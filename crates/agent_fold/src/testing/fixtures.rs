@@ -5,7 +5,8 @@ pub const TURN: &str = include_str!("../../fixtures/turn.jsonl");
 
 /// A hand-shaped turn whose walkthrough files the Agent Service collected
 /// after the turn ended: prose, a tool call, a clean stop, then one
-/// `artifacts` frame carrying a screenshot and a recording.
+/// `artifacts` frame naming that turn and carrying a screenshot and a
+/// recording.
 pub const ARTIFACTS: &str = include_str!("../../fixtures/artifacts.jsonl");
 
 /// A hand-shaped Claude Code turn calling Macro tools over MCP - a read, a

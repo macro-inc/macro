@@ -1,6 +1,6 @@
 //! The fold's state and the one place the protocol is dispatched.
 
-use std::collections::{HashMap, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 use crate::domain::error::FoldError;
 use crate::domain::harness::{HarnessReader, ToolFrame};
@@ -127,6 +127,15 @@ pub(super) struct FoldState {
     /// Controls awaiting a response, by request id: where the control part
     /// sits (message, part), so the response can resolve its outcome.
     pub(super) pending_controls: HashMap<RequestId, (usize, usize)>,
+    /// Every artifact key this fold has seen, from every `artifacts` frame,
+    /// whether or not the frame found a message to attach to.
+    ///
+    /// Not renderable - keys stay out of [`MessagePart::Artifacts`] - and not
+    /// used by the fold for anything. It exists for the collector: it lists a
+    /// provider's files afresh each time and diffs that listing against this
+    /// set to decide what is new, so what counts is that the key is in the
+    /// log, not where it landed.
+    pub(super) known_artifact_keys: BTreeSet<String>,
 }
 
 /// Where a tool call's part sits: which message, and the path of part
@@ -389,8 +398,8 @@ impl FoldState {
 
             // Files the agent produced outside the conversation, collected
             // by the Agent Service after the turn ended.
-            Message::ToServer(ToServerMessage::Artifacts { artifacts }) => {
-                StepChange::message(self.attach_artifacts(artifacts))
+            Message::ToServer(ToServerMessage::Artifacts { artifacts, turn }) => {
+                StepChange::message(self.attach_artifacts(artifacts, *turn))
             }
 
             // The wrapped protocol enums are `#[non_exhaustive]`.

@@ -6,13 +6,21 @@
 
 use super::util::{TURN, capturing_warnings, parse_log};
 use crate::domain::fold::{FoldMachineImpl, fold};
-use crate::domain::model::{Author, FoldEvent, MessagePart};
+use crate::domain::model::{Author, FoldEvent, MessagePart, TurnId};
 use crate::domain::ports::FoldMachine;
 use crate::testing::fixtures::ARTIFACTS;
 
-/// One `artifacts` frame, as the Agent Service writes it.
+/// One `artifacts` frame naming no turn: what a writer that cannot say which
+/// turn the files came from produces.
 fn artifacts_frame(items: &str) -> String {
     format!(r#"{{"direction":"to_server","content":{{"type":"artifacts","artifacts":[{items}]}}}}"#)
+}
+
+/// One `artifacts` frame naming its turn, as the Agent Service writes it.
+fn artifacts_frame_for(turn: u32, items: &str) -> String {
+    format!(
+        r#"{{"direction":"to_server","content":{{"type":"artifacts","turn":{turn},"artifacts":[{items}]}}}}"#
+    )
 }
 
 /// One screenshot, named by its suffix so two frames are told apart.
@@ -114,8 +122,8 @@ fn an_unanswered_turn_mints_a_message_holding_only_the_files() {
 }
 
 /// The pull is asynchronous, so the frame can land after the user has already
-/// asked something else. It belongs to the turn that produced it, not to
-/// whatever is running now.
+/// asked something else. A frame that names no turn has only the transcript
+/// to go on, and the newest agent message is the best guess available.
 #[test]
 fn a_late_frame_attaches_to_the_previous_turn() {
     let log = format!(
@@ -197,6 +205,11 @@ fn the_frame_reports_the_message_it_updated() {
     let updated = last.expect("the agent message was updated");
     assert_eq!(updated.author, Author::Agent);
     assert_eq!(
+        updated.id,
+        TurnId(0),
+        "the update names the turn the frame named"
+    );
+    assert_eq!(
         artifacts_part(updated.parts.as_slice()).len(),
         2,
         "the update carries the files, not just the stop reason"
@@ -205,5 +218,143 @@ fn the_frame_reports_the_message_it_updated() {
         machine.messages(),
         fold(parse_log(ARTIFACTS)),
         "the stream and the batch fold agree"
+    );
+}
+
+/// A second prompt, which opens turn 1 and leaves turn 0's message alone.
+const SECOND_TURN: &str = concat!(
+    r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p2","method":"session/prompt","params":{"sessionId":"s1","prompt":[{"type":"text","text":"and again"}]}}}"#,
+    "\n",
+    r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s1","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Working on it."}}}}}"#,
+);
+
+/// The turn the files belong to is named, so a later turn being open - and
+/// holding the newest agent message - changes nothing about where they land.
+#[test]
+fn a_named_turn_wins_over_the_newest_message() {
+    let log = format!(
+        "{}\n{SECOND_TURN}\n{}",
+        ARTIFACTS.trim_end(),
+        artifacts_frame_for(0, &screenshot("late"))
+    );
+    let (messages, warnings) = capturing_warnings(|| fold(parse_log(&log)));
+
+    assert_eq!(warnings, vec![], "a named turn is not an anomaly");
+    let first = messages
+        .iter()
+        .find(|message| message.author == Author::Agent && message.id == TurnId(0))
+        .expect("turn 0's agent message");
+    assert_eq!(
+        artifacts_part(first.parts.as_slice()).len(),
+        3,
+        "the late file joins the two turn 0 already had"
+    );
+    let second = messages
+        .iter()
+        .find(|message| message.author == Author::Agent && message.id == TurnId(1))
+        .expect("turn 1's agent message");
+    assert!(
+        !second
+            .parts
+            .iter()
+            .any(|part| matches!(part, MessagePart::Artifacts { .. })),
+        "the open turn keeps none of them: {:#?}",
+        second.parts
+    );
+}
+
+/// A turn abandoned by the next prompt never got an agent message at all.
+/// Naming it still finds it a home: one minted for that turn, holding only
+/// the files.
+///
+/// The minted message is appended rather than spliced in ahead of the newer
+/// turn's prompt. `messages` is derivation order and every position the fold
+/// holds is an index into it, and the web feed orders rows by `(turn,
+/// author)` itself - see `create-agent-session-feed.ts` - so the row still
+/// renders under its own turn.
+#[test]
+fn a_named_turn_without_a_message_gets_one_minted() {
+    let log = format!(
+        "{}\n{}\n{}",
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p1","method":"session/prompt","params":{"sessionId":"s1","prompt":[{"type":"text","text":"record it"}]}}}"#,
+        SECOND_TURN,
+        artifacts_frame_for(0, &screenshot("only"))
+    );
+    let (messages, warnings) = capturing_warnings(|| fold(parse_log(&log)));
+
+    assert_eq!(warnings, vec![]);
+    // The two prompts, turn 1's agent message, then the minted one.
+    assert_eq!(messages.len(), 4, "{messages:#?}");
+    let minted = messages.last().expect("the minted message");
+    assert_eq!(minted.id, TurnId(0), "minted for the turn the frame named");
+    assert_eq!(minted.author, Author::Agent);
+    assert_eq!(minted.stop, None, "the turn is not closed by its files");
+    assert!(
+        matches!(minted.parts.as_slice(), [MessagePart::Artifacts { .. }]),
+        "only the files: {:#?}",
+        minted.parts
+    );
+}
+
+/// A turn ordinal this fold has never opened cannot be honoured: attaching
+/// elsewhere would file the walkthrough under work that did not produce it.
+#[test]
+fn an_unknown_turn_warns_and_drops() {
+    let log = format!(
+        "{}\n{}",
+        ARTIFACTS.trim_end(),
+        artifacts_frame_for(7, &screenshot("stray"))
+    );
+    let (messages, warnings) = capturing_warnings(|| fold(parse_log(&log)));
+
+    assert_eq!(warnings.len(), 1, "{warnings:#?}");
+    assert_eq!(
+        messages,
+        fold(parse_log(ARTIFACTS)),
+        "the stray frame changed nothing"
+    );
+}
+
+/// Nothing has been prompted, so no turn exists to attribute unnamed files
+/// to either.
+#[test]
+fn files_before_any_turn_warn_and_drop() {
+    let (messages, warnings) =
+        capturing_warnings(|| fold(parse_log(&artifacts_frame(&screenshot("early")))));
+
+    assert_eq!(warnings.len(), 1, "{warnings:#?}");
+    assert_eq!(messages, vec![]);
+}
+
+/// What a collector diffs its next listing against: every key the log has
+/// carried, whether or not the frame it came in on found a message.
+#[test]
+fn known_keys_accumulate_across_every_frame() {
+    let log = format!(
+        "{}\n{}\n{}",
+        ARTIFACTS.trim_end(),
+        artifacts_frame_for(7, &screenshot("stray")),
+        artifacts_frame(&screenshot("second"))
+    );
+    let mut machine = FoldMachineImpl::new();
+    capturing_warnings(|| {
+        for entry in parse_log(&log) {
+            let _ = machine.push(entry);
+        }
+    });
+
+    assert_eq!(
+        machine
+            .known_artifact_keys()
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>(),
+        vec![
+            "walkthrough/second.png@1",
+            "walkthrough/settings.mp4@1",
+            "walkthrough/settings.png@1",
+            "walkthrough/stray.png@1",
+        ],
+        "the dropped frame's key counts too - it is in the log"
     );
 }

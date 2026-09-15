@@ -203,5 +203,15 @@ pub enum ToServerMessage {
         /// The files collected, in the order the provider listed them. An
         /// empty list is legal and means nothing was produced.
         artifacts: Vec<Artifact>,
+        /// The turn these files came out of, as the fold numbers turns
+        /// (`agent_fold::TurnId`). The Service learns it from the same
+        /// signal that told it the turn ended, and a reader's own fold of
+        /// this log derives the same ordinals, so naming it here is exact
+        /// where guessing from arrival order is not. `None` when the writer
+        /// does not know, which leaves the reader to guess.
+        ///
+        /// The raw ordinal rather than the id type: this crate sits under
+        /// `agent_fold` and must not depend on it.
+        turn: Option<u32>,
     },
 }
