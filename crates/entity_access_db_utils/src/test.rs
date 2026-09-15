@@ -774,16 +774,10 @@ async fn delete_user_entity_access_rows_removes_targeted_direct_grants_only(pool
         None,
     )
     .await;
-    // Same source_id as a targeted user, so these rows vanish if the DELETE
-    // drops its source_type predicate.
     for (source_id, source_type, access_level) in [
+        ("team-1", EntityAccessSourceType::Team, AccessLevel::Edit),
         (
-            alice.as_ref(),
-            EntityAccessSourceType::Team,
-            AccessLevel::Edit,
-        ),
-        (
-            alice.as_ref(),
+            "channel-1",
             EntityAccessSourceType::Channel,
             AccessLevel::Comment,
         ),
@@ -835,8 +829,8 @@ async fn delete_user_entity_access_rows_removes_targeted_direct_grants_only(pool
         grants(&rows),
         vec![
             ("bot", BOT_PRINCIPAL, AccessLevel::Edit, None),
-            ("channel", alice.as_ref(), AccessLevel::Comment, None),
-            ("team", alice.as_ref(), AccessLevel::Edit, None),
+            ("channel", "channel-1", AccessLevel::Comment, None),
+            ("team", "team-1", AccessLevel::Edit, None),
             (
                 "user",
                 "macro|bob@macro.com",
@@ -894,6 +888,51 @@ async fn delete_user_entity_access_rows_without_user_ids_keeps_every_row(pool: P
         vec![
             ("user", "macro|alice@macro.com", AccessLevel::Edit, None),
             ("user", "macro|owner@macro.com", AccessLevel::Owner, None),
+        ]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_user_entity_access_rows_keeps_team_and_channel_grants_that_share_a_targeted_user_id(
+    pool: Pool<Postgres>,
+) {
+    let initiative_id = Uuid::from_u128(0x0b04);
+    let alice = MacroUserIdStr::try_from_email("alice@macro.com").unwrap();
+
+    let mut tx = pool.begin().await.unwrap();
+    for (source_type, access_level) in [
+        (EntityAccessSourceType::User, AccessLevel::Edit),
+        (EntityAccessSourceType::Team, AccessLevel::Edit),
+        (EntityAccessSourceType::Channel, AccessLevel::Comment),
+    ] {
+        insert_entity_access_for_test(
+            &mut tx,
+            &initiative_id,
+            EntityType::Initiative,
+            alice.as_ref(),
+            source_type,
+            access_level,
+            None,
+        )
+        .await;
+    }
+
+    delete_user_entity_access_rows(
+        &mut tx,
+        &initiative_id,
+        EntityType::Initiative,
+        &[alice.clone()],
+    )
+    .await
+    .unwrap();
+    tx.commit().await.unwrap();
+
+    let rows = fetch_entity_access_rows(&pool, &initiative_id, EntityType::Initiative).await;
+    assert_eq!(
+        grants(&rows),
+        vec![
+            ("channel", alice.as_ref(), AccessLevel::Comment, None),
+            ("team", alice.as_ref(), AccessLevel::Edit, None),
         ]
     );
 }
