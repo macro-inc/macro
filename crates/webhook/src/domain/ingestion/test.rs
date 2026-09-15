@@ -1332,14 +1332,40 @@ fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::Agen
     Event::new(AgentTriggerTopicEvent::New(
         NewAgentSessionEvent::TopLevelMentioned(AgentBotMentionedEvent {
             bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
+            message: ChannelMessagePostedMetadata {
+                channel_id: uuid::Uuid::from_u128(1),
+                message_id: uuid::Uuid::from_u128(2),
+                thread_id: None,
+                sender: sender("macro|asker@example.com"),
+                triggered_by: None,
+                channel_type: ChannelType::Public,
+                content: "fix the flaky test".to_owned(),
+                mentions: vec![],
+                attachments: vec![],
+                created_at: timestamp(),
+            },
+        }),
+    ))
+}
+
+fn agent_trigger_document_event()
+-> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
+    use agent_trigger::domain::broker_events::{
+        AgentMentionedEvent, AgentTriggerTopicEvent, NewAgentSessionEvent,
+    };
+
+    Event::new(AgentTriggerTopicEvent::New(
+        NewAgentSessionEvent::Mentioned(AgentMentionedEvent {
+            bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
             message: messages::domain::events::MessagePostedMetadata {
-                parent: messages::domain::models::MessageParent::Channel(uuid::Uuid::from_u128(1)),
+                parent: messages::domain::models::MessageParent::parse("document", "doc-1")
+                    .unwrap(),
                 message_id: uuid::Uuid::from_u128(2),
                 thread_id: None,
                 root_id: uuid::Uuid::from_u128(2),
                 sender: sender("macro|asker@example.com"),
                 triggered_by: None,
-                content: "fix the flaky test".to_owned(),
+                content: "summarize this".to_owned(),
                 mentions: vec![],
                 attachments: vec![],
                 created_at: timestamp(),
@@ -1351,21 +1377,21 @@ fn agent_trigger_new_event() -> Event<agent_trigger::domain::broker_events::Agen
 fn agent_trigger_existing_event()
 -> Event<agent_trigger::domain::broker_events::AgentTriggerTopicEvent> {
     use agent_trigger::domain::broker_events::{
-        AgentTriggerTopicEvent, ExistingAgentSessionEvent, ThreadEventMetadata,
+        AgentTriggerTopicEvent, ChannelEventMetadata, ExistingAgentSessionEvent,
     };
 
     Event::new(AgentTriggerTopicEvent::Existing(
-        ExistingAgentSessionEvent::Thread(ThreadEventMetadata {
+        ExistingAgentSessionEvent::Channel(ChannelEventMetadata {
             bot_id: bot_id::BotId::new_from_uuid(uuid::Uuid::from_u128(0xB07)),
             session_id: agent_session::domain::model::AgentSessionId::TEST_A,
             kind: agent_trigger::domain::broker_events::ThreadMessageKind::MentionThread,
-            message: messages::domain::events::MessagePostedMetadata {
-                parent: messages::domain::models::MessageParent::Channel(uuid::Uuid::from_u128(1)),
+            message: ChannelMessagePostedMetadata {
+                channel_id: uuid::Uuid::from_u128(1),
                 message_id: uuid::Uuid::from_u128(2),
                 thread_id: None,
-                root_id: uuid::Uuid::from_u128(2),
                 sender: sender("macro|asker@example.com"),
                 triggered_by: None,
+                channel_type: ChannelType::Public,
                 content: "and now the other one".to_owned(),
                 mentions: vec![],
                 attachments: vec![],
@@ -1373,6 +1399,27 @@ fn agent_trigger_existing_event()
             },
         }),
     ))
+}
+
+/// A document trigger is gated by who may read the document.
+#[tokio::test]
+async fn a_document_trigger_is_gated_by_its_document() {
+    let access = MockAccessService::with_users(vec![user_id(PERSONAL_WORKSPACE_ID)]);
+    let repository = MockRepository::new(
+        vec![PERSONAL_WORKSPACE_ID.to_string()],
+        vec![webhook("wh_agent_feed", PERSONAL_WORKSPACE_ID)],
+    );
+    let service = service(access.clone(), repository.clone(), MockEnqueuer::default());
+
+    service
+        .ingest_agent_trigger_event(agent_trigger_document_event())
+        .await
+        .expect("document agent trigger events are ingested");
+
+    assert_eq!(
+        lock(&access.calls).as_slice(),
+        &[("doc-1".to_owned(), EntityType::Document)],
+    );
 }
 
 /// An existing session does not grant a webhook access to a new message parent.

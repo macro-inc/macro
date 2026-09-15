@@ -2,7 +2,7 @@
 
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentTriggerTopicEvent, ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata,
+    AgentTriggerTopicEvent, OpeningMention, SessionMessage,
 };
 use bot_id::BotId;
 
@@ -38,15 +38,7 @@ pub enum Skipped {
 /// Bot targeted by a recognized trigger event shape.
 #[must_use]
 pub fn agent_trigger_bot_id(event: &AgentTriggerTopicEvent) -> Option<BotId> {
-    match event {
-        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
-            Some(mentioned.bot_id)
-        }
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(metadata)) => {
-            Some(metadata.bot_id)
-        }
-        _ => None,
-    }
+    event.bot_id()
 }
 
 /// Route one trigger event: work for this deployment, or a reason it was
@@ -62,11 +54,13 @@ pub fn route_agent_trigger(
     runtime: Option<AgentRuntimeConfig>,
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
-        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
+        AgentTriggerTopicEvent::New(event) => {
+            let Some(OpeningMention { bot_id, message }) = event.mention() else {
+                return Err(Skipped::Unrecognized);
+            };
             let Some(runtime) = runtime.filter(|runtime| runtime.kind.is_managed()) else {
                 return Err(Skipped::ForeignBot);
             };
-            let message = mentioned.message;
             let sender = message
                 .sender
                 .as_user()
@@ -75,7 +69,7 @@ pub fn route_agent_trigger(
             Ok(RoutedTrigger::Command(
                 AgentSessionId::new(),
                 HarnessCommand::Open(OpenSession {
-                    bot_id: mentioned.bot_id,
+                    bot_id,
                     runtime,
                     origin: MentionOrigin {
                         parent: message.parent,
@@ -89,14 +83,16 @@ pub fn route_agent_trigger(
                 }),
             ))
         }
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Thread(
-            ThreadEventMetadata {
+        AgentTriggerTopicEvent::Existing(event) => {
+            let Some(SessionMessage {
                 bot_id,
                 session_id,
                 kind: _,
                 message,
-            },
-        )) => {
+            }) = event.session_message()
+            else {
+                return Err(Skipped::Unrecognized);
+            };
             let origin = AnnounceOrigin {
                 parent: message.parent,
                 thread_id: message.thread_id.unwrap_or(message.message_id),
@@ -130,6 +126,5 @@ pub fn route_agent_trigger(
                 },
             ))
         }
-        _ => Err(Skipped::Unrecognized),
     }
 }

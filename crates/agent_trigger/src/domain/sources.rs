@@ -13,13 +13,11 @@
 #[cfg(test)]
 mod test;
 
-use channels::domain::broker_events::{
-    ChannelMacroEvent, ChannelMessagePostedMetadata, ChannelTopicEvent,
-};
+use super::broker_events::posted_from_channel_event;
+use super::processing::TriggerInput;
+use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use macro_event_broker::{MacroEvent as _, MacroEventCollection};
 use macro_uuid::Uuid;
-use messages::domain::events::{MessageEventAttachment, MessagePostedMetadata};
-use messages::domain::models::MessageParent;
 use messages::outbound::broker::{MessageMacroEvent, MessageTopicEvent};
 use serde::Deserialize;
 
@@ -60,7 +58,7 @@ pub struct DecodedTrigger {
     pub event_type: &'static str,
     /// The committed post, when the record was one; other facts on the topic
     /// carry no trigger.
-    pub posted: Option<MessagePostedMetadata>,
+    pub posted: Option<TriggerInput>,
 }
 
 /// A topic collection whose records may carry a committed post.
@@ -79,7 +77,13 @@ impl TriggerEvents for MessageTriggerEvents {
         let Self::MessageMacroEvent(event) = self;
         let envelope = event.event();
         let (event_type, posted) = match &envelope.event {
-            MessageTopicEvent::Posted(posted) => ("message.posted", Some(posted.clone())),
+            MessageTopicEvent::Posted(posted) => (
+                "message.posted",
+                Some(TriggerInput {
+                    posted: posted.clone(),
+                    channel_type: None,
+                }),
+            ),
             MessageTopicEvent::Patched(_) => ("message.patched", None),
             MessageTopicEvent::Deleted(_) => ("message.deleted", None),
             MessageTopicEvent::Mentioned(_) => ("message.mentioned", None),
@@ -101,7 +105,10 @@ impl TriggerEvents for ChannelTriggerEvents {
         let Self::ChannelMacroEvent(event) = self;
         let envelope = event.event();
         let posted = match &envelope.event {
-            ChannelTopicEvent::MessagePosted(posted) => Some(posted_from_channel_event(posted)),
+            ChannelTopicEvent::MessagePosted(posted) => Some(TriggerInput {
+                posted: posted_from_channel_event(posted),
+                channel_type: Some(posted.channel_type),
+            }),
             _ => None,
         };
         DecodedTrigger {
@@ -126,34 +133,5 @@ fn channel_event_type(event: &ChannelTopicEvent) -> &'static str {
         ChannelTopicEvent::MessageAttachmentRemoved(_) => "channel.message_attachment_removed",
         ChannelTopicEvent::ParticipantAdded(_) => "channel.participant_added",
         ChannelTopicEvent::ParticipantRemoved(_) => "channel.participant_removed",
-    }
-}
-
-/// The parent-aware shape of a channel post published before parents existed.
-///
-/// A channel event names its channel and, for a reply, its thread; the root
-/// is the thread when there is one and the message itself otherwise, exactly
-/// as the message service derives it.
-pub fn posted_from_channel_event(posted: &ChannelMessagePostedMetadata) -> MessagePostedMetadata {
-    MessagePostedMetadata {
-        parent: MessageParent::Channel(posted.channel_id),
-        message_id: posted.message_id,
-        thread_id: posted.thread_id,
-        root_id: posted.thread_id.unwrap_or(posted.message_id),
-        sender: posted.sender.clone(),
-        triggered_by: posted.triggered_by.clone(),
-        content: posted.content.clone(),
-        mentions: posted.mentions.clone(),
-        attachments: posted
-            .attachments
-            .iter()
-            .map(|attachment| MessageEventAttachment {
-                attachment_id: attachment.attachment_id,
-                entity_type: attachment.entity_type.clone(),
-                entity_id: attachment.entity_id.clone(),
-                created_at: attachment.created_at,
-            })
-            .collect(),
-        created_at: posted.created_at,
     }
 }
