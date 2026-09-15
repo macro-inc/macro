@@ -1,6 +1,4 @@
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
-import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import type { ReplyTargetDecoratorProps } from '@macro-inc/lexical-core';
@@ -34,36 +32,13 @@ export function ReplyTarget(props: ReplyTargetDecoratorProps) {
   return (
     <button
       type="button"
-      class="group/reply-target flex w-full min-w-0 items-center gap-1 py-1 text-left text-xs text-ink-muted rounded-md hover:bg-hover"
-      aria-label={`Replying to ${senderName()}: ${props.displayText}`}
+      class="w-full min-w-0 truncate text-left text-xs text-ink-muted pl-3 py-1.5 rounded-md hover:bg-hover"
+      aria-label={`Replying to ${senderName()}`}
       data-reply-target-target-message-id={props.targetMessageId}
       on:mousedown={(event) => event.preventDefault()}
       on:click={openTarget}
     >
-      <svg
-        viewBox="0 0 20 21.333"
-        class="ml-1 h-[1.333rem] w-5 shrink-0 overflow-visible text-edge transition-opacity group-hover/reply-target:opacity-0"
-        fill="none"
-        aria-hidden="true"
-      >
-        <path
-          d="M20 10.667H8a8 5.333 0 0 0-8 5.333v5.333"
-          stroke="currentColor"
-          stroke-width="2"
-          vector-effect="non-scaling-stroke"
-        />
-      </svg>
-      <span class="shrink-0 font-semibold text-ink-disabled transition-colors group-hover/reply-target:text-ink-subtle">
-        {senderName()}
-      </span>
-      <div class="min-w-0 flex-1 overflow-hidden italic text-ink-subtle transition-colors group-hover/reply-target:text-ink-muted">
-        <StaticMarkdown
-          markdown={props.displayText}
-          theme={singleLineMarkdownTheme}
-          target="internal"
-          singleLine
-        />
-      </div>
+      Replying to <span class="font-medium">{senderName()}</span>
     </button>
   );
 }
