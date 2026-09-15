@@ -53,7 +53,7 @@ An accent **Create agent** button stays fixed to the right of the strip.
 It closes the session composer and opens the new-agent form at
 `/app/settings/agents?createAgent=true`; it does not create a session.
 Recents are remembered per user on this device. With no history, **Macro**
-`@macro` (the default) and **Cursor** `@cursor` lead, followed by saved agents
+`@macro` (the default), **Cursor** `@cursor`, and **Codex** `@codex` lead, followed by saved agents
 the caller can start: their own, team-shared personas, and selected-channel
 personas they can `@` mention.
 Without a connected Cursor API key, Cursor is a **Connect Cursor** button:
@@ -61,6 +61,12 @@ clicking it closes the composer and opens Settings → Harness without creating
 a session. It is keyboard-accessible; arrow navigation focuses it without
 activating it. Connected Cursor remains a selectable agent. Setup navigation
 is disabled while a session is being created or its setup is being retried.
+Codex shows **Set up Codex** until ChatGPT is connected and a cloud environment
+is saved in Settings → Harness. A configured Codex row is selectable; its prompt
+starts the Codex bot in that environment. The composer hides model overrides for
+Codex because this harness does not expose model selection. Setup navigation,
+selection, and the create/prompt payloads were verified in Chromium with mocked
+app navigation and backend state; no remote session was created by that check.
 Each row shows its `@handle` beneath the name. There are no coding tags;
 default models appear only in the prompt's model selector.
 There is no search field or browse/expand control. Left/Right change the selected

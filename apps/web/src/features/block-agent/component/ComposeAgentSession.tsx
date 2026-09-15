@@ -6,6 +6,11 @@ import {
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
 import {
+  CODEX_BOT_HANDLE,
+  CODEX_BOT_ID,
+  CODEX_BOT_NAME,
+} from '@core/constant/codexAgent';
+import {
   CURSOR_BOT_HANDLE,
   CURSOR_BOT_ID,
   CURSOR_BOT_NAME,
@@ -30,6 +35,7 @@ import {
 } from '@queries/agent-session/mutations';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useAgentModelsQuery } from '@queries/agents/models';
+import { useCodexStatusQuery } from '@queries/auth/codex';
 import {
   useCursorApiKeyStatusQuery,
   useCursorModelsQuery,
@@ -99,6 +105,11 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   const navigate = useNavigate();
   const agentsQuery = useAgentsQuery();
   const cursorStatus = useCursorApiKeyStatusQuery();
+  const codexStatus = useCodexStatusQuery();
+  const codexReady = () =>
+    codexStatus.isSuccess &&
+    codexStatus.data.connected &&
+    !!codexStatus.data.environmentId;
   const cursorConnected = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const cursorNeedsConnection = () =>
@@ -161,6 +172,20 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
         : 'Connect Cursor in Settings → Harness',
       connectLabel: cursorNeedsConnection() ? 'Connect Cursor' : undefined,
     },
+    {
+      id: CODEX_BOT_ID,
+      botId: CODEX_BOT_ID,
+      name: CODEX_BOT_NAME,
+      handle: CODEX_BOT_HANDLE,
+      harness: 'codex-cloud',
+      unavailableReason: codexReady()
+        ? undefined
+        : 'Connect ChatGPT and choose an environment in Settings → Harness',
+      connectLabel:
+        codexStatus.isSuccess && !codexStatus.isPlaceholderData && !codexReady()
+          ? 'Set up Codex'
+          : undefined,
+    },
     ...(agentsQuery.isSuccess ? agentsQuery.data : [])
       // Only runtimes Macro provisions can be started from here; a persona on
       // a registered macrod daemon opens its own sessions.
@@ -173,6 +198,17 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
         description: agent.bot.description ?? undefined,
         avatarUrl: agent.bot.avatar_url ?? undefined,
         harness: agent.harness,
+        unavailableReason:
+          agent.harness === 'codex-cloud' && !codexReady()
+            ? 'Connect ChatGPT and choose an environment in Settings → Harness'
+            : undefined,
+        connectLabel:
+          agent.harness === 'codex-cloud' &&
+          codexStatus.isSuccess &&
+          !codexStatus.isPlaceholderData &&
+          !codexReady()
+            ? `Set up ${agent.bot.name}`
+            : undefined,
         defaultModel: agent.default_model,
         ownerId:
           agent.bot.owner?.type === 'user'
@@ -192,6 +228,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
     );
   };
   const availableModels = (): ModelOption[] => {
+    if (selectedPersona()?.harness === 'codex-cloud') return [];
     if (selectedPersona()?.harness === 'cursor') {
       return cursorModels.isSuccess
         ? cursorModels.data.models.map((model) => ({
@@ -206,6 +243,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   const modelShortlist = () =>
     shortlistModelOptions(selectedPersona(), availableModels());
   const modelsForPersona = (persona: PersonaOption): ModelOption[] => {
+    if (persona.harness === 'codex-cloud') return [];
     const defaults =
       persona.harness === 'cursor' ? cursorDefaults : macroDefaults;
     const models =
@@ -234,7 +272,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   const connectPersona = (id: string) => {
     if (submitting() || sessionId()) return;
     const persona = personas().find((item) => item.id === id);
-    if (persona?.harness !== 'cursor' || !persona.connectLabel) return;
+    if (!persona?.connectLabel) return;
     close();
     openSettings('Harness');
   };
@@ -448,20 +486,22 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
 
         <div class="mt-auto flex shrink-0 items-center justify-between gap-2 px-4 pt-1 pb-3">
           <div class="m-px flex min-h-7 min-w-0 flex-wrap items-center gap-2 text-sm">
-            <Suspense>
-              <ModelPicker
-                persona={selectedPersona()}
-                available={modelsForPersona(selectedPersona())}
-                shortlist={modelShortlist()}
-                value={modelOverride()}
-                loading={
-                  selectedPersona()?.harness === 'cursor' &&
-                  cursorModels.isPending
-                }
-                disabled={submitting() || !!sessionId()}
-                onSelect={setModelOverride}
-              />
-            </Suspense>
+            <Show when={selectedPersona()?.harness !== 'codex-cloud'}>
+              <Suspense>
+                <ModelPicker
+                  persona={selectedPersona()}
+                  available={modelsForPersona(selectedPersona())}
+                  shortlist={modelShortlist()}
+                  value={modelOverride()}
+                  loading={
+                    selectedPersona()?.harness === 'cursor' &&
+                    cursorModels.isPending
+                  }
+                  disabled={submitting() || !!sessionId()}
+                  onSelect={setModelOverride}
+                />
+              </Suspense>
+            </Show>
           </div>
 
           <SessionStartToggle

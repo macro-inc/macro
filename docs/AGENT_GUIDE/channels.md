@@ -70,7 +70,7 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` open
+bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 The reply renders a Magic Chip: a rounded card of constant height that is present
@@ -84,6 +84,13 @@ whole turn, and a finished turn with nothing said leaves the area empty. The are
 cropped at the chip's height with a fade at its foot; clicking it expands it in place, and
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
+
+`@codex` appears when the mentioning user has connected ChatGPT and saved a
+cloud environment in Settings → Harness. Its environment and branch come from
+those saved choices. Follow-up mentions continue the same agent session. When
+the provider URL arrives, the session header offers **Open in Codex**. Mention
+eligibility is covered by component/query tests; the channel interaction requires
+a configured backend for end-to-end verification.
 
 Cursor sessions choose a repository from the mentioning user's linked GitHub App
 installations on their first prompt. A session without a repository can still use

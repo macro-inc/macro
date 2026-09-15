@@ -20,6 +20,8 @@ import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
 
+vi.mock('./codex/views/CodexHarness', () => ({ CodexHarness: () => null }));
+
 const mocks = vi.hoisted(() => ({
   status: {
     isSuccess: true,

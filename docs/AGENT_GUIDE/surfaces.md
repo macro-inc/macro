@@ -398,8 +398,20 @@ a retryable error without hiding the other harnesses. Editing preserves a saved 
 is no longer offered and labels it `saved, unavailable`. A macrod with no responding runtime
 can remain loading until the 10-second discovery timeout; use Retry after reconnecting it.
 
-`Harness` configures Cursor and paired macrod runtimes. Cursor's default-model picker uses
+`Harness` configures Cursor, Codex, and paired macrod runtimes. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
+
+Under **Codex**, choose **Connect with ChatGPT**, copy the displayed device code,
+and use **Continue to ChatGPT** to finish sign-in in the provider tab. The Macro
+page displays pending, expired, failed, and retryable error states; **Cancel
+sign-in** cancels the attempt. Once connected, select **Cloud environment**, enter
+**Branch**, and choose **Save Codex settings**. These choices are saved for the
+signed-in user and apply to new sessions. **Disconnect ChatGPT** removes the
+connection. The UI never asks for an OAuth token.
+
+The Codex section and its auth/config requests were exercised in Chromium with
+mocked backend responses on 2026-09-15. Provider login and a full deployed Macro
+session were not exercised by that UI check.
 
 ## Notifications
 

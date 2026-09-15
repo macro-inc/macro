@@ -1,3 +1,4 @@
+import { isCodexBotId } from '@core/constant/codexAgent';
 /**
  * Block-level state for the agent block, following the chat block's
  * `ChatInputProvider`/`useChatInputContext` convention: the provider owns the
@@ -187,7 +188,7 @@ export function AgentSessionProvider(
           The poll component gates on `isSuccess` so it should not suspend;
           this boundary is the backstop if a read of `query.data` ever does. */}
       <Suspense fallback={null}>
-        <CursorExternalUrlPoll
+        <CloudExternalUrlPoll
           sessionId={sessionId}
           session={feed.session}
           applySnapshot={feed.applySnapshot}
@@ -228,7 +229,7 @@ export function AgentSessionProvider(
  * the feed's snapshot. Lives in its own Suspense so the rest of the block
  * stays mounted while this query's first fetch is in flight.
  */
-function CursorExternalUrlPoll(props: {
+function CloudExternalUrlPoll(props: {
   sessionId: Accessor<string | undefined>;
   session: Accessor<AgentSessionResponse | undefined>;
   applySnapshot: (session: AgentSessionResponse) => void;
@@ -239,7 +240,9 @@ function CursorExternalUrlPoll(props: {
     const id = props.sessionId();
     const session = props.session();
     if (!id || !session || session.external?.url) return undefined;
-    return isCursorBotId(session.botId) ? id : undefined;
+    return isCursorBotId(session.botId) || isCodexBotId(session.botId)
+      ? id
+      : undefined;
   });
   createEffect(() => {
     // `query.data` suspends while pending and throws once it errors

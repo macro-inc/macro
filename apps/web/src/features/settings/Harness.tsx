@@ -21,6 +21,7 @@ import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
+import { CodexHarness } from './codex/views/CodexHarness';
 import { HarnessPairingDialog } from './HarnessPairingDialog';
 import { ConnectAction, StatusDot } from './integration-ui';
 import { SettingsCard, SettingsPage } from './primitives';
@@ -358,6 +359,8 @@ export function Harness() {
             </Show>
           </div>
         </section>
+
+        <CodexHarness />
 
         <section class="flex gap-4 px-6 py-5">
           <HarnessIcon>

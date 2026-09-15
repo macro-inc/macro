@@ -1,4 +1,5 @@
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
+import { CODEX_BOT_ID } from '@core/constant/codexAgent';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { CreateAgentSessionResponse } from '@service-agent-harness/generated/schemas';
@@ -19,6 +20,17 @@ const navigation = vi.hoisted(() => ({
   open: vi.fn(),
   settings: vi.fn(),
   navigate: vi.fn(),
+}));
+const codexConnection = vi.hoisted(() => ({
+  connected: false,
+  environmentId: null as string | null,
+}));
+vi.mock('@queries/auth/codex', () => ({
+  useCodexStatusQuery: () => ({
+    isSuccess: true,
+    isPlaceholderData: false,
+    data: codexConnection,
+  }),
 }));
 const cursorConnection = vi.hoisted(() => ({
   registered: true,
@@ -116,6 +128,16 @@ vi.mock('@queries/agents/agents', () => ({
         },
         harness: 'in-memory',
         default_model: 'anthropic/claude-sonnet-5',
+      },
+      {
+        bot: {
+          id: 'codex-reviewer',
+          name: 'Codex Reviewer',
+          handle: 'codex-reviewer',
+          has_agent: true,
+        },
+        harness: 'codex-cloud',
+        default_model: '',
       },
       {
         bot: { id: 'local', name: 'Local', handle: 'local', has_agent: true },
@@ -219,6 +241,8 @@ const failure = err([
 let client: QueryClient;
 
 beforeEach(() => {
+  codexConnection.connected = false;
+  codexConnection.environmentId = null;
   cursorConnection.registered = true;
   cursorConnection.isPlaceholderData = false;
   cmd.held = false;
@@ -252,6 +276,35 @@ function enterPrompt() {
 }
 
 describe('agent session creation', () => {
+  it('opens setup for a custom Codex persona without creating a session', () => {
+    mount();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Set up Codex Reviewer' })
+    );
+    expect(navigation.settings).toHaveBeenCalledWith('Harness');
+    expect(agentHarnessServiceClient.create).not.toHaveBeenCalled();
+  });
+
+  it('opens Codex setup when disconnected', () => {
+    mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Set up Codex' }));
+    expect(navigation.settings).toHaveBeenCalledWith('Harness');
+    expect(agentHarnessServiceClient.create).not.toHaveBeenCalled();
+  });
+
+  it('starts the connected Codex bot without an unsupported model override', async () => {
+    codexConnection.connected = true;
+    codexConnection.environmentId = 'environment-1';
+    mount();
+    fireEvent.click(screen.getByRole('radio', { name: /^Codex @codex$/ }));
+    expect(screen.queryByRole('button', { name: 'Model override' })).toBeNull();
+    hotkeys.enter();
+    await waitFor(() =>
+      expect(agentHarnessServiceClient.create).toHaveBeenCalledWith({
+        botId: CODEX_BOT_ID,
+      })
+    );
+  });
   it('autofocuses the prompt when the composer opens', async () => {
     mount();
     const prompt = screen.getByRole('textbox', { name: 'Task for the agent' });
