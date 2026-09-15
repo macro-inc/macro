@@ -1112,9 +1112,29 @@ where
                     Err(_) => {
                         // Quiet streams are checked through the exact same raw
                         // polling/capture path as disconnected streams.
-                        let status = self
+                        //
+                        // The stream is still connected here — merely quiet,
+                        // which is ordinary during long tool work. So a run
+                        // record that cannot be read is a lost liveness check,
+                        // not a lost turn: this loop keeps reading the channel
+                        // that is actually working, exactly as the doc on
+                        // `stream_turn` requires. Journal failures still
+                        // propagate; they are never masked.
+                        let status = match self
                             .poll_once(session_id, session, agent, run, cancel, emit)
-                            .await?;
+                            .await
+                        {
+                            Ok(status) => status,
+                            Err(SessionError::Cursor(error)) => {
+                                tracing::warn!(
+                                    %run,
+                                    %error,
+                                    "run record unreadable while its stream is open; staying on the stream"
+                                );
+                                continue;
+                            }
+                            Err(error) => return Err(error),
+                        };
                         if status.is_terminal() {
                             terminal = Some(status.status);
                             break;

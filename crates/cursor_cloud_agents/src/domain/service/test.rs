@@ -2964,3 +2964,42 @@ async fn a_cancel_near_poll_exhaustion_still_reports_cancelled() {
         .expect("a cancelled turn reports a stop reason, not an error");
     assert_eq!(stop, StopReason::Cancelled);
 }
+
+/// A run record that cannot be read is a lost liveness check, not a lost
+/// turn. `stream_turn`'s contract: "A turn may lose its liveness; it must not
+/// lose its answer." The stream here is connected and merely quiet — ordinary
+/// during long tool work — so a provider blip on the unrelated run-record
+/// endpoint must not end a turn whose answer is still arriving.
+#[tokio::test(start_paused = true)]
+async fn a_poll_failure_does_not_end_a_turn_whose_stream_is_alive() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "the answer".to_owned(),
+        })
+        .expect("stream open");
+    // No run result is scripted, so every poll the quiet timeout triggers
+    // errors — the provider blip. The stream then delivers the outcome.
+    let finish = tokio::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_secs(45)).await;
+        let _ = events.send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+            text: None,
+            duration_ms: None,
+            git: None,
+        });
+        let _ = events.send(CursorEvent::Done);
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("an unreadable record must not lose the stream's answer");
+    assert_eq!(stop, StopReason::EndTurn);
+    finish.await.expect("the finisher completes");
+    assert_eq!(agent_texts(&notifier.updates()), vec!["the answer"]);
+}
