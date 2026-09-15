@@ -12,6 +12,11 @@ export type TaskGroupBy =
 
 export type TaskSortId = 'updated_at' | 'created_at' | 'viewed_at';
 
+export type TaskDetailTarget = {
+  id: string;
+  fallbackName?: string;
+};
+
 export type TasksViewState = {
   tab: TaskTab;
   search: string;
