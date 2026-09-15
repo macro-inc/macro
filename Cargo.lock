@@ -4889,6 +4889,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws_lambda_events",
+ "entity_registry_db_utils",
  "lambda_runtime",
  "macro_db_migrator",
  "macro_entrypoint",
