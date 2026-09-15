@@ -1,0 +1,21 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ *
+ * Single prod deployment only — there is no dev environment.
+ *
+ * Secrets (set with `wrangler secret put <NAME>`):
+ *   BOT_TOKEN       - bot API key (mbot_..., sent as x-macro-bot-token)
+ *   CHANNEL_ID      - UUID of the channel the bot posts to
+ *   WEBHOOK_SECRET  - shared secret embedded in the webhook URL path
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "datadog-alerts-bot",
+	"main": "src/worker.ts",
+	"compatibility_date": "2026-01-01",
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": {
+		"enabled": true
+	}
+}
