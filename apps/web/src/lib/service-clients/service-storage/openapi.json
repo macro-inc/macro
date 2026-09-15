@@ -24711,6 +24711,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "rootId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "text": {
             "type": "string"
           },
@@ -24843,7 +24847,6 @@
           "uuid",
           "documentId",
           "owner",
-          "threadId",
           "page",
           "originalPage",
           "originalIndex",
@@ -24880,6 +24883,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "rootId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "rotation": {
             "type": "number",
             "format": "double"
@@ -24888,7 +24895,7 @@
             "type": "boolean"
           },
           "threadId": {
-            "type": "integer",
+            "type": ["integer", "null"],
             "format": "int64"
           },
           "uuid": {
