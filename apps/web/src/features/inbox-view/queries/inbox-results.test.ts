@@ -422,9 +422,7 @@ describe('Home pagination', () => {
       loadActivity: true,
     });
     activity.entities = [];
-    expect(
-      getHomePagination(notifications, activity).loadActivity
-    ).toBe(true);
+    expect(getHomePagination(notifications, activity).loadActivity).toBe(true);
   });
 
   it('releases the available source when the other source is exhausted or failed', () => {
@@ -439,7 +437,16 @@ describe('Home pagination', () => {
     ]);
     const activity = page([entity('a', 8)]);
     expect(
-      getHomePagination({ ...notifications, oldestFetchedTimestamp: soupPageTimestamp(notifications.entities, 'updated_at') }, activity)
+      getHomePagination(
+        {
+          ...notifications,
+          oldestFetchedTimestamp: soupPageTimestamp(
+            notifications.entities,
+            'updated_at'
+          ),
+        },
+        activity
+      )
     ).toMatchObject({ loadActivity: true, loadNotifications: false });
   });
 });

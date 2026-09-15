@@ -57,14 +57,21 @@ function email(id: string, day: number): EmailEntity {
 function makeQuery(initial: EntityData[], hasMore = true) {
   const [entities, setEntities] = createSignal(initial);
   const [more, setMore] = createSignal(hasMore);
-  const [oldestFetchedTimestamp, setOldestFetchedTimestamp] = createSignal<number>();
+  const [oldestFetchedTimestamp, setOldestFetchedTimestamp] =
+    createSignal<number>();
   const [loading, setLoading] = createSignal(false);
   const [error, setError] = createSignal<Error | null>(null);
   const fetchNextPage = vi.fn(async () => {});
   const query: SoupAstItemsQuery = {
     get data() {
       if (loading()) throw new Error('Read pending query data');
-      return { entities: entities(), groups: undefined, oldestFetchedTimestamp: oldestFetchedTimestamp() ?? soupPageTimestamp(entities(), 'touched_by_me') };
+      return {
+        entities: entities(),
+        groups: undefined,
+        oldestFetchedTimestamp:
+          oldestFetchedTimestamp() ??
+          soupPageTimestamp(entities(), 'touched_by_me'),
+      };
     },
     get isLoading() {
       return loading();
@@ -85,7 +92,15 @@ function makeQuery(initial: EntityData[], hasMore = true) {
     refresh: vi.fn(async () => {}),
     resetToInitialPage: vi.fn(),
   };
-  return { query, setEntities, setMore, setLoading, setError, fetchNextPage, setOldestFetchedTimestamp };
+  return {
+    query,
+    setEntities,
+    setMore,
+    setLoading,
+    setError,
+    fetchNextPage,
+    setOldestFetchedTimestamp,
+  };
 }
 
 let dispose: (() => void) | undefined;
@@ -124,7 +139,11 @@ describe('Home data source', () => {
 
   it('does not treat older cache-only rows as fetched page coverage', async () => {
     const notifications = makeQuery([email('n9', 9), email('n1', 1)]);
-    const activity = makeQuery([email('a10', 10), email('a8', 8), email('cached', 2)]);
+    const activity = makeQuery([
+      email('a10', 10),
+      email('a8', 8),
+      email('cached', 2),
+    ]);
     activity.setOldestFetchedTimestamp(new Date(2026, 8, 8).getTime());
     const { source } = mount(notifications, activity);
     expect(ids(source)).toEqual(['a10', 'n9']);

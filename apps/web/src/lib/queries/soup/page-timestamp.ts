@@ -13,7 +13,10 @@ export function soupPageTimestamp(
     const timestamp = match(sort)
       .with('notified_at', () => entity.notifiedAt)
       .with('touched_by_me', () => entity.touchedAt)
-      .with('updated_at', () => entity.sortTs ?? entity.updatedAt ?? entity.createdAt)
+      .with(
+        'updated_at',
+        () => entity.sortTs ?? entity.updatedAt ?? entity.createdAt
+      )
       .otherwise(() => undefined);
     if (timestamp == null) continue;
     oldest = Math.min(oldest, new Date(timestamp).getTime());

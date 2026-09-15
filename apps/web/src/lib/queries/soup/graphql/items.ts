@@ -480,10 +480,10 @@ export function createGraphqlSoupAstItemsQuery(
       },
       select: ({ pages }) => {
         const entities = pages.flatMap((page) =>
-            mapSoupPageToEntityList(mapGraphqlSoupPage(page), {
-              instructionsIdQuery,
-              showSupportedForeignEntities,
-            })
+          mapSoupPageToEntityList(mapGraphqlSoupPage(page), {
+            instructionsIdQuery,
+            showSupportedForeignEntities,
+          })
         );
         return {
           records: pages.flatMap((page) => page.user.soup.items),
@@ -594,10 +594,12 @@ export function createGraphqlSoupAstItemsQuery(
   return {
     data: createMemo(() => {
       const data = displayData();
-      return data && {
-        ...data,
-        oldestFetchedTimestamp: query.data?.data.oldestFetchedTimestamp,
-      };
+      return (
+        data && {
+          ...data,
+          oldestFetchedTimestamp: query.data?.data.oldestFetchedTimestamp,
+        }
+      );
     }),
     error,
     isSupported,
