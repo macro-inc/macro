@@ -244,6 +244,7 @@ async fn the_cursor_bot_routes_to_cursor_and_everything_else_to_the_sandbox() {
     let router = RoutedContainerManager::new(
         sandbox.clone(),
         cursor.clone(),
+        TaggedManager::new("codex"),
         FixedBotSessions(bot_id::CURSOR_BOT_ID),
     );
 
@@ -270,6 +271,7 @@ async fn resume_and_teardown_route_by_the_stored_bot() {
     let router = RoutedContainerManager::new(
         sandbox.clone(),
         cursor.clone(),
+        TaggedManager::new("codex"),
         FixedBotSessions(bot_id::CURSOR_BOT_ID),
     );
 
@@ -287,6 +289,7 @@ async fn a_database_backed_cursor_agent_routes_by_its_stored_harness() {
     let router = RoutedContainerManager::new(
         sandbox.clone(),
         cursor.clone(),
+        TaggedManager::new("codex"),
         FixedBotSessions(BotId::TEST_A),
     );
 
@@ -299,4 +302,42 @@ async fn a_database_backed_cursor_agent_routes_by_its_stored_harness() {
         ["cursor:resume", "cursor:session_token", "cursor:teardown"]
     );
     assert!(sandbox.calls().is_empty());
+}
+
+#[tokio::test]
+async fn codex_routes_all_lifecycle_operations_and_rejects_resize() {
+    let sandbox = TaggedManager::new("sandbox");
+    let cursor = TaggedManager::new("cursor");
+    let codex = TaggedManager::new("codex");
+    let router = RoutedContainerManager::new(
+        sandbox.clone(),
+        cursor.clone(),
+        codex.clone(),
+        FixedBotSessions(bot_id::CODEX_BOT_ID),
+    );
+    router
+        .spawn(spawn_for(AgentKind::CodexCloud))
+        .await
+        .unwrap()
+        .map_transport(|transport| assert!(matches!(transport, RoutedTransport::Codex(_))));
+    let session = AgentSessionId::new();
+    router.resume(session).await.unwrap();
+    router.session_token(session).await.unwrap();
+    router.teardown(session).await.unwrap();
+    assert!(router.resize(session, SandboxSize::Default).await.is_err());
+    assert_eq!(
+        codex.calls(),
+        [
+            "codex:spawn",
+            "codex:resume",
+            "codex:session_token",
+            "codex:teardown"
+        ]
+    );
+    assert!(sandbox.calls().is_empty());
+    assert!(cursor.calls().is_empty());
+    assert_eq!(
+        AgentKind::from_harness("codex-cloud"),
+        AgentKind::CodexCloud
+    );
 }

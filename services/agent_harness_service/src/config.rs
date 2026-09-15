@@ -35,6 +35,11 @@ macro_env_var::env_vars!(
     pub struct PipedreamProjectId;
 );
 
+macro_env_var::maybe_env_vars!(
+    /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
+    pub struct CodexOauthKmsKeyId;
+);
+
 /// The Pipedream project environment matching this deployment: production in
 /// prd, development everywhere else.
 fn default_pipedream_environment() -> String {
@@ -51,6 +56,8 @@ pub struct Config {
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
+    /// Dedicated OAuth encryption key; absent deployments keep Codex unavailable.
+    pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
     pub kafka_brokers: KafkaBrokers,
     /// MacroDB connection string; `agent_sessions` lives here.
@@ -164,6 +171,17 @@ pub struct Config {
 }
 
 impl Config {
+    /// Resolve the optional key from Doppler or the deployment-injected environment.
+    pub fn codex_oauth_kms_key_id(&self) -> Option<String> {
+        self.codex_oauth_kms_key_id
+            .value()
+            .map(str::to_owned)
+            .or_else(|| {
+                CodexOauthKmsKeyId::new().and_then(|value| value.value().map(str::to_owned))
+            })
+            .filter(|value| !value.trim().is_empty())
+    }
+
     /// Load the configuration from the environment.
     pub fn from_env() -> anyhow::Result<Self> {
         macro_config::ConfigLoader::load::<Config>()

@@ -21,7 +21,7 @@ impl PullRequestReporter for CursorPullRequestReporter {
     ) -> Pin<Box<dyn Future<Output = Result<(), rootcause::Report>> + Send + 'a>> {
         Box::pin(async move {
             self.service
-                .set_pull_request(self.session, &self.owner, url)
+                .set_pull_request(self.session, &self.owner, url, None)
                 .await
                 .map(|_| ())
                 .map_err(|error| rootcause::report!(error).into())

@@ -1,3 +1,4 @@
+import { useCodexAgentsAccess } from '@core/codex/flag';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
@@ -11,6 +12,7 @@ import {
   insertDocumentMentionAtDragCoordinates,
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
+import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
 import {
   enableChatV3Agents,
@@ -28,6 +30,7 @@ import {
   uploadFile,
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
+import { useCodexStatusQuery } from '@queries/auth/codex';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { CollapsedInput, ComposerSurface } from '@ui';
 import { $getRoot } from 'lexical';
@@ -40,6 +43,7 @@ import {
   Switch,
 } from 'solid-js';
 import {
+  codexMentionUser,
   cursorMentionUser,
   isMacroAiId,
   isMacroCoderId,
@@ -268,6 +272,8 @@ export function ChannelInput(props: ChannelInputProps) {
 
   const canUseCursor = useCursorAgentsAccess();
   const cursorApiKey = useCursorApiKeyStatusQuery();
+  const canUseCodex = useCodexAgentsAccess();
+  const codexStatus = useCodexStatusQuery(canUseCodex);
 
   // Macro AI and Macro Coder (flag-gated) are mentionable in every channel,
   // and any bot added to the channel is mentionable too. All are surfaced
@@ -276,10 +282,19 @@ export function ChannelInput(props: ChannelInputProps) {
   const mentionUsers: Accessor<IUser[]> = () => {
     const cursorEnabled =
       canUseCursor() && (cursorApiKey.data?.registered ?? false);
+    const codexEnabled =
+      canUseCodex() &&
+      codexStatus.isSuccess &&
+      codexStatus.data.connected &&
+      !!codexStatus.data.environmentId?.trim();
     const base = [
       ...(props.participants?.() ?? []),
       ...(props.bots?.() ?? []),
-    ].filter((user) => cursorEnabled || !isCursorBotId(user.id));
+    ].filter(
+      (user) =>
+        (cursorEnabled || !isCursorBotId(user.id)) &&
+        (codexEnabled || !isCodexBotId(user.id))
+    );
     if (
       isFeatureEnabled(enableChatV3Agents) &&
       !base.some((user) => isMacroCoderId(user.id))
@@ -299,6 +314,9 @@ export function ChannelInput(props: ChannelInputProps) {
       !base.some((user) => isCursorBotId(user.id))
     ) {
       base.unshift(cursorMentionUser());
+    }
+    if (codexEnabled && !base.some((user) => isCodexBotId(user.id))) {
+      base.unshift(codexMentionUser());
     }
     if (!base.some((user) => isMacroAiId(user.id))) {
       base.unshift(macroAiMentionUser());

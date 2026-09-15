@@ -1,3 +1,4 @@
+import { CODEX_BOT_NAME, isCodexBotId } from '@core/constant/codexAgent';
 import { CURSOR_BOT_NAME, isCursorBotId } from '@core/constant/cursorAgent';
 import { isMacroAgentId, MACRO_AGENT_NAME } from '@core/constant/macroAgent';
 import { isMacroCoderId, MACRO_CODER_NAME } from '@core/constant/macroCoder';
@@ -12,6 +13,7 @@ export function firstPartyBotName(id: string): string | undefined {
   if (isMacroAgentId(id)) return MACRO_AGENT_NAME;
   if (isMacroCoderId(id)) return MACRO_CODER_NAME;
   if (isMacroNewId(id)) return MACRO_NEW_NAME;
+  if (isCodexBotId(id)) return CODEX_BOT_NAME;
   if (isCursorBotId(id)) return CURSOR_BOT_NAME;
   if (isMacroSystemId(id)) return MACRO_SYSTEM_NAME;
   return undefined;

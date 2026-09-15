@@ -72,7 +72,7 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` open
+bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 The reply renders a Magic Chip: a rounded card of constant height that is present
@@ -86,6 +86,16 @@ whole turn, and a finished turn with nothing said leaves the area empty. The are
 cropped at the chip's height with a fade at its foot; clicking it expands it in place, and
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
+
+`@codex` requires both `enable-chat-v3-agents` and `enable-codex-agents`.
+It appears when the mentioning user has connected ChatGPT and saved a
+cloud environment in Settings → Harness. New sessions use that environment on
+`main`; there is no automatic repository selection. Follow-up mentions continue the same agent session. When
+the provider URL arrives, the session header offers **Open in Codex**. Codex
+assistant text appears as complete messages while tool activity and thinking
+can continue updating during the turn. Mention
+eligibility is covered by component/query tests; the channel interaction requires
+a configured backend for end-to-end verification.
 
 Cursor sessions choose a repository from the mentioning user's linked GitHub App
 installations on their first prompt. A session without a repository can still use
@@ -103,8 +113,9 @@ service at `/mcp/internal` on its egress listener, separately from workspace MCP
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
 model supplies only the URL. The tool records the link, not the GitHub PR itself.
 The shared Macro system instructions ask agents to register PRs when
-`macro_internal.set_pull_request` is available. The instruction is not prepended
-to individual user messages. Cursor
+`macro_internal.set_pull_request` is available. Macro Internal MCP also advertises
+this guidance in its server instructions. It is not prepended to individual user
+messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
 automatic creation can finish after the agent stops. Repeated registration is
@@ -114,11 +125,19 @@ chips reload the current link; reconnecting also refreshes it. Multiple chips
 for the same session share its metadata, and loading it leaves the surrounding
 editor visible.
 
-When Cursor opens a pull request, the chip header shows its GitHub link as soon
-as the run reports it, including after restoring a session. The link remains
+When Cursor or Codex reports a pull request, the chip header shows its GitHub
+link. Codex links can arrive after the assistant finishes; a session-update event
+refreshes mounted chips without a new conversation message. Codex checks provider
+PR metadata every 20 seconds while attached. Viewing a disconnected Codex session
+reads saved history; sending a message reattaches the runtime. Refresh requires its original
+ChatGPT connection to remain connected. The link remains
 usable while the webhook mapping is loading or absent, then becomes a Macro PR
 entity link once synced. On narrow chips, long PR names truncate with an
-ellipsis; hover the link to inspect the full title.
+ellipsis; hover the link to inspect the full title. Codex delayed-link discovery,
+duplicate and changed metadata updates, and opening the exact PR URL were verified
+in Chromium with mocked session snapshots and realtime invalidation. This UI check
+does not prove live provider discovery; backend tests separately cover delayed
+provider metadata.
 
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's

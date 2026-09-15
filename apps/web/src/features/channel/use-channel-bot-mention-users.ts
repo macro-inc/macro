@@ -1,5 +1,8 @@
+import { useCodexAgentsAccess } from '@core/codex/flag';
+import { isCodexBotId } from '@core/constant/codexAgent';
 import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
+import { useCodexStatusQuery } from '@queries/auth/codex';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
 import type { Agent } from '@service-storage/generated/schemas/agent';
@@ -19,17 +22,29 @@ function mentionUser(bot: Bot): IUser {
 export function availableBotMentionUsers(
   channelBots: readonly Bot[],
   agents: readonly Agent[],
-  cursorConnected: boolean
+  cursorConnected: boolean,
+  codexConnected = false
 ): IUser[] {
   const globalAgents = agents.filter(
     (agent) =>
       agent.channel_scope === 'all' &&
       agent.bot.has_agent &&
-      (agent.harness !== 'cursor' || cursorConnected)
+      (agent.harness !== 'cursor' || cursorConnected) &&
+      (agent.harness !== 'codex-cloud' || codexConnected)
+  );
+  const codexBotIds = new Set(
+    agents
+      .filter((agent) => agent.harness === 'codex-cloud')
+      .map((agent) => agent.bot.id)
   );
   const seen = new Set<string>();
 
   return [...channelBots, ...globalAgents.map((agent) => agent.bot)]
+    .filter(
+      (bot) =>
+        codexConnected ||
+        (!isCodexBotId(`bot|${bot.id}`) && !codexBotIds.has(bot.id))
+    )
     .map(mentionUser)
     .filter((user) => {
       if (seen.has(user.id)) return false;
@@ -51,12 +66,18 @@ export function useChannelBotMentionUsers(
   const channelBots = useChannelBotsQuery(channelId);
   const agents = useAgentsQuery();
   const cursorStatus = useCursorApiKeyStatusQuery();
+  const canUseCodex = useCodexAgentsAccess();
+  const codexStatus = useCodexStatusQuery(canUseCodex);
 
   return createMemo(() =>
     availableBotMentionUsers(
-      channelBots.data ?? [],
-      agents.data ?? [],
-      cursorStatus.data?.registered ?? false
+      channelBots.isSuccess ? channelBots.data : [],
+      agents.isSuccess ? agents.data : [],
+      cursorStatus.isSuccess ? cursorStatus.data.registered : false,
+      canUseCodex() &&
+        codexStatus.isSuccess &&
+        codexStatus.data.connected &&
+        !!codexStatus.data.environmentId?.trim()
     )
   );
 }

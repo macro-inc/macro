@@ -2,7 +2,7 @@
 
 pub mod keys;
 pub mod manager;
-pub mod pipe;
+pub use crate::outbound::acp_pipe as pipe;
 mod pull_request;
 pub mod repository_chooser;
 

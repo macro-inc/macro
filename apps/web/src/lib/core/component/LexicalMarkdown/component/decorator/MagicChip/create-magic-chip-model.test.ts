@@ -128,61 +128,71 @@ describe('createMagicChipModel', () => {
     serviceClient.control.mockResolvedValue({ isErr: () => false });
   });
 
-  it('reloads the session PR on gateway updates and reconnect without folding it', async () => {
-    const snapshot = (pullRequestUrl: string | null) => ({
-      isOk: () => true,
-      isErr: () => false,
-      value: {
-        status: { kind: 'disconnected' },
-        harness: 'cursor',
-        model: '',
-        canEdit: true,
-        pullRequestUrl,
-      },
-    });
-    const first = 'https://github.com/org/repo/pull/1';
-    const second = 'https://github.com/org/repo/pull/2';
-    serviceClient.get.mockResolvedValue(snapshot(null));
-    let model!: ReturnType<typeof createMagicChipModel>;
-    let sibling!: ReturnType<typeof createMagicChipModel>;
-    const dispose = createRoot((dispose) => {
-      model = createModel(props);
-      sibling = createModel(props);
-      return dispose;
-    });
-    await settle();
-    expect(model.header()?.pullRequestUrl).toBeUndefined();
-    expect(serviceClient.get).toHaveBeenCalledTimes(1);
+  it.each(['cursor', 'codex-cloud'])(
+    'reloads the completed %s session PR on gateway updates and reconnect without folding it',
+    async (harness) => {
+      const snapshot = (pullRequestUrl: string | null) => ({
+        isOk: () => true,
+        isErr: () => false,
+        value: {
+          status: { kind: 'disconnected' },
+          harness,
+          model: '',
+          canEdit: true,
+          pullRequestUrl,
+        },
+      });
+      const first = 'https://github.com/org/repo/pull/1';
+      const second = 'https://github.com/org/repo/pull/2';
+      serviceClient.get.mockResolvedValue(snapshot(null));
+      let model!: ReturnType<typeof createMagicChipModel>;
+      let sibling!: ReturnType<typeof createMagicChipModel>;
+      const dispose = createRoot((dispose) => {
+        model = createModel(props);
+        sibling = createModel(props);
+        return dispose;
+      });
+      await settle();
+      expect(model.header()?.pullRequestUrl).toBeUndefined();
+      expect(serviceClient.get).toHaveBeenCalledTimes(1);
 
-    let resolveStale!: (value: ReturnType<typeof snapshot>) => void;
-    serviceClient.get.mockReturnValueOnce(
-      new Promise((resolve) => {
-        resolveStale = resolve;
-      })
-    );
-    void handleAgentSessionUpdated({ agentSessionId: 'session' });
-    await settle();
-    serviceClient.get.mockResolvedValue(snapshot(first));
-    await handleAgentSessionUpdated({ agentSessionId: 'session' });
-    await settle();
-    expect(model.header()?.pullRequestUrl).toBe(first);
-    resolveStale(snapshot(null));
-    await settle();
-    expect(model.header()?.pullRequestUrl).toBe(first);
+      let resolveStale!: (value: ReturnType<typeof snapshot>) => void;
+      serviceClient.get.mockReturnValueOnce(
+        new Promise((resolve) => {
+          resolveStale = resolve;
+        })
+      );
+      void handleAgentSessionUpdated({ agentSessionId: 'session' });
+      await settle();
+      serviceClient.get.mockResolvedValue(snapshot(first));
+      await handleAgentSessionUpdated({ agentSessionId: 'session' });
+      await settle();
+      expect(model.header()?.pullRequestUrl).toBe(first);
+      expect(model.header()?.agent).toBe(
+        harness === 'codex-cloud' ? 'Codex Agent' : 'Cursor Agent'
+      );
+      await handleAgentSessionUpdated({ agentSessionId: 'session' });
+      await settle();
+      expect(model.header()?.pullRequestUrl).toBe(first);
+      expect(sibling.header()?.pullRequestUrl).toBe(first);
+      resolveStale(snapshot(null));
+      await settle();
+      expect(model.header()?.pullRequestUrl).toBe(first);
 
-    sessionFold.acquireAgentSessionFold.mock.calls[0]![0].onReplace([]);
-    expect(model.header()?.pullRequestUrl).toBe(first);
-    serviceClient.get.mockResolvedValue(snapshot(second));
-    await invalidateAgentSessionMetadata();
-    await settle();
-    expect(model.header()?.pullRequestUrl).toBe(second);
-    expect(sibling.header()?.pullRequestUrl).toBe(second);
-    dispose();
-    const calls = serviceClient.get.mock.calls.length;
-    await handleAgentSessionUpdated({ agentSessionId: 'session' });
-    await invalidateAgentSessionMetadata();
-    expect(serviceClient.get).toHaveBeenCalledTimes(calls);
-  });
+      sessionFold.acquireAgentSessionFold.mock.calls[0]![0].onReplace([]);
+      expect(model.header()?.pullRequestUrl).toBe(first);
+      serviceClient.get.mockResolvedValue(snapshot(second));
+      await invalidateAgentSessionMetadata();
+      await settle();
+      expect(model.header()?.pullRequestUrl).toBe(second);
+      expect(sibling.header()?.pullRequestUrl).toBe(second);
+      dispose();
+      const calls = serviceClient.get.mock.calls.length;
+      await handleAgentSessionUpdated({ agentSessionId: 'session' });
+      await invalidateAgentSessionMetadata();
+      expect(serviceClient.get).toHaveBeenCalledTimes(calls);
+    }
+  );
 
   it('restarts an initial pending snapshot when registration arrives', async () => {
     const snapshot = (pullRequestUrl: string | null) => ({

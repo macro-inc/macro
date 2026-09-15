@@ -215,8 +215,7 @@ where
         command: HarnessCommand,
     ) -> Result<CommandOutcome> {
         let span = tracing::Span::current();
-        // Open never routes: it is what creates the session row this routing
-        // would read, and a fresh id has no manager to defer to.
+        // Open creates the row and has no existing manager to route through.
         if matches!(command, HarnessCommand::Open(_)) {
             span.record("agent.session.management", "open");
             span.record("agent.command.forwarded", false);

@@ -205,6 +205,10 @@ impl InfraEnv {
             "CURSOR_API_KEY_KMS_KEY_ID".into(),
             resources::CURSOR_API_KEY_KMS_ALIAS.into(),
         );
+        env.insert(
+            "CODEX_OAUTH_KMS_KEY_ID".into(),
+            resources::CODEX_OAUTH_KMS_ALIAS.into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());

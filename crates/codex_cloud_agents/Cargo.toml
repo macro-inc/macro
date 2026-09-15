@@ -1,0 +1,38 @@
+[package]
+name = "codex_cloud_agents"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+postgres = ["dep:agent_session", "dep:sqlx"]
+
+[[bin]]
+name = "codex-cloud-probe"
+path = "src/main.rs"
+
+[dependencies]
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+agent_session = { path = "../agent_session", optional = true }
+sqlx = { workspace = true, optional = true }
+agent-client-protocol = { workspace = true }
+base64 = { workspace = true }
+clap = { workspace = true }
+futures = { workspace = true }
+lazy-regex = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+rootcause = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true }
+tokio = { workspace = true, features = ["signal", "time", "io-std", "io-util", "sync"] }
+tokio-util = { workspace = true, features = ["compat"] }
+uuid = { workspace = true }
+zeroize = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+agent_fold = { path = "../agent_fold", default-features = false }
+axum = { workspace = true }
+insta = { version = "1.48.0", features = ["json"] }
+tokio = { workspace = true, features = ["net", "test-util"] }
