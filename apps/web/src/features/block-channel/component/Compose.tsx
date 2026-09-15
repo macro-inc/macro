@@ -20,6 +20,7 @@ import {
 } from '@components/app/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -196,6 +197,9 @@ export function ChannelCompose() {
     },
   });
   clearComposer = () => markdownEditor.controls.clear();
+  const hasLineBreaks = createHasLineBreaks(
+    markdownEditor.buildHandle().lexical
+  );
 
   const placeholder = createMemo(() => {
     const name = channelName();
@@ -271,12 +275,20 @@ export function ChannelCompose() {
                 input={inputState.view()}
                 commands={inputState.commands}
               >
-                <ComposerSurface>
+                <ComposerSurface appearance="chat">
                   <Input.DropZone
                     onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
                     onDragEnd={() => inputState.setIsDraggedOver(false)}
                   >
-                    <Input.Layout>
+                    <Input.Layout
+                      data-composer-inline={
+                        !inputState.view().showFormatRibbon &&
+                        !inputState.view().attachments?.length &&
+                        !hasLineBreaks()
+                          ? ''
+                          : undefined
+                      }
+                    >
                       <Input.DropOverlay />
                       <Input.FormatRibbon>
                         <FormatButtons
@@ -318,7 +330,9 @@ export function ChannelCompose() {
                             >
                               <Input.AttachFilesAction />
                             </Show>
-                            <Input.ToggleFormatAction />
+                            <Show when={isTouchDevice()}>
+                              <Input.ToggleFormatAction />
+                            </Show>
                           </Input.Actions.Left>
                           <Input.Actions.Right>
                             <Input.SendAction />

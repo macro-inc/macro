@@ -8,7 +8,7 @@ import { entityKeys } from './keys';
 const STALE_TIME = 60 * 1000;
 const GC_TIME = 10 * 60 * 1000;
 
-async function fetchDocumentMetadata(
+export async function fetchDocumentMetadata(
   documentId: string
 ): Promise<DocumentMetadata> {
   const result = await storageServiceClient.getDocumentMetadata({ documentId });

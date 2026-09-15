@@ -1,3 +1,4 @@
+import composerStyles from '@app/components/ui/components/chat-composer.module.css';
 import { cn } from '@ui';
 import type { JSX } from 'solid-js';
 
@@ -5,6 +6,7 @@ interface MessageCardProps {
   messageId: string | null | undefined;
   isSelected: boolean;
   allowHover: boolean;
+  isTouch: boolean;
   /**
    * Click or Enter on the row. Clicks landing on a control inside the card are
    * excluded so row activation never fights an inner button.
@@ -23,17 +25,9 @@ interface MessageCardProps {
  * so both content shapes read identically and a single DOM node carries
  * `data-message-body-id` across an expand.
  *
- * Selection (one message at a time) reads as depth rather than an accent ring:
- * a drop shadow in light mode, an accent-tinted border in dark mode where a
- * shadow would be invisible. The border is present in every state so moving the
- * selection never reflows the list. Hover is the `hover` tint painted *over*
- * the card background (see the `overlay-*` utility) rather than replacing it,
- * so the card keeps its lift; the selected card skips the tint so selection
- * always reads as one settled state.
- *
- * There is no focus ring: focusing the card selects it, so the selected styling
- * is already the focus indicator. A ring would also linger after a collapse,
- * since this node keeps DOM focus while its content swaps.
+ * Desktop shares the chat composer's rounded surface, soft shadow and dark
+ * rim. Hover adds only a faint tint; keyboard focus uses a neutral outline.
+ * Touch devices retain their existing card and selection treatment.
  */
 export function MessageCard(props: MessageCardProps) {
   return (
@@ -43,9 +37,18 @@ export function MessageCard(props: MessageCardProps) {
           class={cn(
             'relative p-4 rounded-lg bg-message border border-edge-muted outline-none',
             'mobile:rounded-none mobile:border-0 mobile:border-t mobile:bg-transparent mobile:px-4 mobile:ring-0 mobile:shadow-none mobile:focus-visible:bg-hover',
-            props.isSelected
-              ? 'z-1 light-mode:shadow-lg light-mode:shadow-drop-shadow dark-mode:ring-1 dark-mode:ring-accent/40'
-              : props.allowHover && 'hover:overlay-hover'
+            props.isTouch
+              ? props.isSelected
+                ? 'z-1 light-mode:shadow-lg light-mode:shadow-drop-shadow dark-mode:ring-1 dark-mode:ring-accent/40'
+                : props.allowHover && 'hover:overlay-hover'
+              : [
+                  'glass-input focus-visible:outline-1 focus-visible:outline-ink/20 focus-visible:outline-offset-2',
+                  composerStyles.surface,
+                  props.isSelected && 'z-1',
+                  !props.isSelected &&
+                    props.allowHover &&
+                    'hover:overlay-[color-mix(in_srgb,var(--color-ink)_1%,transparent)]',
+                ]
           )}
           style={{ '--user-icon-width': '1rem' }}
           data-message-body-id={props.messageId}

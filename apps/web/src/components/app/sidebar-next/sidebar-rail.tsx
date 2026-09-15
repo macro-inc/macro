@@ -8,6 +8,7 @@ import {
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
 import { useActiveCallsQuery } from '@queries/call/call';
+import { TooltipGroup } from '@ui';
 import { For } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
@@ -21,9 +22,6 @@ export type SidebarRailProps = {
   sidebarState?: SidebarState;
   onOpenChange: (open: boolean) => void;
 };
-
-/** 36px buttons plus the 12px of padding either side. */
-const RAIL_WIDTH = 'w-15';
 
 /**
  * The rebuilt app sidebar, behind `enable-new-app-views`: a single always-narrow
@@ -70,33 +68,35 @@ export const SidebarRail = (props: SidebarRailProps) => {
   };
 
   return (
-    <div
-      {...hotkeyScopeNeutralAttribute}
-      data-ui="sidebar-rail"
-      class={`relative flex h-full ${RAIL_WIDTH} shrink-0 flex-col items-center gap-2 overflow-hidden border-r border-thread-rail bg-surface px-3 pb-3 pt-3`}
-    >
-      <SidebarRailCreateButton />
-      <SearchRailButton />
+    <TooltipGroup openDelay={2000} skipDelayDuration={0}>
+      <div
+        {...hotkeyScopeNeutralAttribute}
+        data-ui="sidebar-rail"
+        class="[&_*]:transition-none relative flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-hidden border-r border-edge-muted bg-surface px-2.5 pb-3 pt-3"
+      >
+        <SidebarRailCreateButton />
+        <SearchRailButton />
 
-      <nav class="shrink-0 pt-5">
-        <ul class="flex flex-col items-center gap-2">
-          <For each={visibleNavItems(gates())}>
-            {(item) => (
-              <li class="flex">
-                <ListNav
-                  item={item}
-                  unread={hasUnread(item.id)}
-                  activeCall={item.id === 'channels' && hasActiveCall()}
-                />
-              </li>
-            )}
-          </For>
-        </ul>
-      </nav>
+        <nav class="shrink-0 pt-5">
+          <ul class="flex flex-col items-center gap-2">
+            <For each={visibleNavItems(gates())}>
+              {(item) => (
+                <li class="flex">
+                  <ListNav
+                    item={item}
+                    unread={hasUnread(item.id)}
+                    activeCall={item.id === 'channels' && hasActiveCall()}
+                  />
+                </li>
+              )}
+            </For>
+          </ul>
+        </nav>
 
-      <div class="min-h-0 flex-1" />
+        <div class="min-h-0 flex-1" />
 
-      <FooterActions />
-    </div>
+        <FooterActions />
+      </div>
+    </TooltipGroup>
   );
 };

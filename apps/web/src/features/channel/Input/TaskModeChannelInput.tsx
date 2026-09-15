@@ -1,12 +1,12 @@
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isPlatform } from '@core/util/platform';
 import { makePersisted } from '@solid-primitives/storage';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import { createSignal, onCleanup, Show, splitProps } from 'solid-js';
 import { ChannelInput, type ChannelInputProps } from './ChannelInput';
 import { Input } from './Input';
 import { TaskComposer, type TaskComposerSendPayload } from './TaskComposer';
-import { TaskModeSwitch } from './TaskModeSwitch';
 import type { InputHandle } from './types';
 import type { InputTaskPersistence } from './utils/persistence';
 
@@ -31,13 +31,13 @@ function MessageModeActions(props: {
       fallback={
         <Input.Actions>
           <Input.Actions.Left>
-            <Input.AttachFilesAction />
-            <Input.ToggleFormatAction />
-            <Show when={props.canUseTaskMode}>
-              <TaskModeSwitch
-                checked={false}
-                onChange={props.onEnterTaskMode}
-              />
+            <Input.AttachFilesAction
+              onCreateTask={
+                props.canUseTaskMode ? props.onEnterTaskMode : undefined
+              }
+            />
+            <Show when={isTouchDevice()}>
+              <Input.ToggleFormatAction />
             </Show>
           </Input.Actions.Left>
           <Input.Actions.Right>
@@ -168,10 +168,13 @@ export function TaskModeChannelInput(props: TaskModeChannelInputProps) {
                   }
                   draftPersistenceKey={local.taskPersistence?.draftKey}
                   modeSwitch={
-                    <TaskModeSwitch
-                      checked={true}
-                      onChange={() => setTaskMode(false)}
-                    />
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setTaskMode(false)}
+                    >
+                      Back to message
+                    </Button>
                   }
                   onSend={handleTaskSend}
                 />

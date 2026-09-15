@@ -1,7 +1,11 @@
 import type { EntityData, WithNotification } from '@entity';
 import { describe, expect, it, vi } from 'vitest';
 import { buildInboxQuery } from './inbox-query';
-import { groupInboxEntitiesByDate, inboxGroupTimestamp } from './inbox-results';
+import {
+  groupInboxEntitiesByDate,
+  inboxGroupTimestamp,
+  mergeHomeEntities,
+} from './inbox-results';
 
 // The soup barrel these pull in transitively imports the websocket client
 // modules, which open real sockets at module scope and reject under jsdom.
@@ -133,5 +137,80 @@ describe('inbox date buckets', () => {
       'Today',
       'Last 7 days',
     ]);
+  });
+});
+
+describe('Home activity and notifications', () => {
+  const signal = { tab: 'signal' as const, capabilities };
+  const recent = (id: string, touchedAt: string) => ({
+    ...staleTaskFreshComment,
+    id,
+    notifiedAt: undefined,
+    // Someone else's later edit must not determine my recency.
+    updatedAt: '2026-09-03T12:00:00Z',
+    touchedAt,
+  });
+
+  it('includes own activity without notifications and sorts by own action time', () => {
+    const rows = mergeHomeEntities(
+      [staleTaskFreshComment],
+      [
+        recent('older', '2026-09-01T12:00:00Z'),
+        recent('newer', '2026-09-02T18:00:00Z'),
+      ],
+      signal
+    );
+    expect(rows.map((row) => row.id)).toEqual(['newer', 'task', 'older']);
+    expect(rows[2].sortTs).toBe('2026-09-01T12:00:00Z');
+    expect(
+      groupInboxEntitiesByDate(
+        rows,
+        signal,
+        now,
+        (entity) => entity.sortTs
+      ).map((group) => group.label)
+    ).toEqual(['Today', 'Yesterday']);
+  });
+
+  it('deduplicates an entity, retaining notifications and the latest relevant timestamp', () => {
+    const notifications = () => [];
+    const notified = { ...staleTaskFreshComment, notifications };
+    const rows = mergeHomeEntities(
+      [notified],
+      [recent('task', '2026-09-02T18:00:00Z')],
+      signal
+    );
+    expect(rows).toHaveLength(1);
+    expect(rows[0].notifications).toBe(notifications);
+    expect(rows[0].sortTs).toBe('2026-09-02T18:00:00Z');
+    expect(rows[0].notifiedAt).toBe(notified.notifiedAt);
+    expect(notified.sortTs).toBeUndefined();
+    expect(
+      mergeHomeEntities(
+        [notified],
+        [recent('task', '2026-09-01T12:00:00Z')],
+        signal
+      )[0].sortTs
+    ).toBe(notified.notifiedAt);
+  });
+
+  it('keeps sent mail and AI chats without requiring an unread notification', () => {
+    const sent = {
+      ...freshEmail,
+      done: true,
+      isRead: true,
+      touchedAt: '2026-09-02T18:00:00Z',
+    };
+    const chat = {
+      ...recent('chat', '2026-09-02T17:00:00Z'),
+      type: 'chat' as const,
+    };
+    expect(
+      mergeHomeEntities([], [sent, chat], signal).map((row) => row.type)
+    ).toEqual(['email', 'chat']);
+  });
+
+  it('rejects cache inserts without a recorded own touch', () => {
+    expect(mergeHomeEntities([], [freshEmail], signal)).toEqual([]);
   });
 });

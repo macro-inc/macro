@@ -1,3 +1,4 @@
+import composerStyles from '@app/components/ui/components/chat-composer.module.css';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
@@ -25,6 +26,7 @@ import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { mergeRegister } from '@lexical/utils';
 import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
@@ -39,7 +41,7 @@ import type { PropertyApiValues } from '@property/types';
 import { useUpsertToHistoryMutation } from '@queries/history/history';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, Hotkey, Scroll, ToggleSwitch } from '@ui';
+import { Button, cn, Hotkey, Scroll, ToggleSwitch } from '@ui';
 import {
   $getRoot,
   $getSelection,
@@ -807,11 +809,19 @@ export function ComposeTask(props: ComposeTaskProps) {
 
   return (
     <div
-      class="portal-scope flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4"
+      class={cn(
+        'portal-scope flex flex-col relative h-full max-h-full min-h-0 p-4 gap-4',
+        !isTouchDevice() && splitPanel.handle.isPopover() && 'p-[7.5px]'
+      )}
       tabIndex={-1}
       ref={setContainerRef}
     >
-      <div class="flex items-center gap-1">
+      <div
+        class={cn(
+          'flex items-center gap-1',
+          !isTouchDevice() && composerStyles.actions
+        )}
+      >
         <div class="flex-1 flex items-center">
           <Show when={splitPanel?.handle.isPopover()}>
             <Button
@@ -833,7 +843,7 @@ export function ComposeTask(props: ComposeTaskProps) {
             size="sm"
             variant="outline"
             depth={3}
-            class="bg-surface px-3"
+            class={cn('bg-surface px-3', !isTouchDevice() && 'rounded-full')}
           >
             Clear Draft
           </Button>
@@ -849,7 +859,12 @@ export function ComposeTask(props: ComposeTaskProps) {
           </Button>
         </Show>
       </div>
-      <div class="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <div
+        class={cn(
+          'flex-1 min-h-0 flex flex-col overflow-hidden',
+          !isTouchDevice() && splitPanel.handle.isPopover() && 'px-[8.5px]'
+        )}
+      >
         <div class="shrink-0 flex gap-2 items-start px-2 mb-4">
           <Show when={tagLayoutMode() === 'title'}>
             <div class={COMPOSER_TITLE_LINE_CLASS}>
@@ -969,7 +984,12 @@ export function ComposeTask(props: ComposeTaskProps) {
         </div>
       </Show>
 
-      <div class="shrink-0 flex justify-between items-end gap-2">
+      <div
+        class={cn(
+          'shrink-0 flex justify-between items-end gap-2',
+          !isTouchDevice() && composerStyles.actions
+        )}
+      >
         <input
           ref={(el) => {
             attachInputRef = el;
@@ -1000,7 +1020,10 @@ export function ComposeTask(props: ComposeTaskProps) {
             disabled={title().trim().length === 0 || isCreating()}
             variant={title().trim().length === 0 ? 'ghost' : 'accent'}
             depth={3}
-            class="gap-3 rounded-lg border-0"
+            class={cn(
+              'gap-3 rounded-lg border-0',
+              !isTouchDevice() && 'rounded-full h-[33.75px] px-[15px]'
+            )}
           >
             Create Task
             <Hotkey shortcut="cmd+enter" theme="current" />

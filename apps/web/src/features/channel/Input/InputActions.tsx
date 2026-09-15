@@ -1,13 +1,18 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
+import TaskIcon from '@phosphor/list-checks.svg';
+import PaperclipIcon from '@phosphor/paperclip.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import FormatIcon from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
-import type { JSX } from 'solid-js';
+import { Dropdown } from '@ui';
+import { type JSX, Show } from 'solid-js';
 import { InputActionButton } from './ActionButton';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
 import { useInput, useInputCommands } from './context';
 
-export function AttachFilesAction() {
+export function AttachFilesAction(props: { onCreateTask?: () => void } = {}) {
+  const input = useInput();
   const commands = useInputCommands();
   let fileInputRef: HTMLInputElement | undefined;
 
@@ -33,12 +38,47 @@ export function AttachFilesAction() {
         onChange={onAttachFiles}
         data-input-attach-file-picker
       />
-      <InputActionButton
-        label="Attach files"
-        onClick={() => fileInputRef?.click()}
+      <Show
+        when={!isTouchDevice()}
+        fallback={
+          <InputActionButton
+            label="Attach files"
+            onClick={() => fileInputRef?.click()}
+          >
+            <PlusIcon />
+          </InputActionButton>
+        }
       >
-        <PlusIcon />
-      </InputActionButton>
+        <Dropdown placement="top-start" modal={false}>
+          <Dropdown.Trigger
+            aria-label="Add to message"
+            variant="ghost"
+            size="icon-sm"
+            class="rounded-full"
+          >
+            <PlusIcon />
+          </Dropdown.Trigger>
+          <Dropdown.Content>
+            <Dropdown.Group>
+              <Dropdown.Item onSelect={() => fileInputRef?.click()}>
+                <PaperclipIcon class="size-4" /> Attach files
+              </Dropdown.Item>
+              <Dropdown.CheckboxItem
+                closeOnSelect
+                checked={!!input().showFormatRibbon}
+                onChange={() => commands.toggleFormatRibbon()}
+              >
+                <FormatIcon class="size-4" /> Formatting
+              </Dropdown.CheckboxItem>
+              <Show when={props.onCreateTask}>
+                <Dropdown.Item onSelect={() => props.onCreateTask?.()}>
+                  <TaskIcon class="size-4" /> Create task
+                </Dropdown.Item>
+              </Show>
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Dropdown>
+      </Show>
     </>
   );
 }

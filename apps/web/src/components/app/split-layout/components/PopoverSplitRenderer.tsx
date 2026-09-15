@@ -1,9 +1,10 @@
+import composerStyles from '@app/components/ui/components/chat-composer.module.css';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { Dialog, Panel } from '@ui';
+import { cn, Dialog, Panel } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -53,6 +54,9 @@ function PopoverSplitModal(props: {
   popover: PopoverSplitData;
   onClose: () => void;
 }) {
+  const isTaskComposer = () =>
+    props.popover.content.type === 'component' &&
+    props.popover.content.id === 'task-compose';
   const [panelRef, setPanelRef] = createSignal<HTMLElement | null>(null);
   const [displayName, setDisplayName] = createSignal(props.popover.content.id);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
@@ -181,8 +185,18 @@ function PopoverSplitModal(props: {
           open={props.popover.isOpen}
           onOpenChange={onOpenChange}
           contentRef={attachPanel}
+          class={cn(
+            isTaskComposer() && [composerStyles.surface, 'glass-input']
+          )}
         >
-          <Panel depth={2} class="rounded-xl bg-dialog *:max-h-[75vh]">
+          <Panel
+            depth={2}
+            hideBorder={isTaskComposer()}
+            class={cn(
+              'rounded-xl bg-dialog *:max-h-[75vh]',
+              isTaskComposer() && 'rounded-[inherit] bg-transparent'
+            )}
+          >
             <Content />
           </Panel>
         </Dialog>

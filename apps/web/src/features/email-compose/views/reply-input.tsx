@@ -1,3 +1,4 @@
+import composerStyles from '@app/components/ui/components/chat-composer.module.css';
 import { EmailAttachmentPill } from '@app/features/email-message/components/attachment-pill';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
@@ -305,7 +306,10 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       class={cn(
         'relative flex flex-col flex-1 max-w-full min-h-0',
         isMobileDrawer() && 'min-h-full overflow-y-scroll overscroll-y-none',
-        props.unframed ? 'rounded-lg' : 'rounded-xl bg-menu-glass glass-input'
+        props.unframed ? 'rounded-lg' : 'rounded-xl bg-menu-glass glass-input',
+        props.unframed &&
+          !composeContext.presentation.isTouch() &&
+          'overflow-visible'
       )}
       style={props.unframed ? { 'background-color': 'transparent' } : undefined}
       hideBorder={props.unframed}
@@ -413,6 +417,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
             class={cn(
               'ph-no-capture cursor-text wrap-break-word text-ink h-auto overflow-visible',
               isMobileDrawer() ? 'text-[17px] leading-6' : 'text-sm',
+              !composeContext.presentation.isTouch() && 'text-[15px]',
               // Quoted thread collapses behind the "⋯" pill below
               // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
               // variants turn the underscore in .macro_quote into a space)
@@ -527,14 +532,28 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               />
             )}
           </Show>
-          {/* No fixed height: the send button (size-7.5) is taller than the icon
-              buttons, and a fixed h-9 minus the vertical padding left it 4px short
-              — with items-end it bled upward over the signature bar above. */}
+          {/* Keep the footer intrinsic-height so it cannot overlap the signature.
+              Desktop inline replies offset the card's 16px padding to 7.5px. */}
           <div
             ref={bottomBarRef}
-            class="shrink-0 flex flex-row w-full justify-between items-end space-x-2 px-0 pb-0 pt-1.5"
+            class={cn(
+              'shrink-0 flex flex-row w-full justify-between items-end space-x-2 px-0 pb-0 pt-1.5',
+              !composeContext.presentation.isTouch() &&
+                props.unframed &&
+                'w-auto -mx-[8.5px] -mb-[8.5px]',
+              !composeContext.presentation.isTouch() && [
+                composerStyles.actions,
+                'justify-end items-center space-x-0 gap-[3.75px]',
+              ]
+            )}
           >
-            <div class="flex flex-row items-center gap-1">
+            <div
+              class={cn(
+                'flex flex-row items-center gap-1',
+                !composeContext.presentation.isTouch() &&
+                  'flex-row-reverse gap-[3.75px]'
+              )}
+            >
               <div class="relative flex">
                 <AttachButton />
               </div>
@@ -564,6 +583,11 @@ export function ReplyInputView(props: ReplyInputViewProps) {
                 />
               </Show>
               <SendButton
+                class={
+                  !composeContext.presentation.isTouch()
+                    ? composerStyles.sendButton
+                    : undefined
+                }
                 disabled={sendActionDisabled()}
                 pending={isSending()}
                 hidden={sendActionHidden()}

@@ -15,7 +15,7 @@ export function InboxDateGroupHeader(props: {
             'group/header relative flex items-center gap-2.5 rounded-lg px-2 py-1.5 text-xs font-semibold tracking-tight',
             'border-none my-0 text-ink-extra-muted/80',
             'mx-0 w-full',
-            'pl-(--soup-row-padding-l)',
+            'px-4',
             !props.isFirst && 'pt-5'
           )}
         >

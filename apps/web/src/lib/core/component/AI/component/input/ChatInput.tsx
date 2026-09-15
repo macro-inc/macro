@@ -13,6 +13,7 @@ import { isImageAttachment } from '@core/component/AI/util/attachment';
 import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -24,6 +25,7 @@ import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideTo
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, ComposerSurface, cn, SendButton as UiSendButton } from '@ui';
@@ -49,7 +51,9 @@ type ChatInputProps = {
 };
 
 type ChatInputComponentProps = {
-  variant?: 'default' | 'tall';
+  variant?: 'default' | 'tall' | 'home';
+  class?: string;
+  placeholder?: string;
   editor: EditorConfigBuilder;
   initialValue?: string;
   onChange?: (markdown: string) => void;
@@ -119,7 +123,10 @@ export function ChatInput(props: ChatInputComponentProps) {
   // the right-hand controls (whose width changes with the selector's state).
   const [rightControlsEl, setRightControlsEl] = createSignal<HTMLElement>();
   const rightControlsSize = createElementSize(rightControlsEl);
-  const rightControlsInset = () => (rightControlsSize.width ?? 44) + 10;
+  const rightControlsInset = () =>
+    isTouchDevice()
+      ? (rightControlsSize.width ?? 44) + 10
+      : (rightControlsSize.width ?? 41.25) + 9.375;
 
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
   const { hasConsent, requestConsent, ConsentDialog } = useAiDataConsentGate();
@@ -164,6 +171,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   const isMultiline = () => {
     // Access markdownText to create reactive dependency
     const text = markdownText();
+    if (hasLineBreaks()) return true;
     if (text.trim().length === 0) return false;
     if (!mdRef) return false;
     return mdRef.scrollHeight > LINE_HEIGHT_THRESHOLD;
@@ -215,6 +223,8 @@ export function ChatInput(props: ChatInputComponentProps) {
       props.onChange?.(md);
     });
 
+  const hasLineBreaks = createHasLineBreaks(props.editor.buildHandle().lexical);
+
   const hasAttachments = () =>
     attachments.attached().some(isImageAttachment) ||
     uploadQueue.uploading().length > 0;
@@ -229,7 +239,9 @@ export function ChatInput(props: ChatInputComponentProps) {
       aria-label="Attach files"
       onClick={() => setShowAttachMenu((prev) => !prev)}
     >
-      <PaperclipIcon />
+      <Show when={!isTouchDevice()} fallback={<PaperclipIcon />}>
+        <PlusIcon />
+      </Show>
     </Button>
   );
 
@@ -263,7 +275,11 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   const RightControls = () => (
-    <div ref={setRightControlsEl} class="flex shrink-0 items-center gap-1">
+    <div
+      data-chat-input-controls
+      ref={setRightControlsEl}
+      class="flex shrink-0 items-center gap-1"
+    >
       <ModelSelector
         selectedModel={model()}
         models={modelOptions()}
@@ -300,12 +316,14 @@ export function ChatInput(props: ChatInputComponentProps) {
   return (
     <div class="relative">
       <ComposerSurface
+        appearance="chat"
         class={cn(
           'h-auto',
           !isMultiline() &&
             !hasAttachments() &&
             !isTallVariant() &&
-            'touch:rounded-full'
+            'touch:rounded-full',
+          props.class
         )}
       >
         <div
@@ -345,6 +363,9 @@ export function ChatInput(props: ChatInputComponentProps) {
           </Show>
 
           <div
+            data-chat-input-layout=""
+            data-chat-input-multiline={isMultiline() ? '' : undefined}
+            data-chat-input-tall={isTallVariant() ? '' : undefined}
             ref={setLineEl}
             class={cn('relative px-2 py-1.5 touch:min-h-12.5 touch:py-[9px]', {
               'flex flex-col px-2 py-2 touch:p-0': isTallVariant(),
@@ -375,6 +396,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               </div>
             </Show>
             <div
+              data-chat-input-editor=""
               id={CHAT_INPUT_TEXT_AREA_ID}
               class={cn(
                 'text-sm text-ink touch:px-3 touch:py-2',
@@ -401,7 +423,8 @@ export function ChatInput(props: ChatInputComponentProps) {
               <MarkdownShell
                 config={props.editor}
                 placeholder={
-                  isTouchDevice() ? 'Ask AI…' : 'Ask AI, @mention anything'
+                  props.placeholder ??
+                  (isTouchDevice() ? 'Ask AI…' : 'Ask AI, @mention anything')
                 }
                 initialValue={props.initialValue}
                 autofocus={
@@ -419,6 +442,7 @@ export function ChatInput(props: ChatInputComponentProps) {
             </div>
 
             <div
+              data-chat-input-toolbar=""
               class={cn('contents', {
                 'flex justify-between items-center touch:h-8 touch:gap-2 touch:p-2 touch:mb-2':
                   isTallVariant(),

@@ -81,7 +81,6 @@ import { AnimatedCompanyIcon } from '@icon/wide-company';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedHomeIcon } from '@icon/wide-home';
-import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
@@ -189,9 +188,9 @@ const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 const SIDEBAR_LINKS = [
   {
     id: 'inbox',
-    label: 'Notifications',
+    label: 'Home',
     href: LIST_VIEW_PATHS.inbox,
-    icon: AnimatedInboxIcon,
+    icon: AnimatedHomeIcon,
     hotkey: 'i',
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
@@ -1030,7 +1029,7 @@ const COMPANIES_LINK: SidebarItem = {
 
 const DASHBOARD_LINK: SidebarItem = {
   id: 'home',
-  label: 'Home',
+  label: 'Assistant',
   href: '/home',
   icon: AnimatedHomeIcon,
   hotkey: 'h',
@@ -1497,7 +1496,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar flex flex-col gap-0 overflow-hidden bg-surface px-3 pb-3 pt-4 text-[13px]',
         isExpanded() &&
-          'relative h-full shrink-0 max-w-55 w-55 border-r border-thread-rail opacity-100',
+          'relative h-full shrink-0 max-w-55 w-55 border-r border-edge-muted opacity-100',
         props.sidebarState === 'hidden' &&
           'fixed left-0 top-0 bottom-0 h-full -translate-x-full max-w-0 w-0 opacity-0 pointer-events-none',
         isCollapsed() && 'fixed z-modal-content',

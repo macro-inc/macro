@@ -21,7 +21,7 @@ function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3',
+        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge-muted px-4 py-3',
         local.class
       )}
       data-view-sidebar-header=""
@@ -59,6 +59,19 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
   );
 }
 
+function CompactContent(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['class']);
+  return (
+    <Content
+      {...rest}
+      class={cn(
+        'px-1.5 [&_nav]:gap-1 [&_[data-view-sidebar-item]]:border-0 [&_[data-view-sidebar-item]:hover]:bg-none [&_[data-view-sidebar-item]]:h-8 [&_[data-view-sidebar-item]]:gap-2 [&_[data-view-sidebar-item]]:px-2.5 [&_[data-view-sidebar-item]]:py-0 [&_[data-view-sidebar-item]]:font-normal [&_[data-view-sidebar-item]>span[aria-hidden]]:size-5 touch:[&_[data-view-sidebar-item]]:h-11',
+        local.class
+      )}
+    />
+  );
+}
+
 function Nav(props: JSX.HTMLAttributes<HTMLElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   return (
@@ -86,6 +99,7 @@ function Item(props: NavRowProps) {
       type={local.type ?? 'button'}
       active={local.active}
       aria-current={ariaCurrent()}
+      data-view-sidebar-item=""
       class={cn(
         'h-9 gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink-muted transition-none not-disabled:hover:bg-hover not-disabled:hover:text-ink',
         local.active && 'bg-active text-ink not-disabled:hover:bg-active',
@@ -100,6 +114,7 @@ export const ViewSidebar = Object.assign(Root, {
   Header,
   Title,
   Content,
+  CompactContent,
   Nav,
   Item,
 });

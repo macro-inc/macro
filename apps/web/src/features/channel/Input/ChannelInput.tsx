@@ -6,6 +6,7 @@ import {
   INSERT_DOCUMENT_MENTION_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
+import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
 import {
   clearDragInsertPreview,
   insertDocumentMentionAtDragCoordinates,
@@ -111,7 +112,9 @@ function WebDefaultActions(props: { input: InputData }) {
     <Input.Actions>
       <Input.Actions.Left>
         <Input.AttachFilesAction />
-        <Input.ToggleFormatAction />
+        <Show when={isTouchDevice()}>
+          <Input.ToggleFormatAction />
+        </Show>
         <Show when={isReplyInput(props.input)}>
           <Input.CloseReplyAction />
         </Show>
@@ -339,6 +342,7 @@ export function ChannelInput(props: ChannelInputProps) {
   });
   const markdownHandle = markdownEditor.buildHandle();
   const lexicalEditor = () => markdownHandle.lexical;
+  const hasLineBreaks = createHasLineBreaks(lexicalEditor());
   const [entityDragInsertStore, setEntityDragInsertStore] =
     createDragInsertStore();
 
@@ -452,7 +456,15 @@ export function ChannelInput(props: ChannelInputProps) {
         onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
         onDragEnd={() => inputState.setIsDraggedOver(false)}
       >
-        <Input.Layout>
+        <Input.Layout
+          data-composer-inline={
+            !inputState.view().showFormatRibbon &&
+            !inputState.view().attachments?.length &&
+            !hasLineBreaks()
+              ? ''
+              : undefined
+          }
+        >
           <Input.DropOverlay />
           <Input.FormatRibbon>
             <FormatButtons
@@ -529,6 +541,7 @@ export function ChannelInput(props: ChannelInputProps) {
           data-collapsed-input-file-picker
         />
         <CollapsedInput
+          appearance="chat"
           class="touch:rounded-full touch:island"
           draft={inputState.view().value}
           renderDraft={(draft) => (
@@ -551,6 +564,7 @@ export function ChannelInput(props: ChannelInputProps) {
         />
       </Show>
       <ComposerSurface
+        appearance="chat"
         onFocusOut={(e) => {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;

@@ -1,5 +1,4 @@
 import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
-import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { ComposeAgentSession } from '@app/features/block-agent/component/ComposeAgentSession';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
@@ -241,7 +240,7 @@ function LegacyInboxView() {
   const preset = getViewPreset('inbox');
   return (
     <SoupView
-      viewName="Notifications"
+      viewName="Home"
       initialFilters={preset?.filters}
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
@@ -316,30 +315,7 @@ function TrackedMyActivityView() {
   return <MyActivityView onOpen={openEntityInSplit} />;
 }
 
-function MyActivityViewWrapper() {
-  const activityFeedEnabled = useActivityFeedFlag();
-  const posthog = usePosthog();
-
-  // Registered even when the flag is off so a bookmarked /activity or a
-  // restored split recovers to the inbox instead of an empty split, and the
-  // data-owning feed view is never mounted. The redirect replaces the split
-  // irreversibly, so it must wait for PostHog to actually answer — on a
-  // fresh reload the flag reads false until flags load.
-  return (
-    <Show
-      when={activityFeedEnabled()}
-      fallback={
-        <Show when={posthog.flagsLoaded()}>
-          <RedirectSplit to={{ type: 'component', id: 'inbox' }} />
-        </Show>
-      }
-    >
-      <TrackedMyActivityView />
-    </Show>
-  );
-}
-
-registerComponent('activity', withAuth(MyActivityViewWrapper));
+registerComponent('activity', withAuth(TrackedMyActivityView));
 
 registerComponent(
   'reminders',

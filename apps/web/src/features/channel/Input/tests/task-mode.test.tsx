@@ -237,6 +237,10 @@ import { ChannelInput } from '../ChannelInput';
 import { TaskModeChannelInput } from '../TaskModeChannelInput';
 import type { InputData } from '../types';
 
+vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
+  createHasLineBreaks: () => () => false,
+}));
+
 const baseInput: InputData = {
   mode: 'channel',
   id: 'input-1',
@@ -271,7 +275,7 @@ describe('Channel input task mode', () => {
     expect(screen.queryByTestId('task-composer')).toBeNull();
   });
 
-  it('shows an unchecked task mode switch at the normal input width', () => {
+  it('keeps task creation inside the plus menu at the normal input width', () => {
     const { container } = render(() => (
       <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
     ));
@@ -279,8 +283,9 @@ describe('Channel input task mode', () => {
     expect(container.firstElementChild?.classList).toContain(
       'macro-message-width'
     );
-    const modeSwitch = screen.getByRole('switch', { name: 'Task' });
-    expect(modeSwitch).toHaveProperty('checked', false);
+    expect(screen.queryByRole('switch', { name: 'Task' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Add to message' })).toBeTruthy();
+    expect(screen.queryByRole('menuitem', { name: 'Create task' })).toBeNull();
     expect(screen.queryByTestId('task-composer')).toBeNull();
   });
 
@@ -290,7 +295,8 @@ describe('Channel input task mode', () => {
       <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
     ));
 
-    await user.click(screen.getByRole('switch', { name: 'Task' }));
+    await user.click(screen.getByRole('button', { name: 'Add to message' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Create task' }));
 
     expect(screen.getByTestId('task-composer')).toBeTruthy();
     const messageFace = container.querySelector('[data-input-face="message"]');
@@ -298,31 +304,35 @@ describe('Channel input task mode', () => {
     expect(messageFace?.classList.contains('hidden')).toBe(true);
     expect(taskFace?.classList.contains('hidden')).toBe(false);
 
-    // The switch rendered inside the composer footer is checked; toggling it
-    // returns to message mode but keeps the composer mounted for its draft.
-    const composerSwitch = within(taskFace as HTMLElement).getByRole('switch', {
-      name: 'Task',
-    });
-    expect(composerSwitch).toHaveProperty('checked', true);
-    await user.click(composerSwitch);
+    // Returning to messages preserves the mounted task draft.
+    await user.click(
+      within(taskFace as HTMLElement).getByRole('button', {
+        name: 'Back to message',
+      })
+    );
 
     expect(messageFace?.classList.contains('hidden')).toBe(false);
     expect(taskFace?.classList.contains('hidden')).toBe(true);
     expect(screen.getByTestId('task-composer')).toBeTruthy();
   });
 
-  it('enters task mode from clicks on the switch pill itself, not just the control', async () => {
+  it('opens formatting from the plus menu without switching to task mode', async () => {
     const user = userEvent.setup();
     render(() => (
       <TaskModeChannelInput input={baseInput} onSendTask={() => {}} />
     ));
-
-    // The pill (Kobalte switch root) is the label's parent; clicking its
-    // padding must toggle just like clicking the control or label.
-    const pill = screen.getByText('Task').parentElement as HTMLElement;
-    await user.click(pill);
-
-    expect(screen.getByTestId('task-composer')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Format' })).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Add to message' }));
+    await user.click(
+      screen.getByRole('menuitemcheckbox', { name: 'Formatting' })
+    );
+    expect(screen.queryByTestId('task-composer')).toBeNull();
+    await user.click(screen.getByRole('button', { name: 'Add to message' }));
+    expect(
+      screen
+        .getByRole('menuitemcheckbox', { name: 'Formatting' })
+        .getAttribute('aria-checked')
+    ).toBe('true');
   });
 
   it('restores a persisted task mode on remount', async () => {
@@ -340,7 +350,8 @@ describe('Channel input task mode', () => {
         taskPersistence={taskPersistence}
       />
     ));
-    await user.click(screen.getByRole('switch', { name: 'Task' }));
+    await user.click(screen.getByRole('button', { name: 'Add to message' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Create task' }));
     expect(
       first.container
         .querySelector('[data-input-face="task"]')
@@ -373,7 +384,8 @@ describe('Channel input task mode', () => {
       <TaskModeChannelInput input={baseInput} onSendTask={onSendTask} />
     ));
 
-    await user.click(screen.getByRole('switch', { name: 'Task' }));
+    await user.click(screen.getByRole('button', { name: 'Add to message' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Create task' }));
     await user.click(screen.getByTestId('task-composer-send'));
 
     expect(onSendTask).toHaveBeenCalledOnce();

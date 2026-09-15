@@ -1,0 +1,28 @@
+/* Shared desktop selection for navigation and entity lists. */
+:global(html:not([data-touch-device='true'])) .row {
+  position: relative;
+  border-radius: 4px;
+}
+
+:global(html:not([data-touch-device='true'])) .selected {
+  background-color: color-mix(in srgb, var(--color-ink) 12%, var(--color-surface));
+
+  &::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    left: 0;
+    width: 3px;
+    border-radius: 4px 0 0 4px;
+    background-color: white;
+    pointer-events: none;
+  }
+}
+
+:global(html[data-theme-light='true']:not([data-touch-device='true'])) .selected {
+  background-color: color-mix(in srgb, var(--color-ink) 6%, var(--color-surface));
+
+  &::before {
+    background-color: black;
+  }
+}

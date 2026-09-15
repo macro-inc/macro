@@ -178,11 +178,12 @@ export function AgentInput(props: AgentInputProps) {
       </Show>
       {/* h-auto beats Surface's size-full so the in-flow controls are not
           clipped over the editor (that was Auto sitting on the placeholder). */}
-      <ComposerSurface class="h-auto">
+      <ComposerSurface appearance="chat" class="h-auto">
         {/* Desktop: one row, send right of the text. Touch: the text gets
             the whole width and the controls drop to a footer row (model
             left, send right) — the chat-tall / channel footer shape. */}
         <div
+          data-agent-input-layout
           class="flex items-end gap-1 px-2 py-1.5 touch:flex-col touch:items-stretch touch:gap-0 touch:p-0"
           onPointerDown={focusEditor}
           onMouseDown={focusEditor}
@@ -192,6 +193,7 @@ export function AgentInput(props: AgentInputProps) {
             the same 44px single-line height as ChatInput. */}
           <div
             id={AGENT_INPUT_TEXT_AREA_ID}
+            data-agent-input-editor
             ref={bodyRef}
             class={cn(
               'min-w-0 flex-1 pl-1 text-sm text-ink touch:px-3 touch:py-2',
@@ -217,7 +219,10 @@ export function AgentInput(props: AgentInputProps) {
           </div>
 
           {/* In-flow — never absolute over the text. */}
-          <div class="flex shrink-0 items-center gap-1 pb-0.5 touch:h-8 touch:gap-2 touch:p-2 touch:mb-2">
+          <div
+            data-agent-input-toolbar
+            class="flex shrink-0 items-center gap-1 pb-0.5 touch:h-8 touch:gap-2 touch:p-2 touch:mb-2"
+          >
             <Show when={isTouchDevice() && props.modelControl}>
               <div class="min-w-0">{props.modelControl}</div>
             </Show>

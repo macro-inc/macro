@@ -293,10 +293,8 @@ body.tauri-ios {
   --color-panel: var(--theme-panel, var(--color-surface-1));
   --color-dialog: var(--color-surface-2);
   --color-menu: var(--color-surface-2);
-  /* Menu surface for glassed floating chrome (menus, popovers, cmd+k, the
-     channel input): the menu color with a hint of see-through, mirroring the
-     site hero bar's `--b1 86%`. Pair `bg-menu-glass` with a `glass-*` utility
-     so a backdrop blur sits behind the translucency. */
+  /* Touch surfaces keep their translucent fill; desktop overrides it below
+     while retaining the shared glass rim and shadow. */
   --color-menu-glass: color-mix(in oklch, var(--color-menu) 88%, transparent);
   --color-tooltip: var(--color-surface-2);
   --color-toast: var(--color-surface-2);
@@ -525,6 +523,10 @@ body.tauri-ios {
 /* scuffed: might wan to use signals for this */
 @custom-variant touch (&:where(html[data-touch-device="true"] *));
 
+html:not([data-touch-device="true"]) {
+  --color-menu-glass: var(--color-menu);
+}
+
 @custom-variant mobile {
   &:where(html[data-touch-device="true"] *) {
     @media (max-width: 639px) {
@@ -615,6 +617,9 @@ html[data-theme-light='false'] {
      which Chrome ignores: the glass loses its blur in production builds while
      still looking right in dev. */
   backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  &:where(html:not([data-touch-device="true"]) *) {
+    backdrop-filter: none;
+  }
   box-shadow:
     inset 0 1px 0 color-mix(in oklch, var(--glass-tint) calc(var(--glass-highlight-base) * var(--glass-scale)), transparent),
     inset 0 -1px 0 color-mix(in oklch, var(--glass-shade-color) calc(var(--glass-shade-base) * var(--glass-scale)), transparent),

@@ -31,6 +31,10 @@ vi.hoisted(() => {
   });
 });
 
+vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
+  createHasLineBreaks: () => () => false,
+}));
+
 vi.mock('@core/util/upload', () => ({
   chatRuleset: {},
   uploadFile: vi.fn(),
@@ -359,8 +363,12 @@ describe('Input slots', () => {
 
     await user.click(screen.getByRole('button', { name: 'Send message' }));
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
-    await user.click(screen.getByRole('button', { name: 'Attach files' }));
-    await user.click(screen.getByRole('button', { name: 'Format' }));
+    await user.click(screen.getByRole('button', { name: 'Add to message' }));
+    await user.click(screen.getByRole('menuitem', { name: 'Attach files' }));
+    await user.click(screen.getByRole('button', { name: 'Add to message' }));
+    await user.click(
+      screen.getByRole('menuitemcheckbox', { name: 'Formatting' })
+    );
     await user.click(screen.getByRole('button', { name: 'Delete reply' }));
 
     expect(onSend).toHaveBeenCalledOnce();
@@ -385,7 +393,7 @@ describe('Input slots', () => {
     ));
 
     expect(screen.getByTestId('custom-actions')).toBeTruthy();
-    expect(screen.queryByRole('button', { name: 'Attach files' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Add to message' })).toBeNull();
     expect(screen.queryByRole('button', { name: 'Send message' })).toBeNull();
   });
 

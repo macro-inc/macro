@@ -1,3 +1,4 @@
+import composerStyles from '@app/components/ui/components/chat-composer.module.css';
 import { MAX_ATTACHMENTS_BYTES_SIZE } from '@app/features/email-compose/core/constants';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
@@ -9,11 +10,12 @@ import {
 } from '@core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
 import { fileSelector } from '@core/directive/fileSelector';
 
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { plural } from '@core/util/string';
 import PaperclipIcon from '@phosphor/paperclip.svg?component-solid';
 import TextAa from '@phosphor/text-aa.svg';
 import Trash from '@phosphor/trash.svg';
-import { Button, SendButton, Tooltip } from '@ui';
+import { Button, cn, SendButton, Tooltip } from '@ui';
 import { FORMAT_TEXT_COMMAND, type LexicalEditor } from 'lexical';
 import { createSignal, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
@@ -76,7 +78,16 @@ export function EmailComposeToolbar(props: {
           />
         </div>
       </Show>
-      <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 mt-2">
+      <div
+        class={cn(
+          'flex flex-row w-full h-8 justify-between items-center space-x-2 mt-2',
+          !isTouchDevice() &&
+            !ctx.isMobile() && [
+              composerStyles.actions,
+              'w-auto h-auto -mx-[8.5px] -mb-[8.5px] justify-end space-x-0 gap-[3.75px]',
+            ]
+        )}
+      >
         <Show
           when={!ctx.isMobile()}
           fallback={
@@ -115,9 +126,16 @@ export function EmailComposeToolbar(props: {
               <TextAa />
             </Button>
             <Show when={ctx.hasDraft()}>
-              <div aria-hidden="true" class="mx-1 h-4 w-px bg-edge-muted/70" />
+              <div
+                aria-hidden="true"
+                class={cn(
+                  'mx-1 h-4 w-px bg-edge-muted/70',
+                  !isTouchDevice() && 'hidden'
+                )}
+              />
               <Button
                 onclick={ctx.onDelete}
+                class={!isTouchDevice() ? 'order-first' : undefined}
                 tooltip="Delete draft"
                 size="icon-sm"
               >
@@ -137,6 +155,7 @@ export function EmailComposeToolbar(props: {
             </Show>
             <Tooltip label={ctx.sendTime() ? 'Send time is scheduled' : ''}>
               <SendButton
+                class={!isTouchDevice() ? composerStyles.sendButton : undefined}
                 onClick={() => ctx.onSend()}
                 disabled={
                   ctx.isSavingDraft?.() ||

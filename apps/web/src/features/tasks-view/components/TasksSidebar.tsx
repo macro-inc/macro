@@ -3,6 +3,7 @@ import {
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import {
@@ -11,15 +12,12 @@ import {
 } from '@app/util/favorites';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
 import CheckSquareIcon from '@phosphor/check-square.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import NoteIcon from '@phosphor/note-pencil.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { Button } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useTasksView } from '../tasks-view-context';
@@ -46,11 +44,12 @@ export function TasksNavigation(props: { onNavigate?: () => void }) {
               props.onNavigate?.();
             }}
           >
-            <Dynamic
-              component={item.icon}
+            <span
               aria-hidden="true"
-              class="size-4 shrink-0"
-            />
+              class="flex size-5 shrink-0 items-center justify-center"
+            >
+              <Dynamic component={item.icon} class="size-4" />
+            </span>
             <span class="truncate">{item.label}</span>
           </ViewSidebar.Item>
         )}
@@ -72,7 +71,10 @@ function FavoriteRow(props: {
         title={name()}
         onClick={(event) => props.onOpen(props.favorite, event)}
       >
-        <span class="flex size-4 shrink-0 items-center justify-center">
+        <span
+          aria-hidden="true"
+          class="flex size-5 shrink-0 items-center justify-center"
+        >
           <FavoriteIcon favorite={props.favorite} class="size-4" />
         </span>
         <span class="truncate">{name()}</span>
@@ -151,34 +153,15 @@ export function TasksSidebar() {
 
   return (
     <ViewSidebar.Root aria-label="Tasks navigation" class="gap-4 bg-panel">
-      <ViewSidebar.Header>
-        <div class="flex min-w-0 items-center gap-1">
-          <SplitPanel.CloseButton />
-          <ViewSidebar.Title>Tasks</ViewSidebar.Title>
-        </div>
-        <SplitPanel.ControlGroup>
-          <SplitPanel.BackButton />
-          <SplitPanel.ForwardButton />
-        </SplitPanel.ControlGroup>
-      </ViewSidebar.Header>
+      <SidebarCreateHeader
+        label="New task"
+        onCreate={() =>
+          layout.popoverSplit({ type: 'component', id: 'task-compose' })
+        }
+      />
 
-      <ViewSidebar.Content class="flex flex-col gap-6">
-        <div class="flex shrink-0 flex-col gap-6">
-          <Button
-            type="button"
-            variant="ghost"
-            depth={2}
-            class="h-10 shrink-0 justify-start gap-3 rounded-xl bg-surface px-3"
-            onClick={() =>
-              layout.popoverSplit({ type: 'component', id: 'task-compose' })
-            }
-          >
-            <PlusIcon class="size-4 shrink-0" />
-            New task
-          </Button>
-
-          <TasksNavigation />
-        </div>
+      <ViewSidebar.CompactContent class="flex flex-col gap-6">
+        <TasksNavigation />
 
         <TaskFavorites
           open={isSidebarSectionOpen('favorites')}
@@ -192,7 +175,7 @@ export function TasksSidebar() {
           open={isSidebarSectionOpen('tags')}
           onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
         />
-      </ViewSidebar.Content>
+      </ViewSidebar.CompactContent>
     </ViewSidebar.Root>
   );
 }

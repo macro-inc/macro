@@ -1,13 +1,16 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
+import styles from './chat-composer.module.css';
 import { Surface, type SurfaceProps } from './Surface';
 
-/** Shared glass chrome. Desktop radius = 14px action radius + 8px inset. */
+/** Chat chrome on desktop; existing glass/island styling on touch devices. */
 export function ComposerSurface(
-  props: Omit<SurfaceProps, 'depth' | 'hideBorder'>
+  props: Omit<SurfaceProps, 'depth' | 'hideBorder'> & {
+    appearance?: 'glass' | 'chat';
+  }
 ) {
-  const [local, rest] = splitProps(props, ['class']);
+  const [local, rest] = splitProps(props, ['class', 'appearance']);
   return (
     <Surface
       {...rest}
@@ -15,6 +18,7 @@ export function ComposerSurface(
         'rounded-[22px] bg-surface touch:rounded-3xl touch:island',
         !isTouchDevice() && 'glass-input bg-menu-glass',
         isTouchDevice() && 'bg-chrome',
+        !isTouchDevice() && local.appearance === 'chat' && styles.chat,
         local.class
       )}
       // Glass draws its own 1px rim; a Surface border would inset that rim

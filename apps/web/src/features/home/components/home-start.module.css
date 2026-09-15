@@ -1,0 +1,62 @@
+.root {
+  font-family: -apple-system-body, ui-sans-serif, -apple-system, system-ui,
+    'Segoe UI', Helvetica, 'Apple Color Emoji', Arial, sans-serif,
+    'Segoe UI Emoji', 'Segoe UI Symbol';
+  --home-suggestion-ink: #afafaf;
+  --home-composer-fill: #212121;
+  --home-composer-shadow: inset 0 0 1px 0 rgb(255 255 255 / 20%);
+  --home-suggestion-hover: rgb(255 255 255 / 6%);
+}
+
+:global(html[data-theme-light='true']) .root {
+  --home-suggestion-ink: #8f8f8f;
+  --home-composer-fill: #fff;
+  --home-composer-shadow: 0 0 0 1px rgb(0 0 0 / 4%),
+    0 2px 8px 0 rgb(0 0 0 / 4%), 0 4px 80px 8px rgb(0 0 0 / 2.4%);
+  --home-suggestion-hover: rgb(13 13 13 / 3%);
+}
+
+/* Measured from ChatGPT's expanded desktop composer. */
+.composer {
+  background: var(--home-composer-fill) !important;
+  box-shadow: var(--home-composer-shadow) !important;
+  backdrop-filter: none !important;
+  border-radius: 26.25px;
+  padding: 0;
+
+  &::after {
+    display: none;
+  }
+
+  [data-chat-input-layout] {
+    padding: 8.4375px 7.5px;
+  }
+
+  [data-chat-input-editor] {
+    padding: 5.625px 9.375px 0;
+    font-size: 15px;
+    line-height: 24.375px;
+  }
+
+  [contenteditable='true'] {
+    min-height: 48.75px;
+    max-height: 195px;
+    overflow-y: auto;
+  }
+
+  [data-chat-input-toolbar] button {
+    height: 33.75px;
+    font-size: 15px;
+  }
+
+  [data-chat-input-toolbar] > div:first-child button,
+  button[aria-label='Send'] {
+    width: 33.75px;
+  }
+
+  button[aria-label='Attach files'] svg,
+  button[aria-label='Send'] svg {
+    width: 22.5px;
+    height: 22.5px;
+  }
+}

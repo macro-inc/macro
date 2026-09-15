@@ -11,7 +11,6 @@ import {
   toEntityActionListState,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
-import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import {
   createSoupEntityActions,
   MaybeSoupEntityActionDrawerManager,
@@ -28,6 +27,7 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
+import { useChannelsContext } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
@@ -67,11 +67,30 @@ import {
   type InboxListStateSnapshot,
 } from '../persistence';
 import {
+  type InboxDataSource,
   type InboxDataSourceItem,
   useInboxDataSource,
 } from '../queries/use-inbox-query';
+import { HomeListEntity } from './HomeListEntity';
 import { InboxDateGroupHeader } from './InboxDateGroupHeader';
 import { InboxEmptyState } from './InboxEmptyState';
+
+function LoadMoreItems(props: { source: InboxDataSource }) {
+  return (
+    <Show when={props.source.hasMore()}>
+      <div class="flex justify-center px-4 py-3">
+        <Button
+          variant="outline"
+          size="sm"
+          disabled={props.source.isLoadingMore()}
+          onClick={() => void props.source.loadMore()}
+        >
+          {props.source.isLoadingMore() ? 'Loading…' : 'Load more'}
+        </Button>
+      </div>
+    </Show>
+  );
+}
 
 type InboxActionRow = {
   entity: WithNotification<EntityData>;
@@ -90,6 +109,11 @@ type InboxListProps = {
 
 /** Compact notification list used by the Notifications workspace. */
 export function InboxList(props: InboxListProps) {
+  const channels = useChannelsContext();
+  const channelName = (entity: EntityData) =>
+    entity.type === 'channel_thread'
+      ? (channels.channelsById()[entity.channelId]?.name ?? undefined)
+      : undefined;
   const { state } = useInboxView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -445,13 +469,30 @@ export function InboxList(props: InboxListProps) {
       <div
         ref={listRoot}
         role="grid"
-        aria-label="Notifications"
+        aria-label="Home"
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
         class="soup-list relative mt-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
         style={{ '--mobile-content-inset-top': '0px' }}
       >
+        <Show when={source.warning()}>
+          {(warning) => (
+            <div
+              role="status"
+              class="flex items-center gap-2 px-4 pb-2 text-xs text-ink-muted"
+            >
+              <span>{warning()}</span>
+              <button
+                type="button"
+                class="underline"
+                onClick={() => void source.refresh()}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+        </Show>
         <PullToRefresh
           scrollContainer={pullScrollContainer}
           onRefresh={pullRefresh}
@@ -483,7 +524,7 @@ export function InboxList(props: InboxListProps) {
             >
               <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
                 <SpinnerIcon
-                  aria-label="Loading notifications"
+                  aria-label="Loading Home"
                   class="size-5 animate-spin"
                 />
               </div>
@@ -494,7 +535,7 @@ export function InboxList(props: InboxListProps) {
                 ref={setEmptyViewport}
                 class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))] text-sm text-ink-muted"
               >
-                <span>Notifications couldn’t be loaded.</span>
+                <span>Home couldn’t be loaded.</span>
                 <Button
                   variant="outline"
                   size="sm"
@@ -511,6 +552,7 @@ export function InboxList(props: InboxListProps) {
                 class="min-h-0 flex-1 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))]"
               >
                 <InboxEmptyState />
+                <LoadMoreItems source={source} />
               </div>
             </Match>
 
@@ -527,7 +569,7 @@ export function InboxList(props: InboxListProps) {
                   data={rows()}
                   scrollRef={viewport()}
                   bufferSize={500}
-                  itemSize={88}
+                  itemSize={36}
                   keepMounted={
                     list.focus.index() >= 0 ? [list.focus.index()] : undefined
                   }
@@ -566,9 +608,14 @@ export function InboxList(props: InboxListProps) {
                               data-soup-entity
                             >
                               <div role="gridcell">
-                                <InboxListEntity
-                                  class="mx-0 w-full border-b-[1px] border-thread-rail touch:border-b-0"
-                                  cardClass="rounded-none px-4 py-3 mobile:pl-(--soup-row-padding-l)"
+                                <HomeListEntity
+                                  channelName={channelName(entityRow().entity)}
+                                  timestamp={
+                                    state.tab === 'signal'
+                                      ? entityRow().entity.sortTs
+                                      : (entityRow().entity.notifiedAt ??
+                                        entityRow().entity.sortTs)
+                                  }
                                   entity={entityRow().entity}
                                   occurrenceKey={entityRow().id}
                                   checked={list.selection.isSelected(
@@ -579,7 +626,6 @@ export function InboxList(props: InboxListProps) {
                                     !isTouchDevice() &&
                                     list.focus.key() === entityRow().id
                                   }
-                                  focusable={false}
                                   entityRowConfig={{
                                     swipeLeftColor: 'bg-success',
                                     swipeLeftRevealedComponent: (
@@ -654,6 +700,7 @@ export function InboxList(props: InboxListProps) {
                     </Switch>
                   )}
                 </Virtualizer>
+                <LoadMoreItems source={source} />
               </div>
             </Match>
           </Switch>

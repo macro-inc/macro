@@ -1,10 +1,12 @@
 import { focusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { type Accessor, type JSX, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
+import styles from './chat-composer.module.css';
 import { Layer } from './Layer';
 import { SendButton } from './SendButton';
 
@@ -26,6 +28,7 @@ export type CollapsedInputProps = {
    */
   disabled?: boolean;
   class?: string;
+  appearance?: 'default' | 'chat';
   /**
    * Target of the real input this trigger stands in for. Focused via the
    * `focusInput` directive when the trigger is clicked, so the iOS virtual
@@ -51,8 +54,12 @@ export function CollapsedInput(props: CollapsedInputProps) {
   return (
     <Layer depth={3} data-collapsed-input>
       <div
+        data-composer-collapsed
         class={cn(
           'rounded-xl w-full h-12.5 island flex min-w-0 items-center gap-1.5 px-2',
+          !isTouchDevice() &&
+            props.appearance === 'chat' &&
+            cn('glass-input', styles.chat),
           props.class
         )}
       >

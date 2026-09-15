@@ -2,7 +2,16 @@ import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { Placement } from '@floating-ui/dom';
 import { Tooltip as KobalteTooltip } from '@kobalte/core/tooltip';
 import type { ParentProps } from 'solid-js';
-import { createEffect, createSignal, For, on, onCleanup, Show } from 'solid-js';
+import {
+  createContext,
+  createEffect,
+  createSignal,
+  For,
+  on,
+  onCleanup,
+  Show,
+  useContext,
+} from 'solid-js';
 import { Hotkey } from '../../ui/components/Hotkey';
 import { tooltipsEnabled } from '../signals/signals';
 import { cn } from '../utils/classname';
@@ -21,6 +30,30 @@ type TooltipProps = ParentProps<{
   label: string;
   disabled?: boolean;
 }>;
+
+const TooltipTimingContext = createContext({
+  openDelay: 400,
+  skipDelayDuration: 300,
+});
+
+export function TooltipGroup(
+  props: ParentProps<{ openDelay: number; skipDelayDuration?: number }>
+) {
+  return (
+    <TooltipTimingContext.Provider
+      value={{
+        get openDelay() {
+          return props.openDelay;
+        },
+        get skipDelayDuration() {
+          return props.skipDelayDuration ?? 300;
+        },
+      }}
+    >
+      {props.children}
+    </TooltipTimingContext.Provider>
+  );
+}
 
 export type TooltipClassOptions = {
   class?: string;
@@ -41,6 +74,7 @@ export function tooltipClasses(options: TooltipClassOptions = {}): string {
  * </Tooltip>
  */
 export function Tooltip(props: TooltipProps) {
+  const timing = useContext(TooltipTimingContext);
   const [triggerRef, setTriggerRef] = createSignal<HTMLElement>();
   const [open, setOpen] = createSignal(false);
 
@@ -115,7 +149,8 @@ export function Tooltip(props: TooltipProps) {
       ignoreSafeArea={true}
       overflowPadding={16}
       fitViewport={true}
-      openDelay={400}
+      openDelay={timing.openDelay}
+      skipDelayDuration={timing.skipDelayDuration}
       closeDelay={0}
       flip={true}
       gutter={4}

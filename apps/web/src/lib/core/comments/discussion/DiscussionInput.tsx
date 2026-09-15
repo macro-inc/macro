@@ -1,5 +1,5 @@
 import { InputActionButton } from '@channel/Input/ActionButton';
-import { useInputCommands } from '@channel/Input/context';
+import { useInput, useInputCommands } from '@channel/Input/context';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { Input } from '@channel/Input/Input';
 import type {
@@ -16,11 +16,15 @@ import {
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
-import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
+import PaperclipIcon from '@phosphor/paperclip.svg';
+import PlusIcon from '@phosphor/plus.svg';
+import FormatIcon from '@phosphor/text-aa.svg';
 import { isIOS } from '@solid-primitives/platform';
-import { ComposerSurface } from '@ui';
+import { ComposerSurface, Dropdown } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -42,6 +46,7 @@ export type DiscussionInputProps = InputCallbacks & {
 };
 
 function AttachImagesAction() {
+  const input = useInput();
   const commands = useInputCommands();
   let fileInputRef: HTMLInputElement | undefined;
 
@@ -66,12 +71,42 @@ function AttachImagesAction() {
         accept="image/*"
         onChange={onAttachImages}
       />
-      <InputActionButton
-        label="Attach images"
-        onClick={() => fileInputRef?.click()}
+      <Show
+        when={!isTouchDevice()}
+        fallback={
+          <InputActionButton
+            label="Attach images"
+            onClick={() => fileInputRef?.click()}
+          >
+            <PaperclipIcon />
+          </InputActionButton>
+        }
       >
-        <PaperclipIcon />
-      </InputActionButton>
+        <Dropdown placement="top-start" modal={false}>
+          <Dropdown.Trigger
+            aria-label="Add to comment"
+            variant="ghost"
+            size="icon-sm"
+            class="rounded-full"
+          >
+            <PlusIcon />
+          </Dropdown.Trigger>
+          <Dropdown.Content>
+            <Dropdown.Group>
+              <Dropdown.Item onSelect={() => fileInputRef?.click()}>
+                <PaperclipIcon class="size-4" /> Attach images
+              </Dropdown.Item>
+              <Dropdown.CheckboxItem
+                closeOnSelect
+                checked={!!input().showFormatRibbon}
+                onChange={() => commands.toggleFormatRibbon()}
+              >
+                <FormatIcon class="size-4" /> Formatting
+              </Dropdown.CheckboxItem>
+            </Dropdown.Group>
+          </Dropdown.Content>
+        </Dropdown>
+      </Show>
     </>
   );
 }
@@ -81,7 +116,9 @@ function DefaultActions(props: { input: InputData; isSending: boolean }) {
     <Input.Actions>
       <Input.Actions.Left>
         <AttachImagesAction />
-        <Input.ToggleFormatAction />
+        <Show when={isTouchDevice()}>
+          <Input.ToggleFormatAction />
+        </Show>
         <Show when={isReplyInput(props.input)}>
           <Input.CloseReplyAction />
         </Show>
@@ -144,6 +181,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   // Build the editor handle immediately to ensure lexical is available for commands
   markdownEditor.buildHandle();
+  const hasLineBreaks = createHasLineBreaks(markdownEditor.lexical);
 
   const commands = {
     send: async () => {
@@ -207,8 +245,12 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   return (
     <Input.Root input={inputView()} commands={commands}>
-      <ComposerSurface class="h-auto">
-        <Input.Layout>
+      <ComposerSurface appearance="chat" class="h-auto">
+        <Input.Layout
+          data-composer-inline={
+            !showFormatRibbon() && !hasLineBreaks() ? '' : undefined
+          }
+        >
           <Input.FormatRibbon>
             <FormatButtons
               selectionState={() => markdownEditor.selection}

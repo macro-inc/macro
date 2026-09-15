@@ -1,0 +1,329 @@
+/* Shared desktop chrome for chat composers and email message cards. */
+.surface,
+.chat {
+  background: var(--color-surface-2) !important;
+  border-radius: 26.25px;
+  backdrop-filter: none !important;
+}
+
+/* Desktop composer geometry is 15/16 of the original 16px design. */
+.chat {
+  [data-chat-input-toolbar] > :global(.absolute) {
+    bottom: 7.5px;
+  }
+
+  [data-chat-input-toolbar] > :global(.left-2) {
+    left: 7.5px;
+  }
+
+  [data-chat-input-toolbar] > :global(.right-2) {
+    right: 7.5px;
+  }
+
+  [data-chat-input-controls],
+  [data-agent-input-layout],
+  [data-agent-input-toolbar] {
+    gap: 3.75px;
+  }
+
+  [data-chat-input-layout] button[aria-haspopup] {
+    font-size: 15px;
+    gap: 5.625px;
+    padding-inline: 7.5px;
+
+    svg {
+      width: 15px;
+      height: 15px;
+    }
+  }
+
+  [data-chat-input-toolbar] button[aria-label='Stop generating'] {
+    width: 33.75px;
+  }
+
+  [data-chat-input-toolbar] button > :global(.bg-current),
+  [data-agent-input-toolbar] button > :global(.bg-current) {
+    width: 13.125px;
+    height: 13.125px;
+  }
+
+  [data-chat-input-layout]:not([data-chat-input-tall]) {
+    min-height: 48.75px;
+    padding: 12.1875px 7.5px;
+  }
+
+  [data-chat-input-editor] {
+    font-size: 15px;
+    line-height: 24.375px;
+  }
+
+  [data-chat-input-editor] > div {
+    min-height: 24.375px;
+  }
+
+  [contenteditable='true'] > p,
+  [data-chat-input-editor] :global(.pointer-events-none) > p {
+    margin-block: 0;
+  }
+
+  [contenteditable='true'] {
+    min-height: 24.375px;
+    max-height: 195px;
+    overflow-y: auto;
+  }
+
+  [data-chat-input-toolbar] button {
+    height: 33.75px;
+    border-radius: 999px;
+  }
+
+  [data-chat-input-toolbar] button[data-size='icon-sm'],
+  [data-input-footer] button[data-size='icon-sm'],
+  [data-agent-input-toolbar] button,
+  &[data-composer-collapsed] > button:not([data-collapsed-input-preview]) {
+    padding: 3.75px;
+  }
+
+  [data-chat-input-tall] [data-chat-input-editor] > :global(.h-4) {
+    height: 15px;
+  }
+
+  button[aria-label='Attach files'],
+  button:is([aria-label='Send'], [data-input-action='send'], [aria-label='Send next queued message']) {
+    width: 33.75px;
+  }
+
+  button[aria-label='Attach files'] svg,
+  button:is([aria-label='Send'], [data-input-action='send'], [aria-label='Send next queued message']) svg {
+    width: 20.625px;
+    height: 20.625px;
+  }
+
+}
+
+/* Email uses the same send control without inheriting chat editor layout. */
+button.sendButton {
+  width: 33.75px;
+  height: 33.75px;
+  padding: 3.75px;
+
+  svg {
+    width: 20.625px;
+    height: 20.625px;
+  }
+}
+
+button.sendButton:not(:disabled),
+.chat button:is([aria-label='Send'], [data-input-action='send'], [aria-label='Send next queued message']):not(:disabled) {
+  background: var(--color-ink);
+  color: var(--color-panel);
+}
+
+/* Light inputs keep a white surface and soft ambient shadow; glass is dark-only. */
+:global(html[data-theme-light='true']) .surface,
+:global(html[data-theme-light='true']) .chat {
+  background: #fff !important;
+  box-shadow:
+    0 0 0 0.9375px rgb(0 0 0 / 4%),
+    0 1.875px 7.5px 0 rgb(0 0 0 / 4%),
+    0 3.75px 75px 7.5px rgb(0 0 0 / 2.4%) !important;
+  color: #0d0d0d;
+
+  &::after {
+    display: none;
+  }
+}
+
+:global(html[data-theme-light='true']) .chat {
+  [data-chat-input-editor],
+  button[aria-label='Attach files'] {
+    color: #0d0d0d;
+  }
+
+  [data-chat-input-editor] :global(.text-ink-placeholder),
+  button[aria-haspopup] {
+    color: #8f8f8f;
+  }
+
+  button[aria-haspopup] {
+    font-size: 15px;
+    font-weight: 400;
+  }
+
+}
+
+:global(html[data-theme-light='true']) button.sendButton,
+:global(html[data-theme-light='true']) .chat button:is([aria-label='Send'], [data-input-action='send'], [aria-label='Send next queued message']) {
+  box-shadow: none;
+  backdrop-filter: none;
+
+  &::after {
+    display: none;
+  }
+
+  &:not(:disabled) {
+    background: #000;
+    color: #fff;
+  }
+}
+
+.chat {
+  [data-chat-input-layout]:not([data-chat-input-tall]):not([data-chat-input-multiline]) [data-chat-input-editor] {
+    padding-left: 41.25px;
+  }
+
+  [data-chat-input-multiline]:not([data-chat-input-tall]) [data-chat-input-editor] {
+    padding-inline: 9.375px;
+    padding-bottom: 37.5px;
+  }
+
+  [data-chat-input-tall] {
+    padding: 11.25px 7.5px 7.5px;
+  }
+
+  [data-chat-input-tall] [data-chat-input-editor] {
+    padding-inline: 9.375px;
+  }
+
+  [data-input-layout] {
+    padding: 7.5px;
+  }
+
+  [data-input-editor-shell] {
+    padding: 4.6875px 9.375px;
+    max-height: 225px;
+  }
+
+  [data-input-editor],
+  [data-input-editor] > div,
+  [data-agent-input-editor],
+  [data-agent-input-editor] > div {
+    font-size: 15px;
+    line-height: 24.375px;
+    min-height: 24.375px;
+  }
+
+  [data-input-editor] :global(.pointer-events-none) > p,
+  [data-agent-input-editor] :global(.pointer-events-none) > p {
+    margin-block: 0;
+  }
+
+  [data-input-footer] {
+    padding: 3.75px 0 0;
+  }
+
+  [data-input-actions-left],
+  [data-input-actions-right] {
+    gap: 3.75px;
+  }
+
+  [data-input-footer] button[data-button],
+  [data-agent-input-toolbar] button {
+    height: 33.75px;
+    border-radius: 999px;
+  }
+
+  [data-input-footer] button[data-size='icon-sm'],
+  [data-agent-input-toolbar] button {
+    width: 33.75px;
+  }
+
+  [data-input-footer] button[data-size='icon-sm'] > svg {
+    width: 20.625px;
+    height: 20.625px;
+  }
+
+  /* Plain messages sit on one line. Rich content retains the full-width
+     editor and footer so formatting, attachments and task controls fit. */
+  [data-input-layout][data-composer-inline] {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: end;
+    gap: 3.75px;
+    min-height: 48.75px;
+
+    [data-input-editor-shell] {
+      grid-column: 2;
+      grid-row: 1;
+      min-width: 0;
+      padding: 4.6875px 3.75px;
+    }
+
+    [data-input-footer],
+    [data-input-actions] {
+      display: contents;
+    }
+
+    [data-input-actions-left] {
+      grid-column: 1;
+      grid-row: 1;
+    }
+
+    [data-input-actions-right] {
+      grid-column: 3;
+      grid-row: 1;
+    }
+  }
+
+  [data-agent-input-layout] {
+    min-height: 48.75px;
+    padding: 7.5px;
+  }
+
+  [data-agent-input-editor] {
+    padding: 4.6875px 9.375px;
+  }
+
+  [data-agent-input-toolbar] {
+    padding-bottom: 0;
+  }
+}
+
+:global(html[data-theme-light='true']) .chat {
+  [data-input-editor],
+  [data-agent-input-editor] {
+    color: #0d0d0d;
+  }
+
+  [data-input-editor] :global(.text-ink-placeholder),
+  [data-agent-input-editor] :global(.text-ink-placeholder) {
+    color: #8f8f8f;
+  }
+}
+
+.chat[data-composer-collapsed] {
+  height: 48.75px;
+  padding-inline: 7.5px;
+  gap: 5.625px;
+
+  > button:not([data-collapsed-input-preview]) {
+    height: 33.75px;
+    width: 33.75px;
+    border-radius: 999px;
+  }
+
+  [data-collapsed-input-preview] {
+    font-size: 15px;
+    line-height: 24.375px;
+    height: 30px;
+    padding-inline: 5.625px;
+  }
+}
+
+/* Desktop composer action buttons share circular hit targets and hover fills. */
+.actions {
+  button[data-size='icon-sm'] {
+    height: 33.75px;
+    border-radius: 999px;
+    padding: 3.75px;
+
+    &:not(:global(.size-auto)) {
+      width: 33.75px;
+    }
+
+    svg {
+      width: 20.625px;
+      height: 20.625px;
+    }
+  }
+}
