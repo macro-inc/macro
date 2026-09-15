@@ -46,6 +46,7 @@ import type {
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import { getIconConfig } from '@core/component/EntityIcon';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
@@ -73,18 +74,9 @@ import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import { AnimatedActivityIcon } from '@icon/wide-activity';
-import WideCalendarIcon from '@icon/wide-calendar.svg';
-import { AnimatedCallIcon } from '@icon/wide-call';
-import PhoneIcon from '@icon/wide-call.svg';
-import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedCompanyIcon } from '@icon/wide-company';
-import { AnimatedEmailIcon } from '@icon/wide-email';
-import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedHomeIcon } from '@icon/wide-home';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedSearchIcon } from '@icon/wide-search';
-import { AnimatedStarIcon } from '@icon/wide-star';
-import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
@@ -92,6 +84,7 @@ import CompassIcon from '@phosphor/compass.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import GearIcon from '@phosphor/gear.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import PhoneIcon from '@phosphor/phone-call.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import XIcon from '@phosphor/x.svg';
@@ -209,7 +202,7 @@ const SIDEBAR_LINKS = [
     id: 'agents',
     label: 'Agents',
     href: LIST_VIEW_PATHS.agents,
-    icon: AnimatedStarIcon,
+    icon: getIconConfig('agent').icon,
     hotkey: 'a',
     hotkeyToken: TOKENS.sidebar.goTo.agents,
   },
@@ -217,7 +210,7 @@ const SIDEBAR_LINKS = [
     id: 'mail',
     label: 'Email',
     href: LIST_VIEW_PATHS.mail,
-    icon: AnimatedEmailIcon,
+    icon: getIconConfig('email').icon,
     hotkey: 'e',
     hotkeyToken: TOKENS.sidebar.goTo.mail,
   },
@@ -225,7 +218,7 @@ const SIDEBAR_LINKS = [
     id: 'documents',
     label: 'Files',
     href: LIST_VIEW_PATHS.documents,
-    icon: AnimatedFileMdIcon,
+    icon: getIconConfig('files').icon,
     hotkey: 'f',
     hotkeyToken: TOKENS.sidebar.goTo.documents,
   },
@@ -240,7 +233,7 @@ const SIDEBAR_LINKS = [
         or: ['doc-markdown'],
       },
     },
-    icon: AnimatedFileMdIcon,
+    icon: getIconConfig('md').icon,
     hotkey: 'd',
     hotkeyToken: TOKENS.sidebar.goTo.markdownDocuments,
     hiddenFromSidebar: true,
@@ -249,7 +242,7 @@ const SIDEBAR_LINKS = [
     id: 'tasks',
     label: 'Tasks',
     href: LIST_VIEW_PATHS.tasks,
-    icon: AnimatedTaskIcon,
+    icon: getIconConfig('task').icon,
     hotkey: 't',
     hotkeyToken: TOKENS.sidebar.goTo.tasks,
   },
@@ -257,7 +250,7 @@ const SIDEBAR_LINKS = [
     id: 'calendar',
     label: 'Calendar',
     href: '/calendar',
-    icon: WideCalendarIcon,
+    icon: getIconConfig('calendar').icon,
     hotkey: 'r',
     hotkeyToken: TOKENS.sidebar.goTo.calendar,
   },
@@ -265,7 +258,7 @@ const SIDEBAR_LINKS = [
     id: 'channels',
     label: 'Channels',
     href: LIST_VIEW_PATHS.channels,
-    icon: AnimatedChannelIcon,
+    icon: getIconConfig('channel').icon,
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
   },
@@ -1014,7 +1007,7 @@ const CALLS_LINK: SidebarItem = {
   id: 'calls',
   label: 'Calls',
   href: LIST_VIEW_PATHS.calls,
-  icon: AnimatedCallIcon,
+  icon: getIconConfig('call').icon,
   hotkey: 'l',
   hotkeyToken: TOKENS.sidebar.goTo.calls,
 };
@@ -1023,7 +1016,7 @@ const COMPANIES_LINK: SidebarItem = {
   id: 'companies',
   label: 'Customers',
   href: LIST_VIEW_PATHS.companies,
-  icon: AnimatedCompanyIcon,
+  icon: getIconConfig('company').icon,
   hotkey: 'o',
   hotkeyToken: TOKENS.sidebar.goTo.companies,
 };

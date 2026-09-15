@@ -1,12 +1,6 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
-import WideCalendarIcon from '@icon/wide-calendar.svg';
-import { AnimatedCallIcon } from '@icon/wide-call';
-import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedEmailIcon } from '@icon/wide-email';
-import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
+import { getIconConfig } from '@core/component/EntityIcon';
 import { AnimatedInboxIcon } from '@icon/wide-inbox';
-import { AnimatedStarIcon } from '@icon/wide-star';
-import { AnimatedTaskIcon } from '@icon/wide-task';
 import BellIcon from '@phosphor/bell-simple.svg';
 import { type Accessor, createMemo } from 'solid-js';
 import type { MobileTouchIconComponent } from './MobileTouchMenu';
@@ -15,7 +9,7 @@ import type { MobileNavViewId } from './mobile-nav-views';
 export type MobileDockView = {
   id: Exclude<MobileNavViewId, 'search' | 'settings'>;
   label: string;
-  /** Views-menu row icon (animated where available). */
+  /** Views-menu row icon. */
   icon: MobileTouchIconComponent;
   /** Plain svg icons (e.g. the calendar) don't accept `triggerAnimation`. */
   animateIcon?: boolean;
@@ -40,16 +34,46 @@ const MOBILE_DOCK_VIEWS: MobileDockView[] = [
   {
     id: 'calendar',
     label: 'Calendar',
-    icon: WideCalendarIcon,
+    icon: getIconConfig('calendar').icon,
     animateIcon: false,
-    pillIcon: WideCalendarIcon,
+    pillIcon: getIconConfig('calendar').icon,
   },
-  { id: 'mail', label: 'Email', icon: AnimatedEmailIcon },
-  { id: 'channels', label: 'Channels', icon: AnimatedChannelIcon },
-  { id: 'documents', label: 'Files', icon: AnimatedFileMdIcon },
-  { id: 'agents', label: 'Agents', icon: AnimatedStarIcon },
-  { id: 'tasks', label: 'Tasks', icon: AnimatedTaskIcon },
-  { id: 'calls', label: 'Calls', icon: AnimatedCallIcon },
+  {
+    id: 'mail',
+    label: 'Email',
+    icon: getIconConfig('email').icon,
+    animateIcon: false,
+  },
+  {
+    id: 'channels',
+    label: 'Channels',
+    icon: getIconConfig('channel').icon,
+    animateIcon: false,
+  },
+  {
+    id: 'documents',
+    label: 'Files',
+    icon: getIconConfig('files').icon,
+    animateIcon: false,
+  },
+  {
+    id: 'agents',
+    label: 'Agents',
+    icon: getIconConfig('agent').icon,
+    animateIcon: false,
+  },
+  {
+    id: 'tasks',
+    label: 'Tasks',
+    icon: getIconConfig('task').icon,
+    animateIcon: false,
+  },
+  {
+    id: 'calls',
+    label: 'Calls',
+    icon: getIconConfig('call').icon,
+    animateIcon: false,
+  },
 ];
 
 /** The dock views with feature gating applied (the calendar UI flag). */

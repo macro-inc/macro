@@ -4,11 +4,11 @@ import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type ChannelEntity, Entity } from '@entity';
-import ChannelIcon from '@icon/wide-channel.svg';
 import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
 import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
+import ChannelIcon from '@phosphor/hash-straight.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, cn, Dropdown, Tabs, Tooltip } from '@ui';
 import {

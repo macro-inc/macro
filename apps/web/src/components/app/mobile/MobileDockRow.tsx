@@ -5,7 +5,7 @@ import {
 } from '@app/features/command/mobile/MobileSearchInput';
 import { SearchState } from '@app/features/command/mobile/mobileSearchState';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
-import { ENABLE_ANIMATED_ICONS } from '@core/constant/featureFlags';
+import { getIconConfig } from '@core/component/EntityIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { hapticImpact } from '@core/mobile/haptics';
@@ -13,8 +13,6 @@ import { openFilePicker } from '@core/util/upload';
 import { ICON_ANIMATION_DURATION_MS } from '@icon/animation';
 import IconGear from '@icon/macro-gear.svg';
 import CreateIcon from '@icon/square-pen-create.svg';
-import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedSearchIcon } from '@icon/wide-search';
 import BellIcon from '@phosphor/bell-simple.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
@@ -72,22 +70,18 @@ function CreateMenu() {
           {/* Labels key the rows: 'Message' and 'Channel' share a
               blockName. */}
           <For each={blocks()}>
-            {(block) => {
-              const useAnimatedIcon =
-                ENABLE_ANIMATED_ICONS && block.animatedIcon;
-              return (
-                <MobileTouchMenu.Item
-                  id={block.label}
-                  icon={useAnimatedIcon ? block.animatedIcon : block.icon}
-                  animateIcon={!!useAnimatedIcon}
-                  // The block's own action, exactly as the desktop menus
-                  // invoke it (e.g. Channel opens the new-channel modal).
-                  onSelect={() => block.keyDownHandler?.()}
-                >
-                  {block.label}
-                </MobileTouchMenu.Item>
-              );
-            }}
+            {(block) => (
+              <MobileTouchMenu.Item
+                id={block.label}
+                icon={block.icon}
+                animateIcon={false}
+                // The block's own action, exactly as the desktop menus
+                // invoke it (e.g. Channel opens the new-channel modal).
+                onSelect={() => block.keyDownHandler?.()}
+              >
+                {block.label}
+              </MobileTouchMenu.Item>
+            )}
           </For>
           <MobileTouchMenu.Separator />
           <MobileTouchMenu.Footer>Create</MobileTouchMenu.Footer>
@@ -217,8 +211,18 @@ function MobileCompactDockRow() {
       icon: BellIcon,
       animateIcon: false,
     },
-    { id: 'mail', label: 'Email', icon: AnimatedEmailIcon },
-    { id: 'channels', label: 'Channels', icon: AnimatedChannelIcon },
+    {
+      id: 'mail',
+      label: 'Email',
+      icon: getIconConfig('email').icon,
+      animateIcon: false,
+    },
+    {
+      id: 'channels',
+      label: 'Channels',
+      icon: getIconConfig('channel').icon,
+      animateIcon: false,
+    },
   ];
 
   return (

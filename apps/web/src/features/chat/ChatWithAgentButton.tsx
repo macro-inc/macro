@@ -11,12 +11,11 @@ import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { createChat } from '@core/util/create';
-import { AnimatedStarIcon } from '@icon/wide-star';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { Button } from '@ui';
-import { createSignal } from 'solid-js';
 
-export { AnimatedStarIcon as ChatWithAgentIcon };
+export { SparkleIcon as ChatWithAgentIcon };
 
 type ChatWithAgentEntity =
   | { type: 'email'; id: string; name: string }
@@ -129,39 +128,31 @@ export async function openChatWithMessageReplacingSplit(
 }
 
 export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
-  const [hovering, setHovering] = createSignal(false);
-
   return (
     <Button
       tooltip="Chat with Agent"
       variant="outline"
       size="sm"
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
       onClick={() => openChatWithAgent(props.entity)}
       depth={2}
       class="bg-surface"
     >
-      <AnimatedStarIcon triggerAnimation={hovering()} />
+      <SparkleIcon />
       <span class="text-xs">Chat</span>
     </Button>
   );
 }
 
 export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
-  const [hovering, setHovering] = createSignal(false);
-
   return (
     <Button
       onClick={() => openChatWithAgent(props.entity)}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
       variant="ghost"
       size="sm"
       depth={2}
       class="gap-1.5 rounded-full border border-edge-muted px-2"
     >
-      <AnimatedStarIcon triggerAnimation={hovering()} />
+      <SparkleIcon />
       <span class="text-xs font-medium">Ask Macro</span>
     </Button>
   );

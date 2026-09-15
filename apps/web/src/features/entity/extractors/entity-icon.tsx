@@ -7,11 +7,12 @@ import { UserIcon } from '@core/component/UserIcon';
 import { useUserId } from '@core/context/user';
 import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
+import GitMergeBold from '@phosphor-icons/core/bold/git-merge-bold.svg';
+import GitPullRequestBold from '@phosphor-icons/core/bold/git-pull-request-bold.svg';
 import type { StreamEvent } from '@service-connection/generated/schemas';
 import { Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
-import { PulsingStar } from '../components/PulsingStar';
 import type {
   ChannelEntity,
   EntityData,
@@ -32,6 +33,7 @@ interface EntityIconProps {
   class?: string;
   suppressClick?: boolean;
   showTooltip?: boolean;
+  weight?: CoreEntityIconProps['weight'];
 }
 
 function DirectMessageIcon(props: {
@@ -39,6 +41,7 @@ function DirectMessageIcon(props: {
   class?: string;
   suppressClick?: boolean;
   showTooltip?: boolean;
+  weight?: CoreEntityIconProps['weight'];
 }) {
   const userId = useUserId();
   const participantId = () => {
@@ -55,6 +58,7 @@ function DirectMessageIcon(props: {
             targetType="direct_message"
             size="fill"
             class={props.class}
+            weight={props.weight}
           />
         }
       >
@@ -76,6 +80,7 @@ function DirectMessageIcon(props: {
 function GithubPullRequestIcon(props: {
   entity: GithubPullRequestEntity;
   class?: string;
+  weight?: CoreEntityIconProps['weight'];
 }) {
   function config() {
     const status = props.entity.metadata.status;
@@ -83,17 +88,17 @@ function GithubPullRequestIcon(props: {
     switch (status) {
       case 'open':
         return {
-          icon: GitPullRequest,
+          icon: props.weight === 'bold' ? GitPullRequestBold : GitPullRequest,
           iconClass: 'text-success',
         };
       case 'merged':
         return {
-          icon: GitMerge,
+          icon: props.weight === 'bold' ? GitMergeBold : GitMerge,
           iconClass: 'text-note',
         };
       case 'closed':
         return {
-          icon: GitPullRequest,
+          icon: props.weight === 'bold' ? GitPullRequestBold : GitPullRequest,
           iconClass: 'text-failure',
         };
     }
@@ -148,8 +153,6 @@ export function EntityIcon(props: EntityIconProps) {
 
   const isDirectMessage = () => iconType() === 'direct_message';
 
-  const isChatEntity = () => props.entity.type === 'chat';
-
   return (
     <Switch
       fallback={
@@ -157,6 +160,7 @@ export function EntityIcon(props: EntityIconProps) {
           targetType={validIconType()}
           size="fill"
           class={props.class}
+          weight={props.weight}
         />
       }
     >
@@ -164,6 +168,7 @@ export function EntityIcon(props: EntityIconProps) {
         <GithubPullRequestIcon
           entity={props.entity as GithubPullRequestEntity}
           class={props.class}
+          weight={props.weight}
         />
       </Match>
       <Match when={isDirectMessage()}>
@@ -172,13 +177,7 @@ export function EntityIcon(props: EntityIconProps) {
           class={props.class}
           suppressClick={props.suppressClick}
           showTooltip={props.showTooltip}
-        />
-      </Match>
-      <Match when={isChatEntity()}>
-        <PulsingStar
-          kind="listIcon"
-          animate={props.streamState?.type === 'created'}
-          class={props.class}
+          weight={props.weight}
         />
       </Match>
     </Switch>

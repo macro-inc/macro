@@ -4,7 +4,7 @@ import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownS
 import { toast } from '@core/component/Toast/Toast';
 import clickOutside from '@core/directive/clickOutside';
 import { TOKENS } from '@core/hotkey/tokens';
-import { AnimatedStarIcon } from '@icon/wide-star';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import { cancelAiEdit, requestAiEdit } from '@service-ai-editing/client';
 import { Button, SendButton, Surface } from '@ui';
 import { createSignal, Show } from 'solid-js';
@@ -107,7 +107,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
                 'ai-edit-star-breathing text-accent': editing(),
               }}
             >
-              <AnimatedStarIcon triggerAnimation={hovering() && !editing()} />
+              <SparkleIcon />
             </span>
             <span
               class="text-xs font-medium"
@@ -133,7 +133,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
           <div class="flex flex-col gap-2 p-3" use:clickOutside={collapse}>
             <div class="flex items-start gap-2">
               <span class="flex h-8 w-4 shrink-0 items-center justify-center text-accent">
-                <AnimatedStarIcon triggerAnimation={focused()} />
+                <SparkleIcon />
               </span>
               <div class="min-w-0 grow text-sm text-ink">
                 <MarkdownShell

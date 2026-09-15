@@ -36,11 +36,11 @@ import { isMobile } from '@core/mobile/isMobile';
 import { buildEntityData } from '@entity';
 import { AnimatedNoiseIcon } from '@icon/wide-noise';
 import IconShared from '@icon/wide-share.svg';
-import { AnimatedTaskIcon } from '@icon/wide-task';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
 import EnvelopeSimpleOpenIcon from '@phosphor/envelope-simple-open.svg';
+import TaskIcon from '@phosphor/list-checks.svg';
 import ProhibitIcon from '@phosphor/prohibit.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
@@ -236,7 +236,7 @@ export function TopBar(props: {
     },
     {
       label: 'Create task',
-      icon: AnimatedTaskIcon,
+      icon: TaskIcon,
       action: () => props.onCreateTask?.(),
       condition: () => !!props.onCreateTask && !!emailCtx.thread()?.db_id,
     },
