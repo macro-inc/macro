@@ -16,6 +16,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
+import { Permissions } from '@core/component/SharePermissions';
 import {
   ShareDialogContext,
   ShareTrigger,
@@ -66,6 +67,12 @@ function TaskBreadcrumbItem(props: {
   const { fileOperations, menuTools } = useMarkdownDocumentTools();
   const taskName = () => displayName() ?? props.fallbackName;
   const focusTask = () => documentState.editor.md.editor?.focus();
+  const menuPermissions = () => {
+    if (permissions.isOwner()) return Permissions.OWNER;
+    if (permissions.canEdit()) return Permissions.CAN_EDIT;
+    if (permissions.canComment()) return Permissions.CAN_COMMENT;
+    return Permissions.CAN_VIEW;
+  };
 
   return (
     <ViewBreadcrumbs.Item id={`task:${props.documentId}`} order={1}>
@@ -84,9 +91,8 @@ function TaskBreadcrumbItem(props: {
           name={taskName()}
           ops={fileOperations}
           tools={menuTools}
-          blockName="md"
-          blockAlias="task"
-          isOwner={permissions.isOwner()}
+          entityKind="task"
+          permissions={menuPermissions()}
           onDelete={closeTask}
         />
       </div>

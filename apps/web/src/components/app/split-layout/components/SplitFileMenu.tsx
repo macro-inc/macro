@@ -16,19 +16,20 @@ import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import {
   type BlockAlias,
   type BlockName,
-  isInBlock,
-  useMaybeBlockAliasedName,
-  useMaybeBlockName,
+  useBlockAliasedName,
 } from '@core/block';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
+import { Permissions } from '@core/component/SharePermissions';
 import { toast } from '@core/component/Toast/Toast';
+import { resolveBlockAlias } from '@core/constant/allBlocks';
 import { enableReminders } from '@core/constant/featureFlags';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { triggerFocusInput } from '@core/directive/focusInput';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import { getActiveCommandByToken } from '@core/hotkey/utils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { useIsDocumentOwner } from '@core/signal/permissions';
+import { useGetPermissions } from '@core/signal/permissions';
 import { buildEntityData, type EntityData } from '@entity';
 import DotsThree from '@icon/dots-three-large.svg';
 import ArrowRight from '@phosphor/arrow-right.svg';
@@ -106,25 +107,6 @@ export type SplitFileMenuViews = {
   value: string;
   onSelect: (value: string) => void;
 };
-
-/**
- * Blocks whose Block.tsx calls useBlockEntityCommands(), registering the
- * block-scoped shortcuts the generic ops advertise. Keep in sync with that
- * hook's callers.
- */
-const BLOCKS_WITH_ENTITY_HOTKEYS: ReadonlySet<BlockName> = new Set<BlockName>([
-  'agent',
-  'canvas',
-  'channel',
-  'chat',
-  'code',
-  'email',
-  'image',
-  'md',
-  'pdf',
-  'project',
-  'video',
-]);
 
 function SplitMenuItemContent(
   props: Pick<SplitFileMenuAction, 'hotkeyToken' | 'icon' | 'label'> & {
@@ -339,7 +321,7 @@ function MobileRender(
   );
 }
 
-export function SplitFileMenu(props: {
+export type SplitFileMenuProps = {
   id: string;
   itemType: ItemType;
   name: string;
@@ -350,33 +332,22 @@ export function SplitFileMenu(props: {
   mobileViews?: SplitFileMenuViews;
   /**
    * Full entity for the menu's entity-gated items. Supply it when the block
-   * can build one that generic chrome can't reconstruct from id/name/blockName
+   * can build one that generic chrome can't reconstruct from id/name/entityKind
    * alone (e.g. calls need their channelId).
    */
   entity?: EntityData;
   buttonClass?: string;
-  blockName?: BlockName;
-  blockAlias?: BlockName | BlockAlias;
-  isOwner?: boolean;
-  entityHotkeys?: boolean;
+  entityKind: BlockName | BlockAlias;
+  permissions: Permissions;
   onDelete?: () => void;
-}) {
+};
+
+export function SplitFileMenu(props: SplitFileMenuProps) {
   const ctx = useContext(SplitPanelContext);
   if (!ctx)
     throw new Error('<SplitFileMenu> must be used in <SplitPanelContext>');
 
-  const inBlock = isInBlock();
-  const blockName = props.blockName ?? useMaybeBlockName();
-  const aliasedBlockName =
-    props.blockAlias ?? useMaybeBlockAliasedName() ?? blockName;
-  const contextualIsOwner = inBlock ? useIsDocumentOwner() : () => false;
-  const isOwner = () => props.isOwner ?? contextualIsOwner();
-
-  if (!blockName || !aliasedBlockName) {
-    throw new Error(
-      '<SplitFileMenu> requires an enclosing block or explicit block identity'
-    );
-  }
+  const blockName = resolveBlockAlias(props.entityKind);
 
   const [open, setOpen] = createSignal(false);
   const itemOperations = useItemOperations();
@@ -400,20 +371,15 @@ export function SplitFileMenu(props: {
   const addTagAction = makeAddTagAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
-
-  // Blocks outside BLOCKS_WITH_ENTITY_HOTKEYS never register these
-  // shortcuts, so badging them there would advertise dead shortcuts.
-  const blockHotkeyToken = (token: HotkeyToken): HotkeyToken | undefined =>
-    (props.entityHotkeys ?? inBlock) &&
-    BLOCKS_WITH_ENTITY_HOTKEYS.has(blockName)
-      ? token
-      : undefined;
+  const activeHotkeyToken = (token: HotkeyToken): HotkeyToken | undefined => {
+    return getActiveCommandByToken(token) ? token : undefined;
+  };
 
   const { replaceOrInsertSplit } = useSplitLayout();
 
   // The entity this menu operates on: the block's own entity when supplied,
   // else the quick-access cache (richer data, covers channels/calls), else
-  // built from the block's id/name/blockName like the rename/move ops do.
+  // built from the block's id/name/entityKind like the rename/move ops do.
   const menuEntity = createMemo<EntityData | undefined>(() => {
     if (props.entity) return props.entity;
     const item = quickAccess.getById(props.id);
@@ -421,7 +387,7 @@ export function SplitFileMenu(props: {
     return buildEntityData({
       id: props.id,
       name: props.name,
-      blockName: aliasedBlockName,
+      blockName: props.entityKind,
     });
   });
 
@@ -434,7 +400,7 @@ export function SplitFileMenu(props: {
       action: () => {
         void favoriteAction.execute([entity]);
       },
-      hotkeyToken: blockHotkeyToken(TOKENS.entity.action.favorite),
+      hotkeyToken: activeHotkeyToken(TOKENS.entity.action.favorite),
       group: 'macro' as const,
     };
   };
@@ -449,7 +415,7 @@ export function SplitFileMenu(props: {
       action: () => {
         void muteAction.execute([entity]);
       },
-      hotkeyToken: blockHotkeyToken(TOKENS.entity.action.mute),
+      hotkeyToken: activeHotkeyToken(TOKENS.entity.action.mute),
       group: 'macro' as const,
     };
   };
@@ -475,7 +441,7 @@ export function SplitFileMenu(props: {
         setOpen(false);
         createReminderAction.execute([entity]);
       },
-      hotkeyToken: blockHotkeyToken(TOKENS.entity.action.createReminder),
+      hotkeyToken: activeHotkeyToken(TOKENS.entity.action.createReminder),
       group: 'macro' as const,
     };
   };
@@ -491,7 +457,7 @@ export function SplitFileMenu(props: {
         setOpen(false);
         addTagAction.execute([entity]);
       },
-      hotkeyToken: blockHotkeyToken(TOKENS.entity.action.tags),
+      hotkeyToken: activeHotkeyToken(TOKENS.entity.action.tags),
       group: 'macro' as const,
     };
   };
@@ -512,10 +478,10 @@ export function SplitFileMenu(props: {
         if (entity) {
           void copyLinkAction.execute([entity]);
         } else {
-          void copyLinkAction.executeByBlock(props.id, aliasedBlockName);
+          void copyLinkAction.executeByBlock(props.id, props.entityKind);
         }
       },
-      hotkeyToken: blockHotkeyToken(TOKENS.entity.action.copyLink),
+      hotkeyToken: activeHotkeyToken(TOKENS.entity.action.copyLink),
       group: 'sharing' as const,
     };
   };
@@ -526,7 +492,7 @@ export function SplitFileMenu(props: {
     action: () => {
       void copyEntityIdAction.executeById(props.id);
     },
-    hotkeyToken: blockHotkeyToken(TOKENS.entity.action.copyEntityId),
+    hotkeyToken: activeHotkeyToken(TOKENS.entity.action.copyEntityId),
     group: 'sharing' as const,
   });
 
@@ -536,10 +502,7 @@ export function SplitFileMenu(props: {
     onCleanup(() => ctx.setTitleFileMenuTrigger(undefined));
   });
 
-  const ownsMenuEntity = () =>
-    match(props.entity)
-      .with(undefined, () => isOwner())
-      .otherwise((entity) => entity.ownerId === userId());
+  const ownsMenuEntity = () => props.permissions === Permissions.OWNER;
 
   const ops = createMemo<SplitFileMenuAction[]>(() => {
     const mapped = props.ops
@@ -589,7 +552,7 @@ export function SplitFileMenu(props: {
                   });
                 },
                 icon: Rename,
-                hotkeyToken: blockHotkeyToken(TOKENS.entity.action.rename),
+                hotkeyToken: activeHotkeyToken(TOKENS.entity.action.rename),
                 group: 'file' as const,
               };
             })
@@ -630,7 +593,7 @@ export function SplitFileMenu(props: {
                   const entity = buildEntityData({
                     id: props.id,
                     name: props.name,
-                    blockName: aliasedBlockName,
+                    blockName: props.entityKind,
                   });
                   if (!entity) return;
                   setOpen(false);
@@ -642,7 +605,7 @@ export function SplitFileMenu(props: {
                   });
                 },
                 icon: ArrowRight,
-                hotkeyToken: blockHotkeyToken(
+                hotkeyToken: activeHotkeyToken(
                   TOKENS.entity.action.moveToFolder
                 ),
                 group: 'file' as const,
@@ -733,5 +696,24 @@ export function SplitFileMenu(props: {
         views={props.mobileViews}
       />
     </Show>
+  );
+}
+
+export type BlockSplitFileMenuProps = Omit<
+  SplitFileMenuProps,
+  'entityKind' | 'permissions'
+>;
+
+/** Supplies legacy Block identity, permissions, and registered hotkeys. */
+export function BlockSplitFileMenu(props: BlockSplitFileMenuProps) {
+  const entityKind = useBlockAliasedName();
+  const permissions = useGetPermissions();
+
+  return (
+    <SplitFileMenu
+      {...props}
+      entityKind={entityKind}
+      permissions={permissions()}
+    />
   );
 }
