@@ -10,10 +10,12 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import SortAscendingIcon from '@phosphor/sort-ascending.svg';
 import XIcon from '@phosphor/x.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { Button, cn, EmptyStatePanel, Hotkey, Tabs } from '@ui';
+import { Button, cn, Dropdown, EmptyStatePanel, Hotkey, Tabs } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -23,7 +25,7 @@ import {
   Switch,
 } from 'solid-js';
 import { Virtualizer } from 'virtua/solid';
-import type { ChannelsGroup } from '../../types';
+import type { ChannelListSort, ChannelsGroup } from '../../types';
 import { channelMentionsUser } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import {
@@ -101,6 +103,55 @@ const GROUPS: GroupConfig[] = [
     onCreate: () => runCreateAction('channel'),
   },
 ];
+
+const CHANNEL_SORT_OPTIONS: {
+  value: ChannelListSort;
+  label: string;
+}[] = [
+  { value: 'viewed_at', label: 'Last viewed' },
+  { value: 'updated_at', label: 'Last updated' },
+  { value: 'created_at', label: 'Date created' },
+];
+
+function ChannelSortDropdown(props: { group: ChannelsGroup; label: string }) {
+  const rail = useChannelsRail();
+  const setSort = (value: string) => {
+    const option = CHANNEL_SORT_OPTIONS.find((item) => item.value === value);
+    if (option) rail.setSortBy(props.group, option.value);
+  };
+
+  return (
+    <Dropdown placement="bottom-end">
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-sm"
+        class="size-7 rounded-lg"
+        label={`Sort ${props.label.toLowerCase()}`}
+      >
+        <SortAscendingIcon class="size-3.5" />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-40">
+        <Dropdown.Group>
+          <Dropdown.RadioGroup
+            value={rail.sortBy(props.group)}
+            onChange={setSort}
+          >
+            <For each={CHANNEL_SORT_OPTIONS}>
+              {(option) => (
+                <Dropdown.RadioItem closeOnSelect value={option.value}>
+                  <span class="flex-1">{option.label}</span>
+                  <Dropdown.ItemIndicator>
+                    <CheckIcon class="size-3.5 text-accent" />
+                  </Dropdown.ItemIndicator>
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
 
 function FavoriteOption(props: { favorite: Favorite }) {
   const rail = useChannelsRail();
@@ -445,7 +496,11 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
             </span>
           </Show>
         </button>
-        <div data-section-action="" class="pr-1">
+        <div data-section-action="" class="flex items-center gap-0.5 pr-1">
+          <ChannelSortDropdown
+            group={props.config.group}
+            label={props.config.label}
+          />
           <CreateRailAction
             label={props.config.createLabel}
             onClick={props.config.onCreate}

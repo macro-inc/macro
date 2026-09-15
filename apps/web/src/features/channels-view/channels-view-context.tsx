@@ -6,10 +6,13 @@ import type { ContextProviderProps } from '@solid-primitives/context';
 import { createStore, type Store } from 'solid-js/store';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
+  CHANNELS_DEFAULT_SORT_BY,
   clampChannelsRailWidth,
 } from './constants';
 import { createChannelsViewPersistence } from './persistence';
 import type {
+  ChannelListSort,
+  ChannelsGroup,
   ChannelsQueryScope,
   ChannelsRailMode,
   ChannelsRailSection,
@@ -28,6 +31,7 @@ export type ChannelsViewContext = {
   setMobileTab: (tab: ChannelsQueryScope) => void;
   setSelectedChannelId: (channelId: string | undefined) => void;
   setGroupOpen: (group: ChannelsRailSection, open: boolean) => void;
+  setSortBy: (group: ChannelsGroup, sort: ChannelListSort) => void;
   setAsideWidth: (width: number) => void;
   setRailMode: (mode: Exclude<ChannelsRailMode, 'auto'>) => void;
 };
@@ -51,6 +55,13 @@ export const [ChannelsViewProvider, useChannelsView] =
             channels: initial.expandedGroups?.channels ?? true,
             direct_messages: initial.expandedGroups?.direct_messages ?? true,
           },
+          sortBy: {
+            channels:
+              initial.sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
+            direct_messages:
+              initial.sortBy?.direct_messages ??
+              CHANNELS_DEFAULT_SORT_BY.direct_messages,
+          },
           asideWidth: clampChannelsRailWidth(
             initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
           ),
@@ -62,7 +73,9 @@ export const [ChannelsViewProvider, useChannelsView] =
           restoreEntryState: props.initialState === undefined,
           restoreLocalState: props.initialState === undefined,
           restorePreferences:
-            initial.asideWidth === undefined && initial.railMode === undefined,
+            initial.asideWidth === undefined &&
+            initial.railMode === undefined &&
+            initial.sortBy === undefined,
         })
       );
 
@@ -73,6 +86,7 @@ export const [ChannelsViewProvider, useChannelsView] =
         setSelectedChannelId: (channelId) =>
           setState('selectedChannelId', channelId),
         setGroupOpen: (group, open) => setState('expandedGroups', group, open),
+        setSortBy: (group, sort) => setState('sortBy', group, sort),
         setAsideWidth: (width) =>
           setState('asideWidth', clampChannelsRailWidth(width)),
         setRailMode: (mode) => setState('railMode', mode),

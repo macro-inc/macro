@@ -165,7 +165,7 @@ export function buildChannelRailRows(
 }
 
 export function ChannelsRail(props: ChannelsRailProps) {
-  const { state, setGroupOpen, setSelectedChannelId, setTab } =
+  const { state, setGroupOpen, setSelectedChannelId, setSortBy, setTab } =
     useChannelsView();
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
@@ -644,6 +644,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
     selectedChannelId: () => state.selectedChannelId,
     isGroupOpen: (group) => state.expandedGroups[group],
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
+    sortBy: (group) => state.sortBy[group],
+    setSortBy,
     registerRootRef: setListRoot,
     activateRow,
     registerScrollRef: (group, element) => {

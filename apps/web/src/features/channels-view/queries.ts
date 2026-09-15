@@ -12,7 +12,11 @@ import {
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { type Accessor, createMemo } from 'solid-js';
-import type { ChannelsQueryScope } from './types';
+import type {
+  ChannelListSort,
+  ChannelsGroup,
+  ChannelsQueryScope,
+} from './types';
 import { channelHasMessages, isDirectMessage } from './utils';
 
 const CHANNELS_QUERY_PARAMS = {
@@ -70,12 +74,16 @@ export const CHANNELS_QUERY_DEFINITIONS = {
 } satisfies Record<ChannelsSourceScope, ChannelsQueryDefinition>;
 
 export function channelsQueryArgs(
-  scope: ChannelsSourceScope
+  scope: ChannelsSourceScope,
+  sortMethod?: ChannelListSort
 ): SoupAstItemsQueryArgs {
   const definition = CHANNELS_QUERY_DEFINITIONS[scope];
 
   return {
-    params: definition.params,
+    params: {
+      ...definition.params,
+      sort_method: sortMethod ?? definition.params.sort_method,
+    },
     body: compileToAst(queryStateFrom(definition.filters)),
   };
 }
@@ -138,10 +146,11 @@ export function resolveSelectedChannel(
 
 function useChannelsDataSource(
   scope: ChannelsSourceScope,
-  enabled: Accessor<boolean>
+  enabled: Accessor<boolean>,
+  sortMethod: Accessor<ChannelListSort | undefined>
 ): ChannelsDataSource {
   const query = useSoupAstItemsQuery(
-    () => channelsQueryArgs(scope),
+    () => channelsQueryArgs(scope, sortMethod()),
     () => ({ enabled: enabled(), staleTime: 30_000 })
   );
   const items = createMemo<ChannelEntity[]>((previous) => {
@@ -152,11 +161,20 @@ function useChannelsDataSource(
       (query.data?.entities ?? []).filter(isChannelEntity)
     );
 
-    if (scope !== 'direct_messages' && scope !== 'search') return channels;
+    if (scope === 'recents') return channels;
+
+    const activeSort =
+      sortMethod() ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method;
+    const sortDate = (channel: ChannelEntity) =>
+      activeSort === 'created_at'
+        ? channel.createdAt
+        : activeSort === 'viewed_at'
+          ? channel.viewedAt
+          : channel.updatedAt;
 
     return channels
       .slice()
-      .sort((left, right) => compareDateDesc(left.updatedAt, right.updatedAt));
+      .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
   }, []);
 
   return {
@@ -181,15 +199,30 @@ function useChannelsDataSource(
 }
 
 export function useChannelsSources(
-  enabled: (scope: ChannelsSourceScope) => boolean
+  enabled: (scope: ChannelsSourceScope) => boolean,
+  sortBy: (group: ChannelsGroup) => ChannelListSort
 ): ChannelsSources {
   return {
-    channels: useChannelsDataSource('channels', () => enabled('channels')),
-    direct_messages: useChannelsDataSource('direct_messages', () =>
-      enabled('direct_messages')
+    channels: useChannelsDataSource(
+      'channels',
+      () => enabled('channels'),
+      () => sortBy('channels')
     ),
-    recents: useChannelsDataSource('recents', () => enabled('recents')),
-    search: useChannelsDataSource('search', () => enabled('search')),
+    direct_messages: useChannelsDataSource(
+      'direct_messages',
+      () => enabled('direct_messages'),
+      () => sortBy('direct_messages')
+    ),
+    recents: useChannelsDataSource(
+      'recents',
+      () => enabled('recents'),
+      () => undefined
+    ),
+    search: useChannelsDataSource(
+      'search',
+      () => enabled('search'),
+      () => undefined
+    ),
   };
 }
 

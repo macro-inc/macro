@@ -203,6 +203,9 @@ artwork and wraps long queries.
 Collapsing a section does not discard its loaded pages. Recent has its own
 pagination cursor. Each list is virtualized, so offscreen conversations may not
 exist in the DOM.
+Channels and DMs each have a sort action before their create action. They can be
+sorted by last viewed, last updated, or date created, and each choice persists
+independently as a user preference.
 Compact channel and DM rows in All have the same height. Section headings place
 their caret immediately after the title and reveal it on hover or while the
 section is collapsed; hovering only undims the heading text, while

@@ -7,6 +7,7 @@ import type { Accessor } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import type { ChannelsSourceScope, ChannelsSources } from '../../queries';
 import type {
+  ChannelListSort,
   ChannelsGroup,
   ChannelsRailSection,
   ChannelsTab,
@@ -59,6 +60,8 @@ export type ChannelsRailContext = {
   selectedChannelId: Accessor<string | undefined>;
   isGroupOpen: (group: ChannelsRailSection) => boolean;
   toggleGroup: (group: ChannelsRailSection) => void;
+  sortBy: (group: ChannelsGroup) => ChannelListSort;
+  setSortBy: (group: ChannelsGroup, sort: ChannelListSort) => void;
   registerRootRef: (element: HTMLDivElement) => void;
   activateRow: (rowId: ChannelRailRow['id']) => void;
   registerScrollRef: (
