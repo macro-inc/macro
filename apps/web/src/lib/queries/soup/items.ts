@@ -33,9 +33,9 @@ import {
 import { type Accessor, onCleanup } from 'solid-js';
 import { queryClient } from '../client';
 import { registerActiveGraphqlSoupQuery } from './graphql/active-queries';
-import { soupPageTimestamp } from './page-timestamp';
 import { createGraphqlGroupedSoupAstItemsQuery } from './graphql/grouped-items';
 import { createGraphqlSoupAstItemsQuery } from './graphql/items';
+import { soupPageTimestamp } from './page-timestamp';
 import {
   createSoupRequestSignal,
   SOUP_NETWORK_QUERY_OPTIONS,

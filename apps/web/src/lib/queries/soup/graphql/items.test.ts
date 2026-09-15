@@ -152,6 +152,76 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     });
   });
 
+  it('keeps fetched timestamp coverage separate from older local cache candidates', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    getGraphqlSoupCacheHostMock.mockReturnValue({
+      currentRevision: async () => REVISION_0,
+      entityFilter: entityFilterMock,
+      onCacheChanged: () => () => {},
+      onCacheGenerationChanged: () => () => {},
+    });
+    entityFilterMock.mockResolvedValue({
+      kind: 'reconciled',
+      revision: REVISION_0,
+      keys: ['GraphqlSoupDocument:cached'],
+      retainedKeys: [],
+      optimistic: false,
+    });
+    readRecordsByKeysMock.mockResolvedValue({
+      revision: REVISION_0,
+      records: [
+        {
+          recordKey: 'GraphqlSoupDocument:cached',
+          record: {
+            __typename: 'GraphqlSoupDocument',
+            id: 'cached',
+            type: 'document',
+            name: 'Cached',
+            touchedAt: '2025-01-01T00:00:00Z',
+          },
+        },
+      ],
+    });
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'touched_by_me' }, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    try {
+      await vi.waitFor(() =>
+        expect(query.data()?.entities[0]?.id).toBe('cached')
+      );
+      expect(query.data()?.oldestFetchedTimestamp).toBeUndefined();
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [
+            {
+              id: 'fetched',
+              type: 'document',
+              name: 'Fetched',
+              touchedAt: '2026-09-08T00:00:00Z',
+            },
+          ],
+          next_cursor: 'next-page',
+        }),
+        { source: 'normalized-cache-hit', revision: REVISION_0 }
+      );
+      await vi.waitFor(() => {
+        expect(
+          query.data()?.entities.some((entity) => entity.id === 'cached')
+        ).toBe(true);
+        expect(query.data()?.oldestFetchedTimestamp).toBe(
+          Date.parse('2026-09-08T00:00:00Z')
+        );
+      });
+    } finally {
+      dispose();
+    }
+  });
+
   it('paginates never-visited Mail filters offline without a server cursor or stale preview timestamps', async () => {
     const online = vi.spyOn(navigator, 'onLine', 'get').mockReturnValue(false);
     const fake = makeFakeClient();
