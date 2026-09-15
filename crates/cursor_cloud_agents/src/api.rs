@@ -146,6 +146,32 @@ pub enum CursorClientError {
     Http(#[from] reqwest::Error),
 }
 
+/// Cursor's error codes for "this key's account cannot reach that repository".
+///
+/// `repository_access` is the direct one: the repo exists but this account
+/// cannot use it. `integration_not_connected` is the same wall one step
+/// earlier — the GitHub app is not installed for the owner at all — and its
+/// remedy is the same connect flow, which is why both map to one error.
+///
+/// Deliberately excluded: `repository_required` (the request sent no repo, a
+/// bug here, not the user's), `validation_error` (a malformed url is ours to
+/// fix), and `unauthorized`/`plan_required` (about the key, not the repo).
+const REPOSITORY_ACCESS_CODES: [&str; 2] = ["repository_access", "integration_not_connected"];
+
+/// Whether a create-agent failure means Cursor cannot reach the repository.
+///
+/// Matches only the documented envelope, `{"error": {"code": "…"}}`, and only
+/// on a 4xx: an unrecognized body — a different code, a proxy's HTML, a 5xx —
+/// is left to the generic path so a new failure mode is never mislabelled as
+/// a repository the user must go connect.
+fn repository_is_inaccessible(status: reqwest::StatusCode, body: &str) -> bool {
+    if !status.is_client_error() || status == reqwest::StatusCode::REQUEST_TIMEOUT {
+        return false;
+    }
+    serde_json::from_str::<crate::api::wire::ApiErrorEnvelope>(body)
+        .is_ok_and(|envelope| REPOSITORY_ACCESS_CODES.contains(&envelope.error.code.as_str()))
+}
+
 /// The Cursor cloud API client.
 #[derive(Debug, Clone)]
 pub struct CursorClient {
@@ -193,6 +219,23 @@ impl CursorClient {
         Body: serde::Serialize + Sync,
         Reply: serde::de::DeserializeOwned,
     {
+        let (status, text) = self.post_for_text(path, body).await?;
+        Self::decode_post(path, status, &text)
+    }
+
+    /// POST a JSON body and read the response back as status plus raw text.
+    ///
+    /// Split out of [`Self::post_json`] so a caller that classifies error
+    /// bodies — [`Self::create_agent`] — sees the body itself rather than
+    /// re-parsing it out of a formatted message.
+    async fn post_for_text<Body>(
+        &self,
+        path: &str,
+        body: &Body,
+    ) -> Result<(reqwest::StatusCode, String), rootcause::Report>
+    where
+        Body: serde::Serialize + Sync,
+    {
         let response = self
             .http
             .post(self.url(path))
@@ -206,6 +249,18 @@ impl CursorClient {
             .text()
             .await
             .map_err(|error| rootcause::report!(error))?;
+        Ok((status, text))
+    }
+
+    /// Turn one POST's status and body into the reply or a report.
+    fn decode_post<Reply>(
+        path: &str,
+        status: reqwest::StatusCode,
+        text: &str,
+    ) -> Result<Reply, rootcause::Report>
+    where
+        Reply: serde::de::DeserializeOwned,
+    {
         if !status.is_success() {
             if status.is_client_error() && status != reqwest::StatusCode::REQUEST_TIMEOUT {
                 return Err(
@@ -217,7 +272,7 @@ impl CursorClient {
             }
             return Err(rootcause::report!("cursor POST {path} -> {status}: {text}"));
         }
-        serde_json::from_str(&text)
+        serde_json::from_str(text)
             .map_err(|error| rootcause::report!("cursor POST {path}: bad response body: {error}"))
     }
 
@@ -324,6 +379,7 @@ impl CursorAgents for CursorClient {
         &self,
         prompt: &str,
         repo: Option<&RepoUrl>,
+        open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
     ) -> Result<(CursorAgentId, CursorRunId), rootcause::Report> {
@@ -341,8 +397,23 @@ impl CursorAgents for CursorClient {
                 .unwrap_or_default(),
             model: model.map(ModelSelection::from),
             mcp_servers: mcp_servers.iter().map(McpServerSelection::from).collect(),
+            // A repo-less agent has nothing to open a pull request against,
+            // whatever the caller asked for.
+            auto_create_pr: open_pull_request && repo.is_some(),
         };
-        let reply: CreateAgentResponse = self.post_json("/v1/agents", &request).await?;
+        let (status, text) = self.post_for_text("/v1/agents", &request).await?;
+        if let Some(repo) = repo
+            && repository_is_inaccessible(status, &text)
+        {
+            return Err(
+                rootcause::report!(crate::domain::error::RepositoryUnavailable {
+                    repo: repo.clone(),
+                    detail: text,
+                })
+                .into_dynamic(),
+            );
+        }
+        let reply: CreateAgentResponse = Self::decode_post("/v1/agents", status, &text)?;
         tracing::info!(agent = %reply.agent.id, url = %reply.agent.url, "cursor agent created");
         Ok((
             CursorAgentId::new(reply.agent.id),

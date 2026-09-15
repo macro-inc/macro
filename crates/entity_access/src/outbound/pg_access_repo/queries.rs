@@ -31,6 +31,7 @@ pub mod crm_company_access;
 pub mod crm_contact_access;
 pub mod document_access;
 pub mod foreign_entity_access;
+pub mod initiative_access;
 pub mod project_access;
 pub mod team_access;
 pub mod thread_access;

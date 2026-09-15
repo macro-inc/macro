@@ -16,6 +16,7 @@ use predicate_index::{
 use soup::domain::models::SoupProjectionHydration;
 use thiserror::Error;
 
+pub mod channel;
 mod profile;
 mod wire;
 

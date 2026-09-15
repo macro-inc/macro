@@ -26,6 +26,8 @@ use std::sync::{Arc, Mutex};
 struct StubSessions {
     external: Arc<Mutex<HashMap<AgentSessionId, ExternalSession>>>,
     acp_session_id: Arc<Mutex<Option<String>>>,
+    /// What the repository chooser wrote back, per session.
+    repo_url: Arc<Mutex<HashMap<AgentSessionId, Option<String>>>>,
 }
 
 impl ExternalSessionRepo for StubSessions {
@@ -84,6 +86,7 @@ impl AgentSessionRepo for StubSessions {
             model: "auto".to_owned(),
             harness: "cursor".to_owned(),
             repo_url: None,
+            pull_request_url: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             sandbox_size: SandboxSize::Default,
@@ -117,6 +120,14 @@ impl AgentSessionRepo for StubSessions {
         unimplemented!("the manager never lists thread sessions")
     }
 
+    async fn recent_for_owner(
+        &self,
+        _owner: &MacroUserIdStr<'_>,
+        _limit: std::num::NonZeroUsize,
+    ) -> SessionResult<Vec<agent_session::domain::model::AgentSession>> {
+        unimplemented!("the manager never summarizes an owner's recent sessions")
+    }
+
     async fn session_bot(&self, _id: BotId) -> SessionResult<SessionBot> {
         unimplemented!("the manager never renders bots")
     }
@@ -131,6 +142,22 @@ impl AgentSessionRepo for StubSessions {
 
     async fn set_model(&self, _id: AgentSessionId, _model: &str) -> SessionResult<()> {
         unimplemented!("the manager never sets models")
+    }
+
+    async fn set_egress_token_hash(&self, _id: AgentSessionId, _hash: &str) -> SessionResult<()> {
+        unimplemented!("this adapter does not rotate credentials")
+    }
+
+    async fn set_repo_url(
+        &self,
+        id: AgentSessionId,
+        repo_url: Option<String>,
+    ) -> SessionResult<()> {
+        self.repo_url
+            .lock()
+            .expect("stub poisoned")
+            .insert(id, repo_url);
+        Ok(())
     }
 
     async fn delete(&self, _id: AgentSessionId) -> SessionResult<()> {
@@ -372,10 +399,21 @@ impl CursorApiKeys for StubKeys {
     }
 }
 
+/// A user who reaches no repository through the GitHub App: the chooser
+/// short-circuits on an empty listing, so these tests drive the whole spawn
+/// path without a model call.
+struct NoRepositories;
+
+impl ReachableRepositories for NoRepositories {
+    async fn for_user(&self, _user: &MacroUserIdStr<'_>) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+}
+
 fn manager(
     base_url: String,
     sessions: StubSessions,
-) -> CursorContainerManager<StubSessions, StubKeys> {
+) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories> {
     manager_with_keys(base_url, sessions, StubKeys::connected())
 }
 
@@ -383,9 +421,8 @@ fn manager_with_keys(
     base_url: String,
     sessions: StubSessions,
     keys: StubKeys,
-) -> CursorContainerManager<StubSessions, StubKeys> {
-    let repo = CursorRepoUrl::parse("https://github.com/macro-inc/macro").expect("valid repo");
-    CursorContainerManager::with_memory_journal(keys, base_url, repo, sessions)
+) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories> {
+    CursorContainerManager::with_memory_journal(keys, base_url, sessions, Arc::new(NoRepositories))
 }
 
 async fn next_acp(
@@ -594,8 +631,8 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
                 },
                 {
                     "type": "http",
-                    "name": "google_sheets",
-                    "url": "https://egress.test/mcp/google_sheets",
+                    "name": "macro_internal",
+                    "url": "https://egress.test/mcp/internal",
                     "headers": [{"name": "Authorization", "value": "Bearer test-session-token"}],
                 },
             ],
@@ -631,9 +668,9 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
                 "headers": { "Authorization": "Bearer test-session-token" },
             },
             {
-                "name": "google_sheets",
+                "name": "macro_internal",
                 "type": "http",
-                "url": "https://egress.test/mcp/google_sheets",
+                "url": "https://egress.test/mcp/internal",
                 "headers": { "Authorization": "Bearer test-session-token" },
             },
         ])

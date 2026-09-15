@@ -5,6 +5,7 @@ import type {
   OperationContext,
   OperationResult,
 } from '@urql/core';
+import { CombinedError } from '@urql/core';
 import { createComputed, createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject } from 'wonka';
@@ -69,6 +70,7 @@ import { createGraphqlSoupAstItemsQuery } from './items';
 
 type FakeExecution = {
   variables: Record<string, unknown>;
+  fail(error: CombinedError): void;
   next(
     data: unknown,
     metadata?: {
@@ -116,6 +118,8 @@ function makeFakeClient(): {
     } as Operation<unknown, Record<string, unknown>>;
     executions.push({
       variables: _request.variables,
+      fail: (error) =>
+        subject.next({ operation, error, stale: false, hasNext: false }),
       next: (
         data,
         metadata = { source: 'live-network', revision: REVISION_1 }
@@ -266,6 +270,73 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       online.mockRestore();
     }
   });
+
+  it.each(['mail-page', 'incomplete', 'unsupported'] as const)(
+    'handles a failed network refresh with %s local Mail proof',
+    async (kind) => {
+      const fake = makeFakeClient();
+      getGraphqlSoupClientMock.mockReturnValue(fake.client);
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        currentRevision: async () => REVISION_0,
+        entityFilter: entityFilterMock,
+        onCacheChanged: () => () => {},
+        onCacheGenerationChanged: () => () => {},
+      });
+      makeGraphqlSoupInputMock.mockReturnValue({
+        initial: { emailView: 'ALL', sortMethod: 'UPDATED_AT', limit: 10 },
+      });
+      entityFilterMock.mockResolvedValue({
+        kind,
+        revision: REVISION_0,
+        keys: [],
+        sortTimestamps: [],
+        nextCursor: null,
+        optimistic: false,
+      });
+      readRecordsByKeysMock.mockResolvedValue({
+        revision: REVISION_0,
+        records: [],
+      });
+      let dispose!: () => void;
+      let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+      createRoot((stop) => {
+        dispose = stop;
+        query = createGraphqlSoupAstItemsQuery(
+          () => ({ params: {}, body: {} }),
+          () => ({ enabled: true })
+        );
+      });
+      try {
+        await vi.waitFor(() => expect(entityFilterMock).toHaveBeenCalled());
+        const offlineError = new CombinedError({
+          networkError: new Error('API disconnected'),
+        });
+        fake.executions[0].fail(offlineError);
+        if (kind === 'mail-page') {
+          await vi.waitFor(() => expect(query.data()?.cachedMail).toBe(true));
+          expect(query.data()?.entities).toEqual([]);
+          expect(query.error()).toBeUndefined();
+          // Server-reported errors are not hidden just because local data exists.
+          const serverError = new CombinedError({
+            graphQLErrors: ['Forbidden'],
+          });
+          fake.executions[0].fail(serverError);
+          expect(query.error()).toBe(serverError);
+          const unauthorized = new CombinedError({
+            networkError: new Error('HTTP 403'),
+            response: { status: 403 },
+          });
+          fake.executions[0].fail(unauthorized);
+          expect(query.error()).toBe(unauthorized);
+        } else {
+          expect(query.data()?.cachedMail).not.toBe(true);
+          expect(query.error()).toBe(offlineError);
+        }
+      } finally {
+        dispose();
+      }
+    }
+  );
 
   it.each([
     { localNext: null, networkNext: 'server-next' },

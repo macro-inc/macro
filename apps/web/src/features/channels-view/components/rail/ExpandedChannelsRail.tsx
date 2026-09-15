@@ -1,14 +1,27 @@
-import { ViewSidebar } from '@app/components/view-shell';
+import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { runCreateAction } from '@app/features/command/Launcher';
+import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import { useFavoriteDisplayName } from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import type { ChannelEntity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
-import { cn, Hotkey, Tabs } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import XIcon from '@phosphor/x.svg';
+import type { Favorite } from '@service-storage/generated/schemas/favorite';
+import { Button, cn, EmptyStatePanel, Hotkey, Tabs } from '@ui';
+import {
+  type Accessor,
+  createSignal,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { Virtualizer } from 'virtua/solid';
 import type { ChannelsGroup } from '../../types';
 import { channelMentionsUser, isDirectMessage } from '../../utils';
@@ -18,6 +31,7 @@ import {
   ChannelCallIndicator,
   ChannelMutedIndicator,
   ChannelRailItemContextMenu,
+  CONVERSATION_CARD_HEIGHT,
   ConversationCard,
   IncomingCallActions,
   isPrimaryMouseDown,
@@ -25,6 +39,7 @@ import {
 import {
   domIdForRow,
   rowKeyForChannel,
+  rowKeyForFavorite,
   rowKeyForSection,
   useChannelsRail,
 } from './ChannelsRailContext';
@@ -37,6 +52,8 @@ import {
   RailModeButton,
 } from './ChannelsRailSection';
 import {
+  useChannelRailFavoriteItemState,
+  useChannelRailFavoritesState,
   useChannelRailItemState,
   useChannelRailScopeState,
   useChannelRailSectionState,
@@ -44,9 +61,22 @@ import {
 } from './hooks/useChannelRailState';
 
 const CHANNEL_TABS = [
-  { value: 'browse', label: 'Browse' },
-  { value: 'recents', label: 'Recents' },
+  { value: 'browse', label: 'All' },
+  { value: 'recents', label: 'Recent' },
 ];
+
+type ChannelRailSearch = {
+  isOpen: Accessor<boolean>;
+  query: Accessor<string>;
+  results: Accessor<readonly ChannelEntity[]>;
+  isLoading: Accessor<boolean>;
+  error: Accessor<unknown | undefined>;
+  open: () => void;
+  close: () => void;
+  setQuery: (query: string) => void;
+  registerInput: (element: HTMLInputElement) => void;
+  retry: () => Promise<void>;
+};
 
 type GroupConfig = {
   group: ChannelsGroup;
@@ -72,6 +102,43 @@ const GROUPS: GroupConfig[] = [
     onCreate: () => runCreateAction('channel'),
   },
 ];
+
+function FavoriteOption(props: { favorite: Favorite }) {
+  const rail = useChannelsRail();
+  const displayName = useFavoriteDisplayName(props.favorite);
+  const item = useChannelRailFavoriteItemState(() => props.favorite);
+
+  return (
+    <button
+      id={item().domId}
+      type="button"
+      role="treeitem"
+      tabIndex={-1}
+      class={cn(
+        'flex h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors',
+        item().selected && !isTouchDevice() && 'bg-active text-ink',
+        (!item().selected || isTouchDevice()) && 'text-ink-muted',
+        !item().selected &&
+          !isTouchDevice() &&
+          item().focused &&
+          'bg-hover text-ink',
+        !item().selected &&
+          !isTouchDevice() &&
+          !item().focused &&
+          'hover:bg-hover hover:text-ink'
+      )}
+      aria-current={item().selected ? 'page' : undefined}
+      onClick={() => rail.activateRow(rowKeyForFavorite(props.favorite))}
+    >
+      <span class="flex size-6 shrink-0 items-center justify-center">
+        <FavoriteIcon favorite={props.favorite} class="size-4" />
+      </span>
+      <span class="min-w-0 flex-1 truncate text-sm font-medium">
+        {displayName()}
+      </span>
+    </button>
+  );
+}
 
 function ChannelOption(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
@@ -126,7 +193,51 @@ function ChannelOption(props: { channel: ChannelEntity }) {
   );
 }
 
-function ExpandedHeader() {
+function ExpandedFavoritesSection() {
+  const rail = useChannelsRail();
+  const section = useChannelRailFavoritesState();
+
+  return (
+    <Show when={section().items.length > 0}>
+      <CollapsibleSection.Root open={section().open}>
+        <CollapsibleSection.Header
+          focused={section().focused}
+          focusWithin={section().containsFocus}
+          class="h-9"
+        >
+          <button
+            id={section().domId}
+            type="button"
+            role="treeitem"
+            tabIndex={-1}
+            class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none"
+            aria-expanded={section().open}
+            onClick={() => rail.activateRow(rowKeyForSection('favorites'))}
+          >
+            <CaretDownIcon
+              class={cn(
+                'size-3 shrink-0 transition-transform',
+                !section().open && '-rotate-90'
+              )}
+            />
+            <span class="min-w-0 truncate">Favorites</span>
+          </button>
+        </CollapsibleSection.Header>
+        <CollapsibleSection.Content
+          open={section().open}
+          contentRef={(element) => rail.registerScrollRef('favorites', element)}
+          class="flex min-h-0 flex-col gap-0.5"
+        >
+          <For each={section().items}>
+            {(favorite) => <FavoriteOption favorite={favorite} />}
+          </For>
+        </CollapsibleSection.Content>
+      </CollapsibleSection.Root>
+    </Show>
+  );
+}
+
+function ExpandedHeader(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
   const selectTab = (value: string) => {
     if (value === 'browse' || value === 'recents') {
@@ -147,23 +258,147 @@ function ExpandedHeader() {
           <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
         </SplitPanel.ControlGroup>
       </ViewSidebar.Header>
-      <div class="px-4">
+      <div class="flex items-center justify-between gap-2 px-4">
         <Tabs
           aria-label="Chat sidebar views"
-          fullWidth
           list={CHANNEL_TABS}
           value={rail.tab()}
           onChange={selectTab}
         />
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          label={
+            props.search.isOpen() ? 'Close search' : 'Search conversations'
+          }
+          aria-pressed={props.search.isOpen()}
+          class={cn(
+            'size-7 rounded-lg',
+            props.search.isOpen() && 'bg-active text-ink'
+          )}
+          onClick={() =>
+            props.search.isOpen() ? props.search.close() : props.search.open()
+          }
+        >
+          <MagnifyingGlassIcon class="size-3.5" />
+        </Button>
       </div>
+      <Show when={props.search.isOpen()}>
+        <div class="px-4">
+          <SearchBar
+            ref={props.search.registerInput}
+            label="Search channels and direct messages"
+            placeholder="Search conversations"
+            value={props.search.query()}
+            hotkey="cmd+f"
+            onValueChange={props.search.setQuery}
+            onEscape={() => {
+              if (!props.search.query()) props.search.close();
+            }}
+            class="h-9 shrink-0 rounded-xl"
+          />
+        </div>
+      </Show>
     </div>
+  );
+}
+
+function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
+  const rail = useChannelsRail();
+  const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
+  const pagination = useChannelRailVirtualizer(() => 'search');
+  const query = () => props.search.query().trim();
+  const focusedIndex = () => {
+    const row = rail.list.focus.item();
+    return row?.kind === 'conversation' && row.scope === 'search'
+      ? row.localIndex
+      : -1;
+  };
+
+  return (
+    <Switch>
+      <Match
+        when={props.search.isLoading() && props.search.results().length === 0}
+      >
+        <RailListLoading />
+      </Match>
+      <Match when={props.search.error() && props.search.results().length === 0}>
+        <RailListError retry={props.search.retry} />
+      </Match>
+      <Match when={props.search.results().length > 0}>
+        <div
+          ref={setScrollRoot}
+          class="scrollbar-hidden size-full min-h-0 overflow-y-auto"
+          aria-busy={rail.sources.search.isLoadingMore()}
+        >
+          <Virtualizer
+            ref={pagination.registerVirtualizer}
+            data={props.search.results()}
+            scrollRef={scrollRoot()}
+            itemSize={rail.tab() === 'recents' ? CONVERSATION_CARD_HEIGHT : 42}
+            bufferSize={360}
+            keepMounted={focusedIndex() >= 0 ? [focusedIndex()] : undefined}
+            onScroll={pagination.loadMoreNearEnd}
+          >
+            {(channel) => (
+              <Show
+                when={rail.tab() === 'recents'}
+                fallback={
+                  <div class="px-4 pb-0.5">
+                    <ChannelOption channel={channel} />
+                  </div>
+                }
+              >
+                <RecentConversationCard channel={channel} />
+              </Show>
+            )}
+          </Virtualizer>
+          <Show when={rail.sources.search.isLoadingMore()}>
+            <RailListLoadingMore
+              variant={rail.tab() === 'recents' ? 'recent' : 'channel'}
+            />
+          </Show>
+          <Show when={props.search.isLoading()}>
+            <RailListLoadingMore
+              variant={rail.tab() === 'recents' ? 'recent' : 'channel'}
+            />
+          </Show>
+        </div>
+      </Match>
+      <Match when={true}>
+        <EmptyStatePanel
+          centered
+          graphic={EmptyStateNoSearchMatchGraphic}
+          title={query() ? 'No results' : 'No conversations to show'}
+          description={
+            query() ? (
+              <span>
+                No conversations match{' '}
+                <span class="[overflow-wrap:anywhere]">“{query()}”</span>
+              </span>
+            ) : (
+              'Channels and direct messages you join will appear here.'
+            )
+          }
+          primaryAction={
+            query()
+              ? {
+                  label: 'Clear search',
+                  icon: XIcon,
+                  onClick: () => props.search.setQuery(''),
+                }
+              : undefined
+          }
+        />
+      </Match>
+    </Switch>
   );
 }
 
 function ExpandedGroupSection(props: { config: GroupConfig }) {
   const rail = useChannelsRail();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  const { state: section, clearVisibleActivity } = useChannelRailSectionState(
+  const { state: section } = useChannelRailSectionState(
     () => props.config.group
   );
   const pagination = useChannelRailVirtualizer(() => props.config.group);
@@ -220,7 +455,6 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
         class="flex min-h-0 flex-col gap-0.5"
         activityTargetId={section().targetId}
         activityLabel={section().label}
-        onActivityVisible={clearVisibleActivity}
       >
         <Switch>
           <Match
@@ -277,6 +511,7 @@ function ExpandedBrowse() {
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
   const hasItems = () =>
+    rail.favorites().length > 0 ||
     rail.sources.channels.items().length > 0 ||
     rail.sources.direct_messages.items().length > 0;
   const sourcesSettled = () =>
@@ -292,6 +527,7 @@ function ExpandedBrowse() {
       </Match>
       <Match when={true}>
         <div class="flex h-full min-h-0 flex-col gap-3 px-4">
+          <ExpandedFavoritesSection />
           <For each={GROUPS}>
             {(config) => <ExpandedGroupSection config={config} />}
           </For>
@@ -370,7 +606,7 @@ function ExpandedRecents() {
             ref={pagination.registerVirtualizer}
             data={scope().items}
             scrollRef={scrollRoot()}
-            itemSize={72}
+            itemSize={CONVERSATION_CARD_HEIGHT}
             bufferSize={360}
             keepMounted={scope().keepMounted}
             onScroll={pagination.loadMoreNearEnd}
@@ -391,7 +627,7 @@ function ExpandedRecents() {
   );
 }
 
-export function ExpandedChannelsRail() {
+export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
   const activeDescendant = () => {
     const rowId = rail.list.focus.key();
@@ -400,7 +636,7 @@ export function ExpandedChannelsRail() {
 
   return (
     <>
-      <ExpandedHeader />
+      <ExpandedHeader search={props.search} />
       <div class="flex min-h-0 flex-1 flex-col">
         <div
           ref={rail.registerRootRef}
@@ -410,6 +646,9 @@ export function ExpandedChannelsRail() {
           class="min-h-0 flex-1 overflow-hidden outline-none"
         >
           <Switch>
+            <Match when={props.search.isOpen()}>
+              <ExpandedSearchResults search={props.search} />
+            </Match>
             <Match when={rail.tab() === 'browse'}>
               <ExpandedBrowse />
             </Match>
@@ -418,7 +657,7 @@ export function ExpandedChannelsRail() {
             </Match>
           </Switch>
         </div>
-        <Show when={rail.tab() === 'browse'}>
+        <Show when={!props.search.isOpen() && rail.tab() === 'browse'}>
           <footer class="flex h-9 shrink-0 items-center justify-start gap-1 border-t border-edge-muted px-4 text-xxs text-ink-extra-muted">
             <span>Use</span>
             <Hotkey shortcut="[" theme="subtle" />

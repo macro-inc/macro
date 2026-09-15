@@ -33,6 +33,11 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::Mutex;
 
+mod soup;
+pub use soup::{
+    EntityFilterRequest, EntityFilterResult, PredicateBaselineEntry, PredicateFilterResult,
+};
+
 /// Mirrors `ReadResult` in `apps/web/src/lib/graphql-cache/protocol.ts`.
 #[derive(Debug, Serialize)]
 #[serde(tag = "kind", rename_all = "camelCase")]
@@ -349,6 +354,9 @@ struct EngineState {
 #[derive(Clone)]
 pub struct EngineHandle {
     inner: Arc<Mutex<EngineState>>,
+    // Shared by cloned handles, changed when the native engine is reopened.
+    // Revisions alone may repeat across process restarts.
+    mail_generation: String,
 }
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
@@ -385,6 +393,7 @@ impl EngineHandle {
             None => Engine::new(storage),
         };
         EngineHandle {
+            mail_generation: soup_filter_cache_adapter::mail::new_generation(),
             inner: Arc::new(Mutex::new(EngineState {
                 engine,
                 ops: OpInterner::default(),
@@ -476,6 +485,15 @@ impl EngineHandle {
             .map_err(|error| error.to_string())
     }
 
+    /// Evaluates a Soup predicate or a revision-bound cached Mail page.
+    pub async fn entity_filter(
+        &self,
+        request: EntityFilterRequest,
+    ) -> Result<EntityFilterResult, String> {
+        let mut state = self.inner.lock().await;
+        soup::filter(&mut state.engine, &self.mail_generation, request).await
+    }
+
     /// Recovers cached query variables without materializing each variant.
     pub async fn inspect_query_variants(
         &self,
@@ -537,8 +555,17 @@ impl EngineHandle {
             let op_id = ops.intern(&registration.op_id);
             (op_id, registration.entity_resolvers)
         });
+        let projections = soup::write_projections(
+            engine,
+            &query,
+            operation_name.as_deref(),
+            &variables,
+            &data,
+            identity.as_deref(),
+        )
+        .await?;
         engine
-            .write_query_with_registration(
+            .write_query_with_registration_and_projections(
                 origin,
                 registration
                     .as_ref()
@@ -553,6 +580,7 @@ impl EngineHandle {
                     data: &data,
                     identity: identity.as_deref(),
                 },
+                projections,
             )
             .await
             .map(|result| wire_write_result(ops, result))
@@ -571,13 +599,23 @@ impl EngineHandle {
     ) -> Result<HydrationWriteResultWire, String> {
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
+        let projections = soup::write_projections(
+            engine,
+            &query,
+            operation_name.as_deref(),
+            &variables,
+            &data,
+            identity.as_deref(),
+        )
+        .await?;
         engine
-            .hydrate_query(
+            .hydrate_query_with_projections(
                 &query,
                 operation_name.as_deref(),
                 &variables,
                 &data,
                 identity.as_deref(),
+                projections,
             )
             .await
             .map(|result| HydrationWriteResultWire {
@@ -608,8 +646,17 @@ impl EngineHandle {
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
+        let projections = soup::optimistic_projections(
+            engine,
+            &query,
+            operation_name.as_deref(),
+            &variables,
+            &data,
+            created_at_ms,
+        )
+        .await?;
         let result = engine
-            .enqueue_optimistic_mutation(
+            .enqueue_optimistic_mutation_with_projections(
                 origin,
                 BeginOptimisticWrite {
                     uuid: &uuid,
@@ -626,6 +673,7 @@ impl EngineHandle {
                     now_ms,
                     lease_expires_at_ms,
                 },
+                projections,
             )
             .await
             .map_err(|error| error.to_string())?;
@@ -716,14 +764,24 @@ impl EngineHandle {
         };
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
+        let projections = soup::write_projections(
+            engine,
+            &query,
+            operation_name.as_deref(),
+            &variables,
+            &data,
+            None,
+        )
+        .await?;
         match engine
-            .commit_optimistic_write_with_outcome(
+            .commit_optimistic_write_with_projections_outcome(
                 transaction,
                 claim,
                 &query,
                 operation_name.as_deref(),
                 &variables,
                 &data,
+                projections,
             )
             .await
             .map_err(|e| e.to_string())?
@@ -780,12 +838,14 @@ impl EngineHandle {
         &self,
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
-        let keys: Vec<EntityKey<'static>> =
-            keys.into_iter().map(|key| EntityKey(key.into())).collect();
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
+        let projections = soup::invalidation_projections(engine, &keys).await?;
+        let keys: Vec<EntityKey<'static>> =
+            keys.into_iter().map(|key| EntityKey(key.into())).collect();
         let affected = engine
-            .invalidate_keys(keys.iter())
+            .invalidate_keys_with_projections(&keys, projections)
+            .await
             .map_err(|error| error.to_string())?;
         Ok(AffectedOperationsResultWire {
             revision: affected.revision.to_string(),
@@ -799,11 +859,15 @@ impl EngineHandle {
         &self,
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
-        let keys: Vec<EntityKey<'static>> =
-            keys.into_iter().map(|key| EntityKey(key.into())).collect();
         let mut state = self.inner.lock().await;
         let EngineState { engine, ops } = &mut *state;
-        let affected = engine.delete_keys(&keys).await.map_err(|e| e.to_string())?;
+        let projections = soup::deletion_projections(engine, &keys).await?;
+        let keys: Vec<EntityKey<'static>> =
+            keys.into_iter().map(|key| EntityKey(key.into())).collect();
+        let affected = engine
+            .delete_keys_with_projection_changes(&keys, projections)
+            .await
+            .map_err(|e| e.to_string())?;
         Ok(AffectedOperationsResultWire {
             revision: affected.revision.to_string(),
             affected_ops: ops.names(affected.value),

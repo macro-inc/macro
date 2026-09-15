@@ -22,6 +22,7 @@ use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use std::collections::HashMap;
+use std::num::NonZeroUsize;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -128,6 +129,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let now = chrono::Utc::now();
         let session = AgentSession {
+            pull_request_url: None,
             id: params.id,
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: params.owner_id,
@@ -254,6 +256,28 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         })
     }
 
+    async fn recent_for_owner(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        limit: NonZeroUsize,
+    ) -> Result<Vec<AgentSession>> {
+        let mut found: Vec<AgentSession> = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned")
+            .values()
+            .filter(|session| session.owner_id.as_ref() == owner.as_ref())
+            .cloned()
+            .collect();
+        found.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.id.as_uuid().cmp(&a.id.as_uuid()))
+        });
+        found.truncate(limit.get());
+        Ok(found)
+    }
+
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
         Ok(SessionBot {
             id,
@@ -276,6 +300,30 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
             AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
         })?;
         session.acp_session_id = Some(acp_session_id);
+        session.modified_at = chrono::Utc::now();
+        Ok(())
+    }
+
+    async fn set_egress_token_hash(&self, id: AgentSessionId, hash: &str) -> Result<()> {
+        self.get(id).await?;
+        let mut hashes = self
+            .egress_token_hashes
+            .lock()
+            .expect("token store poisoned");
+        hashes.retain(|_, session| *session != id);
+        hashes.insert(hash.to_owned(), id);
+        Ok(())
+    }
+
+    async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
+        let mut sessions = self
+            .sessions
+            .lock()
+            .expect("in-memory session store is not poisoned");
+        let session = sessions.get_mut(&id).ok_or_else(|| {
+            AgentSessionError::Unknown(anyhow::anyhow!("no agent session {}", id.as_uuid()))
+        })?;
+        session.repo_url = repo_url;
         session.modified_at = chrono::Utc::now();
         Ok(())
     }
@@ -642,6 +690,7 @@ impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
 pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     let now = chrono::Utc::now();
     AgentSession {
+        pull_request_url: None,
         id,
         name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
         owner_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
@@ -676,6 +725,7 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
 #[derive(Debug, Clone, Default)]
 pub struct RecordingRealtime {
     published: Arc<Mutex<Vec<LogAppended>>>,
+    updated: Arc<Mutex<Vec<AgentSessionId>>>,
     down: bool,
 }
 
@@ -691,8 +741,14 @@ impl RecordingRealtime {
     pub fn down() -> Self {
         Self {
             published: Arc::default(),
+            updated: Arc::default(),
             down: true,
         }
+    }
+
+    /// Sessions whose persisted metadata changed.
+    pub fn updated(&self) -> Vec<AgentSessionId> {
+        self.updated.lock().unwrap().clone()
     }
 
     /// Everything published, in order.
@@ -706,6 +762,17 @@ impl RecordingRealtime {
 }
 
 impl AgentSessionRealtime for RecordingRealtime {
+    async fn publish_updated(
+        &self,
+        session: AgentSessionId,
+    ) -> std::result::Result<(), rootcause::Report> {
+        if self.down {
+            return Err(rootcause::report!("the connection gateway is down"));
+        }
+        self.updated.lock().unwrap().push(session);
+        Ok(())
+    }
+
     async fn publish(&self, event: LogAppended) -> std::result::Result<(), rootcause::Report> {
         if self.down {
             return Err(rootcause::report!("the connection gateway is down"));
@@ -779,5 +846,26 @@ impl AgentSessionLifecyclePublisher for RecordingLifecyclePublisher {
             .push(event);
         self.count.send_modify(|published| *published += 1);
         Box::pin(async {})
+    }
+}
+
+impl crate::domain::pull_request::SessionPullRequestRepo for InMemoryAgentSessionRepo {
+    async fn record_pull_request(
+        &self,
+        session: AgentSessionId,
+        owner: &MacroUserIdStr<'static>,
+        url: &str,
+    ) -> Result<bool> {
+        let mut sessions = self.sessions.lock().unwrap();
+        let stored = sessions
+            .get_mut(&session)
+            .filter(|stored| &stored.owner_id == owner)
+            .ok_or(AgentSessionError::Forbidden)?;
+        if stored.pull_request_url.as_deref() == Some(url) {
+            return Ok(false);
+        }
+        stored.pull_request_url = Some(url.to_owned());
+        stored.modified_at = chrono::Utc::now();
+        Ok(true)
     }
 }

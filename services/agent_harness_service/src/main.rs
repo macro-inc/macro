@@ -13,6 +13,7 @@ mod bots_directory;
 mod config;
 mod containers;
 mod harness_bindings;
+mod internal_mcp;
 mod model_providers;
 mod runtime_commands;
 mod trigger;
@@ -44,13 +45,14 @@ use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::channel_prompt_context::ChannelPromptContextAdapter;
 use agent_harness::outbound::containers::HarnessContainers;
-use agent_harness::outbound::cursor::{CursorContainerManager, PgCursorApiKeys};
+use agent_harness::outbound::cursor::{CursorContainerManager, PgCursorApiKeys, PostgresJournal};
 use agent_harness::outbound::daytona::{
     AnthropicApiKey as AnthropicApiKeySecret, DaytonaApiKey as DaytonaApiKeySecret,
     DaytonaContainerManager, DaytonaSettings, Snapshot,
 };
 use agent_harness::outbound::egress::EgressProvisioner;
 use agent_harness::outbound::forward::RedisCommandForwarder;
+use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
 use agent_harness::outbound::prompt_mentions::{LexicalPromptMentions, PgSessionAccess};
@@ -91,8 +93,9 @@ use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
 use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
 use cursor_cloud_agents::api::CURSOR_API_BASE_URL;
-use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
-use github::domain::service::{InstallationTokenConfig, InstallationTokenService};
+use github::domain::service::{
+    InstallationTokenConfig, InstallationTokenService, ReachableRepositoriesService,
+};
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use harness_bindings::{PgHarnessBindings, PgHarnessPresence};
@@ -423,16 +426,50 @@ async fn run() -> anyhow::Result<()> {
             &aws_config,
         ))),
     );
+    // Which repositories a session may work on is the owner's question, not
+    // the deployment's: the same App credentials the egress proxy mints tokens
+    // with, read in the other direction - from the user to their installations.
+    let reachable_repositories = Arc::new(GithubReachableRepositories::new(
+        ReachableRepositoriesService::new(
+            InstallationTokenConfig {
+                client_id: config.github_sync_app_client_id.clone(),
+                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
+            },
+            PgGithubSyncRepo::new(pool.clone()),
+            GithubSyncClientImpl::default(),
+        ),
+    ));
+    let session_pull_requests: Arc<dyn agent_session::domain::pull_request::SessionPullRequests> =
+        Arc::new(
+            agent_session::domain::pull_request::SessionPullRequestService::new(
+                session_repo.clone(),
+                ConnectionGatewayAgentSessionRealtime::new(
+                    connection_gateway.clone(),
+                    session_repo.clone(),
+                ),
+            ),
+        );
+    let internal_mcp = internal_mcp::router(
+        Arc::new(session_repo.clone()),
+        session_pull_requests.clone(),
+        url::Url::parse(&egress_base_url)?
+            .host_str()
+            .context("egress URL needs a host")?
+            .to_owned(),
+    );
     let cursor_manager = CursorContainerManager::new(
         cursor_keys.clone(),
         CURSOR_API_BASE_URL.to_owned(),
-        CursorRepoUrl::parse(&config.cursor_repo_url)
-            .context("CURSOR_REPO_URL is not a valid repository url")?,
         session_repo.clone(),
-        pool.clone(),
-        replica,
+        reachable_repositories,
+        ai_usage::pg_recorder(pool.clone()),
+        PostgresJournal {
+            pool: pool.clone(),
+            replica,
+        },
         pending_commands.clone(),
-    );
+    )
+    .with_pull_requests(session_pull_requests);
     // Fixed system agents retain their deployment defaults. User/team agents
     // are resolved from agent_configs for every trigger so newly-created or
     // edited agents require no service restart.
@@ -715,7 +752,9 @@ async fn run() -> anyhow::Result<()> {
 
     let egress_port = config.egress_port;
     let egress_http = tokio::spawn(async move {
-        if let Err(error) = api::serve_egress(egress, egress_port, shutdown_signal()).await {
+        if let Err(error) =
+            api::serve_egress(egress, internal_mcp, egress_port, shutdown_signal()).await
+        {
             tracing::error!(error = ?error, "agent harness service egress stopped");
         }
     });

@@ -20,6 +20,8 @@ pub enum AgentSessionError {
     ThreadSessionExists,
     #[error("the session owner is not a known user")]
     UnknownOwner,
+    #[error("expected a GitHub PR URL: https://github.com/owner/repo/pull/number")]
+    InvalidPullRequestUrl,
     #[error("invalid agent session name: {0}")]
     InvalidName(&'static str),
     #[error("a preview request may name at most {0} sessions")]

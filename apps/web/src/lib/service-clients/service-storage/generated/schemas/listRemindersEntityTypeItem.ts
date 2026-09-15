@@ -30,4 +30,6 @@ export const ListRemindersEntityTypeItem = {
   reminder: 'reminder',
   skill: 'skill',
   agent_session: 'agent_session',
+  scheduled_action: 'scheduled_action',
+  initiative: 'initiative',
 } as const;

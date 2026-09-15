@@ -721,6 +721,38 @@ async fn team_item_access_includes_team_channels_and_bot_grants(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_item_access_resolves_bot_typed_grant(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    let bot_id = BotId::new_from_uuid(Uuid::new_v4());
+    let bot_principal = bot_id.into_storage_id();
+    let document_id = Uuid::new_v4();
+
+    insert_pg_bot_team(&pool, team_id).await?;
+    insert_pg_bot(&pool, bot_id, None, Some(team_id)).await?;
+    insert_pg_bot_entity_access(
+        &pool,
+        document_id,
+        "document",
+        bot_principal.as_ref(),
+        "bot",
+        AccessLevel::Owner,
+    )
+    .await?;
+
+    let access = PgAccessRepository::new(pool)
+        .get_team_entity_access(
+            bot_id,
+            team_id,
+            &document_id.to_string(),
+            EntityType::Document,
+        )
+        .await?;
+
+    assert_eq!(access, Some(AccessLevel::Owner));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn team_item_access_allows_public_link_sharing(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::new_v4();
     let bot_id = BotId::new_from_uuid(Uuid::new_v4());

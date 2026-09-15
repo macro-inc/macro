@@ -6,6 +6,7 @@ publish = false
 
 [features]
 default = ["inbound", "outbound"]
+ai_tools = ["inbound", "dep:ai_toolset", "dep:async-trait", "dep:schemars"]
 # The `seed_jsonl` replay binary: an argument parser, and the Postgres
 # adapter it writes through.
 cli = ["dep:clap", "outbound"]
@@ -35,6 +36,10 @@ schema = ["dep:utoipa", "agent_runtime_protocol/utoipa", "macro_user_id/schema"]
 test-utils = ["dep:mockall", "agent_fold/test-utils"]
 
 [dependencies]
+lazy-regex = { workspace = true }
+ai_toolset = { path = "../ai_toolset", optional = true }
+async-trait = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
 
 agent-client-protocol = { workspace = true }
 harness_id = { path = "../harness_id" }

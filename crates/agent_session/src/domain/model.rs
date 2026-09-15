@@ -224,6 +224,8 @@ pub struct AgentSession {
     pub harness: String,
     /// repo we are working with, when one was stated
     pub repo_url: Option<String>,
+    /// The pull request associated with this session, independent of conversation history.
+    pub pull_request_url: Option<String>,
     /// Directory the harness runs in, snapshotted at creation. The session
     /// actor sends it as the working directory of `session/new`, and resume
     /// and load re-enter it - the directory the session actually ran in,

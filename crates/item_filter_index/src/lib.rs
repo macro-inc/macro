@@ -4,6 +4,7 @@
 use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst,
+    agent_session::AgentSessionLiteral,
     calendar_event::CalendarEventLiteral,
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
@@ -15,6 +16,7 @@ use item_filters::ast::{
     foreign_entity::ForeignEntityLiteral,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
+    reminder::ReminderLiteral,
 };
 use predicate_index::{
     ExactValue, IndexQuery, PartitionPredicate, PredicateExpr, Profile, RangeBound, SortDirection,
@@ -26,6 +28,7 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
+mod channels;
 pub mod mail;
 
 /// Stable direct-field profile name retained for existing browser projections.
@@ -95,6 +98,31 @@ pub mod vocabulary {
     /// Chat partition.
     pub fn chat_partition() -> Token {
         token("chat")
+    }
+
+    /// Channel partition in the browser-composed profile.
+    pub fn channel_partition() -> Token {
+        token("channel")
+    }
+
+    /// Canonical channel type.
+    pub fn channel_type() -> Token {
+        token("channel-type")
+    }
+
+    /// Channel team UUID, when present.
+    pub fn channel_team() -> Token {
+        token("channel-team")
+    }
+
+    /// Channel organization ID as a signed 64-bit big-endian integer.
+    pub fn channel_organization() -> Token {
+        token("channel-organization")
+    }
+
+    /// Whether the viewer is an active channel participant.
+    pub fn channel_participant() -> Token {
+        token("channel-participant")
     }
 
     /// Record identity attribute.
@@ -268,6 +296,18 @@ fn check_soup_flat(
         return Eligibility::Unsupported(UnsupportedReason::GlobalProperties);
     }
 
+    if supports_notifications
+        && ast.properties_filter.is_some()
+        && unsupported_partition(
+            ast.channel_filter.as_deref(),
+            "channel",
+            |literal| matches!(literal, ChannelLiteral::ChannelId(id) if id.is_nil()),
+        )
+        .is_err()
+    {
+        return Eligibility::Unsupported(UnsupportedReason::GlobalProperties);
+    }
+
     for result in [
         unsupported_partition(
             ast.calendar_event_filter.as_deref(),
@@ -284,15 +324,19 @@ fn check_soup_flat(
         } else {
             Ok(())
         },
-        unsupported_partition(
-            ast.channel_filter.as_deref(),
-            "channel",
-            |literal| matches!(literal, ChannelLiteral::ChannelId(id) if id.is_nil()),
-        ),
+        if supports_notifications {
+            channels::check(ast.channel_filter.as_deref())
+        } else {
+            unsupported_partition(
+                ast.channel_filter.as_deref(),
+                "channel",
+                |literal| matches!(literal, ChannelLiteral::ChannelId(id) if id.is_nil()),
+            )
+        },
         unsupported_partition(
             ast.channel_thread_filter.as_deref(),
             "channelThread",
-            |literal| matches!(literal, ChannelThreadLiteral::ThreadId(id) if id.is_nil()),
+            |literal| matches!(literal, ChannelThreadLiteral::ThreadId(id) | ChannelThreadLiteral::ChannelId(id) if id.is_nil()),
         ),
         unsupported_partition(
             ast.call_filter.as_deref(),
@@ -315,12 +359,23 @@ fn check_soup_flat(
         }
     }
 
-    // Reminders are uniquely excluded by Soup when their tree is omitted.
-    if ast.reminder_filter.is_some() {
+    // These opt-in partitions are empty when omitted. The UI's confine()
+    // also excludes them with a positive nil ID. Accept only proven emptiness,
+    // not arbitrary trees over partitions that have no local index.
+    if ast.reminder_filter.as_deref().is_some_and(|expr| {
+        !proves_none(
+            expr,
+            |literal| matches!(literal, ReminderLiteral::Id(id) if id.is_nil()),
+        )
+    }) {
         return Eligibility::Unsupported(UnsupportedReason::Partition("reminder"));
     }
-    // Agent sessions are opt-in the same way.
-    if ast.agent_session_filter.is_some() {
+    if ast.agent_session_filter.as_deref().is_some_and(|expr| {
+        !proves_none(
+            expr,
+            |literal| matches!(literal, AgentSessionLiteral::Id(id) if id.is_nil()),
+        )
+    }) {
         return Eligibility::Unsupported(UnsupportedReason::Partition("agent_session"));
     }
 
@@ -396,8 +451,9 @@ pub fn compile_soup_flat_v3(
     )
 }
 
-/// Compile exact UNSEEN/SEEN notification predicates in addition to v3 literals.
-/// DONE is intentionally unsupported: the active edge contains no done history.
+/// Compile participant-scoped Channels and exact UNSEEN/SEEN notification
+/// predicates in addition to v3 literals. DONE is intentionally unsupported:
+/// the active edge contains no done history.
 pub fn compile_soup_flat_v4(
     ast: &EntityFilterAst,
     request: SoupFlatRequest,
@@ -510,6 +566,12 @@ fn compile_soup_flat(
         limit: request.limit,
     };
 
+    let mut query = query;
+    if supports_notifications {
+        query
+            .partitions
+            .push(channels::compile(ast.channel_filter.as_deref())?);
+    }
     Ok(LocalCompileOutcome::Supported(ValidatedIndexQuery::new(
         query,
     )?))

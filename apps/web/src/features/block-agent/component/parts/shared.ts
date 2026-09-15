@@ -5,9 +5,15 @@
  * row-level facts every card shares.
  */
 
-import type { ToolName } from '@service-agent-fold/generated/types';
+import type {
+  MessagePart,
+  ToolName,
+} from '@service-agent-fold/generated/types';
 import type { JSX } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { ToolStatus } from '../../ui';
+
+export type ToolUsePart = Extract<MessagePart, { kind: 'tool_use' }>;
 
 /**
  * Where a part sits in its transcript, for the chat components a Macro tool
@@ -50,4 +56,25 @@ export function pathsSubtitle(paths: string[]): string | undefined {
   if (paths.length === 0) return undefined;
   if (paths.length === 1) return paths[0];
   return `${paths.length} files`;
+}
+
+/**
+ * What a call touched, in a word — the subtitle its card would show, for the
+ * one-line summary a collapsed group gives its latest call.
+ */
+export function toolCallDetail(part: ToolUsePart): string | undefined {
+  return match(part.detail)
+    .with({ kind: 'terminal' }, (detail) => detail.command ?? undefined)
+    .with({ kind: 'edit' }, (detail) =>
+      pathsSubtitle(detail.diffs.map((diff) => diff.path))
+    )
+    .with(
+      { kind: 'read' },
+      { kind: 'delete' },
+      { kind: 'move' },
+      { kind: 'search' },
+      (detail) => pathsSubtitle(detail.paths)
+    )
+    .with({ kind: 'subagent' }, (detail) => detail.title)
+    .otherwise(() => undefined);
 }

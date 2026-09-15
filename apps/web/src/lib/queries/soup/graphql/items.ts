@@ -561,7 +561,22 @@ export function createGraphqlSoupAstItemsQuery(
         };
   });
 
-  const error = (): CombinedError | undefined => query.error ?? undefined;
+  const error = (): CombinedError | undefined => {
+    const error = query.error;
+    // A background transport failure must not replace usable cached Mail
+    // (including an exact empty page) with the full-screen error state.
+    // Keep server responses (including HTTP auth failures), GraphQL errors,
+    // and failures without current-query local proof visible.
+    if (
+      error?.networkError &&
+      !error.response &&
+      error.graphQLErrors.length === 0 &&
+      displayLocalProjection()?.mail
+    ) {
+      return undefined;
+    }
+    return error ?? undefined;
+  };
   createComputed(
     on(error, (queryError) => {
       if (queryError) {

@@ -158,7 +158,7 @@ pub enum AccessGrant {
     EntityAccess {
         /// Who the row was granted to.
         source_type: EntityAccessSourceType,
-        /// User id, channel id, or team id.
+        /// User or bot principal, channel id, or team id.
         source_id: String,
         /// Level stored on the row.
         access_level: AccessLevel,
@@ -428,6 +428,7 @@ fn format_source_type(source_type: EntityAccessSourceType) -> &'static str {
         EntityAccessSourceType::User => "user",
         EntityAccessSourceType::Channel => "channel",
         EntityAccessSourceType::Team => "team",
+        EntityAccessSourceType::Bot => "bot",
     }
 }
 

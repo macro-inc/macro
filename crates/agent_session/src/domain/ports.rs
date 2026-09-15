@@ -12,6 +12,7 @@ use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessa
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use std::num::NonZeroUsize;
 
 /// A bidirectional connection to an agent runtime.
 pub trait AgentConnector:
@@ -45,6 +46,9 @@ pub struct BotFacts {
     /// Runtime profile for a persisted agent. Fixed system bots have no
     /// persisted profile and use deployment defaults instead.
     pub managed_profile: Option<ManagedAgentProfile>,
+    /// Whether the persona is limited to selected channels. Channel co-members
+    /// may start a session as it, matching `@` mentions in those channels.
+    pub selected_channels: bool,
 }
 
 /// Runtime settings snapshotted when a managed persona opens a session.
@@ -81,6 +85,13 @@ pub trait BotDirectory: Send + Sync + 'static {
         user: MacroUserIdStr<'static>,
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Whether the user and bot share at least one active channel.
+    fn user_shares_channel_with_bot(
+        &self,
+        user: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Why a user cannot select a bot as a managed session persona.
@@ -101,9 +112,10 @@ pub enum ManagedPersonaError {
 /// Resolve and authorize a managed persona for a user.
 ///
 /// Ownership policy lives in the domain: private personas belong to their
-/// owner, team personas are available to team members, and managed system
-/// bots (the deployment's own coders) are available to everyone, exactly as
-/// they are when mentioned in a channel.
+/// owner, team personas are available to team members, selected-channel
+/// personas are available to anyone who can `@` them in a shared channel,
+/// and managed system bots (the deployment's own coders) are available to
+/// everyone, exactly as they are when mentioned in a channel.
 pub async fn managed_persona_for_user<Bots: BotDirectory>(
     bots: &Bots,
     bot_id: BotId,
@@ -126,12 +138,22 @@ pub async fn managed_persona_for_user<Bots: BotDirectory>(
             profile: None,
         });
     }
-    let authorized = if let Some(owner) = facts.owner_user_id {
+    let authorized = if let Some(owner) = &facts.owner_user_id {
         owner.as_ref() == user.as_ref()
+            || (facts.selected_channels
+                && bots
+                    .user_shares_channel_with_bot(user.clone(), bot_id)
+                    .await
+                    .map_err(ManagedPersonaError::Lookup)?)
     } else if let Some(team_id) = facts.owner_team_id {
         bots.user_has_team(user.clone(), team_id)
             .await
             .map_err(ManagedPersonaError::Lookup)?
+            || (facts.selected_channels
+                && bots
+                    .user_shares_channel_with_bot(user.clone(), bot_id)
+                    .await
+                    .map_err(ManagedPersonaError::Lookup)?)
     } else {
         false
     };
@@ -271,6 +293,13 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         ids: &[AgentSessionId],
     ) -> impl Future<Output = Result<Vec<AgentSessionPreview>>> + Send;
 
+    /// Replace the session credential when attaching an external runtime.
+    fn set_egress_token_hash(
+        &self,
+        id: AgentSessionId,
+        hash: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// The session a sandbox's egress token stands for, if any still does.
     ///
     /// `egress_token_hash` is the SHA-256 hex of the token as presented, never
@@ -311,6 +340,13 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
 
+    /// The owner's newest sessions, newest first, at most `limit`.
+    fn recent_for_owner<'owner>(
+        &self,
+        owner: &MacroUserIdStr<'owner>,
+        limit: NonZeroUsize,
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
+
     /// The agent behind a session, for rendering the messages it sent.
     ///
     /// A bot that has been deleted still has messages in the channel, so this
@@ -323,6 +359,20 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         &self,
         id: AgentSessionId,
         acp_session_id: SessionId,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist the repository the session works on, or clear it. Idempotent.
+    ///
+    /// Written after the session is open, because for some runtimes the
+    /// repository is not known at creation: a Cursor session's repository
+    /// follows from what its first prompt asks for. The row is authoritative
+    /// once written - the egress proxy pins the sandbox's git traffic to it -
+    /// so `None` is a real answer meaning "this session works on no
+    /// repository", not "leave whatever is there".
+    fn set_repo_url(
+        &self,
+        id: AgentSessionId,
+        repo_url: Option<String>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Persist the model the session is running on. Idempotent.
@@ -614,6 +664,14 @@ pub trait AgentSessionRealtime {
         &self,
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
+    /// Tell viewers to refetch changed session metadata.
+    fn publish_updated(
+        &self,
+        _session: AgentSessionId,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
 
     /// Publish a user-facing name change to the session's viewers.
     fn publish_renamed(
@@ -917,3 +975,6 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         id: AgentSessionId,
     ) -> impl Future<Output = Result<Option<harness_id::HarnessId>>> + Send;
 }
+
+#[cfg(test)]
+mod test;

@@ -61,6 +61,9 @@ where
 fn supports_explain(entity_type: EntityType) -> bool {
     !matches!(
         entity_type,
-        EntityType::User | EntityType::ChannelMessage | EntityType::Skill
+        EntityType::User
+            | EntityType::ChannelMessage
+            | EntityType::Skill
+            | EntityType::ScheduledAction
     )
 }

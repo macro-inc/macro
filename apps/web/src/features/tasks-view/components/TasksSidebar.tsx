@@ -3,6 +3,7 @@ import {
   useViewTabHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import {
   favoriteSplitContent,
@@ -60,21 +61,23 @@ export function TasksNavigation(props: { onNavigate?: () => void }) {
 
 function FavoriteRow(props: {
   favorite: Favorite;
-  onOpen: (favorite: Favorite) => void;
+  onOpen: (favorite: Favorite, event: MouseEvent) => void;
 }) {
   const name = useFavoriteDisplayName(props.favorite);
 
   return (
-    <ViewSidebar.Item
-      class="font-normal"
-      title={name()}
-      onClick={() => props.onOpen(props.favorite)}
-    >
-      <span class="flex size-4 shrink-0 items-center justify-center">
-        <FavoriteIcon favorite={props.favorite} class="size-4" />
-      </span>
-      <span class="truncate">{name()}</span>
-    </ViewSidebar.Item>
+    <FavoriteContextMenu favorite={props.favorite} triggerClass="block">
+      <ViewSidebar.Item
+        class="font-normal"
+        title={name()}
+        onClick={(event) => props.onOpen(props.favorite, event)}
+      >
+        <span class="flex size-4 shrink-0 items-center justify-center">
+          <FavoriteIcon favorite={props.favorite} class="size-4" />
+        </span>
+        <span class="truncate">{name()}</span>
+      </ViewSidebar.Item>
+    </FavoriteContextMenu>
   );
 }
 
@@ -93,10 +96,10 @@ function TaskFavorites(props: {
       )
       .sort((left, right) => left.sortOrder - right.sortOrder)
   );
-
-  const openFavorite = (favorite: Favorite) => {
+  const openFavorite = (favorite: Favorite, event: MouseEvent) => {
     layout.openWithSplit(favoriteSplitContent(favorite), {
       referredFrom: 'sidebar',
+      preferNewSplit: event.shiftKey,
     });
   };
 

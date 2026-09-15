@@ -24,7 +24,7 @@ use crate::domain::{
         EnrichedGithubPullRequest, GithubWebhookEventType, ValidatedGithubWebhookEvent,
         extract_github_mentions,
     },
-    ports::{GithubSyncClient, GithubSyncRepo},
+    ports::{GithubSyncClient, GithubSyncRealtime, GithubSyncRepo},
 };
 
 use super::{GithubSyncServiceImpl, PullRequestForeignEntityUpsert};
@@ -35,7 +35,8 @@ impl<
     C: GithubSyncClient,
     F: ForeignEntityService,
     N: NotificationIngress,
-> GithubSyncServiceImpl<D, R, C, F, N>
+    P: GithubSyncRealtime,
+> GithubSyncServiceImpl<D, R, C, F, N, P>
 {
     /// Notify the requested reviewer that their review was requested on a
     /// pull request.

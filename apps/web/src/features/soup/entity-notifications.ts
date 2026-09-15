@@ -1,4 +1,9 @@
-import type { EntityData } from '@entity/types/entity';
+import type {
+  ChannelEntity,
+  ChannelMessageEntity,
+  ChannelThreadEntity,
+  EntityData,
+} from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
 import { toNotificationEntity } from '@entity/utils/notification';
 import { channelThreadRootId } from '@notifications/channel-thread-root';
@@ -47,12 +52,17 @@ function channelThreadNotificationIds(
   return ids;
 }
 
+export type ChannelNotificationScopeEntity =
+  | Pick<ChannelEntity, 'type'>
+  | Pick<ChannelMessageEntity, 'type'>
+  | Pick<ChannelThreadEntity, 'type' | 'messageId'>;
+
 /**
  * Splits notifications shared by channel and channel-thread entities into the
  * stack rendered by each Inbox row.
  */
 export function scopeChannelNotificationsForEntity(
-  entity: EntityData,
+  entity: ChannelNotificationScopeEntity,
   notifications: UnifiedNotification[]
 ): UnifiedNotification[] {
   if (entity.type === 'channel') {
@@ -100,7 +110,10 @@ export function withEntityNotifications<T extends EntityData>(
     ...entity,
     notifications: () => {
       const notifications = read();
-      return options.scopeChannelThreads
+      return options.scopeChannelThreads &&
+        (entity.type === 'channel' ||
+          entity.type === 'channel_message' ||
+          entity.type === 'channel_thread')
         ? scopeChannelNotificationsForEntity(entity, notifications)
         : notifications;
     },

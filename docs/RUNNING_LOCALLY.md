@@ -44,6 +44,10 @@ experimental-features = nix-command flakes
 
 The default shell does not include the Tauri platform dependencies. They are large, so they live in their own shells. For Linux desktop development, use `nix develop .#tauri-linux`. For Android development on x86_64 Linux, use `nix develop .#tauri-android`.
 
+For automated Linux desktop offline tests, use `nix develop .#tauri-e2e` and the
+[native E2E guide](../apps/web/tests/native/README.md). It runs the real Tauri
+webview/native cache with deterministic API fixtures, without the local stack.
+
 ## Run the frontend against hosted services
 
 The web app talks to hosted `*-dev` services when you run `bun run dev` from the web app.

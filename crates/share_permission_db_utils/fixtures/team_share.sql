@@ -14,7 +14,9 @@ INSERT INTO "Document" (id, name, owner) VALUES
     ('20000000-0000-0000-0000-000000000002', 'Document', 'macro|owner@example.com');
 INSERT INTO "Chat" (id, name, "userId") VALUES
     ('20000000-0000-0000-0000-000000000003', 'Chat', 'macro|owner@example.com');
-INSERT INTO "SharePermission" (id) VALUES ('project'), ('document'), ('chat'), ('active-call'), ('archived-call');
+INSERT INTO "SharePermission" (id) VALUES ('project'), ('document'), ('chat'), ('active-call'), ('archived-call'), ('initiative');
+INSERT INTO initiative (id, name, owner_user_id, share_permission_id) VALUES
+    ('20000000-0000-0000-0000-000000000007', 'Initiative', 'macro|owner@example.com', 'initiative');
 INSERT INTO "ProjectPermission" ("projectId", "sharePermissionId") VALUES ('20000000-0000-0000-0000-000000000001', 'project');
 INSERT INTO "DocumentPermission" ("documentId", "sharePermissionId") VALUES ('20000000-0000-0000-0000-000000000002', 'document');
 INSERT INTO "ChatPermission" ("chatId", "sharePermissionId") VALUES ('20000000-0000-0000-0000-000000000003', 'chat');

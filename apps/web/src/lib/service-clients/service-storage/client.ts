@@ -1801,6 +1801,30 @@ export const storageServiceClient = {
     });
   },
 
+  /**
+   * Look a foreign entity up by the identifier its source system assigned,
+   * e.g. `owner/repo/pull/12` for `github_pull_request`. The identifier is a
+   * wildcard path segment, so its slashes are kept and only the segments
+   * themselves are escaped.
+   */
+  async getForeignEntityBySource({
+    source,
+    foreignEntityId,
+  }: {
+    source: string;
+    foreignEntityId: string;
+  }): Promise<Result<ForeignEntity, ResultError<FetchWithTokenErrorCode>[]>> {
+    const encodedForeignEntityId = foreignEntityId
+      .split('/')
+      .map((segment) => encodeURIComponent(segment))
+      .join('/');
+
+    return await dssFetch<ForeignEntity>(
+      `/foreign_entity/by_source/${encodeURIComponent(source)}/${encodedForeignEntityId}`,
+      { method: 'GET' }
+    );
+  },
+
   async exportDocument({ documentId }) {
     return (
       await dssFetch<ExportDocumentResponse>(

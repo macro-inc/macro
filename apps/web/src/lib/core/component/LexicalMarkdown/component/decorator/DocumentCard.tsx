@@ -10,7 +10,9 @@ import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import { blockElementSignal } from '@core/signal/blockElement';
+import { getDisplayName, tryMacroId } from '@core/user';
 import { matches } from '@core/util/match';
+import DotsThree from '@icon/dots-three-large.svg';
 import {
   $convertCardToMention,
   $getId,
@@ -24,18 +26,15 @@ import {
 } from '@macro-inc/lexical-core';
 import Minimize from '@phosphor/arrows-in.svg';
 import Clipboard from '@phosphor/clipboard.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import DotsThree from '@phosphor/list.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
-import UserIcon from '@phosphor/user.svg';
 import {
   type AccessiblePreviewItem,
   isAccessiblePreviewItem,
 } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn, Dropdown, Layer } from '@ui';
+import { Card, cn, Dropdown, Item } from '@ui';
 import {
   $addUpdateTag,
   $createNodeSelection,
@@ -58,7 +57,10 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { formatDate } from '../../../../util/date';
-import { TaskPropertiesPreview } from '../../../TaskPropertiesPreview';
+import {
+  TaskPropertiesPreview,
+  TaskPropertiesPreviewProvider,
+} from '../../../TaskPropertiesPreview';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { UPDATE_DOCUMENT_NAME_COMMAND } from '../../plugins';
@@ -350,128 +352,200 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const DocumentInfo = (props: {
     item: AccessiblePreviewItem;
     blockName: string;
+    blockParams: DocumentCardDecoratorProps['blockParams'];
   }) => {
     return (
-      <div class="p-2">
-        <div class="flex center gap-2 items-center">
-          <div class="shrink-0">
-            <ItemEntityIcon size="sm" />
-          </div>
-          <div class="text-sm font-semibold truncate grow">
-            <BlockLink id={props.item.id} blockOrFileName={props.blockName}>
-              <span class="hover:underline">{props.item.name}</span>
-            </BlockLink>
-          </div>
-          <Dropdown open={dropdownOpen()} onOpenChange={setDropdownOpen}>
-            <Dropdown.Trigger size="icon-sm" variant="ghost">
-              <DotsThree />
-            </Dropdown.Trigger>
-            <Dropdown.Content mount={blockElementSignal.get()}>
-              <Dropdown.Group>
-                <Dropdown.Item onSelect={convertToMention}>
-                  <Minimize class="size-4 shrink-0" />
-                  <span class="flex-1 truncate">Convert to Inline Mention</span>
-                </Dropdown.Item>
-                <Dropdown.Item onSelect={handleCopy}>
-                  <Clipboard class="size-4 shrink-0" />
-                  <span class="flex-1 truncate">Copy Link</span>
-                </Dropdown.Item>
-              </Dropdown.Group>
-              <Dropdown.Group>
-                <Dropdown.Item onSelect={deleteCard}>
-                  <TrashSimple class="size-4 shrink-0" />
-                  <span class="flex-1 truncate">Delete</span>
-                </Dropdown.Item>
-              </Dropdown.Group>
-            </Dropdown.Content>
-          </Dropdown>
-        </div>
-        <div
-          class={cn('flex items-center justify-between', {
-            'mt-2': Boolean(props.item.owner) || Boolean(props.item.updatedAt),
-          })}
-        >
-          <Show when={props.item.owner}>
-            {(owner) => (
-              <div class="flex items-center text-xs text-ink-extra-muted">
-                <UserIcon class="size-3 mr-1" />
-                <span class="truncate">{owner().replace('macro|', '')}</span>
-              </div>
-            )}
-          </Show>
-          <Show when={props.item.updatedAt}>
-            {(updatedAt) => (
-              <div class="flex items-center text-xs text-ink-extra-muted pr-1">
-                <ClockIcon class="size-3 mr-1" />
-                <span>{formatDate(updatedAt())}</span>
-              </div>
-            )}
-          </Show>
-        </div>
-      </div>
+      <Card.Header class="shrink-0 py-2.5">
+        <Item class="grid grid-cols-[1rem_minmax(0,1fr)_auto] items-start gap-x-2 border-0 p-0">
+          <Item.Icon class="col-start-1 row-start-1">
+            <Show
+              when={props.blockName === 'task'}
+              fallback={<ItemEntityIcon size="xs" />}
+            >
+              <Suspense
+                fallback={
+                  <LoadingSpinner class="size-4 animate-spin text-ink-muted" />
+                }
+              >
+                <TaskPropertiesPreview
+                  taskId={props.item.id}
+                  taskName={props.item.name}
+                  previewProperties={documentProperties()}
+                  mode="status"
+                />
+              </Suspense>
+            </Show>
+          </Item.Icon>
+          <Item.Content class="col-start-2 row-start-1">
+            <Item.Title>
+              <BlockLink
+                id={props.item.id}
+                blockOrFileName={props.blockName}
+                params={props.blockParams}
+              >
+                <span
+                  role="link"
+                  tabIndex={0}
+                  class="wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return;
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.currentTarget.click();
+                  }}
+                >
+                  {props.item.name}
+                </span>
+              </BlockLink>
+            </Item.Title>
+            <Show when={props.item.owner || props.item.updatedAt}>
+              <Item.Description class="text-left wrap-anywhere">
+                <Show when={props.item.owner}>
+                  {(owner) =>
+                    getDisplayName(tryMacroId(owner())) ||
+                    owner().replace('macro|', '')
+                  }
+                </Show>
+                <Show when={props.item.owner && props.item.updatedAt}>
+                  {' - '}
+                </Show>
+                <Show when={props.item.updatedAt}>
+                  {(updatedAt) => formatDate(updatedAt())}
+                </Show>
+              </Item.Description>
+            </Show>
+          </Item.Content>
+          <Item.Actions class="col-start-3 row-start-1 h-5">
+            <Dropdown open={dropdownOpen()} onOpenChange={setDropdownOpen}>
+              <Dropdown.Trigger
+                size="icon-sm"
+                variant="ghost"
+                aria-label="Document card actions"
+              >
+                <DotsThree />
+              </Dropdown.Trigger>
+              <Dropdown.Content mount={blockElementSignal.get()}>
+                <Dropdown.Group>
+                  <Dropdown.Item onSelect={convertToMention}>
+                    <Minimize class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">
+                      Convert to Inline Mention
+                    </span>
+                  </Dropdown.Item>
+                  <Dropdown.Item onSelect={handleCopy}>
+                    <Clipboard class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">Copy Link</span>
+                  </Dropdown.Item>
+                </Dropdown.Group>
+                <Dropdown.Group>
+                  <Dropdown.Item onSelect={deleteCard}>
+                    <TrashSimple class="size-4 shrink-0" />
+                    <span class="flex-1 truncate">Delete</span>
+                  </Dropdown.Item>
+                </Dropdown.Group>
+              </Dropdown.Content>
+            </Dropdown>
+          </Item.Actions>
+        </Item>
+      </Card.Header>
     );
   };
 
   return (
-    <Layer depth={2}>
-      <div
-        ref={(el) => {
-          setContainerRef(el);
-          setPreviewBoxRef(el);
-        }}
-        contentEditable={false}
-        class={cn(
-          'relative my-2 rounded border border-edge bg-surface no-select-children select-none overflow-hidden flex flex-col',
-          isSelectedAsNode() &&
-            !channelMessageId() &&
-            'bg-active outline-edge outline-4',
-          isPreviewable() && 'resize-y shrink-0 min-h-25'
-        )}
-        style={{
-          height: isPreviewable() ? previewBoxHeight : 'auto',
-        }}
-        onClick={(e) => {
-          if (channelMessageId()) return;
-          e.preventDefault();
-          clickCardHandler();
-        }}
-      >
-        <Switch>
-          <Match when={item().loading}>
-            <div class="flex items-center justify-center p-4 text-ink-muted">
-              <LoadingSpinner class="size-6 animate-spin" />
-            </div>
-          </Match>
-          <Match when={matches(item(), isAccessiblePreviewItem)}>
-            {(item) => (
-              <>
-                {/*<div class="h-2"/>*/}
-                <DocumentInfo item={item()} blockName={props.blockName} />
-                <Show when={props.blockName === 'task'}>
+    <Card
+      variant="filled"
+      depth={2}
+      ref={(el) => {
+        setContainerRef(el);
+        setPreviewBoxRef(el);
+      }}
+      contentEditable={false}
+      class={cn(
+        'my-2 rounded-xl no-select-children select-none overflow-hidden',
+        isSelectedAsNode() &&
+          !channelMessageId() &&
+          'border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] ring-2 ring-edge-muted',
+        isPreviewable() && 'resize-y shrink-0 min-h-80'
+      )}
+      style={{
+        height: isPreviewable() ? previewBoxHeight : 'auto',
+      }}
+      onClick={(e) => {
+        if (channelMessageId()) return;
+        // Controls and embedded editors own their clicks and native defaults.
+        if (
+          e.target instanceof Element &&
+          e.target.closest(
+            'a, button, input, textarea, select, [role="link"], [role="button"], [role="combobox"], [data-document-card-controls]'
+          )
+        )
+          return;
+        e.preventDefault();
+        clickCardHandler();
+      }}
+    >
+      <Switch>
+        <Match when={item().loading}>
+          <div class="flex items-center justify-center p-4 text-ink-muted">
+            <LoadingSpinner class="size-6 animate-spin" />
+          </div>
+        </Match>
+        <Match when={matches(item(), isAccessiblePreviewItem)}>
+          {(item) => (
+            <TaskPropertiesPreviewProvider
+              taskId={props.blockName === 'task' ? item().id : undefined}
+              previewProperties={documentProperties()}
+            >
+              <DocumentInfo
+                item={item()}
+                blockName={props.blockName}
+                blockParams={props.blockParams}
+              />
+              <Show when={props.blockName === 'task'}>
+                <Card.Body
+                  class="shrink-0 pt-2 pl-9 [&>div]:px-0 [&>div]:pb-0"
+                  data-document-card-controls
+                >
                   <Suspense fallback={<div class="w-full bg-active h-4 m-2" />}>
                     <TaskPropertiesPreview
                       taskId={item().id}
                       previewProperties={documentProperties()}
+                      mode="details"
                     />
                   </Suspense>
-                </Show>
-                <Show when={previewComponent()}>
-                  <Show
-                    when={isPreviewable()}
-                    fallback={
-                      <Dynamic component={previewComponent()} {...props} />
-                    }
+                </Card.Body>
+              </Show>
+              <Show when={previewComponent()}>
+                <Card.Body
+                  class={cn(
+                    'mx-3 mt-2 mb-3 p-0',
+                    isPreviewable() && 'flex min-h-0 flex-1'
+                  )}
+                  data-document-card-controls
+                >
+                  <Card
+                    variant="filled"
+                    offset={1}
+                    class={cn(
+                      'w-full overflow-hidden rounded-lg',
+                      isPreviewable() && 'min-h-0 flex-1'
+                    )}
                   >
-                    <div class="relative grow overflow-y-scroll">
+                    <div
+                      class={cn(
+                        'relative min-w-0',
+                        isPreviewable() && 'min-h-0 flex-1 overflow-y-auto'
+                      )}
+                    >
                       <Dynamic component={previewComponent()} {...props} />
                     </div>
-                  </Show>
-                </Show>
-              </>
-            )}
-          </Match>
-        </Switch>
-      </div>
-    </Layer>
+                  </Card>
+                </Card.Body>
+              </Show>
+            </TaskPropertiesPreviewProvider>
+          )}
+        </Match>
+      </Switch>
+    </Card>
   );
 }

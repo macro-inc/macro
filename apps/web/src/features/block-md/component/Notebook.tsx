@@ -423,7 +423,7 @@ export function Notebook(props: {
                 <DocumentAiEditBar documentId={props.documentId} />
               </div>
             </Show>
-            <DocumentDiscussion />
+            <DocumentDiscussion editorHasFocus={editorHasFocus()} />
           </Show>
         </ParamsProvider>
       </div>

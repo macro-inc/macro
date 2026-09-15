@@ -9,6 +9,7 @@ mod handle_pr;
 mod notify_pr;
 mod notify_pr_activity;
 mod notify_pr_checks;
+mod realtime;
 
 use crate::domain::{
     models::{
@@ -19,7 +20,7 @@ use crate::domain::{
         ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
         sign_installation_state, verify_installation_state,
     },
-    ports::{GithubSyncClient, GithubSyncRepo, GithubSyncService},
+    ports::{GithubSyncClient, GithubSyncRealtime, GithubSyncRepo, GithubSyncService},
 };
 use documents::domain::{models::DocumentError, ports::DocumentService};
 use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
@@ -67,11 +68,13 @@ pub struct GithubSyncServiceImpl<
     C: GithubSyncClient,
     F: ForeignEntityService,
     N: NotificationIngress,
+    P: GithubSyncRealtime,
 > {
     config: GithubSyncConfig,
     document_service: Arc<D>,
     foreign_entity_service: Arc<F>,
     notification_ingress: N,
+    realtime: P,
     repo: R,
     pub(crate) client: C,
 }
@@ -82,7 +85,8 @@ impl<
     C: GithubSyncClient,
     F: ForeignEntityService,
     N: NotificationIngress,
-> GithubSyncServiceImpl<D, R, C, F, N>
+    P: GithubSyncRealtime,
+> GithubSyncServiceImpl<D, R, C, F, N, P>
 {
     /// Create a new github sync service.
     pub fn new(
@@ -92,12 +96,14 @@ impl<
         notification_ingress: N,
         repo: R,
         client: C,
+        realtime: P,
     ) -> Self {
         Self {
             config,
             document_service,
             foreign_entity_service,
             notification_ingress,
+            realtime,
             repo,
             client,
         }
@@ -143,7 +149,8 @@ impl<
     C: GithubSyncClient,
     F: ForeignEntityService,
     N: NotificationIngress,
-> GithubSyncServiceImpl<D, R, C, F, N>
+    P: GithubSyncRealtime,
+> GithubSyncServiceImpl<D, R, C, F, N, P>
 {
     /// Extract PR metadata and generate an installation access token.
     /// Returns `None` if any required field is missing or token generation fails.
@@ -544,6 +551,8 @@ impl<
                 continue;
             };
 
+            self.publish_pull_request(source, &foreign_entity).await;
+
             upserts.push(PullRequestForeignEntityUpsert {
                 source: source.clone(),
                 foreign_entity_id: foreign_entity.id,
@@ -866,7 +875,8 @@ impl<
     C: GithubSyncClient,
     F: ForeignEntityService,
     N: NotificationIngress,
-> GithubSyncService for GithubSyncServiceImpl<D, R, C, F, N>
+    P: GithubSyncRealtime,
+> GithubSyncService for GithubSyncServiceImpl<D, R, C, F, N, P>
 {
     #[tracing::instrument(skip(self, body), err)]
     async fn validate_webhook_event(

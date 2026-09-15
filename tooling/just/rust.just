@@ -109,6 +109,8 @@ setup_test_envs:
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_access_management/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/mobile_welcome_email_db_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_access_db_utils/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_registry/entity_registry/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/entity_registry/entity_registry_db_utils/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/mcp_client/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./services/document_storage_service/.env
     echo "DATABASE_URL={{ DATABASE_URL }}" >> ./crates/task_dedup/.env

@@ -581,6 +581,26 @@ impl GithubSyncRepo for StubSyncRepo {
         Ok(member_ids)
     }
 
+    async fn get_installation_ids_for_sources(
+        &self,
+        macro_id: &str,
+        team_ids: &[uuid::Uuid],
+    ) -> Result<Vec<String>, Self::Err> {
+        let rows = self.installation_source_rows.lock().unwrap();
+        let mut installation_ids: Vec<String> = rows
+            .iter()
+            .filter(|(_, sources)| {
+                sources.iter().any(|source| match source {
+                    GithubAppInstallationSource::User(user) => user == macro_id,
+                    GithubAppInstallationSource::Team(team) => team_ids.contains(team),
+                })
+            })
+            .map(|(installation_id, _)| installation_id.clone())
+            .collect();
+        installation_ids.sort();
+        Ok(installation_ids)
+    }
+
     async fn get_installation_sources(
         &self,
         installation_id: &str,
@@ -1157,6 +1177,7 @@ type TestGithubSyncService = GithubSyncServiceImpl<
     StubSyncClient,
     StubForeignEntityService,
     StubNotificationIngress,
+    StubRealtime,
 >;
 type TestServiceWithForeignEntityService = (TestGithubSyncService, Arc<StubForeignEntityService>);
 
@@ -1190,6 +1211,7 @@ fn make_sync_service_with_repo_and_notification_ingress(
         notification_ingress,
         repo,
         StubSyncClient::new(),
+        StubRealtime::default(),
     )
 }
 
@@ -1212,6 +1234,7 @@ fn make_sync_service_with_doc_service() -> (TestGithubSyncService, Arc<StubDocum
         StubNotificationIngress::new(),
         StubSyncRepo::new(),
         StubSyncClient::new(),
+        StubRealtime::default(),
     );
     (service, doc_service)
 }
@@ -5777,4 +5800,112 @@ async fn repeated_installation_association_is_idempotent() {
             installation_setup_user().into()
         )]
     );
+}
+
+#[derive(Default)]
+struct StubRealtime {
+    fail_sends: bool,
+    events: std::sync::Mutex<Vec<(Vec<MacroUserIdStr<'static>>, ForeignEntity)>>,
+}
+
+impl crate::domain::ports::GithubSyncRealtime for StubRealtime {
+    async fn publish_pull_request(
+        &self,
+        recipients: &[MacroUserIdStr<'static>],
+        entity: &ForeignEntity,
+    ) -> Result<(), GithubError> {
+        if self.fail_sends {
+            return Err(GithubError::Internal(anyhow::anyhow!(
+                "gateway unavailable"
+            )));
+        }
+        self.events
+            .lock()
+            .unwrap()
+            .push((recipients.to_vec(), entity.clone()));
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn realtime_publishes_saved_entities_only_to_their_source_members() {
+    let team = macro_uuid::generate_uuid_v7();
+    let repo = StubSyncRepo::new()
+        .with_team_members(team, vec!["macro|actor@user.com", "macro|reader@user.com"]);
+    let service = make_sync_service_with_repo(repo);
+    let pull_request: EnrichedGithubPullRequest = serde_json::from_value(
+        expected_pull_request_metadata("PR", GithubPullRequestStatus::Open, None, None),
+    )
+    .unwrap();
+    let sources = vec![
+        GithubAppInstallationSource::Team(team),
+        GithubAppInstallationSource::User("macro|owner@user.com".to_string()),
+    ];
+    service
+        .upsert_enriched_pull_request_foreign_entities(pull_request.clone(), &sources)
+        .await;
+    let stored = service.foreign_entity_service.foreign_entities();
+    {
+        let events = service.realtime.events.lock().unwrap();
+        assert_eq!(events.len(), 2);
+        assert_eq!(events[0].1, stored[0]);
+        assert_eq!(events[1].1, stored[1]);
+        let recipients: HashSet<_> = events[0].0.iter().map(|id| id.as_ref()).collect();
+        assert_eq!(
+            recipients,
+            HashSet::from(["macro|actor@user.com", "macro|reader@user.com"])
+        );
+        assert_eq!(
+            events[1].0.iter().map(|id| id.as_ref()).collect::<Vec<_>>(),
+            vec!["macro|owner@user.com"]
+        );
+    }
+    let mut merged = pull_request;
+    merged.status = Some(GithubPullRequestStatus::Merged);
+    service
+        .upsert_enriched_pull_request_foreign_entities(merged, &sources)
+        .await;
+    let events = service.realtime.events.lock().unwrap();
+    assert_eq!(events.len(), 4);
+    assert_eq!(events[2].1.id, stored[0].id);
+    assert_eq!(events[2].1.metadata["status"], "merged");
+}
+
+#[tokio::test]
+async fn realtime_does_not_publish_to_an_empty_or_invalid_source() {
+    let service = make_sync_service();
+    let pull_request: EnrichedGithubPullRequest = serde_json::from_value(
+        expected_pull_request_metadata("PR", GithubPullRequestStatus::Open, None, None),
+    )
+    .unwrap();
+    service
+        .upsert_enriched_pull_request_foreign_entities(
+            pull_request,
+            &[
+                GithubAppInstallationSource::Team(macro_uuid::generate_uuid_v7()),
+                GithubAppInstallationSource::User("invalid".to_string()),
+            ],
+        )
+        .await;
+    assert!(service.realtime.events.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn realtime_delivery_failure_keeps_the_saved_mapping() {
+    let mut service = make_sync_service();
+    service.realtime.fail_sends = true;
+    let pull_request: EnrichedGithubPullRequest = serde_json::from_value(
+        expected_pull_request_metadata("PR", GithubPullRequestStatus::Open, None, None),
+    )
+    .unwrap();
+    let upserts = service
+        .upsert_enriched_pull_request_foreign_entities(
+            pull_request,
+            &[GithubAppInstallationSource::User(
+                "macro|owner@user.com".to_string(),
+            )],
+        )
+        .await;
+    assert_eq!(upserts.len(), 1);
+    assert_eq!(service.foreign_entity_service.foreign_entities().len(), 1);
 }

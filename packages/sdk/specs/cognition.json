@@ -2131,7 +2131,8 @@
           "ai_projection",
           "ai_editing",
           "import",
-          "agent_session"
+          "agent_session",
+          "agent_repository_choice"
         ]
       },
       "AssistantMessagePart": {
@@ -2971,7 +2972,9 @@
           "crm_contact",
           "reminder",
           "skill",
-          "agent_session"
+          "agent_session",
+          "scheduled_action",
+          "initiative"
         ]
       },
       "ErrorBody": {

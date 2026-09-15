@@ -7,8 +7,7 @@ import { EntityIcon, getEntityIconType } from '@core/component/EntityIcon';
 import { ItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import {
-  createTheme,
-  twoLineClampMarkdownTheme,
+  inlineWrappingMarkdownTheme,
   unifiedListMarkdownTheme,
 } from '@core/component/LexicalMarkdown/theme';
 import { UserIcon } from '@core/component/UserIcon';
@@ -609,14 +608,6 @@ function CardMarkdownLine(props: { text?: string; class?: string }) {
     </Show>
   );
 }
-
-const inlineWrappingMarkdownTheme = createTheme(
-  {
-    root: 'md inline pr-[2px] cursor-default',
-    paragraph: 'md-p text-[1em] inline',
-  },
-  twoLineClampMarkdownTheme
-);
 
 /**
  * The two-line clamped markdown body (the channel-style message preview),

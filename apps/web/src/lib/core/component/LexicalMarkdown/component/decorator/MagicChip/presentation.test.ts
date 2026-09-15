@@ -323,6 +323,30 @@ describe('deriveMagicChipPresentation', () => {
     });
   });
 
+  it("shows the runtime's reason under a failed turn", () => {
+    const presentation = deriveMagicChipPresentation({
+      persistedStatus: 'acp_ready',
+      response: response({
+        parts: [],
+        stop: {
+          kind: 'failed',
+          message:
+            "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again.",
+        },
+      }),
+    });
+
+    expect(presentation).toEqual({
+      kind: 'working',
+      activity: {
+        label: "Agent couldn't answer",
+        detail:
+          "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again.",
+        busy: false,
+      },
+    });
+  });
+
   it('settles into final markdown without completion chrome', () => {
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'booting',

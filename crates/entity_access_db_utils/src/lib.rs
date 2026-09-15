@@ -9,6 +9,7 @@ pub mod team_share;
 
 use macro_user_id::user_id::MacroUserIdStr;
 pub use model_entity::EntityType;
+use model_owner::Owner;
 pub use models_entity_access_management::EntityAccessSourceType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
@@ -44,6 +45,59 @@ pub async fn insert_entity_access_row(
     Ok(())
 }
 
+struct OwnerGrantSource {
+    source_type: EntityAccessSourceType,
+    source_id: String,
+}
+
+impl OwnerGrantSource {
+    fn from_owner(owner: &Owner) -> Self {
+        let source_type = match owner {
+            Owner::User(_) => EntityAccessSourceType::User,
+            Owner::Bot(_) => EntityAccessSourceType::Bot,
+            Owner::Team(_) => EntityAccessSourceType::Team,
+        };
+        Self {
+            source_type,
+            source_id: owner.principal_id(),
+        }
+    }
+}
+
+/// Inserts or raises `owner`'s direct grant on the entity to `Owner`.
+///
+/// Does not authorize and does not commit.
+///
+/// A no-op still holds the conflicting row lock until the caller commits.
+#[tracing::instrument(skip(transaction), err)]
+pub async fn upsert_owner_grant(
+    transaction: &mut Transaction<'_, Postgres>,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+    owner: &Owner,
+) -> Result<(), sqlx::Error> {
+    let source = OwnerGrantSource::from_owner(owner);
+    // Conflict WHERE only steers index inference onto the direct unique index.
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, $2, $3, $4, 'owner')
+        ON CONFLICT (entity_id, entity_type, source_id, source_type)
+        WHERE granted_from_project_id IS NULL
+        DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
+        WHERE entity_access.access_level != 'owner'
+        "#,
+        entity_id,
+        entity_type.as_ref(),
+        source.source_id,
+        source.source_type as _,
+    )
+    .execute(transaction.as_mut())
+    .await?;
+
+    Ok(())
+}
+
 /// Removes all user source level entity access rows for the provided entity aside from the owner
 /// one.
 /// This is used when an item goes from public to private.
@@ -67,6 +121,50 @@ pub async fn remove_non_owner_user_entity_access(
         entity_type.as_ref(),
         EntityAccessSourceType::User as _,
         owner_id,
+    )
+    .execute(transaction.as_mut())
+    .await?;
+
+    Ok(())
+}
+
+/// Deletes the direct user grants named by `user_ids` on the given entity.
+///
+/// Only the rows this entity granted those users directly are removed. An owner
+/// row survives even when its user is named, and a grant inherited from a project
+/// (`granted_from_project_id IS NOT NULL`) survives because the project still
+/// grants it. Team, bot, and channel grants are out of scope. Use this to revoke
+/// one membership. [`remove_non_owner_user_entity_access`] is the wider
+/// public-to-private sweep.
+///
+/// *NOTE*: The transaction does not get committed automatically.
+#[tracing::instrument(skip(transaction), err)]
+pub async fn delete_user_entity_access_rows(
+    transaction: &mut Transaction<'_, Postgres>,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+    user_ids: &[MacroUserIdStr<'_>],
+) -> Result<(), sqlx::Error> {
+    if user_ids.is_empty() {
+        return Ok(());
+    }
+
+    let macro_ids: Vec<String> = user_ids.iter().map(|id| id.to_string()).collect();
+
+    sqlx::query!(
+        r#"
+        DELETE FROM entity_access
+        WHERE entity_id = $1
+        AND entity_type = $2
+        AND source_type = $3
+        AND source_id = ANY($4)
+        AND access_level != 'owner'
+        AND granted_from_project_id IS NULL
+        "#,
+        entity_id,
+        entity_type.as_ref(),
+        EntityAccessSourceType::User as _,
+        macro_ids.as_slice(),
     )
     .execute(transaction.as_mut())
     .await?;
@@ -266,8 +364,10 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::CrmContact
             | EntityType::Skill
             | EntityType::ForeignEntity
-            // Reminders are never channel-shared: they are private to one user.
-            | EntityType::Reminder => {
+            // Reminders and scheduled actions are never channel-shared: they
+            // are private to one user.
+            | EntityType::Reminder
+            | EntityType::ScheduledAction => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "received unexpected entity type {entity_type:?}"
                 )));
@@ -305,7 +405,8 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
-            | EntityType::Call => {
+            | EntityType::Call
+            | EntityType::Initiative => {
                 sqlx::query!(
                     r#"
                     DELETE FROM entity_access
@@ -335,8 +436,10 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::CrmContact
             | EntityType::Skill
             | EntityType::ForeignEntity
-            // Reminders are never channel-shared: they are private to one user.
-            | EntityType::Reminder => {
+            // Reminders and scheduled actions are never channel-shared: they
+            // are private to one user.
+            | EntityType::Reminder
+            | EntityType::ScheduledAction => {
                 return Err(sqlx::Error::InvalidArgument(format!(
                     "Received invalid EntityType {entity_type:?}"
                 )));
@@ -416,7 +519,8 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
-            | EntityType::Call => {
+            | EntityType::Call
+            | EntityType::Initiative => {
                 let entity_type_str = entity_type.as_ref();
 
                 let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(

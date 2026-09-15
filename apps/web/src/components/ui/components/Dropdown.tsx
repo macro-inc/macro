@@ -204,10 +204,9 @@ function DropdownContent(props: DropdownContentProps) {
       >
         <KobalteDropdownMenu.Content
           class={cn(
-            // Glass: the content is the pane (blur + rim + shadow) and goes
-            // transparent; the groups inside paint the menu color, which the
-            // redefined --color-menu makes translucent so the blur shows.
-            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-transparent text-sm [--color-menu:var(--color-menu-glass)]',
+            // Paint the same surface as context menus, including custom
+            // contents (calendar month lists) without a Dropdown.Group.
+            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-menu-glass text-sm [--color-surface:var(--color-menu)]',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -249,7 +248,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
       >
         <KobalteDropdownMenu.SubContent
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-transparent text-sm [--color-menu:var(--color-menu-glass)] [--color-surface:var(--color-menu)]',
+            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-menu-glass text-sm [--color-surface:var(--color-menu)]',
             local.class
           )}
           depth={local.depth ?? 2}

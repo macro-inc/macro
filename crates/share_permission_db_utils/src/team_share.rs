@@ -95,6 +95,7 @@ fn entity_uuid(entity: &Entity<'_>) -> TeamShareResult<Uuid> {
             | EntityType::Chat
             | EntityType::EmailThread
             | EntityType::Call
+            | EntityType::Initiative
     ) {
         return Err(report!(TeamShareError::InvalidEntity));
     }
@@ -140,6 +141,9 @@ async fn load_state(connection: &mut PgConnection, entity: &Entity<'_>) -> TeamS
             UNION ALL
             SELECT c.created_by, c.share_permission_id FROM call_records c
             WHERE $2 = 'call' AND c.id = $3 AND NOT EXISTS (SELECT 1 FROM calls WHERE id = $3)
+            UNION ALL
+            SELECT i.owner_user_id, i.share_permission_id FROM initiative i
+            WHERE $2 = 'initiative' AND i.id = $3
         )
         SELECT e.owner AS "owner!", e.permission_id,
             sp.id AS "stored_permission_id?",

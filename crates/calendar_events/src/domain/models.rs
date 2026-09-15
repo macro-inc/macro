@@ -669,6 +669,72 @@ pub struct CalendarEventOverride {
     pub attendees: Option<Vec<CalendarAttendee>>,
 }
 
+impl CalendarEventOverride {
+    /// The content this exception replaces on its occurrence.
+    pub fn content(&self) -> OccurrenceContent<'_> {
+        OccurrenceContent {
+            title: self.title.as_deref(),
+            description: self.description.as_deref(),
+            location: self.location.as_deref(),
+            status: self.status,
+        }
+    }
+
+    /// Overlay this exception on its series event so the event reads as the
+    /// overridden occurrence: the exception's content, its time, and its own
+    /// attendee list when it carries one.
+    pub fn apply_to(&self, event: &mut CalendarEvent) {
+        event.apply_occurrence_content(self.content());
+        event.time = self.time.clone();
+        if let Some(attendees) = &self.attendees {
+            event.attendees = attendees.clone();
+        }
+    }
+}
+
+/// The content an exception replaces on one occurrence of a series. A field
+/// left `None` inherits the series value.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OccurrenceContent<'a> {
+    /// Replacement title.
+    pub title: Option<&'a str>,
+    /// Replacement description.
+    pub description: Option<&'a str>,
+    /// Replacement location.
+    pub location: Option<&'a str>,
+    /// Replacement status.
+    pub status: Option<EventStatus>,
+}
+
+impl CalendarEvent {
+    /// Read this series event as one occurrence: the exception's content
+    /// replaces the series content on the entity and on every calendar copy,
+    /// so a client showing any copy sees the occurrence's own text.
+    pub fn apply_occurrence_content(&mut self, content: OccurrenceContent<'_>) {
+        if let Some(title) = content.title {
+            self.title = title.to_string();
+            for source in &mut self.sources {
+                source.title = title.to_string();
+            }
+        }
+        if let Some(description) = content.description {
+            self.description = Some(description.to_string());
+            for source in &mut self.sources {
+                source.description = Some(description.to_string());
+            }
+        }
+        if let Some(location) = content.location {
+            self.location = Some(location.to_string());
+            for source in &mut self.sources {
+                source.location = Some(location.to_string());
+            }
+        }
+        if let Some(status) = content.status {
+            self.status = status;
+        }
+    }
+}
+
 /// A start-only value used to identify an overridden occurrence.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]

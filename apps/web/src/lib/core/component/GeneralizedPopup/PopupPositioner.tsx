@@ -10,7 +10,7 @@ import {
   shift,
 } from '@floating-ui/dom';
 import { mergeRefs } from '@solid-primitives/refs';
-import { Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import {
   createEffect,
   createSignal,
@@ -36,6 +36,8 @@ type PopupPositionerProps = {
   useBlockBoundary?: boolean;
   /** Stacking depth for the floating layer. Defaults to 2. */
   layerDepth?: 0 | 1 | 2 | 3 | 4;
+  /** Classes on the positioned container, including its stacking order. */
+  class?: string;
   /** Forwarded to the positioned container element. */
   ref?: Ref<HTMLDivElement>;
 };
@@ -86,7 +88,7 @@ export function PopupPositioner(props: PopupPositionerProps) {
     <Layer depth={props.layerDepth ?? 2}>
       <div
         ref={mergeRefs(setPopupRef, props.ref)}
-        class="absolute"
+        class={cn('absolute', props.class)}
         style={{
           left: `${position().x}px`,
           top: `${position().y}px`,

@@ -62,6 +62,8 @@ pub enum AiFeature {
     Import,
     /// In-process ACP agent sessions (the in-memory harness).
     AgentSession,
+    /// Choosing the repository an agent session's first prompt belongs to.
+    AgentRepositoryChoice,
 }
 
 /// Resolved price for one completion.
