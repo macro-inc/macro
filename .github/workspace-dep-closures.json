@@ -3944,6 +3944,15 @@
       "crates/remote_env_var",
       "crates/workspace-hack"
     ],
+    "entity_registry": [
+      "crates/bot_id",
+      "crates/cowlike",
+      "crates/entity_registry",
+      "crates/macro_user_id",
+      "crates/model-entity",
+      "crates/model_owner",
+      "crates/workspace-hack"
+    ],
     "favorites": [
       "crates/agent",
       "crates/ai_toolset",
