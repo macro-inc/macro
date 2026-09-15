@@ -8,6 +8,7 @@ import {
   For,
   type JSX,
   onCleanup,
+  onMount,
   type ParentProps,
   Show,
   splitProps,
@@ -115,6 +116,7 @@ function Separator(props: ViewBreadcrumbsSeparatorProps) {
 export type ViewBreadcrumbsItemProps = BreadcrumbButtonProps & {
   id: string;
   order?: number;
+  suffix?: JSX.Element;
 };
 
 /**
@@ -123,13 +125,22 @@ export type ViewBreadcrumbsItemProps = BreadcrumbButtonProps & {
  */
 function Item(props: ViewBreadcrumbsItemProps) {
   const context = useViewBreadcrumbsContext();
-  const [local, itemProps] = splitProps(props, ['id', 'order']);
-  const unregister = context.register({
-    id: local.id,
-    order: () => local.order,
-    render: () => <BreadcrumbButton {...itemProps} />,
+  const [local, itemProps] = splitProps(props, ['id', 'order', 'suffix']);
+  let unregister: (() => void) | undefined;
+
+  onMount(() => {
+    unregister = context.register({
+      id: local.id,
+      order: () => local.order,
+      render: () => (
+        <>
+          <BreadcrumbButton {...itemProps} />
+          {local.suffix}
+        </>
+      ),
+    });
   });
-  onCleanup(unregister);
+  onCleanup(() => unregister?.());
 
   return null;
 }

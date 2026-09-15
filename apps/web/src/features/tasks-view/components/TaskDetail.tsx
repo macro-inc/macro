@@ -42,63 +42,63 @@ function TaskBreadcrumbLabel(props: { taskName: string }) {
   );
 }
 
-function TaskDetailBreadcrumbRegistration(props: {
+function TaskViewBreadcrumbItem() {
+  const { state, closeTask } = useTasksView();
+  const tabName = () =>
+    TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
+
+  return (
+    <ViewBreadcrumbs.Item id="tasks-view" order={0} onClick={closeTask}>
+      <span class="truncate">{tabName()}</span>
+    </ViewBreadcrumbs.Item>
+  );
+}
+
+function TaskBreadcrumbItem(props: {
   documentId: string;
   fallbackName: string;
 }) {
-  const { state, closeTask } = useTasksView();
+  const { closeTask } = useTasksView();
   const { displayName } = useMarkdownName();
-  const { state: documentState } = useMarkdownDocument();
-  const tabName = () =>
-    TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
+  const { permissions, state: documentState } = useMarkdownDocument();
+  const { fileOperations, menuTools } = useMarkdownDocumentTools();
   const taskName = () => displayName() ?? props.fallbackName;
   const focusTask = () => documentState.editor.md.editor?.focus();
 
   return (
-    <>
-      <ViewBreadcrumbs.Item id="tasks-view" order={0} onClick={closeTask}>
-        <span class="truncate">{tabName()}</span>
-      </ViewBreadcrumbs.Item>
-      <ViewBreadcrumbs.Item
-        id={`task:${props.documentId}`}
-        order={1}
-        current
-        class="gap-1.5"
-        onClick={focusTask}
-      >
-        <TaskBreadcrumbLabel taskName={taskName()} />
-      </ViewBreadcrumbs.Item>
-    </>
+    <ViewBreadcrumbs.Item
+      id={`task:${props.documentId}`}
+      order={1}
+      current
+      class="gap-1.5"
+      onClick={focusTask}
+      suffix={
+        <div class="shrink-0">
+          <SplitFileMenu
+            id={props.documentId}
+            itemType="document"
+            name={taskName()}
+            ops={fileOperations}
+            tools={menuTools}
+            blockName="md"
+            blockAlias="task"
+            isOwner={permissions.isOwner()}
+            onDelete={closeTask}
+          />
+        </div>
+      }
+    >
+      <TaskBreadcrumbLabel taskName={taskName()} />
+    </ViewBreadcrumbs.Item>
   );
 }
 
-function TaskDetailTopBar(props: {
-  documentId: string;
-  fallbackName: string;
-  isOwner: boolean;
-}) {
+function TaskDetailTopBar(props: { documentId: string }) {
   const panel = useSplitPanelOrThrow();
-  const { closeTask } = useTasksView();
-  const { displayName } = useMarkdownName();
-  const { fileOperations, menuTools } = useMarkdownDocumentTools();
-  const taskName = () => displayName() ?? props.fallbackName;
 
   return (
     <div class="flex h-12 min-w-0 shrink-0 items-center gap-1 border-edge border-b px-3">
       <ViewBreadcrumbs.Outlet aria-label="Task location" />
-      <div class="shrink-0">
-        <SplitFileMenu
-          id={props.documentId}
-          itemType="document"
-          name={taskName()}
-          ops={fileOperations}
-          tools={menuTools}
-          blockName="md"
-          blockAlias="task"
-          isOwner={props.isOwner}
-          onDelete={closeTask}
-        />
-      </div>
       <div class="ml-auto flex shrink-0 items-center gap-2">
         <ShareTrigger
           id={props.documentId}
@@ -161,17 +161,10 @@ export function TaskDetail(props: { task: TaskDetailTarget }) {
       <ModalsProvider>
         <OldOverlay />
         <ViewBreadcrumbs.Root>
-          <TaskDetailBreadcrumbRegistration
-            documentId={props.task.id}
-            fallbackName={fallbackName()}
-          />
+          <TaskViewBreadcrumbItem />
           <SidePanel.Root>
             <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-              <TaskDetailTopBar
-                documentId={props.task.id}
-                fallbackName={fallbackName()}
-                isOwner={permissions().isOwner}
-              />
+              <TaskDetailTopBar documentId={props.task.id} />
               <div class="relative min-h-0 min-w-0 flex-1">
                 <Switch fallback={<TaskDetailBodyState />}>
                   <Match when={document.error}>
@@ -180,6 +173,10 @@ export function TaskDetail(props: { task: TaskDetailTarget }) {
                   <Match when={data()}>
                     {(loaded) => (
                       <Suspense fallback={<TaskDetailBodyState />}>
+                        <TaskBreadcrumbItem
+                          documentId={props.task.id}
+                          fallbackName={fallbackName()}
+                        />
                         <SidePanel.Layout headerToggle={false}>
                           <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
                             <MarkdownSidePanelSections />
