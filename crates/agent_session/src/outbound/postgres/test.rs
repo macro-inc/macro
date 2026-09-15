@@ -143,7 +143,7 @@ async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) 
     .await
     .expect("create originating channel");
     sqlx::query!(
-        "INSERT INTO comms_messages (id, channel_id, sender_id, content) VALUES ($1, $2, $3, '')",
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content) VALUES ($1, 'channel', $2::uuid::text, $3, '')",
         thread_id,
         channel_id,
         owner_id,
@@ -152,7 +152,7 @@ async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) 
     .await
     .expect("create originating thread");
     sqlx::query!(
-        "INSERT INTO comms_messages (id, channel_id, thread_id, sender_id, content) VALUES ($1, $2, $3, $4, '')",
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, thread_id, sender_id, content) VALUES ($1, 'channel', $2::uuid::text, $3, $4, '')",
         originating_message_id,
         channel_id,
         thread_id,
@@ -722,7 +722,7 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
+async fn find_for_thread_matches_the_originating_thread_and_bot(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_a = create_test_bot(&pool).await;
     let bot_b = create_test_bot(&pool).await;
@@ -736,32 +736,42 @@ async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
     .await;
     // The create response must already resolve the thread's channel: linked
     // -thread navigation renders from this row without a second lookup.
-    assert_eq!(session.thread_channel_id, Some(originating_channel));
+    assert_eq!(
+        session.thread_parent,
+        Some(messages::domain::models::MessageParent::Channel(
+            originating_channel
+        ))
+    );
     // A session from some other context must not shadow the lookup.
     create_session(&repo, new_session(bot_a, None, None)).await;
 
     let found = repo
-        .find_for_channel(Some(thread), Some(bot_b))
+        .find_for_thread(Some(thread), Some(bot_b))
         .await
         .expect("find bot B's session by originating thread");
-    let ChannelSession::CreatedFromThread(matched) = found else {
+    let ThreadSession::CreatedFromThread(matched) = found else {
         panic!("expected the originating-thread session, got {found:?}");
     };
     assert_eq!(matched.id, session.id);
     assert_eq!(matched.originating_message_id, Some(originating_message));
-    assert_eq!(matched.thread_channel_id, Some(originating_channel));
+    assert_eq!(
+        matched.thread_parent,
+        Some(messages::domain::models::MessageParent::Channel(
+            originating_channel
+        ))
+    );
 
     let wrong_bot = repo
-        .find_for_channel(Some(thread), Some(bot_a))
+        .find_for_thread(Some(thread), Some(bot_a))
         .await
         .expect("look up the wrong bot");
-    assert!(matches!(wrong_bot, ChannelSession::None));
+    assert!(matches!(wrong_bot, ThreadSession::None));
 
     let wrong_thread = repo
-        .find_for_channel(Some(macro_uuid::generate_uuid_v7()), Some(bot_b))
+        .find_for_thread(Some(macro_uuid::generate_uuid_v7()), Some(bot_b))
         .await
         .expect("look up an unrelated thread");
-    assert!(matches!(wrong_thread, ChannelSession::None));
+    assert!(matches!(wrong_thread, ThreadSession::None));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -862,7 +872,7 @@ async fn recent_for_owner_returns_the_owners_newest_sessions(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_for_channel_requires_thread_and_bot_for_originating_match(pool: PgPool) {
+async fn find_for_thread_requires_thread_and_bot_for_originating_match(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
     let (_channel, thread, originating_message) = insert_originating_thread_fixture(&pool).await;
@@ -873,16 +883,16 @@ async fn find_for_channel_requires_thread_and_bot_for_originating_match(pool: Pg
     .await;
 
     let without_bot = repo
-        .find_for_channel(Some(thread), None)
+        .find_for_thread(Some(thread), None)
         .await
         .expect("look up without a bot");
-    assert!(matches!(without_bot, ChannelSession::None));
+    assert!(matches!(without_bot, ThreadSession::None));
 
     let without_thread = repo
-        .find_for_channel(None, Some(bot))
+        .find_for_thread(None, Some(bot))
         .await
         .expect("look up without a thread");
-    assert!(matches!(without_thread, ChannelSession::None));
+    assert!(matches!(without_thread, ThreadSession::None));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -2118,4 +2128,143 @@ async fn pull_request_waiting_on_takeover_cannot_overwrite_successor(pool: PgPoo
         .await,
         Err(AgentSessionError::FencedOut(_))
     ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_document_session_preserves_its_origin_and_inherits_live_document_access(pool: PgPool) {
+    use entity_access::domain::ports::EntityAccessService as _;
+    use messages::domain::{
+        models::PostMessage,
+        ports::{CreateMessage, MessageRepository},
+    };
+    let bot = create_test_bot(&pool).await;
+    let document = macro_uuid::generate_uuid_v7();
+    let document_id = document.to_string();
+    sqlx::query!(r#"INSERT INTO "Document" (id, name, owner, "fileType") VALUES ($1, 'Agent document', $2, 'md')"#, document_id, OWNER)
+        .execute(&pool).await.unwrap();
+    let messages = messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone());
+    let parent = MessageParent::parse("document", &document_id).unwrap();
+    let root = messages
+        .create(CreateMessage {
+            parent: parent.clone(),
+            actor: OWNER.to_owned().try_into().unwrap(),
+            triggered_by: None,
+            input: PostMessage {
+                attribution: Default::default(),
+                notification_policy: Default::default(),
+                content: "@agent investigate".into(),
+                thread_id: None,
+                anchor: None,
+                mentions: vec![],
+                attachments: vec![],
+                nonce: None,
+            },
+        })
+        .await
+        .unwrap();
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let session = create_session(&repo, new_session(bot, Some(root.id), Some(root.id))).await;
+    assert_eq!(session.thread_parent, Some(parent.clone()));
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .unwrap()
+            .thread_parent,
+        Some(parent.clone())
+    );
+    assert_eq!(
+        repo.find_all_for_thread(root.id).await.unwrap()[0].thread_parent,
+        Some(parent)
+    );
+
+    let collaborator = "macro|doc-agent-collaborator@example.com";
+    insert_user(&pool, collaborator).await;
+    let mut transaction = pool.begin().await.unwrap();
+    insert_entity_access_row(
+        &mut transaction,
+        &document,
+        EntityType::Document,
+        collaborator,
+        EntityAccessSourceType::User,
+        AccessLevel::Comment,
+    )
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
+    let access = entity_access::domain::service::EntityAccessServiceImpl::new(
+        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+    );
+    use crate::domain::audience::{AuthorizedSessionAudience, SessionAudience};
+    let audience = AuthorizedSessionAudience::new(
+        repo.clone(),
+        access.clone(),
+        DocumentSubscriptions {
+            document: document_id.clone(),
+            candidates: [
+                collaborator.to_string(),
+                "macro|uninvited@example.com".to_string(),
+            ]
+            .into_iter()
+            .collect(),
+        },
+    );
+    let viewers = audience.viewers(session.id).await.unwrap();
+    assert!(viewers.contains(&user_id(OWNER)));
+    assert!(viewers.contains(&user_id(collaborator)));
+    assert_eq!(viewers.len(), 2);
+    // Bind owned values across the async lookup.
+    let collaborator_id = user_id(collaborator);
+    let session_id = session.id.to_string();
+    assert_eq!(
+        access
+            .get_access_level(
+                Some(&collaborator_id),
+                &session_id,
+                EntityType::AgentSession
+            )
+            .await
+            .unwrap(),
+        Some(AccessLevel::Edit)
+    );
+    sqlx::query!(
+        "DELETE FROM entity_access WHERE entity_id = $1 AND source_id = $2",
+        document,
+        collaborator
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        access
+            .get_access_level(
+                Some(&collaborator_id),
+                &session_id,
+                EntityType::AgentSession
+            )
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        audience.viewers(session.id).await.unwrap(),
+        vec![user_id(OWNER)]
+    );
+}
+
+struct DocumentSubscriptions {
+    document: String,
+    candidates: std::collections::HashSet<String>,
+}
+impl crate::domain::audience::SessionSubscriptions for DocumentSubscriptions {
+    async fn candidates(
+        &self,
+        _: AgentSessionId,
+        parent: Option<&MessageParent>,
+    ) -> Result<std::collections::HashSet<String>, rootcause::Report> {
+        assert_eq!(
+            parent,
+            Some(&MessageParent::parse("document", &self.document).unwrap())
+        );
+        Ok(self.candidates.clone())
+    }
 }

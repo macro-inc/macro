@@ -29589,18 +29589,22 @@
       },
       "ThreadOrigin": {
         "type": "object",
-        "description": "The channel thread a session was opened from, when it was.",
-        "required": ["channel_id", "thread_id", "originating_message_id"],
+        "description": "The thread a session was opened from, when it was.",
+        "required": ["parent", "thread_id", "originating_message_id"],
         "properties": {
           "channel_id": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
-            "description": "Channel the thread lives in."
+            "description": "Channel the thread lives in, for channel parents only. Kept beside\n`parent` for consumers written when every origin was a channel."
           },
           "originating_message_id": {
             "type": "string",
             "format": "uuid",
             "description": "The message whose mention opened the session."
+          },
+          "parent": {
+            "$ref": "#/components/schemas/MessageParent",
+            "description": "Entity owning the thread: the channel or document it was posted in."
           },
           "thread_id": {
             "type": "string",

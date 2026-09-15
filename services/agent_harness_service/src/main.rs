@@ -43,8 +43,8 @@ use agent_harness::domain::trigger_router::{
 use agent_harness::inbound::model_load::AgentModelsRouterState;
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
-use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
-use agent_harness::outbound::channel_prompt_context::ChannelPromptContextAdapter;
+use agent_harness::outbound::channel_announcer::MessageAnnouncer;
+use agent_harness::outbound::channel_prompt_context::MessagePromptContextAdapter;
 use agent_harness::outbound::containers::HarnessContainers;
 use agent_harness::outbound::cursor::{CursorContainerManager, PgCursorApiKeys, PostgresJournal};
 use agent_harness::outbound::daytona::{
@@ -82,7 +82,6 @@ use anyhow::Context as _;
 use bot_id::BotId;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use bots_directory::PgBotDirectory;
-use channels::domain::service::ChannelServiceImpl;
 use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher};
 use channels::outbound::connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher;
 use channels::outbound::contacts_dispatcher::ContactsChannelDispatcher;
@@ -233,6 +232,20 @@ async fn run() -> anyhow::Result<()> {
     // log and pushes each frame at the channel's participants so a viewer sees
     // it happen.
     let session_repo = PgAgentSessionRepo::new(pool.clone());
+    let entity_access = Arc::new(
+        entity_access::domain::service::EntityAccessServiceImpl::new(
+            entity_access::outbound::PgAccessRepository::new(pool.clone()),
+        ),
+    );
+    // Frames reach the owner plus whoever currently holds session access,
+    // which for a document-born session follows the document's own grants.
+    let session_audience = agent_session::domain::audience::AuthorizedSessionAudience::new(
+        session_repo.clone(),
+        (*entity_access).clone(),
+        agent_session::outbound::connection_gateway_realtime::ConnectionGatewaySessionSubscriptions(
+            connection_gateway.clone(),
+        ),
+    );
     // One ownership identity for the whole process. Both attach-capable
     // service instances below live here, so they share it.
     let replica = ReplicaId::mint();
@@ -260,7 +273,7 @@ async fn run() -> anyhow::Result<()> {
         FoldedMessageService::new(session_repo.clone()),
         ConnectionGatewayAgentSessionRealtime::new(
             connection_gateway.clone(),
-            session_repo.clone(),
+            session_audience.clone(),
         ),
         HaikuAgentSessionNameGenerator::new(ai_usage::pg_recorder(pool.clone())),
         turn_observer.clone(),
@@ -462,7 +475,7 @@ async fn run() -> anyhow::Result<()> {
                 session_repo.clone(),
                 ConnectionGatewayAgentSessionRealtime::new(
                     connection_gateway.clone(),
-                    session_repo.clone(),
+                    session_audience.clone(),
                 ),
             ),
         );
@@ -638,33 +651,74 @@ async fn run() -> anyhow::Result<()> {
             macro_queues::ContactsQueue::new().to_string(),
         ),
     });
+    // The same message service the storage API composes, so an announcement
+    // posted here fans out exactly like a post through the API: channel side
+    // effects for channel threads, document comment notifications for
+    // discussions, and the common realtime and broker facts for both.
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
         ConnectionGatewayChannelRealtimePublisher::new(connection_gateway.clone()),
         NotificationChannelSender::new(Arc::clone(&notifications)),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
-    .with_macro_event_broker(broker);
-    let channel_service = Arc::new(ChannelServiceImpl::with_dependencies(
-        PgChannelsRepo::new(pool.clone()),
-        SpawnedChannelEventDispatcher::new(side_effects),
-        channels::domain::service::NoopChannelReferenceSharePermissions,
-    ));
-    let entity_access = Arc::new(
-        entity_access::domain::service::EntityAccessServiceImpl::new(
-            entity_access::outbound::PgAccessRepository::new(pool.clone()),
-        ),
-    );
+    .with_macro_event_broker(broker.clone());
     let lexical = LexicalClient::new(
         config.internal_api_key.clone(),
         LexicalServiceUrl::new()?.to_string(),
     );
-    let announcer = ChannelAnnouncer::new(Arc::clone(&channel_service), lexical.clone());
+    let message_realtime = messages::outbound::connection_gateway::ConnectionGatewayMessages(
+        connection_gateway.clone(),
+    );
+    let message_delivery = messages::domain::delivery::ParentMessagePublisher::new(
+        channels::domain::message_delivery::ChannelMessageDelivery::new(
+            PgChannelsRepo::new(pool.clone()),
+            SpawnedChannelEventDispatcher::new(side_effects),
+            channels::domain::service::NoopChannelReferenceSharePermissions,
+            message_realtime.clone(),
+        ),
+        messages::domain::delivery::DiscussionDelivery::new(
+            messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone()),
+            messages::outbound::entity_access_audience::EntityAccessMessageAudience(
+                (*entity_access).clone(),
+            ),
+            message_realtime,
+            messages::outbound::notification_sender::MessageNotificationSender(Arc::clone(
+                &notifications,
+            )),
+        )
+        .with_sharing(messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())),
+    );
+    let message_service: Arc<dyn messages::domain::api::MessageServiceApi> = Arc::new(
+        messages::domain::service::MessageService::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+            messages::domain::effects::MessageEffects::new(
+                messages::outbound::broker::BrokerMessagePublisher::new(broker),
+                messages::domain::ports::NoMessageEventPublisher,
+                message_delivery,
+            ),
+        )
+        .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
+            PgChannelsRepo::new(pool.clone()),
+        ))
+        .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
+            Arc::new(lexical.clone()),
+        ))
+        .with_references(
+            messages::outbound::entity_access_audience::EntityAccessMessageReferences(
+                (*entity_access).clone(),
+            ),
+        ),
+    );
+    let announcer = MessageAnnouncer::new(
+        message_service.clone(),
+        Arc::clone(&entity_access),
+        lexical.clone(),
+    );
     let prompt_mentions =
         LexicalPromptMentions::new(lexical.clone(), PgSessionAccess::new(pool.clone()));
     let prompt_composer = LexicalAgentPromptComposer::new(lexical);
     let prompt_context =
-        ChannelPromptContextAdapter::new(channel_service, Arc::clone(&entity_access));
+        MessagePromptContextAdapter::new(message_service, Arc::clone(&entity_access));
 
     // One connection per harness, shared by every session of every agent
     // bound to it. Held here because the gateway puts dialed-in sockets into
@@ -824,7 +878,7 @@ async fn run() -> anyhow::Result<()> {
         AgentSessionServiceImpl::new(
             session_repo.clone(),
             FoldedMessageService::new(session_repo.clone()),
-            ConnectionGatewayAgentSessionRealtime::new(connection_gateway, session_repo.clone()),
+            ConnectionGatewayAgentSessionRealtime::new(connection_gateway, session_audience),
             NoOpAgentSessionNameGenerator,
             Arc::new(NoOpTurnObserver),
             lifecycle_publisher,
@@ -907,6 +961,7 @@ async fn run() -> anyhow::Result<()> {
         pool.clone(),
         config.kafka_brokers.as_ref().to_owned(),
         config.internal_api_key.clone(),
+        config.agent_trigger_event_source,
     ));
 
     let egress_port = config.egress_port;

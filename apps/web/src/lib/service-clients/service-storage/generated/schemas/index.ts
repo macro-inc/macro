@@ -1392,6 +1392,7 @@ export * from './threadAnchorOneOfType';
 export * from './threadCreatedAt';
 export * from './threadDeletedAt';
 export * from './threadOrigin';
+export * from './threadOriginChannelId';
 export * from './threadPatch';
 export * from './threadPatchNonce';
 export * from './threadPatchResolved';

@@ -9794,17 +9794,22 @@ export type ThreadAnchor = {
 };
 
 /**
- * The channel thread a session was opened from, when it was.
+ * The thread a session was opened from, when it was.
  */
 export type ThreadOrigin = {
     /**
-     * Channel the thread lives in.
+     * Channel the thread lives in, for channel parents only. Kept beside
+     * `parent` for consumers written when every origin was a channel.
      */
-    channel_id: string;
+    channel_id?: string | null;
     /**
      * The message whose mention opened the session.
      */
     originating_message_id: string;
+    /**
+     * Entity owning the thread: the channel or document it was posted in.
+     */
+    parent: MessageParent;
     /**
      * Root message of the thread.
      */

@@ -1056,7 +1056,7 @@
       },
       "AgentSessionNotificationRef": {
         "type": "object",
-        "description": "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.",
+        "description": "Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.",
         "required": ["sessionId", "sessionName", "botId", "botName"],
         "properties": {
           "announcementMessageId": {
@@ -1075,7 +1075,18 @@
           "channelId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "The channel the session was opened from, when it was."
+            "description": "The channel the session was opened from, when it was opened from a\nchannel thread."
+          },
+          "parent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentSessionOriginParent",
+                "description": "The channel or document the session was opened from, when it was."
+              }
+            ]
           },
           "sessionId": {
             "type": "string",
@@ -1090,6 +1101,21 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The thread the session was opened from, when it was."
+          }
+        }
+      },
+      "AgentSessionOriginParent": {
+        "type": "object",
+        "description": "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface.",
+        "required": ["type", "id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The channel or document id."
+          },
+          "type": {
+            "type": "string",
+            "description": "`channel` or `document`."
           }
         }
       },

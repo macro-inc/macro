@@ -3,12 +3,11 @@
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use channels::domain::ports::ChannelService;
-use channels::domain::side_effects::ChannelBotTrigger;
+use messages::domain::{api::MessageReader, events::MessagePostedMetadata};
 use uuid::Uuid;
 
 use super::models::{BotInvocation, BotTrigger, TranscriptMessage};
-use super::ports::{InferredTriggerClassifier, TriggerDetector};
+use super::ports::{ConversationAccess, InferredTriggerClassifier, TriggerDetector};
 use super::sender_label;
 
 /// Detects both explicit `@`-mention triggers and inferred triggers.
@@ -23,20 +22,25 @@ use super::sender_label;
 ///
 /// Bot-authored messages never trigger anything; classifier failures resolve
 /// to no trigger.
-pub struct MentionOrInferredDetector<C, I> {
-    channels: Arc<C>,
+pub struct MentionOrInferredDetector<I> {
+    messages: Arc<dyn MessageReader>,
+    access: Arc<dyn ConversationAccess>,
     classifier: Arc<I>,
 }
 
-impl<C, I> MentionOrInferredDetector<C, I>
+impl<I> MentionOrInferredDetector<I>
 where
-    C: ChannelService,
     I: InferredTriggerClassifier,
 {
     /// Create a detector from the channel read service and a classifier.
-    pub fn new(channels: Arc<C>, classifier: Arc<I>) -> Self {
+    pub fn new(
+        messages: Arc<dyn MessageReader>,
+        access: Arc<dyn ConversationAccess>,
+        classifier: Arc<I>,
+    ) -> Self {
         Self {
-            channels,
+            messages,
+            access,
             classifier,
         }
     }
@@ -46,54 +50,51 @@ where
     /// yet.
     async fn thread_transcript(
         &self,
-        candidate: &ChannelBotTrigger,
+        candidate: &MessagePostedMetadata,
         parent_id: Uuid,
-    ) -> Vec<TranscriptMessage> {
-        let mut transcript = Vec::new();
-
-        let parent = self
-            .channels
-            .get_message_context(candidate.channel_id, parent_id, 0, 0)
+    ) -> anyhow::Result<Vec<TranscriptMessage>> {
+        let user = candidate
+            .sender
+            .as_user()
+            .ok_or_else(|| anyhow::anyhow!("only users invoke agents"))?;
+        let access = self
+            .access
+            .user_write(user, &candidate.parent)
             .await
-            .inspect_err(|err| tracing::warn!(error=?err, "failed to load thread parent"))
-            .unwrap_or_default()
-            .into_iter()
-            .find(|message| message.id == parent_id);
-        if let Some(parent) = parent
-            && parent.deleted_at.is_none()
-            && !parent.content.trim().is_empty()
+            .map_err(|e| anyhow::anyhow!(e.to_string()))?;
+        let view = access.try_into_requirement()?;
+        let current = self
+            .messages
+            .get(view.clone(), candidate.message_id)
+            .await?;
+        if current.deleted_at.is_some()
+            || current.root_id() != parent_id
+            || current.sender_id != candidate.sender
         {
-            transcript.push(transcript_message(&parent.sender_id, &parent.content));
+            anyhow::bail!("invalid trigger origin");
         }
-
-        let replies = self
-            .channels
-            .get_thread_replies(candidate.channel_id, parent_id)
-            .await
-            .inspect_err(|err| tracing::warn!(error=?err, "failed to load thread replies"))
-            .unwrap_or_default();
-        let mut candidate_included = false;
-        for reply in replies {
-            if reply.content.trim().is_empty() {
-                continue;
+        let thread = self.messages.get_thread(view, parent_id).await?;
+        let mut transcript = Vec::new();
+        for message in std::iter::once(thread.root).chain(thread.replies) {
+            if message.deleted_at.is_none() && !message.content.trim().is_empty() {
+                transcript.push(transcript_message(
+                    message.sender_id.as_ref(),
+                    &message.content,
+                ));
             }
-            candidate_included |= reply.id == candidate.message.id;
-            transcript.push(transcript_message(&reply.sender_id, &reply.content));
         }
-        if !candidate_included {
-            transcript.push(transcript_message(
-                candidate.message.sender_id.as_ref(),
-                &candidate.message.content,
-            ));
-        }
-        transcript
+        Ok(transcript)
     }
 
-    async fn infer(&self, candidate: &ChannelBotTrigger) -> Option<BotInvocation> {
-        let requesting_user = candidate.message.sender_id.as_user()?;
-        let parent_id = candidate.message.thread_id?;
+    async fn infer(&self, candidate: &MessagePostedMetadata) -> Option<BotInvocation> {
+        let requesting_user = candidate.sender.as_user()?;
+        let parent_id = candidate.thread_id?;
 
-        let transcript = self.thread_transcript(candidate, parent_id).await;
+        let transcript = self
+            .thread_transcript(candidate, parent_id)
+            .await
+            .inspect_err(|err| tracing::warn!(error=?err, "unable to load authorized bot thread"))
+            .ok()?;
         if !transcript.iter().any(|message| message.from_agent) {
             return None;
         }
@@ -127,21 +128,31 @@ fn transcript_message(sender_id: &str, content: &str) -> TranscriptMessage {
 }
 
 #[async_trait]
-impl<C, I> TriggerDetector for MentionOrInferredDetector<C, I>
+impl<I> TriggerDetector for MentionOrInferredDetector<I>
 where
-    C: ChannelService,
     I: InferredTriggerClassifier,
 {
-    async fn detect(&self, candidate: &ChannelBotTrigger) -> Vec<BotInvocation> {
-        if candidate.message.sender_id.as_user().is_none() {
+    async fn detect(&self, candidate: &MessagePostedMetadata) -> Vec<BotInvocation> {
+        if candidate.sender.as_user().is_none() {
             return Vec::new();
         }
-        if !candidate.mentioned_bot_ids.is_empty() {
-            return candidate
-                .mentioned_bot_ids
-                .iter()
+        let Some(user) = candidate.sender.as_user() else {
+            return Vec::new();
+        };
+        if self
+            .access
+            .user_write(user, &candidate.parent)
+            .await
+            .is_err()
+        {
+            return Vec::new();
+        }
+        let mentioned = messages::domain::mentions::bot_mention_ids(&candidate.mentions);
+        if !mentioned.is_empty() {
+            return mentioned
+                .into_iter()
                 .map(|bot_id| BotInvocation {
-                    bot_id: *bot_id,
+                    bot_id,
                     trigger: BotTrigger::Mention,
                 })
                 .collect();

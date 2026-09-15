@@ -43,7 +43,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
@@ -54,6 +54,29 @@ where
         &self,
         request: agent_session::domain::ports::OpenExternalAgentSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
+        // The thread linkage is the caller's claim: it is honoured only when
+        // the owner can write to that parent and the message sits in it.
+        if let Some(thread) = &request.thread {
+            self.inner
+                .prompt_context
+                .authorize_origin(
+                    &request.owner,
+                    &AnnounceOrigin {
+                        parent: thread.parent.clone(),
+                        thread_id: thread.thread_id,
+                        message_id: thread.message_id,
+                    },
+                )
+                .await
+                .map_err(|error| {
+                    tracing::warn!(
+                        error = ?error,
+                        owner = %request.owner,
+                        "rejecting an external session whose claimed thread its owner may not post in"
+                    );
+                    AgentSessionError::Forbidden
+                })?;
+        }
         let defaults = self.inner.defaults.for_bot(request.bot_id);
         let session = self
             .inner
@@ -86,7 +109,7 @@ where
             let announcement = SessionAnnouncement {
                 session_id: session.id,
                 bot_id: request.bot_id,
-                origin_channel_id: thread.channel_id,
+                origin_parent: thread.parent,
                 origin_thread_id: thread.thread_id,
                 origin_message_id: thread.message_id,
                 prompted_message_id: MessageId::first(AuthorKind::User),
@@ -318,13 +341,13 @@ where
         match self
             .inner
             .sessions
-            .find_for_channel(Some(thread_id), Some(bot_id))
+            .find_for_thread(Some(thread_id), Some(bot_id))
             .await?
         {
-            agent_session::domain::model::ChannelSession::CreatedFromThread(session) => {
+            agent_session::domain::model::ThreadSession::CreatedFromThread(session) => {
                 Ok(Some(session.id))
             }
-            agent_session::domain::model::ChannelSession::None => Ok(None),
+            agent_session::domain::model::ThreadSession::None => Ok(None),
         }
     }
 }
@@ -358,7 +381,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
@@ -369,7 +392,7 @@ where
         %session_id,
         bot_id = %command.bot_id,
         message_id = %command.origin.message_id,
-        channel_id = %command.origin.channel_id,
+        parent = ?command.origin.parent,
         thread_id = %command.origin.thread_id,
         agent.trigger.kind = "mention",
         agent.session.id = tracing::field::Empty,
@@ -385,6 +408,18 @@ where
             origin,
         } = command;
         tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
+        // The mention was observed, but the sender's access is checked now:
+        // a user removed from the parent since posting opens nothing.
+        self.prompt_context
+            .authorize_origin(
+                &origin.sender,
+                &AnnounceOrigin {
+                    parent: origin.parent.clone(),
+                    thread_id: origin.thread_id,
+                    message_id: origin.message_id,
+                },
+            )
+            .await?;
         let defaults = self.defaults.for_bot(bot_id);
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
 
@@ -475,7 +510,7 @@ where
                 action: AgentAction::prompt(origin.content),
                 actor: Some(origin.sender),
                 announce: Some(AnnounceOrigin {
-                    channel_id: origin.channel_id,
+                    parent: origin.parent,
                     thread_id: origin.thread_id,
                     message_id: origin.message_id,
                 }),

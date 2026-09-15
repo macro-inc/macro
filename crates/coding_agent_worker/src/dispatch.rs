@@ -43,7 +43,7 @@ impl WorkExecutor for Dispatcher {
             TriggerWork::OpenAndPrompt {
                 bot,
                 sender,
-                channel_id,
+                parent,
                 thread_id,
                 message_id,
                 content,
@@ -62,7 +62,8 @@ impl WorkExecutor for Dispatcher {
                     repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),
                     thread: Some(CreateSessionThread {
-                        channel_id,
+                        parent: Some(parent),
+                        channel_id: None,
                         thread_id: Some(thread_id),
                         message_id,
                         content: content.clone(),

@@ -459,8 +459,11 @@ pub struct AgentSessionResponse {
     pub can_edit: bool,
     /// The root message of the thread the session was created from, if any.
     pub thread_id: Option<Uuid>,
+    /// The channel or document `thread_id` lives in, when the session was
+    /// spawned from a thread.
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
     /// The channel `thread_id` lives in, when the session was spawned from a
-    /// thread.
+    /// channel thread. Derived from `thread_parent`.
     pub thread_channel_id: Option<Uuid>,
     /// The exact message that invoked the bot, if any.
     pub originating_message_id: Option<Uuid>,
@@ -525,13 +528,18 @@ impl From<ExternalSession> for ExternalSessionResponse {
 impl AgentSessionResponse {
     /// Describe `session` to a caller whose edit access is `can_edit`.
     pub fn new(session: AgentSession, can_edit: bool) -> Self {
+        let thread_channel_id = match &session.thread_parent {
+            Some(messages::domain::models::MessageParent::Channel(channel_id)) => Some(*channel_id),
+            Some(messages::domain::models::MessageParent::Document(_)) | None => None,
+        };
         Self {
             id: session.id.as_uuid(),
             name: session.name,
             owner_id: session.owner_id.to_string(),
             can_edit,
             thread_id: session.thread_id,
-            thread_channel_id: session.thread_channel_id,
+            thread_parent: session.thread_parent,
+            thread_channel_id,
             originating_message_id: session.originating_message_id,
             bot_id: session.bot_id.as_uuid(),
             model: session.model,
@@ -1416,8 +1424,13 @@ pub struct CreateAgentSessionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionThread {
-    /// Channel the mentioning message was posted in.
-    pub channel_id: Uuid,
+    /// Entity the mentioning message was posted in.
+    #[serde(default)]
+    pub parent: Option<messages::domain::models::MessageParent>,
+    /// Channel the mentioning message was posted in. Runtimes built before
+    /// message parents send this instead of `parent`.
+    #[serde(default)]
+    pub channel_id: Option<Uuid>,
     /// Thread the session belongs to; defaults to the message itself, which
     /// is how a top-level mention roots its own thread.
     pub thread_id: Option<Uuid>,
@@ -1480,6 +1493,8 @@ pub enum CreateSessionApiError {
     InvalidWorkspace(&'static str),
     /// The request mixed the managed and external shapes.
     MixedSessionShape,
+    /// The thread named neither a parent nor a channel.
+    ThreadParentRequired,
     /// The thread already routes to a session; carries it for recovery.
     ThreadSessionExists {
         /// The existing session, when it could be resolved.
@@ -1534,6 +1549,10 @@ impl IntoResponse for CreateSessionApiError {
                  workspace, owner or thread asks for an external one"
                     .to_owned(),
             ),
+            Self::ThreadParentRequired => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "thread.parent is required".to_owned(),
+            ),
             Self::ThreadSessionExists { session_id } => {
                 let body = ThreadSessionExistsResponse {
                     message: THREAD_SESSION_EXISTS_MESSAGE.to_owned(),
@@ -1555,6 +1574,10 @@ impl IntoResponse for CreateSessionApiError {
             Self::Domain(AgentSessionError::UnknownOwner) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "owner is not a known user".to_owned(),
+            ),
+            Self::Domain(AgentSessionError::Forbidden) => (
+                StatusCode::FORBIDDEN,
+                "the owner may not post in the claimed thread".to_owned(),
             ),
             Self::Domain(error) => {
                 tracing::error!(error = ?error, "failed to open an agent session");
@@ -1767,12 +1790,23 @@ pub async fn create_agent_session_handler<
     validate_workspace(&workspace)?;
     let owner = resolve_owner(&caller.authorization, request.owner)?;
 
-    let thread = request.thread.map(|thread| SessionThread {
-        channel_id: thread.channel_id,
-        thread_id: thread.thread_id.unwrap_or(thread.message_id),
-        message_id: thread.message_id,
-        content: thread.content,
-    });
+    let thread = request
+        .thread
+        .map(|thread| {
+            let parent = thread
+                .parent
+                .or(thread
+                    .channel_id
+                    .map(messages::domain::models::MessageParent::Channel))
+                .ok_or(CreateSessionApiError::ThreadParentRequired)?;
+            Ok::<_, CreateSessionApiError>(SessionThread {
+                parent,
+                thread_id: thread.thread_id.unwrap_or(thread.message_id),
+                message_id: thread.message_id,
+                content: thread.content,
+            })
+        })
+        .transpose()?;
     let session = match state
         .opener
         .open_external_session(OpenExternalAgentSession {

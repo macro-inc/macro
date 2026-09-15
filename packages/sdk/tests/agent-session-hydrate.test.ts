@@ -13,6 +13,10 @@ const identity = {
   bot_name: 'Macro Coder',
   owner_id: 'macro|owner@example.com',
   origin: {
+    parent: {
+      type: 'channel' as const,
+      id: '01a00000-0000-7000-8000-000000000001',
+    },
     channel_id: '01a00000-0000-7000-8000-000000000001',
     thread_id: '01a00000-0000-7000-8000-000000000002',
     originating_message_id: '01a00000-0000-7000-8000-000000000003',

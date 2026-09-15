@@ -6,13 +6,11 @@
  */
 import type { AgentSessionNotificationRefAnnouncementMessageId } from './agentSessionNotificationRefAnnouncementMessageId';
 import type { AgentSessionNotificationRefChannelId } from './agentSessionNotificationRefChannelId';
+import type { AgentSessionNotificationRefParent } from './agentSessionNotificationRefParent';
 import type { AgentSessionNotificationRefThreadId } from './agentSessionNotificationRefThreadId';
 
 /**
- * The session an agent-session notification is about, and where its magic
-chip lives when it was opened from a thread.
-
-Flattened into each agent-session kind so the wire keeps these keys at the
+ * Flattened into each agent-session kind so the wire keeps these keys at the
 top level of the metadata, the way [`CommonChannelMetadata`] does.
  */
 export interface AgentSessionNotificationRef {
@@ -25,8 +23,10 @@ RFC 4122 uuids and fail a `format: uuid` check on the client. */
   /** The bot's display name; agent notifications have no user sender, so
 this is who they read as being from. */
   botName: string;
-  /** The channel the session was opened from, when it was. */
+  /** The channel the session was opened from, when it was opened from a
+channel thread. */
   channelId?: AgentSessionNotificationRefChannelId;
+  parent?: AgentSessionNotificationRefParent;
   /** The session; what a click opens. */
   sessionId: string;
   /** The session's name at the time of the event. */
