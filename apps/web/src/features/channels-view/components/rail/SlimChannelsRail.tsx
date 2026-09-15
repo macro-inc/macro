@@ -594,13 +594,13 @@ function SlimSortDropdown(props: { group: ChannelsGroup; label: string }) {
       <Dropdown.Trigger
         variant="ghost"
         size="sm"
-        class="h-7 min-w-28 justify-between gap-1 rounded-lg px-2 text-xs font-normal"
+        class="h-7 min-w-28 justify-between gap-1 rounded-lg px-2 text-sm font-normal"
         aria-label={`Sort ${props.label.toLowerCase()}`}
       >
         <span class="truncate">{selected()?.label}</span>
         <CaretDownIcon class="size-2.5 shrink-0" />
       </Dropdown.Trigger>
-      <Dropdown.Content portalScope="local" class="min-w-36">
+      <Dropdown.Content class="min-w-36">
         <Dropdown.Group>
           <Dropdown.RadioGroup
             value={rail.sortBy(props.group)}
@@ -632,8 +632,8 @@ function SlimRailSettings() {
         <Popover.Trigger
           as={Button}
           variant="ghost"
-          size="icon-sm"
-          class="rounded-lg"
+          size="icon-md"
+          class="rounded-lg data-expanded:bg-active data-expanded:text-ink"
           label="Chat rail settings"
         >
           <GearIcon class="size-4" />
@@ -641,20 +641,20 @@ function SlimRailSettings() {
         <Popover.Portal>
           <Layer depth={3}>
             <Popover.Content
-              class="portal-scope z-action-menu w-56 rounded-xl border border-edge bg-menu-glass p-2 glass menu-open-animation"
+              class="portal-scope z-action-menu w-56 overflow-hidden rounded-xl border border-edge bg-menu-glass text-sm [--color-surface:var(--color-menu)] glass menu-open-animation"
               onOpenAutoFocus={(event) => event.preventDefault()}
               onCloseAutoFocus={(event) => event.preventDefault()}
             >
               <Popover.Title class="sr-only">Chat rail settings</Popover.Title>
-              <div class="flex flex-col gap-3">
+              <div class="flex size-full flex-col gap-(--app-border-width) bg-edge-muted/60">
                 <For each={SLIM_GROUPS}>
                   {(config) => (
-                    <section class="flex flex-col gap-1">
-                      <h3 class="px-2 text-xs font-normal text-ink-extra-muted">
+                    <section class="flex flex-col bg-menu p-1.5">
+                      <h3 class="flex h-7 items-center px-2 text-xs font-normal text-ink-extra-muted">
                         {config.label}
                       </h3>
-                      <div class="flex h-8 items-center justify-between gap-3 px-2">
-                        <span class="text-xs text-ink-muted">Visibility</span>
+                      <div class="flex h-8 items-center justify-between gap-3 rounded-lg px-2 font-normal text-ink">
+                        <span>Visible</span>
                         <ToggleSwitch
                           size="xs"
                           checked={rail.slimGroupEnabled(config.group)}
@@ -665,8 +665,8 @@ function SlimRailSettings() {
                           labelClass="sr-only"
                         />
                       </div>
-                      <div class="flex h-8 items-center justify-between gap-3 px-2">
-                        <span class="text-xs text-ink-muted">Sort by</span>
+                      <div class="flex h-8 items-center justify-between gap-3 rounded-lg px-2 font-normal text-ink">
+                        <span>Sort by</span>
                         <SlimSortDropdown
                           group={config.group}
                           label={config.label}
