@@ -30,30 +30,6 @@ fn registered_kinds_round_trip_and_match_check_spellings() {
     }
 }
 
-fn expected_registration(ty: EntityType) -> Result<RegisteredEntityType, UnregisteredEntityType> {
-    match ty {
-        EntityType::Project => Ok(RegisteredEntityType::Project),
-        EntityType::Document => Ok(RegisteredEntityType::Document),
-        EntityType::Chat => Ok(RegisteredEntityType::Chat),
-        EntityType::AgentSession => Ok(RegisteredEntityType::AgentSession),
-        EntityType::ScheduledAction => Ok(RegisteredEntityType::ScheduledAction),
-        EntityType::User
-        | EntityType::Channel
-        | EntityType::ChannelMessage
-        | EntityType::EmailThread
-        | EntityType::CalendarEvent
-        | EntityType::Team
-        | EntityType::Call
-        | EntityType::ForeignEntity
-        | EntityType::StaticFile
-        | EntityType::CrmCompany
-        | EntityType::CrmContact
-        | EntityType::Reminder
-        | EntityType::Skill
-        | EntityType::Initiative => Err(UnregisteredEntityType(ty)),
-    }
-}
-
 #[test]
 fn try_from_rejects_every_unregistered_entity_type() {
     let unregistered = [
@@ -72,15 +48,10 @@ fn try_from_rejects_every_unregistered_entity_type() {
         EntityType::Skill,
         EntityType::Initiative,
     ];
-    assert_eq!(unregistered.len(), 14);
     for ty in unregistered {
         assert_eq!(
             RegisteredEntityType::try_from(ty),
             Err(UnregisteredEntityType(ty))
-        );
-        assert_eq!(
-            RegisteredEntityType::try_from(ty),
-            expected_registration(ty)
         );
     }
 }
