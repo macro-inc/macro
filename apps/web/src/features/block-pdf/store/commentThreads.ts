@@ -68,14 +68,18 @@ export const pdfCommentThreads = createBlockMemo((): PdfCommentThread[] => {
   });
 });
 
-/** Legacy anchors store a numeric thread id; message discussions store the anchor uuid. */
+/**
+ * Legacy anchors store a numeric thread id. Anchors of a shared discussion
+ * store the root id instead, and the discussion names the anchor uuid back.
+ */
 export function findAnchorThread(
   threads: readonly PdfCommentThread[],
-  anchor: { uuid: string; threadId?: number | null }
+  anchor: { uuid: string; threadId?: number | null; rootId?: string | null }
 ): PdfCommentThread | undefined {
   return threads.find(
     (thread) =>
-      (thread.anchorId != null && thread.anchorId === anchor.uuid) ||
-      (anchor.threadId != null && thread.threadId === anchor.threadId)
+      (anchor.threadId != null && thread.threadId === anchor.threadId) ||
+      (anchor.rootId != null && thread.threadId === anchor.rootId) ||
+      (thread.anchorId != null && thread.anchorId === anchor.uuid)
   );
 }
