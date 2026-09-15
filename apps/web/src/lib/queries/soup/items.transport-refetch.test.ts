@@ -51,7 +51,10 @@ vi.mock('@queries/soup/keys', () => ({
 vi.mock('@queries/soup/transform-utils', () => ({
   isDisplayableSoupItem: vi.fn(() => true),
   isInstructionsMdDoc: vi.fn(() => false),
-  mapApiSoupItemToEntity: vi.fn((item) => ({ ...item.data, touchedAt: item.touched_at })),
+  mapApiSoupItemToEntity: vi.fn((item) => ({
+    ...item.data,
+    touchedAt: item.touched_at,
+  })),
   mapSoupPageToEntityList: vi.fn((page) =>
     page.items.map((item: { data: unknown }) => item.data)
   ),
@@ -151,7 +154,7 @@ describe('Soup refetch transport selection', () => {
     });
     const createOptions = vi.mocked(useInfiniteQuery).mock.calls.at(-1)?.[0];
     if (!createOptions) throw new Error('REST query was not created');
-    const options = createOptions() as {
+    const options = createOptions() as unknown as {
       queryFn: (context: {
         signal: AbortSignal;
         pageParam: null;

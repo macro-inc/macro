@@ -123,6 +123,7 @@ Yesterday, and the existing older-date groups. These use local time and refresh
 every 30 seconds without a new action. Scrolling near the bottom automatically
 loads older items. Home buffers older rows until both notification and own-activity
 pages have loaded through their timestamp, then advances the shallower feed first.
+Older cache-only rows do not advance this boundary.
 Rows tied at a page boundary appear together, so loading another page does not
 insert older history above already displayed rows. Live actions and refreshes
 can still reorder rows. Short or fully filtered pages continue loading until the list
