@@ -2,7 +2,7 @@ import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useChatInputContext } from '@core/component/AI/context';
-import { itemToBlockName } from '@core/constant/allBlocks';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useSettingsState } from '@core/constant/SettingsState';
 import type { Entity } from '@core/types';
 import {
@@ -99,11 +99,7 @@ export function useHomeRecommendations() {
         const metadata = await fetchDocumentMetadata(item.entityId);
         return splitManager.openWithSplit(
           {
-            type: itemToBlockName({
-              type: 'document',
-              fileType: metadata.fileType ?? undefined,
-              subType: metadata.subType ?? undefined,
-            }),
+            type: fileTypeToBlockName(metadata.subType ?? metadata.fileType),
             id: item.entityId,
           },
           { activate: true, preferNewSplit: true }

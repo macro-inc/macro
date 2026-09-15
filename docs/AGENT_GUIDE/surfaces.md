@@ -77,7 +77,8 @@ suggestions appear below the
 composer, using the existing fast/smart recommendation projections. Compact rows
 use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
 suggestion fills the input and replaces its context attachments without sending;
-the Open action opens its source item in a new split. Suggestion loading/errors
+the Open action opens its source item in a new split, preserving the editor type
+for tasks, skills, snippets, and other documents. Suggestion loading/errors
 are isolated from the input. If generation stalls for 45 seconds, the shimmer
 is replaced with a retry action; a late result still appears automatically. Shift+Enter adds a line. Selecting a Home row replaces
 the composer with its preview. Mobile continues to show the activity list alone.
