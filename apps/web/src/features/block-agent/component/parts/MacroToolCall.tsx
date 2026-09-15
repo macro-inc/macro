@@ -101,6 +101,11 @@ function GenericMacroToolCall(props: {
       status={props.common.status}
       muted={props.common.muted}
       trailing={props.common.trailing}
+      hasContent={
+        props.detail.input != null ||
+        props.detail.output != null ||
+        Boolean(props.detail.error)
+      }
     >
       <Show when={body()}>{(text) => <FoldedOutput text={text()} />}</Show>
     </ToolCard>

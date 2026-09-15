@@ -221,6 +221,12 @@ to open the title menu (caret), then **Rename** — that opens the generic entit
 rename dialog. Do not expect a tap on the name itself to start
 an inline edit.
 
+Tool groups and individual tool cards start collapsed. Expand a group to see
+its calls, then expand an edit card to view its file diffs. Diff bodies load
+only when their card opens; syntax highlighting may appear after the diff text.
+Opening a session or expanding a group should leave the app responsive, even
+when the session contains many file edits.
+
 ### Sharing a session
 
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;
