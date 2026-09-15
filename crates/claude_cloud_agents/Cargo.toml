@@ -1,0 +1,32 @@
+[package]
+name = "claude_cloud_agents"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+async-trait = { workspace = true }
+sqlx = { workspace = true }
+cursor_api_key = { path = "../cursor_api_key" }
+axum = { workspace = true }
+base64 = { workspace = true }
+macro_authorization = { path = "../macro_authorization", features = ["axum"] }
+rand = { workspace = true }
+sha2 = { workspace = true }
+subtle = "2"
+utoipa = { workspace = true }
+agent-runtime-protocol = { package = "agent_runtime_protocol", path = "../agent_runtime_protocol", default-features = false, features = ["transport"] }
+futures = { workspace = true }
+reqwest = { workspace = true, features = ["stream", "query"] }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["fs", "io-util", "sync", "time", "macros"] }
+uuid = { workspace = true }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tempfile = "3"
+clap = { workspace = true, features = ["derive"] }

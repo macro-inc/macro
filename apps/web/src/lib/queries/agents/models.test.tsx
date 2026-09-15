@@ -60,7 +60,7 @@ describe('agent model discovery', () => {
 
     await vi.waitFor(() => {
       expect(agentHarnessServiceClient.loadAgentModels).toHaveBeenCalledTimes(
-        4
+        5
       );
     });
     expect(
@@ -69,6 +69,7 @@ describe('agent model discovery', () => {
         .mock.calls.map(([request]) => request)
     ).toEqual([
       { harness: 'in-memory' },
+      { harness: 'claude-cloud' },
       { harness: 'cursor' },
       { harness: 'macrod', harnessId: 'harness-a' },
       { harness: 'macrod', harnessId: 'harness-b' },
@@ -78,6 +79,7 @@ describe('agent model discovery', () => {
   it('omits Cursor when it is not registered', () => {
     expect(buildAgentModelTargets(false, [{ id: 'harness-a' }])).toEqual([
       { harness: 'in-memory' },
+      { harness: 'claude-cloud' },
       { harness: 'macrod', harnessId: 'harness-a' },
     ]);
   });

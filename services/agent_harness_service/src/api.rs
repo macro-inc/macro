@@ -62,6 +62,7 @@ pub struct ApiStates<T, R, Opener, Bots, Access, Auth, Models> {
     create: CreateSessionState<Opener, Bots, Auth>,
     gateway: RuntimeGatewayState<Auth>,
     models: AgentModelsRouterState<Models, Auth>,
+    claude_auth: Router,
 }
 
 impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Access, Auth, Models> {
@@ -79,7 +80,14 @@ impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Acc
             create,
             gateway,
             models,
+            claude_auth: Router::new(),
         }
+    }
+
+    /// Attach the optional owner-authenticated Claude demo connection routes.
+    pub fn with_claude_auth(mut self, router: Router) -> Self {
+        self.claude_auth = router;
+        self
     }
 }
 
@@ -171,6 +179,7 @@ where
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(states.read))
         .merge(agent_models_router(states.models))
+        .merge(states.claude_auth)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

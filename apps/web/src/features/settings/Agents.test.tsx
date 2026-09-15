@@ -22,6 +22,17 @@ import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
 
+vi.mock('@queries/claude-auth/connection', () => ({
+  useClaudeConnectionSource: () => ({
+    status: () => ({ enabled: true, connected: false, ephemeral: true }),
+    failed: () => false,
+    begin: vi.fn(),
+    complete: vi.fn(),
+    disconnect: vi.fn(),
+    refresh: vi.fn(),
+  }),
+}));
+
 const [searchParams, updateSearchParams] = createStore<{
   createAgent?: string;
 }>({});

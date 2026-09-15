@@ -29,6 +29,7 @@ members = [
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
+  "crates/claude_cloud_agents",
   "crates/embedding",
   "crates/email_api_client",
   "crates/entity_mutation",

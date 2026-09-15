@@ -556,6 +556,53 @@ async fn open_creates_announces_and_delivers_the_mention() {
     );
 }
 
+#[tokio::test]
+async fn claude_cloud_only_accepts_control_from_the_subscription_owner() {
+    let (service, _repo, containers, _announcer, _runtimes) = harness();
+    let mut command = open_command();
+    command.runtime.kind = AgentKind::ClaudeCloud;
+    command.runtime.harness = "claude-cloud".into();
+    let owner = command.origin.sender.clone();
+    let id = AgentSessionId::new();
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(id).unwrap();
+        complete_handshake(&container).await;
+    };
+    let (opened, ()) = tokio::join!(open, drive);
+    opened.unwrap();
+    for actor in [None, Some(staff_sender())] {
+        let error = service
+            .control_event(
+                id,
+                ControlEvent {
+                    action: AgentAction::prompt("spend another user's subscription"),
+                    actor,
+                },
+            )
+            .await
+            .unwrap_err();
+        assert!(matches!(error, AgentSessionError::Forbidden));
+    }
+    // A non-turn control exercises the same owner gate without opening another turn.
+    let owner_action = service.control_event(
+        id,
+        ControlEvent {
+            action: AgentAction::prompt("owner follow-up"),
+            actor: Some(owner),
+        },
+    );
+    let drive = async {
+        let container = containers.container(id).unwrap();
+        container.agent().completes_prompt().await;
+    };
+    let (accepted, ()) = tokio::join!(owner_action, drive);
+    accepted.unwrap();
+}
+
 /// The agent's MCP selection is snapshotted onto the session row at open, so
 /// the proxy enforces exactly what this attach advertised for as long as the
 /// session lives, whatever the agent is edited to later.

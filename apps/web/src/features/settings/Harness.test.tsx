@@ -29,6 +29,20 @@ vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
 }));
 
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|demo@example.com',
+}));
+vi.mock('@queries/claude-auth/connection', () => ({
+  useClaudeConnectionSource: () => ({
+    status: () => ({ enabled: true, connected: false, ephemeral: true }),
+    failed: () => false,
+    begin: vi.fn(),
+    complete: vi.fn(),
+    disconnect: vi.fn(),
+    refresh: vi.fn(),
+  }),
+}));
+
 const mocks = vi.hoisted(() => ({
   status: {
     isSuccess: true,
@@ -278,11 +292,17 @@ describe('Harness', () => {
     }
   );
 
-  it('shows the three configurable harness options', () => {
+  it('shows Claude with the Anthropic logo above Cursor in the harness list', () => {
     render(() => <Harness />);
 
     expect(screen.getByRole('heading', { name: 'In-memory' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
+    const claude = screen.getByRole('heading', { name: 'Claude Cloud (demo)' });
+    const cursor = screen.getByRole('heading', { name: 'Cursor' });
+    expect(
+      claude.compareDocumentPosition(cursor) & Node.DOCUMENT_POSITION_FOLLOWING
+    ).toBeTruthy();
+    expect(screen.getByLabelText('Anthropic')).toBeTruthy();
     expect(
       screen.getByRole('heading', { name: 'Bring your own agent' })
     ).toBeTruthy();

@@ -77,7 +77,7 @@ where
                 .spawn(command)
                 .await?
                 .map_transport(RoutedTransport::Sandbox)),
-            AgentKind::External => Err(external_is_unroutable()),
+            AgentKind::External | AgentKind::ClaudeCloud => Err(external_is_unroutable()),
         }
     }
 
@@ -102,7 +102,7 @@ where
                 .resume(session)
                 .await?
                 .map_transport(RoutedTransport::Sandbox)),
-            AgentKind::External => Err(external_is_unroutable()),
+            AgentKind::External | AgentKind::ClaudeCloud => Err(external_is_unroutable()),
         }
     }
 
@@ -114,7 +114,7 @@ where
             AgentKind::SandboxedCoder | AgentKind::InMemory => {
                 self.sandbox.session_token(session).await
             }
-            AgentKind::External => Err(external_is_unroutable()),
+            AgentKind::External | AgentKind::ClaudeCloud => Err(external_is_unroutable()),
         }
     }
 
@@ -124,7 +124,7 @@ where
             AgentKind::CodexCloud => self.codex.teardown(session).await,
             AgentKind::Cursor => self.cursor.teardown(session).await,
             AgentKind::SandboxedCoder | AgentKind::InMemory => self.sandbox.teardown(session).await,
-            AgentKind::External => Err(external_is_unroutable()),
+            AgentKind::External | AgentKind::ClaudeCloud => Err(external_is_unroutable()),
         }
     }
 
@@ -148,7 +148,7 @@ where
             AgentKind::InMemory => Err(HarnessError::Container(
                 "an in-memory session has no sandbox to resize".to_owned(),
             )),
-            AgentKind::External => Err(external_is_unroutable()),
+            AgentKind::External | AgentKind::ClaudeCloud => Err(external_is_unroutable()),
         }
     }
 }
@@ -158,7 +158,9 @@ where
 /// corrupt session row or a broken gate, and refusing loudly beats picking a
 /// provider that cannot serve it.
 fn external_is_unroutable() -> HarnessError {
-    HarnessError::Container("an external bot's session has no provider to route to".to_owned())
+    HarnessError::Container(
+        "this session requires a provider outside the sandbox/Cursor router".to_owned(),
+    )
 }
 
 /// A transport that is one provider's or the other's, decided per session.

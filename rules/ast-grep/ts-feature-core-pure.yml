@@ -15,6 +15,7 @@ note: |-
   The shared @core/util/base64 codec is also pure and may be reused by email.
 files:
   - apps/web/src/features/property/tags/core/**
+  - apps/web/src/features/claude-connection/core/**
   - apps/web/src/features/activity/core/**
   - apps/web/src/features/drive-view/core/**
   - apps/web/src/features/email-message/core/**

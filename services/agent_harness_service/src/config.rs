@@ -53,6 +53,12 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
+    /// Private owner-keyed OAuth file for the single-replica Claude demo.
+    /// Local browser connections always use encrypted MacroDB storage.
+    /// Empty disables Claude outside the local environment.
+    /// Nonempty is refused in production.
+    #[macro_config_default(String::new())]
+    pub claude_cloud_credentials_path: String,
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,

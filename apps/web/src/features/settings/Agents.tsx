@@ -121,6 +121,14 @@ export function Agents() {
     return buildAgentModelTargets(cursorConnected(), harnesses).map(
       (target) => {
         if (target.harness === 'in-memory') return IN_MEMORY_HARNESS;
+        if (target.harness === 'claude-cloud') {
+          return {
+            id: 'claude-cloud',
+            name: 'Claude Cloud (demo)',
+            kind: 'builtin',
+            target,
+          };
+        }
         if (target.harness === 'cursor') {
           return {
             id: 'cursor',
@@ -379,6 +387,7 @@ function summarizeAgent(
 function harnessName(id: string): string {
   if (id === 'in-memory') return 'In-memory';
   if (id === 'cursor') return 'Cursor';
+  if (id === 'claude-cloud') return 'Claude Cloud (demo)';
   // Any other id is a registered macrod harness uuid; if it is not in the
   // connected list any more, the harness has been removed.
   return 'Disconnected harness';
@@ -857,7 +866,14 @@ function AgentDialog(props: {
                       handleHarnessChange(event.currentTarget.value)
                     }
                   >
-                    <For each={props.connectedHarnesses}>
+                    <For
+                      each={props.connectedHarnesses.filter(
+                        (harness) =>
+                          harness.id !== 'claude-cloud' ||
+                          modelDataForHarness(harness.id)?.status ===
+                            'available'
+                      )}
+                    >
                       {(harness) => (
                         <option value={harness.id}>{harness.name}</option>
                       )}

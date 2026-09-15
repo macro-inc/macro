@@ -325,6 +325,7 @@ dependencies = [
  "bot_id",
  "bots",
  "channels",
+ "claude_cloud_agents",
  "codex_cloud_agents",
  "codex_connection",
  "connection_gateway_client",
@@ -3613,6 +3614,35 @@ name = "clap_lex"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
+
+[[package]]
+name = "claude_cloud_agents"
+version = "0.1.0"
+dependencies = [
+ "agent_runtime_protocol",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "clap",
+ "cursor_api_key",
+ "futures",
+ "macro_authorization",
+ "macro_db_migrator",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "sse-core",
+ "subtle",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "utoipa",
+ "uuid",
+ "zeroize",
+]
 
 [[package]]
 name = "clipboard-win"

@@ -42,7 +42,8 @@ export function isManagedHarness(harness: string): boolean {
     harness === 'in-memory' ||
     harness === 'macro-inmem' ||
     harness === 'cursor' ||
-    harness === 'codex-cloud'
+    harness === 'codex-cloud' ||
+    harness === 'claude-cloud'
   );
 }
 
@@ -78,6 +79,9 @@ export function agentRuntimeDescription(
   }
   if (persona.harness === 'codex-cloud')
     return 'Runs in your selected Codex cloud environment';
+  if (persona.harness === 'claude-cloud') {
+    return 'Runs in Claude’s cloud using your subscription. Demo: text prompts, no Macro connectors';
+  }
   if (persona.harness === 'macrod') {
     return `Do work locally using ${persona.name}${ownerName ? ` owned by ${ownerName}` : ''}`;
   }
@@ -98,6 +102,8 @@ export function harnessDisplayName(harness: string): string {
       return 'Cursor';
     case 'codex-cloud':
       return 'Codex';
+    case 'claude-cloud':
+      return 'Claude Cloud';
     default:
       return harness;
   }

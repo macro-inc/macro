@@ -22,6 +22,7 @@ import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
 import { Button, Dialog, Panel } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
+import { ClaudeConnection } from '../claude-connection/claude-connection';
 import { CodexHarness } from './codex/views/CodexHarness';
 import { HarnessPairingDialog } from './HarnessPairingDialog';
 import { ConnectAction, HarnessIcon, StatusDot } from './integration-ui';
@@ -176,6 +177,8 @@ export function Harness() {
             </p>
           </div>
         </section>
+
+        <ClaudeConnection />
 
         <section class="flex gap-4 px-6 py-5">
           <HarnessIcon>

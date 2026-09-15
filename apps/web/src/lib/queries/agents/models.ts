@@ -14,7 +14,10 @@ export function buildAgentModelTargets(
   cursorRegistered: boolean,
   harnesses: readonly Pick<Harness, 'id'>[]
 ): AgentModelTarget[] {
-  const targets: AgentModelTarget[] = [{ harness: 'in-memory' }];
+  const targets: AgentModelTarget[] = [
+    { harness: 'in-memory' },
+    { harness: 'claude-cloud' },
+  ];
   if (cursorRegistered) targets.push({ harness: 'cursor' });
   targets.push(
     ...harnesses.map(

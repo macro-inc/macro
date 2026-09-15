@@ -280,6 +280,25 @@ pub struct ExternalSession {
     pub last_run_id: Option<String>,
 }
 
+impl ExternalSession {
+    /// Provider link, including Claude demo mappings created before URLs were saved.
+    pub fn web_url(&self) -> Option<String> {
+        self.external_url.clone().or_else(|| {
+            (self.provider == "claude-cloud"
+                && self.external_id.starts_with("cse_")
+                && self.external_id.len() > 4
+                && self
+                    .external_id
+                    .bytes()
+                    .all(|b| b.is_ascii_alphanumeric() || b == b'_'))
+            .then(|| format!("https://claude.ai/code/{}", self.external_id))
+        })
+    }
+}
+
+#[cfg(test)]
+mod test;
+
 /// The agent behind a session, as much of it as rendering a message needs.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]

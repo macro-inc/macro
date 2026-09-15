@@ -244,3 +244,14 @@ category, Esc closes. The category strip and footer have transparent backgrounds
 Settings → Agents and Settings → Harness render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
+
+Claude Cloud connection setup is in Settings → Harness, above Cursor, with the
+Anthropic logo. Settings → Agents selects an agent's harness but does not host
+Claude's connection form. Claude's model picker uses provider-reported IDs,
+names, descriptions, and order. Settings discovers from recent account sessions;
+session catalogs update through replay, polling, and streaming. Before any catalog
+is available, only subscription default is shown with an explanation. It saves the next-turn preference
+without waking an idle worker; provider model rejections surface during the turn.
+Claude sessions expose **Open in Claude** in the header
+toolbar (or its overflow menu). With a live runtime, messages sent in Claude are
+polled into Macro about every two seconds; disconnected runtimes must resume first.

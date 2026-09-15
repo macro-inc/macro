@@ -14,6 +14,7 @@ use agent_session::inbound::axum_router::{
     PreviewAgentSessionsRequest, PreviewAgentSessionsResponse, QueuedActionDto,
     RenameAgentSessionRequest, SandboxSizeBody, SessionStatusDto, WithAgentSessionId,
 };
+use claude_cloud_agents::inbound::auth as claude_auth;
 use utoipa::{
     Modify, OpenApi,
     openapi::security::{Http, HttpAuthScheme, SecurityScheme},
@@ -37,6 +38,10 @@ impl Modify for SecurityAddon {
     modifiers(&SecurityAddon),
     info(terms_of_service = "https://macro.com/terms"),
     paths(
+        claude_auth::status,
+        claude_auth::start,
+        claude_auth::complete,
+        claude_auth::disconnect,
         axum_router::create_agent_session_handler,
         axum_router::get_agent_session_handler,
         axum_router::preview_agent_sessions_handler,
@@ -53,6 +58,10 @@ impl Modify for SecurityAddon {
         model_load::load_agent_models_handler,
     ),
     components(schemas(
+        claude_auth::StatusResponse,
+        claude_auth::StartResponse,
+        claude_auth::CompleteRequest,
+        claude_auth::EmptyRequest,
         CreateAgentSessionRequest,
         CreateAgentSessionResponse,
         CreateSessionThread,
