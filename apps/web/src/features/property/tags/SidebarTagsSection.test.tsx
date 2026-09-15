@@ -108,6 +108,96 @@ describe('SidebarTagsSection', () => {
     expect(onActiveIdsChange).toHaveBeenLastCalledWith([]);
   });
 
+  it('expands virtual parents without filtering and selects an exact nested tag', async () => {
+    const sets = [
+      {
+        ...TAG_SETS[0],
+        options: [
+          {
+            ...TAG_SETS[0].options[0],
+            value: { type: 'string' as const, value: 'Work/Urgent' },
+          },
+        ],
+      },
+    ];
+    const { onActiveIdsChange } = renderSection({}, sets);
+    expect(screen.queryByRole('button', { name: 'Urgent' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    expect(onActiveIdsChange).not.toHaveBeenCalled();
+    await fireEvent.click(screen.getByRole('button', { name: 'Urgent' }));
+    expect(onActiveIdsChange).toHaveBeenLastCalledWith(['urgent']);
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse Work' })
+    );
+    expect(screen.queryByRole('button', { name: 'Urgent' })).toBeNull();
+  });
+
+  it('reveals restored selections and separates parent selection from disclosure', async () => {
+    const sets = [
+      {
+        ...TAG_SETS[0],
+        options: [
+          {
+            ...TAG_SETS[0].options[0],
+            value: { type: 'string' as const, value: 'Work/Urgent' },
+          },
+          {
+            ...TAG_SETS[0].options[1],
+            value: { type: 'string' as const, value: 'Work' },
+          },
+        ],
+      },
+    ];
+    const onSelect = vi.fn();
+    renderSection({ activeIds: ['urgent'], onActiveIdsChange: onSelect }, sets);
+    expect(
+      screen
+        .getByRole('button', { name: 'Urgent' })
+        .getAttribute('aria-current')
+    ).toBe('page');
+    await fireEvent.click(screen.getByRole('button', { name: 'Work' }));
+    expect(onSelect).toHaveBeenLastCalledWith(['later']);
+    await fireEvent.click(
+      screen.getByRole('button', { name: 'Collapse Work' })
+    );
+    expect(onSelect).toHaveBeenCalledOnce();
+  });
+
+  it('updates the hierarchy when the provider catalog changes', async () => {
+    const [sets, setSets] = createSignal<TagSetResponse[]>([]);
+    render(() => (
+      <TagSetsProvider tagSets={sets}>
+        <SidebarTagsSection
+          activeIds={[]}
+          onActiveIdsChange={() => {}}
+          open
+          onOpenChange={() => {}}
+        />
+      </TagSetsProvider>
+    ));
+    expect(screen.getByText('No tags yet')).toBeTruthy();
+    const catalog = (name: string) => [
+      {
+        ...TAG_SETS[0],
+        options: [
+          {
+            ...TAG_SETS[0].options[0],
+            value: { type: 'string' as const, value: name },
+          },
+        ],
+      },
+    ];
+    setSets(catalog('Work/Urgent'));
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand Work' }));
+    expect(screen.getByRole('button', { name: 'Urgent' })).toBeTruthy();
+    setSets(catalog('Home/Urgent'));
+    expect(screen.queryByRole('button', { name: 'Work' })).toBeNull();
+    await fireEvent.click(screen.getByRole('button', { name: 'Expand Home' }));
+    expect(screen.getByRole('button', { name: 'Urgent' })).toBeTruthy();
+    setSets([]);
+    expect(screen.getByText('No tags yet')).toBeTruthy();
+  });
+
   it('opens the tag editor from the New tag action', async () => {
     renderSection();
 

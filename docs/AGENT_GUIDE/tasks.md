@@ -47,3 +47,11 @@ Users with view or comment access see the same pills read-only.
 
 In any channel composer, toggle the `Task` switch before sending to create a task from the
 message.
+
+### Nested sidebar tags
+
+Tag names containing `/` render as nested branches (for example, `Work/Urgent`).
+Use the caret to expand or collapse a branch. A folder-only parent expands without
+filtering; clicking an actual tag selects only that tag, including when it has
+children. Personal and team paths stay separate. Ancestors of restored selected
+tags start expanded. Filter-menu options continue to show full tag names.

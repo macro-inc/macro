@@ -93,6 +93,10 @@ selecting it again clears that tag filter. Favorite rows open their tasks.
 
 ## Email — `/app/component/mail`
 
+Email's Tags sidebar uses the same [nested tag tree as Tasks](tasks.md#nested-sidebar-tags).
+Carets and folder-only parents expand branches; actual tags select their exact ID
+and switch the mailbox to All. Parent selection does not include descendant tags.
+
 Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `Shared` /
 `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
