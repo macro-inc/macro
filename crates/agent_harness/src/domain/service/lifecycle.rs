@@ -21,6 +21,7 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 > AgentSessionNotificationRecipient
     for AgentHarnessService<
         Sessions,
@@ -33,6 +34,7 @@ impl<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >
 where
     Sessions: AgentSessionService,
@@ -45,6 +47,7 @@ where
     Lifecycle: AgentSessionLifecyclePublisher,
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
+    Artifacts: ArtifactSource,
 {
     async fn session_deleted(
         &self,
@@ -162,6 +165,7 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 > agent_session::domain::ports::SessionTurnObserver
     for AgentHarnessService<
         Sessions,
@@ -174,6 +178,7 @@ impl<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >
 where
     Sessions: AgentSessionService,
@@ -186,6 +191,7 @@ where
     Lifecycle: AgentSessionLifecyclePublisher,
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
+    Artifacts: ArtifactSource,
 {
     fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
         drop(self.execute_here(id, HarnessCommand::Turn(signal)));
@@ -212,6 +218,7 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 >
     AgentHarnessInner<
         Sessions,
@@ -224,6 +231,7 @@ impl<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >
 where
     Sessions: AgentSessionService,
@@ -236,6 +244,7 @@ where
     Lifecycle: AgentSessionLifecyclePublisher,
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
+    Artifacts: ArtifactSource,
 {
     /// The MCP servers to advertise when reattaching to an existing container.
     ///

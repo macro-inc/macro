@@ -721,12 +721,28 @@ pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
 /// best-effort by contract, so "a publisher that is down changes nothing about
 /// the durable append" is the property every caller of it has to hold.
 ///
-/// Cheap to clone - clones share one store.
-#[derive(Debug, Clone, Default)]
+/// Cheap to clone - clones share one store. [`wait_for_published`] is a real
+/// wait on a `watch`, so a publish that lands before the waiter subscribes is
+/// counted and nothing polls.
+///
+/// [`wait_for_published`]: RecordingRealtime::wait_for_published
+#[derive(Debug, Clone)]
 pub struct RecordingRealtime {
     published: Arc<Mutex<Vec<LogAppended>>>,
     updated: Arc<Mutex<Vec<AgentSessionId>>>,
+    count: tokio::sync::watch::Sender<usize>,
     down: bool,
+}
+
+impl Default for RecordingRealtime {
+    fn default() -> Self {
+        Self {
+            published: Arc::default(),
+            updated: Arc::default(),
+            count: tokio::sync::watch::Sender::new(0),
+            down: false,
+        }
+    }
 }
 
 impl RecordingRealtime {
@@ -740,10 +756,18 @@ impl RecordingRealtime {
     #[must_use]
     pub fn down() -> Self {
         Self {
-            published: Arc::default(),
-            updated: Arc::default(),
             down: true,
+            ..Self::default()
         }
+    }
+
+    /// Resolve once at least `count` frames have been published.
+    pub async fn wait_for_published(&self, count: usize) {
+        let mut receiver = self.count.subscribe();
+        receiver
+            .wait_for(|published| *published >= count)
+            .await
+            .expect("the recording realtime holds the sender");
     }
 
     /// Sessions whose persisted metadata changed.
@@ -777,10 +801,15 @@ impl AgentSessionRealtime for RecordingRealtime {
         if self.down {
             return Err(rootcause::report!("the connection gateway is down"));
         }
-        self.published
-            .lock()
-            .expect("in-memory realtime store is not poisoned")
-            .push(event);
+        let published = {
+            let mut store = self
+                .published
+                .lock()
+                .expect("in-memory realtime store is not poisoned");
+            store.push(event);
+            store.len()
+        };
+        self.count.send_replace(published);
         Ok(())
     }
 }

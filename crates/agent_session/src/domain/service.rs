@@ -261,6 +261,15 @@ pub trait AgentSessionService: Send + Sync + 'static {
         size: SandboxSize,
     ) -> impl Future<Output = Result<()>> + Send;
 
+    /// Append a frame the Service itself authored - not the runtime, not a
+    /// user - to the session's log, live if an actor holds the session,
+    /// durably otherwise.
+    fn record_frame(
+        &self,
+        id: AgentSessionId,
+        message: ToServerMessage,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// The user's default sandbox size for new `@coder` sessions.
     ///
     /// A missing preference is [`SandboxSize::Default`].
@@ -502,7 +511,7 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             otel.status_description = tracing::field::Empty,
         );
         if commands
-            .send(SessionCommand {
+            .send(SessionCommand::Act {
                 user_id,
                 action,
                 action_id,
@@ -856,6 +865,64 @@ where
 
     async fn publish_queue_changed(&self, event: AgentSessionQueueChanged) -> Result<()> {
         Ok(self.realtime.publish_queue_changed(event).await?)
+    }
+
+    #[tracing::instrument(
+        name = "agent.session.record_frame",
+        err,
+        skip(self, message),
+        fields(agent.session.id = %id, agent.session.live = tracing::field::Empty),
+    )]
+    async fn record_frame(&self, id: AgentSessionId, message: ToServerMessage) -> Result<()> {
+        let live = self
+            .active
+            .get(&id)
+            .and_then(|entry| entry.commands.clone());
+        tracing::Span::current().record("agent.session.live", live.is_some());
+        let Some(commands) = live else {
+            // No actor here, so no claim to write under. The same unfenced
+            // writer `mark_disconnected` uses, for the same reason: this
+            // frame is an addition to history that contends with nothing a
+            // live actor is writing, and it still streams to viewers and
+            // folds exactly as an actor-written one does.
+            let mut logs = LiveSessionLogWriter::new(self.repo.clone(), self.realtime.clone());
+            return tokio::time::timeout(
+                SESSION_PERSIST_TIMEOUT,
+                logs.append(AgentSessionLog {
+                    agent_session_id: id,
+                    user_id: None,
+                    content: Message::ToServer(message),
+                }),
+            )
+            .await
+            .unwrap_or(Err(AgentSessionError::LogTimedOut(id)))
+            .map(|_| ());
+        };
+
+        let (completed, result) = oneshot::channel();
+        let span = tracing::info_span!(
+            "agent.session.record",
+            agent.session.id = %id,
+            otel.status_code = tracing::field::Empty,
+            otel.status_description = tracing::field::Empty,
+        );
+        if commands
+            .send(SessionCommand::Record {
+                message,
+                completed,
+                span,
+            })
+            .await
+            .is_err()
+        {
+            return Err(AgentSessionError::Disconnected(id));
+        }
+        drop(commands);
+        match tokio::time::timeout(SESSION_PERSIST_TIMEOUT, result).await {
+            Ok(Ok(result)) => result,
+            Ok(Err(_)) => Err(AgentSessionError::Disconnected(id)),
+            Err(_elapsed) => Err(AgentSessionError::LogTimedOut(id)),
+        }
     }
 
     async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {

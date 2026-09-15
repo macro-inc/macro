@@ -360,6 +360,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "static_file_service_client",
  "tokio",
  "tokio-retry",
  "tokio-util",

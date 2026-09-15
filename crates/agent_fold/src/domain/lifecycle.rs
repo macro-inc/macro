@@ -107,6 +107,7 @@ impl LifecycleFold {
             action_id,
             stop: stop.clone(),
             last_text: last_text(message),
+            known_artifact_keys: self.inner.known_artifact_keys().clone(),
         });
     }
 

@@ -880,7 +880,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
 
     let (completed, result) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionCommand::Act {
             user_id: None,
             action: AgentAction::prompt("keep dispatching"),
             action_id: AgentActionId::mint(),
@@ -963,7 +963,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
     release.notify_one();
     let (completed, result) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionCommand::Act {
             user_id: None,
             action: AgentAction::prompt("keep working"),
             action_id: AgentActionId::mint(),
@@ -1564,7 +1564,7 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
     );
     let (completed, completion) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionCommand::Act {
             user_id: None,
             action: AgentAction::prompt("must remain unsent"),
             action_id: AgentActionId::mint(),
@@ -1742,7 +1742,7 @@ async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
     let action_id = AgentActionId::mint();
     let (completed, result) = oneshot::channel();
     commands
-        .send(SessionCommand {
+        .send(SessionCommand::Act {
             user_id: None,
             action: AgentAction::prompt("what time is it?"),
             action_id,
@@ -1876,5 +1876,129 @@ mod fold_signals {
             .expect("append succeeds");
 
         assert!(appended.signals.is_empty(), "{:#?}", appended.signals);
+    }
+}
+
+/// Frames the Service itself authors, which no runtime ever sends.
+mod record_frame {
+    use super::*;
+    use agent_fold::domain::model::MessagePart;
+    use agent_runtime_protocol::domain::schema::v0::Artifact;
+
+    fn artifacts(turn: u32) -> ToServerMessage {
+        ToServerMessage::Artifacts {
+            turn: Some(turn),
+            artifacts: vec![Artifact {
+                key: "walkthrough/one.png@1".to_owned(),
+                uri: "https://macro.com/files/one.png".to_owned(),
+                name: "one.png".to_owned(),
+                mime_type: "image/png".to_owned(),
+                size_bytes: 11,
+            }],
+        }
+    }
+
+    #[tokio::test]
+    async fn a_live_session_logs_the_frame_and_sends_the_runtime_nothing() {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_session();
+        repo.insert_session(test_agent_session(session));
+        let service = AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
+        );
+        let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
+        let (inbound_tx, inbound_rx) = mpsc::channel(8);
+        service
+            .attach_session(
+                session,
+                RuntimeAttachment::solo(RecordingTransport {
+                    outbound: outbound_tx,
+                    inbound: inbound_rx,
+                }),
+            )
+            .await
+            .expect("the transport attaches");
+        open_test_session(&inbound_tx, &mut outbound_rx, session).await;
+
+        service
+            .record_frame(session, artifacts(0))
+            .await
+            .expect("a live session records the frame");
+
+        let stored = AgentSessionLogRepo::list_by_session(&repo, session)
+            .await
+            .expect("stored log can be read");
+        let recorded = stored
+            .iter()
+            .filter(|entry| {
+                matches!(
+                    &entry.entry.content,
+                    Message::ToServer(ToServerMessage::Artifacts { .. })
+                )
+            })
+            .count();
+        assert_eq!(recorded, 1, "{stored:#?}");
+        assert!(
+            outbound_rx.try_recv().is_err(),
+            "the machine reacts to an artifacts frame with nothing"
+        );
+    }
+
+    /// No actor here, so the frame takes the durable writer - and a reader
+    /// folding the log afterwards sees the files on the turn's message.
+    #[tokio::test]
+    async fn a_session_with_no_actor_writes_durably_and_folds() {
+        let repo = InMemoryAgentSessionRepo::new();
+        let session = test_session();
+        repo.insert_session(test_agent_session(session));
+        let realtime = RecordingRealtime::new();
+        let service = AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            realtime.clone(),
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
+        );
+        let mut logs = LiveSessionLogWriter::new(repo.clone(), NoOpRealtime);
+        for frame in parse_log_as(session, TURN) {
+            AgentSessionLogWriter::append(&mut logs, frame)
+                .await
+                .expect("the turn is stored");
+        }
+        let already = realtime.published().len();
+
+        service
+            .record_frame(session, artifacts(0))
+            .await
+            .expect("a disconnected session still records the frame");
+
+        let stored = AgentSessionLogRepo::list_by_session(&repo, session)
+            .await
+            .expect("stored log can be read");
+        assert!(matches!(
+            stored.last().map(|entry| &entry.entry.content),
+            Some(Message::ToServer(ToServerMessage::Artifacts { .. }))
+        ));
+        assert_eq!(
+            realtime.published().len() - already,
+            1,
+            "a durably written frame reaches viewers like any other"
+        );
+        let messages = fold(stored.into_iter().map(|entry| entry.entry));
+        assert!(
+            messages.iter().any(|message| message
+                .parts
+                .iter()
+                .any(|part| matches!(part, MessagePart::Artifacts { .. }))),
+            "{messages:#?}"
+        );
     }
 }

@@ -24,6 +24,7 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 > agent_session::domain::ports::SessionOpener
     for AgentHarnessService<
         Sessions,
@@ -36,6 +37,7 @@ impl<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >
 where
     Sessions: AgentSessionService,
@@ -48,6 +50,7 @@ where
     Lifecycle: AgentSessionLifecyclePublisher,
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
+    Artifacts: ArtifactSource,
 {
     async fn open_external_session(
         &self,
@@ -275,6 +278,7 @@ impl<
     Lifecycle,
     Mentions,
     Notifier,
+    Artifacts,
 >
     AgentHarnessInner<
         Sessions,
@@ -287,6 +291,7 @@ impl<
         Lifecycle,
         Mentions,
         Notifier,
+        Artifacts,
     >
 where
     Sessions: AgentSessionService,
@@ -299,6 +304,7 @@ where
     Lifecycle: AgentSessionLifecyclePublisher,
     Mentions: PromptMentions,
     Notifier: AgentSessionNotifier,
+    Artifacts: ArtifactSource,
 {
     #[tracing::instrument(err, skip(self, command), fields(
         %session_id,

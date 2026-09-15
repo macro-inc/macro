@@ -42,10 +42,13 @@ use agent_harness::domain::trigger_router::{
 use agent_harness::inbound::model_load::AgentModelsRouterState;
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
+use agent_harness::outbound::artifacts::StaticFileArtifactStore;
 use agent_harness::outbound::channel_announcer::ChannelAnnouncer;
 use agent_harness::outbound::channel_prompt_context::ChannelPromptContextAdapter;
 use agent_harness::outbound::containers::HarnessContainers;
-use agent_harness::outbound::cursor::{CursorContainerManager, PgCursorApiKeys, PostgresJournal};
+use agent_harness::outbound::cursor::{
+    CursorArtifacts, CursorContainerManager, PgCursorApiKeys, PostgresJournal,
+};
 use agent_harness::outbound::daytona::{
     AnthropicApiKey as AnthropicApiKeySecret, DaytonaApiKey as DaytonaApiKeySecret,
     DaytonaContainerManager, DaytonaSettings, Snapshot,
@@ -115,6 +118,7 @@ use macro_event_broker::{
 };
 use macro_service_urls::{
     AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
+    StaticFileServiceUrl,
 };
 use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
 use pipedream_mcp::outbound::api::{PipedreamClient, PipedreamConfig};
@@ -122,6 +126,7 @@ use pipedream_mcp::outbound::pg_connection_repo::PgConnectionRepo;
 use rdkafka::consumer::CommitMode;
 use rdkafka::message::{BorrowedMessage, Message as _};
 use sqlx::postgres::PgPoolOptions;
+use static_file_service_client::StaticFileServiceClient;
 use tokio_retry::{Retry, strategy::FixedInterval};
 use tracing::Instrument as _;
 
@@ -580,6 +585,18 @@ async fn run() -> anyhow::Result<()> {
     // explicitly selected coding agents keep their configured runtimes.
     .with_managed_bot(inmem_bot);
 
+    // Cursor's walkthrough files, re-hosted on the static file service so the
+    // permalinks in a session log outlive Cursor's fifteen-minute urls. Same
+    // per-user keys the container manager runs sessions on: the files belong
+    // to the owner's own cloud agent.
+    let artifacts = CursorArtifacts::new(
+        cursor_keys.clone(),
+        StaticFileArtifactStore::new(StaticFileServiceClient::new(
+            config.internal_api_key.clone(),
+            StaticFileServiceUrl::new()?.to_string(),
+        )),
+        CURSOR_API_BASE_URL.to_owned(),
+    );
     let harness = Arc::new(AgentHarnessService::new(
         sessions,
         containers,
@@ -596,6 +613,7 @@ async fn run() -> anyhow::Result<()> {
         // Finished / asking / mentioned reach people through the same
         // notification ingress channel messages use.
         IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
+        artifacts,
     ));
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.
