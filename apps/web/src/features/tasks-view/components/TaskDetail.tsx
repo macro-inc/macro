@@ -30,6 +30,15 @@ import {
 import { useTasksView } from '../tasks-view-context';
 import type { TaskDetailTarget } from '../types';
 
+function TaskBreadcrumbLabel(props: { taskName: string }) {
+  return (
+    <>
+      <EntityIcon targetType="task" size="xs" class="shrink-0" />
+      <span class="truncate">{props.taskName}</span>
+    </>
+  );
+}
+
 function TaskDetailBreadcrumb(props: {
   taskName: string;
   onTaskClick?: () => void;
@@ -45,10 +54,39 @@ function TaskDetailBreadcrumb(props: {
       </ViewBreadcrumbs.Item>
       <ViewBreadcrumbs.Separator />
       <ViewBreadcrumbs.Item current class="gap-1.5" onClick={props.onTaskClick}>
-        <EntityIcon targetType="task" size="xs" class="shrink-0" />
-        <span class="truncate">{props.taskName}</span>
+        <TaskBreadcrumbLabel taskName={props.taskName} />
       </ViewBreadcrumbs.Item>
     </ViewBreadcrumbs.Root>
+  );
+}
+
+function TaskDetailBreadcrumbRegistration(props: {
+  documentId: string;
+  fallbackName: string;
+}) {
+  const { state, closeTask } = useTasksView();
+  const { displayName } = useMarkdownName();
+  const { state: documentState } = useMarkdownDocument();
+  const tabName = () =>
+    TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
+  const taskName = () => displayName() ?? props.fallbackName;
+  const focusTask = () => documentState.editor.md.editor?.focus();
+
+  return (
+    <>
+      <ViewBreadcrumbs.Register id="tasks-view" order={0} onClick={closeTask}>
+        <span class="truncate">{tabName()}</span>
+      </ViewBreadcrumbs.Register>
+      <ViewBreadcrumbs.Register
+        id={`task:${props.documentId}`}
+        order={1}
+        current
+        class="gap-1.5"
+        onClick={focusTask}
+      >
+        <TaskBreadcrumbLabel taskName={taskName()} />
+      </ViewBreadcrumbs.Register>
+    </>
   );
 }
 
@@ -60,14 +98,12 @@ function TaskDetailTopBar(props: {
   const panel = useSplitPanelOrThrow();
   const { closeTask } = useTasksView();
   const { displayName } = useMarkdownName();
-  const { state: documentState } = useMarkdownDocument();
   const { fileOperations, menuTools } = useMarkdownDocumentTools();
   const taskName = () => displayName() ?? props.fallbackName;
-  const focusTask = () => documentState.editor.md.editor?.focus();
 
   return (
     <div class="flex h-12 min-w-0 shrink-0 items-center gap-1 border-edge border-b px-3">
-      <TaskDetailBreadcrumb taskName={taskName()} onTaskClick={focusTask} />
+      <ViewBreadcrumbs.Outlet aria-label="Task location" />
       <div class="shrink-0">
         <SplitFileMenu
           id={props.documentId}
@@ -145,46 +181,52 @@ function TaskDetailContent(props: {
     >
       <ModalsProvider>
         <OldOverlay />
-        <SidePanel.Root>
-          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <TaskDetailTopBar
-              documentId={props.task.id}
-              fallbackName={fallbackName()}
-              isOwner={props.data.permissions.isOwner}
-            />
-            <div class="relative min-h-0 min-w-0 flex-1">
-              <Suspense
-                fallback={
-                  <div class="grid size-full place-items-center text-ink-muted">
-                    <SpinnerIcon class="size-5 animate-spin" />
-                  </div>
-                }
-              >
-                <SidePanel.Layout headerToggle={false}>
-                  <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
-                    <MarkdownSidePanelSections />
-                  </Show>
-                  <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-                    <div class="absolute top-1.5 right-4 z-action-menu flex justify-end">
-                      <FindAndReplace hotkeyScope={panel.splitHotkeyScope} />
+        <ViewBreadcrumbs.Provider>
+          <TaskDetailBreadcrumbRegistration
+            documentId={props.task.id}
+            fallbackName={fallbackName()}
+          />
+          <SidePanel.Root>
+            <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+              <TaskDetailTopBar
+                documentId={props.task.id}
+                fallbackName={fallbackName()}
+                isOwner={props.data.permissions.isOwner}
+              />
+              <div class="relative min-h-0 min-w-0 flex-1">
+                <Suspense
+                  fallback={
+                    <div class="grid size-full place-items-center text-ink-muted">
+                      <SpinnerIcon class="size-5 animate-spin" />
                     </div>
-                    <DocumentDebouncedNotificationReadMarker
-                      notificationSource={notificationSource}
-                      documentId={props.task.id}
-                    />
-                    <MarkdownDocumentContent
-                      hotkeyScope={panel.splitHotkeyScope}
-                      doInitialSync={props.data.doInitialSync}
-                      loadCachedSnapshot={() =>
-                        loadMarkdownCachedSnapshot(props.task.id)
-                      }
-                    />
-                  </div>
-                </SidePanel.Layout>
-              </Suspense>
+                  }
+                >
+                  <SidePanel.Layout headerToggle={false}>
+                    <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
+                      <MarkdownSidePanelSections />
+                    </Show>
+                    <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+                      <div class="absolute top-1.5 right-4 z-action-menu flex justify-end">
+                        <FindAndReplace hotkeyScope={panel.splitHotkeyScope} />
+                      </div>
+                      <DocumentDebouncedNotificationReadMarker
+                        notificationSource={notificationSource}
+                        documentId={props.task.id}
+                      />
+                      <MarkdownDocumentContent
+                        hotkeyScope={panel.splitHotkeyScope}
+                        doInitialSync={props.data.doInitialSync}
+                        loadCachedSnapshot={() =>
+                          loadMarkdownCachedSnapshot(props.task.id)
+                        }
+                      />
+                    </div>
+                  </SidePanel.Layout>
+                </Suspense>
+              </div>
             </div>
-          </div>
-        </SidePanel.Root>
+          </SidePanel.Root>
+        </ViewBreadcrumbs.Provider>
       </ModalsProvider>
     </MarkdownDocument>
   );
