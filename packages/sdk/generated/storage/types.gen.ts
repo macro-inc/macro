@@ -7122,6 +7122,7 @@ export type PdfHighlightAnchor = {
     pageViewportHeight: number;
     pageViewportWidth: number;
     red: number;
+    rootId?: string | null;
     text: string;
     threadId?: number | null;
     updatedAt?: string | null;
@@ -7165,9 +7166,10 @@ export type PdfPlaceableCommentAnchor = {
     originalPage: number;
     owner: string;
     page: number;
+    rootId?: string | null;
     rotation: number;
     shouldLockOnSave: boolean;
-    threadId: number;
+    threadId?: number | null;
     uuid: string;
     wasDeleted: boolean;
     wasEdited: boolean;

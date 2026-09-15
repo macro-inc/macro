@@ -1418,6 +1418,10 @@ type GraphqlCommentedOnDocumentMetadata {
 	Sender profile-picture URL.
 	"""
 	senderProfilePictureUrl: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
 }
 
 """
@@ -3096,6 +3100,10 @@ type GraphqlMentionedInDocumentCommentMetadata {
 	Sender profile-picture URL.
 	"""
 	senderProfilePictureUrl: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
 }
 
 """
@@ -3668,6 +3676,10 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 	Sender profile-picture URL.
 	"""
 	senderProfilePictureUrl: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
 }
 
 """

@@ -389,6 +389,10 @@ impl GraphqlMentionedInDocumentCommentMetadata {
     async fn sender_profile_picture_url(&self) -> Option<&str> {
         self.0.sender_profile_picture_url.as_deref()
     }
+    /// Display name for a non-user sender.
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
+    }
 }
 
 /// GraphQL wrapper for document comment thread reply metadata.
@@ -438,6 +442,10 @@ impl GraphqlRepliedToDocumentCommentThreadMetadata {
     async fn sender_profile_picture_url(&self) -> Option<&str> {
         self.0.sender_profile_picture_url.as_deref()
     }
+    /// Display name for a non-user sender.
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
+    }
 }
 
 /// GraphQL wrapper for document comment metadata.
@@ -486,6 +494,10 @@ impl GraphqlCommentedOnDocumentMetadata {
     /// Sender profile-picture URL.
     async fn sender_profile_picture_url(&self) -> Option<&str> {
         self.0.sender_profile_picture_url.as_deref()
+    }
+    /// Display name for a non-user sender.
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
     }
 }
 
