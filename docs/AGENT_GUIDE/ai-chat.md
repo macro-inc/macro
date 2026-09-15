@@ -65,13 +65,16 @@ Codex shows **Set up Codex** until ChatGPT is connected and a cloud environment
 is saved in Settings → Harness. New sessions use the saved environment and
 always start from `main`. The composer hides model overrides for
 Codex because this harness does not expose model selection. Codex assistant
-text appears as complete messages; tool activity and thinking can still update
-while a response is being prepared. Codex file citations render as inline code
+text updates incrementally as provider fragments arrive. The text is provisional:
+completed messages and final snapshots correct it in place, including missing
+or reordered fragments. Tool activity and thinking also update during the turn.
+Codex file citations render as inline code
 with the path and line range, such as `.gitkeep:1` or `src/main.rs:2-12`;
 they do not link to a local file or a guessed remote revision.
-A recorded two-turn Codex conversation was
-verified in Chromium with the production conversation renderer: both replies
-appear once, with headings, lists, and inline code intact. Setup navigation,
+A recorded two-turn Codex conversation is covered by live/replay fold snapshots.
+Chromium verification with the production conversation renderer and WASM fold
+confirmed that partial text updates to corrected Markdown in the same message
+and text-container nodes, without appending a duplicate answer. Setup navigation,
 selection, and the create/prompt payloads were verified in Chromium with mocked
 app navigation and backend state; no remote session was created by that check.
 Each row shows its `@handle` beneath the name. There are no coding tags;

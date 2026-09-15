@@ -155,6 +155,98 @@ The call site sends no resume cursor and configures no explicit retry. Ordinary
 EOF completes the stream and invalidates task/turn queries. Production must
 journal event IDs and reconcile with turn/task reads after disconnect.
 
+### Desktop reconciliation audit
+
+Static review of version 26.908.70816 on 2026-09-15 traced the remote page,
+shared fetch/SSE parser, native authentication bridge, and conversation renderer.
+This audit did not establish a lossless provider stream contract.
+
+The remote page uses the same WHAM SSE route as Macro. Its caller passes no
+cursor, offset, `Last-Event-ID`, retry strategy, or alternate WebSocket transport.
+The shared SSE parser recognizes `event:` and `data:` but ignores `id:` and
+`retry:`. Outer JSON record IDs deduplicate events; they do not establish order.
+
+The desktop keeps replaceable message items:
+
+1. `item/started` and `item/completed` insert or replace the full item by ID.
+2. Deltas append only when an item with the matching ID/type already exists.
+   Orphan deltas are discarded. There is no completed-item guard against later
+   deltas in this reducer.
+3. A changed turn snapshot rebuilds the projection from stored events and eligible
+   live events. Once a completed turn contains a stored completed agent message,
+   stored history takes precedence and live text is excluded.
+4. `output_items` text is used only when no agent message exists. It does not
+   repair an existing partial message by itself.
+
+Thus a full completion can repair a missing prefix, but no desktop mechanism
+found here reconstructs an unknown ordering of live fragments. The task and turn
+list queries have a five-second **stale time**, not a five-second polling timer.
+Normal SSE completion invalidates those queries. Macro independently polls the
+active turn every five seconds and reconciles its final text.
+
+A separate ChatGPT completion engine in the same bundle uses
+`/f/conversation/resume`, offsets/resume tokens, and `/celsius/ws/user` WebSocket
+handoff. No call path connects those mechanisms to the WHAM remote task page;
+their presence does not establish a Codex task resume surface.
+
+#### Macro text replacement
+
+Macro advertises `clientCapabilities._meta["macro.textReplace"] = true`.
+The Codex ACP adapter then emits ordinary `agent_message_chunk` updates with
+`_meta: {"macro.textReplace": {"id": "<item-id>"}}`. Their text is a full
+snapshot of a turn-local text part. The fold inserts that part once and replaces
+it at the same position on later updates; empty text clears provisional content.
+The durable event log remains append-only.
+
+Incoming deltas update provisional text. Full completions replace it and later
+deltas for completed items are ignored. Final poll fragments are combined in
+one stable provisional slot; repeated fragments replace by their synthetic ID.
+Terminal completion clears any remaining unverified text. Cancellation/failure
+also clear incomplete text while keeping completed messages. Clients that do not
+advertise this capability receive completed messages through ordinary ACP append
+semantics. This is protocol negotiation, not a claim that standard ACP itself
+supports replacing assistant prose.
+
+Provider fragments can still be missing, bursty, or reordered while a turn runs.
+This implementation offers provisional incremental text with correction, not
+guaranteed lossless token delivery. Establishing the latter requires observed
+sequence/offset metadata, cumulative in-progress snapshots with an overlap
+boundary, or a stronger upstream contract.
+
+A read-only live task on the test repository verified this path on 2026-09-15:
+236 keyed text updates arrived, beginning 19.94 seconds after submission. The
+last provisional text contained 1,007 characters; a non-prefix completion
+replaced it with the full 1,357-character answer at 25.34 seconds. The prompt
+ended at 37.25 seconds. Replaying the session reproduced the final answer
+exactly. No tool calls were observed. These are timings from one task, not a
+latency guarantee.
+
+#### Citation rendering
+
+Desktop parses `【F:path†L1-L3】` into a structured file directive. Its file control
+dispatches path, working directory, host and line data to an opener; the marker
+does not contain a GitHub URL. The remote renderer supplies a null working
+directory. Macro currently converts explicit file citations to Markdown code
+such as `path:1-3`, without guessing a local checkout or remote revision.
+
+#### Reproducible source locations
+
+Offsets below are approximate zero-based Unicode character offsets in the
+unmodified extracted files, not UTF-8 byte offsets. Minified names are specific
+to this build.
+
+| Asset | Functions / offsets | Evidence |
+| --- | --- | --- |
+| `remote-conversation-page-29652746442b.js` | `wa` 41915, `Da` 42300, `ja` 44200, `Na` 44900, `Ba` 47970, `to` 49430 | Stored/live fold, item replacement, SSE hook |
+| `app-initial-cf777d5420b1.js` | `LS.stream` 2785158, `nC` 2796398, `pAi` 5254358, `mAi` 5254533 | Stream transport, bridge headers, snapshot query settings |
+| `src-25d8c35b9f39.js` | `Cd` 93710, `wd` 94061 | SSE parser |
+| `app-initial-cf777d5420b1.js` | `Lvn` 2941900, `Yvn` 2944200, `iyi` 5080224 | Citation parser and file opener |
+| `app-primary-b7eba075b72d.js` | `fat` 440404, `Omt` 683070 | File-reference rendering and click dispatch |
+
+SHA-256 of the remote conversation asset:
+`3fc92f2adcb66ec889939e5d4616287f4b28493f8ef781daa61a6db159f5e734`.
+The package and ASAR hashes above identify the other assets.
+
 ## ACP mapping
 
 | ACP operation | Mapping |

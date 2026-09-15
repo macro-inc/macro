@@ -23,8 +23,32 @@ appear once, with three headings, thirteen list items, inline code, and no
 synthetic correction or final-output wrappers. That browser check uses the
 recorded snapshot, not a new live cloud task.
 
+The same recording also has a replacement-enabled ACP/fold snapshot. It checks
+every fold prefix, final corrected prose, and repeated replacement loads. A
+controlled live runtime test holds a prompt open until the client has received
+and folded provisional text, then verifies that a terminal snapshot replaces it.
+The WASM/browser check verifies that corrected text keeps the same message and
+text-container DOM nodes. Standard ACP clients without the replacement
+capability continue to receive complete messages.
+
 `reported_gitkeep_message.md` is transcribed from the user's rendered message,
 not a raw provider recording. Its ACP snapshot verifies that the native and
 poll-fallback message paths both turn `【F:.gitkeep†L1】` into Markdown inline
 code, `.gitkeep:1`, without changing the original provider text. The projected
 snapshot is also checked in Chromium with the production message renderer.
+
+`live_text_replacement.jsonl` retains all 236 ACP agent text updates from an
+actual read-only cloud smoke test on 2026-09-15, plus its prompt and completion
+response. The prompt requested approximately 200 words of tea instructions with
+headings, a numbered list, and an emoji, explicitly forbidding tools, file access,
+commands, commits, and pull requests. No tool calls were observed. The last text
+snapshot corrects the preceding 1,007-character provisional message into the
+exact 1,357-character provider answer, including a non-prefix change.
+
+Only session, request, and text-key identifiers were normalized. Timestamps,
+initialization, session creation, and the subsequent reload were omitted; text
+and text-update order are unchanged. No credentials, private paths, or original
+session identifiers are included. The live run's reloaded final text matched
+its live answer exactly. `live_stream.rs` folds every retained prefix through
+`agent_fold`, checks all updates were visible before completion, and asserts that
+one corrected text part contains the final answer without duplication.

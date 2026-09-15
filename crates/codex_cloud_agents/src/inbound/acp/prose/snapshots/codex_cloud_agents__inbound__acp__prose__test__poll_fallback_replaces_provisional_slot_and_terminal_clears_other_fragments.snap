@@ -1,0 +1,54 @@
+---
+source: crates/codex_cloud_agents/src/inbound/acp/prose/test.rs
+expression: updates
+---
+[
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "bad prefix"
+    },
+    "_meta": {
+      "macro.textReplace": {
+        "id": "m1"
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "another fragment"
+    },
+    "_meta": {
+      "macro.textReplace": {
+        "id": "m2"
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": "The only file is `.gitkeep`. `.gitkeep:1`"
+    },
+    "_meta": {
+      "macro.textReplace": {
+        "id": "m1"
+      }
+    }
+  },
+  {
+    "sessionUpdate": "agent_message_chunk",
+    "content": {
+      "type": "text",
+      "text": ""
+    },
+    "_meta": {
+      "macro.textReplace": {
+        "id": "m2"
+      }
+    }
+  }
+]

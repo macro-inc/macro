@@ -13,7 +13,8 @@ is required before it is available in a shared environment.
    `main`. Repositories must already be configured in Codex on the web.
 4. Choose Codex in the agent composer or mention `@codex` in a channel. The first
    prompt creates a remote task; later messages continue the same task. Macro
-   displays complete assistant messages, live command activity and a link to the cloud task.
+   displays incremental assistant text, live command activity and a link to the cloud task.
+   Streamed text is provisional; completed provider text replaces it in place.
 5. **Stop** requests cancellation at the provider. Disconnect in Harness settings
    removes Macro's credentials; reconnecting creates a new connection identity.
 
@@ -81,7 +82,7 @@ per-user PostgreSQL connection and journal, never those local credentials.
 | --- | --- |
 | Launch | Requires a saved environment, then creates a cloud task on `main`. |
 | Follow-up | Continues the existing task using its latest assistant turn. |
-| Streaming | Uses the source-backed per-turn SSE route and reconciles final turn state. |
+| Streaming | Uses per-turn SSE for provisional keyed text, replaces it with completed text, and reconciles final turn state. |
 | Stop | Requests remote cancellation; terminal state comes from provider evidence. |
 | Load | Replaces history from the native journal and observes an unfinished turn; no `session/resume`. |
 | Commands | Translates exposed command events to ACP tool activity. |
