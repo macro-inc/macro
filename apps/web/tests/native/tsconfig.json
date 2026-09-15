@@ -1,4 +1,6 @@
 {
+  "extends": "../../tsconfig.json",
+  "exclude": [],
   "compilerOptions": {
     "target": "ESNext",
     "module": "ESNext",
@@ -9,8 +11,8 @@
     "esModuleInterop": true,
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
-    "types": ["bun", "node"],
+    "types": ["bun", "node", "vite/client", "vite-plugin-solid-svg/types-component-solid", "vite-plugin-solid-svg/types", "wicg-file-system-access", "@types/gtag.js", "@types/facebook-pixel"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"]
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts", "../../src/**/*.d.ts"]
 }

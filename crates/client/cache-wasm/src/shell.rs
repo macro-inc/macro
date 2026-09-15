@@ -24,10 +24,11 @@ use cache_turso::{
 use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
 use soup_filter_cache_adapter::{
-    SoupFilterCompileOutcome, authoritative_projection_mutations, compile_filter_request,
-    dirty_projection_mutations, mail::ProjectionError as MailProjectionError,
-    notification_deletion_updates, notification_projection_updates,
-    optimistic_notification_updates, optimistic_projection_mutations,
+    SoupFilterCompileOutcome, authoritative_projection_mutations,
+    compile_current_filter_request as compile_filter_request, dirty_projection_mutations,
+    mail::ProjectionError as MailProjectionError, notification_deletion_updates,
+    notification_projection_updates, optimistic_notification_updates,
+    optimistic_projection_mutations,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -1022,7 +1023,7 @@ impl CacheEngine {
                 serde_wasm_bindgen::from_value(request).map_err(err_js)?;
             if let Some(mail) = request.mail {
                 let generation = state.mail_generation.clone();
-                let result = soup_filter_cache_adapter::mail::page(
+                let result = soup_filter_cache_adapter::mail::page_current(
                     state.engine_mut()?,
                     &generation,
                     request.filters,
@@ -1181,6 +1182,17 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                reuse_stored_identity,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .write_query_with_registration_and_projections(
@@ -1254,6 +1266,17 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                reuse_stored_identity,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .hydrate_query_with_projections(
@@ -1339,6 +1362,16 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             ));
+            let projection_mutations = soup_filter_cache_adapter::properties::augment_optimistic(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                projection_mutations,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let claim = MutationClaimRequest {
                 owner: lease_owner,
                 now_ms: parse_timestamp(now_ms, "claim timestamp")?,
@@ -1557,6 +1590,17 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                true,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write_with_projections_outcome(
@@ -1645,6 +1689,15 @@ impl CacheEngine {
             );
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
+            projections.extend(
+                soup_filter_cache_adapter::properties::deletion_updates(
+                    state.engine_mut()?.storage(),
+                    &keys.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::current_mutations(projections);
             let result = state
                 .engine_mut()?
                 .invalidate_keys_with_projections(&keys, projections)
@@ -1677,6 +1730,15 @@ impl CacheEngine {
             );
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
+            projections.extend(
+                soup_filter_cache_adapter::properties::deletion_updates(
+                    state.engine_mut()?.storage(),
+                    &keys.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::current_mutations(projections);
             let result = state
                 .engine_mut()?
                 .delete_keys_with_projection_changes(&keys, projections)

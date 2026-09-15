@@ -1,10 +1,12 @@
 import { afterEach, expect, test } from 'bun:test';
 import { type DocumentNode, type ExecutionResult, print, visit } from 'graphql';
 import {
+  SoupBackfillDocument,
   SoupDocument,
   type SoupInput,
   SoupMailBackfillDocument,
   type SoupQuery,
+  SoupSharedMailBackfillDocument,
 } from '../../../src/lib/service-clients/service-storage/graphql/generated/graphql';
 import { fixtureId } from './mail';
 import { startFixtureServer } from './server';
@@ -210,6 +212,44 @@ for (const [name, input] of invalidSignalInputs) {
     expect(result.data?.user?.soup?.items ?? []).toEqual([]);
   });
 }
+
+test('matrix fixtures validate against the production backfill selections', async () => {
+  server = startFixtureServer(0, true);
+  for (const [document, operationName, input, count] of [
+    [
+      SoupBackfillDocument,
+      'SoupBackfill',
+      {
+        initial: {
+          limit: 100,
+          emailView: 'ALL',
+          filters: {
+            emailFilter: { tree: { literal: { threadId: fixtureId(0) } } },
+          },
+        },
+      },
+      65,
+    ],
+    [
+      SoupSharedMailBackfillDocument,
+      'SoupSharedMailBackfill',
+      { initial: { limit: 100, emailView: 'ALL' } },
+      3,
+    ],
+  ] as const) {
+    const response = await fetch(`${server.origin}/dss/items/soup/graphql`, {
+      method: 'POST',
+      body: JSON.stringify({
+        query: transportQuery(document),
+        operationName,
+        variables: { input },
+      }),
+    });
+    const result = await response.json();
+    expect(result.errors).toBeUndefined();
+    expect(result.data.user.soup.items).toHaveLength(count);
+  }
+});
 
 test('unknown endpoints fail closed; disconnect removes the TCP listener', async () => {
   server = startFixtureServer();
