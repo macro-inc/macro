@@ -17,7 +17,7 @@ CREATE TABLE agent_session_changes (
     -- Identity of the capture the summary columns describe (UUIDv7, minted
     -- in application code).
     changeset_id UUID,
-    source TEXT CHECK (source IN ('cursor_github_compare', 'macrod_git', 'sandbox_git')),
+    source TEXT CHECK (source IN ('cursor_github_compare', 'macrod_git')),
     -- `https://github.com/owner/name` when the extractor knows it.
     repository TEXT,
     base_ref TEXT,

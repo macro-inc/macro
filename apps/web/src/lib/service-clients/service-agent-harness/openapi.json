@@ -2077,7 +2077,7 @@
       "ChangesetSourceDto": {
         "type": "string",
         "description": "Which harness family the changeset came from, on the wire.",
-        "enum": ["cursor_github_compare", "macrod_git", "sandbox_git"]
+        "enum": ["cursor_github_compare", "macrod_git"]
       },
       "ControlRequest": {
         "allOf": [

@@ -151,8 +151,6 @@ pub enum ChangesetSourceDto {
     CursorGithubCompare,
     /// A self-hosted `macrod` daemon's working tree.
     MacrodGit,
-    /// A managed sandbox's working tree.
-    SandboxGit,
 }
 
 impl From<ChangesetSource> for ChangesetSourceDto {
@@ -160,7 +158,6 @@ impl From<ChangesetSource> for ChangesetSourceDto {
         match source {
             ChangesetSource::CursorGithubCompare => Self::CursorGithubCompare,
             ChangesetSource::MacrodGit => Self::MacrodGit,
-            ChangesetSource::SandboxGit => Self::SandboxGit,
         }
     }
 }

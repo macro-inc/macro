@@ -136,8 +136,6 @@ pub enum ChangesetSource {
     CursorGithubCompare,
     /// A self-hosted `macrod` daemon's working tree, diffed by git.
     MacrodGit,
-    /// A managed sandbox, diffed inside the container.
-    SandboxGit,
 }
 
 /// What an extractor hands back: the raw patch plus the range it covers. The

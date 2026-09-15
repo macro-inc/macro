@@ -3,8 +3,8 @@
 //! changeset.
 //!
 //! An agent works somewhere this service cannot see - a Cursor cloud VM, a
-//! sandbox, a daemon on someone's laptop - and the transcript only shows the
-//! edits its tools reported. This crate owns the other view: the whole diff
+//! daemon on someone's machine - and the transcript only shows the edits its
+//! tools reported. This crate owns the other view: the whole diff
 //! between the branch the session started from and what it has now, captured
 //! after each turn, stored as a patch blob, and served to the Changes pane.
 //!

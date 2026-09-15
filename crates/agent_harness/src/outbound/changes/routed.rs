@@ -12,9 +12,10 @@ mod test;
 
 /// Dispatches each session to the extractor its harness family answers to.
 ///
-/// Managed sandboxes and the in-process agent have no extractor yet, so
-/// their sessions are [`ExtractError::Unsupported`] - the pane says changes
-/// are not available for that harness rather than showing nothing.
+/// Only Cursor cloud agents and self-hosted daemons report their changes.
+/// Managed sandboxes, other cloud providers, and the in-process agent answer
+/// [`ExtractError::Unsupported`], so the pane says changes are not available
+/// for that harness rather than showing nothing.
 pub struct RoutedChangesetExtractor<Cursor, Macrod> {
     cursor: Cursor,
     macrod: Macrod,
@@ -36,7 +37,10 @@ where
         match AgentKind::for_session(session.bot_id, &session.harness) {
             AgentKind::Cursor => self.cursor.extract(session).await,
             AgentKind::External => self.macrod.extract(session).await,
-            AgentKind::SandboxedCoder | AgentKind::InMemory => Err(ExtractError::Unsupported {
+            AgentKind::SandboxedCoder
+            | AgentKind::CodexCloud
+            | AgentKind::ClaudeCloud
+            | AgentKind::InMemory => Err(ExtractError::Unsupported {
                 harness: session.harness.clone(),
             }),
         }

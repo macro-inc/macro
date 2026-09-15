@@ -15,5 +15,4 @@ export type ChangesetSourceDto =
 export const ChangesetSourceDto = {
   cursor_github_compare: 'cursor_github_compare',
   macrod_git: 'macrod_git',
-  sandbox_git: 'sandbox_git',
 } as const;

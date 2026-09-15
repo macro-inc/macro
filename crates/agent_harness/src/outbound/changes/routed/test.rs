@@ -54,3 +54,15 @@ async fn managed_sandboxes_and_the_in_process_agent_are_unsupported() {
         Err(ExtractError::Unsupported { .. })
     ));
 }
+
+#[tokio::test]
+async fn cloud_providers_without_changes_extractors_are_unsupported() {
+    for harness in ["codex-cloud", "claude-cloud"] {
+        let mut session = test_agent_session(AgentSessionId::TEST_A);
+        session.harness = harness.to_owned();
+        assert!(matches!(
+            router().extract(&session).await,
+            Err(ExtractError::Unsupported { harness: actual }) if actual == harness
+        ));
+    }
+}
