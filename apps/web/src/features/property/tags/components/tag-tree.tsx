@@ -1,10 +1,10 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import CaretUpIcon from '@phosphor/caret-up.svg';
-import FolderIcon from '@phosphor/folder.svg';
+import CaretRightIcon from '@phosphor/caret-right.svg';
 import { Button, cn } from '@ui';
 import { For, Show } from 'solid-js';
 import type { TagTreeNode } from '../core/tag-tree';
 import { TagDot } from '../TagDot';
+import { BranchTagIcon } from './branch-tag-icon';
 
 export function TagTree(props: {
   nodes: TagTreeNode[];
@@ -40,10 +40,10 @@ export function TagTree(props: {
                     aria-expanded={open()}
                     onClick={() => props.onToggle(node)}
                   >
-                    <CaretUpIcon
+                    <CaretRightIcon
                       class={cn(
                         'size-3 transition-transform',
-                        open() && 'rotate-180'
+                        open() && 'rotate-90'
                       )}
                     />
                   </Button>
@@ -67,10 +67,10 @@ export function TagTree(props: {
                     class="flex size-4 shrink-0 items-center justify-center"
                   >
                     <Show
-                      when={node.tag}
-                      fallback={<FolderIcon class="size-4" />}
+                      when={node.children.length > 0}
+                      fallback={<TagDot color={node.tag?.color} />}
                     >
-                      {(tag) => <TagDot color={tag().color} />}
+                      <BranchTagIcon node={node} />
                     </Show>
                   </span>
                   <span class="truncate">{node.name}</span>

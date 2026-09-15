@@ -50,7 +50,9 @@ message.
 
 ### Nested sidebar tags
 
-Tag names containing `/` render as nested branches (for example, `Work/Urgent`).
+Tag names containing `/` render with one child level (for example, `Work/Urgent`).
+Deeper paths remain in the child label: `Work/Customers/Acme` appears as
+`Customers/Acme` under `Work`, alongside any actual `Customers` tag.
 Use the caret to expand or collapse a branch. A folder-only parent expands without
 filtering; clicking an actual tag selects only that tag, including when it has
 children. Personal and team paths stay separate. Ancestors of restored selected

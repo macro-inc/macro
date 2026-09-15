@@ -6,10 +6,10 @@ import type { TreeTag } from './core/tag-tree';
 /** A tag as list surfaces show it: the option plus its owning set. */
 export type TagOptionSummary = TreeTag;
 
-const SCOPE_ORDER: Record<TagScope, number> = { user: 0, team: 1 };
+const SCOPE_ORDER: Record<TagScope, number> = { team: 0, user: 1 };
 
 /**
- * Flattens tag sets into display order: the personal set before the team
+ * Flattens tag sets into display order: the team set before the personal
  * set, each in the order the user arranged it in Settings.
  */
 export function listTagOptions(

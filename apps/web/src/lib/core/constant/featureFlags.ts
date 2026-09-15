@@ -107,12 +107,14 @@ export function isFeatureEnabled(flag: Flag): boolean {
 
 /**
  * Switches Inbox, Tasks, and Channels from the current SoupView implementations
- * to the new composable view implementations. Override locally with
+ * to the new composable view implementations. Enabled by default on this branch.
+ * Override with
  * VITE_ENABLE_NEW_APP_VIEWS.
  */
 export const enableNewAppViews = defineFlag({
   key: 'enable-new-app-views',
   env: 'ENABLE_NEW_APP_VIEWS',
+  default: true,
 });
 
 /**
@@ -402,15 +404,15 @@ export const enableEmailSignatures = defineFlag({
 
 // SidebarNext: the rebuilt app sidebar — the narrow icon rail in
 // `components/app/sidebar-next` — rendered in place of `AppSidebar`.
-// PostHog-gated everywhere, dev included: no dev-mode default, so `AppSidebar`
-// stays the sidebar you get by default until the flag is on for you. Set
-// VITE_ENABLE_SIDEBAR_NEXT=true to force the rail on locally without PostHog.
+// Enabled by default on this branch, including local development without PostHog.
+// Set VITE_ENABLE_SIDEBAR_NEXT=false to restore AppSidebar.
 //
 // The PostHog key is deliberately broader than the local names: `enable-new-app-views`
 // is the rollout switch for the rebuilt app surfaces, of which this sidebar is one.
 export const enableSidebarNext = defineFlag({
   key: 'enable-new-app-views',
   env: 'ENABLE_SIDEBAR_NEXT',
+  default: true,
 });
 
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the

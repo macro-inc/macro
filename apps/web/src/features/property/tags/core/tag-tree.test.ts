@@ -14,7 +14,7 @@ const tag = (
 });
 
 describe('buildTagTree', () => {
-  it('creates missing ancestors and attaches actual parent tags without changing ids', () => {
+  it('keeps deeper paths in child labels and attaches actual parent tags', () => {
     const child = tag('acme', 'Work/Customers/Acme');
     const parent = tag('work', 'Work');
     const tree = buildTagTree([
@@ -24,13 +24,28 @@ describe('buildTagTree', () => {
     ]);
     expect(tree).toHaveLength(1);
     expect(tree[0].tag).toBe(parent);
-    expect(tree[0].children[0].name).toBe('Customers');
-    expect(tree[0].children[0].tag).toBeUndefined();
-    expect(tree[0].children[0].children.map((node) => node.name)).toEqual([
-      'Acme',
-      'Beta',
+    expect(tree[0].children.map((node) => node.name)).toEqual([
+      'Customers/Acme',
+      'Customers/Beta',
     ]);
-    expect(tree[0].children[0].children[0].tag).toBe(child);
+    expect(tree[0].children[0].tag).toBe(child);
+    expect(tree[0].children.every((node) => node.children.length === 0)).toBe(
+      true
+    );
+  });
+
+  it('keeps a child and its deeper tags independently selectable at the same level', () => {
+    const tree = buildTagTree([
+      tag('soupio', 'feature/soupio'),
+      tag('dink', 'feature/soupio/dink'),
+    ]);
+    expect(tree[0].children.map((node) => [node.name, node.tag?.id])).toEqual([
+      ['soupio', 'soupio'],
+      ['soupio/dink', 'dink'],
+    ]);
+    expect(tree[0].children.every((node) => node.children.length === 0)).toBe(
+      true
+    );
   });
 
   it('keeps scopes separate and preserves first appearance order', () => {
