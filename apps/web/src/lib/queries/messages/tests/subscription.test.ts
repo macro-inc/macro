@@ -43,7 +43,11 @@ vi.mock('@tanstack/solid-query', () => ({
   useQuery: (options: () => unknown) => options(),
 }));
 vi.mock('../../client', () => ({
-  queryClient: { invalidateQueries: mocks.invalidate },
+  queryClient: {
+    invalidateQueries: mocks.invalidate,
+    getQueryState: () => undefined,
+    getQueriesData: () => [],
+  },
 }));
 
 const parent: MessageParent = { type: 'document', id: 'source-document' };

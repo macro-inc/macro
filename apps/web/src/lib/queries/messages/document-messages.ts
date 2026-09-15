@@ -101,5 +101,7 @@ export function useMessageLink(
     },
     rootId: () =>
       legacy.isSuccess ? (legacy.data.thread_id ?? legacy.data.id) : null,
+    /** True once the link is known to be a root, a reply, or nothing loadable. */
+    resolved: () => !target() || legacy.isSuccess || legacy.isError,
   };
 }

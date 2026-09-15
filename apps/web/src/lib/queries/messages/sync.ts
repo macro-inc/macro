@@ -5,6 +5,7 @@ import type {
   MessageParent,
   MessageThread,
 } from '@service-storage/messages';
+import { entityMessagesClient } from '@service-storage/messages';
 import { queryClient } from '../client';
 import { consumeNonce } from '../nonce';
 import { MessageNonceKeys, messageKeys } from './keys';
@@ -130,8 +131,25 @@ export function handleMessageEvent(
   )
     return;
   applyMessage(change.message, change.type);
-  // A newly posted root also carries anchor/resolution metadata in its timeline projection.
-  if (change.type === 'posted' && !change.message.thread_id) {
+  if (
+    change.type === 'posted' &&
+    !change.message.thread_id &&
+    parent.type === 'document'
+  ) {
+    void loadDocumentRootState(parent, change.message.id);
+  }
+}
+
+/** A live document root arrives without its anchor; its thread state carries it. */
+async function loadDocumentRootState(parent: MessageParent, rootId: string) {
+  try {
+    const thread = await entityMessagesClient.thread(parent, rootId);
+    queryClient.setQueryData<MessageThread>(
+      getThreadRepliesQueryKey(parent, rootId),
+      thread
+    );
+    applyThreadState(parent, thread.state);
+  } catch {
     void queryClient.invalidateQueries({
       queryKey: getMessageTimelineQueryKeyPrefix(parent),
     });

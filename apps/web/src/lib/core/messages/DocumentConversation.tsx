@@ -24,7 +24,12 @@ export function DocumentConversation(props: {
     () => props.parent,
     () => props.targetId
   );
-  const query = useMessageTimelineQuery(() => props.parent, target.messageId);
+  // A copied link may name a reply or an anchored root; the window is a root window.
+  const query = useMessageTimelineQuery(
+    () => props.parent,
+    target.rootId,
+    target.resolved
+  );
   const send = useSendMessageMutation();
   const userId = useUserId();
   const bots = useMessageBotMentionUsers(() => props.parent);

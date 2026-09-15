@@ -18,6 +18,11 @@ vi.mock('../../client', () => ({
     return testQueryClient;
   },
 }));
+const mocks = vi.hoisted(() => ({ thread: vi.fn() }));
+vi.mock('@service-storage/messages', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  entityMessagesClient: { thread: mocks.thread },
+}));
 
 import { registerNonce } from '../../nonce';
 import { MessageNonceKeys, messageKeys } from '../keys';
@@ -326,6 +331,58 @@ describe.each(['channel', 'document'] as const)(
           .pages[0].items.map((root) => root.id)
       ).toEqual(['root']);
     });
+    it(
+      type === 'document'
+        ? "loads a live root's thread state instead of refetching the timeline"
+        : 'applies a live root without a metadata refetch',
+      async () => {
+        seed();
+        mocks.thread.mockReset();
+        const rootState = {
+          ...state,
+          root_id: 'newer-root',
+          anchor: { type: 'markdown', mark_id: 'mark' } as const,
+        };
+        mocks.thread.mockResolvedValue({
+          root: message(parent, 'newer-root'),
+          state: rootState,
+          replies: [],
+        });
+        const invalidate = vi.spyOn(testQueryClient, 'invalidateQueries');
+        handleMessageEvent({
+          parent,
+          actor: 'macro|b@example.com',
+          nonce: null,
+          change: {
+            type: 'posted',
+            message: message(parent, 'newer-root'),
+            mentions: [],
+            notification_policy: 'Default',
+          },
+        });
+        const newestRoot = () =>
+          testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+            .pages[0].items[0];
+        if (type === 'document') {
+          expect(mocks.thread).toHaveBeenCalledWith(parent, 'newer-root');
+          await vi.waitFor(() =>
+            expect(newestRoot().state.anchor).toEqual(rootState.anchor)
+          );
+          expect(
+            testQueryClient.getQueryData<MessageThread>(
+              getThreadRepliesQueryKey(parent, 'newer-root')
+            )?.state
+          ).toEqual(rootState);
+        } else {
+          expect(mocks.thread).not.toHaveBeenCalled();
+          expect(newestRoot().id).toBe('newer-root');
+        }
+        // Only the soft invalidation that leaves mounted timelines alone may run.
+        for (const [filters] of invalidate.mock.calls) {
+          expect(filters?.refetchType).toBe('inactive');
+        }
+      }
+    );
     it('skips the sender nonce and scopes ephemeral typing to the parent and root', () => {
       seed();
       registerNonce(MessageNonceKeys.MESSAGE, 'own-send');
