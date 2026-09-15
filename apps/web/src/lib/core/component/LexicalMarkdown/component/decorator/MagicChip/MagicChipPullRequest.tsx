@@ -11,9 +11,8 @@ import { type Component, createMemo, Show } from 'solid-js';
 /**
  * The pull request a session opened, in the chip's header: our GitHub PR
  * entity once the webhook has synced it, a plain link to GitHub until then.
- * Cursor reports the url the moment the PR exists, which is usually a few
- * seconds before the entity does; connection gateway supplies the saved entity
- * and subsequent status changes.
+ * Cloud runtimes can report the URL before the GitHub webhook entity exists.
+ * Connection gateway supplies the saved entity and subsequent status changes.
  */
 export const MagicChipPullRequest: Component<{ url: string }> = (props) => {
   const reference = createMemo(() => parseGithubPrUrl(props.url));

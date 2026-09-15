@@ -42,7 +42,7 @@ impl AsyncTool<SessionToolContext> for SetPullRequest {
     ) -> ToolResult<String> {
         context
             .service
-            .set_pull_request(context.session, &request.user_id, &self.url)
+            .set_pull_request(context.session, &request.user_id, &self.url, None)
             .await
             .map_err(|error| ToolCallError {
                 description: error.to_string(),

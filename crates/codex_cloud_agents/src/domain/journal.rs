@@ -26,6 +26,13 @@ pub enum JournalInput {
         /// Exact provider response, including unknown fields.
         native: Option<String>,
     },
+    /// Changed task metadata captured without adding conversation output.
+    Metadata {
+        /// Provider projection, used only when native data is absent in a fixture.
+        snapshot: TaskSnapshot,
+        /// Exact provider response preserved before metadata publication.
+        native: Option<String>,
+    },
     /// Stream failure or EOF, retained without inventing a terminal outcome.
     TransportError(String),
     /// An attachment began observing an already accepted turn.
@@ -57,8 +64,29 @@ pub struct ReplayMachine {
     seen: HashSet<String>,
     events: Vec<CloudEvent>,
     poll: Option<TaskSnapshot>,
+    accepted: Vec<(String, String)>,
+    pull_requests: std::collections::HashMap<String, Vec<super::cloud::ExternalPullRequest>>,
 }
 impl ReplayMachine {
+    pub(crate) fn accepted(&self, task: &str) -> Vec<String> {
+        self.accepted
+            .iter()
+            .filter(|(id, _)| id == task)
+            .map(|(_, turn)| turn.clone())
+            .collect()
+    }
+    pub(crate) fn pull_requests(&self, task: &str) -> Vec<super::cloud::ExternalPullRequest> {
+        self.pull_requests.get(task).cloned().unwrap_or_default()
+    }
+    fn remember_metadata(&mut self, snapshot: &TaskSnapshot) {
+        let entries = self
+            .pull_requests
+            .entry(snapshot.task_id.as_str().into())
+            .or_default();
+        // Reverse each observation so a reverse search sees its first valid
+        // provider entry, before any older observation of the same turn.
+        entries.extend(snapshot.pull_requests.iter().rev().cloned());
+    }
     /// Last successfully consumed journal sequence.
     pub fn sequence(&self) -> i64 {
         self.sequence
@@ -164,6 +192,19 @@ impl ReplayMachine {
         self.sequence = entry.sequence;
         let mut output = Vec::new();
         match &entry.input {
+            JournalInput::PromptAccepted {
+                task,
+                turn: Some(turn),
+            } => {
+                self.accepted.push((task.clone(), turn.clone()));
+            }
+            JournalInput::Metadata { snapshot, native } => {
+                let snapshot = match native {
+                    Some(native) => TaskSnapshot::from_native(&snapshot.task_id, native)?,
+                    None => snapshot.clone(),
+                };
+                self.remember_metadata(&snapshot);
+            }
             JournalInput::Prompt(blocks) => {
                 output.extend(self.finish());
                 self.pending_terminal = None;
@@ -212,6 +253,7 @@ impl ReplayMachine {
                     Some(native) => TaskSnapshot::from_native(&snapshot.task_id, native)?,
                     None => snapshot.clone(),
                 };
+                self.remember_metadata(&snapshot);
                 // A preflight task read can discover a web-side continuation. Retain
                 // that fact without attributing its output to our pinned assistant turn.
                 if let Some(expected) = &entry.turn

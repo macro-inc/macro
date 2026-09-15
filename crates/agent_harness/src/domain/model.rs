@@ -197,6 +197,8 @@ pub struct DeliverAction {
 pub enum HarnessCommand {
     /// Open a new session.
     Open(OpenSession),
+    /// Observe an existing Codex session without submitting remote work.
+    Observe,
     /// Act on a session that already exists.
     Deliver(DeliverAction),
     /// Replace a queued prompt's text before it dispatches.

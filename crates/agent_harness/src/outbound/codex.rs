@@ -27,6 +27,7 @@ pub struct CodexContainerManager<P, S, J> {
     connections: Option<Arc<dyn ConnectionService>>,
     sessions: S,
     decision: Arc<dyn RepositoryDecision>,
+    pull_requests: Option<Arc<dyn agent_session::domain::pull_request::SessionPullRequests>>,
     journal: Arc<dyn Fn(AgentSessionId) -> (J, AttachmentActivation) + Send + Sync>,
 }
 impl<P, S: Clone, J> Clone for CodexContainerManager<P, S, J> {
@@ -36,6 +37,7 @@ impl<P, S: Clone, J> Clone for CodexContainerManager<P, S, J> {
             connections: self.connections.clone(),
             sessions: self.sessions.clone(),
             decision: self.decision.clone(),
+            pull_requests: self.pull_requests.clone(),
             journal: self.journal.clone(),
         }
     }
@@ -59,8 +61,17 @@ impl<
             connections,
             sessions,
             decision,
+            pull_requests: None,
             journal,
         }
+    }
+    /// Publish verified Codex PRs through the same session operation as other runtimes.
+    pub fn with_pull_requests(
+        mut self,
+        service: Arc<dyn agent_session::domain::pull_request::SessionPullRequests>,
+    ) -> Self {
+        self.pull_requests = Some(service);
+        self
     }
     async fn attach(&self, id: AgentSessionId) -> Result<RuntimeAttachment<PipeTransport>> {
         let row = AgentSessionRepo::get(&self.sessions, id).await?;
@@ -73,6 +84,7 @@ impl<
             .resolve(row.owner_id.as_ref())
             .await
             .map_err(|e| HarnessError::Container(e.to_string()))?;
+        let claim = Arc::new(std::sync::OnceLock::new());
         let runtime = Arc::new(CodexRuntime {
             provider: self.provider.clone(),
             connections,
@@ -85,8 +97,19 @@ impl<
             sessions: self.sessions.clone(),
             history: self.sessions.clone(),
             decision: self.decision.clone(),
+            pull_requests: self.pull_requests.clone(),
+            claim: claim.clone(),
         });
         let (journal, activate) = (self.journal)(id);
+        let activate: AttachmentActivation = Box::new(move |ownership| {
+            activate(ownership)?;
+            claim.set(ownership).map_err(|_| {
+                agent_runtime_protocol::domain::ports::TransportError::Client(
+                    "Codex attachment already activated".into(),
+                )
+                .into()
+            })
+        });
         let service = Arc::new(
             SessionService::new(runtime, journal, None).with_session_id(id.as_uuid().to_string()),
         );

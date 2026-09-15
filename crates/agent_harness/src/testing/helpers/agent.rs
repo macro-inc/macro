@@ -121,6 +121,16 @@ impl FakeAgent {
         self.sends_reply(id, response);
     }
 
+    /// Answer the `session/load` this agent received.
+    pub fn loads_session(&self, response: agent_client_protocol::schema::v1::LoadSessionResponse) {
+        let id = self
+            .lock_progress()
+            .opening
+            .clone()
+            .expect("the harness has not sent session/load");
+        self.sends_reply(id, response);
+    }
+
     /// Wait for and complete the next `session/prompt` request.
     pub async fn completes_prompt(&self) {
         let mut received = self.received.subscribe();

@@ -2,6 +2,7 @@
 use super::cloud::{CloudEvent, CloudId, Launch, NativeRecord, TurnId};
 use super::journal::{JournalEntry, JournalInput, ReplayMachine};
 use super::runtime::{CloudRuntime, CloudTarget};
+mod metadata;
 use futures::StreamExt as _;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -89,6 +90,8 @@ struct Session {
     cancel: AtomicBool,
     reload_pending: AtomicBool,
     changed: tokio::sync::Notify,
+    metadata_lock: Mutex<()>,
+    published_pr: Mutex<Option<String>>,
 }
 /// Exclusive recovery reservation retained across the ACP load response.
 pub struct Recovery {
@@ -115,6 +118,7 @@ pub struct SessionService<R, J> {
     journal: J,
     explicit_target: Option<CloudTarget>,
     sessions: Mutex<HashMap<String, Arc<Session>>>,
+    metadata_changed: tokio::sync::Notify,
 }
 impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
     /// Compose cloud and persistence ports with an explicit remote target.
@@ -125,6 +129,7 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
             journal,
             explicit_target,
             sessions: Mutex::new(HashMap::new()),
+            metadata_changed: tokio::sync::Notify::new(),
         }
     }
     /// Pin ACP identity to the host session so a lost new-session response cannot orphan a launch.
@@ -140,6 +145,7 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
             .unwrap_or_else(|| uuid::Uuid::now_v7().to_string());
         if self.journal.load(&id).await?.is_some() {
             self.session(&id).await?;
+            self.metadata_changed.notify_one();
             return Ok(id);
         }
         let auth = self.probe.identity().await?;
@@ -157,6 +163,7 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
             .append(&id, 0, None, &JournalInput::HistoryComplete)
             .await?;
         self.session(&id).await?;
+        self.metadata_changed.notify_one();
         Ok(id)
     }
     async fn session(&self, id: &str) -> Result<Arc<Session>, rootcause::Report> {
@@ -207,6 +214,8 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
             cancel: AtomicBool::new(false),
             reload_pending: AtomicBool::new(false),
             changed: tokio::sync::Notify::new(),
+            metadata_lock: Mutex::new(()),
+            published_pr: Mutex::new(None),
         });
         sessions.insert(id.to_owned(), session.clone());
         Ok(session)
@@ -262,6 +271,10 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
             .append(id, machine.sequence(), turn.as_ref(), &input)
             .await?;
         let events = machine.push(&entry)?;
+        if matches!(&input, JournalInput::Poll {snapshot,..} if !snapshot.pull_requests.is_empty())
+        {
+            self.metadata_changed.notify_one();
+        }
         for event in &events {
             sink.emit(event)?;
         }
@@ -565,6 +578,7 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
     ) -> Result<Recovery, rootcause::Report> {
         let recovery = self.reserve_recovery(id).await?;
         self.replay_entries(id, sink).await?;
+        self.metadata_changed.notify_one();
         recovery
             .session
             .reload_pending

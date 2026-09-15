@@ -110,6 +110,7 @@ impl Runtime {
     }
     fn state(&self) -> Result<TaskSnapshot> {
         Ok(TaskSnapshot {
+            pull_requests: vec![],
             task_id: CloudId::new("task-fold".into())?,
             title: None,
             native: None,
@@ -139,6 +140,9 @@ impl Runtime {
     }
 }
 impl CloudRuntime for Runtime {
+    async fn report_pull_request(&self, _: &str) -> Result<()> {
+        Ok(())
+    }
     async fn identity(&self) -> Result<RuntimeIdentity> {
         Ok(RuntimeIdentity {
             connection_id: "connection-fold".into(),

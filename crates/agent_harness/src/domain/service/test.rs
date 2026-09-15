@@ -2950,3 +2950,5 @@ async fn codex_channel_mention_opens_without_egress_or_mcp() {
         [false]
     );
 }
+
+mod observation;

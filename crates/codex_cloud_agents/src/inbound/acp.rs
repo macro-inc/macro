@@ -241,7 +241,8 @@ where
     R: tokio::io::AsyncRead + Send + 'static,
     W: tokio::io::AsyncWrite + Send + 'static,
 {
-    Agent
+    let metadata_service = service.clone();
+    let connection = Agent
         .builder()
         .name("codex-cloud-acp")
         .on_receive_request(
@@ -356,8 +357,28 @@ where
             },
             on_receive_notification!(),
         )
-        .connect_to(ByteStreams::new(writer.compat_write(), reader.compat()))
-        .await
+        .connect_to(ByteStreams::new(writer.compat_write(), reader.compat()));
+    let refresh = async move {
+        let base = std::time::Duration::from_secs(20);
+        let mut delay = base;
+        loop {
+            tokio::select! {
+                _=tokio::time::sleep(delay)=>{},
+                _=metadata_service.metadata_changed()=>{delay=base;}
+            }
+            match metadata_service.refresh_metadata().await {
+                Ok(()) => delay = base,
+                Err(error) => {
+                    eprintln!("codex_acp: metadata refresh unavailable: {error}");
+                    delay = delay
+                        .saturating_mul(2)
+                        .min(std::time::Duration::from_secs(300));
+                }
+            }
+        }
+    };
+    tokio::pin!(connection);
+    tokio::select! {result=&mut connection=>result, _=refresh=>connection.await}
 }
 #[cfg(test)]
 mod test;

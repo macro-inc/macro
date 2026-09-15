@@ -151,6 +151,7 @@ impl CloudTasks for Provider {
         Ok(TaskSnapshot {
             task_id: task.clone(),
             native: None,
+            pull_requests: vec![],
             title: None,
             assistant_status: Some("completed".into()),
             turns: Vec::<TurnSnapshot>::new(),
@@ -222,6 +223,8 @@ fn runtime(
         sessions: Sessions::default(),
         history: agent_session::testing::InMemoryAgentSessionRepo::default(),
         decision: Arc::new(NoDecision),
+        pull_requests: None,
+        claim: Arc::new(std::sync::OnceLock::new()),
     }
 }
 fn launch() -> Launch {
@@ -275,3 +278,73 @@ async fn launch_rechecks_environment_visibility() {
 }
 
 mod selection;
+
+#[derive(Default)]
+struct PullRequests(
+    Mutex<
+        Vec<(
+            AgentSessionId,
+            String,
+            String,
+            agent_session::domain::model::SessionClaim,
+        )>,
+    >,
+);
+impl agent_session::domain::pull_request::SessionPullRequests for PullRequests {
+    fn set_pull_request<'a>(
+        &'a self,
+        session: AgentSessionId,
+        owner: &'a MacroUserIdStr<'static>,
+        url: &'a str,
+        claim: Option<agent_session::domain::model::SessionClaim>,
+    ) -> std::pin::Pin<
+        Box<dyn Future<Output = agent_session::domain::error::Result<String>> + Send + 'a>,
+    > {
+        Box::pin(async move {
+            self.0.lock().unwrap().push((
+                session,
+                owner.to_string(),
+                url.to_owned(),
+                claim.expect("Codex publication requires the activated fence"),
+            ));
+            Ok(url.into())
+        })
+    }
+}
+#[tokio::test]
+async fn pr_publication_passes_the_activated_claim_and_rejects_disconnected_owner() {
+    use agent_session::domain::model::{ManagerFence, ReplicaId, SessionClaim};
+    let connections = Arc::new(Connections::default());
+    let mut runtime = runtime(
+        "macro|pr@example.com",
+        connections.clone(),
+        Arc::new(Provider::default()),
+    );
+    let reporter = Arc::new(PullRequests::default());
+    runtime.pull_requests = Some(reporter.clone());
+    let url = "https://github.com/org/repo/pull/42";
+    assert!(runtime.report_pull_request(url).await.is_err());
+    assert!(reporter.0.lock().unwrap().is_empty());
+    let claim = SessionClaim {
+        session: runtime.session,
+        replica: ReplicaId::from_uuid(uuid::Uuid::from_u128(2)),
+        fence: ManagerFence(7),
+    };
+    runtime.claim.set(claim).unwrap();
+    runtime.report_pull_request(url).await.unwrap();
+    {
+        let calls = reporter.0.lock().unwrap();
+        assert_eq!(calls[0].0, runtime.session);
+        assert_eq!(calls[0].1, runtime.owner.as_ref());
+        assert_eq!(calls[0].2, url);
+        assert_eq!(calls[0].3.session, claim.session);
+        assert_eq!(calls[0].3.replica, claim.replica);
+        assert_eq!(calls[0].3.fence, claim.fence);
+    }
+    connections
+        .disconnect(runtime.owner.as_ref())
+        .await
+        .unwrap();
+    assert!(runtime.report_pull_request(url).await.is_err());
+    assert_eq!(reporter.0.lock().unwrap().len(), 1);
+}

@@ -61,6 +61,10 @@ pub struct CodexRuntime<P, S, H = S> {
     pub history: H,
     /// Shared metered model decision; its candidates are this owner's Codex repositories.
     pub decision: Arc<dyn RepositoryDecision>,
+    /// Shared owner-authorized session PR publication service.
+    pub pull_requests: Option<Arc<dyn agent_session::domain::pull_request::SessionPullRequests>>,
+    /// Immutable ownership claim activated before this attachment can publish metadata.
+    pub claim: Arc<std::sync::OnceLock<agent_session::domain::model::SessionClaim>>,
 }
 impl<P, S, H> CodexRuntime<P, S, H> {
     async fn connection(
@@ -170,6 +174,27 @@ impl<P: OAuth + CloudConversation, S: ExternalSessionRepo, H: AgentSessionRepo> 
                 rootcause::report!("could not record the selected Codex repository: {error}")
             })?;
         Ok(target)
+    }
+    async fn report_pull_request(&self, url: &str) -> Result<(), rootcause::Report> {
+        self.credentials().await?;
+        if let Some(service) = &self.pull_requests {
+            service
+                .set_pull_request(
+                    self.session,
+                    &self.owner,
+                    url,
+                    Some(
+                        *self.claim.get().ok_or_else(|| {
+                            rootcause::report!("Codex attachment is not activated")
+                        })?,
+                    ),
+                )
+                .await
+                .map_err(|error| {
+                    rootcause::report!("could not publish Codex pull request: {error}")
+                })?;
+        }
+        Ok(())
     }
     async fn launch(&self, request: &Launch) -> Result<CreatedTask, rootcause::Report> {
         request.validate()?;

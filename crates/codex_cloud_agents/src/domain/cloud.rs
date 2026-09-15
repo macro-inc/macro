@@ -105,6 +105,17 @@ pub struct TaskSnapshot {
     pub assistant_status: Option<String>,
     /// Selected current turns only, preserving which field each observation came from.
     pub turns: Vec<TurnSnapshot>,
+    /// Verified provider PR associations, independent of proposed diffs or assistant text.
+    pub pull_requests: Vec<ExternalPullRequest>,
+}
+
+/// A real GitHub pull request associated by the provider with an assistant turn.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct ExternalPullRequest {
+    /// Provider turn association; never inferred from the current turn.
+    pub assistant_turn_id: TurnId,
+    /// Canonical credential-free GitHub pull request URL.
+    pub url: String,
 }
 
 impl TaskSnapshot {

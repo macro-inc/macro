@@ -109,7 +109,7 @@ new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
 model supplies only the URL. The tool records the link, not the GitHub PR itself.
-Every harness receives a shared prompt instruction to register PRs. Cursor
+Harnesses with Macro Internal MCP receive a shared instruction to register PRs. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
 automatic creation can finish after the agent stops. Repeated registration is
@@ -119,10 +119,18 @@ chips reload the current link; reconnecting also refreshes it. Multiple chips
 for the same session share its metadata, and loading it leaves the surrounding
 editor visible.
 
-When Cursor opens a pull request, the chip header shows its GitHub link as soon
-as the run reports it, including after restoring a session. The link remains
+When Cursor or Codex reports a pull request, the chip header shows its GitHub
+link. Codex links can arrive after the assistant finishes; a session-update event
+refreshes mounted chips without a new conversation message. Codex checks provider
+PR metadata every 20 seconds while attached. Viewing a disconnected Codex session
+restores observation without starting a task; refresh requires its original
+ChatGPT connection to remain connected. The link remains
 usable while the webhook mapping is loading or absent, then becomes a Macro PR
-entity link once synced.
+entity link once synced. Codex delayed-link discovery, duplicate and changed
+metadata updates, and opening the exact PR URL were verified in Chromium with
+mocked session snapshots and realtime invalidation. This UI check does not prove
+live provider discovery; backend tests separately cover reattachment and delayed
+provider metadata.
 
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's

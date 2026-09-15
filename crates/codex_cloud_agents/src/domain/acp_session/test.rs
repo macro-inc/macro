@@ -113,6 +113,7 @@ impl OAuth for Provider {
 fn snapshot(turn: &str, status: &str) -> TaskSnapshot {
     TaskSnapshot {
         native: None,
+        pull_requests: vec![],
         task_id: CloudId::new("task_test".into()).unwrap(),
         title: None,
         assistant_status: Some(status.into()),
@@ -751,3 +752,5 @@ async fn saved_task_without_target_is_rejected_instead_of_selecting_a_new_one() 
     assert_eq!(provider.creates.load(Ordering::SeqCst), 0);
     assert_eq!(provider.followups.load(Ordering::SeqCst), 0);
 }
+
+mod metadata_test;

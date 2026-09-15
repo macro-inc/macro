@@ -86,6 +86,7 @@ per-user PostgreSQL connection and journal, never those local credentials.
 | Stop | Requests remote cancellation; terminal state comes from provider evidence. |
 | Load | Replaces history from the native journal and observes an unfinished turn; no `session/resume`. |
 | Commands | Translates exposed command events to ACP tool activity. |
+| Pull requests | Publishes verified provider PR associations to the shared session metadata and magic chip. |
 | Elicitation/approval | Unsupported; requests cancellation and reports the limitation. |
 | Models, Macro MCP, sandbox resize | Not advertised for this runtime. |
 
@@ -95,6 +96,43 @@ Cloud execution happens in OpenAI's sandbox. See
 [ACP verification](CODEX_ACP_VERIFICATION.md) for the tested protocol surfaces.
 These endpoints were discovered from client source and verified experimentally;
 they are not a documented third-party Codex cloud API contract.
+
+## Pull request links
+
+The task response's `task.external_pull_requests` associates each GitHub URL with
+an assistant turn. Macro accepts links for turns it submitted and for the pinned
+repository, then uses the same owner-authorized `SessionPullRequests` service as
+Cursor. A `type: "pr"` output contains a proposed title, message and diff; neither
+that output nor assistant text proves that a GitHub PR was created.
+
+Task metadata is checked during observation and every 20 seconds while attached,
+including after a turn finishes. Failures retry with backoff capped at five
+minutes. Changed PR evidence is journaled before the
+session link is published. Metadata records do not add assistant messages to
+live output or replacement history. Duplicate links are idempotent, failed
+publication retries, and an empty response does not clear an existing link.
+The PR write locks and checks the attachment's manager generation in the same
+transaction, so a superseded runtime cannot overwrite its successor's link.
+
+Viewing a detached Codex session restores observation through the existing
+manager claim and `session/load` lifecycle. It does not send a prompt or create
+a cloud task. Sessions already managed locally or by another replica keep their
+attachment. A disconnected or replaced ChatGPT connection prevents refresh;
+saved history and any previously recorded link remain readable.
+
+Publishing sends the existing session-update notification. Mounted magic chips
+reload the link, which opens GitHub directly until webhook sync supplies a Macro
+PR entity. GitHub webhook events then drive the usual PR status display. Macro
+does not create a PR merely to obtain a link.
+
+Source evidence: the cloned Codex models `TaskResponse`,
+`ExternalPullRequestResponse` and `GitPullRequest`, plus desktop bundle
+`26.908.70816`'s `remote-conversation-page` component, which matches the external
+association by assistant turn. The existing test task had a PR proposal but an
+empty external association list. A read-only scan of all seven current tasks in
+the disposable test environment also found no linked PRs. Positive PR discovery
+is covered with provider fixtures; the browser check uses mocked session metadata
+and realtime events.
 
 ## Repository selection
 
@@ -168,18 +206,23 @@ release check. Keep real credentials out of fixtures and snapshots.
 
 - Connection lifecycle: 10 tests, including automatic configuration, PostgreSQL
   concurrency and owner isolation.
-- Cloud/ACP: 56 library, 17 private CLI and 4 stdio tests, including recorded snapshots,
+- Cloud/ACP: 64 library, 17 private CLI and 4 stdio tests, including recorded snapshots,
   restart without relaunch, immediate follow-up after load, and ownership takeover.
   Six served ACP-to-fold tests cover replacement, cancellation, incomplete loads,
   and late historical records remaining in the original turn.
-- Harness: 211 package tests and 32 service tests, including named/channel-triggered
+- Harness: 216 package tests and 32 service tests, including named/channel-triggered
   startup without sandbox provisioning, selection from owner repositories, ambiguous
   selection, manual retry in the same session, target pinning after restart, and
   immediate Stop while the model is still selecting.
+- Session service: 218 tests, including atomic PR publication during ownership
+  takeover, authorized observation, and readable metadata during provider outages.
 - Authentication: 102 existing service tests and 5 Codex HTTP/DTO tests.
 - Frontend: 33 focused automatic-selection tests; mocked Chromium settings,
   composer and account-switch flows passed without JavaScript errors. The settings
   checks covered automatic save, primary-repository default branch and custom branch.
+- PR UI: 33 shared magic-chip tests cover Cursor and Codex. Mocked Chromium checks
+  verified late PR metadata, realtime invalidation, duplicate and changed links,
+  and clicking the exact GitHub URL without JavaScript errors.
 - Local runner: 95 tests. Infrastructure type check, root `just check`, workspace
   SQLx preparation with tests, and Codex crate clippy with warnings denied passed.
 
@@ -187,6 +230,9 @@ The full web TypeScript check still reports two existing scroll-deferral errors
 outside the changed files. Strict harness clippy is blocked by the existing unused
 `channels::domain::reference_sharing::grant_level` function; normal harness clippy
 reports that dependency warning, while the Codex crates pass with warnings denied.
+The PR integration's combined all-target clippy pass also reports an existing
+`sort_by_key` suggestion in an unrelated session PostgreSQL test; changed code
+has no lint findings.
 The default local database had an unrelated missing
 migration in its recorded history; schema and SQLx tests used a separate local
 database migrated from the complete repository history.

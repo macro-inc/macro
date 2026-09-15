@@ -43,6 +43,11 @@ pub trait CloudRuntime: Send + Sync {
         prompt: &str,
         requested: Option<&CloudTarget>,
     ) -> impl Future<Output = Result<CloudTarget, rootcause::Report>> + Send;
+    /// Publish verified provider PR metadata through the host's session service.
+    fn report_pull_request(
+        &self,
+        url: &str,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
     /// Submit one launch, without write retries.
     fn launch(
         &self,
@@ -95,6 +100,9 @@ impl<P: OAuth + CloudConversation, S: CredentialStore + Send + Sync> CloudRuntim
         })?;
         target.validate()?;
         Ok(target)
+    }
+    async fn report_pull_request(&self, _: &str) -> Result<(), rootcause::Report> {
+        Ok(())
     }
     async fn launch(&self, request: &Launch) -> Result<CreatedTask, rootcause::Report> {
         self.launch(request, unix_now()?).await

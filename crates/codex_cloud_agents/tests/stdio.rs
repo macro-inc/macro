@@ -112,6 +112,7 @@ impl Provider {
             "in_progress"
         };
         Ok(TaskSnapshot {
+            pull_requests: vec![],
             native: None,
             task_id: CloudId::new("task-test".into())?,
             title: Some("Test".into()),

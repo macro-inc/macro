@@ -215,10 +215,17 @@ where
         command: HarnessCommand,
     ) -> Result<CommandOutcome> {
         let span = tracing::Span::current();
-        // Open never routes: it is what creates the session row this routing
-        // would read, and a fresh id has no manager to defer to.
-        if matches!(command, HarnessCommand::Open(_)) {
-            span.record("agent.session.management", "open");
+        // Open creates the row, while Observe only attaches an unmanaged Codex
+        // session. Neither forwards to or replaces an existing manager.
+        if matches!(command, HarnessCommand::Open(_) | HarnessCommand::Observe) {
+            span.record(
+                "agent.session.management",
+                if matches!(command, HarnessCommand::Observe) {
+                    "observe"
+                } else {
+                    "open"
+                },
+            );
             span.record("agent.command.forwarded", false);
             return self.execute(session_id, command).await;
         }
@@ -301,6 +308,7 @@ where
                 }
             }
             HarnessCommand::Open(_)
+            | HarnessCommand::Observe
             | HarnessCommand::Turn(_)
             | HarnessCommand::SessionStopped { .. }
             | HarnessCommand::SetSandboxSize(_)
@@ -308,6 +316,10 @@ where
         }
 
         match command {
+            HarnessCommand::Observe => {
+                self.observe(session_id).await?;
+                Ok(CommandOutcome::Completed)
+            }
             HarnessCommand::Open(command) => {
                 self.open(session_id, command).await?;
                 Ok(CommandOutcome::Completed)

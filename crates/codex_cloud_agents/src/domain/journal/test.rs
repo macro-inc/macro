@@ -82,6 +82,7 @@ fn missing_history_and_sequence_gaps_fail_closed() {
 #[test]
 fn completed_poll_fallback_is_emitted_once_across_repeated_recovery() {
     let snapshot = TaskSnapshot {
+        pull_requests: vec![],
         native: None,
         task_id: super::super::cloud::CloudId::new("task-test".into()).unwrap(),
         title: None,
@@ -138,6 +139,7 @@ fn completed_poll_fallback_is_emitted_once_across_repeated_recovery() {
 #[test]
 fn native_answer_recovered_after_snapshot_terminal_replaces_the_fallback() {
     let snapshot = TaskSnapshot {
+        pull_requests: vec![],
         native: None,
         task_id: super::super::cloud::CloudId::new("task-test".into()).unwrap(),
         title: None,

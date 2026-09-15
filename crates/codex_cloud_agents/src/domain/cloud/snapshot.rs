@@ -1,5 +1,5 @@
 //! One native task/turn projection shared by transport reads and journal replay.
-use super::{CloudId, TaskSnapshot, TurnSnapshot};
+use super::{CloudId, ExternalPullRequest, TaskSnapshot, TurnId, TurnSnapshot};
 use serde_json::Value;
 
 impl TaskSnapshot {
@@ -76,5 +76,47 @@ pub(super) fn project(task: &CloudId, body: &Value) -> Result<TaskSnapshot, root
             .and_then(Value::as_str)
             .map(str::to_owned),
         turns,
+        pull_requests: body
+            .pointer("/task/external_pull_requests")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .filter_map(project_pull_request)
+            .collect(),
     })
 }
+
+// Accept exactly GitHub's canonical PR URL shape. Restricting every path segment
+// excludes URL userinfo, queries, fragments, encoded separators and other origins.
+fn project_pull_request(value: &Value) -> Option<ExternalPullRequest> {
+    let assistant_turn_id =
+        TurnId::new(value.get("assistant_turn_id")?.as_str()?.to_owned()).ok()?;
+    let url = value.pointer("/pull_request/url")?.as_str()?;
+    let path = url.strip_prefix("https://github.com/")?;
+    let parts: Vec<_> = path.split('/').collect();
+    if parts.len() != 4
+        || parts[2] != "pull"
+        || parts[..2].iter().any(|part| {
+            part.is_empty()
+                || *part == "."
+                || *part == ".."
+                || !part
+                    .bytes()
+                    .all(|byte| byte.is_ascii_alphanumeric() || b"._-".contains(&byte))
+        })
+        || !parts[3].bytes().all(|byte| byte.is_ascii_digit())
+    {
+        return None;
+    }
+    let number = parts[3].parse::<u64>().ok()?;
+    if number == 0 {
+        return None;
+    }
+    Some(ExternalPullRequest {
+        assistant_turn_id,
+        url: format!("https://github.com/{}/{}/pull/{number}", parts[0], parts[1]),
+    })
+}
+
+#[cfg(test)]
+mod test;
