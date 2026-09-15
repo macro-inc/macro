@@ -6238,6 +6238,7 @@ dependencies = [
  "cool_asserts",
  "database_env_vars",
  "futures",
+ "harness_id",
  "macro_authorization",
  "macro_db_migrator",
  "macro_entrypoint",
