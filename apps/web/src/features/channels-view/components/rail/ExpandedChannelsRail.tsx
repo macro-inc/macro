@@ -253,8 +253,6 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           <ViewSidebar.Title>Chat</ViewSidebar.Title>
         </div>
         <SplitPanel.ControlGroup>
-          <SplitPanel.BackButton />
-          <SplitPanel.ForwardButton />
           <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
         </SplitPanel.ControlGroup>
       </ViewSidebar.Header>

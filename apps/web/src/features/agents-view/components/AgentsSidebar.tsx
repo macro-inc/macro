@@ -293,10 +293,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           <SplitPanel.CloseButton />
           <ViewSidebar.Title>Agents</ViewSidebar.Title>
         </div>
-        <SplitPanel.ControlGroup>
-          <SplitPanel.BackButton />
-          <SplitPanel.ForwardButton />
-        </SplitPanel.ControlGroup>
       </ViewSidebar.Header>
 
       <ViewSidebar.Content class="flex flex-col gap-6 overflow-hidden pt-4">

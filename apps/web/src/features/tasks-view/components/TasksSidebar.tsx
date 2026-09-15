@@ -156,10 +156,6 @@ export function TasksSidebar() {
           <SplitPanel.CloseButton />
           <ViewSidebar.Title>Tasks</ViewSidebar.Title>
         </div>
-        <SplitPanel.ControlGroup>
-          <SplitPanel.BackButton />
-          <SplitPanel.ForwardButton />
-        </SplitPanel.ControlGroup>
       </ViewSidebar.Header>
 
       <ViewSidebar.Content class="flex flex-col gap-6">

@@ -10,8 +10,6 @@ function InboxHeader(props: ParentProps) {
         <div class="flex items-center">
           <SplitPanel.ControlGroup>
             <SplitPanel.CloseButton />
-            <SplitPanel.BackButton />
-            <SplitPanel.ForwardButton />
           </SplitPanel.ControlGroup>
         </div>
       </Show>

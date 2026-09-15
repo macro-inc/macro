@@ -61,8 +61,6 @@ export function EmailHeader(props: EmailHeaderProps) {
     <div class="flex min-w-0 flex-col">
       <SplitPanel.ControlGroup class="hidden px-2 pb-2 @max-[720px]/view-shell:flex">
         <SplitPanel.CloseButton />
-        <SplitPanel.BackButton />
-        <SplitPanel.ForwardButton />
       </SplitPanel.ControlGroup>
 
       {/* Sidebar stand-in while the aside is collapsed: the tab menu, the

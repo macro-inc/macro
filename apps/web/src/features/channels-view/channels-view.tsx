@@ -157,14 +157,6 @@ function ChannelsViewRoot() {
                               selectedEntity={channel()}
                               orchestrator={orchestrator}
                               splitPanelContext={panel}
-                              headerLeading={
-                                <Show when={railMode() === 'slim'}>
-                                  <SplitPanel.ControlGroup class="mr-1">
-                                    <SplitPanel.BackButton />
-                                    <SplitPanel.ForwardButton />
-                                  </SplitPanel.ControlGroup>
-                                </Show>
-                              }
                             />
                           </Suspense>
                         )}
