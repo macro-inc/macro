@@ -25,6 +25,17 @@ pub struct EditUsage {
     pub output_tokens: u32,
 }
 
+/// Which pipeline the editing worker runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EditMode {
+    /// Interpreter, supervisor, and parallel coders. Reviews its own work
+    /// across rounds; the right choice for multi-part or structural edits.
+    Supervised,
+    /// One model, the whole document, straight to `runCode`. Seconds instead
+    /// of tens of seconds, for a single contained edit.
+    Fast,
+}
+
 /// Port for applying AI-driven edits to a document via the editing worker.
 #[cfg_attr(test, mockall::automock)]
 pub trait EditingWorkerService: Send + Sync + 'static {
@@ -34,6 +45,7 @@ pub trait EditingWorkerService: Send + Sync + 'static {
         document_id: &str,
         document_token: &DocumentPermissionToken,
         instructions: &str,
+        mode: EditMode,
     ) -> impl Future<Output = anyhow::Result<EditResult>> + Send;
 
     /// Delete all AI edit trace records for `document_id`. Called during

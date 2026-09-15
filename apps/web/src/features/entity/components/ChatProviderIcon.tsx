@@ -1,6 +1,8 @@
-import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
-import { resolveChatInputModel } from '@core/component/AI/util/parse';
-import { getChatInputStoredModel } from '@core/component/AI/util/storage';
+import {
+  modelProvider,
+  ProviderIcon,
+} from '@core/component/AI/component/ProviderIcon';
+import { getChatStoredModel } from '@core/component/AI/util/storage';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Show } from 'solid-js';
 
@@ -11,23 +13,24 @@ export function ChatProviderIcon(props: {
   class?: string;
   animate?: boolean;
 }) {
-  const model = () =>
-    getChatInputStoredModel(props.id) ??
-    (props.model != null ? resolveChatInputModel(props.model) : undefined);
+  const model = () => {
+    const stored = getChatStoredModel(props.id);
+    // Historical models still identify their provider even after they leave the
+    // picker. Applying the composer's default here would mislabel them as Claude.
+    return modelProvider(stored) ? stored : props.model;
+  };
   return (
     <Show
-      when={model()}
+      when={modelProvider(model())}
       fallback={
         <EntityIcon targetType="chat" size="fill" class={props.class} />
       }
     >
-      {(model) => (
-        <ProviderIcon
-          model={model()}
-          class={props.class}
-          animate={props.animate}
-        />
-      )}
+      <ProviderIcon
+        model={model()}
+        class={props.class}
+        animate={props.animate}
+      />
     </Show>
   );
 }

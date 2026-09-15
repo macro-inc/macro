@@ -39,7 +39,11 @@ import { throwOnErr } from '@core/util/result';
 import { waitForFrames } from '@core/util/sleep';
 import { openExternalUrl } from '@core/util/url';
 import {
+  type CalendarEventEntity,
   type ChannelClickTarget,
+  type ChannelEntity,
+  type ChannelMessageEntity,
+  type ChannelThreadEntity,
   type EntityData,
   emailQueryKeyExcludesDone,
   getSnippetHit,
@@ -54,6 +58,7 @@ import {
   type ReminderEntity,
   type SearchLocation,
   toNotificationEntity,
+  type WithNotification,
   type WithSearch,
 } from '@entity';
 import {
@@ -67,6 +72,7 @@ import {
 } from '@notifications';
 import { queryClient } from '@queries/client';
 import { emailKeys } from '@queries/email/keys';
+import { fetchAndCacheThread } from '@queries/email/thread';
 import {
   type NotificationEntityRef,
   updateNotificationsForEntities,
@@ -452,8 +458,20 @@ export function preventDuplicatePreviewEntityOpen(
  * row's preview shows (which may be your own send) rather than an older
  * notification or nothing.
  */
+export type ChannelPreviewSelection = WithNotification<
+  | Pick<ChannelEntity, 'id' | 'type' | 'target'>
+  | Pick<
+      ChannelMessageEntity,
+      'id' | 'type' | 'channelId' | 'messageId' | 'threadId' | 'target'
+    >
+  | Pick<
+      ChannelThreadEntity,
+      'id' | 'type' | 'channelId' | 'messageId' | 'threadId' | 'target'
+    >
+>;
+
 export function getChannelEntityTarget(
-  entity: EntityData
+  entity: EntityData | ChannelPreviewSelection
 ): ChannelClickTarget | undefined {
   if (
     entity.type !== 'channel' &&
@@ -513,22 +531,16 @@ export function getChannelEntityTarget(
  * entity unchanged, so a reactive derivation would never re-run — but a click
  * should always re-activate the target (e.g. after the user cleared the
  * highlight by clicking a message), matching the old inbox's per-click
- * behaviour. No-ops for non-channel entities or when there is no target.
+ * behaviour.
  */
 export async function navigateChannelEntityToTarget(
-  entity: EntityData,
+  entity: ChannelPreviewSelection,
   blockOrchestrator: BlockOrchestrator
 ): Promise<void> {
   const target = getChannelEntityTarget(entity);
   if (!target) return;
 
-  const channelId =
-    entity.type === 'channel'
-      ? entity.id
-      : entity.type === 'channel_message' || entity.type === 'channel_thread'
-        ? entity.channelId
-        : undefined;
-  if (!channelId) return;
+  const channelId = entity.type === 'channel' ? entity.id : entity.channelId;
 
   if (target.kind === 'latest') {
     await goToChannelLatest(blockOrchestrator, channelId);
@@ -543,13 +555,15 @@ export async function navigateChannelEntityToTarget(
   );
 }
 
+export type CalendarPreviewSelection = WithNotification<
+  Pick<CalendarEventEntity, 'id' | 'type' | 'time' | 'occurrenceKey'>
+>;
+
 /** Retargets the singleton Calendar block to a calendar event row. */
 export async function navigateCalendarEntityToTarget(
-  entity: EntityData,
+  entity: CalendarPreviewSelection,
   blockOrchestrator: BlockOrchestrator
 ): Promise<void> {
-  if (entity.type !== 'calendar_event') return;
-
   const calendarHandle = await blockOrchestrator.getBlockHandle(
     CALENDAR_BLOCK_ID,
     'calendar'
@@ -838,16 +852,17 @@ export function markReminderSeenOnOpen(
  * The event and instance a calendar row points at, resolved exactly as the
  * open path resolves it so a copied link lands where a click would.
  */
-export function calendarEventLinkTarget(
-  entity: Extract<EntityData, { type: 'calendar_event' }>
-): { eventId: string; occurrenceKey?: string } {
+export function calendarEventLinkTarget(entity: CalendarPreviewSelection): {
+  eventId: string;
+  occurrenceKey?: string;
+} {
   const { eventId, occurrenceKey } = calendarBlockParamsForEntity(entity);
   return { eventId: eventId ?? entity.id, occurrenceKey };
 }
 
 /** Build singleton calendar block parameters for an event row's occurrence. */
 export function calendarBlockParamsForEntity(
-  entity: Extract<EntityData, { type: 'calendar_event' }>
+  entity: CalendarPreviewSelection
 ): CalendarBlockProps {
   const notifications = isWithNotification(entity)
     ? (entity.notifications?.() ?? [])
@@ -885,7 +900,12 @@ export function calendarBlockParamsForEntity(
  * `fileType`/`subType` come resolved from the server, so a referenced document
  * lands on its real block rather than 'unknown'.
  */
-export function reminderSplitTarget(entity: ReminderEntity) {
+export type ReminderPreviewSelection = Pick<
+  ReminderEntity,
+  'id' | 'type' | 'referencedEntity'
+>;
+
+export function reminderSplitTarget(entity: ReminderPreviewSelection) {
   const referenced = entity.referencedEntity;
   if (!referenced) return undefined;
   return {
@@ -1067,13 +1087,21 @@ type TrashEmailsHandle = {
   undo: () => Promise<void>;
 };
 
+export type TrashEmailTarget = { id: string; linkId?: string };
+
+type TrashLabel = { id: string; linkId?: string };
+
 /**
- * Optimistically removes one or more email threads from soup + email caches,
- * then fires the TRASH label API calls in the background. Takes a single
- * snapshot before all removals so undo restores the complete pre-trash state.
+ * Trash one or more email threads.
+ *
+ * Optimistically removes them from the soup and from all email queries,
+ * then resolves the TRASH label and calls the API. If anything fails, rolls
+ * back the optimistic update.
+ *
  * Returns synchronously so the caller can show the undo toast immediately.
  */
-export function trashEmails(ids: string[]): TrashEmailsHandle {
+export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
+  const ids = targets.map((t) => t.id);
   queryClient.cancelQueries({ queryKey: queryKeys.all.email });
 
   const previousEmail = queryClient.getQueriesData<{
@@ -1104,8 +1132,74 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
     }
   };
 
-  // Resolved lazily by the API calls; used by undo
-  let trashLabelId: string | undefined;
+  // Map each thread id to the TRASH label used to trash it, so undo can remove
+  // the same label. Populated only once every thread has trashed successfully.
+  const threadTrashLabelIds = new Map<string, string>();
+
+  // Seed known linkIds from the explicit targets and the cached email lists.
+  const threadLinkIds = new Map<string, string>();
+  for (const target of targets) {
+    if (target.linkId) {
+      threadLinkIds.set(target.id, target.linkId);
+    }
+  }
+  for (const [, data] of previousEmail) {
+    if (!data?.pages) continue;
+    for (const page of data.pages) {
+      if (!page?.items) continue;
+      for (const item of page.items) {
+        if (
+          item?.id &&
+          idSet.has(item.id) &&
+          !threadLinkIds.has(item.id) &&
+          'linkId' in item &&
+          item.linkId
+        ) {
+          threadLinkIds.set(item.id, item.linkId);
+        }
+      }
+    }
+  }
+
+  // Resolve the TRASH label belonging to a thread's own inbox. The labels
+  // endpoint returns every inbox's labels, so a multi-inbox user must trash
+  // with the label whose linkId matches the thread. The single-label fallback
+  // applies only when the inbox is unknown — a known inbox with no matching
+  // label fails rather than trashing into the wrong one.
+  const resolveTrashLabelId = async (
+    id: string,
+    trashLabels: TrashLabel[]
+  ): Promise<string> => {
+    let linkId = threadLinkIds.get(id);
+    if (!linkId) {
+      const threadData = queryClient.getQueryData<{
+        link_id?: string;
+        pages?: Array<{ link_id?: string }>;
+      }>(emailKeys.threadMessages(id).queryKey);
+      linkId = threadData?.link_id ?? threadData?.pages?.[0]?.link_id;
+    }
+    if (!linkId && trashLabels.length > 1) {
+      const fetched = await fetchAndCacheThread(id);
+      if (!fetched.isErr()) {
+        linkId = fetched.value.thread.link_id;
+      }
+    }
+
+    const matchedLabelId = linkId
+      ? trashLabels.find((label) => label.linkId === linkId)?.id
+      : undefined;
+    const labelId =
+      matchedLabelId ??
+      (linkId
+        ? undefined
+        : trashLabels.length === 1
+          ? trashLabels[0]?.id
+          : undefined);
+    if (!labelId) {
+      throw new Error('TRASH label not found');
+    }
+    return labelId;
+  };
 
   const done = (async () => {
     try {
@@ -1115,24 +1209,59 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
           throwOnErr(async () => await emailClient.getUserLabels()),
         staleTime: 5 * 60 * 1000,
       });
-      const trashLabel = labelsData?.labels.find(
-        (l) => l.providerLabelId === 'TRASH'
-      );
-      const labelId = trashLabel?.id;
-      if (!labelId) {
+      const trashLabels =
+        labelsData?.labels.filter((l) => l.providerLabelId === 'TRASH') ?? [];
+      if (trashLabels.length === 0) {
         throw new Error('TRASH label not found');
       }
-      trashLabelId = labelId;
 
-      await Promise.all(
-        ids.map((id) =>
-          emailClient.updateThreadLabel({
-            thread_id: id,
-            label_id: labelId,
-            value: true,
-          })
+      // Resolve every thread's label before trashing any of them, so a lookup
+      // failure can't leave part of the batch trashed on the server while the
+      // rest is rolled back locally.
+      const labelIds = await Promise.all(
+        ids.map((id) => resolveTrashLabelId(id, trashLabels))
+      );
+
+      // updateThreadLabel resolves an Err on HTTP failure rather than
+      // rejecting, so throwOnErr turns a failed trash into a real rejection.
+      // Settle every call so a partial failure can be compensated instead of
+      // leaving the server disagreeing with the rolled-back UI.
+      const outcomes = await Promise.allSettled(
+        ids.map((id, i) =>
+          throwOnErr(() =>
+            emailClient.updateThreadLabel({
+              thread_id: id,
+              label_id: labelIds[i]!,
+              value: true,
+            })
+          )
         )
       );
+
+      const failure = outcomes.find((o) => o.status === 'rejected');
+      if (failure) {
+        // Revert the threads that did trash so the server matches the rollback
+        // below; best effort, so a failed revert can't mask the original error.
+        await Promise.allSettled(
+          ids.flatMap((id, i) =>
+            outcomes[i]?.status === 'fulfilled'
+              ? [
+                  throwOnErr(() =>
+                    emailClient.updateThreadLabel({
+                      thread_id: id,
+                      label_id: labelIds[i]!,
+                      value: false,
+                    })
+                  ),
+                ]
+              : []
+          )
+        );
+        throw (failure as PromiseRejectedResult).reason;
+      }
+
+      // Every thread trashed — remember the labels so undo can remove them.
+      ids.forEach((id, i) => threadTrashLabelIds.set(id, labelIds[i]!));
     } catch (err) {
       rollback();
       throw err;
@@ -1147,8 +1276,9 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
   return {
     done,
     undo: async () => {
-      // Wait for the trash calls to finish so we know the label ID.
-      // If the trash call itself failed, rollback already happened — nothing to undo.
+      // Wait for the trash calls to finish so we know the label IDs. On any
+      // failure `done` has already rolled back and reverted the server, so
+      // there is nothing left to undo.
       try {
         await done;
       } catch {
@@ -1159,13 +1289,17 @@ export function trashEmails(ids: string[]): TrashEmailsHandle {
 
       try {
         await Promise.all(
-          ids.map((id) =>
-            emailClient.updateThreadLabel({
-              thread_id: id,
-              label_id: trashLabelId!,
-              value: false,
-            })
-          )
+          ids.map((id) => {
+            const labelId = threadTrashLabelIds.get(id);
+            if (!labelId) return Promise.resolve();
+            return throwOnErr(() =>
+              emailClient.updateThreadLabel({
+                thread_id: id,
+                label_id: labelId,
+                value: false,
+              })
+            );
+          })
         );
       } finally {
         // Only invalidate email queries — skip soup invalidation since
@@ -1193,7 +1327,14 @@ function notificationsForMarkDone(
   notifications: UnifiedNotification[],
   scopeChannelNotificationsToEntity: boolean
 ): UnifiedNotification[] {
-  if (!scopeChannelNotificationsToEntity) return notifications;
+  if (
+    !scopeChannelNotificationsToEntity ||
+    (entity.type !== 'channel' &&
+      entity.type !== 'channel_message' &&
+      entity.type !== 'channel_thread')
+  ) {
+    return notifications;
+  }
 
   return scopeChannelNotificationsForEntity(entity, notifications);
 }

@@ -7,11 +7,12 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type EntityData, ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createSignal, onMount, Show, Suspense } from 'solid-js';
+import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
 import { HomeChatStart } from './components/HomeChatStart';
-import { InboxHeader } from './components/InboxHeader';
+import { InboxListLayout } from './components/InboxHeader';
 import { InboxList } from './components/InboxList';
-import { InboxViewProvider } from './inbox-view-context';
+import { InboxTabs } from './components/InboxTabs';
+import { InboxViewProvider, useInboxView } from './inbox-view-context';
 import type { InboxViewStateOptions } from './types';
 
 export type InboxViewProps = {
@@ -33,22 +34,34 @@ function HomeListPane(props: {
   onNewChat: () => void;
 }) {
   return (
-    <>
-      <InboxHeader onNewChat={props.onNewChat} />
+    <InboxListLayout tabs={<InboxTabs />} onNewChat={props.onNewChat}>
       <Suspense fallback={<InboxFallback />}>
         <InboxList
           previewEntity={props.previewEntity}
           onPreviewEntityChange={props.onPreviewEntityChange}
         />
       </Suspense>
-    </>
+    </InboxListLayout>
   );
 }
 
 function InboxViewRoot() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
+  const { state, setTab } = useInboxView();
   const [previewEntity, setPreviewEntity] = createSignal<EntityData>();
+
+  let activeTab = state.tab;
+  createEffect(() => {
+    const nextTab = state.tab;
+    if (nextTab === activeTab) return;
+    activeTab = nextTab;
+    setPreviewEntity(undefined);
+  });
+
+  createEffect(() => {
+    if (state.tab === 'reminders') setTab('signal');
+  });
   const newChat = () => setPreviewEntity(undefined);
 
   onMount(() => panel.handle.setDisplayName('Home'));

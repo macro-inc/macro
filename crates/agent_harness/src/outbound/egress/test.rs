@@ -264,6 +264,11 @@ fn points_every_acp_server_at_the_proxy() {
                 authorization.clone(),
             ),
             (
+                "macro_internal".to_owned(),
+                "https://egress.macro.com/mcp/internal".to_owned(),
+                authorization.clone(),
+            ),
+            (
                 "datadog".to_owned(),
                 "https://egress.macro.com/mcp/datadog".to_owned(),
                 authorization.clone(),
@@ -284,10 +289,16 @@ fn an_owner_with_no_connected_apps_still_gets_the_macro_server() {
 
     assert_eq!(
         entries,
-        [(
-            "macro".to_owned(),
-            "https://egress.macro.com/mcp-macro".to_owned()
-        )]
+        [
+            (
+                "macro".to_owned(),
+                "https://egress.macro.com/mcp-macro".to_owned()
+            ),
+            (
+                "macro_internal".to_owned(),
+                "https://egress.macro.com/mcp/internal".to_owned()
+            )
+        ]
     );
 }
 

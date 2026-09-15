@@ -540,7 +540,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     // `domain::replay`).
                     state.bind_acp_session(request.session_id, true);
                     state.connect_mcp(request.mcp_servers).await;
-                    responder.respond(ResumeSessionResponse::new())
+                    responder.respond(
+                        ResumeSessionResponse::new().config_options(state.model_config_options()),
+                    )
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -638,7 +640,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         );
                     };
                     state.set_model(model.to_string());
-                    responder.respond(SetSessionConfigOptionResponse::new(Vec::new()))
+                    responder.respond(SetSessionConfigOptionResponse::new(
+                        state.model_config_options(),
+                    ))
                 }
             },
             agent_client_protocol::on_receive_request!(),

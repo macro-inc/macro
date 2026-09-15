@@ -49,6 +49,7 @@ export * from './agentSessionResponseAcpSessionId';
 export * from './agentSessionResponseExternal';
 export * from './agentSessionResponseInstructions';
 export * from './agentSessionResponseOriginatingMessageId';
+export * from './agentSessionResponsePullRequestUrl';
 export * from './agentSessionResponseRepoUrl';
 export * from './agentSessionResponseThreadChannelId';
 export * from './agentSessionResponseThreadId';

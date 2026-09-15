@@ -8,9 +8,9 @@ import {
   getTaskPriorityOptionId,
   getTaskStatusOptionId,
 } from '@entity/utils/task-properties';
-import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
-import ClockIcon from '@phosphor/clock.svg';
-import EyeIcon from '@phosphor/eye.svg';
+import CalendarIcon from '@icon/wide-calendar.svg';
+import EditIcon from '@icon/wide-edit.svg';
+import EyeIcon from '@icon/wide-eye.svg';
 import FlagIcon from '@phosphor/flag.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import { PROPERTY_OPTION_IDS } from '@property/constants';
@@ -179,12 +179,12 @@ const SORT_OPTIONS = [
   {
     value: 'updated_at',
     label: 'Last updated',
-    icon: () => <ArrowClockwiseIcon class="size-3.5" />,
+    icon: () => <EditIcon class="size-3.5" />,
   },
   {
     value: 'created_at',
     label: 'Date created',
-    icon: () => <ClockIcon class="size-3.5" />,
+    icon: () => <CalendarIcon class="size-3.5" />,
   },
   {
     value: 'priority',

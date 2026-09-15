@@ -2,7 +2,7 @@
 
 use crate::domain::{
     models::{GithubError, MacroTaskId, ValidatedGithubWebhookEvent},
-    ports::{GithubSyncClient, GithubSyncRepo},
+    ports::{GithubSyncClient, GithubSyncRealtime, GithubSyncRepo},
 };
 use documents::domain::ports::DocumentService;
 use foreign_entity::domain::ports::ForeignEntityService;
@@ -17,7 +17,8 @@ impl<
     C: GithubSyncClient,
     F: ForeignEntityService,
     N: NotificationIngress,
-> GithubSyncServiceImpl<D, R, C, F, N>
+    P: GithubSyncRealtime,
+> GithubSyncServiceImpl<D, R, C, F, N, P>
 {
     /// Handle `pull_request` events with action `opened` or `reopened`.
     #[tracing::instrument(skip(self, event), err)]

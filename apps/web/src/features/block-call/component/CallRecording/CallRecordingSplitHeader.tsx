@@ -135,7 +135,7 @@ export function CallRecordingSplitHeader(props: {
         <div class="-order-1">
           <BlockLiveIndicators />
         </div>
-        <Show when={!record().isActive}>
+        <Show when={!isMobile() && !record().isActive}>
           <div class="order-[900] flex items-center">
             <HeaderIsland>
               <Button

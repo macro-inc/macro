@@ -36,7 +36,7 @@ vi.mock('@ui', () => {
 });
 
 // Neutralize SVG imports; tag the lock so we can assert it renders.
-vi.mock('@core/component/AI/assets/anthropic.svg', () => ({
+vi.mock('@icon/wide-claude.svg', () => ({
   default: () => null,
 }));
 vi.mock('@core/component/AI/assets/openai.svg', () => ({

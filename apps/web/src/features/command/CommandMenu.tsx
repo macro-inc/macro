@@ -5,7 +5,6 @@ import { getSearchSplit } from '@app/features/next-soup/soup-view/search-control
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { TabsInset } from '@core/component/TabsInset';
 import { itemToBlockName } from '@core/constant/allBlocks';
 import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
@@ -31,6 +30,7 @@ import {
   createCommandListController,
   Dialog,
   Hotkey,
+  Tabs,
 } from '@ui';
 import {
   createEffect,
@@ -594,15 +594,14 @@ export function CommandMenuInner(props: {
       <Show when={isEntityActionMode() || !isInCommandScope()}>
         <CommandMenuShell.Toolbar
           class={cn(
-            'pl-2.5 pr-1.5 pt-2 border-0',
+            'pl-2.5 pr-1.5 pt-2 border-0 bg-transparent',
             isEntityActionMode() && 'gap-1.5'
           )}
         >
           <Show
             when={isEntityActionMode()}
             fallback={
-              <TabsInset
-                depth={1}
+              <Tabs
                 list={categoryTabs}
                 value={CommandState.categoryFilter()}
                 onChange={(value) => {
@@ -645,7 +644,7 @@ export function CommandMenuInner(props: {
         </div>
       </CommandMenuShell.Body>
 
-      <CommandMenuShell.Footer>
+      <CommandMenuShell.Footer class="bg-transparent">
         <span class="flex items-center gap-1">
           <div class="flex gap-1">
             <div class="flex border border-edge-muted text-xxs rounded-md items-center px-1.5 py-px font-normal">

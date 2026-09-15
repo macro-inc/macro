@@ -45,7 +45,7 @@ const glassClass = (variant: ButtonVariant): string => {
 /** Canonical classes for the button-group frame. */
 export const buttonGroupVariants = createVariants(
   cn(
-    'inline-flex items-center justify-center overflow-hidden',
+    'inline-flex items-center justify-center',
     'data-[orientation=horizontal]:flex-row',
     'data-[orientation=vertical]:flex-col',
     // strip per-button rounding + borders so the group owns the frame
@@ -138,7 +138,10 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
           )}
           role="group"
         >
-          {props.children}
+          {/* Clip the segments independently of the expanding glass frame. */}
+          <div class="flex size-full min-w-0 items-center justify-center overflow-hidden rounded-[inherit] [flex-direction:inherit]">
+            {props.children}
+          </div>
         </div>
       </Layer>
     </ButtonGroupContext.Provider>

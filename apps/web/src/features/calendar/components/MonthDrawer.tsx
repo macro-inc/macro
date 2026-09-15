@@ -34,14 +34,14 @@ export function MonthDrawer(props: MonthDrawerProps) {
       <MobileDrawer.Trigger
         as={Button}
         aria-label="Choose month"
-        class="max-w-full min-w-0 justify-start gap-1 rounded-full border-none bg-transparent px-1 text-base font-semibold text-ink hover:bg-hover"
+        class="max-w-full min-w-0 justify-start gap-1 rounded-full border-none bg-transparent px-1 text-base font-semibold text-ink not-touch:hover:bg-hover"
       >
         <span class="min-w-0 truncate">{formatCalendarMonth(props.month)}</span>
         <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
       </MobileDrawer.Trigger>
 
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content aria-label="Choose month">
           <MobileDrawer.Handle />
           <MobileDrawer.Section class="mb-3 overflow-visible">

@@ -71,6 +71,7 @@ import {
   cancelAiEdit,
   hasActiveAiEdit,
   requestAiEdit,
+  toastAiEditResult,
 } from '@service-ai-editing/client';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, Toolbar } from '@ui';
@@ -357,15 +358,15 @@ export function MarkdownPopup(props: {
     // The highlight is already tracking the selection; flagging the run
     // keeps it alive (as the loading indicator) after the popup closes.
     setAiEditRunning(true);
+    // Fast mode: one model edits the whole document directly, no supervisor.
     // Apply ops locally so the edit lands in this client's undo stack.
     requestAiEdit({
       documentId: blockId,
       prompt: `Request: ${instruction}\nUser is selecting nodes ${nodeIds.join(' ')}. Proceed with requested edit`,
+      mode: 'fast',
       onOps: (ops) => applyAiOps(editor, props.lexicalMapping, ops),
     })
-      .then((result) => {
-        if (result === 'failed') toast.failure('AI edit failed');
-      })
+      .then(toastAiEditResult)
       .finally(() => {
         setAiEditLocation(null);
         setAiEditRunning(false);
@@ -713,6 +714,7 @@ export function MarkdownPopup(props: {
         }
       >
         <GeneralizedPopup
+          class="z-action-menu"
           anchor={{
             ref: anchorRef()!,
             blockId: `${blockId}`,
@@ -793,7 +795,8 @@ export function MarkdownPopup(props: {
         )}
       </Show>
       <Show when={showPopup() && anchorRef()}>
-        <ScopedPortal scope="local">
+        {/* Touch menus must escape the split's isolation to sit above mobile chrome. */}
+        <ScopedPortal scope={isTouchDevice() ? 'global' : 'local'}>
           <PopupToolbar />
         </ScopedPortal>
       </Show>
@@ -862,7 +865,7 @@ export function MarkdownPopup(props: {
           preventScrollbarShift={false}
         >
           <MobileDrawer.Portal>
-            <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+            <MobileDrawer.Overlay />
             <MobileDrawer.Content aria-label="Edit with AI">
               <MobileDrawer.Handle class="pb-1" />
               <div class="flex items-center gap-2 px-4 pb-3">

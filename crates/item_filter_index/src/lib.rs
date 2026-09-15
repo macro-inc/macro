@@ -4,6 +4,7 @@
 use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst,
+    agent_session::AgentSessionLiteral,
     calendar_event::CalendarEventLiteral,
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
@@ -15,6 +16,7 @@ use item_filters::ast::{
     foreign_entity::ForeignEntityLiteral,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
+    reminder::ReminderLiteral,
 };
 use predicate_index::{
     ExactValue, IndexQuery, PartitionPredicate, PredicateExpr, Profile, RangeBound, SortDirection,
@@ -334,7 +336,7 @@ fn check_soup_flat(
         unsupported_partition(
             ast.channel_thread_filter.as_deref(),
             "channelThread",
-            |literal| matches!(literal, ChannelThreadLiteral::ThreadId(id) if id.is_nil()),
+            |literal| matches!(literal, ChannelThreadLiteral::ThreadId(id) | ChannelThreadLiteral::ChannelId(id) if id.is_nil()),
         ),
         unsupported_partition(
             ast.call_filter.as_deref(),
@@ -357,12 +359,23 @@ fn check_soup_flat(
         }
     }
 
-    // Reminders are uniquely excluded by Soup when their tree is omitted.
-    if ast.reminder_filter.is_some() {
+    // These opt-in partitions are empty when omitted. The UI's confine()
+    // also excludes them with a positive nil ID. Accept only proven emptiness,
+    // not arbitrary trees over partitions that have no local index.
+    if ast.reminder_filter.as_deref().is_some_and(|expr| {
+        !proves_none(
+            expr,
+            |literal| matches!(literal, ReminderLiteral::Id(id) if id.is_nil()),
+        )
+    }) {
         return Eligibility::Unsupported(UnsupportedReason::Partition("reminder"));
     }
-    // Agent sessions are opt-in the same way.
-    if ast.agent_session_filter.is_some() {
+    if ast.agent_session_filter.as_deref().is_some_and(|expr| {
+        !proves_none(
+            expr,
+            |literal| matches!(literal, AgentSessionLiteral::Id(id) if id.is_nil()),
+        )
+    }) {
         return Eligibility::Unsupported(UnsupportedReason::Partition("agent_session"));
     }
 

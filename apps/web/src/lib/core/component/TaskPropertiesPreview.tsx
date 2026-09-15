@@ -4,6 +4,8 @@ import {
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
+import CircleIcon from '@phosphor/circle.svg';
+import { Property as PropertyUI } from '@property';
 import { Modals } from '@property/component/modal';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
@@ -12,10 +14,19 @@ import {
 } from '@property/context/PropertiesContext';
 import { useEntityProperties } from '@property/hooks';
 import type { Property, PropertyApiValues } from '@property/types';
+import { hasValue } from '@property/utils/typeGuards';
 import type { PreviewDocumentProperties } from '@queries/preview/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentAccessLevelQuery } from '@queries/storage/document-metadata';
-import { type Accessor, createMemo, For, Show } from 'solid-js';
+import {
+  type Accessor,
+  createContext,
+  createMemo,
+  For,
+  type JSX,
+  Show,
+  useContext,
+} from 'solid-js';
 
 const TASK_PREVIEW_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.STATUS,
@@ -23,34 +34,62 @@ const TASK_PREVIEW_PROPERTIES = [
   SYSTEM_PROPERTY_IDS.ASSIGNEES,
 ];
 
-type TaskPreviewProps = { taskId: string; taskName?: string };
+type TaskPreviewProps = {
+  taskId: string;
+  taskName?: string;
+  mode?: 'all' | 'status' | 'details';
+};
 
-/** Status, priority, and assignee editors; GraphQL previews own their data. */
-export function TaskPropertiesPreview(
-  props: TaskPreviewProps & {
-    previewProperties?: PreviewDocumentProperties;
-  }
-) {
+type TaskPreviewData = {
+  taskId: Accessor<string>;
+  properties: Accessor<Property[]>;
+  isLoading: Accessor<boolean>;
+  canEdit: Accessor<boolean>;
+  refetch: () => void;
+};
+
+const TaskPreviewDataContext = createContext<TaskPreviewData>();
+
+/** One data owner for status and details; non-task cards are a passthrough. */
+export function TaskPropertiesPreviewProvider(props: {
+  taskId?: string;
+  previewProperties?: PreviewDocumentProperties;
+  children: JSX.Element;
+}) {
   return (
-    <Show
-      when={props.previewProperties}
-      fallback={<RestTaskPropertiesPreview {...props} />}
-    >
-      {(metadata) => (
-        <TaskPropertiesPreviewContent
-          taskId={props.taskId}
-          taskName={props.taskName}
-          properties={() => metadata().properties ?? []}
-          isLoading={metadata().properties === undefined}
-          canEdit={metadata().canEdit}
-          refetch={() => void metadata().refetch()}
-        />
+    <Show when={props.taskId} keyed fallback={props.children}>
+      {(taskId) => (
+        <Show
+          when={props.previewProperties}
+          fallback={
+            <RestTaskPreviewProvider taskId={taskId}>
+              {props.children}
+            </RestTaskPreviewProvider>
+          }
+        >
+          {(metadata) => (
+            <TaskPreviewDataContext.Provider
+              value={{
+                taskId: () => taskId,
+                properties: () => metadata().properties ?? [],
+                isLoading: () => metadata().properties === undefined,
+                canEdit: () => metadata().canEdit,
+                refetch: () => void metadata().refetch(),
+              }}
+            >
+              {props.children}
+            </TaskPreviewDataContext.Provider>
+          )}
+        </Show>
       )}
     </Show>
   );
 }
 
-function RestTaskPropertiesPreview(props: TaskPreviewProps) {
+function RestTaskPreviewProvider(props: {
+  taskId: string;
+  children: JSX.Element;
+}) {
   const { properties, isLoading, refetch } = useEntityProperties(
     props.taskId,
     'TASK',
@@ -58,16 +97,54 @@ function RestTaskPropertiesPreview(props: TaskPreviewProps) {
   );
   const accessQuery = useDocumentAccessLevelQuery(() => props.taskId);
   return (
-    <TaskPropertiesPreviewContent
-      {...props}
-      properties={() => (isLoading() ? [] : properties())}
-      isLoading={isLoading()}
-      canEdit={
-        accessQuery.isSuccess &&
-        hasPermissions(getPermissions(accessQuery.data), Permissions.CAN_EDIT)
+    <TaskPreviewDataContext.Provider
+      value={{
+        taskId: () => props.taskId,
+        properties: () => (isLoading() ? [] : properties()),
+        isLoading,
+        canEdit: () =>
+          accessQuery.isSuccess &&
+          hasPermissions(
+            getPermissions(accessQuery.data),
+            Permissions.CAN_EDIT
+          ),
+        refetch,
+      }}
+    >
+      {props.children}
+    </TaskPreviewDataContext.Provider>
+  );
+}
+
+/** Standalone use gets its own owner; sibling slots reuse the surrounding owner. */
+export function TaskPropertiesPreview(
+  props: TaskPreviewProps & {
+    previewProperties?: PreviewDocumentProperties;
+  }
+) {
+  const shared = useContext(TaskPreviewDataContext);
+  return (
+    <Show
+      when={shared?.taskId() === props.taskId ? shared : undefined}
+      fallback={
+        <TaskPropertiesPreviewProvider
+          taskId={props.taskId}
+          previewProperties={props.previewProperties}
+        >
+          <TaskPropertiesPreview {...props} />
+        </TaskPropertiesPreviewProvider>
       }
-      refetch={refetch}
-    />
+    >
+      {(data) => (
+        <TaskPropertiesPreviewContent
+          {...props}
+          properties={() => data().properties()}
+          isLoading={data().isLoading()}
+          canEdit={data().canEdit()}
+          refetch={() => data().refetch()}
+        />
+      )}
+    </Show>
   );
 }
 
@@ -83,6 +160,10 @@ function TaskPropertiesPreviewContent(
 
   const previewProperties = createMemo(() =>
     TASK_PREVIEW_PROPERTIES.flatMap((id) => {
+      if (props.mode === 'status' && id !== SYSTEM_PROPERTY_IDS.STATUS)
+        return [];
+      if (props.mode === 'details' && id === SYSTEM_PROPERTY_IDS.STATUS)
+        return [];
       const property = props
         .properties()
         .find((candidate) => candidate.propertyDefinitionId === id);
@@ -104,7 +185,22 @@ function TaskPropertiesPreviewContent(
   };
 
   return (
-    <Show when={!props.isLoading && previewProperties().length > 0}>
+    <Show
+      when={!props.isLoading && previewProperties().length > 0}
+      fallback={
+        <Show when={props.mode === 'status'}>
+          <CircleIcon
+            class="size-4 text-ink-muted"
+            role="img"
+            aria-label={
+              props.isLoading
+                ? 'Loading task status'
+                : 'Task status unavailable'
+            }
+          />
+        </Show>
+      }
+    >
       <PropertiesProvider
         entityId={props.taskId}
         entityType="TASK"
@@ -116,17 +212,60 @@ function TaskPropertiesPreviewContent(
         onPropertyDeleted={props.refetch}
         saveHandler={saveHandler}
       >
-        <div class="px-2 pb-2 flex flex-row flex-wrap gap-1 text-xs justify-start">
+        <Show
+          when={props.mode === 'status'}
+          fallback={
+            <div class="px-2 pb-2 flex flex-row flex-wrap gap-1 text-xs justify-start">
+              <For each={previewProperties()}>
+                {(property) => (
+                  <InlinePropertyValue
+                    property={property}
+                    entityId={props.taskId}
+                    class="bg-surface-2 border border-edge"
+                  />
+                )}
+              </For>
+            </div>
+          }
+        >
           <For each={previewProperties()}>
             {(property) => (
-              <InlinePropertyValue
+              <PropertyUI.Root
                 property={property}
-                entityId={props.taskId}
-                class="bg-surface-2 border border-edge"
-              />
+                canEdit={props.canEdit}
+                onSave={saveHandler.saveProperty}
+                onRefresh={props.refetch}
+              >
+                <PropertyUI.Tooltip property={property}>
+                  <PropertyUI.EditTrigger
+                    class="inline-flex size-6 shrink-0 items-center justify-center rounded-full hover:bg-hover focus-visible:outline-2 focus-visible:outline-accent"
+                    aria-disabled={!props.canEdit || !!property.isMetadata}
+                  >
+                    <Show
+                      when={hasValue(property)}
+                      fallback={<CircleIcon class="size-4 text-ink-muted" />}
+                    >
+                      <PropertyUI.Icon property={property} class="size-4" />
+                    </Show>
+                    <span class="sr-only">
+                      Task status:{' '}
+                      <PropertyUI.Text
+                        property={property}
+                        fallback="Not started"
+                      />
+                    </span>
+                  </PropertyUI.EditTrigger>
+                </PropertyUI.Tooltip>
+                <PropertyUI.PopoverEditor
+                  entitySelfFilter={{
+                    entityType: 'TASK',
+                    blockId: props.taskId,
+                  }}
+                />
+              </PropertyUI.Root>
             )}
           </For>
-        </div>
+        </Show>
         <Modals />
       </PropertiesProvider>
     </Show>

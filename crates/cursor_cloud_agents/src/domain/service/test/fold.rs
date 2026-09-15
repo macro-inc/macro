@@ -34,7 +34,7 @@ pub(super) async fn replay_with_runs(
     let service = Arc::new(CursorSessionService::new(
         cursor.clone(),
         notifier.clone(),
-        FixedRepos(None),
+        FixedChooser(None, false),
         journal,
     ));
     service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None, None);
@@ -188,7 +188,7 @@ async fn actual_live_backfill_keeps_older_answer_out_of_pending_or_cancelled_pro
         let service = Arc::new(CursorSessionService::new(
             cursor.clone(),
             notifier.clone(),
-            FixedRepos(None),
+            FixedChooser(None, false),
             journal.clone(),
         ));
         let id = service.new_session(Path::new(""), vec![]);
@@ -518,7 +518,7 @@ async fn load_waiting_for_an_active_backfill_replays_one_copy_through_fold() {
     let service = Arc::new(CursorSessionService::new(
         cursor.clone(),
         notifier.clone(),
-        FixedRepos(None),
+        FixedChooser(None, false),
         journal.clone(),
     ));
     let id = service.new_session(Path::new(""), vec![]);

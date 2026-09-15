@@ -72,7 +72,11 @@ function RecentSessionsContent(props: { limit?: number }) {
                 class="group flex w-full items-center gap-3.5 rounded-xl border border-edge-muted bg-active px-4 py-3 text-left transition-colors hover:bg-hover"
                 onClick={() => openChat(session.id)}
               >
-                <ChatProviderIcon id={session.id} class="size-4 shrink-0" />
+                <ChatProviderIcon
+                  id={session.id}
+                  model={session.model}
+                  class="size-4 shrink-0"
+                />
                 <span class="flex-1 truncate text-sm font-medium text-ink">
                   {session.name}
                 </span>

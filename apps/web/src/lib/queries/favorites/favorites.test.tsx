@@ -59,6 +59,7 @@ vi.mock('../client', () => ({
 }));
 
 import {
+  type FavoritesFilter,
   favoriteEntityType,
   useAddFavoriteMutation,
   useFavoritesData,
@@ -69,9 +70,13 @@ import {
 let testQueryClient: QueryClient;
 let dispose: (() => void) | undefined;
 
-function favorite(entityId: string, sortOrder: number): Favorite {
+function favorite(
+  entityId: string,
+  sortOrder: number,
+  entityType: Favorite['entityType'] = 'document'
+): Favorite {
   return {
-    entityType: 'document',
+    entityType,
     entityId,
     sortOrder,
     createdAt: '2026-01-01T00:00:00Z',
@@ -157,6 +162,14 @@ describe('favorites transport', () => {
     expect(testQueryClient.getQueryCache().getAll()).toEqual([]);
   });
 
+  it('passes favorites filters to the GraphQL transport', () => {
+    const filter: FavoritesFilter = { entityType: ['channel'] };
+    renderHook(() => useFavoritesData(filter));
+
+    expect(mocks.createGraphqlFavoritesQuery).toHaveBeenCalledWith(filter);
+    expect(mocks.getFavoritesRest).not.toHaveBeenCalled();
+  });
+
   it('keeps available GraphQL data visible even when its request errors', () => {
     mocks.createGraphqlFavoritesQuery.mockReturnValue({
       data: { favorites: [favorite('document-1', 0)] },
@@ -172,6 +185,75 @@ describe('favorites transport', () => {
     mocks.getFavoritesRest.mockReturnValue(new Promise(() => {}));
     const favoritesData = renderHook(() => useFavoritesData());
     expect(favoritesData()).toBeUndefined();
+  });
+
+  it('passes favorites filters to the REST transport', async () => {
+    mocks.graphqlSoupEnabled.mockReturnValue(false);
+    mocks.getFavoritesRest.mockResolvedValue(ok({ favorites: [] }));
+    const filter: FavoritesFilter = { entityType: ['channel'] };
+    renderHook(() => useFavoritesData(filter));
+
+    await vi.waitFor(() =>
+      expect(mocks.getFavoritesRest).toHaveBeenCalledWith(filter)
+    );
+  });
+
+  it('updates matching filtered REST caches optimistically', async () => {
+    mocks.graphqlSoupEnabled.mockReturnValue(false);
+    const agentFilter: FavoritesFilter = {
+      entityType: ['agent_session', 'chat'],
+    };
+    const channelFilter: FavoritesFilter = { entityType: ['channel'] };
+    const agent1 = favorite('agent-1', 0, 'agent_session');
+    const agent2 = favorite('agent-2', 1, 'agent_session');
+    const channel = favorite('channel-1', 2, 'channel');
+    testQueryClient.setQueryData<FavoritesList>(favoriteKeys.list().queryKey, {
+      favorites: [agent1, agent2, channel],
+    });
+    testQueryClient.setQueryData<FavoritesList>(
+      favoriteKeys.list(agentFilter).queryKey,
+      { favorites: [agent1, agent2] }
+    );
+    testQueryClient.setQueryData<FavoritesList>(
+      favoriteKeys.list(channelFilter).queryKey,
+      { favorites: [channel] }
+    );
+    mocks.addFavoriteRest.mockResolvedValue(
+      ok(favorite('agent-3', 2, 'agent_session'))
+    );
+    mocks.removeFavoriteRest.mockResolvedValue(ok(undefined));
+    mocks.reorderFavoritesRest.mockResolvedValue(ok(undefined));
+    const mutations = renderHook(() => ({
+      add: useAddFavoriteMutation(),
+      remove: useRemoveFavoriteMutation(),
+      reorder: useReorderFavoritesMutation(),
+    }));
+
+    await mutations.add.mutateAsync({
+      entityType: 'agent_session',
+      entityId: 'agent-3',
+    });
+    await mutations.remove.mutateAsync({
+      entityType: 'agent_session',
+      entityId: 'agent-1',
+    });
+    await mutations.reorder.mutateAsync({
+      favorites: [
+        { entityType: 'agent_session', entityId: 'agent-3' },
+        { entityType: 'agent_session', entityId: 'agent-2' },
+      ],
+    });
+
+    expect(
+      testQueryClient
+        .getQueryData<FavoritesList>(favoriteKeys.list(agentFilter).queryKey)
+        ?.favorites.map((item) => item.entityId)
+    ).toEqual(['agent-3', 'agent-2']);
+    expect(
+      testQueryClient
+        .getQueryData<FavoritesList>(favoriteKeys.list(channelFilter).queryKey)
+        ?.favorites.map((item) => item.entityId)
+    ).toEqual(['channel-1']);
   });
 
   it('keeps queued reorder entirely on the captured GraphQL path', async () => {
@@ -215,7 +297,7 @@ describe('favorites transport', () => {
 
   it('keeps REST reorder optimism while GraphQL Soup is disabled', async () => {
     mocks.graphqlSoupEnabled.mockReturnValue(false);
-    testQueryClient.setQueryData<FavoritesList>(favoriteKeys.list.queryKey, {
+    testQueryClient.setQueryData<FavoritesList>(favoriteKeys.list().queryKey, {
       favorites: [favorite('document-1', 0), favorite('document-2', 1)],
     });
     mocks.reorderFavoritesRest.mockResolvedValue(ok(undefined));
@@ -231,13 +313,13 @@ describe('favorites transport', () => {
 
     expect(
       testQueryClient
-        .getQueryData<FavoritesList>(favoriteKeys.list.queryKey)
+        .getQueryData<FavoritesList>(favoriteKeys.list().queryKey)
         ?.favorites.map((item) => item.entityId)
     ).toEqual(['document-2', 'document-1']);
     expect(mocks.reorderFavoritesRest).toHaveBeenCalledOnce();
     expect(mocks.createGraphqlReorderMutation).not.toHaveBeenCalled();
     expect(invalidateQueries).toHaveBeenCalledWith({
-      queryKey: favoriteKeys.list.queryKey,
+      queryKey: favoriteKeys.list._def,
     });
   });
 });

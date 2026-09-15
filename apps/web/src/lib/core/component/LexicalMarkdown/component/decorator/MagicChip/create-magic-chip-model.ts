@@ -12,15 +12,16 @@ import {
   type MagicChipData,
   type MagicChipStatus,
 } from '@macro-inc/lexical-core';
+import { useAgentSessionQuery } from '@queries/agent-session/session';
 import {
   acquireAgentSessionFold,
   subscribeAgentSessionLog,
 } from '@queries/agent-session/session-fold';
+import { queryReadyGate } from '@queries/gate';
 import type {
   FoldedMessage,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentSessionLogEntryDto,
   SessionStatusDto,
@@ -32,9 +33,6 @@ import {
   type MagicChipPresentation,
   type MagicChipQuestion,
 } from './presentation';
-
-const STATUS_POLL_INTERVAL_MS = 5_000;
-const MAX_STATUS_POLLS = 120;
 
 function systemEvent(entry: AgentSessionLogEntryDto): string | undefined {
   const content = entry.content;
@@ -51,7 +49,11 @@ function magicChipStatus(
 }
 
 /** What the session row says about who runs it, until the fold says more. */
-type SessionIdentity = { harness: string; model: string };
+type SessionIdentity = {
+  harness: string;
+  model: string;
+  pullRequestUrl?: string | null;
+};
 
 /**
  * The persona as the header names it: the runtime's product name followed
@@ -92,15 +94,19 @@ export function createMagicChipModel(props: MagicChipData): {
 } {
   const [latestEvent, setLatestEvent] = createSignal<string>();
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
-  const [persistedStatus, setPersistedStatus] = createSignal(props.status);
-  const [canEdit, setCanEdit] = createSignal<boolean>();
-  const [session, setSession] = createSignal<SessionIdentity>();
+  const sessionQuery = useAgentSessionQuery(() => props.agentSessionId);
+  // Guard pending data so a cold query cannot suspend the surrounding editor.
+  const session = () =>
+    queryReadyGate(sessionQuery) ? sessionQuery.data : undefined;
+  const canEdit = () => session()?.canEdit;
+  const persistedStatus = () => {
+    const status = session()?.status;
+    return (status ? magicChipStatus(status) : undefined) ?? props.status;
+  };
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
   const pendingElicitation = () => metadata()?.pendingElicitation ?? undefined;
   let active = true;
   let release: (() => void) | undefined;
-  let statusTimer: ReturnType<typeof setTimeout> | undefined;
-  let statusPolls = 0;
   const unsubscribe = subscribeAgentSessionLog(
     props.agentSessionId,
     (event) => {
@@ -108,31 +114,6 @@ export function createMagicChipModel(props: MagicChipData): {
       if (name) setLatestEvent(name);
     }
   );
-
-  const refreshStatus = async () => {
-    statusPolls += 1;
-    const result = await agentHarnessServiceClient
-      .get(props.agentSessionId)
-      .catch(() => undefined);
-    if (!active) return;
-    if (result?.isOk()) {
-      setCanEdit(result.value.canEdit);
-      setSession({
-        harness: result.value.harness,
-        model: result.value.model,
-      });
-    }
-    const status = result?.isOk()
-      ? magicChipStatus(result.value.status)
-      : undefined;
-    if (status) setPersistedStatus(status);
-    const retry =
-      result === undefined || status === 'no_messages' || status === 'booting';
-    if (retry && statusPolls < MAX_STATUS_POLLS) {
-      statusTimer = setTimeout(refreshStatus, STATUS_POLL_INTERVAL_MS);
-    }
-  };
-  void refreshStatus();
 
   void acquireAgentSessionFold({
     agentSessionId: props.agentSessionId,
@@ -169,7 +150,6 @@ export function createMagicChipModel(props: MagicChipData): {
 
   onCleanup(() => {
     active = false;
-    clearTimeout(statusTimer);
     unsubscribe();
     release?.();
   });
@@ -223,7 +203,10 @@ export function createMagicChipModel(props: MagicChipData): {
   const header = createMemo((): MagicChipHeader | undefined => {
     const agent = agentName(session()?.harness);
     const model = modelName(metadata(), session());
-    return agent || model ? { agent, model } : undefined;
+    const pullRequestUrl = session()?.pullRequestUrl ?? undefined;
+    return agent || model || pullRequestUrl
+      ? { agent, model, pullRequestUrl }
+      : undefined;
   });
 
   return { presentation, header, elicitation };

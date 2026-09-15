@@ -190,7 +190,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
       >
         <MobileDrawer side="bottom" open={open()} onOpenChange={setOpen}>
           <MobileDrawer.Portal>
-            <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+            <MobileDrawer.Overlay />
             <MobileDrawer.Content aria-label={originTitle()}>
               <MobileDrawer.Handle />
               <div class="flex items-center justify-between px-4 pb-2 text-xs text-ink-muted shrink-0">

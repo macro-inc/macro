@@ -159,7 +159,37 @@ where
         viewer: Option<&ActorInboxes>,
         upsert: CalendarEventUpsert,
     ) -> Result<CalendarEvent, CalendarMutationError> {
+        let event = upsert.event.clone();
+        self.persist_echo_as(viewer, upsert, event).await
+    }
+
+    /// Persist the provider echo of an occurrence-scoped write and return the
+    /// event as that occurrence reads: the series master is what gets stored,
+    /// but the caller changed one instance, so the exception's content,
+    /// time, and attendees overlay the canonical event in the response.
+    async fn persist_occurrence_echo(
+        &self,
+        viewer: Option<&ActorInboxes>,
+        upsert: CalendarEventUpsert,
+        recurrence_id: &str,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
         let mut event = upsert.event.clone();
+        if let Some(exception) = upsert
+            .overrides
+            .iter()
+            .find(|exception| exception.recurrence_id == recurrence_id)
+        {
+            exception.apply_to(&mut event);
+        }
+        self.persist_echo_as(viewer, upsert, event).await
+    }
+
+    async fn persist_echo_as(
+        &self,
+        viewer: Option<&ActorInboxes>,
+        upsert: CalendarEventUpsert,
+        mut event: CalendarEvent,
+    ) -> Result<CalendarEvent, CalendarMutationError> {
         let super::models::CalendarEventSource::Google(source) = &upsert.source;
         let email_link_id = source.email_link_id;
         let outcome = self
@@ -325,7 +355,8 @@ where
                     .map_err(provider_error)?;
                 match outcome {
                     GoogleInstanceUpdateOutcome::Applied(upsert) => {
-                        self.persist_echo(target.actor.as_ref(), *upsert).await
+                        self.persist_occurrence_echo(target.actor.as_ref(), *upsert, &recurrence_id)
+                            .await
                     }
                     GoogleInstanceUpdateOutcome::OccurrenceGone(upsert) => {
                         // Nothing was written, but the provider's view of the
@@ -460,9 +491,13 @@ where
             .await
             .map_err(provider_error)?;
         match outcome {
-            GoogleRsvpOutcome::Applied(upsert) => {
-                self.persist_echo(target.actor.as_ref(), *upsert).await
-            }
+            GoogleRsvpOutcome::Applied(upsert) => match &scope {
+                CalendarRsvpScope::All => self.persist_echo(target.actor.as_ref(), *upsert).await,
+                CalendarRsvpScope::ThisEvent { recurrence_id } => {
+                    self.persist_occurrence_echo(target.actor.as_ref(), *upsert, recurrence_id)
+                        .await
+                }
+            },
             GoogleRsvpOutcome::NotAttendee => Err(CalendarMutationError::NotAttendee),
             GoogleRsvpOutcome::Gone => {
                 self.retire_gone_source(&target).await;

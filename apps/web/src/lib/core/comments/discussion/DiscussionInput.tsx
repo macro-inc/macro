@@ -1,5 +1,6 @@
 import { InputActionButton } from '@channel/Input/ActionButton';
 import { useInput, useInputCommands } from '@channel/Input/context';
+import { createCollapsedInputState } from '@channel/Input/create-collapsed-input-state';
 import { FormatButtons } from '@channel/Input/FormatButtons';
 import { Input } from '@channel/Input/Input';
 import type {
@@ -14,8 +15,10 @@ import {
   applyNodeFormat,
 } from '@channel/Input/utils/formatting';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
+import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -24,7 +27,7 @@ import PaperclipIcon from '@phosphor/paperclip.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import FormatIcon from '@phosphor/text-aa.svg';
 import { isIOS } from '@solid-primitives/platform';
-import { ComposerSurface, Dropdown } from '@ui';
+import { CollapsedInput, ComposerSurface, Dropdown } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -43,6 +46,10 @@ export type DiscussionInputProps = InputCallbacks & {
   children?: JSX.Element;
   /** Whether to auto-focus the input on mount. Defaults to `!isMobile()`. */
   autofocus?: boolean;
+  /** Use the channel-style compact mobile composer until tapped. */
+  collapsible?: boolean;
+  /** Blur and collapse after onSend completes; other inputs retain focus. */
+  blurOnSend?: boolean;
 };
 
 function AttachImagesAction() {
@@ -136,6 +143,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
   const [mentions, setMentions] = createSignal<ItemMention[]>([]);
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isSending, setIsSending] = createSignal(false);
+  let isInternalRefocus = false;
 
   const inputView = () => ({
     ...props.input,
@@ -191,6 +199,10 @@ export function DiscussionInput(props: DiscussionInputProps) {
       setIsSending(true);
       try {
         await props.onSend?.(snapshot);
+        if (props.blurOnSend) {
+          markdownEditor.controls.blur();
+          collapsedInput.collapse();
+        }
         return true;
       } finally {
         setIsSending(false);
@@ -214,20 +226,40 @@ export function DiscussionInput(props: DiscussionInputProps) {
     },
   };
 
+  const collapsedInput = createCollapsedInputState({
+    inputId: () => props.input.id,
+    attachFiles: commands.attachFiles,
+  });
+  const isCollapsed = () => !!props.collapsible && collapsedInput.isCollapsed();
+  const focusEditor = () => {
+    collapsedInput.expand();
+    markdownEditor.controls.focus();
+  };
+
   props.onReady?.({
     clear: () => {
       // On iOS, blur before clearing so dictation finalizes and discards its buffer
-      if (isIOS) {
+      const root = markdownEditor.lexical.getRootElement();
+      if (isIOS && root?.contains(document.activeElement)) {
+        isInternalRefocus = true;
         markdownEditor.controls.blur();
         markdownEditor.controls.clear();
-        requestAnimationFrame(() => markdownEditor.controls.focus());
+        if (props.blurOnSend && isSending()) {
+          // Sending will collapse this input; an iOS refocus would reopen the keyboard.
+          isInternalRefocus = false;
+        } else {
+          requestAnimationFrame(() => {
+            markdownEditor.controls.focus();
+            isInternalRefocus = false;
+          });
+        }
       } else {
         markdownEditor.controls.clear();
       }
       setValue('');
       setMentions([]);
     },
-    focus: () => markdownEditor.controls.focus(),
+    focus: focusEditor,
     send: () => commands.send(),
     attachFiles: async (files: File[]) => {
       // Insert images into the editor
@@ -239,13 +271,54 @@ export function DiscussionInput(props: DiscussionInputProps) {
       markdownEditor.controls.setMarkdown(snapshot.value);
       setMentions(snapshot.mentions);
       setValue(snapshot.value);
-      markdownEditor.controls.focus();
+      focusEditor();
     },
   });
 
   return (
     <Input.Root input={inputView()} commands={commands}>
-      <ComposerSurface appearance="chat" class="h-auto">
+      <Show when={isCollapsed()}>
+        <input
+          ref={collapsedInput.setFilePickerRef}
+          type="file"
+          class="hidden"
+          multiple
+          accept="image/*"
+          onChange={collapsedInput.onFilePickerChange}
+        />
+        <CollapsedInput
+          class="touch:rounded-full touch:island"
+          draft={value()}
+          renderDraft={(draft) => (
+            <StaticMarkdown
+              markdown={draft()}
+              theme={singleLineMarkdownTheme}
+              singleLine
+            />
+          )}
+          placeholder={props.input.placeholder}
+          pending={isSending()}
+          disabled={!value().trim()}
+          getFocusTarget={() => {
+            // Expand synchronously so iOS can focus within the tap gesture.
+            collapsedInput.expand();
+            return markdownEditor.lexical.getRootElement();
+          }}
+          onAttach={collapsedInput.attach}
+          onOpen={collapsedInput.expand}
+          onSend={() => void commands.send()}
+        />
+      </Show>
+      <ComposerSurface
+        appearance="chat"
+        class={isCollapsed() ? 'hidden' : 'h-auto'}
+        onFocusOut={(event) => {
+          const next = event.relatedTarget as Node | null;
+          if (next && event.currentTarget.contains(next)) return;
+          if (isInternalRefocus) return;
+          collapsedInput.collapse();
+        }}
+      >
         <Input.Layout
           data-composer-inline={
             !showFormatRibbon() && !hasLineBreaks() ? '' : undefined

@@ -4110,6 +4110,7 @@ export const getCollabSurfaceResponse = zod
         'skill',
         'agent_session',
         'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity.'),
@@ -4161,6 +4162,7 @@ export const ensureCollabSurfaceBody = zod
         'skill',
         'agent_session',
         'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity access derives from.'),
@@ -4193,6 +4195,7 @@ export const ensureCollabSurfaceResponse = zod
         'skill',
         'agent_session',
         'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('Type of the parent entity.'),
@@ -8565,6 +8568,7 @@ export const listFavoritesQueryParams = zod.object({
           'skill',
           'agent_session',
           'scheduled_action',
+          'initiative',
         ])
         .describe('The type of an entity in Macro')
     )
@@ -8624,6 +8628,7 @@ export const listFavoritesResponse = zod
                 'skill',
                 'agent_session',
                 'scheduled_action',
+                'initiative',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -8671,6 +8676,7 @@ export const addFavoriteBody = zod
         'skill',
         'agent_session',
         'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the entity to favorite.'),
@@ -8719,6 +8725,7 @@ export const addFavoriteResponse = zod
         'skill',
         'agent_session',
         'scheduled_action',
+        'initiative',
       ])
       .describe('The type of an entity in Macro')
       .describe('The type of the favorited entity.'),
@@ -8764,6 +8771,7 @@ export const reorderFavoritesBody = zod
                 'skill',
                 'agent_session',
                 'scheduled_action',
+                'initiative',
               ])
               .describe('The type of an entity in Macro')
               .describe('The type of the favorited entity.'),
@@ -8802,6 +8810,7 @@ export const removeFavoriteByEntityParams = zod.object({
       'skill',
       'agent_session',
       'scheduled_action',
+      'initiative',
     ])
     .describe('The type of the favorited entity.'),
   entity_id: zod.string().describe('The id of the favorited entity.'),
@@ -8810,6 +8819,59 @@ export const removeFavoriteByEntityParams = zod.object({
 export const removeFavoriteByEntityResponseDefault = null;
 
 export const removeFavoriteByEntityResponse = zod.unknown();
+
+/**
+ * `foreign_entity_id` is a wildcard path segment: sources store slashes inside
+the identifier, for example `owner/repo/pull/12`.
+
+Authorization matches the by-id route. Internal service callers see every
+record; an authenticated user sees a record only when they have view access
+to it, and records they cannot view are reported as `404` so the route never
+reveals that a mapping exists. Bot tokens are not accepted here — they use
+the by-id route, which mints a bot-scoped receipt.
+ * @summary Get a visible foreign entity by the identifier its source system assigned.
+ */
+export const getForeignEntityBySourceParams = zod.object({
+  source: zod
+    .string()
+    .describe('Foreign entity source, e.g. github_pull_request'),
+  foreign_entity_id: zod
+    .string()
+    .describe('Identifier assigned by the source system; may contain slashes'),
+});
+
+export const getForeignEntityBySourceResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was created.'),
+    foreignEntityId: zod
+      .string()
+      .describe('Identifier assigned by the external system.'),
+    foreignEntitySource: zod
+      .string()
+      .describe('Source system that owns the external identifier.'),
+    id: zod
+      .uuid()
+      .describe('Internal primary key for this foreign entity record.'),
+    metadata: zod
+      .unknown()
+      .describe('Arbitrary metadata stored with the mapping.'),
+    storedForAuthEntity: zod
+      .string()
+      .describe(
+        'Internal auth entity namespace this foreign entity is stored for.'
+      ),
+    storedForId: zod
+      .string()
+      .describe(
+        'Internal entity identifier this foreign entity is stored for.'
+      ),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('Timestamp when the record was last updated.'),
+  })
+  .describe('A persisted mapping to an entity owned by an external system.');
 
 /**
  * @summary Get a visible foreign entity by its internal ID.
@@ -12296,6 +12358,7 @@ export const getItemsSoupResponse = zod
                                 'skill',
                                 'agent_session',
                                 'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -16264,6 +16327,7 @@ export const postItemsSoupResponse = zod
                                 'skill',
                                 'agent_session',
                                 'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -19675,6 +19739,7 @@ export const postItemsSoupAstResponse = zod
                                 'skill',
                                 'agent_session',
                                 'scheduled_action',
+                                'initiative',
                               ])
                               .describe('The type of an entity in Macro')
                               .describe("The referenced entity's type."),
@@ -23442,6 +23507,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'skill',
                                       'agent_session',
                                       'scheduled_action',
+                                      'initiative',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -26849,6 +26915,7 @@ export const postItemsSoupAstGroupedResponse = zod
                                       'skill',
                                       'agent_session',
                                       'scheduled_action',
+                                      'initiative',
                                     ])
                                     .describe('The type of an entity in Macro')
                                     .describe("The referenced entity's type."),
@@ -29206,6 +29273,7 @@ export const listRemindersQueryParams = zod.object({
           'skill',
           'agent_session',
           'scheduled_action',
+          'initiative',
         ])
         .describe('The type of an entity in Macro')
     )
@@ -29288,6 +29356,7 @@ export const listRemindersResponse = zod
                     'skill',
                     'agent_session',
                     'scheduled_action',
+                    'initiative',
                   ])
                   .describe('The type of an entity in Macro'),
               ])
@@ -29375,6 +29444,7 @@ export const createReminderBody = zod
             'skill',
             'agent_session',
             'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -29459,6 +29529,7 @@ export const getReminderResponse = zod
             'skill',
             'agent_session',
             'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])
@@ -29603,6 +29674,7 @@ export const updateReminderResponse = zod
             'skill',
             'agent_session',
             'scheduled_action',
+            'initiative',
           ])
           .describe('The type of an entity in Macro'),
       ])

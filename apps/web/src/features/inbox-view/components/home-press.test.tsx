@@ -1,8 +1,12 @@
+import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HomeListEntity } from './HomeListEntity';
-import { InboxHeader } from './InboxHeader';
+
+vi.mock('@components/app/split-panel', () => ({
+  SplitPanel: { CloseButton: () => null },
+}));
 
 vi.mock('@entity', () => ({
   Entity: { Title: () => 'Recent chat', Timestamp: () => 'now' },
@@ -22,7 +26,7 @@ describe.each(['recent', 'new chat'] as const)('Home %s press', (kind) => {
     const activate = vi.fn();
     const view = render(() =>
       kind === 'new chat' ? (
-        <InboxHeader onNewChat={activate} />
+        <SidebarCreateHeader label="New chat" onCreate={activate} />
       ) : (
         <HomeListEntity
           entity={{

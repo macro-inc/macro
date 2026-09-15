@@ -9,6 +9,7 @@ pub mod team_share;
 
 use macro_user_id::user_id::MacroUserIdStr;
 pub use model_entity::EntityType;
+use model_owner::Owner;
 pub use models_entity_access_management::EntityAccessSourceType;
 pub use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::{
@@ -37,6 +38,59 @@ pub async fn insert_entity_access_row(
         source_id,
         source_type as _,
         access_level as _,
+    )
+    .execute(transaction.as_mut())
+    .await?;
+
+    Ok(())
+}
+
+struct OwnerGrantSource {
+    source_type: EntityAccessSourceType,
+    source_id: String,
+}
+
+impl OwnerGrantSource {
+    fn from_owner(owner: &Owner) -> Self {
+        let source_type = match owner {
+            Owner::User(_) => EntityAccessSourceType::User,
+            Owner::Bot(_) => EntityAccessSourceType::Bot,
+            Owner::Team(_) => EntityAccessSourceType::Team,
+        };
+        Self {
+            source_type,
+            source_id: owner.principal_id(),
+        }
+    }
+}
+
+/// Inserts or raises `owner`'s direct grant on the entity to `Owner`.
+///
+/// Does not authorize and does not commit.
+///
+/// A no-op still holds the conflicting row lock until the caller commits.
+#[tracing::instrument(skip(transaction), err)]
+pub async fn upsert_owner_grant(
+    transaction: &mut Transaction<'_, Postgres>,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+    owner: &Owner,
+) -> Result<(), sqlx::Error> {
+    let source = OwnerGrantSource::from_owner(owner);
+    // Conflict WHERE only steers index inference onto the direct unique index.
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, $2, $3, $4, 'owner')
+        ON CONFLICT (entity_id, entity_type, source_id, source_type)
+        WHERE granted_from_project_id IS NULL
+        DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()
+        WHERE entity_access.access_level != 'owner'
+        "#,
+        entity_id,
+        entity_type.as_ref(),
+        source.source_id,
+        source.source_type as _,
     )
     .execute(transaction.as_mut())
     .await?;
@@ -307,7 +361,8 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
-            | EntityType::Call => {
+            | EntityType::Call
+            | EntityType::Initiative => {
                 sqlx::query!(
                     r#"
                     DELETE FROM entity_access
@@ -420,7 +475,8 @@ pub async fn update_entity_access_channel_share_permissions(
             | EntityType::Chat
             | EntityType::Document
             | EntityType::EmailThread
-            | EntityType::Call => {
+            | EntityType::Call
+            | EntityType::Initiative => {
                 let entity_type_str = entity_type.as_ref();
 
                 let mut qb: QueryBuilder<Postgres> = QueryBuilder::new(

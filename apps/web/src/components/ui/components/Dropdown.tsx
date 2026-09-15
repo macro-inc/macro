@@ -204,9 +204,9 @@ function DropdownContent(props: DropdownContentProps) {
       >
         <KobalteDropdownMenu.Content
           class={cn(
-            // Desktop paints a solid pane, including padding and ungrouped
-            // content. Touch keeps its translucent group fills and glass rim.
-            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-menu touch:bg-transparent text-sm [--color-menu:var(--color-menu-glass)]',
+            // Paint the same surface as context menus, including custom
+            // contents (calendar month lists) without a Dropdown.Group.
+            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-menu-glass text-sm [--color-surface:var(--color-menu)]',
             local.class
           )}
           depth={local.depth ?? 2}
@@ -248,7 +248,7 @@ function DropdownSubContent(props: DropdownSubContentProps) {
       >
         <KobalteDropdownMenu.SubContent
           class={cn(
-            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-menu touch:bg-transparent text-sm [--color-menu:var(--color-menu-glass)] [--color-surface:var(--color-menu)]',
+            'rounded-xl size-auto z-action-menu menu-open-animation glass bg-menu-glass text-sm [--color-surface:var(--color-menu)]',
             local.class
           )}
           depth={local.depth ?? 2}

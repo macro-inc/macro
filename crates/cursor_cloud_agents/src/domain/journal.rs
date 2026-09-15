@@ -99,6 +99,11 @@ pub struct ReplayMachine {
     runs: HashMap<CursorRunId, RunState>,
 }
 impl ReplayMachine {
+    /// Latest PR recovered from native results or fallback polling.
+    pub fn pull_request_url(&self) -> Option<&str> {
+        self.translator.pull_request_url()
+    }
+
     /// Whether the run's original prompt is reconstructable.
     pub fn has_prompt(&self, run: &CursorRunId) -> bool {
         self.runs.get(run).is_some_and(|s| s.prompt)
@@ -162,6 +167,12 @@ impl ReplayMachine {
                 if !outcome.is_terminal() {
                     return Ok(Vec::new());
                 }
+                let git = value
+                    .get("git")
+                    .filter(|git| !git.is_null())
+                    .map(|git| serde_json::from_value(git.clone()))
+                    .transpose()
+                    .map_err(|error| rootcause::report!(error))?;
                 self.event(
                     run,
                     CursorEvent::Result {
@@ -169,6 +180,7 @@ impl ReplayMachine {
                         status,
                         text,
                         duration_ms: None,
+                        git,
                     },
                 )
             }
@@ -211,7 +223,13 @@ impl ReplayMachine {
                 state.text.push_str(&text);
                 Ok(self.translator.push(CursorEvent::Assistant { text }))
             }
-            CursorEvent::Result { status, text, .. } => {
+            CursorEvent::Result {
+                run_id,
+                status,
+                text,
+                duration_ms,
+                git,
+            } => {
                 if !matches!(
                     status,
                     RunStatus::Finished | RunStatus::Cancelled | RunStatus::Error
@@ -235,6 +253,13 @@ impl ReplayMachine {
                         ));
                     }
                 }
+                updates.extend(self.translator.push(CursorEvent::Result {
+                    run_id,
+                    status: status.clone(),
+                    text: None,
+                    duration_ms,
+                    git,
+                }));
                 state.terminal = Some(status);
                 updates.extend(self.translator.close_open_calls());
                 Ok(updates)

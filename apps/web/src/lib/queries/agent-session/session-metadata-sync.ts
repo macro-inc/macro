@@ -1,4 +1,9 @@
-import type { AgentSessionRenamedEvent } from './realtime-protocol';
+import { queryClient } from '@queries/client';
+import { agentSessionKeys } from './keys';
+import type {
+  AgentSessionRenamedEvent,
+  AgentSessionUpdatedEvent,
+} from './realtime-protocol';
 
 const renameListeners = new Set<(event: AgentSessionRenamedEvent) => void>();
 
@@ -15,4 +20,23 @@ export function subscribeAgentSessionRenamed(
 ): () => void {
   renameListeners.add(listener);
   return () => renameListeners.delete(listener);
+}
+
+/** Cancel stale snapshots before refetching the committed session metadata. */
+export async function handleAgentSessionUpdated(
+  event: AgentSessionUpdatedEvent
+): Promise<void> {
+  const filters = {
+    queryKey: agentSessionKeys.detail(event.agentSessionId).queryKey,
+    exact: true,
+  };
+  await queryClient.cancelQueries(filters);
+  await queryClient.invalidateQueries(filters);
+}
+
+/** Recover session metadata updates missed while the gateway was disconnected. */
+export async function invalidateAgentSessionMetadata(): Promise<void> {
+  const filters = { queryKey: agentSessionKeys.detail._def };
+  await queryClient.cancelQueries(filters);
+  await queryClient.invalidateQueries(filters);
 }
