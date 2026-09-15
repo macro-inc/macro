@@ -40,6 +40,7 @@ beforeAll(() => {
 
 function createMockOrchestrator(): BlockOrchestrator {
   return {
+    isBlockMounted: vi.fn(() => false),
     createBlockInstance: vi.fn((_type, id, _splitId) => ({
       node: { type: 'mock-node', id },
       detach: vi.fn(),

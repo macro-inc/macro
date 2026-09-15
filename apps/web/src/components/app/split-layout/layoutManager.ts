@@ -6,6 +6,7 @@ import type {
   BlockName,
 } from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
+import { toast } from '@core/component/Toast/Toast';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -2010,6 +2011,17 @@ export function createSplitLayout(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
   ): SplitHandle | undefined {
+    // Inline previews register with the orchestrator without owning a split.
+    // Preserve that mount instead of attaching its shared handle a second time.
+    if (
+      content.type !== 'component' &&
+      !getSplitByContent(content.type, content.id) &&
+      orchestrator.isBlockMounted(resolveBlockAlias(content.type), content.id)
+    ) {
+      toast.alert('Content already open.');
+      return undefined;
+    }
+
     if (options.reopen === 'latest') {
       // Fire-and-forget so it covers every open path (fresh mount, duplicate
       // activation, interceptor-consumed navigation). The block-handle proxy

@@ -704,7 +704,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
         >
           <DotsThree />
         </Dropdown.Trigger>
-        <Dropdown.Content class="z-nested-action-menu">
+        <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
           <Dropdown.Group>
             <Show when={props.previewInfo?.showPreview}>
               <Dropdown.Item

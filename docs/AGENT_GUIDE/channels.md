@@ -50,7 +50,9 @@ files`, `Format`, a `Task` switch (turns the message into a task), `Send message
 
 Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
 an existing thread reply, it inserts a one-line reply-target reference into the composer;
-clicking the reference navigates back to that reply. If text in the message is
+clicking the reference navigates back to that reply. References to the current
+channel navigate in place, including inside the preview panel, without opening
+another split. If text in the message is
 browser-selected before `Reply` is clicked, the reference previews only the selected text.
 Clicking `Reply` again for a message already referenced anywhere in the draft keeps
 the existing reference and draft unchanged, even if a different text selection is used.
