@@ -21,7 +21,9 @@ import {
 } from './reconcile';
 import { getThreadRepliesQueryKey } from './thread-replies';
 import {
+  getMessageTimelineQueryKey,
   getMessageTimelineQueryKeyPrefix,
+  type MessageTimelineData,
   setMessageTimelineData,
 } from './timeline';
 import { handleCommsTyping } from './typing';
@@ -131,13 +133,25 @@ export function handleMessageEvent(
   )
     return;
   applyMessage(change.message, change.type);
-  if (
-    change.type === 'posted' &&
-    !change.message.thread_id &&
-    parent.type === 'document'
-  ) {
-    void loadDocumentRootState(parent, change.message.id);
+  if (change.type === 'posted' && !change.message.thread_id) {
+    if (refetchTimelineAwaitingFirstPage(parent)) return;
+    if (parent.type === 'document') {
+      void loadDocumentRootState(parent, change.message.id);
+    }
   }
+}
+
+/**
+ * A root posted before the bottom page's first fetch resolved cannot be
+ * inserted, and a response the server already computed would overwrite it, so
+ * that fetch runs again. Slices around a message never need it.
+ */
+function refetchTimelineAwaitingFirstPage(parent: MessageParent): boolean {
+  const queryKey = getMessageTimelineQueryKey(parent, null);
+  const timeline = queryClient.getQueryState<MessageTimelineData>(queryKey);
+  if (!timeline || timeline.data) return false;
+  void queryClient.invalidateQueries({ queryKey, exact: true });
+  return true;
 }
 
 /** A live document root arrives without its anchor; its thread state carries it. */
