@@ -204,22 +204,28 @@ function SlimFavoritesSection() {
           focusWithin={section().containsFocus}
           class="h-10 justify-center"
         >
-          <button
-            id={section().domId}
-            type="button"
-            role="treeitem"
-            tabIndex={-1}
-            class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none"
-            aria-expanded={section().open}
-            aria-label="Favorites"
-            onMouseDown={(event) => {
-              if (!isPrimaryMouseDown(event)) return;
-              event.preventDefault();
-              rail.toggleGroup('favorites');
-            }}
+          <Tooltip
+            label={`Favorites (${section().open ? 'expanded' : 'collapsed'})`}
+            placement="right"
+            class="size-10"
           >
-            <StarIcon class="size-4" />
-          </button>
+            <button
+              id={section().domId}
+              type="button"
+              role="treeitem"
+              tabIndex={-1}
+              class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none"
+              aria-expanded={section().open}
+              aria-label="Favorites"
+              onMouseDown={(event) => {
+                if (!isPrimaryMouseDown(event)) return;
+                event.preventDefault();
+                rail.toggleGroup('favorites');
+              }}
+            >
+              <StarIcon class="size-4" />
+            </button>
+          </Tooltip>
         </CollapsibleSection.Header>
         <CollapsibleSection.Content
           open={section().open}
@@ -363,7 +369,7 @@ function SlimHeader() {
 
   return (
     <div class="flex shrink-0 flex-col items-center gap-3 pt-2">
-      <div class="flex h-8 w-full items-center justify-between px-1">
+      <div class="flex h-8 w-full items-center justify-center px-1">
         <SplitPanel.CloseButton size="icon-sm" />
         <RailModeButton
           expanded={false}
