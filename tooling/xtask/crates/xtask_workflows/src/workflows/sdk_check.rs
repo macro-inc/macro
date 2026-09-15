@@ -41,6 +41,7 @@ fn check_sdk() -> Job {
         .add_step(steps::show_sccache_stats())
         .add_step(verify_fresh())
         .add_step(typecheck())
+        .add_step(run_tests())
         .add_step(check_coverage())
         .add_step(steps::teardown_nix())
 }
@@ -68,6 +69,14 @@ fn check_coverage() -> Step<Run> {
     Step::new("Check endpoint coverage")
         .run("bun run coverage")
         .working_directory("packages/sdk")
+}
+
+/// The release publishes on merge, so the PR gate runs the same suite the
+/// release validates rather than discovering a failure after it has landed.
+fn run_tests() -> Step<Run> {
+    Step::new("Test SDK")
+        .run("bun test")
+        .working_directory(xtask_paths::repo_dir!("packages/sdk"))
 }
 
 fn typecheck() -> Step<Run> {
