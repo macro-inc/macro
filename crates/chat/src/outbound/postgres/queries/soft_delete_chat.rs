@@ -31,9 +31,7 @@ pub(crate) async fn soft_delete_chat(
     .await?;
 
     let chat_uuid = macro_uuid::string_to_uuid(chat_id)?;
-    entity_registry_db_utils::mark_deleted(tx, chat_uuid, Utc::now())
-        .await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
+    entity_registry_db_utils::mark_deleted(tx, chat_uuid, Utc::now()).await?;
 
     Ok(())
 }

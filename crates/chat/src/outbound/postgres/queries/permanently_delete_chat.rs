@@ -47,13 +47,11 @@ pub(crate) async fn permanently_delete_chat(
     .execute(tx.as_mut())
     .await?;
 
-    entity_registry_db_utils::delete_entity(tx, chat_uuid)
-        .await
-        .map_err(|e| anyhow::anyhow!("{e}"))?;
-
     sqlx::query!(r#"DELETE FROM "Chat" WHERE id = $1"#, chat_id,)
         .execute(tx.as_mut())
         .await?;
+
+    entity_registry_db_utils::delete_entity(tx, chat_uuid).await?;
 
     Ok(())
 }

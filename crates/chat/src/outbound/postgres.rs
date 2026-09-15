@@ -130,11 +130,11 @@ impl ChatRepo for PgChatRepo {
             entity_registry_db_utils::NewEntityRecord::new(
                 chat_uuid,
                 entity_registry_db_utils::RegisteredEntityType::Chat,
-                model_owner::Owner::User(user_id.clone()),
+                model_owner::Owner::User(user_id),
             ),
         )
         .await
-        .map_err(|e| ChatErr::Unknown(anyhow::anyhow!("{e}")))?;
+        .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "create_chat transaction error");
@@ -241,20 +241,20 @@ impl ChatRepo for PgChatRepo {
         .await
         .map_err(|e| ChatErr::Unknown(e.into()))?;
 
+        queries::copy_messages::copy_messages(&mut tx, source_chat_id, &chat_id)
+            .await
+            .map_err(to_chat_err)?;
+
         entity_registry_db_utils::insert_entity(
             &mut tx,
             entity_registry_db_utils::NewEntityRecord::new(
                 chat_uuid,
                 entity_registry_db_utils::RegisteredEntityType::Chat,
-                model_owner::Owner::User(user_id.clone()),
+                model_owner::Owner::User(user_id),
             ),
         )
         .await
-        .map_err(|e| ChatErr::Unknown(anyhow::anyhow!("{e}")))?;
-
-        queries::copy_messages::copy_messages(&mut tx, source_chat_id, &chat_id)
-            .await
-            .map_err(to_chat_err)?;
+        .map_err(|e| ChatErr::Unknown(e.into()))?;
 
         tx.commit().await.map_err(|e| {
             tracing::error!(error=?e, "copy_chat transaction error");

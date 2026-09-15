@@ -578,6 +578,40 @@ async fn copy_chat_registers_entity_row_for_source_and_copy(pool: Pool<Postgres>
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "fixtures", scripts("users"))
 )]
+async fn delete_restore_and_purge_succeed_without_entity_row(pool: Pool<Postgres>) {
+    let repo = PgChatRepo::new(pool.clone());
+    let chat_id = create_test_chat(&repo, "Legacy Chat").await;
+    let chat_uuid = macro_uuid::string_to_uuid(&chat_id).unwrap();
+
+    sqlx::query(r#"DELETE FROM entity WHERE id = $1"#)
+        .bind(chat_uuid)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    repo.delete(&chat_id).await.unwrap();
+    repo.revert_delete(&chat_id, None).await.unwrap();
+    repo.permanently_delete(&chat_id).await.unwrap();
+
+    let chat_count: (i64,) = sqlx::query_as(r#"SELECT COUNT(*) FROM "Chat" WHERE id = $1"#)
+        .bind(&chat_id)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(chat_count.0, 0);
+
+    let entity_count: (i64,) = sqlx::query_as(r#"SELECT COUNT(*) FROM entity WHERE id = $1"#)
+        .bind(chat_uuid)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(entity_count.0, 0);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("users"))
+)]
 async fn create_chat_creates_user_history(pool: Pool<Postgres>) {
     let repo = PgChatRepo::new(pool.clone());
     let user_id = MacroUserIdStr::parse_from_str("macro|test@example.com")

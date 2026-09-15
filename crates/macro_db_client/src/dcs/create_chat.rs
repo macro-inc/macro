@@ -82,11 +82,10 @@ pub async fn create_chat_v2(
         entity_registry_db_utils::NewEntityRecord::new(
             chat_uuid,
             entity_registry_db_utils::RegisteredEntityType::Chat,
-            model_owner::Owner::User(user_id.clone()),
+            model_owner::Owner::User(user_id),
         ),
     )
-    .await
-    .map_err(|e| anyhow::anyhow!("{e}"))?;
+    .await?;
 
     transaction.commit().await.map_err(|e| {
         tracing::error!(error=?e, "create_chat transaction error");
