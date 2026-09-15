@@ -271,9 +271,16 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
-  it.each(['mail-page', 'incomplete', 'unsupported'] as const)(
-    'handles a failed network refresh with %s local Mail proof',
-    async (kind) => {
+  it.each([
+    { mail: true, kind: 'mail-page' },
+    { mail: true, kind: 'incomplete' },
+    { mail: true, kind: 'unsupported' },
+    { mail: false, kind: 'reconciled' },
+    { mail: false, kind: 'incomplete' },
+    { mail: false, kind: 'unsupported' },
+  ] as const)(
+    'handles a failed network refresh with $kind local proof (mail=$mail)',
+    async ({ mail, kind }) => {
       const fake = makeFakeClient();
       getGraphqlSoupClientMock.mockReturnValue(fake.client);
       getGraphqlSoupCacheHostMock.mockReturnValue({
@@ -283,10 +290,15 @@ describe('createGraphqlSoupAstItemsQuery', () => {
         onCacheGenerationChanged: () => () => {},
       });
       makeGraphqlSoupInputMock.mockReturnValue({
-        initial: { emailView: 'ALL', sortMethod: 'UPDATED_AT', limit: 10 },
+        initial: {
+          ...(mail ? { emailView: 'ALL' } : {}),
+          sortMethod: 'UPDATED_AT',
+          limit: 10,
+        },
       });
       entityFilterMock.mockResolvedValue({
         kind,
+        retainedKeys: [],
         revision: REVISION_0,
         keys: [],
         sortTimestamps: [],
@@ -312,9 +324,13 @@ describe('createGraphqlSoupAstItemsQuery', () => {
           networkError: new Error('API disconnected'),
         });
         fake.executions[0].fail(offlineError);
-        if (kind === 'mail-page') {
-          await vi.waitFor(() => expect(query.data()?.cachedMail).toBe(true));
-          expect(query.data()?.entities).toEqual([]);
+        if (kind === 'mail-page' || kind === 'reconciled') {
+          await vi.waitFor(() => expect(query.data()?.entities).toEqual([]));
+          expect(query.data()?.cachedMail).toBe(mail);
+          if (!mail)
+            expect(entityFilterMock.mock.calls.at(-1)?.[0].baseline).toEqual(
+              []
+            );
           expect(query.error()).toBeUndefined();
           // Server-reported errors are not hidden just because local data exists.
           const serverError = new CombinedError({

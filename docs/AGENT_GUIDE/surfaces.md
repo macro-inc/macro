@@ -2,7 +2,7 @@
 
 ## Live updates in flat Soup lists
 
-With browser GraphQL caching enabled, locally supported flat lists reconcile their
+With browser or native Tauri GraphQL caching enabled, locally supported flat lists reconcile their
 loaded server pages with matching cached entities. Complete matching updates can
 appear without a list refetch; confirmed non-matches and explicit deletions disappear.
 Rows whose current predicate facts are unknown retain their previous server membership
@@ -11,7 +11,8 @@ notification-only cache records do not block other rows' updates. While recomput
 is pending, the last rendered result for the same query and cache generation stays
 visible; local results do not trigger the tab-loading bar. A fresh server response
 still replaces that result, and initial loads without usable data retain normal loading
-indicators.
+indicators. A transport failure does not hide usable current-query local results,
+including empty results; HTTP responses and GraphQL errors still surface.
 
 This is a best-effort display, not proof that every matching entity is cached. Outside
 the supported cached-Mail slice below, loading more follows the original server cursors
@@ -20,7 +21,7 @@ Newly loaded server rows join the retained display immediately, without duplicat
 waiting for local recomputation to succeed. Removing pages from the server baseline
 invalidates overlays built from those pages.
 Changing filters or resetting the cache discards prior reconciliation evidence. Grouped
-lists, unsupported filters/sorts, and native/non-cache transports keep their existing
+lists, unsupported filters/sorts, and non-cache transports keep their existing
 network behavior.
 
 For Documents (including Tasks), Projects, Chats, and participating Channels,
