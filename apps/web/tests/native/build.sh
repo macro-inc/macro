@@ -36,5 +36,7 @@ export CARGO_TARGET_DIR="$out/cargo"
 # Exhaustive matrices execute hundreds of thousands of real indexed queries.
 cargo build --locked -p app --no-default-features \
   --config 'profile.dev.package.turso_core.opt-level=3'
-cp "$CARGO_TARGET_DIR/debug/app" "$out/app"
+# Publish atomically so an existing isolated run can finish on its old inode.
+cp "$CARGO_TARGET_DIR/debug/app" "$out/app.next"
+mv "$out/app.next" "$out/app"
 echo "Built isolated E2E application: $out/app"
