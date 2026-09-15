@@ -292,7 +292,26 @@ describe('agent session creation', () => {
     expect(agentHarnessServiceClient.create).not.toHaveBeenCalled();
   });
 
-  it.each([null, 'environment-1'])(
+  it.each([null, '', '   '])(
+    'requires a saved environment when connected with %s',
+    (environmentId) => {
+      codexConnection.connected = true;
+      codexConnection.environmentId = environmentId;
+      mount();
+      expect(
+        screen.queryByRole('radio', { name: /^Codex @codex$/ })
+      ).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Set up Codex' }));
+      expect(navigation.settings).toHaveBeenCalledWith('Harness');
+      expect(agentHarnessServiceClient.create).not.toHaveBeenCalled();
+      fireEvent.click(
+        screen.getByRole('button', { name: 'Set up Codex Reviewer' })
+      );
+      expect(agentHarnessServiceClient.create).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each(['environment-1'])(
     'starts connected Codex with environment %s without a model override',
     async (environmentId) => {
       codexConnection.connected = true;

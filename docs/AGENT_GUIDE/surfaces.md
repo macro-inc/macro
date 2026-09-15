@@ -405,14 +405,12 @@ The Codex row uses the OpenAI logo and the same icon, button, and status styling
 as Cursor. Under **Codex**, choose **Connect with ChatGPT**, copy the displayed device code,
 and use **Continue to ChatGPT** to finish sign-in in the provider tab. The Macro
 page displays pending, expired, failed, and retryable error states; **Cancel
-sign-in** cancels the attempt. Connected accounts default to **Automatic (from
-your prompt)** under **Cloud environment**, with no branch field. Automatic
-selection uses the prompt and repository metadata. If Codex cannot choose
-confidently, select an environment here, save the settings, then try again.
-Manual options show their repositories and offer the primary repository default in the editable **Branch**
-field. Changed selections display **Unsaved changes** until the server confirms
-them. Choose **Save Codex settings** to save either mode for the signed-in user.
-The button is disabled when the displayed settings already match the saved settings.
+sign-in** cancels the attempt. After connecting, choose a **Cloud environment**
+and click **Save Codex settings** before using Codex. Options show their
+repositories. New sessions always use the `main` branch; there is no branch
+picker or automatic repository selection. Changed selections display **Unsaved
+changes** until the server confirms them. The save button is disabled until an
+environment is selected, and when it matches the saved environment.
 These choices apply to new sessions. **Disconnect** in the Codex row (accessible
 name **Disconnect ChatGPT**) removes the connection. The UI never asks for an
 OAuth token.

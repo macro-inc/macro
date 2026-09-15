@@ -59,17 +59,14 @@ function CodexHarnessContent() {
       setError('Could not disconnect ChatGPT. Please try again.');
     }
   };
-  const save = async (config: {
-    environmentId: string | null;
-    branch: string;
-  }) => {
+  const save = async (config: { environmentId: string }) => {
     setError(undefined);
     try {
       await configure.mutateAsync(config);
       toast.success('Codex settings saved');
     } catch {
       setError(
-        'Could not save Codex settings. Check the environment and branch, then retry.'
+        'Could not save Codex settings. Check the environment, then retry.'
       );
     }
   };

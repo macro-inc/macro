@@ -6,35 +6,22 @@ use codex_connection::domain::{
 };
 use std::{collections::HashMap, sync::Mutex};
 
-struct NoDecision;
-#[async_trait::async_trait]
-impl RepositoryDecision for NoDecision {
-    async fn choose(
-        &self,
-        _: &MacroUserIdStr<'static>,
-        _: &str,
-        _: &[String],
-        _: &[agent_session::domain::model::AgentSession],
-    ) -> Result<Option<String>, rootcause::Report> {
-        panic!("explicit target must not use model");
-    }
-}
 #[derive(Default)]
 struct Connections(
     Mutex<HashMap<String, (String, String)>>,
-    Mutex<Option<(Option<String>, String)>>,
+    Mutex<Option<Option<String>>>,
 );
 #[async_trait::async_trait]
 impl ConnectionService for Connections {
     async fn resolve(&self, owner: &str) -> Result<ResolvedConnection, ConnectionError> {
         let rows = self.0.lock().unwrap();
         let (connection, account) = rows.get(owner).ok_or(ConnectionError::NotConnected)?;
-        let (environment, branch) = self
+        let environment = self
             .1
             .lock()
             .unwrap()
             .clone()
-            .unwrap_or((Some("env_owner".into()), "main".into()));
+            .unwrap_or(Some("env_owner".into()));
         Ok(ResolvedConnection {
             connection_id: connection.parse().unwrap(),
             credentials: Credentials {
@@ -45,7 +32,6 @@ impl ConnectionService for Connections {
                 account_id: account.clone(),
             },
             environment_id: environment.map(|id| CloudId::new(id).unwrap()),
-            branch,
         })
     }
     async fn status(&self, _: &str) -> Result<ConnectionStatus, ConnectionError> {
@@ -67,12 +53,7 @@ impl ConnectionService for Connections {
     async fn environments(&self, _: &str) -> Result<Vec<Environment>, ConnectionError> {
         unimplemented!()
     }
-    async fn configure(
-        &self,
-        _: &str,
-        _: Option<&str>,
-        _: &str,
-    ) -> Result<ConnectionStatus, ConnectionError> {
+    async fn configure(&self, _: &str, _: &str) -> Result<ConnectionStatus, ConnectionError> {
         unimplemented!()
     }
 }
@@ -162,19 +143,19 @@ impl CloudConversation for Provider {
     async fn follow_up(
         &self,
         auth: &Credentials,
-        _: &CloudId,
+        task: &CloudId,
         _: &TurnId,
-        prompt: &str,
+        _: &str,
     ) -> Result<CreatedTask, rootcause::Report> {
-        self.create(
-            auth,
-            &Launch {
-                environment: CloudId::new("env_owner".into())?,
-                branch: "main".into(),
-                prompt: prompt.into(),
-            },
-        )
-        .await
+        self.0
+            .lock()
+            .unwrap()
+            .push(format!("followup:{}", auth.account_id));
+        Ok(CreatedTask {
+            task_id: task.clone(),
+            assistant_turn_id: Some(TurnId::new("turn_owner".into())?),
+            url: "https://chatgpt.com/codex/tasks/task_owner".into(),
+        })
     }
     async fn cancel(&self, auth: &Credentials, _: &CloudId) -> Result<(), rootcause::Report> {
         self.0
@@ -221,8 +202,7 @@ fn runtime(
         },
         session: AgentSessionId::new(),
         sessions: Sessions::default(),
-        history: agent_session::testing::InMemoryAgentSessionRepo::default(),
-        decision: Arc::new(NoDecision),
+        session_repository: agent_session::testing::InMemoryAgentSessionRepo::default(),
         pull_requests: None,
         claim: Arc::new(std::sync::OnceLock::new()),
     }

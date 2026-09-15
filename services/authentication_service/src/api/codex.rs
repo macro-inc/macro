@@ -28,8 +28,6 @@ pub struct CodexConnectionStatus {
     pub account_id: Option<String>,
     /// Explicitly selected remote environment.
     pub environment_id: Option<String>,
-    /// Base ref for new cloud tasks.
-    pub branch: String,
 }
 impl From<ConnectionStatus> for CodexConnectionStatus {
     fn from(status: ConnectionStatus) -> Self {
@@ -38,7 +36,6 @@ impl From<ConnectionStatus> for CodexConnectionStatus {
             email: None,
             account_id: status.account_id,
             environment_id: status.environment_id,
-            branch: status.branch,
         }
     }
 }
@@ -97,14 +94,12 @@ pub struct CodexEnvironmentRepository {
     /// Provider default branch.
     pub default_branch: String,
 }
-/// Explicit remote target for future Codex sessions.
+/// Explicit remote environment for future Codex sessions.
 #[derive(Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct CodexConfigRequest {
-    /// An environment currently visible to this account, or null for automatic selection.
-    pub environment_id: Option<String>,
-    /// Git base ref in that environment.
-    pub branch: String,
+    /// An environment currently visible to this account.
+    pub environment_id: String,
 }
 
 pub enum ApiError {
@@ -276,8 +271,7 @@ pub async fn configure(
             .ok_or(ApiError::Unavailable)?
             .configure(
                 user.authorization.macro_user_id.as_ref(),
-                request.environment_id.as_deref(),
-                &request.branch,
+                &request.environment_id,
             )
             .await?
             .into(),

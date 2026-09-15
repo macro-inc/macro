@@ -4,14 +4,11 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
-import type { CodexConfigRequestEnvironmentId } from './codexConfigRequestEnvironmentId';
 
 /**
- * Explicit remote target for future Codex sessions.
+ * Explicit remote environment for future Codex sessions.
  */
 export interface CodexConfigRequest {
-  /** Git base ref in that environment. */
-  branch: string;
-  /** An environment currently visible to this account, or null for automatic selection. */
-  environmentId?: CodexConfigRequestEnvironmentId;
+  /** An environment currently visible to this account. */
+  environmentId: string;
 }

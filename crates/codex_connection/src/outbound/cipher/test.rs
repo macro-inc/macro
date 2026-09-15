@@ -34,7 +34,6 @@ fn state() -> ConnectionState {
                 account_id: "account-test".into(),
             },
             environment_id: Some("env-test".into()),
-            branch: "main".into(),
         }),
         attempt: None,
     }

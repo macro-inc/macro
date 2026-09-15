@@ -39,7 +39,6 @@ describe('Codex connection', () => {
           email: null,
           accountId: 'example-account',
           environmentId: null,
-          branch: 'main',
         }}
       />
     ));
@@ -47,7 +46,7 @@ describe('Codex connection', () => {
     expect(screen.getByRole('link', { name: 'Open Codex' })).toBeTruthy();
   });
 
-  it('saves automatic retaining the stored branch and remains available when environment loading fails', () => {
+  it('cannot save without selecting an environment when environment loading fails', () => {
     const props = base();
     render(() => (
       <CodexConnection
@@ -55,7 +54,6 @@ describe('Codex connection', () => {
         connection={{
           connected: true,
           environmentId: 'env-old',
-          branch: 'release',
         }}
         environmentsError
       />
@@ -70,17 +68,19 @@ describe('Codex connection', () => {
     fireEvent.click(
       screen.getByRole('button', { name: 'Save Codex settings' })
     );
-    expect(props.onSave).toHaveBeenCalledWith({
-      environmentId: null,
-      branch: 'release',
-    });
+    expect(props.onSave).not.toHaveBeenCalled();
+    expect(
+      screen
+        .getByRole('button', { name: 'Save Codex settings' })
+        .hasAttribute('disabled')
+    ).toBe(true);
   });
 
-  it('shows connection and environment loading without exposing a branch in automatic mode', () => {
+  it('requires an environment and offers no automatic or branch selection', () => {
     render(() => (
       <CodexConnection
         {...base()}
-        connection={{ connected: true, environmentId: null, branch: '' }}
+        connection={{ connected: true, environmentId: null }}
         environmentsLoading
       />
     ));
@@ -89,7 +89,7 @@ describe('Codex connection', () => {
     );
     expect(screen.queryByLabelText('Branch')).toBeNull();
     expect(
-      screen.getByRole('option', { name: 'Automatic (from your prompt)' })
+      screen.getByRole('option', { name: 'Choose an environment' })
     ).toBeTruthy();
   });
 
@@ -130,7 +130,7 @@ describe('Codex connection', () => {
       ).toBeNull();
     }
   );
-  it('saves the selected environment and trimmed branch and permits disconnect', () => {
+  it('saves only the selected environment and always describes the main branch', () => {
     const props = base();
     render(() => (
       <CodexConnection
@@ -139,7 +139,6 @@ describe('Codex connection', () => {
           connected: true,
           email: null,
           environmentId: null,
-          branch: 'main',
         }}
         environments={[
           {
@@ -165,18 +164,15 @@ describe('Codex connection', () => {
     fireEvent.change(screen.getByLabelText('Cloud environment'), {
       target: { value: 'env-1' },
     });
-    expect((screen.getByLabelText('Branch') as HTMLInputElement).value).toBe(
-      'develop'
-    );
-    fireEvent.input(screen.getByLabelText('Branch'), {
-      target: { value: ' feature/test ' },
-    });
+    expect(screen.queryByLabelText('Branch')).toBeNull();
+    expect(
+      screen.getByText(/New sessions always start from the main branch/)
+    ).toBeTruthy();
     fireEvent.click(
       screen.getByRole('button', { name: 'Save Codex settings' })
     );
     expect(props.onSave).toHaveBeenCalledWith({
       environmentId: 'env-1',
-      branch: 'feature/test',
     });
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect ChatGPT' }));
     expect(props.onDisconnect).toHaveBeenCalledOnce();
@@ -200,7 +196,6 @@ describe('Codex connection', () => {
     const [connection, setConnection] = createSignal({
       connected: true,
       environmentId: null as string | null,
-      branch: 'main',
     });
     const [error, setError] = createSignal<string>();
     render(() => (
@@ -237,17 +232,7 @@ describe('Codex connection', () => {
       (screen.getByLabelText('Cloud environment') as HTMLSelectElement).value
     ).toBe('env-1');
     setError(undefined);
-    setConnection({ connected: true, environmentId: 'env-1', branch: 'main' });
-    expect(screen.queryByRole('status')).toBeNull();
-    expect(save.hasAttribute('disabled')).toBe(true);
-
-    fireEvent.input(screen.getByLabelText('Branch'), {
-      target: { value: 'release' },
-    });
-    expect(screen.getByRole('status').textContent).toContain('Unsaved changes');
-    fireEvent.input(screen.getByLabelText('Branch'), {
-      target: { value: ' main ' },
-    });
+    setConnection({ connected: true, environmentId: 'env-1' });
     expect(screen.queryByRole('status')).toBeNull();
     expect(save.hasAttribute('disabled')).toBe(true);
   });

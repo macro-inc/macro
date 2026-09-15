@@ -1,5 +1,4 @@
 //! Per-owner Codex authorization and provider mapping for hosted conversations.
-use super::ports::RepositoryDecision;
 use agent_session::domain::{
     model::{AgentSessionId, ExternalSession},
     ports::{AgentSessionRepo, ExternalSessionRepo},
@@ -57,10 +56,8 @@ pub struct CodexRuntime<P, S, H = S> {
     pub session: AgentSessionId,
     /// Owning session persistence port.
     pub sessions: S,
-    /// Owning session port for prior repository context and recording the selected repository.
-    pub history: H,
-    /// Shared metered model decision; its candidates are this owner's Codex repositories.
-    pub decision: Arc<dyn RepositoryDecision>,
+    /// Owning session port for recording the configured repository.
+    pub session_repository: H,
     /// Shared owner-authorized session PR publication service.
     pub pull_requests: Option<Arc<dyn agent_session::domain::pull_request::SessionPullRequests>>,
     /// Immutable ownership claim activated before this attachment can publish metadata.
@@ -93,71 +90,21 @@ impl<P: OAuth + CloudConversation, S: ExternalSessionRepo, H: AgentSessionRepo> 
     }
     async fn resolve_target(
         &self,
-        prompt: &str,
+        _: &str,
         _: Option<&CloudTarget>,
     ) -> Result<CloudTarget, rootcause::Report> {
         let resolved = self.connection().await?;
+        let id = resolved.environment_id.ok_or_else(|| {
+            rootcause::report!(
+                "select and save a Codex environment in Harness settings before sending a prompt"
+            )
+        })?;
         let environments = self.provider.environments(&resolved.credentials).await?;
-        let (environment, branch) = if let Some(id) = resolved.environment_id {
-            let environment = environments.iter().find(|environment| environment.id == id.as_str())
-                .ok_or_else(||rootcause::report!("the configured Codex environment is unavailable; select an environment in Harness settings"))?;
-            (environment, resolved.branch)
-        } else {
-            let identities: Vec<_> = environments
-                .iter()
-                .map(|environment| {
-                    environment
-                        .repositories
-                        .first()
-                        .map(|repository| repository_identity(&repository.clone_url))
-                        .transpose()
-                })
-                .collect::<Result<_, _>>()?;
-            let mut candidates: Vec<String> = identities.iter().flatten().cloned().collect();
-            candidates.sort();
-            candidates.dedup();
-            if candidates.is_empty() {
-                return Err(rootcause::report!(
-                    "no Codex repository metadata is available for automatic selection; select an environment in Harness settings"
-                ));
-            }
-            let recent = self.history.recent_for_owner(&self.owner, std::num::NonZeroUsize::new(6).expect("nonzero")).await
-                .map_err(|error|rootcause::report!("could not read repository context; select an environment in Harness settings: {error}"))?;
-            let recent: Vec<_> = recent
-                .into_iter()
-                .filter(|session| session.id != self.session)
-                .take(5)
-                .collect();
-            let selected = self.decision.choose(&self.owner,prompt,&candidates,&recent).await
-                .map_err(|_|rootcause::report!("automatic Codex repository selection failed; select an environment in Harness settings and retry"))?
-                .ok_or_else(||rootcause::report!("the prompt does not identify a Codex repository; select an environment in Harness settings and retry"))?;
-            if !candidates.contains(&selected) {
-                return Err(rootcause::report!(
-                    "automatic selection returned an unavailable repository; select an environment in Harness settings"
-                ));
-            }
-            let mut matching = environments
-                .iter()
-                .zip(&identities)
-                .filter(|(_, identity)| identity.as_deref() == Some(selected.as_str()))
-                .map(|(environment, _)| environment);
-            let environment = matching.next().ok_or_else(|| {
-                rootcause::report!("the selected repository has no available Codex environment")
-            })?;
-            if matching.next().is_some() {
-                return Err(rootcause::report!(
-                    "multiple Codex environments use this repository; select an environment in Harness settings and retry"
-                ));
-            }
-            let repository = environment
-                .repositories
-                .first()
-                .expect("matched primary repository");
-            (environment, repository.default_branch.clone())
-        };
+        let environment = environments.iter().find(|environment| environment.id == id.as_str())
+            .ok_or_else(||rootcause::report!("the configured Codex environment is unavailable; select and save an environment in Harness settings"))?;
         let target = CloudTarget {
             environment: CloudId::new(environment.id.clone())?,
-            branch,
+            branch: "main".into(),
             repository_url: environment
                 .repositories
                 .first()
@@ -165,9 +112,9 @@ impl<P: OAuth + CloudConversation, S: ExternalSessionRepo, H: AgentSessionRepo> 
                 .transpose()?,
         };
         target.validate()?;
-        // Choosing may await a model; do not pin a result after disconnect/reconnect.
+        // Do not pin a target after the owner disconnects or reconnects.
         self.credentials().await?;
-        self.history
+        self.session_repository
             .set_repo_url(self.session, target.repository_url.clone())
             .await
             .map_err(|error| {

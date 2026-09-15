@@ -5,7 +5,6 @@ use codex_cloud_agents::domain::acp_session::{
 };
 use codex_cloud_agents::domain::cloud::CloudEvent;
 use codex_cloud_agents::domain::journal::{JournalEntry, JournalInput};
-use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 #[derive(Default, Clone)]
 struct Journal(
@@ -51,114 +50,80 @@ impl SessionSink for Sink {
         Ok(())
     }
 }
-type ChoiceObservation = (String, Vec<String>, Vec<AgentSessionId>);
 
-#[derive(Default)]
-struct Choice {
-    selected: Mutex<Option<String>>,
-    failed: AtomicBool,
-    calls: AtomicUsize,
-    observed: Mutex<Vec<ChoiceObservation>>,
-    hold: bool,
-    entered: tokio::sync::Notify,
-    release: tokio::sync::Notify,
-}
-#[async_trait::async_trait]
-impl RepositoryDecision for Choice {
-    async fn choose(
-        &self,
-        owner: &MacroUserIdStr<'static>,
-        _: &str,
-        candidates: &[String],
-        recent: &[agent_session::domain::model::AgentSession],
-    ) -> Result<Option<String>, rootcause::Report> {
-        self.calls.fetch_add(1, Ordering::SeqCst);
-        self.observed.lock().unwrap().push((
-            owner.to_string(),
-            candidates.to_vec(),
-            recent.iter().map(|session| session.id).collect(),
-        ));
-        self.entered.notify_one();
-        if self.hold {
-            self.release.notified().await;
-        }
-        if self.failed.load(Ordering::SeqCst) {
-            return Err(rootcause::report!("injected model failure"));
-        }
-        Ok(self.selected.lock().unwrap().clone())
-    }
-}
-fn environment(id: &str, url: &str, branch: &str) -> Environment {
-    Environment {
-        id: id.into(),
-        label: Some(id.into()),
-        repositories: vec![EnvironmentRepository {
-            full_name: "org/repo".into(),
-            clone_url: url.into(),
-            default_branch: branch.into(),
-        }],
-    }
-}
-type Runtime = CodexRuntime<Provider, Sessions, agent_session::testing::InMemoryAgentSessionRepo>;
-fn automatic(choice: Arc<Choice>) -> (Arc<Runtime>, Arc<Connections>, Arc<Provider>) {
-    let connections = Arc::new(Connections::default());
-    *connections.1.lock().unwrap() = Some((None, "ignored-explicit-branch".into()));
-    let provider = Arc::new(Provider::default());
-    *provider.1.lock().unwrap() = Some(vec![
-        environment("env_a", "https://github.com/Org/Repo.git", "develop"),
-        environment("env_b", "https://github.com/org/other", "main"),
-    ]);
-    provider.1.lock().unwrap().as_mut().unwrap()[0]
-        .repositories
-        .push(EnvironmentRepository {
-            full_name: "org/secondary".into(),
-            clone_url: "https://github.com/org/secondary".into(),
-            default_branch: "secondary-branch".into(),
-        });
-    let mut runtime = runtime(
-        "macro|chooser@example.com",
-        connections.clone(),
-        provider.clone(),
-    );
-    runtime.decision = choice;
-    let mut current = agent_session::testing::test_agent_session(runtime.session);
-    current.owner_id = runtime.owner.clone();
-    runtime.history.insert_session(current);
-    (Arc::new(runtime), connections, provider)
-}
 fn text() -> Vec<agent_client_protocol::schema::v1::ContentBlock> {
     vec![agent_client_protocol::schema::v1::ContentBlock::Text(
         agent_client_protocol::schema::v1::TextContent::new("fix the org/repo login button"),
     )]
 }
+fn configured_runtime() -> (
+    Arc<CodexRuntime<Provider, Sessions, agent_session::testing::InMemoryAgentSessionRepo>>,
+    Arc<Connections>,
+    Arc<Provider>,
+) {
+    let connections = Arc::new(Connections::default());
+    *connections.1.lock().unwrap() = Some(None);
+    let provider = Arc::new(Provider::default());
+    *provider.1.lock().unwrap() = Some(vec![Environment {
+        id: "env_a".into(),
+        label: None,
+        repositories: vec![EnvironmentRepository {
+            full_name: "org/repo".into(),
+            clone_url: "https://github.com/Org/Repo.git".into(),
+            default_branch: "develop".into(),
+        }],
+    }]);
+    let runtime = runtime(
+        "macro|configured@example.com",
+        connections.clone(),
+        provider.clone(),
+    );
+    let mut current = agent_session::testing::test_agent_session(runtime.session);
+    current.owner_id = runtime.owner.clone();
+    runtime.session_repository.insert_session(current);
+    (Arc::new(runtime), connections, provider)
+}
 
 #[tokio::test]
-async fn first_prompt_selects_and_pins_target_using_owner_codex_repositories_and_recent_sessions() {
-    let choice = Arc::new(Choice::default());
-    *choice.selected.lock().unwrap() = Some("https://github.com/org/repo".into());
-    let (runtime, connections, provider) = automatic(choice.clone());
-    let prior = AgentSessionId::new();
-    let mut recent = agent_session::testing::test_agent_session(prior);
-    recent.owner_id = runtime.owner.clone();
-    recent.repo_url = Some("https://github.com/org/repo".into());
-    runtime.history.insert_session(recent);
+async fn explicit_configuration_is_required_even_when_prompt_names_available_repository() {
+    let (runtime, connections, provider) = configured_runtime();
     let journal = Journal::default();
-    let service = SessionService::new(runtime.clone(), journal.clone(), None);
+    let service = SessionService::new(runtime, journal.clone(), None);
     let id = service.new_session().await.unwrap();
-    assert_eq!(choice.calls.load(Ordering::SeqCst), 0);
-    assert!(journal.load(&id).await.unwrap().unwrap().target.is_none());
+    let error = service.prompt(&id, text(), &Sink).await.err().unwrap();
+    assert!(
+        error
+            .to_string()
+            .contains("select and save a Codex environment")
+    );
+    let state = journal.load(&id).await.unwrap().unwrap();
+    assert!(state.target.is_none());
+    assert!(!state.uncertain_write);
+    assert_eq!(journal.read(&id).await.unwrap().len(), 1);
+    assert!(provider.2.lock().unwrap().is_empty());
+    *connections.1.lock().unwrap() = Some(Some("env_a".into()));
     assert!(matches!(
         service.prompt(&id, text(), &Sink).await.unwrap(),
         Outcome::Completed
     ));
+    assert_eq!(provider.2.lock().unwrap()[0].0, "env_a");
+    assert_eq!(provider.2.lock().unwrap()[0].1, "main");
+}
+
+#[tokio::test]
+async fn configured_target_remains_pinned_across_settings_changes_and_restart() {
+    let (runtime, connections, provider) = configured_runtime();
+    *connections.1.lock().unwrap() = Some(Some("env_a".into()));
+    let journal = Journal::default();
+    let service = SessionService::new(runtime.clone(), journal.clone(), None);
+    let id = service.new_session().await.unwrap();
+    service.prompt(&id, text(), &Sink).await.unwrap();
     let pinned = journal.load(&id).await.unwrap().unwrap().target.unwrap();
     assert_eq!(pinned.environment.as_str(), "env_a");
-    assert_eq!(pinned.branch, "develop");
-    assert_eq!(provider.2.lock().unwrap()[0].0, "env_a");
-    assert_eq!(provider.2.lock().unwrap()[0].1, "develop");
+    assert_eq!(pinned.branch, "main");
     assert_eq!(
         runtime
-            .history
+            .session_repository
             .get(runtime.session)
             .await
             .unwrap()
@@ -166,137 +131,17 @@ async fn first_prompt_selects_and_pins_target_using_owner_codex_repositories_and
             .as_deref(),
         Some("https://github.com/org/repo")
     );
-    {
-        let observed = choice.observed.lock().unwrap();
-        assert_eq!(observed[0].0, runtime.owner.as_ref());
-        assert_eq!(observed[0].2, vec![prior]);
-        assert_eq!(
-            observed[0].1,
-            vec![
-                "https://github.com/org/other",
-                "https://github.com/org/repo"
-            ]
-        );
-    }
-    *connections.1.lock().unwrap() = Some((Some("env_b".into()), "release".into()));
+    *connections.1.lock().unwrap() = Some(Some("other_environment".into()));
     drop(service);
-    let restarted = SessionService::new(runtime, journal.clone(), None);
-    restarted.prompt(&id, text(), &Sink).await.unwrap();
-    assert_eq!(choice.calls.load(Ordering::SeqCst), 1);
+    SessionService::new(runtime, journal.clone(), None)
+        .prompt(&id, text(), &Sink)
+        .await
+        .unwrap();
     assert_eq!(
         journal.load(&id).await.unwrap().unwrap().target.unwrap(),
         pinned
     );
-}
-
-#[tokio::test]
-async fn no_selection_is_retryable_after_configuring_explicit_environment_in_same_session() {
-    let choice = Arc::new(Choice::default());
-    let (runtime, connections, provider) = automatic(choice.clone());
-    let journal = Journal::default();
-    let service = SessionService::new(runtime, journal.clone(), None);
-    let id = service.new_session().await.unwrap();
-    let error = service.prompt(&id, text(), &Sink).await.err().unwrap();
-    assert!(error.to_string().contains("Harness settings"));
-    let state = journal.load(&id).await.unwrap().unwrap();
-    assert!(!state.uncertain_write);
-    assert!(state.target.is_none());
-    assert_eq!(journal.read(&id).await.unwrap().len(), 1);
-    assert!(provider.2.lock().unwrap().is_empty());
-    *connections.1.lock().unwrap() = Some((Some("env_b".into()), "release".into()));
-    service.prompt(&id, text(), &Sink).await.unwrap();
-    assert_eq!(choice.calls.load(Ordering::SeqCst), 1);
-    assert_eq!(provider.2.lock().unwrap()[0].0, "env_b");
-    assert_eq!(provider.2.lock().unwrap()[0].1, "release");
-}
-
-#[tokio::test]
-async fn duplicate_repository_environments_reject_case_variants_without_guessing() {
-    let choice = Arc::new(Choice::default());
-    *choice.selected.lock().unwrap() = Some("https://github.com/org/repo".into());
-    let (runtime, _, provider) = automatic(choice);
-    provider
-        .1
-        .lock()
-        .unwrap()
-        .as_mut()
-        .unwrap()
-        .push(environment(
-            "duplicate",
-            "https://GITHUB.com/ORG/REPO.git",
-            "main",
-        ));
-    let journal = Journal::default();
-    let service = SessionService::new(runtime, journal.clone(), None);
-    let id = service.new_session().await.unwrap();
-    assert!(
-        service
-            .prompt(&id, text(), &Sink)
-            .await
-            .err()
-            .unwrap()
-            .to_string()
-            .contains("multiple Codex environments")
-    );
-    assert!(provider.2.lock().unwrap().is_empty());
-    assert!(journal.load(&id).await.unwrap().unwrap().target.is_none());
-}
-
-#[tokio::test]
-async fn cancellation_during_model_choice_never_launches_cloud_work() {
-    let choice = Arc::new(Choice {
-        hold: true,
-        ..Choice::default()
-    });
-    *choice.selected.lock().unwrap() = Some("https://github.com/org/repo".into());
-    let (runtime, _, provider) = automatic(choice.clone());
-    let journal = Journal::default();
-    let service = Arc::new(SessionService::new(runtime, journal.clone(), None));
-    let id = service.new_session().await.unwrap();
-    let running = {
-        let service = service.clone();
-        let id = id.clone();
-        tokio::spawn(async move { service.prompt(&id, text(), &Sink).await })
-    };
-    choice.entered.notified().await;
-    service.cancel(&id).await.unwrap();
-    assert!(matches!(
-        tokio::time::timeout(std::time::Duration::from_secs(1), running)
-            .await
-            .expect("Stop does not wait for the model")
-            .unwrap()
-            .unwrap(),
-        Outcome::Cancelled
-    ));
-    assert!(provider.2.lock().unwrap().is_empty());
-    assert!(!journal.load(&id).await.unwrap().unwrap().uncertain_write);
-}
-
-#[tokio::test]
-async fn disconnect_during_model_choice_prevents_pinning_or_launch() {
-    let choice = Arc::new(Choice {
-        hold: true,
-        ..Choice::default()
-    });
-    *choice.selected.lock().unwrap() = Some("https://github.com/org/repo".into());
-    let (runtime, connections, provider) = automatic(choice.clone());
-    let owner = runtime.owner.clone();
-    let journal = Journal::default();
-    let service = Arc::new(SessionService::new(runtime, journal.clone(), None));
-    let id = service.new_session().await.unwrap();
-    let running = {
-        let service = service.clone();
-        let id = id.clone();
-        tokio::spawn(async move { service.prompt(&id, text(), &Sink).await })
-    };
-    choice.entered.notified().await;
-    connections.disconnect(owner.as_ref()).await.unwrap();
-    choice.release.notify_one();
-    assert!(running.await.unwrap().is_err());
-    let state = journal.load(&id).await.unwrap().unwrap();
-    assert!(state.target.is_none());
-    assert!(!state.uncertain_write);
-    assert!(provider.2.lock().unwrap().is_empty());
+    assert_eq!(provider.2.lock().unwrap().len(), 1);
 }
 
 #[test]
@@ -313,34 +158,4 @@ fn repository_identity_only_casefolds_github_and_strips_one_git_suffix() {
         repository_identity("https://git.example.com/Org/Repo.git").unwrap(),
         "https://git.example.com/Org/Repo"
     );
-}
-
-#[tokio::test]
-async fn model_errors_and_non_candidates_leave_the_unlaunched_session_retryable() {
-    for (selected, failed) in [
-        (Some("https://github.com/outsider/secret"), false),
-        (None, true),
-    ] {
-        let choice = Arc::new(Choice::default());
-        *choice.selected.lock().unwrap() = selected.map(str::to_owned);
-        choice.failed.store(failed, Ordering::SeqCst);
-        let (runtime, _, provider) = automatic(choice);
-        let journal = Journal::default();
-        let service = SessionService::new(runtime, journal.clone(), None);
-        let id = service.new_session().await.unwrap();
-        assert!(
-            service
-                .prompt(&id, text(), &Sink)
-                .await
-                .err()
-                .unwrap()
-                .to_string()
-                .contains("Harness settings")
-        );
-        let state = journal.load(&id).await.unwrap().unwrap();
-        assert!(state.target.is_none());
-        assert!(!state.uncertain_write);
-        assert_eq!(journal.read(&id).await.unwrap().len(), 1);
-        assert!(provider.2.lock().unwrap().is_empty());
-    }
 }

@@ -280,7 +280,10 @@ export function ChannelInput(props: ChannelInputProps) {
   const mentionUsers: Accessor<IUser[]> = () => {
     const cursorEnabled =
       canUseCursor() && (cursorApiKey.data?.registered ?? false);
-    const codexEnabled = codexStatus.isSuccess && codexStatus.data.connected;
+    const codexEnabled =
+      codexStatus.isSuccess &&
+      codexStatus.data.connected &&
+      !!codexStatus.data.environmentId?.trim();
     const base = [
       ...(props.participants?.() ?? []),
       ...(props.bots?.() ?? []),

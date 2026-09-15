@@ -14,8 +14,6 @@ import type { CodexConnectionStatusEnvironmentId } from './codexConnectionStatus
 export interface CodexConnectionStatus {
   /** Connected provider account identifier. */
   accountId?: CodexConnectionStatusAccountId;
-  /** Base ref for new cloud tasks. */
-  branch: string;
   /** Whether the user has completed provider authorization. */
   connected: boolean;
   /** Reserved until provider-verified email metadata is available. */

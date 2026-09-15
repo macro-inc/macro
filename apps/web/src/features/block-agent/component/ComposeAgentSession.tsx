@@ -106,7 +106,10 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
   const agentsQuery = useAgentsQuery();
   const cursorStatus = useCursorApiKeyStatusQuery();
   const codexStatus = useCodexStatusQuery();
-  const codexReady = () => codexStatus.isSuccess && codexStatus.data.connected;
+  const codexReady = () =>
+    codexStatus.isSuccess &&
+    codexStatus.data.connected &&
+    !!codexStatus.data.environmentId?.trim();
   const cursorConnected = () =>
     cursorStatus.isSuccess ? cursorStatus.data.registered : false;
   const cursorNeedsConnection = () =>
@@ -177,7 +180,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
       harness: 'codex-cloud',
       unavailableReason: codexReady()
         ? undefined
-        : 'Connect ChatGPT in Settings → Harness',
+        : 'Connect ChatGPT, then choose and save an environment in Settings → Harness',
       connectLabel:
         codexStatus.isSuccess && !codexStatus.isPlaceholderData && !codexReady()
           ? 'Set up Codex'
@@ -197,7 +200,7 @@ function ComposeAgentSessionContent(props: ComposeAgentSessionProps) {
         harness: agent.harness,
         unavailableReason:
           agent.harness === 'codex-cloud' && !codexReady()
-            ? 'Connect ChatGPT in Settings → Harness'
+            ? 'Connect ChatGPT, then choose and save an environment in Settings → Harness'
             : undefined,
         connectLabel:
           agent.harness === 'codex-cloud' &&

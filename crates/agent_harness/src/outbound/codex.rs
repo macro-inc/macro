@@ -4,7 +4,7 @@ use crate::domain::{
     codex::{CODEX_PROVIDER, CodexRuntime},
     error::{HarnessError, Result},
     model::SpawnContainer,
-    ports::{ContainerManager, RepositoryDecision},
+    ports::ContainerManager,
     sandbox::SandboxResizeEffect,
 };
 use agent_session::domain::{
@@ -26,7 +26,6 @@ pub struct CodexContainerManager<P, S, J> {
     provider: Arc<P>,
     connections: Option<Arc<dyn ConnectionService>>,
     sessions: S,
-    decision: Arc<dyn RepositoryDecision>,
     pull_requests: Option<Arc<dyn agent_session::domain::pull_request::SessionPullRequests>>,
     journal: Arc<dyn Fn(AgentSessionId) -> (J, AttachmentActivation) + Send + Sync>,
 }
@@ -36,7 +35,6 @@ impl<P, S: Clone, J> Clone for CodexContainerManager<P, S, J> {
             provider: self.provider.clone(),
             connections: self.connections.clone(),
             sessions: self.sessions.clone(),
-            decision: self.decision.clone(),
             pull_requests: self.pull_requests.clone(),
             journal: self.journal.clone(),
         }
@@ -53,14 +51,12 @@ impl<
         provider: Arc<P>,
         connections: Option<Arc<dyn ConnectionService>>,
         sessions: S,
-        decision: Arc<dyn RepositoryDecision>,
         journal: Arc<dyn Fn(AgentSessionId) -> (J, AttachmentActivation) + Send + Sync>,
     ) -> Self {
         Self {
             provider,
             connections,
             sessions,
-            decision,
             pull_requests: None,
             journal,
         }
@@ -95,8 +91,7 @@ impl<
             },
             session: id,
             sessions: self.sessions.clone(),
-            history: self.sessions.clone(),
-            decision: self.decision.clone(),
+            session_repository: self.sessions.clone(),
             pull_requests: self.pull_requests.clone(),
             claim: claim.clone(),
         });

@@ -25,7 +25,6 @@ export function useCodexStatusQuery() {
       email: null,
       accountId: null,
       environmentId: null,
-      branch: '',
     },
   }));
 }

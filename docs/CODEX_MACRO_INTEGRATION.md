@@ -9,12 +9,11 @@ is required before it is available in a shared environment.
 1. Open **Settings → Harness → Codex** and choose **Connect with ChatGPT**.
 2. Open the official verification page and enter the displayed device code.
    Macro polls the owner-bound attempt until it completes, expires or is cancelled.
-3. Leave **Cloud environment** on **Automatic (from your prompt)**, or select an
-   environment and branch and save the configuration. Repositories must already
-   be configured in Codex on the web.
+3. Select a **Cloud environment** and save it. New sessions always start from
+   `main`. Repositories must already be configured in Codex on the web.
 4. Choose Codex in the agent composer or mention `@codex` in a channel. The first
    prompt creates a remote task; later messages continue the same task. Macro
-   displays streamed assistant text, command activity and a link to the cloud task.
+   displays complete assistant messages, live command activity and a link to the cloud task.
 5. **Stop** requests cancellation at the provider. Disconnect in Harness settings
    removes Macro's credentials; reconnecting creates a new connection identity.
 
@@ -80,7 +79,7 @@ per-user PostgreSQL connection and journal, never those local credentials.
 
 | Surface | Behavior |
 | --- | --- |
-| Launch | Chooses an environment from the first prompt or uses an explicit setting, then creates a cloud task. |
+| Launch | Requires a saved environment, then creates a cloud task on `main`. |
 | Follow-up | Continues the existing task using its latest assistant turn. |
 | Streaming | Uses the source-backed per-turn SSE route and reconciles final turn state. |
 | Stop | Requests remote cancellation; terminal state comes from provider evidence. |
@@ -134,33 +133,22 @@ the disposable test environment also found no linked PRs. Positive PR discovery
 is covered with provider fixtures; the browser check uses mocked session metadata
 and realtime events.
 
-## Repository selection
+## Environment selection
 
-Cursor and Codex share the metered Haiku repository decision: it reads the first
-prompt, the candidate repository URLs and the owner's five recent sessions.
-Cursor continues to supply repositories available through Macro's GitHub App.
-Codex supplies repositories from the owner's connected Codex environments; the
-two services may have different repository access.
+Codex requires an explicit saved environment in Harness settings. A newly
+connected account cannot launch work until its environment is saved. This path
+does not call Cursor's Haiku repository chooser or inspect recent sessions.
+Cursor's repository selection behavior is unchanged.
 
-The transport projects only environment ID, label and safe repository metadata
-from the provider's `repos` and `repo_map` fields. Repository names, clone URLs
-and default branches are available to the picker. Setup scripts, environment
-variables and other provider fields are omitted. Display labels are never used
-to infer repository identity.
+The transport exposes environment IDs, labels and safe repository metadata from
+the connected account. Configuration accepts only an environment ID and verifies
+that it is available. New cloud tasks always use `main`, even if the repository
+advertises a different default branch. No branch preference is stored.
 
-An explicit environment and branch in Harness settings bypass automatic choice.
-Automatic selection uses the first repository in each environment, matching the
-desktop's branch selection behavior. The model chooses only from the candidate
-repository URLs; the runtime maps that answer to exactly one environment. If
-multiple environments use that repository, or no repository clearly fits, the
-prompt reports that the user should select an environment in Harness settings
-and retry. It does not create a cloud task for an ambiguous choice.
-
-Selection happens on the first prompt, before a cloud submission is recorded as
-pending. The selected environment, branch and repository are pinned for that
-session. Follow-ups and replacement loads retain them even if settings change.
-A new connection begins in automatic mode; the existing explicit demo binary
-continues to use its private fixed target.
+The environment, `main` branch and primary repository are pinned on the first
+successful prompt. Follow-ups and replacement loads retain the session's target
+even if the saved environment changes. Standalone demo target configuration is
+independent of this hosted setup.
 
 ## Configuration and rollout
 
@@ -204,22 +192,21 @@ release check. Keep real credentials out of fixtures and snapshots.
 
 ### Results for this implementation
 
-- Connection lifecycle: 10 tests, including automatic configuration, PostgreSQL
+- Connection lifecycle: tests cover required environment configuration, PostgreSQL
   concurrency and owner isolation.
 - Cloud/ACP: 64 library, 17 private CLI and 4 stdio tests, including recorded snapshots,
   restart without relaunch, immediate follow-up after load, and ownership takeover.
   Six served ACP-to-fold tests cover replacement, cancellation, incomplete loads,
   and late historical records remaining in the original turn.
 - Harness: 216 package tests and 32 service tests, including named/channel-triggered
-  startup without sandbox provisioning, selection from owner repositories, ambiguous
-  selection, manual retry in the same session, target pinning after restart, and
-  immediate Stop while the model is still selecting.
+  startup without sandbox provisioning, required environment selection, retry after
+  setup in the same session, and target pinning after restart.
 - Session service: 218 tests, including atomic PR publication during ownership
   takeover, authorized observation, and readable metadata during provider outages.
 - Authentication: 102 existing service tests and 5 Codex HTTP/DTO tests.
-- Frontend: 33 focused automatic-selection tests; mocked Chromium settings,
+- Frontend: focused configuration tests; mocked Chromium settings,
   composer and account-switch flows passed without JavaScript errors. The settings
-  checks covered automatic save, primary-repository default branch and custom branch.
+  checks cover required environment save and fixed `main` behavior.
 - PR UI: 33 shared magic-chip tests cover Cursor and Codex. Mocked Chromium checks
   verified late PR metadata, realtime invalidation, duplicate and changed links,
   and clicking the exact GitHub URL without JavaScript errors.
@@ -238,6 +225,5 @@ migration in its recorded history; schema and SQLx tests used a separate local
 database migrated from the complete repository history.
 
 The repository metadata was also checked against the authenticated test account
-without launching a task. No database queries changed for automatic selection;
-the prepared workspace SQLx cache remains current. The full application login
+without launching a task. Environment selection changes do not alter database queries. The full application login
 and cloud launch through a deployed backend remains a release check.

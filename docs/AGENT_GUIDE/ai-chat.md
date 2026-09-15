@@ -61,10 +61,9 @@ clicking it closes the composer and opens Settings → Harness without creating
 a session. It is keyboard-accessible; arrow navigation focuses it without
 activating it. Connected Cursor remains a selectable agent. Setup navigation
 is disabled while a session is being created or its setup is being retried.
-Codex shows **Set up Codex** until ChatGPT is connected in Settings → Harness.
-A connected Codex row is selectable immediately. By default, Codex chooses an
-environment and repository default branch from the prompt. If it cannot choose
-confidently, select an environment in Harness settings and try again. The composer hides model overrides for
+Codex shows **Set up Codex** until ChatGPT is connected and a cloud environment
+is saved in Settings → Harness. New sessions use the saved environment and
+always start from `main`. The composer hides model overrides for
 Codex because this harness does not expose model selection. Codex assistant
 text appears as complete messages; tool activity and thinking can still update
 while a response is being prepared. A recorded two-turn Codex conversation was

@@ -1,7 +1,34 @@
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { Bot } from '@service-storage/generated/schemas/bot';
-import { describe, expect, it } from 'vitest';
-import { availableBotMentionUsers } from './use-channel-bot-mention-users';
+import { createRoot } from 'solid-js';
+import { describe, expect, it, vi } from 'vitest';
+import {
+  availableBotMentionUsers,
+  useChannelBotMentionUsers,
+} from './use-channel-bot-mention-users';
+
+const readiness = vi.hoisted(() => ({
+  connected: true,
+  environmentId: null as string | null,
+}));
+vi.mock('@queries/auth/codex', () => ({
+  useCodexStatusQuery: () => ({ isSuccess: true, data: readiness }),
+}));
+vi.mock('@queries/auth/cursor-api-key', () => ({
+  useCursorApiKeyStatusQuery: () => ({
+    isSuccess: true,
+    data: { registered: false },
+  }),
+}));
+vi.mock('@queries/channel/channel-bots', () => ({
+  useChannelBotsQuery: () => ({ isSuccess: true, data: [] }),
+}));
+vi.mock('@queries/agents/agents', () => ({
+  useAgentsQuery: () => ({
+    isSuccess: true,
+    data: [agent('codex-agent', 'Codex', 'all', 'codex-cloud')],
+  }),
+}));
 
 const timestamp = '2026-08-27T12:00:00Z';
 
@@ -36,7 +63,20 @@ function agent(
 }
 
 describe('availableBotMentionUsers', () => {
-  it('only offers Codex agents when ChatGPT is connected, including automatic mode', () => {
+  it.each([null, '', '   ', 'env-saved'])(
+    'gates the real mention query on saved environment %s',
+    (environmentId) => {
+      readiness.environmentId = environmentId;
+      createRoot((dispose) => {
+        const users = useChannelBotMentionUsers(() => 'channel-1');
+        expect(users().map((user) => user.id)).toEqual(
+          environmentId === 'env-saved' ? ['bot|codex-agent'] : []
+        );
+        dispose();
+      });
+    }
+  );
+  it('only offers Codex agents after connection and environment readiness', () => {
     const codex = agent('codex-agent', 'Codex', 'all', 'codex-cloud');
     expect(availableBotMentionUsers([], [codex], false, false)).toEqual([]);
     expect(availableBotMentionUsers([], [codex], false, true)).toHaveLength(1);

@@ -9,5 +9,4 @@ export type CodexConnectionDisplay = {
   email?: string | null;
   accountId?: string | null;
   environmentId?: string | null;
-  branch: string;
 };

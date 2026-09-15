@@ -187,13 +187,10 @@ async fn configuration_requires_visible_environment_and_refresh_is_serialized() 
             .is_none()
     );
     assert!(matches!(
-        service.configure(OWNER, Some("invisible"), "main").await,
+        service.configure(OWNER, "invisible").await,
         Err(ConnectionError::InvalidInput)
     ));
-    service
-        .configure(OWNER, Some("env-test"), "main")
-        .await
-        .unwrap();
+    service.configure(OWNER, "env-test").await.unwrap();
     repo.owner(OWNER)
         .lock()
         .await
@@ -218,7 +215,6 @@ async fn refresh_cannot_rebind_provider_account() {
         id: Uuid::now_v7(),
         credentials: credentials("account-a", 1),
         environment_id: Some("env-test".into()),
-        branch: "main".into(),
     });
     let service = ConnectionServiceImpl::new(
         repo.clone(),
@@ -245,36 +241,27 @@ async fn refresh_cannot_rebind_provider_account() {
 }
 
 #[tokio::test]
-async fn automatic_selection_can_replace_explicit_configuration() {
+async fn configuration_requires_a_nonempty_visible_environment() {
     let (service, repo, _) = service();
     let login = service.start_login(OWNER).await.unwrap();
     ready(&repo, OWNER).await;
     service.poll_login(OWNER, login.attempt_id).await.unwrap();
     assert!(
         service
-            .resolve(OWNER)
+            .status(OWNER)
             .await
             .unwrap()
             .environment_id
             .is_none()
     );
-    for (environment, branch) in [
-        (Some("env-test"), ""),
-        (Some("env-test"), "bad\nref"),
-        (Some("env-test"), "bad ref"),
-        (Some("env-test"), "main..other"),
-        (Some("env-test"), "refs/heads/.hidden"),
-        (Some("unknown"), "main"),
-    ] {
+    for environment in ["", " ", "unknown", "bad/environment"] {
         assert!(matches!(
-            service.configure(OWNER, environment, branch).await,
+            service.configure(OWNER, environment).await,
             Err(ConnectionError::InvalidInput)
         ));
     }
-    service
-        .configure(OWNER, Some("env-test"), "feature/work")
-        .await
-        .unwrap();
+    let status = service.configure(OWNER, "env-test").await.unwrap();
+    assert_eq!(status.environment_id.as_deref(), Some("env-test"));
     assert_eq!(
         service
             .resolve(OWNER)
@@ -285,15 +272,14 @@ async fn automatic_selection_can_replace_explicit_configuration() {
             .as_str(),
         "env-test"
     );
-    let status = service.configure(OWNER, None, "main").await.unwrap();
-    assert!(status.connected);
-    assert!(status.environment_id.is_none());
-    assert!(
+    assert!(service.configure(OWNER, "").await.is_err());
+    assert_eq!(
         service
-            .resolve(OWNER)
+            .status(OWNER)
             .await
             .unwrap()
             .environment_id
-            .is_none()
+            .as_deref(),
+        Some("env-test")
     );
 }

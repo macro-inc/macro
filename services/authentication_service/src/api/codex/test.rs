@@ -6,24 +6,22 @@ fn connection_status_has_stable_safe_camel_case_shape() {
         connected: false,
         account_id: None,
         environment_id: None,
-        branch: "main".into(),
     });
     assert_eq!(
         serde_json::to_value(disconnected).unwrap(),
         serde_json::json!({
-            "connected":false,"email":null,"accountId":null,"environmentId":null,"branch":"main"
+            "connected":false,"email":null,"accountId":null,"environmentId":null
         })
     );
     let configured = CodexConnectionStatus::from(ConnectionStatus {
         connected: true,
         account_id: Some("account-a".into()),
         environment_id: Some("env-a".into()),
-        branch: "feature/example".into(),
     });
     assert_eq!(
         serde_json::to_value(configured).unwrap(),
         serde_json::json!({
-            "connected":true,"email":null,"accountId":"account-a","environmentId":"env-a","branch":"feature/example"
+            "connected":true,"email":null,"accountId":"account-a","environmentId":"env-a"
         })
     );
 }
@@ -105,10 +103,17 @@ async fn domain_errors_have_distinct_http_status_and_only_safe_message() {
 }
 
 #[test]
-fn automatic_configuration_and_repository_metadata_wire_contract() {
+fn explicit_environment_configuration_and_repository_metadata_wire_contract() {
+    for invalid in [
+        serde_json::json!({}),
+        serde_json::json!({"environmentId":null}),
+        serde_json::json!({"environmentId":"env-a","branch":"other"}),
+    ] {
+        assert!(serde_json::from_value::<CodexConfigRequest>(invalid).is_err());
+    }
     let request: CodexConfigRequest =
-        serde_json::from_value(serde_json::json!({"environmentId":null,"branch":"main"})).unwrap();
-    assert!(request.environment_id.is_none());
+        serde_json::from_value(serde_json::json!({"environmentId":"env-a"})).unwrap();
+    assert_eq!(request.environment_id, "env-a");
     let environment = CodexEnvironment {
         id: "env-a".into(),
         label: None,

@@ -3977,31 +3977,24 @@
       },
       "CodexConfigRequest": {
         "type": "object",
-        "description": "Explicit remote target for future Codex sessions.",
-        "required": ["branch"],
+        "description": "Explicit remote environment for future Codex sessions.",
+        "required": ["environmentId"],
         "properties": {
-          "branch": {
-            "type": "string",
-            "description": "Git base ref in that environment."
-          },
           "environmentId": {
-            "type": ["string", "null"],
-            "description": "An environment currently visible to this account, or null for automatic selection."
+            "type": "string",
+            "description": "An environment currently visible to this account."
           }
-        }
+        },
+        "additionalProperties": false
       },
       "CodexConnectionStatus": {
         "type": "object",
         "description": "Safe connection metadata; no secret or masked token is returned.",
-        "required": ["connected", "branch"],
+        "required": ["connected"],
         "properties": {
           "accountId": {
             "type": ["string", "null"],
             "description": "Connected provider account identifier."
-          },
-          "branch": {
-            "type": "string",
-            "description": "Base ref for new cloud tasks."
           },
           "connected": {
             "type": "boolean",

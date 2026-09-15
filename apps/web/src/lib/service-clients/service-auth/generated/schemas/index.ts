@@ -12,7 +12,6 @@ export * from './checkoutSessionMetadataFbc';
 export * from './checkoutSessionMetadataFbp';
 export * from './checkoutSessionMetadataGaClientId';
 export * from './codexConfigRequest';
-export * from './codexConfigRequestEnvironmentId';
 export * from './codexConnectionStatus';
 export * from './codexConnectionStatusAccountId';
 export * from './codexConnectionStatusEmail';

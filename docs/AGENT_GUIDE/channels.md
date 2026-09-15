@@ -85,11 +85,9 @@ cropped at the chip's height with a fade at its foot; clicking it expands it in 
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
 
-`@codex` appears when the mentioning user has connected ChatGPT in Settings →
-Harness. Automatic mode chooses the environment and repository default branch
-from the prompt; an explicit saved environment and branch override automatic
-selection. If selection is uncertain, choose an environment in Harness settings
-and try again. Follow-up mentions continue the same agent session. When
+`@codex` appears when the mentioning user has connected ChatGPT and saved a
+cloud environment in Settings → Harness. New sessions use that environment on
+`main`; there is no automatic repository selection. Follow-up mentions continue the same agent session. When
 the provider URL arrives, the session header offers **Open in Codex**. Codex
 assistant text appears as complete messages while tool activity and thinking
 can continue updating during the turn. Mention

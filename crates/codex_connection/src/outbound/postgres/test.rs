@@ -145,7 +145,6 @@ async fn separate_service_replicas_rotate_one_owner_token_once(pool: PgPool) {
         id: Uuid::now_v7(),
         credentials: credentials(1),
         environment_id: Some("env-test".into()),
-        branch: "main".into(),
     });
     initial.commit().await.unwrap();
     let rotations = Arc::new(std::sync::atomic::AtomicUsize::new(0));

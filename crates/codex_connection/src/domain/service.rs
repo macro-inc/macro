@@ -53,7 +53,6 @@ impl<P: OAuth> ConnectionServiceImpl<P> {
             id: connection.id,
             credentials: copy_credentials(&connection.credentials)?,
             environment_id: connection.environment_id.clone(),
-            branch: connection.branch.clone(),
         };
         // Persist any rotated token before a downstream provider operation can fail.
         if needs_refresh {
@@ -84,11 +83,6 @@ fn status(state: &ConnectionState) -> ConnectionStatus {
             .connection
             .as_ref()
             .and_then(|connection| connection.environment_id.clone()),
-        branch: state
-            .connection
-            .as_ref()
-            .map(|connection| connection.branch.clone())
-            .unwrap_or_else(|| "main".into()),
     }
 }
 
@@ -191,7 +185,6 @@ impl<P: OAuth + 'static> ConnectionService for ConnectionServiceImpl<P> {
                         id: Uuid::now_v7(),
                         credentials,
                         environment_id: None,
-                        branch: "main".into(),
                     });
                     LoginStatus::Connected
                 }
@@ -235,24 +228,17 @@ impl<P: OAuth + 'static> ConnectionService for ConnectionServiceImpl<P> {
     async fn configure(
         &self,
         owner: &str,
-        environment: Option<&str>,
-        branch: &str,
+        environment: &str,
     ) -> Result<ConnectionStatus, ConnectionError> {
-        if let Some(environment) = environment {
-            CloudId::new(environment.to_owned()).map_err(|_| ConnectionError::InvalidInput)?;
-        }
-        codex_cloud_agents::domain::cloud::validate_branch(branch)
-            .map_err(|_| ConnectionError::InvalidInput)?;
+        CloudId::new(environment.to_owned()).map_err(|_| ConnectionError::InvalidInput)?;
         let resolved = self.fresh(owner).await?;
-        if let Some(environment) = environment {
-            let environments = self
-                .provider
-                .environments(&resolved.credentials)
-                .await
-                .map_err(|_| ConnectionError::Provider)?;
-            if !environments.iter().any(|item| item.id == environment) {
-                return Err(ConnectionError::InvalidInput);
-            }
+        let environments = self
+            .provider
+            .environments(&resolved.credentials)
+            .await
+            .map_err(|_| ConnectionError::Provider)?;
+        if !environments.iter().any(|item| item.id == environment) {
+            return Err(ConnectionError::InvalidInput);
         }
         let mut transaction = self.lock(owner).await?;
         let connection = transaction
@@ -263,8 +249,7 @@ impl<P: OAuth + 'static> ConnectionService for ConnectionServiceImpl<P> {
         if connection.id != resolved.id {
             return Err(ConnectionError::AccountChanged);
         }
-        connection.environment_id = environment.map(str::to_owned);
-        connection.branch = branch.into();
+        connection.environment_id = Some(environment.to_owned());
         let result = status(transaction.state());
         transaction.commit().await?;
         Ok(result)
@@ -279,7 +264,6 @@ impl<P: OAuth + 'static> ConnectionService for ConnectionServiceImpl<P> {
                 .map(CloudId::new)
                 .transpose()
                 .map_err(|_| ConnectionError::Encryption)?,
-            branch: connection.branch,
         })
     }
 }

@@ -47,8 +47,6 @@ pub struct ConnectionStatus {
     pub account_id: Option<String>,
     /// Selected environment, if configured.
     pub environment_id: Option<String>,
-    /// Git base ref for new sessions.
-    pub branch: String,
 }
 
 /// Information needed to complete device authorization in the browser.
@@ -87,8 +85,6 @@ pub struct ResolvedConnection {
     pub credentials: Credentials,
     /// Validated remote environment identity.
     pub environment_id: Option<CloudId>,
-    /// Explicit remote git ref.
-    pub branch: String,
 }
 
 /// Owning service boundary used by auth handlers and cloud session runtimes.
@@ -106,12 +102,11 @@ pub trait ConnectionService: Send + Sync {
     async fn disconnect(&self, owner: &str) -> Result<(), ConnectionError>;
     /// List environments using freshly rotated credentials.
     async fn environments(&self, owner: &str) -> Result<Vec<Environment>, ConnectionError>;
-    /// Select a visible environment, or automatic selection when absent.
+    /// Select a visible environment for subsequent sessions.
     async fn configure(
         &self,
         owner: &str,
-        environment: Option<&str>,
-        branch: &str,
+        environment: &str,
     ) -> Result<ConnectionStatus, ConnectionError>;
     /// Resolve an authenticated connection, serializing refresh across service replicas.
     async fn resolve(&self, owner: &str) -> Result<ResolvedConnection, ConnectionError>;
@@ -134,8 +129,6 @@ pub struct StoredConnection {
     pub credentials: Credentials,
     /// Optional until the user chooses an environment.
     pub environment_id: Option<String>,
-    /// Remote branch.
-    pub branch: String,
 }
 /// Encrypted device flow state; terminal attempts contain no device secret.
 #[derive(Serialize, Deserialize)]
