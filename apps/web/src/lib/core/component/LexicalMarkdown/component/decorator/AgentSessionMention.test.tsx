@@ -111,7 +111,13 @@ describe('agent session mention rendering', () => {
     fireEvent.click(screen.getByText('Fix mentions'));
     expect(mocks.open).toHaveBeenCalledWith(
       { type: 'agent', id: 'session' },
-      expect.anything()
+      { preferNewSplit: true }
+    );
+    mocks.open.mockClear();
+    fireEvent.click(screen.getByText('Fix mentions'), { shiftKey: true });
+    expect(mocks.open).toHaveBeenCalledWith(
+      { type: 'agent', id: 'session' },
+      { preferNewSplit: true }
     );
   });
   it.each(['no_access', 'does_not_exist'])(

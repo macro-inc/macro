@@ -178,7 +178,7 @@ function ChannelReferenceRow(props: {
 
 function GenericReferenceRow(props: {
   reference: GenericRef;
-  onOpen: (item: PreviewItem, e?: KeyboardEvent | MouseEvent) => void;
+  onOpen: (item: PreviewItem) => void;
 }) {
   const userId = props.reference.user_id!;
   const senderName = () => {
@@ -213,7 +213,7 @@ function GenericReferenceRow(props: {
       }
       senderName={senderName()}
       timestamp={props.reference.created_at}
-      onClick={(e) => props.onOpen(item(), e)}
+      onClick={() => props.onOpen(item())}
     />
   );
 }
@@ -227,27 +227,20 @@ export function References(props: ReferenceProps) {
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
   const navigateToItem = ({
-    event,
     blockId,
     blockName,
   }: {
-    event?: KeyboardEvent | MouseEvent;
     blockName: BlockName | BlockAlias;
     blockId: string;
   }) => {
-    openWithSplit(
-      { type: blockName, id: blockId },
-      { preferNewSplit: event?.shiftKey !== true }
-    );
+    openWithSplit({ type: blockName, id: blockId }, { preferNewSplit: true });
   };
 
   const navigateToMessage = ({
     channelId,
     messageId,
     threadId,
-    event,
   }: {
-    event?: KeyboardEvent | MouseEvent;
     channelId: string;
     messageId: string;
     threadId?: string;
@@ -258,20 +251,16 @@ export function References(props: ReferenceProps) {
       messageId,
       threadId,
       {
-        preferNewSplit: event?.shiftKey !== true,
+        preferNewSplit: true,
       }
     );
   };
 
-  const navigateToGenericReference = (
-    item: PreviewItem,
-    event?: KeyboardEvent | MouseEvent
-  ) => {
+  const navigateToGenericReference = (item: PreviewItem) => {
     if (isAccessiblePreviewItem(item) && item.type === 'document') {
       const blockId = item.id;
       const blockType = fileTypeToBlockName(item.fileType);
       navigateToItem({
-        event,
         blockName: blockType,
         blockId,
       });
@@ -303,9 +292,8 @@ export function References(props: ReferenceProps) {
               return (
                 <ChannelReferenceRow
                   reference={ref}
-                  onOpen={(e) =>
+                  onOpen={() =>
                     navigateToMessage({
-                      event: e,
                       channelId: ref.channel_id,
                       messageId: ref.message_id,
                       threadId: ref.thread_id,

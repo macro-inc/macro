@@ -47,10 +47,7 @@ export function AgentSessionMention(props: AgentSessionMentionDecoratorProps) {
     layout?.openWithSplit(
       { type: 'agent', id: props.id },
       {
-        preferNewSplit: openInNewSplitForMention(
-          event?.shiftKey,
-          event !== null
-        ),
+        preferNewSplit: openInNewSplitForMention(event !== null),
       }
     );
   };

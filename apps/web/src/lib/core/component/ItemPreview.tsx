@@ -76,12 +76,11 @@ export function useItemPreviewData(entity: Accessor<ItemEntity>) {
     type: ItemType | undefined,
     id: string,
     fileType?: FileType,
-    subType?: NamedSubType,
-    shiftKey?: boolean
+    subType?: NamedSubType
   ) {
     const _type = subType ?? fileType ?? type;
     if (!_type) return;
-    openItem(_type, id, openInNewSplitForMention(shiftKey, true));
+    openItem(_type, id, openInNewSplitForMention(true));
   }
 
   const name = () => {
@@ -268,14 +267,13 @@ function ItemPreviewInner(props: ItemPreviewProps) {
                 };
 
                 const navHandlers =
-                  useSplitNavigationHandler<HTMLButtonElement>((e) => {
+                  useSplitNavigationHandler<HTMLButtonElement>(() => {
                     const item = accessibleItem();
                     onPreviewClick(
                       item.type,
                       item.id,
                       item.fileType,
-                      item.subType?.type as NamedSubType | undefined,
-                      e.shiftKey
+                      item.subType?.type as NamedSubType | undefined
                     );
                   });
 

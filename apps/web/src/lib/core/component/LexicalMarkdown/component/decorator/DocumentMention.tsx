@@ -130,7 +130,7 @@ function SkillSlashText(props: {
       'skill',
       props.documentId,
       undefined,
-      openInNewSplitForMention(e.shiftKey, true)
+      openInNewSplitForMention(true)
     );
   });
   return (
@@ -557,7 +557,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
           !paramKey || paramKey === event?.occurrenceKey
             ? event?.time
             : undefined,
-        openInNewSplit: openInNewSplitForMention(e?.shiftKey, e != null),
+        openInNewSplit: openInNewSplitForMention(e != null),
       });
       return;
     }
@@ -565,7 +565,7 @@ function DocumentMentionInner(props: DocumentMentionDecoratorProps) {
       resolvedBlockName(),
       props.documentId,
       props.blockParams,
-      openInNewSplitForMention(e?.shiftKey, e != null)
+      openInNewSplitForMention(e != null)
     );
   });
 

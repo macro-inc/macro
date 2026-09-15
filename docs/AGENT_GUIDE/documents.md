@@ -54,6 +54,10 @@ transcript to AI context, or grant access. Private/deleted sessions show an
 unavailable label. Mounted references refresh every 30 seconds while the tab is
 active to update titles and check access.
 
+Clicking an inline mention chip (or pressing Enter on a selected chip) opens
+it in a new split. Shift-click keeps that new-split behavior; it does not
+replace the current split.
+
 Hover a document reference chip to open its preview without navigating. With
 the preview open, the compact header shows a tinted icon, title, and author/time
 byline. Click the title to open the document; the Reference actions ellipsis menu contains copy

@@ -430,7 +430,7 @@ export function PullRequestMention(props: PullRequestMentionDecoratorProps) {
   const open = (e: MouseEvent | KeyboardEvent | null) => {
     openWithSplit(
       { type: 'pr', id: props.id },
-      { preferNewSplit: openInNewSplitForMention(e?.shiftKey, e != null) }
+      { preferNewSplit: openInNewSplitForMention(e != null) }
     );
   };
 
@@ -502,7 +502,7 @@ export function PullRequestEntityLink(props: {
     e.stopPropagation();
     openWithSplit(
       { type: 'pr', id: props.entity.id },
-      { preferNewSplit: openInNewSplitForMention(e.shiftKey, true) }
+      { preferNewSplit: openInNewSplitForMention(true) }
     );
   };
   const navHandlers = useSplitNavigationHandler<HTMLButtonElement>(open);
