@@ -297,6 +297,10 @@ fn the_agent_harness_uses_local_containers_and_wipes_daytona() {
     // No `CURSOR_API_KEY`: `@cursor` sessions run on the key each user
     // registers in settings, so there is no deployment-wide one to stub.
     assert!(!env.contains_key("CURSOR_API_KEY"));
+    assert_eq!(
+        env.get("CODEX_OAUTH_KMS_KEY_ID").map(String::as_str),
+        Some(resources::CODEX_OAUTH_KMS_ALIAS)
+    );
 }
 
 /// Sandboxes and the harness are both containers, so they reach each other on a
