@@ -161,14 +161,16 @@ try {
   const emailNavigation = browser.$('button[aria-label="Go to Email"]');
   await emailNavigation.waitForDisplayed({ timeout: 120_000 });
   await emailNavigation.click();
-  console.log('Waiting for three metadata backfill pages');
+  console.log(
+    `Waiting for ${fixture.expectedMetadataPages} metadata backfill pages`
+  );
   await waitForBackfill(browser, fixture.expectedMetadataPages);
   if (matrixMode)
     await browser.waitUntil(
-      async () =>
-        (await checkpoints(browser)).some(
-          (c) => c.key.endsWith(':shared-email-filter-metadata') && c.completed
-        ),
+      async () => {
+        const lanes = await checkpoints(browser!);
+        return lanes.length === 5 && lanes.every((lane) => lane.completed);
+      },
       { timeout: 60_000 }
     );
   assert.equal(fixture.metadataPagesServed, fixture.expectedMetadataPages);

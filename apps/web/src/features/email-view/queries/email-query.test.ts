@@ -159,8 +159,12 @@ describe('buildEmailQuery', () => {
     );
     expect(ef({ read: ['read'] })).toContain(serialize({ l: { Read: true } }));
     expect(ef({ done: ['done'] })).toContain(
-      serialize({ l: { NotificationState: 'done' } })
+      serialize({ l: { InboxVisible: false } })
     );
+    expect(ef({ done: ['not-done'] })).toContain(
+      serialize({ l: { InboxVisible: true } })
+    );
+    expect(ef({ done: ['done'] })).not.toContain('NotificationState');
     expect(ef({ calendar: ['has-calendar-invite'] })).toContain(
       serialize({ l: { CalendarOnly: true } })
     );

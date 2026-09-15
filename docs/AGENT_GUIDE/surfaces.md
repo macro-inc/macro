@@ -44,9 +44,15 @@ backfill checkpoint is refreshed to index channel rows; queued work is preserved
 Notification facts use the existing active-only GraphQL edge and primary entity
 association. Missing/partial or over-budget snapshots remain incomplete, never an
 empty notification set; display metadata decoding omissions remain a best-effort
-limitation. The v4 projection tracks individual notification IDs, bounded by the
-shared 256-fact per-entity budget. This cache-format upgrade resets old cached data
-and pending cache mutations, and the bumped backfill checkpoint rebuilds projections.
+limitation. The current `soup-flat-v5` projection retains notification IDs and
+adds complete select-option/entity-reference property snapshots. Tags, task status,
+priority and assignee selections compose with owner and type filters. The shared
+256-fact per-entity budget still applies: missing, malformed or over-budget property
+snapshots are unknown, never evidence of absence. Property-only mutations update
+these postings atomically; rollback does not restore unrelated property values.
+Checkpoint v14 rehydrates older projections without wiping normalized records or
+queued mutations. General Soup still uses its existing server pagination; filter-only
+offline checks use an ungrouped view with a created/updated timestamp sort.
 
 Realtime Soup batches coalesce repeated entity IDs (including entity type), keeping
 that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.
@@ -140,16 +146,17 @@ necessarily evaluated from the last synchronized grants.
 The lightweight metadata backfill runs before body hydration. Its refreshes scan all
 metadata: message-time watermarks alone miss archive/read changes on old threads.
 Filter availability therefore does not guarantee that opening every message body works offline. Missing
-projection proof is unknown, never false. Sender/recipient, attachment chips,
-property/tag refinements and non-created/updated sorts remain network-only or
-existing client refinements; durable offline sending/archiving is not added by this slice. No cache-format wipe is required: Mail uses a separate versioned profile
+projection proof is unknown, never false. Tag selections use cached property postings;
+attachment chips refine the cached rows on the client. Sender/recipient filters and
+non-created/updated sorts remain outside this local profile. Grouping and sort-selector
+coverage are separate from the filter-selection matrix. No cache-format wipe is required: Mail uses a separate versioned profile
 and a new backfill checkpoint, preserving existing queued work. Deploy the backend
 schema additions before the client: it selects canonical message eligibility/recency
 fields, body-free canonical preview references, and viewer-relative share facts.
-The `soup-mail-v2` profile and new backfill checkpoint rebuild Mail proof without
+The `soup-mail-v3` property-aware profile and new backfill checkpoint rebuild Mail proof without
 changing the persisted mutation queue format. Native Tauri maintains the same
 predicate projections and revision-bound local page contract as the browser.
-Checkpoint v13 restarts older scans to populate native indexes without wiping
+Checkpoint v14 restarts older scans to populate property-aware indexes without wiping
 queued work. A background network failure does not hide a usable current-query
 cached Mail page; server-reported GraphQL errors still surface.
 

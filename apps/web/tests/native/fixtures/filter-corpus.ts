@@ -1,7 +1,7 @@
 import {
   PROPERTY_OPTION_IDS,
   SYSTEM_PROPERTY_IDS,
-} from '../../../src/features/property/constants';
+} from '../../../src/features/property/identifiers';
 import { mailProjectionCapsules } from '../../../src/lib/graphql-cache/worker/browser-test/mail-projection-capsules';
 import type { TagSetResponse } from '../../../src/lib/service-clients/service-properties/generated/schemas/tagSetResponse';
 import { EMAIL, fixtureId as id, USER_ID } from './mail';
@@ -308,7 +308,8 @@ export function filterCorpus(
       calendar: n % 5 === 0,
       shared: n === 60 || n >= 71,
       draft: n % 3 === 0,
-      sent: n % 4 === 0,
+      // The canonical capsule for row 4 intentionally has no outbound timestamp.
+      sent: n % 4 === 0 && n !== 4,
       attachmentKind,
       api: {
         __typename: 'GraphqlSoupEmailThread',

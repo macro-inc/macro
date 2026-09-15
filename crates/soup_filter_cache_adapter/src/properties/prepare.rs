@@ -330,6 +330,16 @@ pub(super) async fn prepare<S: PredicateIndexStorage>(
         }
     }
     let routed = mutation_owners(query, operation, variables, data)?;
+    for (key, parent) in &routed {
+        if updates
+            .get(key)
+            .is_none_or(|record| !record.fields.contains_key("value"))
+        {
+            // A successful explicit property mutation with an ID-only response
+            // is not evidence that the old value survived unchanged.
+            result.entry(parent.clone()).or_default().snapshot = Some(Err(()));
+        }
+    }
     for (key, update) in &updates {
         if !key.as_ref().starts_with("GraphqlProperty:")
             || !update.fields.contains_key("value")
@@ -350,6 +360,9 @@ pub(super) async fn prepare<S: PredicateIndexStorage>(
         };
         record.merge(update.clone());
         let Some(definition) = definition(&record) else {
+            if let Some(parent) = routed.get(key) {
+                result.entry(parent.clone()).or_default().snapshot = Some(Err(()));
+            }
             continue;
         };
         let parents = if let Some(parent) = routed.get(key) {

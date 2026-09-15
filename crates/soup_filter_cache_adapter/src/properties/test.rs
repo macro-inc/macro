@@ -1,7 +1,8 @@
 use super::*;
 use cache_core::{
-    engine::{Engine, NetworkWrite},
+    engine::{BeginOptimisticWrite, Engine, InitialClaimOutcome, NetworkWrite},
     predicate::PredicateIndexStorage,
+    queue::{MutationClaimRequest, MutationClaimToken},
     store::{InMemoryStorage, Storage},
 };
 use serde_json::json;
@@ -188,6 +189,146 @@ fn identity_changes_never_borrow_older_property_snapshots() {
             "macro|other@example.com",
         )
         .await;
+        assert!(!matches(&mut engine, literal(1, 11)).await);
+        assert!(!matches(&mut engine, json!({"not":literal(1,11)})).await);
+    });
+}
+
+#[test]
+fn independent_property_optimism_survives_rollback_and_commits() {
+    pollster::block_on(async {
+        let mut engine =
+            Engine::new(cache_turso::TursoStorage::open_in_memory("property-queue").unwrap());
+        write(&mut engine, QUERY, &Map::new(), &data(), VIEWER).await;
+        let mut first = None;
+        let mut second_data = Value::Null;
+        let mut second_vars = Map::new();
+        for (definition, option) in [(1, 12), (2, 23)] {
+            let vars = json!({"input":{"entityType":"PROJECT","entityId":id(100),"propertyDefinitionId":id(definition)}}).as_object().unwrap().clone();
+            let data = json!({"setEntityProperty":property(definition, option)});
+            let projections = augment_optimistic(engine.storage(), SET, None, &vars, &data, vec![])
+                .await
+                .unwrap();
+            let uuid = format!("00000000-0000-7000-8000-{definition:012}");
+            let queued = engine
+                .enqueue_optimistic_mutation_with_projections(
+                    None,
+                    BeginOptimisticWrite {
+                        uuid: &uuid,
+                        query: SET,
+                        operation_name: None,
+                        variables: &vars,
+                        data: &data,
+                        link_patches: &[],
+                        revalidations: &[],
+                        created_at_ms: 0,
+                    },
+                    MutationClaimRequest {
+                        owner: "runner".into(),
+                        now_ms: 0,
+                        lease_expires_at_ms: 1000,
+                    },
+                    projections,
+                )
+                .await
+                .unwrap();
+            if definition == 1 {
+                first = Some(queued);
+            } else {
+                second_data = data;
+                second_vars = vars;
+            }
+        }
+        assert!(
+            matches(
+                &mut engine,
+                json!({"and":{"left":literal(1,12),"right":literal(2,23)}})
+            )
+            .await
+        );
+        let first = first.unwrap();
+        let InitialClaimOutcome::Claimed(claim) = first.initial_claim else {
+            panic!("first claim")
+        };
+        engine
+            .rollback_optimistic_write(
+                first.transaction_id,
+                MutationClaimToken {
+                    owner: "runner".into(),
+                    generation: claim.lease_generation,
+                },
+            )
+            .await
+            .unwrap();
+        assert!(
+            matches(
+                &mut engine,
+                json!({"and":{"left":literal(1,11),"right":literal(2,23)}})
+            )
+            .await
+        );
+        assert!(!matches(&mut engine, literal(1, 12)).await);
+        let claim = engine
+            .claim_next_mutation(MutationClaimRequest {
+                owner: "runner".into(),
+                now_ms: 1,
+                lease_expires_at_ms: 1000,
+            })
+            .await
+            .unwrap()
+            .unwrap();
+        let projections = augment_authoritative(
+            engine.storage(),
+            SET,
+            None,
+            &second_vars,
+            &second_data,
+            true,
+            vec![],
+        )
+        .await
+        .unwrap();
+        engine
+            .commit_optimistic_write_with_projections_outcome(
+                claim.queued.id,
+                MutationClaimToken {
+                    owner: "runner".into(),
+                    generation: claim.lease_generation,
+                },
+                SET,
+                None,
+                &second_vars,
+                &second_data,
+                projections,
+            )
+            .await
+            .unwrap();
+        assert!(
+            matches(
+                &mut engine,
+                json!({"and":{"left":literal(1,11),"right":literal(2,23)}})
+            )
+            .await
+        );
+        assert!(
+            engine
+                .storage()
+                .load_mutation_queue()
+                .await
+                .unwrap()
+                .is_empty()
+        );
+    });
+}
+
+#[test]
+fn id_only_property_mutation_responses_invalidate_old_value_proof() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        write(&mut engine, QUERY, &Map::new(), &data(), VIEWER).await;
+        let vars = json!({"input":{"entityType":"PROJECT","entityId":id(100),"propertyDefinitionId":id(1)}}).as_object().unwrap().clone();
+        write(&mut engine, "mutation Set($input: SetEntityPropertyInput!) { setEntityProperty(input: $input) { id } }", &vars,
+            &json!({"setEntityProperty":{"id":id(1001)}}), VIEWER).await;
         assert!(!matches(&mut engine, literal(1, 11)).await);
         assert!(!matches(&mut engine, json!({"not":literal(1,11)})).await);
     });

@@ -37,7 +37,10 @@ import type {
   EntityFilterCacheResult,
 } from '../../src/lib/graphql-cache/protocol';
 import { makeGraphqlSoupInput } from '../../src/lib/queries/soup/graphql/ast';
-import { materializeMailView } from '../../src/lib/queries/soup/graphql/mail-view';
+import {
+  isCachedMailView,
+  materializeMailView,
+} from '../../src/lib/queries/soup/graphql/mail-view';
 import {
   isDisplayableSoupItem,
   mapApiSoupItemToEntity,
@@ -68,6 +71,7 @@ import { USER_ID } from './fixtures/mail';
 const corpus = filterCorpus();
 const byKey = new Map(corpus.map((row) => [key(row), row]));
 const tagContext = createTagFacetContext(matrixTagSets);
+const ALL_INBOXES = '__all_inboxes__';
 const ordered = (ids: string[]) => [...ids].sort();
 function key(row: FixtureRow) {
   return `${row.api.__typename}:${row.id}`;
@@ -124,6 +128,11 @@ function args(
     'Matrix only evaluates initial, ungrouped filter selections'
   );
   const { filters, emailView } = input.initial;
+  if (emailView)
+    assert(
+      isCachedMailView(emailView),
+      `Unsupported matrix Mail view ${emailView}`
+    );
   return {
     filters: filters ?? {},
     sortMethod: 'UPDATED_AT',
@@ -162,7 +171,8 @@ function emailMatch(
   if (tab === 'sent' && !row.sent) return false;
   if (tab === 'calendar' && !row.calendar) return false;
   if (
-    !intersects(selection.inboxes, [row.linkId!]) ||
+    (selection.inboxes[0] !== ALL_INBOXES &&
+      !selection.inboxes.includes(row.linkId!)) ||
     !intersects(selection.tags, row.tags)
   )
     return false;
@@ -223,7 +233,7 @@ function* cases(): Generator<Case> {
       done: staticChoices('done'),
       calendar: [[], ['has-calendar-invite']],
       tags: subsets(TAGS),
-      inboxes: subsets(LINKS),
+      inboxes: [[ALL_INBOXES], ...subsets(LINKS)],
       attachments: subsets(attachmentOptions),
     })) {
       const facets = {
@@ -235,15 +245,20 @@ function* cases(): Generator<Case> {
       };
       const query = buildEmailQuery({
         tab: tab.id,
-        inboxIds: selection.inboxes.length ? selection.inboxes : undefined,
+        inboxIds:
+          selection.inboxes[0] === ALL_INBOXES ? undefined : selection.inboxes,
         facets,
         facetContext: tagContext,
       });
+      const expected: FixtureRow[] = [];
+      for (const row of corpus) {
+        if (emailMatch(row, tab.id, selection)) expected.push(row);
+      }
       yield {
         view: 'email',
         name: `${tab.id} ${JSON.stringify(selection)}`,
         args: translate(query),
-        expected: corpus.filter((row) => emailMatch(row, tab.id, selection)),
+        expected,
         attachments: selection.attachments,
         emailTab: tab.id,
       };
@@ -265,21 +280,25 @@ function* cases(): Generator<Case> {
         groupBy: 'none',
         sort: [{ id: 'updated_at', reversed: false }],
       });
+      const expected: FixtureRow[] = [];
+      for (const row of corpus) {
+        if (
+          row.kind === 'task' &&
+          (tab.id !== 'my-tasks' || row.assignees!.includes(USER_ID)) &&
+          (tab.id !== 'created-by-me' || row.owner === USER_ID) &&
+          intersects(selection.status, [row.status!]) &&
+          intersects(selection.priority, [row.priority!]) &&
+          intersects(selection.assignees, row.assignees!) &&
+          intersects(selection['created-by'], [row.owner]) &&
+          intersects(selection.tags, row.tags)
+        )
+          expected.push(row);
+      }
       yield {
         view: 'tasks',
         name: `${tab.id} ${JSON.stringify(selection)}`,
         args: translate(query),
-        expected: corpus.filter(
-          (row) =>
-            row.kind === 'task' &&
-            (tab.id !== 'my-tasks' || row.assignees!.includes(USER_ID)) &&
-            (tab.id !== 'created-by-me' || row.owner === USER_ID) &&
-            intersects(selection.status, [row.status!]) &&
-            intersects(selection.priority, [row.priority!]) &&
-            intersects(selection.assignees, row.assignees!) &&
-            intersects(selection['created-by'], [row.owner]) &&
-            intersects(selection.tags, row.tags)
-        ),
+        expected,
       };
     }
   }
@@ -311,24 +330,30 @@ function* cases(): Generator<Case> {
         },
       });
       const query = { params: { limit: 100 }, body: compileToAst(state) };
+      const expected: FixtureRow[] = [];
+      for (const row of corpus) {
+        if (!intersects(selection.tags, row.tags)) continue;
+        if (tab === 'folders') {
+          if (row.kind === 'project') expected.push(row);
+          continue;
+        }
+        if (row.kind !== 'file') continue;
+        if (tab === 'owned' && (row.owner !== USER_ID || row.attachment))
+          continue;
+        if (tab === 'shared' && (row.owner === USER_ID || row.attachment))
+          continue;
+        if (tab === 'attachments' && !row.attachment) continue;
+        if (
+          intersects(selection['created-by'], [row.owner]) &&
+          intersects(selection.type, [row.category!])
+        )
+          expected.push(row);
+      }
       yield {
         view: 'files',
         name: `${tab} ${JSON.stringify(selection)}`,
         args: translate(query),
-        expected: corpus.filter((row) => {
-          if (!intersects(selection.tags, row.tags)) return false;
-          if (tab === 'folders') return row.kind === 'project';
-          if (row.kind !== 'file') return false;
-          if (tab === 'owned' && (row.owner !== USER_ID || row.attachment))
-            return false;
-          if (tab === 'shared' && (row.owner === USER_ID || row.attachment))
-            return false;
-          if (tab === 'attachments' && !row.attachment) return false;
-          return (
-            intersects(selection['created-by'], [row.owner]) &&
-            intersects(selection.type, [row.category!])
-          );
-        }),
+        expected,
       };
     }
   }
@@ -351,18 +376,24 @@ function* cases(): Generator<Case> {
   }
 }
 
-const host = getGraphqlSoupCacheHost();
-assert(host, 'Real Tauri cache host must already be initialized');
+const host = (() => {
+  const host = getGraphqlSoupCacheHost();
+  assert(host, 'Real Tauri cache host must already be initialized');
+  return host;
+})();
 const iterator = cases();
 const records = new Map<string, MailItemFieldsFragment>();
 let revision: string | undefined;
-let previousRequest: string | undefined;
-let previousResult: EntityFilterCacheResult | undefined;
 const progress = {
   evaluated: 0,
   nativeRequests: 0,
   byView: {} as Record<string, number>,
-  failures: [] as { name: string; error: string }[],
+  failures: [] as {
+    name: string;
+    error: string;
+    args: EntityFilterCacheArgs;
+    fixture?: unknown;
+  }[],
   done: false,
 };
 
@@ -381,23 +412,45 @@ export async function runBatch(size = 128) {
     for (const row of selected.records)
       records.set(row.recordKey, row.record as MailItemFieldsFragment);
   }
+  const batch: Case[] = [];
   for (let n = 0; n < size && !progress.done; n++) {
     const next = iterator.next();
     if (next.done) {
       progress.done = true;
       break;
     }
-    const test = next.value;
+    batch.push(next.value);
+  }
+  const requests = [
+    ...new Map(
+      batch.map((test) => [JSON.stringify(test.args), test.args])
+    ).entries(),
+  ];
+  const responses = new Map<string, EntityFilterCacheResult | Error>();
+  // Amortize WebKit IPC round trips. The native engine still serializes every
+  // evaluation through its real mutex, and no mutations run during this phase.
+  for (let offset = 0; offset < requests.length; offset += 8) {
+    await Promise.all(
+      requests.slice(offset, offset + 8).map(async ([key, args]) => {
+        try {
+          responses.set(key, await host.entityFilter(args));
+        } catch (error) {
+          responses.set(
+            key,
+            error instanceof Error ? error : new Error(String(error))
+          );
+        }
+        progress.nativeRequests++;
+      })
+    );
+  }
+  for (const test of batch) {
     progress.evaluated++;
     progress.byView[test.view] = (progress.byView[test.view] ?? 0) + 1;
     try {
-      const requestKey = JSON.stringify(test.args);
-      if (requestKey !== previousRequest) {
-        previousResult = await host.entityFilter(test.args);
-        previousRequest = requestKey;
-        progress.nativeRequests++;
-      }
-      const result = previousResult!;
+      const result = responses.get(JSON.stringify(test.args));
+      if (result instanceof Error) throw result;
+      assert(result, 'Missing native evaluation response');
       assert(
         result.kind === 'mail-page' || result.kind === 'reconciled',
         `Local evaluation returned ${result.kind}`
@@ -406,7 +459,7 @@ export async function runBatch(size = 128) {
       assert(
         JSON.stringify(ordered(result.keys)) ===
           JSON.stringify(ordered(test.expected.map(key))),
-        `Wrong native matches: ${JSON.stringify(result.keys)}`
+        `Wrong native matches: ${JSON.stringify(result.keys)}; expected ${JSON.stringify(test.expected.map(key))}`
       );
       if (result.kind === 'reconciled')
         assert(
@@ -432,7 +485,7 @@ export async function runBatch(size = 128) {
           const entity = mapApiSoupItemToEntity(item);
           assert(entity.type === 'email', 'Expected email entity');
           return testFacets(
-            { attachments: test.attachments },
+            { attachments: test.attachments ?? [] },
             EMAIL_FACETS,
             entity,
             tagContext
@@ -455,6 +508,22 @@ export async function runBatch(size = 128) {
         progress.failures.push({
           name: `${test.view}: ${test.name}`,
           error: String(error),
+          args: test.args,
+          fixture:
+            test.view === 'email'
+              ? {
+                  links: LINKS,
+                  rows: corpus
+                    .filter((row) => row.kind === 'email')
+                    .map((row) => ({
+                      id: row.id,
+                      link: row.linkId,
+                      sent: row.sent,
+                      owner: row.owner,
+                      tags: row.tags,
+                    })),
+                }
+              : undefined,
         });
     }
   }
