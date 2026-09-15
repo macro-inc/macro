@@ -32,6 +32,8 @@ import {
   createSignal,
   ErrorBoundary,
   Match,
+  onCleanup,
+  onMount,
   type Resource,
   Show,
   Suspense,
@@ -44,6 +46,8 @@ import {
 } from '../queries/task-document';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskDetailTarget } from '../types';
+
+const TASK_BREADCRUMB_SKELETON_DELAY_MS = 150;
 
 function TaskViewBreadcrumbItem() {
   const { state, closeTask } = useTasksView();
@@ -97,25 +101,23 @@ function TaskBreadcrumbItem(props: {
 
   return (
     <ViewBreadcrumbs.Item id={`task:${props.documentId}`} order={1}>
-      <ViewBreadcrumbs.Button
-        current
-        class="gap-1.5 motion-safe:animate-[dialog-overlay-open_150ms_ease-out]"
-        onClick={focusTask}
-      >
-        <EntityIcon targetType="task" size="xs" class="shrink-0" />
-        <span class="truncate">{taskName()}</span>
-      </ViewBreadcrumbs.Button>
-      <div class="shrink-0 motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
-        <SplitFileMenu
-          id={props.documentId}
-          itemType="document"
-          name={taskName()}
-          ops={fileOperations}
-          tools={menuTools}
-          entityKind="task"
-          permissions={menuPermissions()}
-          onDelete={closeTask}
-        />
+      <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
+        <ViewBreadcrumbs.Button current class="gap-1.5" onClick={focusTask}>
+          <EntityIcon targetType="task" size="xs" class="shrink-0" />
+          <span class="truncate">{taskName()}</span>
+        </ViewBreadcrumbs.Button>
+        <div class="shrink-0">
+          <SplitFileMenu
+            id={props.documentId}
+            itemType="document"
+            name={taskName()}
+            ops={fileOperations}
+            tools={menuTools}
+            entityKind="task"
+            permissions={menuPermissions()}
+            onDelete={closeTask}
+          />
+        </div>
       </div>
     </ViewBreadcrumbs.Item>
   );
@@ -147,8 +149,18 @@ function TaskDetailTopBar(props: {
 }
 
 function TaskBreadcrumbSkeleton() {
+  const [visible, setVisible] = createSignal(false);
+
+  onMount(() => {
+    const timeoutId = window.setTimeout(
+      () => setVisible(true),
+      TASK_BREADCRUMB_SKELETON_DELAY_MS
+    );
+    onCleanup(() => window.clearTimeout(timeoutId));
+  });
+
   return (
-    <>
+    <Show when={visible()}>
       <ViewBreadcrumbs.Separator />
       <div
         aria-hidden="true"
@@ -157,7 +169,7 @@ function TaskBreadcrumbSkeleton() {
         <span class="skeleton-shimmer size-4 shrink-0 rounded bg-skeleton" />
         <span class="skeleton-shimmer h-3 w-24 rounded-full bg-skeleton" />
       </div>
-    </>
+    </Show>
   );
 }
 
