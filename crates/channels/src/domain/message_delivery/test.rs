@@ -1,9 +1,10 @@
 use super::*;
 use crate::domain::{
-    models::{ChannelInfo, ChannelParticipant, ChannelType, ParticipantRole, SimpleMention},
+    models::{ChannelInfo, ChannelParticipant, ChannelType, ParticipantRole},
     ports::MockChannelRepo,
 };
 use chrono::Utc;
+use messages::domain::models::SimpleMention;
 use std::{
     collections::HashSet,
     sync::{Arc, Mutex},

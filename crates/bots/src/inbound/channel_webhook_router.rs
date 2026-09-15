@@ -392,9 +392,8 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
             Self::BadRequest(_)
             | Self::Bot(BotError::BadRequest(_))
             | Self::Message(MessageError::Invalid(_)) => StatusCode::BAD_REQUEST,
-            Self::Bot(BotError::Unauthorized) | Self::Message(MessageError::Forbidden) => {
-                StatusCode::UNAUTHORIZED
-            }
+            Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
+            Self::Message(MessageError::Forbidden) => StatusCode::FORBIDDEN,
             Self::Bot(BotError::NotFound(_)) | Self::Message(MessageError::NotFound) => {
                 StatusCode::NOT_FOUND
             }

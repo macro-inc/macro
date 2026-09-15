@@ -16,7 +16,7 @@ use crate::domain::{
         GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
         MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
         ParticipantRole, PatchChannelRequest, RecentChannelMessage, ReferencedShareItemType,
-        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
+        ResolvedChannelMessage, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
         TopLevelMessageRow, UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
@@ -32,6 +32,7 @@ use item_filters::ast::{
     channel::{ChannelLiteral, ChannelThreadLiteral},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use messages::domain::models::SimpleMention;
 use models_pagination::{CreatedAt, Query};
 #[cfg(feature = "list")]
 use recursion::CollapsibleExt;

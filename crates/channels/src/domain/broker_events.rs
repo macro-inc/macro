@@ -15,7 +15,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
-use crate::domain::models::{ChannelType, MutatedAttachment, SimpleMention};
+use crate::domain::models::{ChannelType, MutatedAttachment};
+use messages::domain::models::SimpleMention;
 
 /// Attachment payload carried by channel wire events.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]

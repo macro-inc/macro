@@ -8,6 +8,9 @@ use item_filters::ast::{
 #[cfg(any(feature = "list", feature = "outbound"))]
 use macro_user_id::email::ReadEmailParts;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::{
+    PatchMessageNotificationPolicy, PostMessageNotificationPolicy, SimpleMention,
+};
 use models_pagination::{CreatedAt, CursorVal, Identify, SortOn};
 #[cfg(feature = "list")]
 use models_pagination::{Query, SimpleSortMethod};
@@ -776,8 +779,6 @@ pub struct NewChannelAttachment {
     pub height: Option<i32>,
 }
 
-pub use messages::domain::models::SimpleMention;
-
 /// Shareable entity type referenced by a channel message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReferencedShareItemType {
@@ -871,8 +872,6 @@ impl ReferencedShareItem {
         self.entity_type
     }
 }
-
-pub use messages::domain::models::{PatchMessageNotificationPolicy, PostMessageNotificationPolicy};
 
 /// Request to send a channel message.
 #[derive(Debug, Clone, Serialize, Deserialize)]

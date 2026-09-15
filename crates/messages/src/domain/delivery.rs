@@ -214,12 +214,19 @@ impl<
             // Only document link sharing confers explicit visibility on mention.
             if let MessageParent::Document(_) = &event.parent
                 && let Some(level) = context.link_share_access
-                && let Ok(document) = uuid::Uuid::parse_str(&event.parent.entity_id())
                 && !audience.mentioned.is_empty()
             {
-                self.sharing
-                    .grant(document, audience.mentioned.clone(), level)
-                    .await?;
+                match uuid::Uuid::parse_str(&event.parent.entity_id()) {
+                    Ok(document) => {
+                        self.sharing
+                            .grant(document, audience.mentioned.clone(), level)
+                            .await?;
+                    }
+                    Err(_) => tracing::warn!(
+                        document = %event.parent.entity_id(),
+                        "mention access is not granted on a legacy document id"
+                    ),
+                }
             }
             if policy == PostMessageNotificationPolicy::MentionsOnly {
                 audience.participants.clear();

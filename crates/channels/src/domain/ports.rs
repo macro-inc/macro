@@ -10,8 +10,8 @@ use crate::domain::models::{
     MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
     NewChannelAttachment, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
     PostMessageResponse, PostReactionRequest, PostTypingRequest, ReferencedShareItem,
-    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
-    ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, ThreadData, ThreadReply,
+    ThreadReplyRow, TopLevelMessageRow,
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{
@@ -31,6 +31,7 @@ use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::SimpleMention;
 use models_pagination::{CreatedAt, Query};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;

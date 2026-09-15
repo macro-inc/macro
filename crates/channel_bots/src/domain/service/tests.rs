@@ -3,9 +3,8 @@ use std::sync::{Arc, Mutex};
 use async_trait::async_trait;
 use channels::domain::models::{
     AttachmentEntityReference, ChannelAttachmentType, ChannelContextMessage, ChannelMessageFilters,
-    ChannelParticipant, MessagePageDirection, MutatedMessage, PatchMessageNotificationPolicy,
-    PatchMessageRequest, PostMessageNotificationPolicy, PostMessageRequest, PostMessageResponse,
-    ResolvedChannelMessage, Sender, ThreadReply,
+    ChannelParticipant, MessagePageDirection, MutatedMessage, PatchMessageRequest,
+    PostMessageRequest, PostMessageResponse, ResolvedChannelMessage, Sender, ThreadReply,
 };
 use channels::domain::ports::{
     ChannelAttachmentsPage, ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
@@ -16,6 +15,7 @@ use entity_access::domain::models::{
     BotReceiptScope, Entity, EntityAccessReceipt, EntityPermission, EntityType, ParticipantRole,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::{PatchMessageNotificationPolicy, PostMessageNotificationPolicy};
 use messages::domain::{
     models::{Message, MessageParent, ThreadPatch, ThreadState},
     ports::{MessageError, MessagePatch},

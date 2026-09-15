@@ -17,10 +17,11 @@ mod test;
 use std::sync::Arc;
 
 use channel_sender::ChannelSender;
-use channels::domain::models::{PostMessageNotificationPolicy, PostMessageRequest};
+use channels::domain::models::PostMessageRequest;
 use channels::domain::ports::ChannelService;
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::{AgentAnnouncementChip, AgentAnnouncementReplyTarget};
+use messages::domain::models::PostMessageNotificationPolicy;
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{AnnouncedMessage, SessionAnnouncement};
