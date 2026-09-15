@@ -39,7 +39,8 @@ use crate::domain::{
         PatchTeamCrmSettingsResponse, PatchTeamRequest, RemoveTeamInviteError,
         RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamWithMembers, ToggleAutoJoinDomainError, TryJoinTeamByDomainError,
+        TeamMember, TeamProfile, TeamWithMembers, ToggleAutoJoinDomainError,
+        TryJoinTeamByDomainError,
     },
     team_repo::TeamService,
 };
@@ -226,6 +227,7 @@ impl TeamService for FakeTeamService {
         &self,
         _user_id: &MacroUserIdStr<'_>,
         _team_name: &str,
+        _profile: &TeamProfile,
         _subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, CreateTeamError> {
         panic!("unexpected create_team call")

@@ -4,11 +4,16 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CreateTeamRequestLogoUrl } from './createTeamRequestLogoUrl';
+import type { CreateTeamRequestStartupType } from './createTeamRequestStartupType';
 
 /**
  * The request body to create a new team
  */
 export interface CreateTeamRequest {
+  /** Absolute URL of the team's logo image (an uploaded static file) */
+  logo_url?: CreateTeamRequestLogoUrl;
   /** The name of the team */
   name: string;
+  startup_type?: CreateTeamRequestStartupType;
 }

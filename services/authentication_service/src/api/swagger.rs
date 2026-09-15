@@ -226,6 +226,7 @@ use model::user::{
                         TeamMember,
                         Team,
                         TeamPlan,
+                        teams::domain::model::StartupType,
                         TeamWithMembers,
                         TeamInviteDetails,
                         CreateTeamRequest,

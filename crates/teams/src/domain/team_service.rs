@@ -43,8 +43,9 @@ use crate::domain::{
         InviteUsersToTeamError, JoinTeamError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
         RemoveTeamInviteError, RemoveUserFromTeamError, RestorePermissionsForTeamMembersError,
         RevokePermissionsForTeamMembersError, Team, TeamError, TeamInvite, TeamInviteDetails,
-        TeamMember, TeamMembers, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
+        TeamMember, TeamMembers, TeamProfile, TeamRole, TeamWithMembers, ToggleAutoJoinDomainError,
         TryJoinTeamByDomainError, is_generic_email_domain, team_slug_from_name,
+        validate_team_logo_url,
     },
     team_analytics::{NoOpTeamAnalytics, TeamAnalytics, TeamAnalyticsEvent},
     team_crm_settings_repo::TeamCrmSettingsRepository,
@@ -561,8 +562,12 @@ where
         &self,
         user_id: &MacroUserIdStr<'_>,
         team_name: &str,
+        profile: &TeamProfile,
         subscription_id: Option<&stripe::SubscriptionId>,
     ) -> Result<Team, CreateTeamError> {
+        profile
+            .validate()
+            .map_err(|e| CreateTeamError::InvalidTeamProfile(e.to_string()))?;
         // New teams start with `team_crm_settings.crm_enabled = false`
         // (seeded by `team_repository.create_team`), so there's nothing
         // for the email-backfill fan-out to populate yet. The fan-out
@@ -571,7 +576,7 @@ where
         let team_slug = team_slug_from_name(team_name);
         let team = self
             .team_repository
-            .create_team(user_id, team_name, &team_slug, subscription_id)
+            .create_team(user_id, team_name, &team_slug, profile, subscription_id)
             .await?;
         let owner_id = user_id.clone().into_owned();
         self.channel_service
@@ -1618,6 +1623,10 @@ where
                     ));
                 }
             }
+        }
+
+        if let Some(Some(logo_url)) = req.logo_url.as_ref() {
+            validate_team_logo_url(logo_url)?;
         }
 
         self.team_repository.patch_team(&team_id, req).await?;

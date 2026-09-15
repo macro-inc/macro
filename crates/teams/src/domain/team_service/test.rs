@@ -310,13 +310,14 @@ impl TeamRepository for MockTeamRepository {
         _: &MacroUserIdStr<'_>,
         team_name: &str,
         team_slug: &str,
+        profile: &TeamProfile,
         _: Option<&stripe::SubscriptionId>,
     ) -> impl Future<Output = Result<Team, CreateTeamError>> + Send {
         self.create_team_calls
             .lock()
             .unwrap()
             .push((team_name.to_string(), team_slug.to_string()));
-        let team = self.created_team.clone();
+        let team = self.created_team.clone().with_profile(profile.clone());
         async move { Ok(team) }
     }
 
@@ -1647,7 +1648,12 @@ async fn team_event_create_publishes_actual_domain_and_billing_flags() {
     let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
 
     service
-        .create_team(&owner, "Enterprise Team", Some(&subscription_id))
+        .create_team(
+            &owner,
+            "Enterprise Team",
+            &TeamProfile::default(),
+            Some(&subscription_id),
+        )
         .await
         .unwrap();
 
@@ -1673,7 +1679,7 @@ async fn team_event_create_generic_domain_is_unpaid_without_auto_join() {
     let service = build_service_with_event_broker(team_repository, event_broker.clone());
 
     service
-        .create_team(&owner, "Personal Team", None)
+        .create_team(&owner, "Personal Team", &TeamProfile::default(), None)
         .await
         .unwrap();
 
@@ -1696,7 +1702,7 @@ async fn team_event_create_failure_emits_nothing_and_broker_failure_is_swallowed
 
     assert!(
         service
-            .create_team(&owner, "Failed Team", None)
+            .create_team(&owner, "Failed Team", &TeamProfile::default(), None)
             .await
             .is_err()
     );
@@ -1710,7 +1716,7 @@ async fn team_event_create_failure_emits_nothing_and_broker_failure_is_swallowed
     let service = build_service_with_event_broker(team_repository, RecordingEventBroker::failing());
     assert!(
         service
-            .create_team(&owner, "Successful Team", None)
+            .create_team(&owner, "Successful Team", &TeamProfile::default(), None)
             .await
             .is_ok()
     );
@@ -2015,7 +2021,10 @@ async fn create_team_sets_slug_from_name_or_uses_default() {
             NoOpTeamCrmSettingsRepository,
         );
 
-        service.create_team(&owner, team_name, None).await.unwrap();
+        service
+            .create_team(&owner, team_name, &TeamProfile::default(), None)
+            .await
+            .unwrap();
 
         assert_eq!(
             *create_team_calls.lock().unwrap(),
@@ -2056,7 +2065,7 @@ async fn create_team_creates_default_team_channel() {
     );
 
     service
-        .create_team(&owner, "Requested Team Name", None)
+        .create_team(&owner, "Requested Team Name", &TeamProfile::default(), None)
         .await
         .unwrap();
 
@@ -2114,7 +2123,7 @@ async fn create_team_fails_when_default_team_channel_creation_fails() {
     .with_event_broker(event_broker.clone());
 
     let result = service
-        .create_team(&owner, "Failed Channel Team", None)
+        .create_team(&owner, "Failed Channel Team", &TeamProfile::default(), None)
         .await;
 
     assert!(matches!(result, Err(CreateTeamError::StorageLayerError(_))));
@@ -2149,7 +2158,12 @@ async fn test_create_team_moves_github_installation_to_created_team() {
     );
 
     let created_team = service
-        .create_team(&user_id, "New Team", Some(&"sub_test".parse().unwrap()))
+        .create_team(
+            &user_id,
+            "New Team",
+            &TeamProfile::default(),
+            Some(&"sub_test".parse().unwrap()),
+        )
         .await
         .unwrap();
 
@@ -2188,7 +2202,12 @@ async fn test_create_team_propagates_github_installation_move_failure() {
     );
 
     let err = service
-        .create_team(&user_id, "New Team", Some(&"sub_test".parse().unwrap()))
+        .create_team(
+            &user_id,
+            "New Team",
+            &TeamProfile::default(),
+            Some(&"sub_test".parse().unwrap()),
+        )
         .await
         .err()
         .unwrap();
@@ -2229,6 +2248,7 @@ async fn team_analytics_create_team_emits_created_event_with_team_id() {
         .create_team(
             &user_id,
             "Analytics Team",
+            &TeamProfile::default(),
             Some(&"sub_test".parse().unwrap()),
         )
         .await
@@ -2279,6 +2299,7 @@ async fn team_analytics_failure_is_swallowed_by_create_team() {
         .create_team(
             &user_id,
             "Analytics Team",
+            &TeamProfile::default(),
             Some(&"sub_test".parse().unwrap()),
         )
         .await;
@@ -2316,6 +2337,7 @@ async fn team_analytics_create_team_does_not_emit_when_side_effect_fails() {
         .create_team(
             &user_id,
             "Analytics Team",
+            &TeamProfile::default(),
             Some(&"sub_test".parse().unwrap()),
         )
         .await
@@ -3159,6 +3181,8 @@ async fn test_patch_team_rejects_owner_role_assignment() {
             role: TeamRole::Owner,
         }]),
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
 
     let receipt = test_team_receipt::<AdminTeamRole>(
@@ -3197,6 +3221,8 @@ async fn test_patch_team_rejects_owner_downgrade() {
             role: TeamRole::Member,
         }]),
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
 
     let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
@@ -3244,6 +3270,8 @@ async fn test_patch_team_applies_role_updates_and_name() {
             },
         ]),
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
 
     let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
@@ -3295,6 +3323,8 @@ async fn test_patch_team_empty_role_updates() {
         slug: None,
         user_role_updates: Some(Vec::new()),
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
 
     let receipt = test_team_receipt::<AdminTeamRole>(team_id, &owner_id);
@@ -3320,6 +3350,8 @@ async fn test_patch_team_metadata_publishes_updated_with_omitted_fields() {
         slug: None,
         user_role_updates: None,
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
 
     service
@@ -3364,6 +3396,8 @@ async fn test_patch_team_role_only_publishes_previous_role_without_updated_event
             role: TeamRole::Admin,
         }]),
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
 
     service
@@ -3419,6 +3453,8 @@ async fn test_patch_team_partial_role_failure_keeps_ordered_success_events() {
             },
         ]),
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
 
     assert!(
@@ -3449,6 +3485,8 @@ async fn test_patch_team_repository_failure_does_not_publish_updated() {
         slug: None,
         user_role_updates: None,
         default_link_share: None,
+        startup_type: None,
+        logo_url: None,
     };
 
     assert!(
@@ -5799,7 +5837,7 @@ async fn create_team_without_subscription_skips_convert_and_defaults_auto_join()
     );
 
     let team = service
-        .create_team(&user_id, "Free Team", None)
+        .create_team(&user_id, "Free Team", &TeamProfile::default(), None)
         .await
         .unwrap();
 
@@ -5835,7 +5873,12 @@ async fn create_team_with_subscription_converts_and_defaults_auto_join() {
 
     let subscription_id: stripe::SubscriptionId = "sub_test".parse().unwrap();
     service
-        .create_team(&user_id, "Paid Team", Some(&subscription_id))
+        .create_team(
+            &user_id,
+            "Paid Team",
+            &TeamProfile::default(),
+            Some(&subscription_id),
+        )
         .await
         .unwrap();
 
@@ -5864,7 +5907,7 @@ async fn create_team_generic_domain_does_not_default_auto_join() {
     );
 
     service
-        .create_team(&user_id, "Personal Team", None)
+        .create_team(&user_id, "Personal Team", &TeamProfile::default(), None)
         .await
         .unwrap();
 

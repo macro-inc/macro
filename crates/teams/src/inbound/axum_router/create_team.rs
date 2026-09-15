@@ -3,7 +3,7 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_authorization::{MacroAuthorizationExtractor, MacroAuthorizationService, UserOrInternal};
 
 use crate::domain::{
-    model::{CreateTeamError, Team},
+    model::{CreateTeamError, StartupType, Team, TeamProfile},
     team_repo::TeamService,
 };
 
@@ -14,6 +14,12 @@ use super::TeamRouterState;
 pub struct CreateTeamRequest {
     /// The name of the team
     pub name: String,
+    /// What kind of startup the team is building
+    #[serde(default)]
+    pub startup_type: Option<StartupType>,
+    /// Absolute URL of the team's logo image (an uploaded static file)
+    #[serde(default)]
+    pub logo_url: Option<String>,
 }
 
 /// Creates a new team.
@@ -43,9 +49,18 @@ pub async fn handler<T: TeamService, Eas: EntityAccessService, Auth: MacroAuthor
         .await
         .map_err(|e| CreateTeamError::StorageLayerError(e.into()))?;
 
+    let profile = TeamProfile {
+        startup_type: req.startup_type,
+        logo_url: req.logo_url.clone(),
+    };
     let team = state
         .service
-        .create_team(&user.macro_user_id, &req.name, subscription_id.as_ref())
+        .create_team(
+            &user.macro_user_id,
+            &req.name,
+            &profile,
+            subscription_id.as_ref(),
+        )
         .await?;
 
     Ok(Json(team))

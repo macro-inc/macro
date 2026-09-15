@@ -80,9 +80,14 @@ export type CreatePortalSessionRequest = {
  */
 export type CreateTeamRequest = {
     /**
+     * Absolute URL of the team's logo image (an uploaded static file)
+     */
+    logo_url?: string | null;
+    /**
      * The name of the team
      */
     name: string;
+    startup_type?: null | StartupType;
 };
 
 /**
@@ -659,6 +664,11 @@ export type PatchTeamCrmSettingsResponse = {
 export type PatchTeamRequest = {
     default_link_share?: null | LinkShare;
     /**
+     * Absolute URL of the team's logo image. Omit to leave unchanged or
+     * pass `null` to remove the logo.
+     */
+    logo_url?: string | null;
+    /**
      * The new name for the team
      */
     name?: string | null;
@@ -666,6 +676,7 @@ export type PatchTeamRequest = {
      * The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE.
      */
     slug?: string | null;
+    startup_type?: null | StartupType;
     /**
      * Role updates to apply to team users
      */
@@ -813,6 +824,15 @@ export type SsoRequiredResponse = {
 };
 
 /**
+ * What kind of startup a team is building. Captured at team creation
+ * (the onboarding team step) so the workspace can be tailored later.
+ *
+ * Stored as its snake_case wire value in `team.startup_type` (TEXT with a
+ * CHECK constraint mirroring these variants).
+ */
+export type StartupType = 'ai' | 'b2b_saas' | 'developer_tools' | 'fintech' | 'healthcare_biotech' | 'consumer' | 'marketplace_ecommerce' | 'hardware_deeptech' | 'climate_energy' | 'other';
+
+/**
  * Response containing the Stripe session URL
  */
 export type StripeSessionResponse = {
@@ -849,9 +869,14 @@ export type Team = {
      */
     enterprise: boolean;
     id: string;
+    /**
+     * Absolute URL of the team's logo image, when set.
+     */
+    logo_url?: string | null;
     name: string;
     owner_id: string;
     slug: string;
+    startup_type?: null | StartupType;
 };
 
 /**

@@ -7,6 +7,7 @@ import {
 } from '@service-auth/client';
 import type { CreateTeamRequest } from '@service-auth/generated/schemas/createTeamRequest';
 import type { PatchTeamRequest } from '@service-auth/generated/schemas/patchTeamRequest';
+import type { StartupType } from '@service-auth/generated/schemas/startupType';
 import type { Team } from '@service-auth/generated/schemas/team';
 import { TeamRole } from '@service-auth/generated/schemas/teamRole';
 import type { TeamWithMembers } from '@service-auth/generated/schemas/teamWithMembers';
@@ -346,6 +347,10 @@ export function useDeleteTeamMutation(callbacks?: DeleteTeamCallbacks) {
 
 type CreateTeamWithInvitesArgs = {
   name: string;
+  /** What kind of startup the team is building. */
+  startup_type?: StartupType | null;
+  /** Public URL of an already-uploaded logo image. */
+  logo_url?: string | null;
   invites?: { email: string }[];
 };
 type CreateTeamWithInvitesContext = { previousTeams: Team[] | undefined };
@@ -360,9 +365,18 @@ export function useCreateTeamWithInvitesMutation(
   callbacks?: CreateTeamWithInvitesCallbacks
 ) {
   return useMutation(() => ({
-    mutationFn: async ({ name, invites }: CreateTeamWithInvitesArgs) => {
+    mutationFn: async ({
+      name,
+      startup_type,
+      logo_url,
+      invites,
+    }: CreateTeamWithInvitesArgs) => {
       const team = await throwOnErr(() =>
-        authServiceClient.createTeam({ name })
+        authServiceClient.createTeam({
+          name,
+          startup_type: startup_type ?? null,
+          logo_url: logo_url ?? null,
+        })
       );
 
       if (invites && invites.length > 0) {
@@ -379,7 +393,7 @@ export function useCreateTeamWithInvitesMutation(
       CreateTeamWithInvitesContext
     >(
       {
-        onMutate: async ({ name }) => {
+        onMutate: async ({ name, startup_type, logo_url }) => {
           await queryClient.cancelQueries({
             queryKey: teamKeys.userTeams.queryKey,
           });
@@ -403,6 +417,8 @@ export function useCreateTeamWithInvitesMutation(
               enterprise: false,
               allow_non_admin_invites: true,
               default_link_share: 'TEAM',
+              startup_type: startup_type ?? null,
+              logo_url: logo_url ?? null,
             };
 
             queryClient.setQueryData<Team[]>(

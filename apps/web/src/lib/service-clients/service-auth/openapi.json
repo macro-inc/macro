@@ -3891,9 +3891,24 @@
         "description": "The request body to create a new team",
         "required": ["name"],
         "properties": {
+          "logo_url": {
+            "type": ["string", "null"],
+            "description": "Absolute URL of the team's logo image (an uploaded static file)"
+          },
           "name": {
             "type": "string",
             "description": "The name of the team"
+          },
+          "startup_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StartupType",
+                "description": "What kind of startup the team is building"
+              }
+            ]
           }
         }
       },
@@ -4623,6 +4638,10 @@
               }
             ]
           },
+          "logo_url": {
+            "type": ["string", "null"],
+            "description": "Absolute URL of the team's logo image. Omit to leave unchanged or\npass `null` to remove the logo."
+          },
           "name": {
             "type": ["string", "null"],
             "description": "The new name for the team"
@@ -4630,6 +4649,17 @@
           "slug": {
             "type": ["string", "null"],
             "description": "The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE."
+          },
+          "startup_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StartupType",
+                "description": "What kind of startup the team is building. Omit to leave unchanged\nor pass `null` to clear."
+              }
+            ]
           },
           "user_role_updates": {
             "type": ["array", "null"],
@@ -4829,6 +4859,22 @@
           }
         }
       },
+      "StartupType": {
+        "type": "string",
+        "description": "What kind of startup a team is building. Captured at team creation\n(the onboarding team step) so the workspace can be tailored later.\n\nStored as its snake_case wire value in `team.startup_type` (TEXT with a\nCHECK constraint mirroring these variants).",
+        "enum": [
+          "ai",
+          "b2b_saas",
+          "developer_tools",
+          "fintech",
+          "healthcare_biotech",
+          "consumer",
+          "marketplace_ecommerce",
+          "hardware_deeptech",
+          "climate_energy",
+          "other"
+        ]
+      },
       "StripeSessionResponse": {
         "type": "object",
         "description": "Response containing the Stripe session URL",
@@ -4884,6 +4930,10 @@
             "type": "string",
             "format": "uuid"
           },
+          "logo_url": {
+            "type": ["string", "null"],
+            "description": "Absolute URL of the team's logo image, when set."
+          },
           "name": {
             "type": "string"
           },
@@ -4892,6 +4942,17 @@
           },
           "slug": {
             "type": "string"
+          },
+          "startup_type": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/StartupType",
+                "description": "What kind of startup the team is building, when known."
+              }
+            ]
           }
         }
       },

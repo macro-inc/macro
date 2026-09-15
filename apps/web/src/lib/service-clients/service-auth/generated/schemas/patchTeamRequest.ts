@@ -5,8 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { PatchTeamRequestDefaultLinkShare } from './patchTeamRequestDefaultLinkShare';
+import type { PatchTeamRequestLogoUrl } from './patchTeamRequestLogoUrl';
 import type { PatchTeamRequestName } from './patchTeamRequestName';
 import type { PatchTeamRequestSlug } from './patchTeamRequestSlug';
+import type { PatchTeamRequestStartupType } from './patchTeamRequestStartupType';
 import type { PatchTeamRequestUserRoleUpdates } from './patchTeamRequestUserRoleUpdates';
 
 /**
@@ -14,10 +16,14 @@ import type { PatchTeamRequestUserRoleUpdates } from './patchTeamRequestUserRole
  */
 export interface PatchTeamRequest {
   default_link_share?: PatchTeamRequestDefaultLinkShare;
+  /** Absolute URL of the team's logo image. Omit to leave unchanged or
+pass `null` to remove the logo. */
+  logo_url?: PatchTeamRequestLogoUrl;
   /** The new name for the team */
   name?: PatchTeamRequestName;
   /** The new slug for the team. This is normalized to SCREAMING_SNAKE_CASE. */
   slug?: PatchTeamRequestSlug;
+  startup_type?: PatchTeamRequestStartupType;
   /** Role updates to apply to team users */
   user_role_updates?: PatchTeamRequestUserRoleUpdates;
 }
