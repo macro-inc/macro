@@ -867,10 +867,7 @@ impl NotificationTitle for MentionedInDocumentCommentMetadata {
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let email = sender.0.email_part();
-        let sender = email.email_str();
+        let sender = comment_sender_label(sender_id, self.sender_display_name.as_deref());
         let title = match &self.file_type {
             Some(ft) => format!("{sender} mentioned you in {}.{ft}", self.document_name),
             None => format!("{sender} mentioned you in {}", self.document_name),
@@ -1136,10 +1133,58 @@ impl NotificationExtIos for TaskAssignedMetadata {
     }
 }
 
+/// Identity of a document comment or its thread. Comments written before the
+/// shared message store carry the legacy numeric ids; comments in the shared
+/// store carry the message and root UUIDs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
+#[serde(untagged)]
+pub enum CommentRef {
+    /// Legacy `Comment.id` or `Thread.id`.
+    Legacy(i64),
+    /// Message or root id in the shared message store.
+    Message(Uuid),
+}
+
+impl From<i64> for CommentRef {
+    fn from(id: i64) -> Self {
+        Self::Legacy(id)
+    }
+}
+
+impl From<Uuid> for CommentRef {
+    fn from(id: Uuid) -> Self {
+        Self::Message(id)
+    }
+}
+
+impl std::fmt::Display for CommentRef {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Legacy(id) => write!(f, "{id}"),
+            Self::Message(id) => write!(f, "{id}"),
+        }
+    }
+}
+
+/// Sender wording shared by the document comment notifications: the acting
+/// user's email, then a bot's public name, then a generic agent label.
+fn comment_sender_label(
+    sender_id: Option<MacroUserIdStr<'_>>,
+    sender_display_name: Option<&str>,
+) -> String {
+    sender_id
+        .map(|id| id.0.email_part().email_str().to_owned())
+        .or_else(|| sender_display_name.map(str::to_owned))
+        .unwrap_or_else(|| "Agent".to_owned())
+}
+
 /// Notification sent when a user is mentioned in a document comment.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct MentionedInDocumentCommentMetadata {
+    /// Public bot name when the author is an agent rather than a Macro user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_display_name: Option<String>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
@@ -1154,9 +1199,9 @@ pub struct MentionedInDocumentCommentMetadata {
     /// The mention ID.
     pub mention_id: String,
     /// the comment id
-    pub comment_id: i64,
+    pub comment_id: CommentRef,
     /// the thread id
-    pub thread_id: i64,
+    pub thread_id: CommentRef,
     /// the text of the comment
     pub text: String,
     #[serde(default)]
@@ -1190,6 +1235,9 @@ impl NotificationExtIos for MentionedInDocumentCommentMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct RepliedToDocumentCommentThreadMetadata {
+    /// Public bot name when the author is an agent rather than a Macro user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_display_name: Option<String>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
@@ -1202,9 +1250,9 @@ pub struct RepliedToDocumentCommentThreadMetadata {
     #[serde(default)]
     pub sub_type: Option<NotificationDocumentSubType>,
     /// the comment id
-    pub comment_id: i64,
+    pub comment_id: CommentRef,
     /// the thread id
-    pub thread_id: i64,
+    pub thread_id: CommentRef,
     /// the text of the comment
     pub text: String,
     #[serde(default)]
@@ -1220,10 +1268,7 @@ impl NotificationTitle for RepliedToDocumentCommentThreadMetadata {
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let email = sender.0.email_part();
-        let sender = email.email_str();
+        let sender = comment_sender_label(sender_id, self.sender_display_name.as_deref());
         let title = match &self.file_type {
             Some(ft) => format!("{sender} replied in {}.{ft}", self.document_name),
             None => format!("{sender} replied in {}", self.document_name),
@@ -1262,6 +1307,9 @@ impl NotificationExtIos for RepliedToDocumentCommentThreadMetadata {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CommentedOnDocumentMetadata {
+    /// Public bot name when the author is an agent rather than a Macro user.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sender_display_name: Option<String>,
     /// The name of the document.
     pub document_name: String,
     /// The owner of the document.
@@ -1274,9 +1322,9 @@ pub struct CommentedOnDocumentMetadata {
     #[serde(default)]
     pub sub_type: Option<NotificationDocumentSubType>,
     /// the comment id
-    pub comment_id: i64,
+    pub comment_id: CommentRef,
     /// the thread id
-    pub thread_id: i64,
+    pub thread_id: CommentRef,
     /// the text of the comment
     pub text: String,
     #[serde(default)]
@@ -1292,10 +1340,7 @@ impl NotificationTitle for CommentedOnDocumentMetadata {
         &self,
         sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        let sender =
-            sender_id.ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
-        let email = sender.0.email_part();
-        let sender = email.email_str();
+        let sender = comment_sender_label(sender_id, self.sender_display_name.as_deref());
         let title = match &self.file_type {
             Some(ft) => format!("{sender} commented on {}.{ft}", self.document_name),
             None => format!("{sender} commented on {}", self.document_name),

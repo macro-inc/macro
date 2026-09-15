@@ -4,15 +4,19 @@ use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
-use channels::domain::models::{
-    ParticipantRole, PatchMessageNotificationPolicy, PatchMessageRequest,
-    PostMessageNotificationPolicy, PostMessageRequest, Sender,
+use channels::domain::ports::ChannelService;
+use messages::domain::{
+    api::MessageCommands,
+    models::{
+        MessageAttribution, MessageParent, PatchMessageNotificationPolicy, PostMessage,
+        PostMessageNotificationPolicy,
+    },
+    ports::{MessageError, MessagePatch},
 };
-use channels::domain::ports::{ChannelMutationErr, ChannelService};
 use uuid::Uuid;
 
 use super::models::{BotEvent, BotTrigger};
-use super::ports::{AgentResponder, UserTimeZones};
+use super::ports::{AgentResponder, ConversationAccess, UserTimeZones};
 use super::sender_label;
 
 /// How many channel messages to include around the trigger.
@@ -130,6 +134,8 @@ fn current_time_block(now: chrono::DateTime<chrono::Utc>, time_zone: Option<&str
 /// edits that same message with the final answer.
 pub struct MacroAiHandler<C, R, Z> {
     channels: Arc<C>,
+    messages: Arc<dyn MessageCommands>,
+    access: Arc<dyn ConversationAccess>,
     responder: Arc<R>,
     time_zones: Arc<Z>,
 }
@@ -140,10 +146,19 @@ where
     R: AgentResponder,
     Z: UserTimeZones,
 {
-    /// Create a Macro AI handler.
-    pub fn new(channels: Arc<C>, responder: Arc<R>, time_zones: Arc<Z>) -> Self {
+    /// Create a Macro AI handler that reads channel context through `channels`
+    /// and replies through the shared message commands.
+    pub fn new(
+        channels: Arc<C>,
+        messages: Arc<dyn MessageCommands>,
+        access: Arc<dyn ConversationAccess>,
+        responder: Arc<R>,
+        time_zones: Arc<Z>,
+    ) -> Self {
         Self {
             channels,
+            messages,
+            access,
             responder,
             time_zones,
         }
@@ -313,30 +328,36 @@ where
     /// React to a Macro AI mention.
     #[tracing::instrument(skip(self, event), fields(channel_id = %event.channel_id), err)]
     pub(crate) async fn handle(&self, event: &BotEvent) -> anyhow::Result<()> {
-        let actor = Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+        let parent = MessageParent::Channel(event.channel_id);
 
         // 1. Gather conversational context (before posting, so our own
         //    "thinking" message is not included).
         let prompt = self.build_prompt(event).await;
 
-        // 2. Post the immediate "thinking" message in the thread.
+        // 2. Post the immediate "thinking" message in the thread. The capability
+        //    carries the requesting user, so the message records who triggered it.
+        let access = self
+            .access
+            .bot_write(&event.requesting_user, &parent)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
         let thinking = self
-            .channels
-            .post_message(
-                actor.clone(),
-                event.channel_id,
-                PostMessageRequest {
+            .messages
+            .post(
+                access,
+                PostMessage {
+                    attribution: MessageAttribution::ActingUser,
+                    notification_policy: PostMessageNotificationPolicy::Silent,
                     content: THINKING_MESSAGE.to_string(),
-                    mentions: Vec::new(),
                     thread_id: Some(event.reply_thread_id),
+                    anchor: None,
+                    mentions: Vec::new(),
                     attachments: Vec::new(),
                     nonce: None,
-                    notification_policy: PostMessageNotificationPolicy::Silent,
-                    triggered_by: Some(event.requesting_user.as_ref().to_string()),
                 },
             )
             .await?;
-        let message_id = Uuid::parse_str(&thinking.id)?;
+        let message_id = thinking.id;
 
         // 3. Run the agent loop to produce the reply.
         let reply = match self
@@ -355,26 +376,26 @@ where
         // 4. Replace the "thinking" message with the answer. A NotFound here
         //    means a participant deleted the thinking message while the agent
         //    ran — treat that as the user not wanting a response.
+        let access = self
+            .access
+            .bot_write(&event.requesting_user, &parent)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
         match self
-            .channels
-            .patch_message(
-                actor,
-                ParticipantRole::Member,
-                event.channel_id,
+            .messages
+            .patch(
+                access,
                 message_id,
-                PatchMessageRequest {
+                MessagePatch {
                     content: Some(reply),
-                    mentions: None,
-                    attachment_ids_to_delete: None,
-                    attachments_to_add: None,
-                    nonce: None,
                     notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                    ..Default::default()
                 },
             )
             .await
         {
-            Ok(()) => Ok(()),
-            Err(ChannelMutationErr::NotFound(_)) => {
+            Ok(_) => Ok(()),
+            Err(MessageError::NotFound) => {
                 tracing::info!(%message_id, "thinking message was deleted; dropping bot response");
                 Ok(())
             }

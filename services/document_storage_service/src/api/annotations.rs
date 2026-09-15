@@ -257,13 +257,14 @@ impl CommentNotifContext {
         mention_id: &str,
     ) -> SendNotificationRequestBuilder<'static, MentionedInDocumentCommentMetadata> {
         let notification = MentionedInDocumentCommentMetadata {
+            sender_display_name: None,
             document_name: self.document_name.clone(),
             owner: self.owner.clone(),
             file_type: self.file_type.clone(),
             sub_type: self.sub_type.clone(),
             mention_id: mention_id.to_string(),
-            comment_id: self.comment_id,
-            thread_id: self.thread_id,
+            comment_id: self.comment_id.into(),
+            thread_id: self.thread_id.into(),
             text: self.text.clone(),
             sender_profile_picture_url: self.sender_profile_picture_url.clone(),
         };
@@ -282,12 +283,13 @@ impl CommentNotifContext {
         participant_ids: HashSet<MacroUserIdStr<'static>>,
     ) -> SendNotificationRequestBuilder<'static, RepliedToDocumentCommentThreadMetadata> {
         let notification = RepliedToDocumentCommentThreadMetadata {
+            sender_display_name: None,
             document_name: self.document_name.clone(),
             owner: self.owner.clone(),
             file_type: self.file_type.clone(),
             sub_type: self.sub_type.clone(),
-            comment_id: self.comment_id,
-            thread_id: self.thread_id,
+            comment_id: self.comment_id.into(),
+            thread_id: self.thread_id.into(),
             text: self.text.clone(),
             sender_profile_picture_url: self.sender_profile_picture_url.clone(),
         };
@@ -303,12 +305,13 @@ impl CommentNotifContext {
 
     fn commented_on_document_metadata(&self) -> CommentedOnDocumentMetadata {
         CommentedOnDocumentMetadata {
+            sender_display_name: None,
             document_name: self.document_name.clone(),
             owner: self.owner.clone(),
             file_type: self.file_type.clone(),
             sub_type: self.sub_type.clone(),
-            comment_id: self.comment_id,
-            thread_id: self.thread_id,
+            comment_id: self.comment_id.into(),
+            thread_id: self.thread_id.into(),
             text: self.text.clone(),
             sender_profile_picture_url: self.sender_profile_picture_url.clone(),
         }

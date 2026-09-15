@@ -1170,6 +1170,47 @@ pub trait ChannelMentionExtractor: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<SimpleMention>, Self::Err>> + Send;
 }
 
+/// Channel message writes expressed in the existing channel request shapes.
+///
+/// Implemented over the shared message commands, so every channel writer
+/// (HTTP, tools, webhooks, built-in bots) shares one persistence and delivery
+/// path with document discussions.
+#[async_trait::async_trait]
+pub trait ChannelMessageCommands: Send + Sync + 'static {
+    /// Post through the common message policy.
+    async fn post_message(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr>;
+    /// Apply partial message changes.
+    async fn patch_message(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        message_id: Uuid,
+        req: PatchMessageRequest,
+    ) -> Result<(), ChannelMutationErr>;
+    /// Delete under common authorship rules.
+    async fn delete_message(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        message_id: Uuid,
+        query: DeleteMessageQuery,
+    ) -> Result<(), ChannelMutationErr>;
+    /// Change the verified actor's reaction.
+    async fn post_reaction(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostReactionRequest,
+    ) -> Result<(), ChannelMutationErr>;
+    /// Broadcast the verified actor's typing state.
+    async fn post_typing(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostTypingRequest,
+    ) -> Result<(), ChannelMutationErr>;
+}
+
 /// Errors that can occur while mutating channels.
 #[derive(Debug, thiserror::Error)]
 pub enum ChannelMutationErr {

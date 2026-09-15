@@ -180,7 +180,7 @@ pub async fn fetch_pdf_placeable_anchors(
             pa.uuid, 
             pa."documentId" as document_id, 
             pa.owner, 
-            pa."threadId" as thread_id, 
+            pa."threadId" as "thread_id!", 
             pa.page, 
             pa."originalPage" as original_page, 
             pa."originalIndex" as original_index, 

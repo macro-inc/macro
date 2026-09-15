@@ -316,13 +316,20 @@ export type ChannelReplyMetadata = CommonChannelMetadata & {
 export type ChannelType = 'public' | 'private' | 'directMessage' | 'team';
 
 /**
+ * Identity of a document comment or its thread. Comments written before the
+ * shared message store carry the legacy numeric ids; comments in the shared
+ * store carry the message and root UUIDs.
+ */
+export type CommentRef = number | string;
+
+/**
  * Notification sent when someone comments on a document the user owns.
  */
 export type CommentedOnDocumentMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -335,6 +342,10 @@ export type CommentedOnDocumentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -344,7 +355,7 @@ export type CommentedOnDocumentMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
 
 /**
@@ -777,7 +788,7 @@ export type MentionedInDocumentCommentMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -794,6 +805,10 @@ export type MentionedInDocumentCommentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -803,7 +818,7 @@ export type MentionedInDocumentCommentMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
 
 export type NewEmailMetadata = {
@@ -1115,7 +1130,7 @@ export type RepliedToDocumentCommentThreadMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -1128,6 +1143,10 @@ export type RepliedToDocumentCommentThreadMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -1137,7 +1156,7 @@ export type RepliedToDocumentCommentThreadMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
 
 /**

@@ -776,25 +776,7 @@ pub struct NewChannelAttachment {
     pub height: Option<i32>,
 }
 
-/// Simple entity mention attached to a message.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
-pub struct SimpleMention {
-    /// Mentioned entity type.
-    pub entity_type: String,
-    /// Mentioned entity id.
-    pub entity_id: String,
-}
-
-impl SimpleMention {
-    /// Construct a tracked mention of a Macro user.
-    pub fn user(user_id: &MacroUserIdStr<'_>) -> Self {
-        Self {
-            entity_type: "user".to_string(),
-            entity_id: user_id.as_ref().to_string(),
-        }
-    }
-}
+pub use messages::domain::models::SimpleMention;
 
 /// Shareable entity type referenced by a channel message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -890,27 +872,7 @@ impl ReferencedShareItem {
     }
 }
 
-/// Internal notification behavior for a posted channel message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PostMessageNotificationPolicy {
-    /// Apply the normal channel notification rules.
-    #[default]
-    Default,
-    /// Notify tracked mentions without reply, channel-message, or channel-invite notifications.
-    MentionsOnly,
-    /// Do not send notifications for this post. Realtime/search side effects still run.
-    Silent,
-}
-
-/// Internal notification behavior for a patched channel message.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum PatchMessageNotificationPolicy {
-    /// Apply the normal edit behavior: realtime/search only, no notifications.
-    #[default]
-    Default,
-    /// Notify as though the patched message content had just been posted.
-    NotifyAsPostedMessage,
-}
+pub use messages::domain::models::{PatchMessageNotificationPolicy, PostMessageNotificationPolicy};
 
 /// Request to send a channel message.
 #[derive(Debug, Clone, Serialize, Deserialize)]

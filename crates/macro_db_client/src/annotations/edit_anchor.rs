@@ -93,7 +93,7 @@ async fn edit_pdf_free_comment_anchor(
             uuid, 
             "documentId" as document_id,
             owner, 
-            "threadId" as thread_id, 
+            "threadId" as "thread_id!", 
             page, 
             "originalPage" as original_page, 
             "originalIndex" as original_index, 

@@ -23,12 +23,13 @@ use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use bot_id::BotId;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, AdminParticipantRole, EntityAccessReceipt, EntityType,
-        MemberParticipantRole, RequiredPermission,
+        AccessError, AccessLevel, AdminParticipantRole, BotAccessScope, EntityAccessReceipt,
+        EntityType, MemberParticipantRole, RequiredPermission,
     },
     ports::EntityAccessService,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::{api::MessageCommands, service::MessageWrite};
 use std::sync::Arc;
 use uuid::Uuid;
 
@@ -44,6 +45,8 @@ where
     Svc: ChannelService,
     AccessSvc: EntityAccessService,
 {
+    /// Shared message writer used to send channel messages on the user's behalf.
+    pub messages: Arc<dyn MessageCommands>,
     /// Channel message service used to read timelines, resolve messages, and fetch threads.
     pub service: Arc<Svc>,
     /// Entity access service used to ensure the caller is a channel member.
@@ -60,6 +63,7 @@ where
 {
     fn clone(&self) -> Self {
         Self {
+            messages: self.messages.clone(),
             service: self.service.clone(),
             entity_access_service: self.entity_access_service.clone(),
             actor: self.actor,
@@ -73,12 +77,34 @@ where
     AccessSvc: EntityAccessService,
 {
     /// Create a new channel tool context.
-    pub fn new(service: Svc, entity_access_service: AccessSvc) -> Self {
+    pub fn new(
+        messages: Arc<dyn MessageCommands>,
+        service: Svc,
+        entity_access_service: AccessSvc,
+    ) -> Self {
         Self {
+            messages,
             service: Arc::new(service),
             entity_access_service: Arc::new(entity_access_service),
             actor: bot_id::MACRO_AI_BOT_ID,
         }
+    }
+
+    /// Mint the bot's channel write capability on behalf of the requesting user.
+    pub async fn require_channel_message_write(
+        &self,
+        request_context: &RequestContext,
+        channel_id: Uuid,
+    ) -> Result<EntityAccessReceipt<MessageWrite>, ToolCallError> {
+        self.entity_access_service
+            .generate_bot_entity_access_receipt::<MessageWrite>(
+                self.actor,
+                BotAccessScope::user(request_context.user_id.clone()),
+                &channel_id.to_string(),
+                EntityType::Channel,
+            )
+            .await
+            .map_err(|error| channel_receipt_error(ChannelReceiptKind::Member, error))
     }
 
     /// Set the bot these tools act as.
