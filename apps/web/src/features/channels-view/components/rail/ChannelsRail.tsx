@@ -236,11 +236,13 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSearchQuery('');
     props.onSearchOpenChange(false);
   };
+
   const openSearch = () => {
     if (props.mode === 'slim') props.onModeChange('full');
     props.onSearchOpenChange(true);
     queueMicrotask(() => searchInput?.focus());
   };
+
   const selectTab = (tab: ChannelsTab) => {
     previewAfterNavigation.clear();
     setRestoreListScroll(true);
@@ -248,6 +250,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const channelCalls = useChannelCalls();
+
   const channels = createMemo(() =>
     deduplicateChannels([
       props.sources.channels.items(),
@@ -256,6 +259,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       props.sources.search.items(),
     ])
   );
+
   const channelSearchQuery = useSearchSoupQuery(
     () => ({
       params: { page_size: 100 },
@@ -271,6 +275,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         props.searchOpen && normalizedSearchQuery() === serviceSearchQuery(),
     })
   );
+
   const localSearchResults = createMemo(() => {
     const query = normalizedSearchQuery().toLocaleLowerCase();
     const items = props.sources.search.items();
@@ -280,6 +285,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       channel.name.toLocaleLowerCase().includes(query)
     );
   });
+
   const serviceSearchResults = createMemo(() => {
     if (
       normalizedSearchQuery() !== serviceSearchQuery() ||
@@ -293,14 +299,17 @@ export function ChannelsRail(props: ChannelsRailProps) {
       (entity): entity is WithSearch<ChannelEntity> => isChannelEntity(entity)
     );
   });
+
   const searchResults = createMemo(() =>
     deduplicateChannels([localSearchResults(), serviceSearchResults()])
   );
+
   const searchLoading = () =>
     props.sources.search.isLoading() ||
     (normalizedSearchQuery().length >= 3 &&
       (normalizedSearchQuery() !== serviceSearchQuery() ||
         channelSearchQuery.isFetching));
+
   const searchError = () => {
     if (
       normalizedSearchQuery() === serviceSearchQuery() &&
@@ -311,13 +320,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
     return props.sources.search.error() ?? undefined;
   };
+
   const retrySearch = async () => {
     await props.sources.search.refresh();
     if (normalizedSearchQuery().length >= 3) {
       await channelSearchQuery.refetch();
     }
   };
+
   const channelActivity = useChannelRailActivity(channels, channelCalls);
+
   const favorites = createMemo(() => favoritesData()?.favorites ?? []);
 
   const visibleRows = createMemo(() => {
@@ -435,9 +447,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const scrollScopeToSelectedOrStart = (scope: ChannelsQueryScope) => {
     const items = props.sources[scope].items();
+
     const selectedIndex = items.findIndex(
       (channel) => channel.id === state.selectedChannelId
     );
+
     const targetIndex = selectedIndex >= 0 ? selectedIndex : 0;
     const virtualizer = virtualizers()[scope];
 
@@ -455,9 +469,11 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const scrollSearchToSelectedOrStart = () => {
     const items = searchResults();
+
     const selectedIndex = items.findIndex(
       (channel) => channel.id === state.selectedChannelId
     );
+
     const virtualizer = virtualizers().search;
     if (!virtualizer || items.length === 0) return;
 
@@ -471,6 +487,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     if (!scrollRoot?.isConnected) return;
 
     scrollRoot.scrollTop = 0;
+
     const favorite = favorites().find(
       (item) =>
         item.entityType === 'channel' &&
@@ -485,6 +502,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
     const elementBounds = element.getBoundingClientRect();
     const scrollBounds = scrollRoot.getBoundingClientRect();
+
     if (elementBounds.bottom > scrollBounds.bottom) {
       scrollRoot.scrollTop += elementBounds.bottom - scrollBounds.bottom;
     }
@@ -623,10 +641,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const jumpToSection = (offset: 1 | -1) => {
     const currentGroup = list.focus.item()?.group;
+
     const sections =
       favorites().length > 0
         ? CHANNEL_RAIL_SECTIONS
         : CHANNEL_RAIL_SECTIONS.filter((section) => section !== 'favorites');
+
     const currentIndex = currentGroup ? sections.indexOf(currentGroup) : -1;
     const origin = currentIndex === -1 ? (offset === 1 ? -1 : 0) : currentIndex;
     const nextIndex = (origin + offset + sections.length) % sections.length;

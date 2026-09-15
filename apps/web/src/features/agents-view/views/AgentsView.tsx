@@ -55,12 +55,16 @@ function LoadingComposer() {
 function AgentsWorkspace() {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
+
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
+
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
+
   const [page, setPage] = createSignal<AgentsPage>('new');
   const [selected, setSelected] = createSignal<SelectedConversation>();
   const [search, setSearch] = createSignal('');
+
   const query = useSoupItemsQuery(
     () => {
       const ownerId = userId();
@@ -78,6 +82,7 @@ function AgentsWorkspace() {
     },
     () => ({ enabled: Boolean(userId()) })
   );
+
   const conversations = () =>
     selectRecentAgentConversations(
       query.isSuccess ? query.data : [],

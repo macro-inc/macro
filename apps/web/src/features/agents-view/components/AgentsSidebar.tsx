@@ -240,22 +240,29 @@ export type AgentsSidebarProps = {
 
 export function AgentsSidebar(props: AgentsSidebarProps) {
   const panel = useSplitPanelOrThrow();
+
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
+
   const [searchOpen, setSearchOpen] = createSignal(false);
   const [recentChatsOpen, setRecentChatsOpen] = createSignal(true);
+
   const [scrollRoot, setScrollRoot] = createSignal<HTMLElement>();
   const [loadMoreSentinel, setLoadMoreSentinel] =
     createSignal<HTMLDivElement>();
+
   let searchInput: HTMLInputElement | undefined;
+
   const visibleConversations = () =>
     forceEmptyState() ? [] : props.conversations;
+
   const actionController = createListController({
     items: visibleConversations,
     getKey: (conversation) => conversation.id,
     isSelectable: () => false,
   });
+
   const actionList = toEntityActionListState({
     controller: actionController,
     getEntity: (conversation) => conversation,
