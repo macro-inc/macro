@@ -32,14 +32,16 @@ function useViewBreadcrumbsContext() {
   const context = useContext(ViewBreadcrumbsContext);
   if (!context) {
     throw new Error(
-      'ViewBreadcrumbs registration must be inside <ViewBreadcrumbs.Provider>'
+      'ViewBreadcrumbs items must be inside <ViewBreadcrumbs.Root>'
     );
   }
   return context;
 }
 
-/** Provides an ordered registration scope for breadcrumb items. */
-function Provider(props: ParentProps) {
+export type ViewBreadcrumbsRootProps = ParentProps;
+
+/** Owns the ordered registration context for one breadcrumb path. */
+function Root(props: ViewBreadcrumbsRootProps) {
   const [entries, setEntries] = createSignal<RegisteredBreadcrumb[]>([]);
   let sequence = 0;
 
@@ -62,27 +64,11 @@ function Provider(props: ParentProps) {
   );
 }
 
-export type ViewBreadcrumbsRootProps = JSX.HTMLAttributes<HTMLElement>;
-
-function Root(props: ViewBreadcrumbsRootProps) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
-
-  return (
-    <nav
-      aria-label="Breadcrumb"
-      {...rest}
-      class={cn('flex min-w-0 items-center gap-0.5 text-sm', local.class)}
-    >
-      {local.children}
-    </nav>
-  );
-}
-
-export type ViewBreadcrumbsItemProps = ButtonProps & {
+type BreadcrumbButtonProps = ButtonProps & {
   current?: boolean;
 };
 
-function Item(props: ViewBreadcrumbsItemProps) {
+function BreadcrumbButton(props: BreadcrumbButtonProps) {
   const [local, rest] = splitProps(props, [
     'children',
     'class',
@@ -126,33 +112,34 @@ function Separator(props: ViewBreadcrumbsSeparatorProps) {
   );
 }
 
-export type ViewBreadcrumbsRegisterProps = ViewBreadcrumbsItemProps & {
+export type ViewBreadcrumbsItemProps = BreadcrumbButtonProps & {
   id: string;
   order?: number;
 };
 
 /**
- * Registers one breadcrumb item with the nearest Provider and removes it when
+ * Registers one breadcrumb item with the nearest Root and removes it when
  * its owning component unmounts.
  */
-function Register(props: ViewBreadcrumbsRegisterProps) {
+function Item(props: ViewBreadcrumbsItemProps) {
   const context = useViewBreadcrumbsContext();
   const [local, itemProps] = splitProps(props, ['id', 'order']);
   const unregister = context.register({
     id: local.id,
     order: () => local.order,
-    render: () => <Item {...itemProps} />,
+    render: () => <BreadcrumbButton {...itemProps} />,
   });
   onCleanup(unregister);
 
   return null;
 }
 
-export type ViewBreadcrumbsOutletProps = ViewBreadcrumbsRootProps;
+export type ViewBreadcrumbsOutletProps = JSX.HTMLAttributes<HTMLElement>;
 
 /** Renders all registered items in order with separators between them. */
 function Outlet(props: ViewBreadcrumbsOutletProps) {
   const context = useViewBreadcrumbsContext();
+  const [local, rest] = splitProps(props, ['children', 'class']);
   const entries = createMemo(() =>
     [...context.entries()].sort(
       (left, right) =>
@@ -163,7 +150,11 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
   );
 
   return (
-    <Root {...props}>
+    <nav
+      aria-label="Breadcrumb"
+      {...rest}
+      class={cn('flex min-w-0 items-center gap-0.5 text-sm', local.class)}
+    >
       <For each={entries()}>
         {(entry, index) => (
           <>
@@ -174,7 +165,8 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
           </>
         )}
       </For>
-    </Root>
+      {local.children}
+    </nav>
   );
 }
 
@@ -182,7 +174,5 @@ export const ViewBreadcrumbs = Object.assign(Root, {
   Root,
   Item,
   Separator,
-  Provider,
-  Register,
   Outlet,
 });

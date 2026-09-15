@@ -29,17 +29,17 @@ describe('ViewBreadcrumbs registration', () => {
     const [showParent, setShowParent] = createSignal(true);
 
     const view = render(() => (
-      <ViewBreadcrumbs.Provider>
-        <ViewBreadcrumbs.Register id="current" order={20} current>
+      <ViewBreadcrumbs.Root>
+        <ViewBreadcrumbs.Item id="current" order={20} current>
           Task
-        </ViewBreadcrumbs.Register>
+        </ViewBreadcrumbs.Item>
         <Show when={showParent()}>
-          <ViewBreadcrumbs.Register id="parent" order={10}>
+          <ViewBreadcrumbs.Item id="parent" order={10}>
             Tasks
-          </ViewBreadcrumbs.Register>
+          </ViewBreadcrumbs.Item>
         </Show>
         <ViewBreadcrumbs.Outlet />
-      </ViewBreadcrumbs.Provider>
+      </ViewBreadcrumbs.Root>
     ));
 
     expect(

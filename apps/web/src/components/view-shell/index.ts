@@ -31,7 +31,6 @@ export {
   ViewBreadcrumbs,
   type ViewBreadcrumbsItemProps,
   type ViewBreadcrumbsOutletProps,
-  type ViewBreadcrumbsRegisterProps,
   type ViewBreadcrumbsRootProps,
   type ViewBreadcrumbsSeparatorProps,
 } from './ViewBreadcrumbs';

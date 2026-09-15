@@ -23,12 +23,15 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button } from '@ui';
 import { createResource, Match, Show, Suspense, Switch } from 'solid-js';
 import { TASK_TABS } from '../constants';
-import {
-  loadTaskDocument,
-  type TaskDocumentData,
-} from '../queries/task-document';
+import { loadTaskDocument } from '../queries/task-document';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskDetailTarget } from '../types';
+
+const LOADING_PERMISSIONS = {
+  canComment: false,
+  canEdit: false,
+  isOwner: false,
+};
 
 function TaskBreadcrumbLabel(props: { taskName: string }) {
   return (
@@ -36,27 +39,6 @@ function TaskBreadcrumbLabel(props: { taskName: string }) {
       <EntityIcon targetType="task" size="xs" class="shrink-0" />
       <span class="truncate">{props.taskName}</span>
     </>
-  );
-}
-
-function TaskDetailBreadcrumb(props: {
-  taskName: string;
-  onTaskClick?: () => void;
-}) {
-  const { state, closeTask } = useTasksView();
-  const tabName = () =>
-    TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
-
-  return (
-    <ViewBreadcrumbs.Root aria-label="Task location">
-      <ViewBreadcrumbs.Item onClick={closeTask}>
-        <span class="truncate">{tabName()}</span>
-      </ViewBreadcrumbs.Item>
-      <ViewBreadcrumbs.Separator />
-      <ViewBreadcrumbs.Item current class="gap-1.5" onClick={props.onTaskClick}>
-        <TaskBreadcrumbLabel taskName={props.taskName} />
-      </ViewBreadcrumbs.Item>
-    </ViewBreadcrumbs.Root>
   );
 }
 
@@ -74,10 +56,10 @@ function TaskDetailBreadcrumbRegistration(props: {
 
   return (
     <>
-      <ViewBreadcrumbs.Register id="tasks-view" order={0} onClick={closeTask}>
+      <ViewBreadcrumbs.Item id="tasks-view" order={0} onClick={closeTask}>
         <span class="truncate">{tabName()}</span>
-      </ViewBreadcrumbs.Register>
-      <ViewBreadcrumbs.Register
+      </ViewBreadcrumbs.Item>
+      <ViewBreadcrumbs.Item
         id={`task:${props.documentId}`}
         order={1}
         current
@@ -85,7 +67,7 @@ function TaskDetailBreadcrumbRegistration(props: {
         onClick={focusTask}
       >
         <TaskBreadcrumbLabel taskName={taskName()} />
-      </ViewBreadcrumbs.Register>
+      </ViewBreadcrumbs.Item>
     </>
   );
 }
@@ -129,59 +111,56 @@ function TaskDetailTopBar(props: {
   );
 }
 
-function TaskDetailLoadState(props: {
-  taskName: string;
-  error?: boolean;
-  onRetry?: () => void;
-}) {
+function TaskDetailBodyState(props: { error?: boolean; onRetry?: () => void }) {
   return (
-    <div class="flex size-full flex-col">
-      <div class="flex h-12 shrink-0 items-center gap-1 border-edge border-b px-3">
-        <TaskDetailBreadcrumb taskName={props.taskName} />
-      </div>
-      <div class="grid min-h-0 flex-1 place-items-center text-ink-muted">
-        <Switch
-          fallback={
-            <SpinnerIcon
-              aria-label="Loading task"
-              class="size-5 animate-spin"
-            />
-          }
-        >
-          <Match when={props.error}>
-            <div class="flex flex-col items-center gap-3">
-              <span>This task couldn’t be loaded.</span>
-              <Button variant="outline" size="sm" onClick={props.onRetry}>
-                Try again
-              </Button>
-            </div>
-          </Match>
-        </Switch>
-      </div>
+    <div class="grid size-full place-items-center text-ink-muted">
+      <Switch
+        fallback={
+          <SpinnerIcon aria-label="Loading task" class="size-5 animate-spin" />
+        }
+      >
+        <Match when={props.error}>
+          <div class="flex flex-col items-center gap-3">
+            <span>This task couldn’t be loaded.</span>
+            <Button variant="outline" size="sm" onClick={props.onRetry}>
+              Try again
+            </Button>
+          </div>
+        </Match>
+      </Switch>
     </div>
   );
 }
 
-function TaskDetailContent(props: {
-  task: TaskDetailTarget;
-  data: TaskDocumentData;
-}) {
+export function TaskDetail(props: { task: TaskDetailTarget }) {
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
+  const [document, { refetch }] = createResource(
+    () => props.task.id,
+    loadTaskDocument
+  );
   const fallbackName = () => props.task.fallbackName ?? 'New Task';
+  const data = () => document.latest;
+  const documentSource = () => {
+    const loaded = data();
+    return loaded
+      ? ({ type: 'sync', source: loaded.source } as const)
+      : ({ type: 'loading' } as const);
+  };
+  const permissions = () => data()?.permissions ?? LOADING_PERMISSIONS;
 
   return (
     <MarkdownDocument
       documentId={props.task.id}
       kind="task"
-      documentSource={{ type: 'sync', source: props.data.source }}
-      permissions={props.data.permissions}
-      persistedName={props.data.metadata.documentName}
+      documentSource={documentSource()}
+      permissions={permissions()}
+      persistedName={data()?.metadata.documentName}
       fallbackName={fallbackName()}
     >
       <ModalsProvider>
         <OldOverlay />
-        <ViewBreadcrumbs.Provider>
+        <ViewBreadcrumbs.Root>
           <TaskDetailBreadcrumbRegistration
             documentId={props.task.id}
             fallbackName={fallbackName()}
@@ -191,72 +170,48 @@ function TaskDetailContent(props: {
               <TaskDetailTopBar
                 documentId={props.task.id}
                 fallbackName={fallbackName()}
-                isOwner={props.data.permissions.isOwner}
+                isOwner={permissions().isOwner}
               />
               <div class="relative min-h-0 min-w-0 flex-1">
-                <Suspense
-                  fallback={
-                    <div class="grid size-full place-items-center text-ink-muted">
-                      <SpinnerIcon class="size-5 animate-spin" />
-                    </div>
-                  }
-                >
-                  <SidePanel.Layout headerToggle={false}>
-                    <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
-                      <MarkdownSidePanelSections />
-                    </Show>
-                    <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-                      <div class="absolute top-1.5 right-4 z-action-menu flex justify-end">
-                        <FindAndReplace hotkeyScope={panel.splitHotkeyScope} />
-                      </div>
-                      <DocumentDebouncedNotificationReadMarker
-                        notificationSource={notificationSource}
-                        documentId={props.task.id}
-                      />
-                      <MarkdownDocumentContent
-                        hotkeyScope={panel.splitHotkeyScope}
-                        doInitialSync={props.data.doInitialSync}
-                        loadCachedSnapshot={() =>
-                          loadMarkdownCachedSnapshot(props.task.id)
-                        }
-                      />
-                    </div>
-                  </SidePanel.Layout>
-                </Suspense>
+                <Switch fallback={<TaskDetailBodyState />}>
+                  <Match when={document.error}>
+                    <TaskDetailBodyState error onRetry={() => refetch()} />
+                  </Match>
+                  <Match when={data()}>
+                    {(loaded) => (
+                      <Suspense fallback={<TaskDetailBodyState />}>
+                        <SidePanel.Layout headerToggle={false}>
+                          <Show when={ENABLE_MARKDOWN_SIDE_PANEL}>
+                            <MarkdownSidePanelSections />
+                          </Show>
+                          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+                            <div class="absolute top-1.5 right-4 z-action-menu flex justify-end">
+                              <FindAndReplace
+                                hotkeyScope={panel.splitHotkeyScope}
+                              />
+                            </div>
+                            <DocumentDebouncedNotificationReadMarker
+                              notificationSource={notificationSource}
+                              documentId={props.task.id}
+                            />
+                            <MarkdownDocumentContent
+                              hotkeyScope={panel.splitHotkeyScope}
+                              doInitialSync={loaded().doInitialSync}
+                              loadCachedSnapshot={() =>
+                                loadMarkdownCachedSnapshot(props.task.id)
+                              }
+                            />
+                          </div>
+                        </SidePanel.Layout>
+                      </Suspense>
+                    )}
+                  </Match>
+                </Switch>
               </div>
             </div>
           </SidePanel.Root>
-        </ViewBreadcrumbs.Provider>
+        </ViewBreadcrumbs.Root>
       </ModalsProvider>
     </MarkdownDocument>
-  );
-}
-
-export function TaskDetail(props: { task: TaskDetailTarget }) {
-  const [document, { refetch }] = createResource(
-    () => props.task.id,
-    loadTaskDocument
-  );
-  const fallbackName = () => props.task.fallbackName ?? 'New Task';
-
-  return (
-    <Switch fallback={<TaskDetailLoadState taskName={fallbackName()} />}>
-      <Match when={document.error}>
-        <TaskDetailLoadState
-          taskName={fallbackName()}
-          error
-          onRetry={() => refetch()}
-        />
-      </Match>
-      <Match when={document.latest}>
-        {(data) => (
-          <Suspense
-            fallback={<TaskDetailLoadState taskName={fallbackName()} />}
-          >
-            <TaskDetailContent task={props.task} data={data()} />
-          </Suspense>
-        )}
-      </Match>
-    </Switch>
   );
 }
