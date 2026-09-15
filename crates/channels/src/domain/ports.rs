@@ -447,6 +447,14 @@ pub trait ChannelRepo: Send + Sync + 'static {
         content: String,
     ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
 
+    /// Rewrite a message's content so links to `url` carry `preview: false`.
+    fn remove_link_preview(
+        &self,
+        channel_id: Uuid,
+        message_id: Uuid,
+        url: String,
+    ) -> impl Future<Output = Result<MutatedMessage, Self::Err>> + Send;
+
     /// Delete a message within a channel.
     fn delete_message(
         &self,

@@ -9,8 +9,8 @@ use url::Url;
 use super::url_parsers::parse_custom_title;
 
 /// Unfurl response for a single URL: the URL itself plus any metadata that
-/// was extracted from the page's `<head>` (title, description, image,
-/// favicon).
+/// was extracted from the page's `<head>` (title, description, image and
+/// optional intrinsic image size, favicon).
 #[derive(Debug, Serialize, Deserialize, Default, Clone, Eq, PartialEq)]
 #[cfg_attr(feature = "axum", derive(utoipa::ToSchema))]
 pub struct GetUnfurlResponse {
@@ -24,6 +24,14 @@ pub struct GetUnfurlResponse {
     /// The page's preview image URL (from `og:image`), if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub image_url: Option<String>,
+    /// Intrinsic width of the preview image (from `og:image:width`), if both
+    /// width and height were present and parseable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_width: Option<u32>,
+    /// Intrinsic height of the preview image (from `og:image:height`), if both
+    /// width and height were present and parseable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub image_height: Option<u32>,
     /// The page's favicon URL, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub favicon_url: Option<String>,
@@ -57,6 +65,7 @@ impl GetUnfurlResponse {
             .get("property:og:description")
             .map(|s| s.to_string());
         let image_url = metatags.get("property:og:image").map(|s| s.to_string());
+        let (image_width, image_height) = og_image_dimensions(metatags);
 
         let mut favicon_url = metatags.get("favicon").map(|s| s.to_string());
 
@@ -73,9 +82,36 @@ impl GetUnfurlResponse {
             title,
             description,
             image_url,
+            image_width,
+            image_height,
             favicon_url,
         }
     }
+}
+
+/// Both dimensions or neither — a lone width/height cannot reserve aspect ratio.
+fn og_image_dimensions(metatags: &HashMap<String, String>) -> (Option<u32>, Option<u32>) {
+    let width = first_positive_dimension(
+        metatags,
+        &["property:og:image:width", "name:twitter:image:width"],
+    );
+    let height = first_positive_dimension(
+        metatags,
+        &["property:og:image:height", "name:twitter:image:height"],
+    );
+    match (width, height) {
+        (Some(width), Some(height)) => (Some(width), Some(height)),
+        _ => (None, None),
+    }
+}
+
+fn first_positive_dimension(metatags: &HashMap<String, String>, keys: &[&str]) -> Option<u32> {
+    keys.iter().find_map(|key| {
+        metatags
+            .get(*key)
+            .and_then(|raw| raw.trim().parse::<u32>().ok())
+            .filter(|n| *n > 0)
+    })
 }
 
 /// Convenience alias for a list of nullable unfurl responses (one entry per
@@ -110,6 +146,41 @@ mod tests {
         assert_eq!(link.title, "hello");
         assert_eq!(link.description.as_deref(), Some("this is a description"));
         assert_eq!(link.image_url.as_deref(), Some("foo.jpg"));
+        assert_eq!(link.image_width, None);
+        assert_eq!(link.image_height, None);
+    }
+
+    #[test]
+    fn test_extract_og_image_dimensions() {
+        let mut tags = HashMap::new();
+        tags.insert("property:og:image".to_string(), "foo.jpg".to_string());
+        tags.insert("property:og:image:width".to_string(), "1200".to_string());
+        tags.insert("property:og:image:height".to_string(), "630".to_string());
+
+        let link = GetUnfurlResponse::new("localhost", &tags);
+        assert_eq!(link.image_width, Some(1200));
+        assert_eq!(link.image_height, Some(630));
+    }
+
+    #[test]
+    fn test_og_image_dimensions_require_both() {
+        let mut tags = HashMap::new();
+        tags.insert("property:og:image:width".to_string(), "1200".to_string());
+
+        let link = GetUnfurlResponse::new("localhost", &tags);
+        assert_eq!(link.image_width, None);
+        assert_eq!(link.image_height, None);
+    }
+
+    #[test]
+    fn test_twitter_image_dimensions_fallback() {
+        let mut tags = HashMap::new();
+        tags.insert("name:twitter:image:width".to_string(), "800".to_string());
+        tags.insert("name:twitter:image:height".to_string(), "418".to_string());
+
+        let link = GetUnfurlResponse::new("localhost", &tags);
+        assert_eq!(link.image_width, Some(800));
+        assert_eq!(link.image_height, Some(418));
     }
 
     #[test]
