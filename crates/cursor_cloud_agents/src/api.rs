@@ -22,10 +22,10 @@ pub mod wire;
 
 use crate::api::record::SseRecording;
 use crate::api::wire::{
-    AgentSummary, ArchiveAgentResponse, ConversationResponse, CreateAgentRequest,
-    CreateAgentResponse, CreateRunRequest, CreateRunResponse, ListAgentsResponse,
-    ListModelsResponse, ListRunsResponse, McpServerSelection, MeResponse, ModelSelection,
-    PromptBody, RepoSelection,
+    AgentSummary, ArchiveAgentResponse, ArtifactDownloadResponse, ConversationResponse,
+    CreateAgentRequest, CreateAgentResponse, CreateRunRequest, CreateRunResponse,
+    ListAgentsResponse, ListArtifactsResponse, ListModelsResponse, ListRunsResponse,
+    McpServerSelection, MeResponse, ModelSelection, PromptBody, RepoSelection,
 };
 use crate::domain::model::{
     ConversationLine, ConversationSpeaker, CursorAgentId, CursorModel, CursorRunId, McpServer,
@@ -341,6 +341,75 @@ impl CursorClient {
             )
             .await?;
         Ok(())
+    }
+
+    /// List the files an agent has written to its `artifacts/` directory —
+    /// the screenshots and screen recordings a walkthrough produces.
+    ///
+    /// The listing is agent-scoped and cumulative: artifacts survive their
+    /// run, and Cursor offers no run filter, so every turn sees everything
+    /// every earlier turn wrote. A caller that wants "new since last turn"
+    /// has to diff `path` plus `updated_at` against what it saw before —
+    /// `path` alone is not enough, because an agent that reshoots a
+    /// screenshot writes the same path again.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn list_artifacts(
+        &self,
+        agent: &CursorAgentId,
+    ) -> Result<ListArtifactsResponse, rootcause::Report> {
+        self.get_json(&format!("/v1/agents/{agent}/artifacts"))
+            .await
+    }
+
+    /// Ask for a presigned url to one artifact's bytes.
+    ///
+    /// `path` is a [`wire::ArtifactListing::path`] exactly as the listing gave it;
+    /// Cursor requires it to be under `artifacts/` and rejects anything else.
+    /// The url it answers with is good for fifteen minutes, so it is worth
+    /// requesting when a caller is ready to fetch and not worth storing.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn artifact_download_url(
+        &self,
+        agent: &CursorAgentId,
+        path: &str,
+    ) -> Result<ArtifactDownloadResponse, rootcause::Report> {
+        self.get_json(&format!(
+            "/v1/agents/{agent}/artifacts/download?path={}",
+            urlencoding::encode(path)
+        ))
+        .await
+    }
+
+    /// Fetch an artifact's bytes from the presigned url
+    /// [`Self::artifact_download_url`] handed back.
+    ///
+    /// Its own method rather than another `get_*` because everything about
+    /// the request differs from a Cursor API call: the url is S3's, not this
+    /// client's base url; its credentials are already in its query string, so
+    /// the Cursor key must *not* be attached — sending a live API key to a
+    /// third-party host is a credential leak, not a harmless extra header —
+    /// and it stops working fifteen minutes after it was minted.
+    ///
+    /// The response is returned unread. Artifact videos run to tens of
+    /// megabytes, so the caller decides whether to stream the body somewhere
+    /// or buffer it; this method will not buffer it for them.
+    #[tracing::instrument(skip(self, url), err)]
+    pub async fn fetch_artifact(&self, url: &str) -> Result<reqwest::Response, rootcause::Report> {
+        let response = self
+            .http
+            .get(url)
+            .send()
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        let status = response.status();
+        if !status.is_success() {
+            // S3 answers a stale or malformed presigned url with an XML body
+            // naming the reason, which is the only diagnostic there is — the
+            // same bargain `get_json` makes with Cursor's error bodies.
+            let text = response.text().await.unwrap_or_default();
+            return Err(rootcause::report!("artifact fetch -> {status}: {text}"));
+        }
+        Ok(response)
     }
 
     /// Identify the configured API key. The cheap call that proves the key is
