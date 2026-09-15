@@ -28,6 +28,14 @@ fn preserves_unknown_or_malformed_citations() {
         "【F:file†L3-L1】",
         "【F:file†L1-L2-L3】",
         "【F:file†Lx】",
+        "【F:file†L1-L0】",
+        "【F:file†L+1】",
+        "【F:file†L١】",
+        "【F:  †L1】",
+        "【F:file†L1†L2】",
+        "【F:file\u{85}name†L1】",
+        "【F:outer 【F:inner†L1】",
+        "【F:file†L1\n】",
         "【F:file†L9999999999999999999999】",
         "【F:file\nname†L1】",
         "【other†L1】",
@@ -35,4 +43,13 @@ fn preserves_unknown_or_malformed_citations() {
     ] {
         assert_eq!(markdown(text), text);
     }
+}
+
+#[test]
+fn preserves_malformed_boundaries_and_normalizes_valid_line_numbers() {
+    assert_eq!(
+        markdown("【F:outer 【F:inner†L1】 【F:file†L0002-L0003】 【F:last†L4"),
+        "【F:outer 【F:inner†L1】 `file:2-3` 【F:last†L4"
+    );
+    assert_eq!(markdown("【F:a```b.rs†L1】"), "```` a```b.rs:1 ````");
 }

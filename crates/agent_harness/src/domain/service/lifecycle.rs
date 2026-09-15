@@ -263,22 +263,6 @@ where
             .acp_servers())
     }
 
-    /// Attach only a detached Codex observer; normal management claims settle races.
-    pub(super) async fn observe(&self, session_id: AgentSessionId) -> Result<()> {
-        let session = self.sessions.get_session(session_id).await?;
-        if AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::CodexCloud
-            || !matches!(
-                self.sessions.management(session_id).await?,
-                SessionManagement::Unmanaged
-            )
-        {
-            return Ok(());
-        }
-        let attachment = self.containers.resume(session_id).await?;
-        self.sessions.attach_session(session_id, attachment).await?;
-        Ok(())
-    }
-
     /// Release everything the session holds, then delete it.
     ///
     /// The durable delete goes last on purpose. Crashing between the two
@@ -331,66 +315,5 @@ where
             .set_user_sandbox_size(&session.owner_id, size)
             .await?;
         Ok(())
-    }
-}
-
-impl<
-    Sessions,
-    Containers,
-    Announcer,
-    Runtimes,
-    PromptContext,
-    PromptComposer,
-    Egress,
-    Lifecycle,
-    Mentions,
-    Notifier,
-> agent_session::domain::ports::SessionObserver
-    for AgentHarnessService<
-        Sessions,
-        Containers,
-        Announcer,
-        Runtimes,
-        PromptContext,
-        PromptComposer,
-        Egress,
-        Lifecycle,
-        Mentions,
-        Notifier,
-    >
-where
-    Sessions: AgentSessionService,
-    Containers: ContainerManager,
-    Announcer: SessionAnnouncer,
-    Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
-    PromptComposer: AgentPromptComposer,
-    Egress: SandboxEgressProvisioner,
-    Lifecycle: AgentSessionLifecyclePublisher,
-    Mentions: PromptMentions,
-    Notifier: AgentSessionNotifier,
-{
-    fn observe<'a>(
-        &'a self,
-        access: &'a entity_access::domain::models::EntityAccessReceipt<
-            entity_access::domain::models::ViewAccessLevel,
-        >,
-    ) -> std::pin::Pin<Box<dyn Future<Output = agent_session::domain::error::Result<()>> + Send + 'a>>
-    {
-        Box::pin(async move {
-            if access.entity().entity_type
-                != entity_access::domain::models::EntityType::AgentSession
-            {
-                return Err(AgentSessionError::Forbidden);
-            }
-            let id = AgentSessionId::new_from_uuid(
-                macro_uuid::Uuid::parse_str(&access.entity().entity_id)
-                    .map_err(|_| AgentSessionError::Forbidden)?,
-            );
-            self.execute(id, HarnessCommand::Observe)
-                .await
-                .map(drop)
-                .map_err(into_session_error)
-        })
     }
 }

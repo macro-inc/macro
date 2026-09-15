@@ -149,12 +149,10 @@ pub trait ChannelPromptContext: Send + Sync + 'static {
 pub trait AgentPromptComposer: Send + Sync + 'static {
     /// Return the markdown that should be delivered to the agent runtime.
     /// `None` sanitizes a prompt without adding a channel-context node.
-    /// Internal tool instructions are included only when the runtime can call them.
     fn compose(
         &self,
         prompt_markdown: &str,
         messages: Option<&[PriorChannelMessage]>,
-        include_internal_tools: bool,
     ) -> impl Future<Output = Result<String>> + Send;
 }
 

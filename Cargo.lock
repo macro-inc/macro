@@ -3669,6 +3669,7 @@ dependencies = [
  "clap",
  "futures",
  "insta",
+ "lazy-regex",
  "reqwest 0.13.4",
  "rootcause",
  "serde",

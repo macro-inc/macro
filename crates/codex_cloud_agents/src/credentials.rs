@@ -6,7 +6,7 @@ use std::io::{Read as _, Write as _};
 use std::path::{Path, PathBuf};
 
 #[cfg(test)]
-#[path = "json_store/test.rs"]
+#[path = "credentials/test.rs"]
 mod test;
 
 const AUTH_FILE: &str = "credentials.json";

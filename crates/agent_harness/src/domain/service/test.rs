@@ -162,7 +162,6 @@ type PromptCompositionCall = (String, Option<Vec<PriorChannelMessage>>);
 struct PromptComposerMock {
     calls: Arc<Mutex<Vec<PromptCompositionCall>>>,
     failure: Arc<Mutex<Option<String>>>,
-    internal_tools: Arc<Mutex<Vec<bool>>>,
 }
 
 impl PromptComposerMock {
@@ -170,7 +169,6 @@ impl PromptComposerMock {
         Self {
             calls: Arc::default(),
             failure: Arc::new(Mutex::new(Some(message.to_owned()))),
-            internal_tools: Arc::default(),
         }
     }
 
@@ -184,12 +182,7 @@ impl AgentPromptComposer for PromptComposerMock {
         &self,
         prompt_markdown: &str,
         messages: Option<&[PriorChannelMessage]>,
-        include_internal_tools: bool,
     ) -> crate::domain::error::Result<String> {
-        self.internal_tools
-            .lock()
-            .unwrap()
-            .push(include_internal_tools);
         self.calls.lock().unwrap().push((
             prompt_markdown.to_owned(),
             messages.map(|messages| messages.to_vec()),
@@ -2901,10 +2894,6 @@ async fn codex_named_session_opens_without_mcp_or_sandbox_defaults() {
         panic!("expected session/new")
     };
     assert!(request.mcp_servers.is_empty());
-    assert_eq!(
-        *service.inner.prompt_composer.internal_tools.lock().unwrap(),
-        [false]
-    );
 }
 
 #[tokio::test]
@@ -2945,10 +2934,6 @@ async fn codex_channel_mention_opens_without_egress_or_mcp() {
         panic!("expected session/new")
     };
     assert!(request.mcp_servers.is_empty());
-    assert_eq!(
-        *service.inner.prompt_composer.internal_tools.lock().unwrap(),
-        [false]
-    );
 }
 
-mod observation;
+mod reopen;

@@ -63,7 +63,6 @@ mod test;
 /// the authorization state the request extractors authenticate against.
 pub struct AgentSessionRouterState<T, Access, Auth> {
     service: Arc<T>,
-    observer: Option<Arc<dyn crate::domain::ports::SessionObserver>>,
     entity_access: Arc<Access>,
     authorization_state: MacroAuthorizationState<Auth>,
 }
@@ -78,21 +77,9 @@ impl<T, Access, Auth> AgentSessionRouterState<T, Access, Auth> {
     ) -> Self {
         Self {
             service: Arc::new(service),
-            observer: None,
             entity_access,
             authorization_state,
         }
-    }
-}
-
-impl<T, Access, Auth> AgentSessionRouterState<T, Access, Auth> {
-    /// Enable provider metadata observation after the request's view authorization.
-    pub fn with_observer(
-        mut self,
-        observer: Arc<dyn crate::domain::ports::SessionObserver>,
-    ) -> Self {
-        self.observer = Some(observer);
-        self
     }
 }
 
@@ -101,7 +88,6 @@ impl<T, Access, Auth> Clone for AgentSessionRouterState<T, Access, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: Arc::clone(&self.service),
-            observer: self.observer.clone(),
             entity_access: Arc::clone(&self.entity_access),
             authorization_state: self.authorization_state.clone(),
         }
@@ -587,21 +573,6 @@ pub async fn get_agent_session_handler<
     State(state): State<AgentSessionRouterState<T, Access, Auth>>,
     Path(session_id): Path<Uuid>,
 ) -> Result<Json<AgentSessionResponse>, AgentSessionApiError> {
-    if let Some(observer) = &state.observer {
-        // Provider availability must never prevent access to persisted session history.
-        match tokio::time::timeout(
-            std::time::Duration::from_secs(2),
-            observer.observe(&access.entity_access_receipt),
-        )
-        .await
-        {
-            Ok(Ok(())) => {}
-            Ok(Err(error)) => {
-                tracing::warn!(?error, "could not start session metadata observation")
-            }
-            Err(_) => tracing::debug!("session observation continues after view wait deadline"),
-        }
-    }
     let session = state
         .service
         .get_session(AgentSessionId::new_from_uuid(session_id))

@@ -36,6 +36,33 @@ fn select(
             })
     })
 }
+
+/// A provider association is an observed link, not evidence that our adapter created a PR.
+pub(super) fn pull_request_event(
+    machine: &ReplayMachine,
+    state: &StoredSession,
+    turn: &str,
+) -> Option<CloudEvent> {
+    let task = state.task.as_deref()?;
+    let target = state.target.as_ref()?;
+    if !machine
+        .accepted(task)
+        .iter()
+        .any(|accepted| accepted == turn)
+    {
+        return None;
+    }
+    let selected = select(&[turn.to_owned()], target, &machine.pull_requests(task))?;
+    Some(CloudEvent {
+        id: format!("codex-pr:{}:{}", selected.turn, selected.url),
+        method: "adapter/pull_request".into(),
+        params: serde_json::json!({
+            "url": selected.url,
+            "assistantTurnId": selected.turn,
+            "source": "codex_cloud_metadata",
+        }),
+    })
+}
 impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
     /// Wait for a newly attached session or foreground metadata observation.
     pub async fn metadata_changed(&self) {
@@ -43,7 +70,8 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
     }
     /// Refresh attached sessions' task metadata without launching work or replaying history.
     /// Fence and identity checks precede provider reads; the attachment retries failures with backoff.
-    pub async fn refresh_metadata(&self) -> Result<(), rootcause::Report> {
+    pub async fn refresh_metadata(&self) -> Result<Vec<String>, rootcause::Report> {
+        let mut changed = Vec::new();
         let sessions: Vec<_> = self
             .sessions
             .lock()
@@ -52,7 +80,7 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
             .map(|(id, session)| (id.clone(), session.clone()))
             .collect();
         if sessions.is_empty() {
-            return Ok(());
+            return Ok(changed);
         }
         self.journal.validate().await?;
         for (id, session) in sessions {
@@ -100,12 +128,14 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
                 }
                 Err(error) => Some(error),
             };
-            self.publish_recorded_pr(&session).await?;
+            if self.publish_recorded_pr(&session).await? {
+                changed.push(id);
+            }
             if let Some(error) = read_error {
                 return Err(error);
             }
         }
-        Ok(())
+        Ok(changed)
     }
     async fn record_metadata_if_current(
         &self,
@@ -134,10 +164,10 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
         machine.push(&entry)?;
         Ok(true)
     }
-    async fn publish_recorded_pr(&self, session: &Session) -> Result<(), rootcause::Report> {
+    async fn publish_recorded_pr(&self, session: &Session) -> Result<bool, rootcause::Report> {
         let state = session.state.lock().await.clone();
         let (Some(task), Some(target)) = (state.task, state.target) else {
-            return Ok(());
+            return Ok(false);
         };
         let selected = {
             let machine = session.machine.lock().await;
@@ -148,15 +178,15 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
             )
         };
         let Some(Selected { url, .. }) = selected else {
-            return Ok(());
+            return Ok(false);
         };
         let mut published = session.published_pr.lock().await;
         if published.as_ref() == Some(&url) {
-            return Ok(());
+            return Ok(false);
         }
         self.journal.validate().await?;
         self.probe.report_pull_request(&url).await?;
         *published = Some(url);
-        Ok(())
+        Ok(true)
     }
 }

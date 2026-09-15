@@ -978,14 +978,3 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
 
 #[cfg(test)]
 mod test;
-
-/// Observe provider metadata for an authorized session without submitting work.
-pub trait SessionObserver: Send + Sync {
-    /// Start observation when appropriate; an existing manager remains authoritative.
-    fn observe<'a>(
-        &'a self,
-        access: &'a entity_access::domain::models::EntityAccessReceipt<
-            entity_access::domain::models::ViewAccessLevel,
-        >,
-    ) -> Pin<Box<dyn Future<Output = Result<()>> + Send + 'a>>;
-}

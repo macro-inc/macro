@@ -215,17 +215,9 @@ where
         command: HarnessCommand,
     ) -> Result<CommandOutcome> {
         let span = tracing::Span::current();
-        // Open creates the row, while Observe only attaches an unmanaged Codex
-        // session. Neither forwards to or replaces an existing manager.
-        if matches!(command, HarnessCommand::Open(_) | HarnessCommand::Observe) {
-            span.record(
-                "agent.session.management",
-                if matches!(command, HarnessCommand::Observe) {
-                    "observe"
-                } else {
-                    "open"
-                },
-            );
+        // Open creates the row and has no existing manager to route through.
+        if matches!(command, HarnessCommand::Open(_)) {
+            span.record("agent.session.management", "open");
             span.record("agent.command.forwarded", false);
             return self.execute(session_id, command).await;
         }
@@ -308,7 +300,6 @@ where
                 }
             }
             HarnessCommand::Open(_)
-            | HarnessCommand::Observe
             | HarnessCommand::Turn(_)
             | HarnessCommand::SessionStopped { .. }
             | HarnessCommand::SetSandboxSize(_)
@@ -316,10 +307,6 @@ where
         }
 
         match command {
-            HarnessCommand::Observe => {
-                self.observe(session_id).await?;
-                Ok(CommandOutcome::Completed)
-            }
             HarnessCommand::Open(command) => {
                 self.open(session_id, command).await?;
                 Ok(CommandOutcome::Completed)
@@ -610,12 +597,7 @@ where
         // what they typed rather than the composed payload.
         let mut composed = entry.action.clone();
         if let Err(error) = self
-            .compose_action(
-                session_id,
-                &mut composed,
-                entry.actor.as_ref(),
-                entry.announce.as_ref(),
-            )
+            .compose_action(&mut composed, entry.actor.as_ref(), entry.announce.as_ref())
             .await
         {
             self.queues.requeue_front(session_id, entry);

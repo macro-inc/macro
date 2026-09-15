@@ -11,8 +11,8 @@ use codex_cloud_agents::{
     domain::{
         acp_session::{SessionService, SessionStore, StoredSession},
         cloud::{
-            CloudEvent, CloudEventStream, CloudId, CreatedTask, Launch, NativeRecord, TaskSnapshot,
-            TurnId, TurnSnapshot,
+            CloudEvent, CloudEventStream, CloudId, CreatedTask, ExternalPullRequest, Launch,
+            NativeRecord, TaskSnapshot, TurnId, TurnSnapshot,
         },
         journal::{JournalEntry, JournalInput},
         runtime::{CloudRuntime, RuntimeIdentity},
@@ -87,6 +87,7 @@ impl SessionStore for Journal {
 }
 #[derive(Default)]
 struct Calls {
+    prs: Vec<ExternalPullRequest>,
     launches: usize,
     followups: Vec<(String, String, String)>,
     turn: usize,
@@ -109,8 +110,9 @@ impl Runtime {
         })
     }
     fn state(&self) -> Result<TaskSnapshot> {
+        let pull_requests = self.0.lock().unwrap().prs.clone();
         Ok(TaskSnapshot {
-            pull_requests: vec![],
+            pull_requests,
             task_id: CloudId::new("task-fold".into())?,
             title: None,
             native: None,
@@ -261,7 +263,7 @@ impl Client {
             Some(codex_cloud_agents::domain::runtime::CloudTarget {
                 environment: CloudId::new("environment-fold".into()).unwrap(),
                 branch: "main".into(),
-                repository_url: None,
+                repository_url: Some("https://github.com/org/repo".into()),
             }),
         ));
         let (client, agent) = tokio::io::duplex(128 * 1024);
@@ -815,4 +817,90 @@ async fn late_historical_records_are_silent_until_replacement_load() {
     );
     assert_eq!(assert_fold(&log), replaced);
     assert_eq!(runtime.0.lock().unwrap().launches, 1);
+}
+
+fn associated_pr(turn: &str, repo: &str, number: u32) -> ExternalPullRequest {
+    ExternalPullRequest {
+        assistant_turn_id: TurnId::new(turn.into()).unwrap(),
+        url: format!("https://github.com/{repo}/pull/{number}"),
+    }
+}
+
+#[tokio::test]
+async fn verified_pr_is_a_standard_completed_tool_in_live_and_replayed_history() {
+    let runtime = Runtime::default();
+    runtime.0.lock().unwrap().prs = vec![
+        associated_pr("turn-1", "org/repo", 42),
+        associated_pr("turn-1", "other/repo", 99),
+        associated_pr("foreign-turn", "org/repo", 98),
+    ];
+    let mut client = Client::new(runtime.clone(), Journal::default());
+    let mut log = vec![];
+    client.initialize(&mut log).await;
+    let session = client.session(&mut log).await;
+    client
+        .prompt(&mut log, &session, 3, "Inspect repository")
+        .await;
+    let messages = assert_fold(&log);
+    assert_turns(&messages, 1);
+    let serialized = serde_json::to_string(&messages).unwrap();
+    assert_eq!(serialized.matches("Found pull request").count(), 1);
+    assert!(serialized.contains("https://github.com/org/repo/pull/42"));
+    assert!(!serialized.contains("other/repo"));
+    assert!(!serialized.contains("/pull/98"));
+    insta::assert_json_snapshot!("verified_pr_tool", messages);
+    for id in [4, 5] {
+        client.load(&mut log, &session, id).await;
+        assert_eq!(assert_fold(&log), messages);
+    }
+    assert_eq!(runtime.0.lock().unwrap().launches, 1);
+}
+
+#[tokio::test]
+async fn late_pr_metadata_replays_on_its_own_turn_without_duplicate_tools() {
+    let runtime = Runtime::default();
+    let journal = Journal::default();
+    let mut client = Client::new(runtime.clone(), journal.clone());
+    let mut log = vec![];
+    client.initialize(&mut log).await;
+    let session = client.session(&mut log).await;
+    client.prompt(&mut log, &session, 3, "First turn").await;
+    client.prompt(&mut log, &session, 4, "Second turn").await;
+    drop(client);
+    let mut snapshot = runtime.state().unwrap();
+    snapshot.pull_requests = vec![associated_pr("turn-1", "org/repo", 42)];
+    let sequence = journal.read(&session).await.unwrap().len() as i64;
+    journal
+        .append(
+            &session,
+            sequence,
+            None,
+            &JournalInput::Metadata {
+                snapshot,
+                native: None,
+            },
+        )
+        .await
+        .unwrap();
+    let mut client = Client::new(runtime.clone(), journal);
+    client.initialize(&mut log).await;
+    client.load(&mut log, &session, 5).await;
+    let messages = assert_fold(&log);
+    assert_turns(&messages, 2);
+    assert!(
+        serde_json::to_string(&messages[1])
+            .unwrap()
+            .contains("Found pull request")
+    );
+    assert!(
+        !serde_json::to_string(&messages[3])
+            .unwrap()
+            .contains("Found pull request")
+    );
+    for id in [6, 7] {
+        client.load(&mut log, &session, id).await;
+        assert_eq!(assert_fold(&log), messages);
+    }
+    assert_eq!(runtime.0.lock().unwrap().launches, 1);
+    assert_eq!(runtime.0.lock().unwrap().followups.len(), 1);
 }

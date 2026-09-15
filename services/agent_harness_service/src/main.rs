@@ -762,8 +762,7 @@ async fn run() -> anyhow::Result<()> {
         ),
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
-    )
-    .with_observer(harness.clone());
+    );
     let control_state = AgentSessionControlState::new(
         harness.clone(),
         entity_access,
@@ -930,8 +929,7 @@ async fn run() -> anyhow::Result<()> {
                                 }
                                 // Never trigger-borne: queue mutations arrive over
                                 // HTTP, and the turn signals are the harness's own.
-                                HarnessCommand::Observe
-                                | HarnessCommand::EditQueued { .. }
+                                HarnessCommand::EditQueued { .. }
                                 | HarnessCommand::RemoveQueued { .. }
                                 | HarnessCommand::Turn(_)
                                 | HarnessCommand::SessionStopped { .. } => "agent_trigger.unexpected",

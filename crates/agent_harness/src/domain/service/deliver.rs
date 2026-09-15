@@ -129,7 +129,6 @@ where
     /// outage cannot eat the prompt.
     pub(super) async fn compose_action(
         &self,
-        session_id: AgentSessionId,
         action: &mut AgentAction,
         actor: Option<&MacroUserIdStr<'static>>,
         announce: Option<&AnnounceOrigin>,
@@ -146,16 +145,9 @@ where
         } else {
             None
         };
-        let session = self.sessions.get_session(session_id).await?;
-        let include_internal_tools =
-            AgentKind::for_session(session.bot_id, &session.harness) != AgentKind::CodexCloud;
         prompt.prompt = self
             .prompt_composer
-            .compose(
-                &raw_prompt,
-                prior_messages.as_deref(),
-                include_internal_tools,
-            )
+            .compose(&raw_prompt, prior_messages.as_deref())
             .await?;
         prompt.set_name_source(raw_prompt);
         Ok(())

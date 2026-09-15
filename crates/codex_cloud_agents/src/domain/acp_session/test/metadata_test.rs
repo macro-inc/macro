@@ -163,7 +163,7 @@ async fn fixture() -> (String, Journal, Arc<Runtime>) {
     (id, journal, runtime)
 }
 #[tokio::test]
-async fn delayed_pr_is_published_once_without_changing_transcript_or_launching_work() {
+async fn delayed_pr_is_published_once_and_replayed_as_an_observed_link() {
     let (id, journal, runtime) = fixture().await;
     let service = SessionService::new(runtime.clone(), journal.clone(), None);
     let before = Sink::default();
@@ -172,8 +172,8 @@ async fn delayed_pr_is_published_once_without_changing_transcript_or_launching_w
     assert!(runtime.reports.lock().unwrap().is_empty());
     assert_eq!(journal.read(&id).await.unwrap().len(), 5);
     *runtime.prs.lock().unwrap() = vec![pr("turn_new", "org/repo", 42)];
-    service.refresh_metadata().await.unwrap();
-    service.refresh_metadata().await.unwrap();
+    assert_eq!(service.refresh_metadata().await.unwrap(), vec![id.clone()]);
+    assert!(service.refresh_metadata().await.unwrap().is_empty());
     runtime.prs.lock().unwrap().clear();
     service.refresh_metadata().await.unwrap();
     assert_eq!(
@@ -190,9 +190,24 @@ async fn delayed_pr_is_published_once_without_changing_transcript_or_launching_w
     assert_eq!(journal.read(&id).await.unwrap().len(), 7);
     let after = Sink::default();
     service.replay(&id, &after).await.unwrap();
+    let after = after.0.lock().unwrap();
+    let links: Vec<_> = after
+        .iter()
+        .filter(|event| event.method == "adapter/pull_request")
+        .collect();
+    assert_eq!(links.len(), 1);
+    assert_eq!(
+        links[0].params["url"],
+        "https://github.com/org/repo/pull/43"
+    );
+    assert_eq!(links[0].params["source"], "codex_cloud_metadata");
+    let original: Vec<_> = after
+        .iter()
+        .filter(|event| event.method != "adapter/pull_request")
+        .collect();
     assert_eq!(
         serde_json::to_value(&*before.0.lock().unwrap()).unwrap(),
-        serde_json::to_value(&*after.0.lock().unwrap()).unwrap()
+        serde_json::to_value(original).unwrap()
     );
 }
 #[tokio::test]

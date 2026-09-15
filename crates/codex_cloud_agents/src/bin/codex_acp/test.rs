@@ -80,3 +80,34 @@ async fn rejects_symlink_and_public_journals() {
     std::os::unix::fs::symlink(root.path().join("credentials.json"), &path).unwrap();
     assert!(store.load(&id).await.is_err());
 }
+
+#[test]
+fn cli_requires_explicit_state_environment_and_branch() {
+    use clap::CommandFactory as _;
+    Args::command().debug_assert();
+    let invocation = [
+        "codex_acp",
+        "--state-dir",
+        "/tmp/probe",
+        "--environment",
+        "env-test",
+        "--branch",
+        "test-branch",
+    ];
+    let args = Args::try_parse_from(invocation).unwrap();
+    assert_eq!(args.state_dir, PathBuf::from("/tmp/probe"));
+    assert_eq!(args.environment, "env-test");
+    assert_eq!(args.branch, "test-branch");
+    for missing in [1, 3, 5] {
+        let incomplete: Vec<_> = invocation
+            .iter()
+            .enumerate()
+            .filter(|(index, _)| *index != missing && *index != missing + 1)
+            .map(|(_, value)| *value)
+            .collect();
+        assert_eq!(
+            Args::try_parse_from(incomplete).err().unwrap().kind(),
+            clap::error::ErrorKind::MissingRequiredArgument
+        );
+    }
+}

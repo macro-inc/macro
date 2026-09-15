@@ -91,6 +91,27 @@ fn project(event: &CloudEvent, text: &mut HashMap<String, String>) -> Vec<Sessio
         .unwrap_or("")
         .to_owned();
     match event.method.as_str() {
+        "adapter/pull_request" => {
+            if text
+                .insert(format!("tool:{}", event.id), String::new())
+                .is_some()
+            {
+                return Vec::new();
+            }
+            let Some(url) = p["url"].as_str() else {
+                return Vec::new();
+            };
+            vec![SessionUpdate::ToolCall(
+                ToolCall::new(event.id.clone(), "Found pull request")
+                    .kind(ToolKind::Other)
+                    .status(ToolCallStatus::Completed)
+                    .raw_input(serde_json::json!({"url": url}))
+                    .raw_output(p.clone())
+                    .content(vec![ToolCallContent::from(ContentBlock::Text(
+                        TextContent::new(format!("[View pull request]({url})")),
+                    ))]),
+            )]
+        }
         "user/message" => {
             text.clear();
             vec![SessionUpdate::UserMessageChunk(chunk(
@@ -238,6 +259,7 @@ where
     W: tokio::io::AsyncWrite + Send + 'static,
 {
     let metadata_service = service.clone();
+    let metadata_reload = reload.clone();
     let connection = Agent
         .builder()
         .name("codex-cloud-acp")
@@ -363,7 +385,16 @@ where
                 _=metadata_service.metadata_changed()=>{delay=base;}
             }
             match metadata_service.refresh_metadata().await {
-                Ok(()) => delay = base,
+                Ok(changed) => {
+                    delay = base;
+                    if let Some(reload) = &metadata_reload {
+                        for id in changed {
+                            if reload.send(SessionId::new(id)).is_err() {
+                                return;
+                            }
+                        }
+                    }
+                }
                 Err(error) => {
                     eprintln!("codex_acp: metadata refresh unavailable: {error}");
                     delay = delay

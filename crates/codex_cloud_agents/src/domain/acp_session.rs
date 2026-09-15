@@ -234,20 +234,63 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
         id: &str,
         sink: &impl SessionSink,
     ) -> Result<(), rootcause::Report> {
-        let mut machine = ReplayMachine::default();
+        let session = self.session(id).await?;
+        let state = session.state.lock().await.clone();
         let entries = self.journal.read(id).await?;
         if entries.is_empty() {
             return Err(rootcause::report!(
                 "native journal has no complete history boundary"
             ));
         }
-        let mut events = Vec::new();
+        // Associations can arrive after a later prompt. Rebuild their tool activity
+        // beside the originating turn rather than attributing it to that later turn.
+        let mut catalog = ReplayMachine::default();
         for entry in &entries {
-            events.extend(machine.push(entry)?);
+            catalog.push(entry)?;
         }
-        events.extend(machine.finish());
-        for event in &events {
-            sink.emit(event)?;
+        let mut machine = ReplayMachine::default();
+        let mut current_turn = None;
+        let emit = |event: CloudEvent, turn: &mut Option<String>| {
+            if event.method == "session/turn_complete"
+                && let Some(turn) = turn.as_deref()
+                && let Some(pr) = metadata::pull_request_event(&catalog, &state, turn)
+            {
+                sink.emit(&pr)?;
+            }
+            if event.method == "user/message" {
+                *turn = None;
+            }
+            sink.emit(&event)
+        };
+        for entry in &entries {
+            if let JournalInput::PromptAccepted { turn, .. } = &entry.input {
+                current_turn = turn.clone();
+            }
+            for event in machine.push(entry)? {
+                emit(event, &mut current_turn)?;
+            }
+        }
+        for event in machine.finish() {
+            emit(event, &mut current_turn)?;
+        }
+        Ok(())
+    }
+
+    async fn finish_events(
+        &self,
+        session: &Session,
+        sink: &impl SessionSink,
+    ) -> Result<(), rootcause::Report> {
+        let state = session.state.lock().await.clone();
+        let mut machine = session.machine.lock().await;
+        for event in machine.finish() {
+            if event.method == "session/turn_complete"
+                && let Some(turn) = state.turn.as_deref()
+                && let Some(pr) = metadata::pull_request_event(&machine, &state, turn)
+            {
+                sink.emit(&pr)?;
+            }
+            sink.emit(&event)?;
         }
         Ok(())
     }
@@ -525,9 +568,7 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
             self.probe.cancel(&task).await?;
         }
         let outcome = self.observe(id, session.clone(), task, turn, sink).await;
-        for event in session.machine.lock().await.finish() {
-            sink.emit(&event)?;
-        }
+        self.finish_events(&session, sink).await?;
         outcome
     }
     async fn reserve_recovery(&self, id: &str) -> Result<Recovery, rootcause::Report> {
@@ -624,9 +665,7 @@ impl<R: CloudRuntime, J: SessionStore> SessionService<R, J> {
             )
             .await
             .map(Some);
-        for event in session.machine.lock().await.finish() {
-            sink.emit(&event)?;
-        }
+        self.finish_events(&session, sink).await?;
         if sink.recovered()? {
             session.reload_pending.store(true, Ordering::SeqCst);
         }

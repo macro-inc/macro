@@ -69,7 +69,11 @@ always start from `main`. The composer hides model overrides for
 Codex because this harness does not expose model selection. Codex assistant
 text appears when the provider supplies a completed message or final snapshot.
 Incomplete text fragments are withheld; tool activity and thinking still update
-during the turn. Codex file citations render as inline code with the path and
+during the turn. Verified Codex PR associations appear as a completed **Found
+pull request** activity containing the PR URL, alongside the clickable
+PR chip. This reports an existing PR; it does not publish one. Opening a detached
+session reads saved history; sending a message reattaches the runtime.
+Codex file citations render as inline code with the path and
 line range, such as `.gitkeep:1` or `src/main.rs:2-12`; they do not link to a local
 file or a guessed remote revision. A recorded two-turn Codex conversation is
 covered by ACP/fold snapshots and checked with the production Markdown renderer. Setup navigation,
