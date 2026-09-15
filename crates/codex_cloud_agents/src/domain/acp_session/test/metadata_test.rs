@@ -319,3 +319,48 @@ async fn slow_metadata_read_cannot_overwrite_a_newer_foreground_observation() {
     );
     assert_eq!(journal.read(&id).await.unwrap().len(), 6);
 }
+
+#[tokio::test]
+async fn pr_reload_waits_for_active_load_and_replays_the_new_link() {
+    let (id, journal, runtime) = fixture().await;
+    let service = Arc::new(SessionService::new(runtime.clone(), journal, None));
+    let initial = Sink::default();
+    let recovery = service.prepare_recovery(&id, &initial).await.unwrap();
+    assert!(
+        initial
+            .0
+            .lock()
+            .unwrap()
+            .iter()
+            .all(|event| event.method != "adapter/pull_request")
+    );
+
+    *runtime.prs.lock().unwrap() = vec![pr("turn_new", "org/repo", 42)];
+    assert_eq!(service.refresh_metadata().await.unwrap(), vec![id.clone()]);
+    let reload = tokio::spawn(async move {
+        let output = Sink::default();
+        let recovery = service.prepare_recovery(&id, &output).await.unwrap();
+        drop(recovery);
+        output
+    });
+    tokio::task::yield_now().await;
+    assert!(
+        !reload.is_finished(),
+        "replacement must wait for the active load"
+    );
+    drop(recovery);
+    let output = tokio::time::timeout(std::time::Duration::from_secs(2), reload)
+        .await
+        .unwrap()
+        .unwrap();
+    let events = output.0.lock().unwrap();
+    let links: Vec<_> = events
+        .iter()
+        .filter(|event| event.method == "adapter/pull_request")
+        .collect();
+    assert_eq!(links.len(), 1);
+    assert_eq!(
+        links[0].params["url"],
+        "https://github.com/org/repo/pull/42"
+    );
+}

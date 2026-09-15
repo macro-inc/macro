@@ -117,13 +117,13 @@ async fn tables(pool: &PgPool) {
     sqlx::raw_sql("CREATE TABLE agent_session(id uuid PRIMARY KEY, manager_replica_id uuid, manager_fence bigint NOT NULL)")
         .execute(pool).await.unwrap();
     sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20260910144348_codex_cloud_session_journal.sql"
+        "../../../../macro_db_client/migrations/20260915231629_codex_cloud_session_journal.sql"
     ))
     .execute(pool)
     .await
     .unwrap();
     sqlx::raw_sql(include_str!(
-        "../../../../macro_db_client/migrations/20260910144349_codex_cloud_native_inputs.sql"
+        "../../../../macro_db_client/migrations/20260915231630_codex_cloud_native_inputs.sql"
     ))
     .execute(pool)
     .await

@@ -3681,6 +3681,7 @@ dependencies = [
  "tokio",
  "tokio-util",
  "uuid",
+ "workspace-hack",
  "zeroize",
 ]
 
@@ -3702,6 +3703,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "uuid",
+ "workspace-hack",
  "zeroize",
 ]
 
@@ -19063,6 +19065,7 @@ dependencies = [
  "hyper-util",
  "idna",
  "indexmap 2.14.0",
+ "insta",
  "ipnet",
  "itertools 0.13.0",
  "lazy_static",

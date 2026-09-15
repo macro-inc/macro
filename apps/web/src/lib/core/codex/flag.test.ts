@@ -3,8 +3,8 @@ import { describe, expect, it, vi } from 'vitest';
 import { useCodexAgentsAccess } from './flag';
 
 const flags = vi.hoisted(() => ({
-  agents: () => false,
-  codex: () => false,
+  agents: (): boolean => false,
+  codex: (): boolean => false,
 }));
 vi.mock('@core/constant/featureFlags', () => ({
   enableChatV3Agents: { key: 'enable-chat-v3-agents' },
