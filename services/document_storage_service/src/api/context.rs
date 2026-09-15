@@ -620,6 +620,11 @@ impl From<&ApiContext> for SearchHandlerState {
                 PgAgentSessionRepo::new(ctx.db.clone()),
             ))
                 as Arc<dyn AgentSessionSearchMetadataService>,
+            favorites: Arc::new(
+                crate::service::soup_favorites_reader::DssSoupFavoritesReader(
+                    ctx.favorites_service.clone(),
+                ),
+            ),
             calendar_search_enabled: ctx.config.calendar_search_enabled,
         }
     }

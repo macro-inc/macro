@@ -4,6 +4,7 @@ import { mapAgentSessionSearchResult } from './agent-session-search';
 
 const session: AgentSessionSearchResponseItem = {
   id: 'session',
+  is_favorited: true,
   name: 'Investigation',
   owner_id: 'owner',
   bot_id: 'bot',
@@ -29,6 +30,7 @@ describe('agent session search projection', () => {
       id: 'session',
       botId: 'bot',
       ownerId: 'owner',
+      isFavorited: true,
     });
     expect(result.search.nameHighlight).toBe(
       '<macro_em>Investigation</macro_em>'

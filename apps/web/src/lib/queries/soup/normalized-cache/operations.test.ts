@@ -453,6 +453,7 @@ describe('removeSearchEntities', () => {
     const session = {
       type: 'agentSession',
       id: 'session-1',
+      is_favorited: false,
       name: 'Search verification',
       owner_id: 'macro|owner@example.com',
       bot_id: 'bot-1',

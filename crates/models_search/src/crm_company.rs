@@ -29,6 +29,9 @@ pub struct CrmCompanySearchDomain {
 pub struct CrmCompanySearchResponseItem {
     /// The id of the company.
     pub id: Uuid,
+    /// Whether the requesting user has favorited the company.
+    #[serde(rename = "is_favorited")]
+    pub is_favorited: bool,
     /// The id of the team that owns this company record.
     pub team_id: Uuid,
     /// Display name from the primary domain's directory entry.

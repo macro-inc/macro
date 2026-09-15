@@ -126,6 +126,7 @@ pub fn construct_search_result(
                     .filter(|p| !p.is_empty());
                 Some(ChatSearchResponseItemWithMetadata {
                     metadata: Some(metadata),
+                    is_favorited: false,
                     properties,
                     extra: ChatSearchResponseItem {
                         id: entity_id,

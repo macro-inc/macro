@@ -209,6 +209,7 @@ pub fn construct_search_result(
                     created_at: info.created_at,
                     updated_at: info.updated_at,
                     viewed_at: info.viewed_at,
+                    is_favorited: false,
                     snippet: info.snippet,
                     is_read: info.is_read,
                     inbox_visible: info.inbox_visible,

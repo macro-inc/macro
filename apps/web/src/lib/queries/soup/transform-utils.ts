@@ -261,6 +261,7 @@ export function mapChannelSearchResultItem(
     channel_id: string;
     channel_type: string;
     owner_id?: string | null;
+    is_favorited: boolean;
     channel_message_search_results: ChannelSearchResult[];
   },
   channels: ReadonlyArray<{ id: string; name?: string | null }>
@@ -297,6 +298,7 @@ export function mapChannelSearchResultItem(
         content,
         name: channelName,
         ownerId,
+        isFavorited: result.is_favorited,
         createdAt: msg.created_at,
         updatedAt: msg.updated_at ?? msg.created_at,
         search,
@@ -330,6 +332,7 @@ export const useSearchResponseItemMapper = () => {
             teamId: result.teamId,
             name: result.name || primaryDomain || 'Unknown Company',
             ownerId: result.teamId,
+            isFavorited: result.is_favorited,
             description: result.description ?? undefined,
             // Not returned by search — left undefined ("not loaded") so
             // consumers don't mistake it for a real `false`.
@@ -403,6 +406,7 @@ export const useSearchResponseItemMapper = () => {
               result.file_type
             ),
             ownerId: result.owner_id,
+            isFavorited: result.is_favorited,
             createdAt: result.metadata?.created_at,
             updatedAt: result.metadata?.updated_at,
             fileType: result.file_type || undefined,
@@ -432,6 +436,7 @@ export const useSearchResponseItemMapper = () => {
             id: result.thread_id,
             name,
             ownerId: result.owner_id,
+            isFavorited: result.is_favorited,
             linkId: result.link_id,
             createdAt: result.created_at,
             updatedAt: result.updated_at,
@@ -458,6 +463,7 @@ export const useSearchResponseItemMapper = () => {
             id: result.chat_id,
             name: result.name,
             ownerId: result.user_id,
+            isFavorited: result.is_favorited,
             createdAt: result.metadata?.created_at,
             updatedAt: result.metadata?.updated_at,
             projectId: result.metadata?.project_id ?? undefined,
@@ -489,6 +495,7 @@ export const useSearchResponseItemMapper = () => {
             id: result.channel_id,
             name: channelName,
             ownerId: result.owner_id ?? '',
+            isFavorited: result.is_favorited,
             channelType: result.channel_type as ChannelType,
             createdAt: result.metadata.created_at,
             updatedAt: result.metadata.updated_at,
@@ -521,6 +528,7 @@ export const useSearchResponseItemMapper = () => {
             content,
             name: channelName,
             ownerId: result.owner_id ?? '',
+            isFavorited: result.is_favorited,
             createdAt: result.created_at,
             updatedAt: result.updated_at,
             search,
@@ -540,6 +548,7 @@ export const useSearchResponseItemMapper = () => {
             id: result.id,
             name: result.name,
             ownerId: result.owner_id,
+            isFavorited: result.is_favorited,
             createdAt: result.created_at,
             updatedAt: result.updated_at,
             projectId: result.metadata?.parent_project_id ?? undefined,
@@ -570,6 +579,7 @@ export const useSearchResponseItemMapper = () => {
             id: result.id,
             name: result.name,
             ownerId: result.owner_id,
+            isFavorited: result.is_favorited,
             status: metadata.status,
             time,
             occurrenceKey: metadata.occurrence?.occurrenceKey,
@@ -614,6 +624,7 @@ export const useSearchResponseItemMapper = () => {
             channelId: result.channel_id,
             channelName,
             ownerId: result.owner_id,
+            isFavorited: result.is_favorited,
             createdAt: result.metadata.started_at,
             updatedAt: result.metadata.updated_at,
             isActive: false,

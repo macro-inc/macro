@@ -4,6 +4,7 @@ use crate::api::{
     search::{
         crm_company::{enrich_crm_companies, resolve_crm_team_receipt},
         enrich::enrich_search_response,
+        favorites::enrich_favorite_state,
         simple::{SearchError, simple_unified::perform_unified_search},
     },
 };
@@ -168,6 +169,7 @@ pub async fn handler(
 
         sort_unified_search_results(results)
     };
+    let results = enrich_favorite_state(&*ctx.favorites, &user_context.user_id, results).await;
 
     Ok(Json(UnifiedSearchResponse {
         results,

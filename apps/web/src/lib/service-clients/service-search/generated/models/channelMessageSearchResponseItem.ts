@@ -29,6 +29,8 @@ export interface ChannelMessageSearchResponseItem {
   highlight: SearchHighlight;
   /** Standardized id field shared by all item types; the channel id. */
   id: string;
+  /** Whether the requesting user has favorited the parent channel. */
+  is_favorited: boolean;
   /** The channel message id */
   message_id: string;
   /** we don't store this for channels atm but keeping it here for consistency */

@@ -46,6 +46,8 @@ pub struct CallRecordMetadata {
 pub struct CallRecordSearchResponseItemWithMetadata {
     /// `None` if the call has been deleted.
     pub metadata: Option<CallRecordMetadata>,
+    /// Whether the requesting user has favorited the call.
+    pub is_favorited: bool,
     /// Entity properties (e.g. tags) on the call.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]

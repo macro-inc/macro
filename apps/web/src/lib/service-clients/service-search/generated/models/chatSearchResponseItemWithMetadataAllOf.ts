@@ -8,6 +8,8 @@ import type { ChatSearchResponseItemWithMetadataAllOfMetadata } from './chatSear
 import type { ChatSearchResponseItemWithMetadataAllOfProperties } from './chatSearchResponseItemWithMetadataAllOfProperties';
 
 export type ChatSearchResponseItemWithMetadataAllOf = {
+  /** Whether the requesting user has favorited the chat. */
+  is_favorited: boolean;
   metadata?: ChatSearchResponseItemWithMetadataAllOfMetadata;
   /** Entity properties (e.g. tags) on the chat. */
   properties?: ChatSearchResponseItemWithMetadataAllOfProperties;

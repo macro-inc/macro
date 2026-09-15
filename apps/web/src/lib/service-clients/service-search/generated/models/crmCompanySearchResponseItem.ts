@@ -25,6 +25,8 @@ export interface CrmCompanySearchResponseItem {
   hidden: boolean;
   /** The id of the company. */
   id: string;
+  /** Whether the requesting user has favorited the company. */
+  is_favorited: boolean;
   /** Display name from the primary domain's directory entry. */
   name?: CrmCompanySearchResponseItemName;
   /** `name` with matched spans wrapped in `<macro_em>…</macro_em>`. */

@@ -22,6 +22,8 @@ export interface ChannelNameSearchResponseItem {
   highlight: SearchHighlight;
   /** Standardized id field shared by all item types; the channel id. */
   id: string;
+  /** Whether the requesting user has favorited the channel. */
+  is_favorited: boolean;
   metadata?: ChannelNameSearchResponseItemMetadata;
   /** The channel owner. */
   owner_id?: ChannelNameSearchResponseItemOwnerId;

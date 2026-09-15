@@ -118,6 +118,7 @@ pub fn construct_search_result(
                 };
                 Some(ProjectSearchResponseItemWithMetadata {
                     metadata: Some(metadata),
+                    is_favorited: false,
                     properties: properties_map
                         .remove(&entity_id.to_string())
                         .filter(|p| !p.is_empty()),

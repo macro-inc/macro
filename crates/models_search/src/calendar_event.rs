@@ -140,6 +140,8 @@ pub struct CalendarEventMetadata {
 pub struct CalendarEventSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the event no longer exists.
     pub metadata: Option<CalendarEventMetadata>,
+    /// Whether the requesting user has favorited the calendar event.
+    pub is_favorited: bool,
     /// Entity properties (e.g. tags) on the event.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]
