@@ -33,3 +33,18 @@ fn allows_static_origins() {
     assert!(is_allowed_origin("https://macro.com"));
     assert!(is_allowed_origin("tauri://localhost"));
 }
+
+#[test]
+fn allows_request_id_header() {
+    assert!(EXTRA_HEADERS.contains(&REQUEST_ID_HEADER));
+}
+
+#[test]
+fn exposes_request_id_header() {
+    assert!(EXPOSED_HEADERS.contains(&REQUEST_ID_HEADER));
+}
+
+#[test]
+fn allows_head_requests() {
+    assert!(ALLOWED_METHODS.contains(&Method::HEAD));
+}

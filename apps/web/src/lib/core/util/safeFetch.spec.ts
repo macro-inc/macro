@@ -4,6 +4,89 @@
 
 import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
 
+const telemetryRecorder = vi.hoisted(() => {
+  let activeSpan: TestSpan | undefined;
+
+  class TestSpan {
+    readonly attributes: Record<string, unknown> = {};
+    readonly errors: unknown[] = [];
+    ended = false;
+
+    constructor(
+      readonly name: string,
+      readonly parent?: TestSpan
+    ) {}
+
+    setAttr(name: string, value: unknown) {
+      this.attributes[name] = value;
+    }
+
+    injectTraceHeaders(headers: Record<string, string>) {
+      headers.traceparent = 'test-traceparent';
+    }
+
+    error(error: unknown) {
+      this.errors.push(error);
+    }
+
+    run<T>(operation: () => T): T {
+      const previous = activeSpan;
+      activeSpan = this;
+      try {
+        const result = operation();
+        if (result instanceof Promise) {
+          return result.finally(() => {
+            activeSpan = previous;
+          }) as T;
+        }
+        activeSpan = previous;
+        return result;
+      } catch (error) {
+        activeSpan = previous;
+        throw error;
+      }
+    }
+
+    end() {
+      this.ended = true;
+    }
+  }
+
+  const spans: TestSpan[] = [];
+  const startSpan = (name: string) => {
+    const span = new TestSpan(name, activeSpan);
+    spans.push(span);
+    return span;
+  };
+
+  return {
+    spans,
+    reset() {
+      spans.length = 0;
+      activeSpan = undefined;
+    },
+    span: (name: string, operation?: (span: TestSpan) => Promise<unknown>) => {
+      const span = startSpan(name);
+      if (!operation) return span;
+      return span.run(async () => {
+        try {
+          return await operation(span);
+        } finally {
+          span.end();
+        }
+      });
+    },
+    clientSpan: (name: string) => startSpan(name),
+  };
+});
+
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: {
+    span: telemetryRecorder.span,
+    clientSpan: telemetryRecorder.clientSpan,
+  },
+}));
+
 import { type BaseFetchErrorCode, safeFetch } from './safeFetch';
 
 let originalFetch = global.fetch;
@@ -19,6 +102,7 @@ describe('safeFetch', () => {
   });
 
   beforeEach(() => {
+    telemetryRecorder.reset();
     global.fetch = mockFetch as typeof fetch;
     global.setTimeout = ((fn: (...args: any[]) => any) => {
       fn();
@@ -62,6 +146,13 @@ describe('safeFetch', () => {
       const [{ code }] = result.error;
       expect(code).toBe('NETWORK_ERROR');
     }
+    const [parent, attempt] = telemetryRecorder.spans;
+    expect(parent?.attributes['safe_fetch.error.code']).toBe('NETWORK_ERROR');
+    expect(attempt?.attributes).toMatchObject({
+      'error.type': 'chromium_failed_to_fetch',
+      'network.error.kind': 'chromium_failed_to_fetch',
+      'safe_fetch.response.visible': false,
+    });
   });
 
   test('retry on network errors when configured', async () => {
@@ -87,6 +178,203 @@ describe('safeFetch', () => {
       expect(data).toEqual({ data: 'retry success' });
     }
     expect(mockFetch).toHaveBeenCalledTimes(2);
+  });
+
+  test('creates one parent with child spans and fresh request IDs per attempt', async () => {
+    const callerHeaders = new Headers({ Authorization: 'Bearer token' });
+    mockFetch
+      .mockRejectedValueOnce(
+        new TypeError('NetworkError when attempting to fetch resource.')
+      )
+      .mockResolvedValueOnce(
+        new Response(JSON.stringify({ data: 'retry success' }), {
+          headers: {
+            'Content-Length': '24',
+            'Content-Type': 'application/json',
+          },
+        })
+      );
+
+    const result = await safeFetch<{ data: string }>(
+      `${window.location.origin}/users/2e4d2c15-4f8c-478b-a157-78fd126ba539`,
+      {
+        method: 'POST',
+        body: '{"query":"safe"}',
+        headers: callerHeaders,
+        retry: { maxTries: 2, delay: 0 },
+        trace: { route: '/users/{userId}' },
+      }
+    );
+
+    expect(result.isOk()).toBe(true);
+    const [parent, firstAttempt, secondAttempt] = telemetryRecorder.spans;
+    expect(parent?.name).toBe('safeFetch POST /users/{userId}');
+    expect(firstAttempt?.name).toBe('HTTP POST /users/{userId}');
+    expect(secondAttempt?.name).toBe('HTTP POST /users/{userId}');
+    expect(firstAttempt?.parent).toBe(parent);
+    expect(secondAttempt?.parent).toBe(parent);
+    expect(firstAttempt?.attributes).toMatchObject({
+      'http.request.method': 'POST',
+      'http.request.body.size': 16,
+      'safe_fetch.retry.attempt': 1,
+      'safe_fetch.retry.max_tries': 2,
+      'safe_fetch.response.visible': false,
+      'network.error.kind': 'firefox_network_error',
+    });
+    expect(secondAttempt?.attributes).toMatchObject({
+      'http.response.status_code': 200,
+      'http.response.body.size': 24,
+      'safe_fetch.retry.attempt': 2,
+      'safe_fetch.response.visible': true,
+    });
+
+    const firstHeaders = mockFetch.mock.calls[0]?.[1]?.headers as Record<
+      string,
+      string
+    >;
+    const secondHeaders = mockFetch.mock.calls[1]?.[1]?.headers as Record<
+      string,
+      string
+    >;
+    expect(firstHeaders['x-request-id']).toBeTruthy();
+    expect(secondHeaders['x-request-id']).toBeTruthy();
+    expect(firstHeaders['x-request-id']).not.toBe(
+      secondHeaders['x-request-id']
+    );
+    expect(firstHeaders.authorization).toBe('Bearer token');
+    expect(callerHeaders.has('x-request-id')).toBe(false);
+  });
+
+  test('does not add request IDs to untraced third-party origins', async () => {
+    await safeFetch<{ data: string }>('https://example.com/data');
+
+    const headers = mockFetch.mock.calls[0]?.[1]?.headers as Record<
+      string,
+      string
+    >;
+    expect(headers['x-request-id']).toBeUndefined();
+  });
+
+  test('retries Request bodies with a fresh clone and honors header replacement', async () => {
+    const consumedBodies: string[] = [];
+    mockFetch
+      .mockImplementationOnce(async (input) => {
+        consumedBodies.push(await (input as Request).text());
+        throw new TypeError('Failed to fetch');
+      })
+      .mockImplementationOnce(async (input, init) => {
+        consumedBodies.push(await (input as Request).text());
+        const headers = new Headers(init?.headers);
+        expect(headers.has('authorization')).toBe(false);
+        expect(headers.get('x-test')).toBe('replacement');
+        return new Response(JSON.stringify({ data: 'ok' }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+
+    const request = new Request(`${window.location.origin}/data`, {
+      method: 'POST',
+      headers: { Authorization: 'Bearer original' },
+      body: '{"value":1}',
+    });
+    const result = await safeFetch<{ data: string }>(request, {
+      headers: { 'x-test': 'replacement' },
+      retry: { maxTries: 2, delay: 0 },
+    });
+
+    expect(result.isOk()).toBe(true);
+    expect(consumedBodies).toEqual(['{"value":1}', '{"value":1}']);
+  });
+
+  test('consumes the original Request when retries are disabled', async () => {
+    const request = new Request(`${window.location.origin}/data`, {
+      method: 'POST',
+      body: '{"value":1}',
+    });
+    mockFetch.mockImplementationOnce(async (input) => {
+      expect(input).toBe(request);
+      expect(await (input as Request).text()).toBe('{"value":1}');
+      return new Response(JSON.stringify({ data: 'ok' }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    });
+
+    const result = await safeFetch<{ data: string }>(request);
+
+    expect(result.isOk()).toBe(true);
+    expect(request.bodyUsed).toBe(true);
+  });
+
+  test('tees RequestInit streams for retries', async () => {
+    const consumedBodies: string[] = [];
+    mockFetch
+      .mockImplementationOnce(async (_input, init) => {
+        consumedBodies.push(await new Response(init?.body).text());
+        throw new TypeError('Failed to fetch');
+      })
+      .mockImplementationOnce(async (_input, init) => {
+        consumedBodies.push(await new Response(init?.body).text());
+        return new Response(JSON.stringify({ data: 'ok' }), {
+          headers: { 'Content-Type': 'application/json' },
+        });
+      });
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode('{"value":1}'));
+        controller.close();
+      },
+    });
+
+    const result = await safeFetch<{ data: string }>(
+      `${window.location.origin}/data`,
+      {
+        method: 'POST',
+        body,
+        retry: { maxTries: 2, delay: 0 },
+      }
+    );
+
+    expect(result.isOk()).toBe(true);
+    expect(consumedBodies).toEqual(['{"value":1}', '{"value":1}']);
+  });
+
+  test('uses the final network outcome instead of a stale retry status', async () => {
+    mockFetch
+      .mockResolvedValueOnce(
+        new Response(null, { status: 500, statusText: 'Server Error' })
+      )
+      .mockRejectedValueOnce(new TypeError('Load failed'));
+
+    const result = await safeFetch<{ data: string }>(
+      `${window.location.origin}/data`,
+      {
+        retry: { maxTries: 2, delay: 0 },
+        trace: { expectedStatusCodes: [500] },
+      }
+    );
+
+    expect(result).toMatchObject({
+      error: [{ code: 'NETWORK_ERROR' }],
+    });
+    const parent = telemetryRecorder.spans[0];
+    const finalAttempt = telemetryRecorder.spans[2];
+    expect(parent?.attributes['safe_fetch.response.visible']).toBe(false);
+    expect(parent?.attributes['http.response.status_code']).toBeUndefined();
+    expect(parent?.errors).toHaveLength(1);
+    expect(finalAttempt?.attributes['network.error.kind']).toBe(
+      'safari_load_failed'
+    );
+  });
+
+  test('normalizes identifier path segments in fallback span names', async () => {
+    await safeFetch<{ data: string }>(
+      'https://localhost/documents/2e4d2c15-4f8c-478b-a157-78fd126ba539'
+    );
+
+    expect(telemetryRecorder.spans.map((span) => span.name)).toEqual([
+      'safeFetch GET /documents/{id}',
+      'HTTP GET /documents/{id}',
+    ]);
   });
 
   test('handle invalid JSON', async () => {

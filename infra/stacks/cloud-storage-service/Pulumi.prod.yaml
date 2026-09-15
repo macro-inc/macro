@@ -1,6 +1,7 @@
 config:
   aws-native:region: us-east-1
   aws:region: us-east-1
+  datadog:apiUrl: https://api.us5.datadoghq.com/
   cloud-storage-service:macro_db_secret_key: macro-db-prod
   cloud-storage-service:macro_db_proxy_secret_key: macrodb-rds-proxy-prod
   cloud-storage-service:macro_db_readonly_secret_key: macro-db-readonly-prod
