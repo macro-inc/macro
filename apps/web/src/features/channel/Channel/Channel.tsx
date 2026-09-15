@@ -15,7 +15,7 @@ import {
   SearchHighlightTermsProvider,
 } from '@channel/Message';
 import { MaybeMessageActionDrawerManager } from '@channel/Mobile/MessageActionDrawerManager';
-import { useChannelBotMentionUsers } from '@channel/use-channel-bot-mention-users';
+import { useMessageBotMentionUsers } from '@channel/use-channel-bot-mention-users';
 import { useChannelParticipants } from '@channel/use-channel-participants';
 import { FloatRegionOrInline } from '@components/app/mobile/float-regions/FloatRegion';
 import { FloatRegions } from '@components/app/mobile/float-regions/float-region-state';
@@ -49,24 +49,25 @@ import {
   invalidateChannelsActivity,
   useUpdateChannelsActivityMutation,
 } from '@queries/channel/activity';
-import {
-  type ChannelMessagesData,
-  createMessageIndex,
-  getChannelMessagesQueryKey,
-  isMissingChannelMessageError,
-  useChannelMessagesQuery,
-} from '@queries/channel/channel-messages';
+import { queryClient } from '@queries/client';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
   useSendMessageMutation,
-} from '@queries/channel/message';
+} from '@queries/messages/mutations';
 import {
   useAddReactionMutation,
   useRemoveReactionMutation,
-} from '@queries/channel/reaction';
-import { threadRepliesQueryOptions } from '@queries/channel/thread-replies';
-import { usePostTypingUpdateMutation } from '@queries/channel/typing';
+} from '@queries/messages/reactions';
+import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
+import {
+  createMessageIndex,
+  getMessageTimelineQueryKey,
+  isMissingMessageError,
+  type MessageTimelineData,
+  useMessageTimelineQuery,
+} from '@queries/messages/timeline';
+import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { queryClient } from '@queries/client';
 import { queryReadyGate } from '@queries/gate';
 import { ChannelTypeEnum } from '@service-storage/client';
@@ -132,13 +133,13 @@ export type ChannelProps = {
   targetMessageId?: string | undefined;
   targetMessageReplyId?: string | undefined;
   lastViewedAt?: DateValue | null;
-  initialMessagesStateSnapshot?: ChannelMessagesStateSnapshot;
+  initialMessagesStateSnapshot?: MessageTimelineStateSnapshot;
   onHandleReady?: (handle: ChannelHandle) => void;
   /** Whether to auto-focus the channel input on mount. Defaults to `!isTouchDevice()`. */
   autofocus?: boolean;
 };
 
-export type ChannelMessagesStateSnapshot = {
+export type MessageTimelineStateSnapshot = {
   scroll?: ThreadListScrollSnapshot;
   threads?: ThreadManagerSnapshot;
   /** The unified input's reply binding, persisted by ids only. */
@@ -148,7 +149,7 @@ export type ChannelMessagesStateSnapshot = {
 export type ChannelHandle = {
   goToMessage: TargetMessageController['goToMessage'];
   goToLatest: () => void;
-  getMessagesStateSnapshot: () => ChannelMessagesStateSnapshot | undefined;
+  getMessagesStateSnapshot: () => MessageTimelineStateSnapshot | undefined;
 };
 
 export function Channel(props: ChannelProps) {
@@ -202,13 +203,13 @@ export function Channel(props: ChannelProps) {
   const [channelInputHandle, setChannelInputHandle] =
     createSignal<InputHandle>();
 
-  const messagesQuery = useChannelMessagesQuery(
-    () => props.channelId,
+  const messagesQuery = useMessageTimelineQuery(
+    () => ({ type: 'channel', id: (() => props.channelId)() }),
     targetMessageController.loadAroundMessageId
   );
   const isTargetMessageMissing = () =>
     targetMessageController.loadAroundMessageId() !== undefined &&
-    isMissingChannelMessageError(messagesQuery.error);
+    isMissingMessageError(messagesQuery.error);
   const messagesLoadResult = {
     data: () => messagesQuery.data,
     // Pagination and background-refresh errors should not replace content that
@@ -226,8 +227,7 @@ export function Channel(props: ChannelProps) {
     on(
       [targetMessageController.loadAroundMessageId, () => messagesQuery.error],
       ([loadAroundMessageId, error]) => {
-        if (!loadAroundMessageId || !isMissingChannelMessageError(error))
-          return;
+        if (!loadAroundMessageId || !isMissingMessageError(error)) return;
 
         toast.alert('Message no longer available', {
           subtext: 'Showing the latest messages instead.',
@@ -241,16 +241,17 @@ export function Channel(props: ChannelProps) {
   // The index reads immediately, before EntityLoadGate's boundary exists.
   const messageIndex = createMessageIndex(() =>
     queryReadyGate(messagesQuery)
-      ? (messagesQuery.data as ChannelMessagesData)
+      ? (messagesQuery.data as MessageTimelineData)
       : undefined
   );
 
   const messages = createMemo(() => [...messageIndex.items]);
   const messageById = () => messageIndex.byId;
   const participants = useChannelParticipants(() => props.channelId);
-  const channelBotMentionUsers = useChannelBotMentionUsers(
-    () => props.channelId
-  );
+  const channelBotMentionUsers = useMessageBotMentionUsers(() => ({
+    type: 'channel',
+    id: props.channelId,
+  }));
 
   const activity = useChannelActivity(props.channelId);
 
@@ -296,7 +297,10 @@ export function Channel(props: ChannelProps) {
     // Reply data and the load-around message window can load in parallel. The
     // mounted query reuses this request and remains the owner of render state.
     void queryClient.prefetchQuery(
-      threadRepliesQueryOptions(props.channelId, threadId)
+      threadRepliesQueryOptions(
+        { type: 'channel', id: props.channelId },
+        threadId
+      )
     );
   };
 
@@ -306,8 +310,8 @@ export function Channel(props: ChannelProps) {
 
   const threadPaginator = createThreadPaginator(messagesQuery);
   const messageEditor = createMessageEditor({
-    channelId: () => props.channelId,
-    participantIds: () => participants.ids(),
+    parent: () => ({ type: 'channel', id: (() => props.channelId)() }),
+
     patchMessage: patchMessageMutation.mutate,
     onEditEnded: (message) => {
       // Clear any highlight left by tapping the edit flag's navigate action
@@ -436,7 +440,7 @@ export function Channel(props: ChannelProps) {
   );
 
   const getMessageActions = createChannelMessageActions({
-    channelId: () => props.channelId,
+    parent: () => ({ type: 'channel', id: (() => props.channelId)() }),
     userId,
     deleteMessage: deleteConfirmation.requestDelete,
     addReaction: addReactionMutation.mutate,
@@ -563,7 +567,12 @@ export function Channel(props: ChannelProps) {
       targetMessageController.reset();
       if (needsLatestPage) {
         await queryClient.resetQueries(
-          { queryKey: getChannelMessagesQueryKey(props.channelId, null) },
+          {
+            queryKey: getMessageTimelineQueryKey(
+              { type: 'channel', id: props.channelId },
+              null
+            ),
+          },
           { throwOnError: true }
         );
       }
@@ -622,12 +631,11 @@ export function Channel(props: ChannelProps) {
     if (!senderId) return;
     const payload = buildPostMessageSendPayload({
       snapshot,
-      participantIds: participants.ids(),
     });
 
     sendMessageMutation.mutate(
       {
-        channelID: props.channelId,
+        parent: { type: 'channel', id: props.channelId },
         senderId,
         optimisticId: crypto.randomUUID(),
         ...payload,
@@ -743,7 +751,10 @@ export function Channel(props: ChannelProps) {
                                 {(m) => (
                                   <ChannelThread
                                     data={m}
-                                    channelId={() => props.channelId}
+                                    parent={() => ({
+                                      type: 'channel',
+                                      id: (() => props.channelId)(),
+                                    })}
                                     isNewestThread={isNewestThread()}
                                     getMessageActions={getMessageActions}
                                     isFindBarOpen={findBar.isOpen}
@@ -774,6 +785,11 @@ export function Channel(props: ChannelProps) {
                                       },
                                       onClearTarget: releaseSelectionAndTarget,
                                     }}
+                                    inputMode={
+                                      isUnifiedInputMode()
+                                        ? 'unified'
+                                        : 'inline'
+                                    }
                                     unifiedReplyTarget={unifiedInput.replyTarget()}
                                     isExpanded={state.isExpanded}
                                     setIsExpanded={state.setIsExpanded}
@@ -916,13 +932,19 @@ export function Channel(props: ChannelProps) {
                             onSend={onSend}
                             onStartTyping={() =>
                               typingMutation.mutate({
-                                channelId: props.channelId,
+                                parent: {
+                                  type: 'channel',
+                                  id: props.channelId,
+                                },
                                 action: 'start',
                               })
                             }
                             onStopTyping={() =>
                               typingMutation.mutate({
-                                channelId: props.channelId,
+                                parent: {
+                                  type: 'channel',
+                                  id: props.channelId,
+                                },
                                 action: 'stop',
                               })
                             }

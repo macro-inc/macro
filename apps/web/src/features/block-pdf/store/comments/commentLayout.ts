@@ -6,7 +6,7 @@ import type {
   Overflow,
   PdfRootLayout,
 } from '@block-pdf/type/comments';
-import { isRoot, type Root } from '@core/comments/commentType';
+import { isRoot, type Root, type ThreadId } from '@core/comments/commentType';
 import { createMemo, createRenderEffect } from 'solid-js';
 import { reconcile } from 'solid-js/store';
 import { usePdfDocument } from '../../context/pdf-document-context';
@@ -15,7 +15,7 @@ import { usePdfDocument } from '../../context/pdf-document-context';
 const CONTAINER_PADDING = 80;
 
 /** Maps thread id to height of its measure container */
-export type ThreadHeights = Record<number, number>;
+export type ThreadHeights = Record<ThreadId, number>;
 
 /** Maps page index to comment layout on that page */
 export type ThreadPositionsOnPage = Partial<

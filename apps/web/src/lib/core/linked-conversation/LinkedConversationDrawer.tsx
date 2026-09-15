@@ -2,11 +2,15 @@ import { navigateToChannelMessage } from '@block-channel/utils/link';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { SplitDrawer } from '@components/app/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
+import type { MessageParent } from '@service-storage/messages';
+import { createCallback } from '@solid-primitives/rootless';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
-import { createChannelThreadSource } from './channel-thread-source';
 import { LinkedConversation } from './LinkedConversation';
+import { createMessageThreadSource } from './message-thread-source';
 
 type LinkedConversationDrawerProps = {
   /**
@@ -14,8 +18,8 @@ type LinkedConversationDrawerProps = {
    * the same split (e.g. a toolbar `BlockTool`) with `useDrawerControl(id)`.
    */
   id: string;
-  /** Channel containing the linked thread. */
-  channelId: string;
+  /** Document or channel containing the linked thread. */
+  parent: MessageParent;
   /** Root message of the linked thread — the conversation's parent id. */
   messageId: string;
   /** Target drawer width in px. */
@@ -23,28 +27,41 @@ type LinkedConversationDrawerProps = {
 };
 
 /**
- * A right-hand [`SplitDrawer`] rendering a linked conversation (a channel
- * thread) inside the current split — the "show the thread this came from"
+ * A right-hand [`SplitDrawer`] rendering an originating message thread inside the current split — the "show the thread this came from"
  * affordance. Fully decoupled from any block: it only needs the thread's
- * channel + root message ids. Clicking a message (or the open button in the
- * drawer header) navigates to the referenced thread in its channel and
+ * parent + root message ids. Clicking a message (or the open button in the
+ * drawer header) navigates to the referenced thread in its parent and
  * closes the drawer.
  */
 export function LinkedConversationDrawer(props: LinkedConversationDrawerProps) {
   const orchestrator = useGlobalBlockOrchestrator();
   const drawer = useDrawerControl(props.id);
 
-  const openInChannel = (clickedMessageId?: string) => {
+  const document = useDocumentMetadataQuery(() =>
+    props.parent.type === 'document' ? props.parent.id : ''
+  );
+  const openInParent = createCallback((clickedMessageId?: string) => {
     const target = clickedMessageId ?? props.messageId;
     const isReply = target !== props.messageId;
-    void navigateToChannelMessage(
-      orchestrator,
-      props.channelId,
-      target,
-      isReply ? props.messageId : undefined
-    );
+    if (props.parent.type === 'channel') {
+      void navigateToChannelMessage(
+        orchestrator,
+        props.parent.id,
+        target,
+        isReply ? props.messageId : undefined
+      );
+    } else if (document.isSuccess && document.data.fileType) {
+      openDocument(
+        document.data.fileType,
+        props.parent.id,
+        { comment_id: target },
+        true
+      );
+    } else {
+      return;
+    }
     drawer.close();
-  };
+  });
 
   return (
     <SplitDrawer
@@ -56,16 +73,16 @@ export function LinkedConversationDrawer(props: LinkedConversationDrawerProps) {
           variant="ghost"
           size="icon-sm"
           label="Open thread"
-          onClick={() => openInChannel()}
+          onClick={() => openInParent()}
         >
           <ArrowSquareOut />
         </Button>
       }
     >
       <DrawerConversation
-        channelId={props.channelId}
+        parent={props.parent}
         messageId={props.messageId}
-        onOpenMessage={openInChannel}
+        onOpenMessage={openInParent}
       />
     </SplitDrawer>
   );
@@ -76,19 +93,25 @@ export function LinkedConversationDrawer(props: LinkedConversationDrawerProps) {
  * open — `SplitDrawer` only creates its children then.
  */
 function DrawerConversation(props: {
-  channelId: string;
+  parent: MessageParent;
   messageId: string;
   onOpenMessage: (messageId: string) => void;
 }) {
-  const source = createChannelThreadSource({
-    channelId: () => props.channelId,
-    messageId: () => props.messageId,
-  });
+  const source = createMessageThreadSource(
+    () => props.parent,
+    () => props.messageId
+  );
 
   return (
     <Show
       when={source.root()}
-      fallback={<p class="px-2 text-sm text-ink-muted">Loading thread…</p>}
+      fallback={
+        <p class="px-2 text-sm text-ink-muted">
+          {source.unavailable?.()
+            ? 'This thread is unavailable.'
+            : 'Loading thread…'}
+        </p>
+      }
     >
       <LinkedConversation
         source={source}

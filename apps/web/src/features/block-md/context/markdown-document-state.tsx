@@ -15,8 +15,10 @@ import type { LexicalEditor } from 'lexical';
 import { createSignal } from 'solid-js';
 import { createStore, type Store } from 'solid-js/store';
 import type {
+  CommentId,
   CommentStore,
   MarkStore,
+  ThreadId,
   ThreadStore,
 } from '../comments/commentType';
 import type { Diff } from '../types';
@@ -66,12 +68,12 @@ const initialFindAndReplaceState: FindAndReplaceState = {
 type MarkdownCommentsState = {
   marks: MarkStore;
   activeMarkIds: string[];
-  activeCommentThread: number | null;
-  highlightedCommentId: number | null;
+  activeCommentThread: ThreadId | null;
+  highlightedCommentId: CommentId | null;
   comments: CommentStore;
   threads: ThreadStore;
   commentMarksInitialized: boolean;
-  highlightedCommentThreads: number[];
+  highlightedCommentThreads: ThreadId[];
 };
 
 export function createMarkdownDocumentState() {

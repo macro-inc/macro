@@ -2,8 +2,18 @@ import { MinimizedThread } from '@core/comments/MinimizedThreads';
 import {
   CommentsContext,
   type CommentsContextType,
+  noopCommentOperations,
   Thread,
 } from '@core/comments/Thread';
+import {
+  type CommentId,
+  isDraftThreadId,
+  type ThreadId,
+} from '@core/comments/commentType';
+import {
+  enableUnifiedDocumentDiscussions,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { autoUpdate, computePosition } from '@floating-ui/dom';
@@ -23,6 +33,26 @@ import {
   useDeleteComment,
   useUpdateComment,
 } from './commentOperations';
+import { useCreateMessageComment } from './messageCommentOperations';
+
+function useCommentOperations(): Pick<
+  CommentsContextType,
+  'commentOperations' | 'messageOperations'
+> {
+  if (isFeatureEnabled(enableUnifiedDocumentDiscussions)) {
+    return {
+      commentOperations: noopCommentOperations,
+      messageOperations: { createComment: useCreateMessageComment() },
+    };
+  }
+  return {
+    commentOperations: {
+      createComment: useCreateComment(),
+      deleteComment: useDeleteComment(),
+      updateComment: useUpdateComment(),
+    },
+  };
+}
 
 const useCommentsContext = (
   setThreadHeight: CommentsContextType['setThreadHeight']
@@ -43,14 +73,12 @@ const useCommentsContext = (
   });
   const ownedCommentSelector = createSelector(
     ownedCommentIds,
-    (id: number, owned) => (owned ?? []).includes(id)
+    (id: CommentId, owned) => (owned ?? []).includes(id)
   );
 
-  const createComment = useCreateComment();
-  const updateComment = useUpdateComment();
-  const deleteComment = useDeleteComment();
+  const operations = useCommentOperations();
 
-  const getCommentById = (id: number) => commentState.comments[id];
+  const getCommentById = (id: CommentId) => commentState.comments[id];
 
   const commentsContext: CommentsContextType = {
     setActiveThread: (threadId) =>
@@ -61,11 +89,7 @@ const useCommentsContext = (
     getCommentById,
     documentId: documentId(),
     ownedComment: ownedCommentSelector,
-    commentOperations: {
-      createComment,
-      deleteComment,
-      updateComment,
-    },
+    ...operations,
     inComment: true,
     highlightedCommentId: () => commentState.highlightedCommentId,
   };
@@ -90,15 +114,19 @@ export const CommentMargin = (props: { wideEnough: boolean }) => {
     }
 
     // new threads will take priority
-    if (set.has(-1)) {
-      return new Set([-1]);
+    const draft = [...set].find(isDraftThreadId);
+    if (draft !== undefined) {
+      return new Set([draft]);
     }
 
     return set;
   });
-  const isActiveSelector = createSelector(activeThreads, (id: number, ids) => {
-    return ids.has(id);
-  });
+  const isActiveSelector = createSelector(
+    activeThreads,
+    (id: ThreadId, ids) => {
+      return ids.has(id);
+    }
+  );
 
   const commentsContext = useCommentsContext(setThreadHeights);
 

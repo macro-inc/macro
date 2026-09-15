@@ -1,45 +1,34 @@
 import { toast } from '@core/component/Toast/Toast';
-import { throwOnErr } from '@core/util/result';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
+import type { CountedReaction } from '@service-storage/generated/schemas/countedReaction';
+import type { MessageParent } from '@service-storage/messages';
 import {
-  type MessageResponse,
-  storageServiceClient,
-} from '@service-storage/client';
-import type { ApiCountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
-import type { PostReactionRequest } from '@service-storage/generated/schemas/postReactionRequest';
+  type Message as EntityMessage,
+  entityMessagesClient,
+} from '@service-storage/messages';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce } from '../nonce';
-import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
-import { ChannelNonceKeys } from './keys';
+import { MessageNonceKeys } from './keys';
 import {
   type MessageTarget,
-  replaceTargetReactions,
+  patchTargetMessage,
   resolveMessageTarget,
   softInvalidateTargetCaches,
 } from './reconcile';
+import { applyMessage } from './sync';
+import { getMessageTimelineQueryKeyPrefix } from './timeline';
 
-type WithChannelId<T> = T & { channelId: string };
+type WithParent<T> = T & { parent: MessageParent };
 type WithUserId<T> = T & { userId: string };
 
-type ReactionList = ApiCountedReaction[];
+type ReactionList = CountedReaction[];
 type WithReactionState<T> = T & {
   currentReactions?: ReactionList;
   threadId?: string;
 };
 
-type AddReactionContext = {
-  messageId: string;
-  emoji: string;
-  userId: string;
-  previousReactions: ReactionList;
-  target: MessageTarget;
-};
-
-type RemoveReactionContext = {
-  messageId: string;
-  emoji: string;
-  userId: string;
+type ReactionContext = {
   previousReactions: ReactionList;
   target: MessageTarget;
 };
@@ -58,7 +47,6 @@ function addUserReaction(
     return {
       reactions: messageReactions,
       didChange: false,
-      wasNewReaction: false,
     };
   }
 
@@ -71,7 +59,6 @@ function addUserReaction(
         )
       : [...messageReactions, { emoji, users: [userId] }],
     didChange: true,
-    wasNewReaction: !existing,
   };
 }
 
@@ -89,7 +76,6 @@ function removeUserReaction(
     return {
       reactions: messageReactions,
       didChange: false,
-      wasLastUser: false,
     };
   }
 
@@ -107,7 +93,6 @@ function removeUserReaction(
       )
       .filter((reaction) => reaction.users.length > 0),
     didChange: true,
-    wasLastUser: existing.users.length === 1,
   };
 }
 
@@ -116,15 +101,13 @@ function removeUserReaction(
  * Returns minimal context for rollback.
  */
 export function optimisticAddReaction(
-  vars: WithChannelId<
-    WithUserId<
-      WithReactionState<Pick<PostReactionRequest, 'emoji' | 'message_id'>>
-    >
+  vars: WithParent<
+    WithUserId<WithReactionState<{ emoji: string; message_id: string }>>
   >
-): AddReactionContext | undefined {
+): ReactionContext | undefined {
   const currentReactions = vars.currentReactions;
   const target = resolveMessageTarget({
-    channelId: vars.channelId,
+    parent: vars.parent,
     messageId: vars.message_id,
     threadId: vars.threadId,
   });
@@ -132,15 +115,14 @@ export function optimisticAddReaction(
   const result = addUserReaction(currentReactions, vars.emoji, vars.userId);
   if (!result.didChange) return;
 
-  const context: AddReactionContext = {
-    messageId: vars.message_id,
-    emoji: vars.emoji,
-    userId: vars.userId,
+  const context: ReactionContext = {
     previousReactions: currentReactions ?? [],
     target,
   };
 
-  replaceTargetReactions(vars.channelId, context.target, result.reactions);
+  patchTargetMessage(vars.parent, context.target, {
+    reactions: result.reactions,
+  });
 
   return context;
 }
@@ -149,10 +131,12 @@ export function optimisticAddReaction(
  * Rollback an optimistic add reaction by removing the user's reaction.
  */
 export function rollbackAddReaction(
-  channelId: string,
-  context: AddReactionContext
+  parent: MessageParent,
+  context: ReactionContext
 ): void {
-  replaceTargetReactions(channelId, context.target, context.previousReactions);
+  patchTargetMessage(parent, context.target, {
+    reactions: context.previousReactions,
+  });
 }
 
 /**
@@ -160,15 +144,13 @@ export function rollbackAddReaction(
  * Returns minimal context for rollback.
  */
 export function optimisticRemoveReaction(
-  vars: WithChannelId<
-    WithUserId<
-      WithReactionState<Pick<PostReactionRequest, 'emoji' | 'message_id'>>
-    >
+  vars: WithParent<
+    WithUserId<WithReactionState<{ emoji: string; message_id: string }>>
   >
-): RemoveReactionContext | undefined {
+): ReactionContext | undefined {
   const currentReactions = vars.currentReactions;
   const target = resolveMessageTarget({
-    channelId: vars.channelId,
+    parent: vars.parent,
     messageId: vars.message_id,
     threadId: vars.threadId,
   });
@@ -176,15 +158,14 @@ export function optimisticRemoveReaction(
   const result = removeUserReaction(currentReactions, vars.emoji, vars.userId);
   if (!result.didChange) return;
 
-  const context: RemoveReactionContext = {
-    messageId: vars.message_id,
-    emoji: vars.emoji,
-    userId: vars.userId,
+  const context: ReactionContext = {
     previousReactions: currentReactions ?? [],
     target,
   };
 
-  replaceTargetReactions(vars.channelId, context.target, result.reactions);
+  patchTargetMessage(vars.parent, context.target, {
+    reactions: result.reactions,
+  });
 
   return context;
 }
@@ -193,14 +174,16 @@ export function optimisticRemoveReaction(
  * Rollback an optimistic remove reaction by re-adding the user's reaction.
  */
 export function rollbackRemoveReaction(
-  channelId: string,
-  context: RemoveReactionContext
+  parent: MessageParent,
+  context: ReactionContext
 ): void {
-  replaceTargetReactions(channelId, context.target, context.previousReactions);
+  patchTargetMessage(parent, context.target, {
+    reactions: context.previousReactions,
+  });
 }
 
 type ReactionParams = {
-  channelId: string;
+  parent: MessageParent;
   messageId: string;
   emoji: string;
   userId: string;
@@ -208,17 +191,16 @@ type ReactionParams = {
   threadId?: string;
 };
 
-type AddReactionMutationContext = AddReactionContext | undefined;
-type RemoveReactionMutationContext = RemoveReactionContext | undefined;
+type ReactionMutationContext = ReactionContext | undefined;
 
 const addReactionNonce = createMutationNonce<ReactionParams>(
-  ChannelNonceKeys.REACTION,
-  (v) => `add:${v.channelId}:${v.messageId}:${v.emoji}`
+  MessageNonceKeys.REACTION,
+  (v) => `add:${v.parent.type}:${v.parent.id}:${v.messageId}:${v.emoji}`
 );
 
 const removeReactionNonce = createMutationNonce<ReactionParams>(
-  ChannelNonceKeys.REACTION,
-  (v) => `remove:${v.channelId}:${v.messageId}:${v.emoji}`
+  MessageNonceKeys.REACTION,
+  (v) => `remove:${v.parent.type}:${v.parent.id}:${v.messageId}:${v.emoji}`
 );
 
 /**
@@ -226,40 +208,37 @@ const removeReactionNonce = createMutationNonce<ReactionParams>(
  */
 export function useAddReactionMutation(
   callbacks?: MutationCallbacks<
-    MessageResponse,
+    EntityMessage,
     Error,
     ReactionParams,
-    AddReactionMutationContext
+    ReactionMutationContext
   >
 ) {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: ReactionParams) => {
-      return await throwOnErr(
-        async () =>
-          await storageServiceClient.postReaction({
-            channel_id: vars.channelId,
-            message_id: vars.messageId,
-            emoji: vars.emoji,
-            action: 'Add',
-            nonce: addReactionNonce.use(vars),
-          })
+      return entityMessagesClient.react(
+        vars.parent,
+        vars.messageId,
+        vars.emoji,
+        true,
+        addReactionNonce.use(vars)
       );
     },
     ...withCallbacks<
-      MessageResponse,
+      EntityMessage,
       Error,
       ReactionParams,
-      AddReactionMutationContext
+      ReactionMutationContext
     >(
       {
         onMutate: async (vars) => {
           addReactionNonce.prepare(vars);
           await queryClient.cancelQueries({
-            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelId),
+            queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
           return optimisticAddReaction({
-            channelId: vars.channelId,
+            parent: vars.parent,
             message_id: vars.messageId,
             emoji: vars.emoji,
             userId: vars.userId,
@@ -267,19 +246,22 @@ export function useAddReactionMutation(
             threadId: vars.threadId,
           });
         },
+        onSuccess(data) {
+          applyMessage(data, 'reaction_changed');
+        },
         onError(error, vars, context) {
           console.error('failed to add reaction', error);
           toast.failure('Failed to add reaction');
           if (context) {
-            rollbackAddReaction(vars.channelId, context);
+            rollbackAddReaction(vars.parent, context);
           }
         },
         onSettled: (_, __, vars) => {
           addReactionNonce.cleanup(vars);
           softInvalidateTargetCaches(
-            vars.channelId,
+            vars.parent,
             resolveMessageTarget({
-              channelId: vars.channelId,
+              parent: vars.parent,
               messageId: vars.messageId,
               threadId: vars.threadId,
             })
@@ -296,40 +278,37 @@ export function useAddReactionMutation(
  */
 export function useRemoveReactionMutation(
   callbacks?: MutationCallbacks<
-    MessageResponse,
+    EntityMessage,
     Error,
     ReactionParams,
-    RemoveReactionMutationContext
+    ReactionMutationContext
   >
 ) {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: ReactionParams) => {
-      return await throwOnErr(
-        async () =>
-          await storageServiceClient.postReaction({
-            channel_id: vars.channelId,
-            message_id: vars.messageId,
-            emoji: vars.emoji,
-            action: 'Remove',
-            nonce: removeReactionNonce.use(vars),
-          })
+      return entityMessagesClient.react(
+        vars.parent,
+        vars.messageId,
+        vars.emoji,
+        false,
+        removeReactionNonce.use(vars)
       );
     },
     ...withCallbacks<
-      MessageResponse,
+      EntityMessage,
       Error,
       ReactionParams,
-      RemoveReactionMutationContext
+      ReactionMutationContext
     >(
       {
         onMutate: async (vars) => {
           removeReactionNonce.prepare(vars);
           await queryClient.cancelQueries({
-            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelId),
+            queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
           return optimisticRemoveReaction({
-            channelId: vars.channelId,
+            parent: vars.parent,
             message_id: vars.messageId,
             emoji: vars.emoji,
             userId: vars.userId,
@@ -337,19 +316,22 @@ export function useRemoveReactionMutation(
             threadId: vars.threadId,
           });
         },
+        onSuccess(data) {
+          applyMessage(data, 'reaction_changed');
+        },
         onError(error, vars, context) {
           console.error('failed to remove reaction', error);
           toast.failure('Failed to remove reaction');
           if (context) {
-            rollbackRemoveReaction(vars.channelId, context);
+            rollbackRemoveReaction(vars.parent, context);
           }
         },
         onSettled: (_, __, vars) => {
           removeReactionNonce.cleanup(vars);
           softInvalidateTargetCaches(
-            vars.channelId,
+            vars.parent,
             resolveMessageTarget({
-              channelId: vars.channelId,
+              parent: vars.parent,
               messageId: vars.messageId,
               threadId: vars.threadId,
             })

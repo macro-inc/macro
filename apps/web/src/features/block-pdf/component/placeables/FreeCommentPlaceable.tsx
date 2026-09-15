@@ -1,5 +1,6 @@
 import { useIsActiveThreadSelector } from '@block-pdf/store/comments/commentStore';
 import type { IThreadPlaceable } from '@block-pdf/type/placeables';
+import type { ThreadId } from '@core/comments/commentType';
 import { cn } from '@ui';
 import type { Component } from 'solid-js';
 import { usePdfDocument } from '../../context/pdf-document-context';
@@ -26,7 +27,7 @@ export const NewFreeCommentPlaceable: Component = () => {
 };
 
 function CommentIndicator(props: {
-  threadId: number;
+  threadId: ThreadId;
   numComments: number;
   isActive: boolean;
   setActive?: () => void;

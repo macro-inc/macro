@@ -2,6 +2,7 @@ import { useUserId } from '@core/context/user';
 import { createMemo, createSelector } from 'solid-js';
 import { usePdfDocument } from '../context/pdf-document-context';
 import { isThreadPlaceable } from '../type/placeables';
+import type { CommentId } from '@core/comments/commentType';
 
 // true if user owns the comment placeable (by uuid)
 export const useOwnedCommentPlaceableSelector = () => {
@@ -56,7 +57,7 @@ export const useOwnedCommentSelector = () => {
   });
   const ownedCommentSelector = createSelector(
     ownedCommentIds,
-    (id: number, owned) => (owned ?? []).includes(id)
+    (id: CommentId, owned) => (owned ?? []).includes(id)
   );
   return ownedCommentSelector;
 };

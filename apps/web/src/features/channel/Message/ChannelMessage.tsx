@@ -1,20 +1,21 @@
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import { touchHandler } from '@core/directive/touchHandler';
+import type { MessageActions, MessageData } from '@core/messages/types';
 import type { IUser } from '@core/user/types';
 import { messageSendMotion } from '@core/util/message-send-motion';
 import TrashIcon from '@phosphor/trash.svg';
+import type { MessageParent } from '@service-storage/messages';
 import { type Accessor, type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
-import { isUnifiedInputMode } from '../unified-input-mode';
 import { useMessage } from './context';
 import type { ChannelMessageListMeta } from './list-meta';
 import { Message } from './Message';
 import { MaybeSwipeToReplyRow } from './SwipeToReplyRow';
-import type { MessageActions, MessageData } from './types';
 
 type ChannelMessageProps = {
-  channelId: string;
+  parent: MessageParent;
+  inputMode?: 'inline' | 'unified';
   message: MessageData;
   actions?: MessageActions;
   listMeta?: ChannelMessageListMeta;
@@ -37,7 +38,8 @@ function isEditingMessage(
 }
 
 function MessageContentSlot(props: {
-  channelId: string;
+  parent: MessageParent;
+  inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
   participants?: Accessor<IUser[]>;
   class?: string;
@@ -47,10 +49,14 @@ function MessageContentSlot(props: {
 
   return (
     <Switch>
-      <Match when={isEditing() && !isUnifiedInputMode() && props.messageEditor}>
+      <Match
+        when={
+          isEditing() && props.inputMode !== 'unified' && props.messageEditor
+        }
+      >
         {(messageEditor) => (
           <MessageEditorContent
-            channelId={props.channelId}
+            parent={props.parent}
             message={message()}
             messageEditor={messageEditor()}
             participants={props.participants}
@@ -108,7 +114,8 @@ function DeletedMessageLayout() {
 }
 
 function RegularMessageLayout(props: {
-  channelId: string;
+  parent: MessageParent;
+  inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
   participants?: Accessor<IUser[]>;
 }) {
@@ -128,7 +135,8 @@ function RegularMessageLayout(props: {
       </Message.Slot>
       <Message.Slot placement="content" class="ph-no-capture">
         <MessageContentSlot
-          channelId={props.channelId}
+          parent={props.parent}
+          inputMode={props.inputMode}
           messageEditor={props.messageEditor}
           participants={props.participants}
         />
@@ -145,7 +153,8 @@ function RegularMessageLayout(props: {
 }
 
 function GroupedMessageLayout(props: {
-  channelId: string;
+  parent: MessageParent;
+  inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
   participants?: Accessor<IUser[]>;
 }) {
@@ -157,7 +166,8 @@ function GroupedMessageLayout(props: {
       <Message.Slot placement="content">
         <div class="ph-no-capture flex gap-3 min-w-0 items-start">
           <MessageContentSlot
-            channelId={props.channelId}
+            parent={props.parent}
+            inputMode={props.inputMode}
             messageEditor={props.messageEditor}
             participants={props.participants}
             class="min-w-0 flex-1"
@@ -191,7 +201,7 @@ export function ChannelMessage(props: ChannelMessageProps) {
           props.targeted ||
           // In unified-input mode the edit happens in the floating input; the
           // accent bar marks the message it is bound to.
-          (isUnifiedInputMode() &&
+          (props.inputMode === 'unified' &&
             isEditingMessage(props.messageEditor, props.message.id))
         }
         onClick={props.onClick}
@@ -210,14 +220,16 @@ export function ChannelMessage(props: ChannelMessageProps) {
           </Match>
           <Match when={isGrouped()}>
             <GroupedMessageLayout
-              channelId={props.channelId}
+              parent={props.parent}
+              inputMode={props.inputMode}
               messageEditor={props.messageEditor}
               participants={props.participants}
             />
           </Match>
           <Match when={true}>
             <RegularMessageLayout
-              channelId={props.channelId}
+              parent={props.parent}
+              inputMode={props.inputMode}
               messageEditor={props.messageEditor}
               participants={props.participants}
             />

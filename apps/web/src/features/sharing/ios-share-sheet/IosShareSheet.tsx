@@ -44,7 +44,7 @@ import {
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
 import { staticFileClient } from '@service-static-files/client';
-import { storageServiceClient } from '@service-storage/client';
+import { entityMessagesClient } from '@service-storage/messages';
 import { isIOS } from '@solid-primitives/platform';
 import { Button } from '@ui';
 import {
@@ -311,15 +311,12 @@ function IosShareSheetComposer(props: {
     const channelId = await resolveDestinationChannelId();
     const message = buildPostMessageRequest({ snapshot });
 
-    const result = await storageServiceClient.postMessage({
-      channel_id: channelId,
-      message,
-    });
-
-    if (result.isErr()) {
-      toast.failure('Failed to send message');
-      throw new Error('Failed to post shared message');
-    }
+    await entityMessagesClient
+      .post({ type: 'channel', id: channelId }, message)
+      .catch((error) => {
+        toast.failure('Failed to send message');
+        throw error;
+      });
 
     invalidateListChannels();
     invalidateContacts();

@@ -1,20 +1,19 @@
-import type { ApiThreadReply } from '@service-storage/client';
-import type { ApiCountedReaction } from '@service-storage/generated/schemas';
+import type { Message as EntityMessage } from '@service-storage/messages';
 
 type ThreadPreviewState = {
-  preview: ApiThreadReply[];
+  preview: EntityMessage[];
   reply_count: number;
   latest_reply_at?: string | null;
 };
 
 type ThreadPreviewReplySnapshot = {
   previewIndex: number;
-  reply: ApiThreadReply;
+  reply: EntityMessage;
 };
 
 export function insertReplyIntoThreadPreview(
   thread: ThreadPreviewState,
-  reply: ApiThreadReply
+  reply: EntityMessage
 ): ThreadPreviewState {
   if (thread.preview.some((previewReply) => previewReply.id === reply.id)) {
     return thread;
@@ -75,21 +74,6 @@ export function replaceReplyIdInThreadPreview(
     if (reply.id !== optimisticId) return reply;
     didChange = true;
     return { ...reply, id: realId };
-  });
-
-  return didChange ? { ...thread, preview } : thread;
-}
-
-export function replaceReplyReactionsInThreadPreview(
-  thread: ThreadPreviewState,
-  replyId: string,
-  reactions: ApiCountedReaction[]
-): ThreadPreviewState {
-  let didChange = false;
-  const preview = thread.preview.map((reply) => {
-    if (reply.id !== replyId) return reply;
-    didChange = true;
-    return { ...reply, reactions };
   });
 
   return didChange ? { ...thread, preview } : thread;
