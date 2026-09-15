@@ -13,6 +13,7 @@ import { type ChannelEntity, Entity } from '@entity';
 import ChannelIcon from '@icon/wide-channel.svg';
 import { Popover } from '@kobalte/core/popover';
 import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
 import ChatTeardropIcon from '@phosphor/chat-teardrop.svg';
 import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
@@ -26,7 +27,6 @@ import {
   createMemo,
   createSignal,
   For,
-  type JSX,
   Match,
   onCleanup,
   Show,
@@ -91,18 +91,9 @@ const SLIM_CHANNEL_TABS = [
 const SLIM_GROUPS: {
   group: ChannelsGroup;
   label: string;
-  icon: () => JSX.Element;
 }[] = [
-  {
-    group: 'channels',
-    label: 'Channels',
-    icon: () => <ChannelIcon class="size-4" />,
-  },
-  {
-    group: 'direct_messages',
-    label: 'DMs',
-    icon: () => <ChatTeardropIcon class="size-4" />,
-  },
+  { group: 'channels', label: 'Channels' },
+  { group: 'direct_messages', label: 'DMs' },
 ];
 
 const SLIM_SORT_OPTIONS: { value: ChannelListSort; label: string }[] = [
@@ -587,6 +578,51 @@ function SlimRecents() {
   );
 }
 
+function SlimSortDropdown(props: { group: ChannelsGroup; label: string }) {
+  const rail = useChannelsRail();
+  const selected = () =>
+    SLIM_SORT_OPTIONS.find(
+      (option) => option.value === rail.sortBy(props.group)
+    );
+  const setSort = (value: string) => {
+    const option = SLIM_SORT_OPTIONS.find((item) => item.value === value);
+    if (option) rail.setSortBy(props.group, option.value);
+  };
+
+  return (
+    <Dropdown placement="bottom-end">
+      <Dropdown.Trigger
+        variant="outline"
+        size="sm"
+        class="h-7 min-w-28 justify-between gap-1 rounded-lg bg-surface px-2 text-xs font-normal"
+        aria-label={`Sort ${props.label.toLowerCase()}`}
+      >
+        <span class="truncate">{selected()?.label}</span>
+        <CaretDownIcon class="size-2.5 shrink-0" />
+      </Dropdown.Trigger>
+      <Dropdown.Content portalScope="local" class="min-w-36">
+        <Dropdown.Group>
+          <Dropdown.RadioGroup
+            value={rail.sortBy(props.group)}
+            onChange={setSort}
+          >
+            <For each={SLIM_SORT_OPTIONS}>
+              {(option) => (
+                <Dropdown.RadioItem closeOnSelect value={option.value}>
+                  <span class="flex-1">{option.label}</span>
+                  <Dropdown.ItemIndicator>
+                    <CheckIcon class="size-3.5 text-accent" />
+                  </Dropdown.ItemIndicator>
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
+
 function SlimRailSettings() {
   const rail = useChannelsRail();
 
@@ -609,20 +645,16 @@ function SlimRailSettings() {
               onOpenAutoFocus={(event) => event.preventDefault()}
               onCloseAutoFocus={(event) => event.preventDefault()}
             >
-              <Popover.Title class="px-2 py-1 text-xs font-medium text-ink">
-                Chat rail
-              </Popover.Title>
-              <div class="flex flex-col gap-1">
+              <Popover.Title class="sr-only">Chat rail settings</Popover.Title>
+              <div class="flex flex-col gap-3">
                 <For each={SLIM_GROUPS}>
                   {(config) => (
-                    <section class="rounded-lg border border-edge-muted p-2">
-                      <div class="flex items-center gap-2">
-                        <span class="flex size-4 shrink-0 items-center justify-center text-ink-muted">
-                          {config.icon()}
-                        </span>
-                        <span class="min-w-0 flex-1 truncate text-xs font-medium text-ink">
-                          {config.label}
-                        </span>
+                    <section class="flex flex-col gap-1">
+                      <h3 class="px-2 text-xs font-normal text-ink">
+                        {config.label}
+                      </h3>
+                      <div class="flex h-8 items-center justify-between gap-3 px-2">
+                        <span class="text-xs text-ink-muted">Visibility</span>
                         <ToggleSwitch
                           size="xs"
                           checked={rail.slimGroupEnabled(config.group)}
@@ -633,38 +665,12 @@ function SlimRailSettings() {
                           labelClass="sr-only"
                         />
                       </div>
-                      <div
-                        role="radiogroup"
-                        aria-label={`Sort ${config.label.toLowerCase()}`}
-                        class="mt-2 flex flex-col gap-0.5"
-                      >
-                        <For each={SLIM_SORT_OPTIONS}>
-                          {(option) => {
-                            const selected = () =>
-                              rail.sortBy(config.group) === option.value;
-                            return (
-                              <button
-                                type="button"
-                                role="radio"
-                                aria-checked={selected()}
-                                class={cn(
-                                  'flex h-7 w-full items-center gap-2 rounded-lg px-2 text-left text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink',
-                                  selected() && 'bg-active text-ink'
-                                )}
-                                onClick={() =>
-                                  rail.setSortBy(config.group, option.value)
-                                }
-                              >
-                                <span class="min-w-0 flex-1 truncate">
-                                  {option.label}
-                                </span>
-                                <Show when={selected()}>
-                                  <CheckIcon class="size-3 shrink-0 text-accent" />
-                                </Show>
-                              </button>
-                            );
-                          }}
-                        </For>
+                      <div class="flex h-8 items-center justify-between gap-3 px-2">
+                        <span class="text-xs text-ink-muted">Sort by</span>
+                        <SlimSortDropdown
+                          group={config.group}
+                          label={config.label}
+                        />
                       </div>
                     </section>
                   )}
