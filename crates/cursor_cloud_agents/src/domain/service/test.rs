@@ -2743,7 +2743,7 @@ async fn a_run_that_never_ends_is_reported_in_words_the_prompter_can_act_on() {
         "leaked source location: {message}"
     );
     assert!(
-        message.contains("still working"),
+        message.contains("has not reported a result"),
         "must say what actually happened: {message}"
     );
 }
@@ -2862,4 +2862,105 @@ async fn a_busy_agent_is_freed_by_cancelling_the_run_this_session_abandoned() {
             .any(|call| matches!(call, CursorCall::CancelRun(_, run) if run == &abandoned)),
         "the abandoned run should have been cancelled to free the agent"
     );
+}
+
+/// The root cause of the reported incident. Cursor announced `FINISHED` on
+/// the stream's `status` channel and sent no `result` frame at all, while its
+/// run record stayed `RUNNING` with an `updatedAt` frozen seconds after the
+/// run began. A turn that accepts only `result` waits out its entire poll
+/// budget against a record that is never going to move, and then fails a run
+/// that had in fact finished.
+#[tokio::test(start_paused = true)]
+async fn a_terminal_status_frame_closes_the_turn_without_a_result_frame() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "the whole answer".to_owned(),
+        })
+        .expect("stream open");
+    events
+        .send(CursorEvent::Status {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        })
+        .expect("stream open");
+    drop(events); // no `result` frame ever comes, exactly as observed
+    // No poll result is scripted: `raw_result` errors when asked, so a turn
+    // that closes here proves it closed on the status frame alone and never
+    // consulted the run record — which in production was frozen at RUNNING.
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("a terminal status frame is a terminal fact");
+    assert_eq!(stop, StopReason::EndTurn);
+    assert_eq!(agent_texts(&notifier.updates()), vec!["the whole answer"]);
+}
+
+/// A non-terminal `status` is framing, not an outcome - Cursor re-sends one
+/// at the top of every reconnect - so it must not close anything.
+#[tokio::test(start_paused = true)]
+async fn a_running_status_frame_does_not_close_the_turn() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Status {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Running,
+        })
+        .expect("stream open");
+    drop(events);
+    // With no outcome from the stream, the record is still what decides.
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("from the record".to_owned()),
+    });
+
+    let stop = service
+        .prompt(&session, "hi")
+        .await
+        .expect("the record closes a turn the stream did not");
+    assert_eq!(stop, StopReason::EndTurn);
+}
+
+/// A stop landing while the poll budget runs out still answers Cancelled:
+/// ACP requires it once the client sent `session/cancel`, and giving up on an
+/// unfinished run takes the `Rejected` variant now.
+#[tokio::test(start_paused = true)]
+async fn a_cancel_near_poll_exhaustion_still_reports_cancelled() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Assistant {
+            text: "partial work".to_owned(),
+        })
+        .expect("stream open");
+    drop(events);
+    for _ in 0..=POLL_ATTEMPTS {
+        cursor.script_run_result(RunOutcome {
+            status: RunStatus::Running,
+            text: None,
+        });
+    }
+
+    let turn = {
+        let service = Arc::clone(&service);
+        let session = session.clone();
+        tokio::spawn(async move { service.prompt(&session, "hi").await })
+    };
+    // Let the turn reach the poll loop, then stop it.
+    tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+    service.cancel(&session).await.expect("cancel lands");
+
+    let stop = turn
+        .await
+        .expect("the turn task completes")
+        .expect("a cancelled turn reports a stop reason, not an error");
+    assert_eq!(stop, StopReason::Cancelled);
 }

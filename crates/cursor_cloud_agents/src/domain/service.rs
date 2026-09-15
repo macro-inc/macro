@@ -804,8 +804,14 @@ where
         }
         // A cancel that raced the stream's own ending still reports
         // Cancelled: ACP requires it once the client sent `session/cancel`.
+        // `Rejected` included, because giving up on a run still going takes
+        // that variant now — a stop landing near the end of the poll budget
+        // must still answer Cancelled, not "Cursor is still working". Journal
+        // failures stay unmasked by cancellation, as ever.
         match outcome {
-            Ok(_) | Err(SessionError::Cursor(_)) if cancelled => Ok(StopReason::Cancelled),
+            Ok(_) | Err(SessionError::Cursor(_) | SessionError::Rejected(_)) if cancelled => {
+                Ok(StopReason::Cancelled)
+            }
             Ok(stop_reason) => Ok(stop_reason),
             Err(error) => Err(error),
         }
@@ -1164,6 +1170,20 @@ where
                         break;
                     }
                     CursorEvent::Result { status, .. } => terminal = Some(status),
+                    // The stream's own account of the run's lifecycle, and a
+                    // terminal one is a terminal fact even with no `result`
+                    // frame behind it. Observed live: a run whose record
+                    // stayed `RUNNING` with a frozen `updatedAt` announced
+                    // `FINISHED` here and sent no `result` at all, so a turn
+                    // that accepted only `result` waited out its whole poll
+                    // budget against a record that was never going to move.
+                    //
+                    // Not a break: trailing content can still be in flight,
+                    // and `done`, the stream's end, or a quiet gap closes the
+                    // turn now that there is an outcome to close it with.
+                    CursorEvent::Status { status, .. } if status.is_terminal() => {
+                        terminal = Some(status);
+                    }
                     CursorEvent::Error { .. } => break,
                     CursorEvent::Done => break,
                     _ => {}
@@ -1224,8 +1244,8 @@ where
                 "gave up waiting; Cursor still reports a non-terminal status"
             );
             return Err(SessionError::Rejected(
-                "Cursor is still working on this and hasn't reported a result. \
-                 It will appear here if the run finishes — or you can stop it and prompt again."
+                "Cursor has not reported a result for this run, and has stopped saying \
+                 anything about it. Prompting again starts fresh and abandons this run."
                     .into(),
             ));
         };

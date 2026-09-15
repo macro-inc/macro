@@ -202,6 +202,17 @@ impl ReplayMachine {
     ) -> Result<Vec<SessionUpdate>, rootcause::Report> {
         let state = self.runs.entry(run.clone()).or_default();
         match event {
+            // A terminal lifecycle frame is a terminal fact here for the same
+            // reason it is one in the session service: a run whose `result`
+            // never arrives still ended, and a projection that only learns
+            // outcomes from `result` leaves such a turn open forever on every
+            // replay — no `turn_complete`, and tool calls still rendering as
+            // in progress. Ordinarily `result` follows a frame later and does
+            // the rest; this is what happens when it does not.
+            CursorEvent::Status { status, .. } if status.is_terminal() => {
+                state.terminal = Some(status);
+                Ok(self.translator.close_open_calls())
+            }
             CursorEvent::Interaction(InteractionUpdate::Other { kind })
                 if kind == "step-started" =>
             {
