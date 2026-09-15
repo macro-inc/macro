@@ -91,6 +91,11 @@ Task navigation uses `My Tasks`, `All Tasks`, and `Created by me`. The desktop
 sidebar has a full-width `New task` action, a collapsible list of task favorites,
 and a collapsible list of tags. Selecting a tag filters the current task view;
 selecting it again clears that tag filter. Favorite rows open their tasks.
+Normal row and favorite activation replaces the list with the editable task
+document; its originating-tab breadcrumb returns to the list and its
+header exposes Share and the task Details/Properties panel. Shift-click opens
+the task in a new split instead. Keyboard navigation moves list focus without
+opening a task until activation.
 
 ## Email — `/app/component/mail`
 

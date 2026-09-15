@@ -14,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   getProjectPermissions: vi.fn(),
   copyLink: vi.fn(),
   blockPermissionsRead: vi.fn(),
+  inBlock: true,
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
@@ -25,7 +26,7 @@ vi.mock('@channel/Input', () => ({
 }));
 vi.mock('@core/auth', () => ({ useIsAuthenticated: () => () => true }));
 vi.mock('@core/block', () => ({
-  isInBlock: () => true,
+  isInBlock: () => mocks.inBlock,
   useBlockAliasedName: () => 'agent',
   useBlockId: () => 'launcher-placeholder',
   createBlockEffect: vi.fn(),
@@ -176,6 +177,7 @@ vi.mock('@ui', () => {
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.inBlock = true;
   mocks.mobile = false;
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
@@ -207,6 +209,21 @@ const share = () =>
   fireEvent.click(screen.getByRole('button', { name: 'Share' }));
 
 describe('agent session sharing', () => {
+  it('uses explicit identity outside a block', () => {
+    mocks.inBlock = false;
+    render(() => (
+      <ShareDialogContext.Provider
+        value={{ isOpen: () => false, open: vi.fn(), close: vi.fn() }}
+      >
+        <ShareTrigger id="task-1" blockType="task" />
+      </ShareDialogContext.Provider>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
+    expect(mocks.copyLink).toHaveBeenCalledWith(
+      'https://macro.com/app/task/task-1'
+    );
+  });
+
   it('copies the saved session link from the shared header trigger', () => {
     const [id, setId] = createSignal('saved-session');
     render(() => (

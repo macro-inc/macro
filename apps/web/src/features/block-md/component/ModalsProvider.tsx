@@ -8,11 +8,21 @@ import {
   ShareModal,
 } from '@core/component/TopBar/ShareButton';
 import { useDocumentMetadataQuery } from '@queries/storage/document-metadata';
-import { createSignal, type ParentProps, Suspense } from 'solid-js';
+import {
+  createSignal,
+  type ParentProps,
+  type Setter,
+  Suspense,
+} from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useMarkdownName } from './MarkdownNameProvider';
 
-export function ModalsProvider(props: ParentProps) {
+export function ModalsProvider(
+  props: ParentProps<{
+    shareOpen?: boolean;
+    onShareOpenChange?: (open: boolean) => void;
+  }>
+) {
   const {
     documentId,
     kind,
@@ -21,7 +31,14 @@ export function ModalsProvider(props: ParentProps) {
   const { displayName } = useMarkdownName();
   const notificationSource = useGlobalNotificationSource();
   const metadataQuery = useDocumentMetadataQuery(documentId);
-  const [shareOpen, setShareOpen] = createSignal(false);
+  const [localShareOpen, setLocalShareOpen] = createSignal(false);
+  const shareOpen = () => props.shareOpen ?? localShareOpen();
+  const setShareOpen: Setter<boolean> = (next) => {
+    const open = typeof next === 'function' ? next(shareOpen()) : next;
+    props.onShareOpenChange?.(open);
+    if (props.shareOpen === undefined) setLocalShareOpen(() => open);
+    return open;
+  };
 
   const blockAlias = (): 'md' | 'task' | 'snippet' | 'skill' => {
     const documentKind = kind();

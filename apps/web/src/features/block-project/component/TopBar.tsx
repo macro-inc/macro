@@ -13,8 +13,8 @@ import {
 import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import {
+  BlockSplitFileMenu,
   type FileOperation,
-  SplitFileMenu,
 } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -132,7 +132,7 @@ export function TopBar() {
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
       <SplitTitleFileMenu>
-        <SplitFileMenu
+        <BlockSplitFileMenu
           id={id}
           itemType="project"
           name={name()}

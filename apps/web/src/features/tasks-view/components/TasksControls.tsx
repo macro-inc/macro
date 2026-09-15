@@ -4,7 +4,6 @@ import {
   ListSortDropdown,
   useViewControlHotkeys,
 } from '@app/components/view-shell';
-import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createSignal, Show } from 'solid-js';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
@@ -86,7 +85,6 @@ export function TasksControls() {
           </span>
         </Show>
       </div>
-      <PreviewButton iconOnly class="rounded-lg" />
     </div>
   );
 }

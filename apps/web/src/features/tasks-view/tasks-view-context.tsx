@@ -5,6 +5,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
+import { type Accessor, createSignal } from 'solid-js';
 import {
   createStore,
   produce,
@@ -16,6 +17,7 @@ import { TASK_DEFAULT_GROUP_BY } from './constants';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
 import { createTasksViewPersistence } from './persistence';
 import type {
+  TaskDetailTarget,
   TaskSortId,
   TasksViewState,
   TasksViewStateOptions,
@@ -29,6 +31,9 @@ type TasksViewProviderProps = ContextProviderProps & {
 export type TasksViewContext = {
   state: Store<TasksViewState>;
   setState: SetStoreFunction<TasksViewState>;
+  selectedTask: Accessor<TaskDetailTarget | undefined>;
+  openTask: (task: TaskDetailTarget) => void;
+  closeTask: () => void;
   setTab: (tab: TaskTab) => void;
   setFacets: (facets: TasksViewState['facets']) => void;
   setPrimarySort: (id: TaskSortId) => void;
@@ -45,6 +50,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
 
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'my-tasks';
+  const [selectedTask, setSelectedTask] = createSignal<TaskDetailTarget>();
 
   const [state, setState] = makePersistedState(
     createStore<TasksViewState>({
@@ -70,7 +76,11 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     })
   );
 
+  const openTask = (task: TaskDetailTarget) => setSelectedTask(task);
+  const closeTask = () => setSelectedTask();
+
   const setTab = (tab: TaskTab) => {
+    closeTask();
     if (state.tab === tab) return;
 
     setState(
@@ -84,6 +94,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   };
 
   const setFacets = (facets: TasksViewState['facets']) => {
+    closeTask();
     setState('facets', reconcile(normalizeFacetSelection(facets)));
   };
 
@@ -106,6 +117,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   return {
     state,
     setState,
+    selectedTask,
+    openTask,
+    closeTask,
     setTab,
     setFacets,
     setPrimarySort,

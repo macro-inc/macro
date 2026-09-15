@@ -3,7 +3,7 @@
 ## Surface
 
 `Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, and `Team tasks`.
-The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, `Filter`, and `Preview`;
+The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, and `Filter`;
 task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
 sidebar has a collapsible `Tags` section listing every personal and team tag, with a
 `New tag` button beside the heading. Clicking a tag narrows the current tab to tasks
@@ -15,6 +15,12 @@ button, and Search.
 
 New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced task features`,
 `How we use tasks at Macro`).
+
+Click a task row or favorite to replace the list with the editable task document. Its top
+bar shows the originating task tab as a breadcrumb, the task name and actions, Share, and
+the Details/Properties side-panel toggle. Choose the originating tab breadcrumb, a task tab,
+or a tag to return to the list. Shift-click a row or favorite to open it in a new split
+instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
 ## Create a task
 

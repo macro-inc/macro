@@ -28,6 +28,14 @@ export {
   useViewTabHotkeys,
 } from './use-view-tab-hotkeys';
 export {
+  ViewBreadcrumbs,
+  type ViewBreadcrumbsButtonProps,
+  type ViewBreadcrumbsItemProps,
+  type ViewBreadcrumbsOutletProps,
+  type ViewBreadcrumbsRootProps,
+  type ViewBreadcrumbsSeparatorProps,
+} from './ViewBreadcrumbs';
+export {
   useViewShell,
   ViewShell,
   type ViewShellLayout,
