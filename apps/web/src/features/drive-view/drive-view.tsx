@@ -41,8 +41,9 @@ import { useFavoritesData } from '@queries/favorites/favorites';
 import { useProjectsQuery } from '@queries/storage/projects';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Dropdown, EmptyStatePanel } from '@ui';
-import { createMemo, For, Show, Suspense } from 'solid-js';
+import { createMemo, For, onCleanup, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { driveLocationLabel } from './core/location-label';
 import { DRIVE_TABS, type DriveState, type DriveTab } from './core/types';
 import { createDriveNavigation } from './primitives/drive-navigation';
 import { driveQuery } from './queries/drive-query';
@@ -103,6 +104,11 @@ export function DriveView(props: DriveViewProps) {
       rootOpen: true,
     },
   });
+  onCleanup(
+    panel.handle.registerEntryStateCaptor('drive.returnLabel', () =>
+      driveLocationLabel(state().location, folders())
+    )
+  );
   const projectId = () => {
     const location = state().location;
     return location.kind === 'folder' ? (location.id ?? undefined) : undefined;
