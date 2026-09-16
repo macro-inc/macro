@@ -125,6 +125,7 @@ const getNotificationSenderFallbackName = (
   const content = notification.notification_metadata.content as
     | {
         sender?: string;
+        senderDisplayName?: string | null;
         senderGithubLogin?: string;
         botName?: string;
         mentionedBy?: string;
@@ -143,6 +144,10 @@ const getNotificationSenderFallbackName = (
       return content?.mentionedBy ?? content?.botName;
     case 'channel_message_send':
       return content?.sender ?? notification.sender_id ?? undefined;
+    case 'commented_on_document':
+    case 'mentioned_in_document_comment':
+    case 'replied_to_document_comment_thread':
+      return content?.senderDisplayName ?? undefined;
     case 'github_pr_status_changed':
     case 'github_review_requested':
     case 'github_pr_comment':
