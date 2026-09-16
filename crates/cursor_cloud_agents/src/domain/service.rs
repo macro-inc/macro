@@ -1760,7 +1760,9 @@ where
         if mirrored {
             let notify = {
                 let mut state = session.state.lock().expect("session state poisoned");
-                if let Err(error) = history_projection(&state.journal_entries) {
+                if let Err(error) =
+                    history_projection(&state.journal_entries, HistoryGap::DeclinesReplacement)
+                {
                     tracing::warn!(error = ?error, %session_id, "captured recovery cannot replace history yet");
                     return Ok(mirrored);
                 }
@@ -2005,7 +2007,10 @@ where
             .expect("session state poisoned")
             .journal_entries
             .clone();
-        let (machine, updates) = history_projection(&entries)?;
+        // A gap here cannot be allowed to fail the load. The runtime reattaches
+        // to a disconnected session by loading it, so a load that refuses is
+        // also every future prompt refused as disconnected, with no way back.
+        let (machine, updates) = history_projection(&entries, HistoryGap::IsServedAnyway)?;
         if let Some(url) = machine.pull_request_url() {
             self.notifier.set_pull_request(id, url).await?;
         }
@@ -2173,8 +2178,25 @@ type HistoryUpdates = Vec<(
     Option<agent_runtime_protocol::domain::turn::TurnOutcome>,
 )>;
 
+/// What a gap in the recovered history costs the caller asking for it.
+///
+/// Replacing a session's conversation is a choice, and a candidate missing a
+/// turn's opening is worse than the history already on screen, so a gap
+/// declines the replacement and what is there stands.
+///
+/// Loading is not a choice. The journal is the only history there is, and a
+/// load that refuses leaves a session that cannot be opened and cannot be
+/// prompted - the runtime reattaches by loading, so every later prompt is
+/// refused as disconnected too. A gap is reported and the rest is served.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HistoryGap {
+    DeclinesReplacement,
+    IsServedAnyway,
+}
+
 fn history_projection(
     entries: &[JournalEntry],
+    gap: HistoryGap,
 ) -> Result<(ReplayMachine, HistoryUpdates), SessionError> {
     for entry in entries {
         if entry.run.is_none()
@@ -2183,6 +2205,13 @@ fn history_projection(
                 matches!(e.input, JournalInput::PromptAccepted(n) | JournalInput::PromptAborted(n) if n == entry.sequence)
             })
         {
+            if gap == HistoryGap::IsServedAnyway {
+                tracing::warn!(
+                    sequence = entry.sequence,
+                    "serving Cursor history whose prompt was never resolved"
+                );
+                break;
+            }
             return Err(rootcause::report!("Cursor prompt acceptance is unknown; refusing incomplete replacement history").into());
         }
     }
@@ -2235,6 +2264,13 @@ fn history_projection(
             .filter(|e| e.run.as_ref() == Some(run))
             .all(|e| matches!(e.input, JournalInput::PromptAccepted(_)));
         if !machine.has_prompt(run) && !accepted_only {
+            if gap == HistoryGap::IsServedAnyway {
+                // The run's own frames are already projected; only the line
+                // that opened it is missing. Serving the turn without it
+                // beats serving nothing, forever.
+                tracing::warn!(%run, "serving Cursor history without a run's original prompt");
+                continue;
+            }
             return Err(rootcause::report!(
                 "Cursor original prompt unavailable for {run}; preserving existing history"
             )

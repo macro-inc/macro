@@ -1489,10 +1489,15 @@ async fn restore_waits_for_session_load_before_recovering_runs() {
 }
 
 /// A foreign run whose stream is gone (retention expired) is captured from
-/// its run record, so the recorded answer is durable. But the record carries
-/// no original prompt: recovery must not ask the client to reload a history
-/// it cannot project, and an explicit load must fail rather than invent one —
-/// the client's prior view stays in place until a load succeeds.
+/// its run record, so the recorded answer is durable. The record carries no
+/// original prompt, so recovery must not ask the client to reload a history
+/// it cannot project.
+///
+/// An explicit load still succeeds. It is the only way back to a session
+/// whose runtime has gone: the harness reattaches by loading, so a load that
+/// refuses is every later prompt refused as disconnected, with nothing the
+/// user can do about it. The answer is served without the line that asked
+/// for it, and the gap is reported.
 #[tokio::test(start_paused = true)]
 async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
     let (service, cursor, notifier) = service(None);
@@ -1548,29 +1553,28 @@ async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
             .any(|e| e.run.as_ref() == Some(&foreign) && e.input == JournalInput::Reconciled)
     );
 
-    let error = service
+    service
         .replay_session(&session)
         .await
-        .err()
-        .expect("a run without its original prompt cannot replace history");
+        .expect("a run without its original prompt still loads")
+        .complete();
     assert!(
-        error.to_string().contains("original prompt unavailable"),
-        "{error}"
-    );
-    assert_eq!(
-        notifier.updates().len(),
-        before,
-        "a failed load publishes nothing: the prior view is retained"
+        notifier.updates().len() > before,
+        "the load serves the history it does have"
     );
     assert!(
-        !ready_for_sync(&service, &session),
-        "nothing syncs or prompts until a load succeeds"
+        ready_for_sync(&service, &session),
+        "a loaded session is promptable again"
     );
     assert_eq!(
         service.journal.read(&session).await.expect("journal"),
         entries,
-        "the failed load discards nothing captured"
+        "the load discards nothing captured"
     );
+    service
+        .prompt(&session, "still reachable after the gap")
+        .await
+        .expect_err("no stream is scripted, but the prompt is not refused as unloaded");
 }
 
 /// A run that is still executing cannot become the watermark when its stream
