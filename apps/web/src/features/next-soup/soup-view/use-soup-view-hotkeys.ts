@@ -15,6 +15,7 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isScopeInActiveBranch } from '@core/hotkey/utils';
 import {
+  type EntityData,
   filterNotDoneNotifications,
   filterValidNotifications,
   isSearchEntity,
@@ -31,6 +32,7 @@ import {
 } from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
+  onOpenEntity?: (entity: EntityData) => boolean;
   onOpenProject?: (id: string) => void;
   disableTabHotkeys?: boolean;
   scopeId: string;
@@ -186,6 +188,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         options.onOpenProject(entity.id);
         return true;
       }
+
+      if (options.onOpenEntity?.(entity)) return true;
 
       const contentHitData = isSearchEntity(entity)
         ? entity.search.contentHitData

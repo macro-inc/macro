@@ -4,12 +4,12 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import SidePanelIcon from '@icon/square-half-filled.svg';
 import { Accordion } from '@kobalte/core/accordion';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
+import SidePanelIcon from '@phosphor/sidebar-simple.svg';
 import { Button, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {

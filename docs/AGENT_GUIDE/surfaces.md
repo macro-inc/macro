@@ -484,8 +484,73 @@ On phones, recorded call headers omit the **Call Again** action.
 
 ## Customers (CRM) — `/app/component/companies`
 
-Board/List views, `Company` create button. Requires a team ("Join a team to enable CRM" →
-`Open team settings`).
+The 216px local sidebar uses the same navigation primitives as Email and Tasks.
+Board and List share a horizontal segmented toggle at the top of the sidebar; the
+main header has no layout toggle. People is not available. Views include All companies, My companies
+(Owner = current user), Needs follow-up (has a stage other than Churned and last
+interaction at least 14 days ago),
+Recently active (team email activity within 7 days), and Unassigned (no Owner). Existing personal/team
+saved views also appear under Views. Stages remain board columns or list properties.
+Board/List switches the representation without changing the selected set.
+Recently active uses the CRM last-interaction timestamp, advanced by sent and received
+email. It does not count company @mentions or chat discussions. Manually created
+companies initialize that timestamp to creation time, so newly added companies may
+also appear before any email; the sidebar hover tooltip discloses this limitation.
+View descriptions appear in sidebar tooltips, not above the main board or list.
+The `Search companies` field uses the shared Email/Tasks search bar. Command-F
+focuses it, `Clear search` resets it, and Escape leaves the field.
+
+Clicking a company in Board or List (or pressing Enter on a focused list row)
+opens its details inside the CRM workspace, keeping the left navigation visible.
+The top breadcrumb reads `<current view or list> > <company>`; click the first
+segment to return with the same filters, layout, and list scroll position. Selecting
+another sidebar view or switching Board/List closes the company details.
+Shift-click still opens the company in a separate split. Direct company links use
+the standalone company page.
+Clicking a contact in an embedded company's Contacts section appends a third
+breadcrumb: `<current view or list> > <company> > <contact>`. The CRM sidebar stays
+visible. Click the company breadcrumb or the contact's Company link to return to
+the company; click the first breadcrumb to return directly to the originating
+view. Shift-click still opens a contact in a separate split. Direct contact links
+use the standalone contact page.
+Company and contact headers have `Copy link` beside the side-panel toggle.
+It copies the record's direct URL and shows a confirmation toast; this is also
+available in the embedded company and contact breadcrumb header.
+
+`Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
+At narrow widths, `Show CRM navigation` opens the same navigation in a menu.
+The sidebar's Views and Lists sections can also collapse independently.
+
+CRM lists are currently disabled by `enableCrmLists` (default `false`). The sidebar
+Lists section, list editor, and company membership controls only mount when enabled.
+Existing list data is preserved; a restored list view returns to All companies while
+disabled. Board/List layout and saved filter views remain available.
+
+When enabled, lists are personal, team-scoped collections of explicit company IDs, persisted through
+saved-view storage separately from saved filter views. `New list` opens a name and
+company picker; `Edit list` changes membership or deletes the collection. An empty list
+must not show every company. The picker browses up to 500 recent companies. Canceling
+never saves the draft. Saving only closes the dialog after the server succeeds.
+
+Company detail pages show a **Lists** section in the right panel, with current
+personal list memberships as chips. **Manage lists** expands a searchable checkbox
+picker. Checking or unchecking saves immediately and refreshes the CRM sidebar's
+membership counts. Changes are disabled while saving; failures show an inline retry
+message and keep the last saved membership. With no lists, create one in the CRM sidebar.
+
+`New company` uses the existing creation dialog. `Import` previews a CSV with `name`
+and `domain` columns (1–100 rows, at most 1 MB). The explicit Import button writes the
+previewed companies. Partial failures retain only failed rows for retry. Use preview
+and cancel for browser checks against hosted dev data. `CRM settings` opens the existing
+settings panel. Requires a team with CRM enabled.
+
+`Export` opens options for companies. Choose Current view
+(respects filters/search) or All records across views (each visible record once), then
+select CSV columns. Company exports include Stage, Owner, Revenue and optional custom
+properties. `Prepare export` fetches every page and shows a count and three-row preview;
+it does not download. `Download CSV` saves the prepared snapshot using the selected
+columns. Changing scope requires preparing again. Cancel stops preparation. CSV uses UTF-8,
+quoted fields, original date timestamps and spreadsheet formula escaping.
 
 ## Activity — `/app/component/activity`
 

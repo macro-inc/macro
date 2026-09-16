@@ -363,8 +363,20 @@ export function EmptyState(props: {
           <Match when={true}>
             <EmptyStatePanel
               graphic={EmptyStateCompaniesGraphic}
-              title="No customers yet"
-              description="Customers your team emails will appear here."
+              title={
+                !soup.activeTab() || soup.activeTab() === 'active'
+                  ? 'No customers yet'
+                  : soup.activeTab()?.startsWith('list:')
+                    ? 'No companies in this list'
+                    : 'No companies in this view'
+              }
+              description={
+                !soup.activeTab() || soup.activeTab() === 'active'
+                  ? 'Customers your team emails will appear here.'
+                  : soup.activeTab()?.startsWith('list:')
+                    ? 'Use Edit list to add companies to this collection.'
+                    : 'Companies that match this view will appear here.'
+              }
             />
           </Match>
         </Switch>

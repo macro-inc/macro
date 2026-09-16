@@ -36,8 +36,6 @@ import { idToEmail } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import UserCircle from '@icon/wide-user-circle.svg';
-import WideUsers from '@icon/wide-users.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
 import IconComment from '@phosphor/chat-teardrop.svg';
@@ -47,6 +45,8 @@ import IconEye from '@phosphor/eye.svg';
 import IconLink from '@phosphor/link.svg';
 import IconEdit from '@phosphor/pencil.svg';
 import IconShared from '@phosphor/share.svg';
+import UserCircle from '@phosphor/user-circle.svg';
+import UsersIcon from '@phosphor/users.svg';
 import IconX from '@phosphor/x.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -581,7 +581,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                         props.navigateToChannel(recipient.channel_id)
                       }
                     >
-                      <Switch fallback={<WideUsers class="shrink-0 size-4" />}>
+                      <Switch fallback={<UsersIcon class="shrink-0 size-4" />}>
                         <Match
                           when={
                             props.channelNameMap.get(recipient.channel_id)
@@ -593,7 +593,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                         <Match
                           when={props.channelNameMap.get(recipient.channel_id)}
                         >
-                          <WideUsers class="shrink-0 size-4" />
+                          <UsersIcon class="shrink-0 size-4" />
                         </Match>
                       </Switch>
                       <div class="font-medium truncate">
@@ -1278,7 +1278,7 @@ export function ShareModal(props: ShareModalProps) {
                                 >
                                   <Switch
                                     fallback={
-                                      <WideUsers class="shrink-0 size-4" />
+                                      <UsersIcon class="shrink-0 size-4" />
                                     }
                                   >
                                     <Match
@@ -1297,7 +1297,7 @@ export function ShareModal(props: ShareModalProps) {
                                         recipient.channel_id
                                       )}
                                     >
-                                      <WideUsers class="shrink-0 size-4" />
+                                      <UsersIcon class="shrink-0 size-4" />
                                     </Match>
                                   </Switch>
                                   <div class="font-medium truncate">

@@ -101,7 +101,7 @@ export function useTeamCrmConfig() {
   }));
 
   const config = createMemo((): TeamCrmConfig => {
-    const data = settingsQuery.data;
+    const data = settingsQuery.isSuccess ? settingsQuery.data : undefined;
     if (!data) return {};
     return {
       permissions: {

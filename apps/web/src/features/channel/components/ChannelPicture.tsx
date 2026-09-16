@@ -1,4 +1,4 @@
-import ChannelIcon from '@icon/wide-channel.svg';
+import ChannelIcon from '@phosphor/hash-straight.svg';
 import { cn } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 

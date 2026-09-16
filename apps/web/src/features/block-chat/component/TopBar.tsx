@@ -20,10 +20,10 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import IconShared from '@icon/wide-share.svg';
 import ChatDebugIcon from '@phosphor/chat-text.svg';
 import Info from '@phosphor/info.svg';
 import Notepad from '@phosphor/notepad.svg';
+import IconShared from '@phosphor/share.svg';
 import type { Accessor } from 'solid-js';
 
 export function TopBar(props: {

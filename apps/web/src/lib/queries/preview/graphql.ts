@@ -277,8 +277,12 @@ function previewFromQuery(
   data: ItemPreviewQuery | ItemPreviewsQuery,
   item: ItemEntity
 ): PreviewItem | undefined {
+  // Cache-and-network can emit a user envelope before this soup selection
+  // is present. Treat that as unloaded so REST fallback can take over.
+  const items = data.user?.soup?.items;
+  if (!items) return undefined;
   const recordKey = normalizedRecordKey(item);
-  const record = data.user.soup.items.find(
+  const record = items.find(
     (record) => `${record.__typename}:${record.id}` === recordKey
   );
   return record ? graphqlRecordToPreview(record) : undefined;

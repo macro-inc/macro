@@ -38,8 +38,8 @@ export function useQuickAccessCrmCompaniesQuery() {
     () => ({ staleTime: STALE_TIME, enabled: crmFlag().enabled })
   );
 
-  const companies = createMemo<CrmCompanyEntity[]>(
-    () => query.data?.filter(isCrmCompanyEntity) ?? []
+  const companies = createMemo<CrmCompanyEntity[]>(() =>
+    query.isSuccess ? (query.data?.filter(isCrmCompanyEntity) ?? []) : []
   );
 
   return { query, companies };

@@ -1,4 +1,4 @@
-import AgentIcon from '@icon/wide-star.svg';
+import AgentIcon from '@phosphor/sparkle.svg';
 
 /** A session reference uses the same icon and underline treatment as other mentions. */
 export function AgentSessionMentionLabel(props: { label: string }) {

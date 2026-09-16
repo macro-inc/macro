@@ -1,6 +1,6 @@
 import { useCallContextOptional } from '@channel/Call/CallContext';
 import { joinChannelCall } from '@channel/Call/join-channel-call';
-import PhoneIcon from '@icon/wide-call.svg';
+import PhoneIcon from '@phosphor/phone-call.svg';
 import { useActiveCallQuery } from '@queries/call/call';
 import { Button } from '@ui';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';

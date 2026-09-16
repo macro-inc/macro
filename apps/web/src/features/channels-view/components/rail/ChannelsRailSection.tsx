@@ -1,7 +1,7 @@
-import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
@@ -241,8 +241,6 @@ export function RailModeButton(props: {
   expanded: boolean;
   onToggle: () => void;
 }) {
-  const [hovering, setHovering] = createSignal(false);
-
   return (
     <Button
       variant="ghost"
@@ -250,10 +248,8 @@ export function RailModeButton(props: {
       label={props.expanded ? 'Collapse chat rail' : 'Expand chat rail'}
       tooltipPlacement={props.expanded ? 'bottom' : 'right'}
       onClick={props.onToggle}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
     >
-      <AnimatedSquareSidebarIcon class="size-4" triggerAnimation={hovering()} />
+      <SidebarIcon class="size-4" />
     </Button>
   );
 }
