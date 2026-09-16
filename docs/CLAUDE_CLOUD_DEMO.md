@@ -91,9 +91,36 @@ The standalone frontend against the existing dev backend cannot exercise this ne
 
 Only the session owner may send/control prompts or edit/remove queued input for this provider. Sharing visibility does not grant permission to spend the owner's subscription. Existing Macro access checks still apply.
 
+## Harness integration
+
+Claude implements the shared `ContainerManager` and `ClaudeModelProbe` ports and
+is dispatched by `RoutedContainerManager` alongside Cursor and Codex. The
+composition root supplies the account-scoped `CloudProvider`, session repository,
+existing egress provisioner, and ACP adapter. Each saved agent retains its own
+instructions, model, and MCP selection. Provider lifecycle policy lives in
+`agent_harness::domain::claude`; OAuth credentials stay behind the account service.
+
+ACP `session/new` and `session/load` carry Macro's existing authenticated HTTP/SSE
+MCP server list. Claude translates that list into the SDK's `mcp_set_servers`
+control request, ordered before the model and user message in the same batch.
+An idle worker needs the user event to wake, so an acknowledgment cannot be awaited
+before submitting that batch. A rejected or missing setup acknowledgment fails the
+turn; rejection also requests interruption. As with model selection, this cannot
+guarantee zero inference before a rejection arrives. Tool permission requests go
+through Macro's standard ACP `session/request_permission` policy. Unsupported
+stdio servers and duplicate names fail the handshake instead of being dropped.
+On reattach the existing egress provisioner mints a fresh session token, persists
+its hash, and reconstructs the saved selection, including after a host restart.
+
+The control request and response match
+[Anthropic's Agent SDK types](https://unpkg.com/@anthropic-ai/claude-agent-sdk@0.3.220/sdk.d.ts).
+Automated tests exercise protocol translation and host permission decisions using
+fake provider ports; they do not establish live Claude Cloud MCP connectivity.
+The cloud worker must be able to reach the configured egress URL.
+
 ## Demo boundary
 
-- Text prompts only; no attachments, repository selection, or Macro/Pipedream MCP connectors are passed to Claude yet. Built-in cloud tools may run according to the provider's normal policy. Additional permission requests are denied rather than silently approved.
+- Text prompts only; attachments and repository selection are not forwarded yet. Macro and configured Pipedream MCP servers use the shared session egress path. Built-in cloud tools retain provider policy; explicit permission requests are delegated to the Macro host.
 - Model discovery is read-only and bounded to five recent account sessions. No catalog is shared across credential owners. New/removed model IDs require no code change; choices absent from the current catalog are rejected. Provider errors stay visible rather than silently substituting a fixed list. No local filesystem. Agent instructions are forwarded as `append_system_prompt`.
 - Access tokens refresh shortly before expiry; rotated refresh tokens are encrypted and saved before provider use. If saving fails, the process retains the rotated grant and retries persistence rather than reusing the old refresh token. A revoked grant produces a reconnect error. No API-key fallback or quota bypass.
 - Prompt sends and session creation are not blindly retried. A durable `claude-cloud-create-pending` mapping prevents duplicate creation after an uncertain request or crash. An operator must inspect the Claude account before clearing a stuck intent.

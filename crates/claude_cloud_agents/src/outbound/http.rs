@@ -1,8 +1,8 @@
 //! The experimentally verified OAuth API origin, not the cookie-authenticated web origin.
-use super::credentials::FileCredentials;
 use crate::domain::{
+    credentials::AccountCredentials,
     model::{Error, Event, Result, SessionId},
-    ports::{Cloud, Events},
+    ports::{Cloud, CloudLifecycle, CloudProvider, Events},
 };
 use futures::StreamExt;
 use serde_json::{Value, json};
@@ -14,13 +14,13 @@ const BETA: &str = "ccr-byoc-2025-07-29";
 /// HTTP client pinned to one Macro account and the official Anthropic origin.
 #[derive(Clone)]
 pub struct Client {
-    credentials: FileCredentials,
+    credentials: AccountCredentials,
     owner: String,
     http: reqwest::Client,
 }
 impl Client {
     /// Resolve account allowlisting before attaching a runtime.
-    pub async fn new(credentials: FileCredentials, owner: String) -> Result<Self> {
+    pub async fn new(credentials: AccountCredentials, owner: String) -> Result<Self> {
         credentials.resolve(&owner).await?;
         let http = reqwest::Client::builder()
             .redirect(reqwest::redirect::Policy::none())
@@ -113,6 +113,27 @@ impl Client {
         )
         .await?;
         Ok(())
+    }
+}
+
+/// Factory using the shared account credential service supplied by the host.
+pub struct Provider(pub Option<AccountCredentials>);
+
+impl CloudProvider for Provider {
+    type Client = Client;
+
+    async fn connect(&self, owner: &str) -> Result<Client> {
+        Client::new(self.0.clone().ok_or(Error::NotConnected)?, owner.to_owned()).await
+    }
+}
+
+impl CloudLifecycle for Client {
+    async fn create(&self, instructions: &str) -> Result<SessionId> {
+        Client::create(self, instructions).await
+    }
+
+    async fn archive(&self, session: &SessionId) -> Result<()> {
+        Client::archive(self, session).await
     }
 }
 

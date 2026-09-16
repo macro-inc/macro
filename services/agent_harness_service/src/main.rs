@@ -10,7 +10,6 @@
 mod agent_runtime_directory;
 mod api;
 mod bots_directory;
-mod claude_cloud;
 mod config;
 mod containers;
 mod harness_bindings;
@@ -625,14 +624,25 @@ async fn run() -> anyhow::Result<()> {
         environment = %config.environment,
         "agent harness serving bots"
     );
+    let claude_provider = Arc::new(claude_cloud_agents::outbound::http::Provider(
+        claude_credentials.clone(),
+    ));
+    let claude_manager = agent_harness::outbound::claude::ClaudeContainerManager::new(
+        agent_harness::domain::claude::ClaudeSessions::new(
+            claude_provider.clone(),
+            session_repo.clone(),
+            session_repo.clone(),
+        ),
+        EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url.clone()),
+        claude_cloud_agents::inbound::acp::attach,
+    );
     let containers = RoutedContainerManager::new(
         sandbox_and_inmem,
         cursor_manager,
         codex_manager,
+        claude_manager,
         session_repo.clone(),
     );
-    let containers =
-        claude_cloud::WithClaude::new(containers, session_repo.clone(), claude_credentials.clone());
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
@@ -808,8 +818,8 @@ async fn run() -> anyhow::Result<()> {
             macrod_models,
             model_probe_timeout,
         )
-        .with_claude(Arc::new(claude_cloud::ClaudeModels(
-            claude_credentials.clone(),
+        .with_claude(Arc::new(agent_harness::outbound::claude::ClaudeModels(
+            claude_provider,
         ))),
     );
     let model_state = AgentModelsRouterState::new(

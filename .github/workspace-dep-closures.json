@@ -164,6 +164,7 @@
       "crates/broadcast",
       "crates/channel_sender",
       "crates/channels",
+      "crates/claude_cloud_agents",
       "crates/codex_cloud_agents",
       "crates/codex_connection",
       "crates/comms_db_client",

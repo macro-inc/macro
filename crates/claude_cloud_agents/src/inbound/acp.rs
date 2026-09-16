@@ -14,11 +14,16 @@ use serde_json::{Value, json};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc::UnboundedSender;
 
+mod mcp;
+mod permissions;
+
 /// Attach a Claude conversation to Macro's existing runtime protocol.
 pub fn attach<C: Cloud>(session: Arc<Session<C>>) -> ServerChannel {
     let (server, mut runtime) = ServerChannel::duplex();
     tokio::spawn(async move {
         let tx = runtime.tx;
+        let permissions =
+            permissions::Permissions::new(tx.clone(), session.id().as_str().to_owned());
         let _ = tx.send(ToServerMessage::Event {
             event: SystemEvent::AcpReady,
         });
@@ -54,6 +59,10 @@ pub fn attach<C: Cloud>(session: Arc<Session<C>>) -> ServerChannel {
                 incoming = runtime.rx.recv() => {
                     let Some(ToRuntimeMessage::Acp(AcpMessage(raw))) = incoming else { break; };
                     let Ok(frame) = serde_json::to_value(raw) else { break; };
+                    if frame.get("method").is_none() {
+                        permissions.respond(&frame);
+                        continue;
+                    }
                     let id = frame.get("id").cloned();
                     let params = &frame["params"];
                     let method = frame["method"].as_str().unwrap_or_default();
@@ -63,10 +72,18 @@ pub fn attach<C: Cloud>(session: Arc<Session<C>>) -> ServerChannel {
                     }
                     match method {
                         "initialize" => { if let Some(id) = id { let _ = reply(&tx, id, json!({
-                            "protocolVersion":1, "agentCapabilities":{"loadSession":true},
-                            "agentInfo":{"name":"claude-cloud","title":"Claude Cloud (demo)","version":"0.1.0"}, "authMethods":[]
+                            "protocolVersion":1, "agentCapabilities":{"loadSession":true,"mcpCapabilities":{"http":true,"sse":true}},
+                            "agentInfo":{"name":"claude-cloud","title":"Claude Cloud","version":"0.1.0"}, "authMethods":[]
                         })); } }
                         "session/new" => {
+                            let setup = match mcp::servers(params) {
+                                Ok(servers) => session.configure_mcp(servers).await,
+                                Err(error) => Err(error),
+                            };
+                            if let Err(error) = setup {
+                                if let Some(id) = id { let _ = failure(&tx, id, &error.to_string()); }
+                                continue;
+                            }
                             if let Err(error) = session.refresh_catalog().await {
                                 if let Some(id) = id { let _ = failure(&tx, id, &error.to_string()); }
                                 continue;
@@ -77,6 +94,14 @@ pub fn attach<C: Cloud>(session: Arc<Session<C>>) -> ServerChannel {
                             }
                         }
                         "session/load" => {
+                            let setup = match mcp::servers(params) {
+                                Ok(servers) => session.configure_mcp(servers).await,
+                                Err(error) => Err(error),
+                            };
+                            if let Err(error) = setup {
+                                if let Some(id) = id { let _ = failure(&tx, id, &error.to_string()); }
+                                continue;
+                            }
                             mirrors.abort_all();
                             while mirrors.join_next().await.is_some() {}
                             if let Some(id) = id {
@@ -103,15 +128,16 @@ pub fn attach<C: Cloud>(session: Arc<Session<C>>) -> ServerChannel {
                             let session = session.clone();
                             let tx = tx.clone();
                             let usage_totals = usage_totals.clone();
+                            let permissions = permissions.clone();
                             turns.spawn(async move {
                                 let final_result = Arc::new(Mutex::new(None));
                                 let observed = final_result.clone();
-                                let outcome = session.prompt(text, |update| {
+                                let outcome = session.prompt_with_permissions(text, |update| {
                                     if let Update::Finished { failed, cancelled, usage } = update {
                                         *observed.lock().map_err(|_| Error::Protocol)? = Some((failed, cancelled, usage));
                                         Ok(())
                                     } else { notification(&tx, session.id().as_str(), update) }
-                                }).await;
+                                }, &permissions).await;
                                 match outcome {
                                     Err(error) => { let _ = failure(&tx, id, &error.to_string()); }
                                     Ok(()) => {

@@ -257,6 +257,7 @@ dependencies = [
  "channel_sender",
  "channels",
  "chrono",
+ "claude_cloud_agents",
  "codex_cloud_agents",
  "codex_connection",
  "cursor_api_key",
@@ -3619,6 +3620,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 name = "claude_cloud_agents"
 version = "0.1.0"
 dependencies = [
+ "agent-client-protocol",
  "agent_runtime_protocol",
  "async-trait",
  "axum",

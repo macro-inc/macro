@@ -4,6 +4,11 @@ use serde::{Deserialize, Serialize};
 /// The deliberately bounded failures exposed to Macro. Never includes HTTP bodies.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// MCP setup failed or the worker did not acknowledge it before prompting.
+    #[error(
+        "Claude could not connect the session's MCP servers; check the harness connection and retry"
+    )]
+    McpConfiguration,
     /// Invalid choice or a provider-rejected switch; does not expose provider bodies.
     #[error(
         "Claude could not select that model. Choose another model available on your subscription."

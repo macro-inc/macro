@@ -5,6 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
+agent-client-protocol = { workspace = true }
 async-trait = { workspace = true }
 sqlx = { workspace = true }
 cursor_api_key = { path = "../cursor_api_key" }

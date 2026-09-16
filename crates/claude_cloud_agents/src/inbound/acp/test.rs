@@ -229,3 +229,5 @@ async fn idle_cloud_turn_is_polled_into_acp_and_completed_without_a_macro_prompt
             .is_err()
     );
 }
+
+mod mcp;
