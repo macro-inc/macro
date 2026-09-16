@@ -7,7 +7,7 @@ import { useBotsQuery } from '@queries/bots/bots';
 import {
   firstPartyBotName,
   getBotDisplayName,
-} from '@queries/channel/message-sender';
+} from '@queries/messages/message-sender';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
 import type { Client } from '@urql/core';

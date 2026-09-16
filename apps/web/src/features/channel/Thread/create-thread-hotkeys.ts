@@ -5,8 +5,10 @@ import {
 } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { HOTKEY_PRIORITY_HIGH } from '@core/hotkey/types';
-import type { ApiChannelMessage } from '@service-storage/generated/schemas/apiChannelMessage';
-import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
+import type {
+  Message as EntityMessage,
+  MessageListItem,
+} from '@service-storage/messages';
 import { type Accessor, onCleanup } from 'solid-js';
 import type { MessageSelection } from '../Channel/create-message-selection';
 import type { MessageActions, MessageData } from '../Message';
@@ -19,11 +21,11 @@ type CreateThreadHotkeysOptions = {
   replySelection: MessageSelection;
   isThreadFocused: Accessor<boolean>;
   isEditing: Accessor<boolean>;
-  activeReplies: Accessor<Array<ApiThreadReply>>;
+  activeReplies: Accessor<Array<EntityMessage>>;
   threadId: Accessor<string>;
   getMessageActions: (message: MessageData) => MessageActions | undefined;
   userId: Accessor<string | undefined>;
-  parentMessage: Accessor<ApiChannelMessage>;
+  parentMessage: Accessor<MessageListItem>;
   collapseThread: () => void;
   isSelected: Accessor<boolean>;
   hasReplies: Accessor<boolean>;

@@ -1,7 +1,11 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { useBlockId } from '@core/block';
-import type { DeleteCommentInfo } from '@core/comments/commentType';
+import type {
+  CommentId,
+  DeleteCommentInfo,
+  ThreadId,
+} from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import {
   CREATE_COMMENT_COMMAND,
@@ -44,7 +48,9 @@ export function useCreateComment() {
   const editor = mdStore.get.editor;
 
   return createCallback(
-    async (info: CreateCommentRequest & { threadId: number }) => {
+    async (
+      info: Omit<CreateCommentRequest, 'threadId'> & { threadId: ThreadId }
+    ) => {
       analytics.track('comment_create', { blockType: 'md' });
       const { threadId, text, mentions } = info;
 
@@ -78,7 +84,8 @@ export function useCreateComment() {
         return response;
       }
 
-      return await createThreadReply(info);
+      if (typeof threadId !== 'number') return null;
+      return await createThreadReply({ ...info, threadId });
     }
   );
 }
@@ -88,11 +95,18 @@ export function useUpdateComment() {
 
   const editComment = useEditCommentResource();
 
-  return createCallback((commentId: number, info: EditCommentRequest) => {
-    analytics.track('comment_update', { blockType: 'md' });
+  return createCallback(
+    (
+      commentId: CommentId,
+      info: Omit<EditCommentRequest, 'threadId'> & { threadId: ThreadId }
+    ) => {
+      analytics.track('comment_update', { blockType: 'md' });
+      if (typeof commentId !== 'number' || typeof info.threadId !== 'number')
+        return Promise.resolve(false);
 
-    return editComment(commentId, info);
-  });
+      return editComment(commentId, { ...info, threadId: info.threadId });
+    }
+  );
 }
 
 export function useCreatePendingComment() {
@@ -116,6 +130,7 @@ export function useDeleteComment() {
       deleteNewComments();
       return true;
     }
+    if (typeof commentId !== 'number') return false;
 
     const comment = comments[commentId];
     // this can happen when deleting the thread ->
@@ -188,7 +203,7 @@ export function useScrollToCommentThread() {
     });
   };
 
-  return async (threadId: number) => {
+  return async (threadId: ThreadId) => {
     // On phones the margin is display:none (the drawer is the only comment
     // surface), so its measure containers can't be scrolled to. Scroll to
     // the thread's mark in the editor itself. On a cold-load deep link the

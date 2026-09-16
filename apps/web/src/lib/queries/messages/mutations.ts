@@ -3,7 +3,6 @@ import type { OptimisticPostMessageAttachment } from '@channel/Input/message-pay
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { markMessageSent } from '@core/util/message-send-motion';
-import { throwOnErr } from '@core/util/result';
 import {
   bumpSoupEntityTouchedAt,
   invalidateSoupEntity,
@@ -12,63 +11,42 @@ import {
   type SoupTransaction,
 } from '@queries/soup/normalized-cache';
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
-import {
-  type ApiChannelMessage,
-  type ApiThreadReply,
-  type IdResponse,
-  type MessageResponse,
-  storageServiceClient,
-} from '@service-storage/client';
-import type { ApiChannelContextMessage as Message } from '@service-storage/generated/schemas/apiChannelContextMessage';
-import type { ApiCountedReaction as CountedReaction } from '@service-storage/generated/schemas/apiCountedReaction';
-import type { ApiMessageAttachment } from '@service-storage/generated/schemas/apiMessageAttachment';
-import type { ChannelMessage } from '@service-storage/generated/schemas/channelMessage';
-import type { NewChannelAttachment as NewAttachment } from '@service-storage/generated/schemas/newChannelAttachment';
-import type { PostMessageRequest } from '@service-storage/generated/schemas/postMessageRequest';
+import type { MessageAttachment } from '@service-storage/generated/schemas/messageAttachment';
+import type { NewAttachment } from '@service-storage/generated/schemas/newAttachment';
 import type { SimpleMention } from '@service-storage/generated/schemas/simpleMention';
+import type { ThreadPatch } from '@service-storage/generated/schemas/threadPatch';
+import type { MessageListItem, MessageParent } from '@service-storage/messages';
+import {
+  type Message as EntityMessage,
+  entityMessagesClient,
+  type PostMessage,
+} from '@service-storage/messages';
 import { useMutation } from '@tanstack/solid-query';
 import { queryClient } from '../client';
 import { createMutationNonce, registerNonce } from '../nonce';
-import { getChannelMessagesQueryKeyPrefix } from './channel-messages';
-import { ChannelNonceKeys } from './keys';
+import { MessageNonceKeys } from './keys';
 import { senderFromStorageId } from './message-sender';
 import {
   captureDeleteSnapshotForTarget,
   type DeleteTargetSnapshot,
-  getTargetMessageState,
+  getTargetMessage,
   getTopLevelMessageDeletedAt,
   insertMessageIntoTargetCaches,
   markTopLevelMessageDeletedInTargetCaches,
+  patchTargetMessage,
   removeMessageFromTargetCaches,
   replaceTargetMessageId,
-  replaceTargetMessageState,
   resolveMessageTarget,
   restoreMessageInTargetCaches,
   softInvalidateTargetCaches,
   topLevelMessageHasReplies,
 } from './reconcile';
+import { applyMessage, applyThreadState } from './sync';
+import { getMessageTimelineQueryKeyPrefix } from './timeline';
 
-/**
- * A message attachment carrying its channel/message ids — the legacy comms `Attachment`
- * shape (a message attachment plus channel_id/message_id; no sender_id).
- */
-type Attachment = ApiMessageAttachment & {
-  channel_id: string;
-  message_id: string;
-};
-
-/**
- * Register nonces for both message and attachment deduplication.
- * The server echoes the same nonce for both message and attachment WebSocket events.
- */
-function registerMessageNonces(
-  optimisticId: string,
-  hasAttachments: boolean
-): void {
-  registerNonce(ChannelNonceKeys.MESSAGE, optimisticId);
-  if (hasAttachments) {
-    registerNonce(ChannelNonceKeys.ATTACHMENT, optimisticId);
-  }
+/** Deduplicate the one committed-message event echoed by the server. */
+function registerMessageNonces(optimisticId: string): void {
+  registerNonce(MessageNonceKeys.MESSAGE, optimisticId);
 }
 
 function normalizeDateValue(
@@ -77,7 +55,7 @@ function normalizeDateValue(
   return value instanceof Date ? value.toISOString() : value;
 }
 
-type WithChannelId<T> = T & { channelId: string };
+type WithParent<T> = T & { parent: MessageParent };
 type WithOptimisticId<T> = T & { optimisticId: string };
 type WithSenderId<T> = T & { senderId: string };
 
@@ -87,9 +65,6 @@ type InsertMessageContext = {
 };
 
 type DeleteMessageContext = {
-  deletedMessage?: Message;
-  deletedReactions: CountedReaction[];
-  deletedAttachments: Attachment[];
   target: ReturnType<typeof resolveMessageTarget>;
   /** Snapshot used to restore a removed thread reply on rollback. */
   targetSnapshot?: DeleteTargetSnapshot;
@@ -101,22 +76,21 @@ type DeleteMessageContext = {
 };
 
 type UpdateMessageContext = {
-  messageId: string;
   target: ReturnType<typeof resolveMessageTarget>;
   previousContent: string;
   previousEditedAt: DateValue | null | undefined;
   previousUpdatedAt: DateValue;
-  previousAttachments: Attachment[];
+  previousAttachments: MessageAttachment[];
 };
 
-type OptimisticApiMessageAttachment = ApiMessageAttachment & {
+type OptimisticMessageAttachment = MessageAttachment & {
   previewSrc?: string;
 };
 
 function makeOptimisticAttachments(
   attachments: readonly OptimisticPostMessageAttachment[],
   now: string
-): OptimisticApiMessageAttachment[] {
+): OptimisticMessageAttachment[] {
   return attachments.map(({ attachment, previewSrc }) => ({
     id: crypto.randomUUID(),
     entity_id: attachment.entity_id,
@@ -129,15 +103,17 @@ function makeOptimisticAttachments(
 }
 
 function makeOptimisticTopLevelMessage(
-  vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>,
-  attachments: OptimisticApiMessageAttachment[],
+  vars: WithParent<WithOptimisticId<WithSenderId<PostMessage>>>,
+  attachments: OptimisticMessageAttachment[],
   now: string
-): ApiChannelMessage {
+): MessageListItem {
   return {
     id: vars.optimisticId,
-    channel_id: vars.channelId,
+    parent: vars.parent,
     sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
+    mentions: vars.mentions ?? [],
+    thread_id: vars.thread_id ?? null,
     content: vars.content,
     created_at: now,
     updated_at: now,
@@ -145,6 +121,14 @@ function makeOptimisticTopLevelMessage(
     edited_at: undefined,
     attachments,
     reactions: [],
+    state: {
+      root_id: vars.optimisticId,
+      user_id: vars.senderId,
+      created_at: now,
+      updated_at: now,
+      resolved: false,
+      anchor: vars.anchor ?? null,
+    },
     thread: {
       preview: [],
       reply_count: 0,
@@ -154,14 +138,17 @@ function makeOptimisticTopLevelMessage(
 }
 
 function makeOptimisticThreadReply(
-  vars: WithChannelId<WithOptimisticId<WithSenderId<PostMessageRequest>>>,
-  attachments: OptimisticApiMessageAttachment[],
+  vars: WithParent<WithOptimisticId<WithSenderId<PostMessage>>>,
+  attachments: OptimisticMessageAttachment[],
   now: string
-): ApiThreadReply {
+): EntityMessage {
   return {
     id: vars.optimisticId,
+    parent: vars.parent,
     sender: senderFromStorageId(vars.senderId),
     sender_id: vars.senderId,
+    mentions: vars.mentions ?? [],
+    thread_id: vars.thread_id ?? null,
     content: vars.content,
     created_at: now,
     updated_at: now,
@@ -175,11 +162,11 @@ function makeOptimisticThreadReply(
  * Optimistically insert a new message into the channel cache.
  * Returns minimal context for rollback (just the optimistic ID).
  */
-export function optimisticInsertChannelMessage(
-  vars: WithChannelId<
+export function optimisticInsertMessage(
+  vars: WithParent<
     WithOptimisticId<
       WithSenderId<
-        PostMessageRequest & {
+        PostMessage & {
           optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
         }
       >
@@ -189,12 +176,12 @@ export function optimisticInsertChannelMessage(
   const now = new Date().toISOString();
   const newAttachments = makeOptimisticAttachments(
     vars.optimisticAttachments ??
-      vars.attachments.map((attachment) => ({ attachment })),
+      (vars.attachments ?? []).map((attachment) => ({ attachment })),
     now
   );
   const threadId = vars.thread_id ?? undefined;
   const target = resolveMessageTarget({
-    channelId: vars.channelId,
+    parent: vars.parent,
     messageId: vars.optimisticId,
     threadId,
   });
@@ -211,14 +198,14 @@ export function optimisticInsertChannelMessage(
       newAttachments,
       now
     );
-    insertMessageIntoTargetCaches(vars.channelId, target, optimisticReply);
+    insertMessageIntoTargetCaches(vars.parent, target, optimisticReply);
   } else {
     const optimisticMessage = makeOptimisticTopLevelMessage(
       vars,
       newAttachments,
       now
     );
-    insertMessageIntoTargetCaches(vars.channelId, target, optimisticMessage);
+    insertMessageIntoTargetCaches(vars.parent, target, optimisticMessage);
   }
 
   return context;
@@ -228,10 +215,10 @@ export function optimisticInsertChannelMessage(
  * Rollback an optimistic message insert by removing the optimistic message.
  */
 export function rollbackInsertChannelMessage(
-  channelId: string,
+  parent: MessageParent,
   context: InsertMessageContext
 ): void {
-  removeMessageFromTargetCaches(channelId, context.target);
+  removeMessageFromTargetCaches(parent, context.target);
 }
 
 /**
@@ -239,16 +226,16 @@ export function rollbackInsertChannelMessage(
  * Called in mutation onSuccess after server returns the real message.
  */
 function replaceOptimisticMessage(
-  vars: WithChannelId<{
+  vars: WithParent<{
     optimisticId: string;
     realId: string;
     threadId?: string;
   }>
 ): void {
   replaceTargetMessageId(
-    vars.channelId,
+    vars.parent,
     resolveMessageTarget({
-      channelId: vars.channelId,
+      parent: vars.parent,
       messageId: vars.optimisticId,
       threadId: vars.threadId,
     }),
@@ -262,48 +249,46 @@ function replaceOptimisticMessage(
  * Top-level messages with thread replies are soft-deleted in place (we set
  * `deleted_at`) so the UI renders the "this message was deleted" placeholder
  * while preserving the replies hanging off the message. Top-level messages
- * with no replies are removed outright. Thread replies don't have a
- * `deleted_at` field in the schema, so we always remove them from the caches
- * and capture a snapshot for rollback.
+ * with no replies are removed outright. Replies are removed from the caches,
+ * with a snapshot retained for rollback.
  */
-export function optimisticDeleteChannelMessage(
-  vars: WithChannelId<
-    Pick<ChannelMessage, 'message_id'> & { threadId?: string }
-  >
+export function optimisticDeleteMessage(
+  vars: WithParent<{ message_id: string; threadId?: string }>
 ): DeleteMessageContext | undefined {
   const target = resolveMessageTarget({
-    channelId: vars.channelId,
+    parent: vars.parent,
     messageId: vars.message_id,
     threadId: vars.threadId,
   });
   const context: DeleteMessageContext = {
-    deletedReactions: [],
-    deletedAttachments: [],
     target,
   };
 
   if (target.kind === 'top_level') {
-    if (topLevelMessageHasReplies(vars.channelId, target.messageId)) {
+    if (
+      vars.parent.type === 'document' ||
+      topLevelMessageHasReplies(vars.parent, target.messageId)
+    ) {
       context.previousDeletedAt =
-        getTopLevelMessageDeletedAt(vars.channelId, target.messageId) ?? null;
+        getTopLevelMessageDeletedAt(vars.parent, target.messageId) ?? null;
       markTopLevelMessageDeletedInTargetCaches(
-        vars.channelId,
+        vars.parent,
         target,
         new Date().toISOString()
       );
     } else {
       context.targetSnapshot = captureDeleteSnapshotForTarget(
-        vars.channelId,
+        vars.parent,
         target
       );
-      removeMessageFromTargetCaches(vars.channelId, target);
+      removeMessageFromTargetCaches(vars.parent, target);
     }
   } else {
     context.targetSnapshot = captureDeleteSnapshotForTarget(
-      vars.channelId,
+      vars.parent,
       target
     );
-    removeMessageFromTargetCaches(vars.channelId, target);
+    removeMessageFromTargetCaches(vars.parent, target);
   }
 
   return context;
@@ -312,13 +297,13 @@ export function optimisticDeleteChannelMessage(
 /**
  * Rollback an optimistic message delete by restoring the deleted data.
  */
-export function rollbackDeleteChannelMessage(
-  channelId: string,
+export function rollbackDeleteMessage(
+  parent: MessageParent,
   context: DeleteMessageContext
 ): void {
   if (context.target.kind === 'top_level' && !context.targetSnapshot) {
     markTopLevelMessageDeletedInTargetCaches(
-      channelId,
+      parent,
       context.target,
       context.previousDeletedAt
     );
@@ -327,7 +312,7 @@ export function rollbackDeleteChannelMessage(
 
   if (context.targetSnapshot) {
     restoreMessageInTargetCaches(
-      channelId,
+      parent,
       context.target,
       context.targetSnapshot
     );
@@ -338,16 +323,16 @@ export function rollbackDeleteChannelMessage(
  * Optimistically update a message's content in the channel cache.
  * Returns minimal context: only the previous content and timestamps.
  */
-export function optimisticUpdateChannelMessage(
-  vars: WithChannelId<
-    Pick<ChannelMessage, 'message_id' | 'content'> & {
-      attachment_ids_to_delete?: string[];
-      attachments_to_add?: NewAttachment[];
-    }
-  >
+export function optimisticUpdateMessage(
+  vars: WithParent<{
+    message_id: string;
+    content: string;
+    attachment_ids_to_delete?: string[];
+    attachments_to_add?: NewAttachment[];
+  }>
 ): UpdateMessageContext | undefined {
   const target = resolveMessageTarget({
-    channelId: vars.channelId,
+    parent: vars.parent,
     messageId: vars.message_id,
   });
 
@@ -355,19 +340,14 @@ export function optimisticUpdateChannelMessage(
   const deletedAttachmentIDs = new Set(vars.attachment_ids_to_delete ?? []);
   const now = new Date().toISOString();
 
-  const renderedState = getTargetMessageState(vars.channelId, target);
+  const renderedState = getTargetMessage(vars.parent, target);
   if (renderedState) {
     context = {
-      messageId: vars.message_id,
       target,
       previousContent: renderedState.content,
-      previousEditedAt: renderedState.editedAt,
-      previousUpdatedAt: renderedState.updatedAt,
-      previousAttachments: renderedState.attachments.map((attachment) => ({
-        ...attachment,
-        channel_id: vars.channelId,
-        message_id: vars.message_id,
-      })),
+      previousEditedAt: renderedState.edited_at,
+      previousUpdatedAt: renderedState.updated_at,
+      previousAttachments: renderedState.attachments,
     };
   }
 
@@ -375,21 +355,21 @@ export function optimisticUpdateChannelMessage(
     const kept = context.previousAttachments.filter(
       (attachment) => !deletedAttachmentIDs.has(attachment.id)
     );
-    const added: Attachment[] = (vars.attachments_to_add ?? []).map((a) => ({
-      id: crypto.randomUUID(),
-      channel_id: vars.channelId,
-      message_id: vars.message_id,
-      entity_id: a.entity_id,
-      entity_type: a.entity_type,
-      width: a.width,
-      height: a.height,
-      created_at: now,
-    }));
+    const added: MessageAttachment[] = (vars.attachments_to_add ?? []).map(
+      (a) => ({
+        id: crypto.randomUUID(),
+        entity_id: a.entity_id,
+        entity_type: a.entity_type,
+        width: a.width,
+        height: a.height,
+        created_at: now,
+      })
+    );
 
-    replaceTargetMessageState(vars.channelId, target, {
+    patchTargetMessage(vars.parent, target, {
       content: vars.content,
-      editedAt: now,
-      updatedAt: now,
+      edited_at: now,
+      updated_at: now,
       attachments: [...kept, ...added],
     });
   }
@@ -400,21 +380,21 @@ export function optimisticUpdateChannelMessage(
 /**
  * Rollback an optimistic message update by restoring previous content.
  */
-export function rollbackUpdateChannelMessage(
-  channelId: string,
+export function rollbackUpdateMessage(
+  parent: MessageParent,
   context: UpdateMessageContext
 ): void {
-  replaceTargetMessageState(channelId, context.target, {
+  patchTargetMessage(parent, context.target, {
     content: context.previousContent,
-    editedAt: normalizeDateValue(context.previousEditedAt),
-    updatedAt: normalizeDateValue(context.previousUpdatedAt) ?? '',
+    edited_at: normalizeDateValue(context.previousEditedAt),
+    updated_at: normalizeDateValue(context.previousUpdatedAt) ?? '',
     attachments: context.previousAttachments,
   });
 }
 
 type SendMessageParams = {
-  channelID: string;
-  message: PostMessageRequest;
+  parent: MessageParent;
+  message: PostMessage;
   optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
   optimisticId: string;
   senderId: string;
@@ -430,7 +410,7 @@ type SendMessageContext = {
  */
 export function useSendMessageMutation(
   callbacks?: MutationCallbacks<
-    IdResponse,
+    EntityMessage,
     Error,
     SendMessageParams,
     SendMessageContext
@@ -442,44 +422,45 @@ export function useSendMessageMutation(
     gcTime: 0,
     mutationFn: async (vars: SendMessageParams) => {
       // Use optimisticId as nonce - allows server to echo it back for correlation
-      return await throwOnErr(
-        async () =>
-          await storageServiceClient.postMessage({
-            channel_id: vars.channelID,
-            message: vars.message,
-            nonce: vars.optimisticId,
-          })
-      );
+      return entityMessagesClient.post(vars.parent, {
+        ...vars.message,
+        nonce: vars.optimisticId,
+      });
     },
-    ...withCallbacks<IdResponse, Error, SendMessageParams, SendMessageContext>(
+    ...withCallbacks<
+      EntityMessage,
+      Error,
+      SendMessageParams,
+      SendMessageContext
+    >(
       {
         onMutate: async (vars) => {
-          registerMessageNonces(
-            vars.optimisticId,
-            vars.message.attachments.length > 0
-          );
+          registerMessageNonces(vars.optimisticId);
           await queryClient.cancelQueries({
-            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelID),
+            queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
-          const insert = optimisticInsertChannelMessage({
-            channelId: vars.channelID,
+          const insert = optimisticInsertMessage({
+            parent: vars.parent,
             optimisticId: vars.optimisticId,
             senderId: vars.senderId,
             optimisticAttachments: vars.optimisticAttachments,
             ...vars.message,
           });
-          const updatedAt = optimisticUpdateSoupItemUpdatedAt(
-            vars.channelID,
-            'channel',
-            new Date().toISOString()
-          );
+          const updatedAt =
+            vars.parent.type === 'channel'
+              ? optimisticUpdateSoupItemUpdatedAt(
+                  vars.parent.id,
+                  'channel',
+                  new Date().toISOString()
+                )
+              : undefined;
 
           return { insert, updatedAt };
         },
         onSuccess(data, variables) {
           const threadId = variables.message.thread_id ?? undefined;
           replaceOptimisticMessage({
-            channelId: variables.channelID,
+            parent: variables.parent,
             optimisticId: variables.optimisticId,
             realId: data.id,
             threadId,
@@ -488,35 +469,37 @@ export function useSendMessageMutation(
           // Sending is a `messaged` activity server-side; stamp the touch now
           // so the Recent order moves the channel up without waiting on the
           // activity consumer, which the refetch below can outrun.
-          bumpSoupEntityTouchedAt(variables.channelID);
+          if (variables.parent.type === 'channel')
+            bumpSoupEntityTouchedAt(variables.parent.id);
 
           // The sender does not receive the notification that normally refreshes
           // this soup entity. Refresh root messages here so the channel moves to
           // its updated position in soup lists.
-          if (threadId === undefined) {
-            refetchSoupEntity(variables.channelID, 'channel');
-            invalidateSoupEntity(variables.channelID);
+          if (threadId === undefined && variables.parent.type === 'channel') {
+            refetchSoupEntity(variables.parent.id, 'channel');
+            invalidateSoupEntity(variables.parent.id);
           }
 
           analytics.track('channel_message_sent', {
             contentLength: variables.message.content?.length ?? 0,
-            attachmentsLength: variables.message.attachments.length,
+            attachmentsLength: variables.message.attachments?.length ?? 0,
             isThreadReply: threadId !== undefined,
           });
+          applyMessage(data, 'edited');
         },
         onError(error, vars, context) {
           console.error('failed to send message', error);
           toast.failure('Failed to send message');
           if (context?.insert) {
-            rollbackInsertChannelMessage(vars.channelID, context.insert);
+            rollbackInsertChannelMessage(vars.parent, context.insert);
           }
           context?.updatedAt?.rollback();
         },
         onSettled: (_data, _error, variables) => {
           softInvalidateTargetCaches(
-            variables.channelID,
+            variables.parent,
             resolveMessageTarget({
-              channelId: variables.channelID,
+              parent: variables.parent,
               messageId: variables.optimisticId,
               threadId: variables.message.thread_id ?? undefined,
             })
@@ -529,7 +512,7 @@ export function useSendMessageMutation(
 }
 
 type DeleteMessageParams = {
-  channelID: string;
+  parent: MessageParent;
   messageID: string;
   threadID?: string;
 };
@@ -537,8 +520,8 @@ type DeleteMessageParams = {
 type DeleteMutationContext = DeleteMessageContext | undefined;
 
 const deleteNonce = createMutationNonce<DeleteMessageParams>(
-  ChannelNonceKeys.MESSAGE,
-  (v) => `delete:${v.channelID}:${v.messageID}`
+  MessageNonceKeys.MESSAGE,
+  (v) => `delete:${v.parent.type}:${v.parent.id}:${v.messageID}`
 );
 
 /**
@@ -555,13 +538,10 @@ export function useDeleteMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: DeleteMessageParams) => {
-      await throwOnErr(
-        async () =>
-          await storageServiceClient.deleteMessage({
-            channel_id: vars.channelID,
-            message_id: vars.messageID,
-            nonce: deleteNonce.use(vars),
-          })
+      await entityMessagesClient.delete(
+        vars.parent,
+        vars.messageID,
+        deleteNonce.use(vars)
       );
     },
     ...withCallbacks<void, Error, DeleteMessageParams, DeleteMutationContext>(
@@ -569,10 +549,10 @@ export function useDeleteMessageMutation(
         onMutate: async (vars) => {
           deleteNonce.prepare(vars);
           await queryClient.cancelQueries({
-            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelID),
+            queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
-          return optimisticDeleteChannelMessage({
-            channelId: vars.channelID,
+          return optimisticDeleteMessage({
+            parent: vars.parent,
             message_id: vars.messageID,
             threadId: vars.threadID,
           });
@@ -581,15 +561,15 @@ export function useDeleteMessageMutation(
           console.error('failed to delete message', error);
           toast.failure('Failed to delete message');
           if (context) {
-            rollbackDeleteChannelMessage(vars.channelID, context);
+            rollbackDeleteMessage(vars.parent, context);
           }
         },
         onSettled: (_data, _error, vars) => {
           deleteNonce.cleanup(vars);
           softInvalidateTargetCaches(
-            vars.channelID,
+            vars.parent,
             resolveMessageTarget({
-              channelId: vars.channelID,
+              parent: vars.parent,
               messageId: vars.messageID,
               threadId: vars.threadID,
             })
@@ -602,7 +582,7 @@ export function useDeleteMessageMutation(
 }
 
 type PatchMessageParams = {
-  channelID: string;
+  parent: MessageParent;
   messageID: string;
   content: string;
   mentions: SimpleMention[];
@@ -613,8 +593,8 @@ type PatchMessageParams = {
 type PatchMutationContext = UpdateMessageContext | undefined;
 
 const patchNonce = createMutationNonce<PatchMessageParams>(
-  ChannelNonceKeys.MESSAGE,
-  (v) => `patch:${v.channelID}:${v.messageID}`
+  MessageNonceKeys.MESSAGE,
+  (v) => `patch:${v.parent.type}:${v.parent.id}:${v.messageID}`
 );
 
 /**
@@ -622,7 +602,7 @@ const patchNonce = createMutationNonce<PatchMessageParams>(
  */
 export function usePatchMessageMutation(
   callbacks?: MutationCallbacks<
-    MessageResponse,
+    EntityMessage,
     Error,
     PatchMessageParams,
     PatchMutationContext
@@ -631,21 +611,21 @@ export function usePatchMessageMutation(
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (vars: PatchMessageParams) => {
-      return await throwOnErr(
-        async () =>
-          await storageServiceClient.patchMessage({
-            channel_id: vars.channelID,
-            message_id: vars.messageID,
-            content: vars.content,
-            mentions: vars.mentions,
-            attachment_ids_to_delete: vars.attachmentIDsToDelete,
-            attachments_to_add: vars.attachmentsToAdd,
-            nonce: patchNonce.use(vars),
-          })
-      );
+      return entityMessagesClient.patch(vars.parent, vars.messageID, {
+        content: vars.content,
+        mentions: vars.mentions,
+        attachments: {
+          type: 'delta',
+          value: {
+            remove: vars.attachmentIDsToDelete ?? [],
+            add: vars.attachmentsToAdd ?? [],
+          },
+        },
+        nonce: patchNonce.use(vars),
+      });
     },
     ...withCallbacks<
-      MessageResponse,
+      EntityMessage,
       Error,
       PatchMessageParams,
       PatchMutationContext
@@ -654,29 +634,32 @@ export function usePatchMessageMutation(
         onMutate: async (vars) => {
           patchNonce.prepare(vars);
           await queryClient.cancelQueries({
-            queryKey: getChannelMessagesQueryKeyPrefix(vars.channelID),
+            queryKey: getMessageTimelineQueryKeyPrefix(vars.parent),
           });
-          return optimisticUpdateChannelMessage({
-            channelId: vars.channelID,
+          return optimisticUpdateMessage({
+            parent: vars.parent,
             message_id: vars.messageID,
             content: vars.content,
             attachment_ids_to_delete: vars.attachmentIDsToDelete,
             attachments_to_add: vars.attachmentsToAdd,
           });
         },
+        onSuccess(data) {
+          applyMessage(data, 'edited');
+        },
         onError(error, vars, context) {
           console.error('failed to update message', error);
           toast.failure('Failed to update message');
           if (context) {
-            rollbackUpdateChannelMessage(vars.channelID, context);
+            rollbackUpdateMessage(vars.parent, context);
           }
         },
         onSettled: (_data, _error, vars) => {
           patchNonce.cleanup(vars);
           softInvalidateTargetCaches(
-            vars.channelID,
+            vars.parent,
             resolveMessageTarget({
-              channelId: vars.channelID,
+              parent: vars.parent,
               messageId: vars.messageID,
             })
           );
@@ -684,5 +667,37 @@ export function usePatchMessageMutation(
       },
       callbacks
     ),
+  }));
+}
+
+export function usePatchThreadMutation() {
+  return useMutation(() => ({
+    mutationFn: async (input: {
+      parent: MessageParent;
+      rootId: string;
+      patch: ThreadPatch;
+    }) => {
+      const state = await entityMessagesClient.patchThread(
+        input.parent,
+        input.rootId,
+        input.patch
+      );
+      applyThreadState(input.parent, state);
+      return state;
+    },
+    onError: () => toast.failure('Could not update discussion'),
+  }));
+}
+export function useDeleteThreadMutation() {
+  return useMutation(() => ({
+    mutationFn: async (input: { parent: MessageParent; rootId: string }) => {
+      const state = await entityMessagesClient.deleteThread(
+        input.parent,
+        input.rootId
+      );
+      applyThreadState(input.parent, state);
+      return state;
+    },
+    onError: () => toast.failure('Could not delete discussion'),
   }));
 }

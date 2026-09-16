@@ -11,10 +11,10 @@ import { produce, reconcile } from 'solid-js/store';
 import { Highlight, type IHighlight } from '../model/Highlight';
 import {
   anchorsResource,
-  commentThreadsResource,
   useCreateUnthreadedHighlightResource,
   useDeleteUnthreadedHighlightResource,
 } from './commentsResource';
+import { findAnchorThread, pdfCommentThreads } from './commentThreads';
 
 /** Map of highlight uuid to highlights */
 export type HighlightUuidMap = Partial<Record<string, IHighlight>>;
@@ -36,15 +36,12 @@ createBlockEffect(() => {
   const anchors = anchorsData();
   if (!anchors || anchors.length === 0) return;
 
-  const [commentThreadsData] = commentThreadsResource;
-  const commentThreads = commentThreadsData() ?? [];
+  const commentThreads = pdfCommentThreads() ?? [];
 
   const highlightAnchors = anchors.filter((a) => a.anchorType === 'highlight');
 
   const mappedAnchors = highlightAnchors.flatMap((a) => {
-    const commentThread = commentThreads.find(
-      (ct) => ct.thread.threadId === a.threadId
-    );
+    const commentThread = findAnchorThread(commentThreads, a);
     // this is an error but probably resolves eventually as the data is fetched asynchronously
     if (!commentThread && a.threadId) {
       return [];
@@ -72,12 +69,13 @@ createBlockEffect(() => {
       },
       thread: commentThread
         ? {
-            threadId: commentThread.thread.threadId,
-            rootId: commentThread.comments[0].commentId,
+            threadId: commentThread.threadId,
+            rootId: commentThread.rootId,
             anchorId: a.uuid,
             page: a.page,
             comments: commentThread.comments,
-            isResolved: commentThread.thread.resolved,
+            replyCount: commentThread.replyCount,
+            isResolved: commentThread.isResolved,
           }
         : null,
     };

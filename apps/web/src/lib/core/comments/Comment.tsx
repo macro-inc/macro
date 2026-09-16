@@ -15,7 +15,7 @@ import {
   useContext,
 } from 'solid-js';
 import { getAndClearCommentMentions } from '.';
-import type { Root } from './commentType';
+import type { CommentId, Root, ThreadId } from './commentType';
 import { EditInput } from './Inputs';
 import { MessageTopRow } from './MessageTopRow';
 import { CommentsContext, ThreadContext } from './Thread';
@@ -213,8 +213,8 @@ export function Comment(
 export function CommentReply(
   props: ParentProps<{
     hide?: boolean;
-    replyId: number;
-    threadId: number;
+    replyId: CommentId;
+    threadId: ThreadId;
     deleteReply: () => void;
     updateReply: (content: string) => unknown | Promise<unknown>;
     isOwned: boolean;

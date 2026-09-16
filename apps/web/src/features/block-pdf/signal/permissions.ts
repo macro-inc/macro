@@ -2,6 +2,7 @@ import { commentsStore } from '@block-pdf/store/comments/commentStore';
 import { commentPlaceables } from '@block-pdf/store/comments/freeComments';
 import { highlightsUuidMap } from '@block-pdf/store/highlight';
 import { createBlockMemo } from '@core/block';
+import type { CommentId } from '@core/comments/commentType';
 import { useUserId } from '@core/context/user';
 import { useCanEdit } from '@core/signal/permissions';
 import { createSelector } from 'solid-js';
@@ -46,7 +47,7 @@ export const useOwnedCommentPlaceableSelector = () => {
 export const useOwnedCommentSelector = () => {
   const ownedCommentSelector = createSelector(
     ownedCommentIds,
-    (id: number, owned) => (owned ?? []).includes(id)
+    (id: CommentId, owned) => (owned ?? []).includes(id)
   );
   return ownedCommentSelector;
 };

@@ -30,7 +30,7 @@ export { isMacroNewId } from '@core/constant/macroNew';
 /**
  * A synthetic [`IUser`] entry so Macro appears in the channel `@`-mention
  * typeahead. The mention rides the existing user-mention machinery and is
- * re-tagged as a bot mention at send time (see `expandMentions`). `email` is set
+ * re-tagged as a bot mention at send time (see `authoredMentions`). `email` is set
  * to the display name so the typeahead shows just "Macro". The id uses the
  * canonical `bot|<uuid>` principal form so persisted mention content matches
  * bot sender/participant ids.

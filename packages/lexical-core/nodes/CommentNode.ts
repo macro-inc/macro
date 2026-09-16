@@ -25,7 +25,7 @@ export function $createCommentNode(params: {
   isDraft?: boolean;
 }): CommentNode {
   return $applyNodeReplacement(
-    new CommentNode(params.ids, undefined, params.threadId)
+    new CommentNode(params.ids, undefined, params.threadId, params.isDraft)
   );
 }
 

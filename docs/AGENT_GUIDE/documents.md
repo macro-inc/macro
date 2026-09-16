@@ -140,6 +140,56 @@ Comments anchored to selected text open in a floating margin card on desktop and
 a `Comments` drawer on touch devices. New comments, replies, and edits use the
 composer surface on desktop; touch inputs use the drawer's background directly.
 
+### Unified document discussions (`enable-unified-document-discussions`)
+
+With the PostHog flag `enable-unified-document-discussions` on (locally
+`VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS=true`), document comments are messages
+read and written through `/dss/messages/document/<id>`, and both comment
+surfaces reuse the channel message components. The legacy annotation comment
+endpoints are not called for that document. Channels are not gated and always
+use the message API.
+
+Below the editor, expand `Discussion` to see comments without a text anchor.
+Its `Leave a comment...` composer is the channel composer: `Attach files`,
+formatting, mentions, and `Send message` (Enter also submits). Confirm
+completion by the new message appearing above the composer; a failed send
+retains the draft. The timeline initially loads a bounded page with up to three
+preview replies per thread. Expand a thread to load its replies;
+`Load earlier comments` pages backward. Live updates preserve unsent replies
+and edits while updating the surrounding thread.
+
+Select text and choose the comment action to create an anchored comment. These
+threads appear beside their text in the margin (or in the active thread drawer
+on phones) and never in the bottom Discussion, including after live updates or
+reloads. Existing highlights locate threads by their stable mark IDs. Replies,
+attachments, reactions, and editing use the same message controls as channels.
+Removing the last marked text moves its retained conversation to Discussion,
+where it remains after reload. Removing only part of a marked range keeps the
+conversation anchored to the remaining text. On phones, the active Markdown
+thread opens in a drawer with a pinned reply composer; long-press any message
+for edit, delete, copy-link, and reaction actions.
+
+`Resolve` / `Reopen` changes the discussion state. Deleting the root message
+leaves a tombstone and retains its replies. `Delete discussion` explicitly
+removes the whole thread and requests confirmation. `Copy link` targets the
+specific comment with `comment_id=<message id>`. Previously copied numeric links
+still resolve under current document permissions. Deleting an anchored Markdown
+discussion removes its mark while preserving the document text and any
+overlapping comments. If deletion happens while the document is closed, its next
+editable view removes the retained mark when the document loads. Read-only
+viewers see plain text without a dead comment highlight; the stored document
+and overlapping live comments stay intact.
+
+PDFs expose a `Comments` section in the side panel as well as anchored margin
+threads. Highlight comments attach to the highlight annotation; deleting a
+discussion attached to a regular highlight leaves the independent highlight in
+place. Placeable comments post through the message API too, but the anchors
+read on the current backend only returns placeables that still reference a
+legacy thread, so a message-backed placeable does not reappear after reload
+until that read includes `root_id`-only rows.
+
+With the flag off, documents behave exactly as described above this section.
+
 ## Side panel
 
 Right side of a doc (toggle with `Hide/Show Side Panel`):

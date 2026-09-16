@@ -1,6 +1,16 @@
+import { URL_PARAMS as MD_URL_PARAMS } from '@block-md/constants';
+import { ChannelInput } from '@channel/Input';
+import { buildPostMessageSendPayload } from '@channel/Input/message-payload';
+import { useBlockAliasedName } from '@core/block';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
+import {
+  enableUnifiedDocumentDiscussions,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
+import { MessageThreadById } from '@core/messages/MessageThread';
+import { buildSimpleEntityUrl } from '@core/util/url';
 import { Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import {
@@ -19,7 +29,16 @@ import {
 } from 'solid-js';
 import { getAndClearCommentMentions } from '.';
 import { Comment, CommentReply } from './Comment';
-import type { CommentOperations, Layout, Reply, Root } from './commentType';
+import {
+  type CommentId,
+  type CommentOperations,
+  DRAFT_THREAD_ID,
+  type Layout,
+  type MessageCommentOperations,
+  type Reply,
+  type Root,
+  type ThreadId,
+} from './commentType';
 import { EditInput, NewReplyInput } from './Inputs';
 import { MeasureContainer } from './MeasureContainer';
 
@@ -49,7 +68,7 @@ type Action = SoftSetEdit | HardSetEdit | SetText;
 
 export const threadMeasureContainerId = (
   documentId: string,
-  threadId: number
+  threadId: ThreadId
 ) => `comment-measure-container-${documentId}-${threadId}`;
 
 export const ThreadContext = createContext<{
@@ -59,21 +78,30 @@ export const ThreadContext = createContext<{
 });
 
 export type CommentsContextType = {
-  setActiveThread: (threadId: number | null) => void;
-  setThreadHeight: (threadId: number, height: number) => void;
+  setActiveThread: (threadId: ThreadId | null) => void;
+  setThreadHeight: (threadId: ThreadId, height: number) => void;
   canComment: Accessor<boolean>;
   isDocumentOwner: Accessor<boolean>;
   commentOperations: CommentOperations;
-  getCommentById: (id: number) => Root | Reply | undefined;
+  /** Present when the document reads and writes comments through the shared message API. */
+  messageOperations?: MessageCommentOperations;
+  getCommentById: (id: CommentId) => Root | Reply | undefined;
   documentId: string;
-  ownedComment: (id: number) => boolean;
+  ownedComment: (id: CommentId) => boolean;
   inComment: boolean;
-  highlightedCommentId: Accessor<number | null>;
+  highlightedCommentId: Accessor<CommentId | null>;
   /**
    * When set (the touch drawer), messages report their inline-edit state so
    * the host can hide its pinned reply composer while an edit is open.
    */
-  setMessageEditing?: (commentId: number, editing: boolean) => void;
+  setMessageEditing?: (commentId: CommentId, editing: boolean) => void;
+};
+
+/** Legacy operations for a document whose comments no longer go through the annotation endpoints. */
+export const noopCommentOperations: CommentOperations = {
+  createComment: () => Promise.resolve(null),
+  deleteComment: () => Promise.resolve(false),
+  updateComment: () => Promise.resolve(false),
 };
 
 export const CommentsContext = createContext<CommentsContextType>({
@@ -81,11 +109,7 @@ export const CommentsContext = createContext<CommentsContextType>({
   setThreadHeight: () => {},
   canComment: () => false,
   isDocumentOwner: () => false,
-  commentOperations: {
-    createComment: () => Promise.resolve(null),
-    deleteComment: () => Promise.resolve(false),
-    updateComment: () => Promise.resolve(false),
-  },
+  commentOperations: noopCommentOperations,
   getCommentById: (_id) => undefined,
   documentId: '',
   ownedComment: () => false,
@@ -93,13 +117,7 @@ export const CommentsContext = createContext<CommentsContextType>({
   highlightedCommentId: () => null,
 });
 
-/**
- * The content of a comment thread: the root comment with its replies and the
- * reply input, or the new-comment composer for a draft. Positioning-agnostic —
- * `Thread` wraps it in the floating margin card, and the touch comment drawer
- * renders it directly.
- */
-export function ThreadBody(props: {
+type ThreadBodyProps = {
   comment: Root;
   isActive: boolean;
   theme?: EditorThemeClasses;
@@ -113,7 +131,72 @@ export function ThreadBody(props: {
    * instead of hover-revealed buttons (the touch drawer has no hover).
    */
   actionsDropdown?: boolean;
-}) {
+};
+
+/**
+ * The content of a comment thread: the root comment with its replies and the
+ * reply input, or the new-comment composer for a draft. Positioning-agnostic —
+ * `Thread` wraps it in the floating margin card, and the touch comment drawer
+ * renders it directly.
+ */
+export function ThreadBody(props: ThreadBodyProps) {
+  return isFeatureEnabled(enableUnifiedDocumentDiscussions) ? (
+    <MessageThreadBody {...props} />
+  ) : (
+    <LegacyThreadBody {...props} />
+  );
+}
+
+/** Document threads render the shared message thread; a draft composes its root. */
+function MessageThreadBody(props: ThreadBodyProps) {
+  const context = useContext(CommentsContext);
+  const blockName = useBlockAliasedName();
+  const parent = () => ({ type: 'document' as const, id: context.documentId });
+  const targetId = () => {
+    const highlighted = context.highlightedCommentId();
+    return typeof highlighted === 'string' ? highlighted : null;
+  };
+  return (
+    <StaticMarkdownContext theme={props.theme ?? baseCommentTheme}>
+      <Show
+        when={!props.comment.isNew}
+        fallback={
+          <ChannelInput
+            parent={parent()}
+            input={{ mode: 'reply', placeholder: 'Leave a comment...' }}
+            onClose={() => context.setActiveThread(null)}
+            onSend={async (snapshot) => {
+              const { thread_id: _threadId, ...message } =
+                buildPostMessageSendPayload({ snapshot }).message;
+              await context.messageOperations?.createComment({
+                ...message,
+                threadId: DRAFT_THREAD_ID,
+              });
+            }}
+          />
+        }
+      >
+        <MessageThreadById
+          parent={parent()}
+          rootId={String(props.comment.threadId)}
+          canWrite={context.canComment()}
+          canManage={context.isDocumentOwner()}
+          hideReplyInput={props.hideReplyInput}
+          onEditingChange={context.setMessageEditing}
+          targetId={targetId()}
+          buildLink={(message) =>
+            buildSimpleEntityUrl(
+              { type: blockName, id: context.documentId },
+              { [MD_URL_PARAMS.commentId]: message.id }
+            )
+          }
+        />
+      </Show>
+    </StaticMarkdownContext>
+  );
+}
+
+function LegacyThreadBody(props: ThreadBodyProps) {
   const {
     canComment,
     commentOperations,
@@ -327,6 +410,7 @@ export function Thread(props: {
     >
       <Layer depth={2}>
         <div
+          data-comment-thread
           // note: pdf-pointer-event-reset is a strange one-off class that mostly normalizes
           // pointer-events: none vs. all inside the .pdfOverlayInner div.
           class="shrink-0 border border-edge bg-surface p-2 shadow-md rounded-xl shadow-drop-shadow portal-scope pointer-events-auto pdf-pointer-event-reset"

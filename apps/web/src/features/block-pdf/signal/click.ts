@@ -1,5 +1,6 @@
 import { PayloadMode } from '@block-pdf/type/placeables';
 import { createBlockEffect, createBlockSignal } from '@core/block';
+import type { ThreadId } from '@core/comments/commentType';
 import { placeableModeSignal } from './placeables';
 
 export const disableOverlayClickSignal = createBlockSignal<boolean>(false);
@@ -11,7 +12,7 @@ export const disablePageViewClickSignal = createBlockSignal<boolean>(false);
 
 export const isSelectingViewerTextSignal = createBlockSignal<boolean>(false);
 
-export const selectingCommentThreadSignal = createBlockSignal<number | null>(
+export const selectingCommentThreadSignal = createBlockSignal<ThreadId | null>(
   null
 );
 
