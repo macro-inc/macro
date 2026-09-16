@@ -231,10 +231,11 @@ export function MessageThreadFromSource(
     () => props.parent,
     () => [props.rootId]
   );
+  // A failed refetch keeps the cached root so an open reply draft survives.
   const root = () =>
-    query.isSuccess
-      ? query.data.find((item) => item.id === props.rootId)
-      : undefined;
+    query.isPending
+      ? undefined
+      : query.data?.find((item) => item.id === props.rootId);
   return (
     <Show when={root()}>
       {(data) => <MessageThread {...props} data={data()} />}

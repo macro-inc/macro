@@ -253,4 +253,25 @@ describe('source channel threads in a document', () => {
     ));
     expect(view.queryByText('thread of channel launch')).toBeNull();
   });
+
+  it('keeps rendering the cached source root while a refetch fails', () => {
+    mocks.byIds.mockReturnValue({
+      isPending: false,
+      isSuccess: false,
+      isError: true,
+      data: [sourceMessage],
+    });
+    const view = render(() => (
+      <MessageThreadFromSource parent={channel} rootId="root" canWrite />
+    ));
+    expect(view.getByText('thread of channel launch')).toBeTruthy();
+  });
+
+  it('renders nothing while the source root is still loading', () => {
+    mocks.byIds.mockReturnValue({ isPending: true, isSuccess: false });
+    const view = render(() => (
+      <MessageThreadFromSource parent={channel} rootId="root" canWrite />
+    ));
+    expect(view.queryByText('thread of channel launch')).toBeNull();
+  });
 });

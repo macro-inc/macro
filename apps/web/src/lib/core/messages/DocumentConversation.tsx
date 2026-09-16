@@ -57,11 +57,13 @@ export function DocumentConversation(props: {
   const messagesById = createMemo(
     () => new Map(messages().map((message) => [message.id, message]))
   );
-  // Keyed by root so a refreshed list keeps each source thread's drafts and focus.
+  // Keyed by root so a refreshed list keeps each source thread's drafts and
+  // focus; a failed refetch keeps the last authorized list rather than
+  // unmounting the threads.
   const sourcesById = createMemo(
     () =>
       new Map(
-        (references.isSuccess ? references.data : []).map((item) => [
+        (references.isPending ? [] : (references.data ?? [])).map((item) => [
           item.root_id,
           item,
         ])
