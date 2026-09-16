@@ -11,6 +11,42 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 import { MessageThread } from './MessageThread';
 import type { MessageData } from './types';
 
+/** The root composer, inline below the roots or floating on touch devices. */
+export function DocumentConversationComposer(props: {
+  parent: MessageParent;
+  collapsible?: boolean;
+  /** Dismiss the keyboard after submitting from a floating mobile composer. */
+  blurOnSend?: boolean;
+}) {
+  const send = useSendMessageMutation();
+  const userId = useUserId();
+  const bots = useMessageBotMentionUsers(() => props.parent);
+  let input: InputHandle | undefined;
+  return (
+    <ChannelInput
+      parent={props.parent}
+      bots={bots}
+      input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
+      autofocus={false}
+      collapsible={props.collapsible}
+      onReady={(handle) => (input = handle)}
+      onSend={async (snapshot) => {
+        const senderId = userId();
+        if (!senderId) return;
+        await send.mutateAsync({
+          parent: props.parent,
+          senderId,
+          optimisticId: crypto.randomUUID(),
+          ...buildPostMessageSendPayload({ snapshot }),
+        });
+        input?.clear();
+        if (props.blurOnSend && document.activeElement instanceof HTMLElement)
+          document.activeElement.blur();
+      }}
+    />
+  );
+}
+
 export function DocumentConversation(props: {
   parent: MessageParent;
   canWrite: boolean;
@@ -18,6 +54,10 @@ export function DocumentConversation(props: {
   targetId?: string | null;
   buildLink?: (message: MessageData) => string;
   label?: string;
+  /** The composer is rendered elsewhere, such as a floating mobile accessory. */
+  hideComposer?: boolean;
+  /** Render nothing while there is no root to show. */
+  hideWhenEmpty?: boolean;
 }) {
   const [expanded, setExpanded] = createSignal(true);
   const target = useMessageLink(
@@ -30,10 +70,6 @@ export function DocumentConversation(props: {
     target.rootId,
     target.resolved
   );
-  const send = useSendMessageMutation();
-  const userId = useUserId();
-  const bots = useMessageBotMentionUsers(() => props.parent);
-  let input: InputHandle | undefined;
   // Until the link resolves, the shared latest page would flash before the window jumps.
   const messages = () =>
     target.resolved() && query.isSuccess
@@ -51,72 +87,60 @@ export function DocumentConversation(props: {
     () => new Map(messages().map((message) => [message.id, message]))
   );
   return (
-    <section class="mt-3 pb-12" data-document-conversation>
-      <button
-        type="button"
-        class="text-xs"
-        onClick={() => setExpanded(!expanded())}
-      >
-        {expanded() ? '▾' : '▸'} {props.label ?? 'Discussion'}
-      </button>
-      <Show when={expanded() || props.targetId}>
-        <StaticMarkdownContext>
-          <Show when={!target.resolved() || query.isPending}>
-            <p class="text-xs text-ink-muted">Loading comments...</p>
-          </Show>
-          <Show when={query.isError}>
-            <button onClick={() => void query.refetch()}>
-              Could not load comments. Retry
-            </button>
-          </Show>
-          <Show when={query.hasNextPage}>
-            <button class="text-xs" onClick={() => void query.fetchNextPage()}>
-              Load earlier comments
-            </button>
-          </Show>
-          <For each={[...messagesById().keys()]}>
-            {(id) => (
-              <MessageThread
-                data={messagesById().get(id)!}
-                canWrite={props.canWrite}
-                canManage={props.canManage}
-                targetId={target.rootId() === id ? target.messageId() : null}
-                buildLink={props.buildLink}
-              />
-            )}
-          </For>
-          <Show when={query.hasPreviousPage}>
-            <button
-              class="text-xs"
-              onClick={() => void query.fetchPreviousPage()}
-            >
-              Load newer comments
-            </button>
-          </Show>
-          <Show when={props.canWrite}>
-            <div class="mt-4">
-              <ChannelInput
-                parent={props.parent}
-                bots={bots}
-                input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
-                autofocus={false}
-                onReady={(handle) => (input = handle)}
-                onSend={async (snapshot) => {
-                  const senderId = userId();
-                  if (!senderId) return;
-                  await send.mutateAsync({
-                    parent: props.parent,
-                    senderId,
-                    optimisticId: crypto.randomUUID(),
-                    ...buildPostMessageSendPayload({ snapshot }),
-                  });
-                  input?.clear();
-                }}
-              />
-            </div>
-          </Show>
-        </StaticMarkdownContext>
-      </Show>
-    </section>
+    <Show when={!props.hideWhenEmpty || messages().length > 0}>
+      <section class="mt-3 pb-12" data-document-conversation>
+        <button
+          type="button"
+          class="text-xs"
+          onClick={() => setExpanded(!expanded())}
+        >
+          {expanded() ? '▾' : '▸'} {props.label ?? 'Discussion'}
+        </button>
+        <Show when={expanded() || props.targetId}>
+          <StaticMarkdownContext>
+            <Show when={!target.resolved() || query.isPending}>
+              <p class="text-xs text-ink-muted">Loading comments...</p>
+            </Show>
+            <Show when={query.isError}>
+              <button onClick={() => void query.refetch()}>
+                Could not load comments. Retry
+              </button>
+            </Show>
+            <Show when={query.hasNextPage}>
+              <button
+                class="text-xs"
+                onClick={() => void query.fetchNextPage()}
+              >
+                Load earlier comments
+              </button>
+            </Show>
+            <For each={[...messagesById().keys()]}>
+              {(id) => (
+                <MessageThread
+                  data={messagesById().get(id)!}
+                  canWrite={props.canWrite}
+                  canManage={props.canManage}
+                  targetId={target.rootId() === id ? target.messageId() : null}
+                  buildLink={props.buildLink}
+                />
+              )}
+            </For>
+            <Show when={query.hasPreviousPage}>
+              <button
+                class="text-xs"
+                onClick={() => void query.fetchPreviousPage()}
+              >
+                Load newer comments
+              </button>
+            </Show>
+            <Show when={props.canWrite && !props.hideComposer}>
+              <div class="mt-4">
+                <DocumentConversationComposer parent={props.parent} />
+              </div>
+            </Show>
+          </StaticMarkdownContext>
+        </Show>
+      </section>
+    </Show>
   );
 }

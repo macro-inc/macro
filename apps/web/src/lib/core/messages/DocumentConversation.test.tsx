@@ -6,7 +6,9 @@ import { DocumentConversation } from './DocumentConversation';
 
 const mocks = vi.hoisted(() => ({ timeline: vi.fn(), linkResolved: true }));
 
-vi.mock('@channel/Input', () => ({ ChannelInput: () => null }));
+vi.mock('@channel/Input', () => ({
+  ChannelInput: () => <textarea aria-label="Leave a comment..." />,
+}));
 vi.mock('@channel/Input/message-payload', () => ({}));
 vi.mock('@channel/use-channel-bot-mention-users', () => ({
   useMessageBotMentionUsers: () => [],
@@ -78,7 +80,15 @@ function thread(
 
 const anchor = { type: 'markdown', mark_id: 'mark' } as const;
 
-function discussion(initialPages: MessageListItem[][], targetId?: string) {
+function discussion(
+  initialPages: MessageListItem[][],
+  targetId?: string,
+  options: {
+    canWrite?: boolean;
+    hideComposer?: boolean;
+    hideWhenEmpty?: boolean;
+  } = {}
+) {
   const [pages, setPages] = createSignal(initialPages);
   mocks.timeline.mockReturnValue({
     isSuccess: true,
@@ -91,14 +101,35 @@ function discussion(initialPages: MessageListItem[][], targetId?: string) {
     ...render(() => (
       <DocumentConversation
         parent={{ type: 'document', id: 'document' }}
-        canWrite={false}
+        canWrite={options.canWrite ?? false}
         targetId={targetId}
+        hideComposer={options.hideComposer}
+        hideWhenEmpty={options.hideWhenEmpty}
       />
     )),
   };
 }
 
 describe('DocumentConversation placement', () => {
+  it('leaves the inline composer to a floating placement and hides an empty conversation on request', () => {
+    const view = discussion([[]], undefined, {
+      canWrite: true,
+      hideComposer: true,
+      hideWhenEmpty: true,
+    });
+    expect(view.queryByRole('textbox')).toBeNull();
+    expect(view.queryByRole('button', { name: /Discussion/ })).toBeNull();
+
+    view.setPages([[thread('first discussion', null)]]);
+    expect(view.getByRole('button', { name: /Discussion/ })).toBeTruthy();
+    expect(view.queryByRole('textbox')).toBeNull();
+  });
+
+  it('renders the inline composer for writers by default', () => {
+    const view = discussion([[]], undefined, { canWrite: true });
+    expect(view.getByRole('textbox')).toBeTruthy();
+  });
+
   it('shows nothing from the shared latest page while a link is still resolving', () => {
     mocks.linkResolved = false;
     const view = discussion([[thread('new discussion', null)]], 'reply');
