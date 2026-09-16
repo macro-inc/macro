@@ -81,7 +81,6 @@ export function EmailSidebar() {
         title="Email"
         label="New email"
         onCreate={() => composeEmail()}
-        showCloseButton={false}
       />
 
       <ViewSidebar.Content class="flex flex-col gap-6">

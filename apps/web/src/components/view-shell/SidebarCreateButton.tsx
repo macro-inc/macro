@@ -9,16 +9,13 @@ export function SidebarCreateHeader(props: {
   title: string;
   label: string;
   onCreate: () => void;
-  showCloseButton?: boolean;
 }) {
   return (
     <header class="flex shrink-0 flex-col">
       <Show when={!isTouchDevice()}>
         <ViewSidebar.Header>
           <div class="flex min-w-0 items-center gap-1">
-            <Show when={props.showCloseButton ?? true}>
-              <SplitPanel.CloseButton class="shrink-0" />
-            </Show>
+            <SplitPanel.CloseButton class="shrink-0" />
             <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
           </div>
         </ViewSidebar.Header>

@@ -162,7 +162,6 @@ export function TasksSidebar() {
       <SidebarCreateHeader
         title="Tasks"
         label="New task"
-        showCloseButton={false}
         onCreate={() =>
           layout.popoverSplit({ type: 'component', id: 'task-compose' })
         }
