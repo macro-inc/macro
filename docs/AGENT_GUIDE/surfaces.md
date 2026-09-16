@@ -399,7 +399,14 @@ file details. Empty folders show `This folder is empty` and a `Back to Drive`
 action that returns to the folder overview. Folder search retains matching
 descendants' ancestors and reveals their branches.
 
-`Search Drive` searches the current tab or folder. The **Filter** menu reuses the
+`Search Drive` searches the current tab or folder overview; search within a folder
+is temporarily hidden, including its Cmd+F shortcut. The sidebar's folder-name
+search remains available. Right-click any Drive view, the Drive folder overview,
+or a folder at any depth for **Open in new split**, **Open in current split**, and
+**Open fullscreen** (when multiple splits are open). Folder menus also offer
+Favorite/Unfavorite, Move to folder, Copy Link, and owner-only Rename and Delete.
+Favorites use the same open actions and **Remove from favorites** menu as Tasks.
+The **Filter** menu reuses the
 legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**
 for Default, All files, and Email attachments. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.

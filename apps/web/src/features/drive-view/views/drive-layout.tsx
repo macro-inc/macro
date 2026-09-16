@@ -12,7 +12,10 @@ import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { Button, Dropdown } from '@ui';
 import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import { DriveBreadcrumbsOutlet } from '../components/DriveBreadcrumbs';
-import { DriveNavigation } from '../components/drive-navigation';
+import {
+  type DriveLocationMenu,
+  DriveNavigation,
+} from '../components/drive-navigation';
 import { FolderTree } from '../components/folder-tree';
 import { buildFolderTree, filterFolderTree } from '../core/folder-tree';
 import { driveLocationLabel } from '../core/location-label';
@@ -41,6 +44,7 @@ export function DriveLayout(props: {
   onRootOpen: (open: boolean) => void;
   createMenu: () => JSX.Element;
   favorites: () => JSX.Element;
+  locationMenu: DriveLocationMenu;
   detail?: JSX.Element;
   children: JSX.Element;
 }) {
@@ -60,6 +64,7 @@ export function DriveLayout(props: {
   const SidebarContent = () => (
     <>
       <DriveNavigation
+        locationMenu={props.locationMenu}
         location={props.state.location}
         onNavigate={(tab) => {
           props.onTab(tab);
@@ -113,18 +118,20 @@ export function DriveLayout(props: {
             />
           </Show>
           <ViewSidebar.Nav aria-label="Folders">
-            <ViewSidebar.Item
-              active={selectedFolder() === null}
-              onClick={() => {
-                props.onFolder(null);
-                setNavigationOpen(false);
-              }}
-            >
-              <ViewSidebar.Icon>
-                <FolderIcon class="size-4" />
-              </ViewSidebar.Icon>
-              <span>Drive</span>
-            </ViewSidebar.Item>
+            <props.locationMenu location={{ kind: 'folder', id: null }}>
+              <ViewSidebar.Item
+                active={selectedFolder() === null}
+                onClick={() => {
+                  props.onFolder(null);
+                  setNavigationOpen(false);
+                }}
+              >
+                <ViewSidebar.Icon>
+                  <FolderIcon class="size-4" />
+                </ViewSidebar.Icon>
+                <span>Drive</span>
+              </ViewSidebar.Item>
+            </props.locationMenu>
             <div class="ml-3 border-l border-edge pl-3">
               <Show
                 when={!props.foldersLoading}
@@ -149,6 +156,7 @@ export function DriveLayout(props: {
                   }
                 >
                   <FolderTree
+                    locationMenu={props.locationMenu}
                     nodes={filteredTree()}
                     selectedId={selectedFolder()}
                     expandedIds={props.state.expandedFolderIds}
@@ -245,20 +253,18 @@ export function DriveLayout(props: {
                         </div>
                       </div>
                       <div class="flex min-w-0 items-center justify-between gap-3">
-                        <SearchBar
-                          ref={props.searchRef}
-                          label="Search Drive"
-                          placeholder={
-                            selectedFolder()
-                              ? 'Search this folder'
-                              : 'Search files'
-                          }
-                          value={props.search}
-                          onValueChange={props.onSearch}
-                          hotkey="cmd+f"
-                          class="max-w-md flex-1"
-                        />
-                        <div class="flex shrink-0 items-center gap-2">
+                        <Show when={!selectedFolder()}>
+                          <SearchBar
+                            ref={props.searchRef}
+                            label="Search Drive"
+                            placeholder="Search files"
+                            value={props.search}
+                            onValueChange={props.onSearch}
+                            hotkey="cmd+f"
+                            class="max-w-md flex-1"
+                          />
+                        </Show>
+                        <div class="ml-auto flex shrink-0 items-center gap-2">
                           <Show
                             when={
                               !(

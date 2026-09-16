@@ -17,6 +17,7 @@ import {
   runCreateAction,
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
+import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import type { Query } from '@app/features/next-soup/filters/filter-store';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
@@ -27,14 +28,17 @@ import { FilterSubmenu } from '@app/features/next-soup/soup-view/filters-bar/fil
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { SoupViewList } from '@app/features/next-soup/soup-view/soup-view';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   favoriteBlockName,
   favoriteSplitContent,
   useFavoriteDisplayName,
 } from '@app/util/favorites';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import { SidebarOpenInSplitMenu } from '@components/app/app-sidebar/sidebar';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
 import {
@@ -55,10 +59,11 @@ import { useFavoritesData } from '@queries/favorites/favorites';
 import { useProjectsQuery } from '@queries/storage/projects';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Dropdown, EmptyStatePanel } from '@ui';
-import { createMemo, For, onCleanup, Show, Suspense } from 'solid-js';
+import { batch, createMemo, For, onCleanup, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { DriveLocationBreadcrumbItems } from './components/DriveBreadcrumbs';
 import { DriveDetailView } from './components/DriveDetailView';
+import type { DriveLocationMenu } from './components/drive-navigation';
 import { driveLocationBreadcrumbs } from './core/breadcrumbs';
 import { driveLocationLabel } from './core/location-label';
 import {
@@ -67,6 +72,7 @@ import {
   type DriveState,
   type DriveTab,
 } from './core/types';
+import { DriveFolderActions } from './drive-folder-actions';
 import { createDriveNavigation } from './primitives/drive-navigation';
 import { driveFilterTab, driveQuery } from './queries/drive-query';
 import { createDriveResults } from './queries/drive-results';
@@ -111,14 +117,16 @@ function DriveFavorite(props: {
 }) {
   const name = useFavoriteDisplayName(props.favorite);
   return (
-    <ViewSidebar.Item
-      class="font-normal"
-      title={name()}
-      onClick={(event) => props.onOpen(props.favorite, name(), event)}
-    >
-      <FavoriteIcon favorite={props.favorite} class="size-4 shrink-0" />
-      <span class="truncate">{name()}</span>
-    </ViewSidebar.Item>
+    <FavoriteContextMenu favorite={props.favorite} triggerClass="block">
+      <ViewSidebar.Item
+        class="font-normal"
+        title={name()}
+        onClick={(event) => props.onOpen(props.favorite, name(), event)}
+      >
+        <FavoriteIcon favorite={props.favorite} class="size-4 shrink-0" />
+        <span class="truncate">{name()}</span>
+      </ViewSidebar.Item>
+    </FavoriteContextMenu>
   );
 }
 
@@ -203,7 +211,7 @@ function DriveViewContent(props: DriveViewProps) {
       ? mergeQuery(queryStateFrom(initial.filters), props.initialFilters)
       : initial.filters,
     initialClientFilters: props.initialClientFilters ?? initial.clientFilters,
-    initialSearchText: view.searchText(),
+    initialSearchText: projectId() ? '' : view.searchText(),
     preferInitialFilters: true,
     sortMethod: () => (isRecent() ? 'touched_by_me' : undefined),
     persistFilters: false,
@@ -222,6 +230,7 @@ function DriveViewContent(props: DriveViewProps) {
     enabled: panel.isPanelActive,
     search: {
       description: 'Search Drive',
+      condition: () => !projectId() && !navigationStack.active(),
       run: () => {
         searchInput?.focus();
         searchInput?.select();
@@ -386,6 +395,56 @@ function DriveViewContent(props: DriveViewProps) {
     </ViewSidebar.Nav>
   );
 
+  const LocationMenu: DriveLocationMenu = (menuProps) => {
+    const folder = () => {
+      const location = menuProps.location;
+      return location.kind === 'folder'
+        ? folders().find((folder) => folder.id === location.id)
+        : undefined;
+    };
+    const content = (): SplitContent => ({
+      type: 'component',
+      id: 'documents',
+      state: {
+        'drive.view': {
+          ...state(),
+          location: menuProps.location,
+          scope: 'default',
+        } satisfies DriveState,
+      },
+    });
+    const openFullscreen = () => {
+      const manager = globalSplitManager();
+      if (!manager) return;
+
+      // Keep this Drive instance so the chosen location is applied to its navigation.
+      batch(() => {
+        navigate(menuProps.location);
+        for (const split of manager.splits()) {
+          if (split.id !== panel.handle.id) manager.removeSplit(split.id);
+        }
+        manager.unSpotlightSplit();
+        panel.handle.activate();
+      });
+    };
+
+    return (
+      <SidebarOpenInSplitMenu
+        content={content}
+        triggerClass="block h-auto"
+        onOpenCurrentSplit={() => navigate(menuProps.location)}
+        onOpenFullscreen={openFullscreen}
+        additionalActions={
+          <Show when={folder()}>
+            {(folder) => <DriveFolderActions folder={folder()} />}
+          </Show>
+        }
+      >
+        {menuProps.children}
+      </SidebarOpenInSplitMenu>
+    );
+  };
+
   return (
     <ViewBreadcrumbs.Root
       value={
@@ -418,6 +477,7 @@ function DriveViewContent(props: DriveViewProps) {
     >
       <DriveLocationBreadcrumbItems entries={locationBreadcrumbs()} />
       <DriveLayout
+        locationMenu={LocationMenu}
         state={state()}
         folders={folders()}
         foldersLoading={projects.isPending}
