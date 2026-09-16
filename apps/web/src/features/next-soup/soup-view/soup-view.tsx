@@ -804,8 +804,6 @@ export const SoupView = (props: SoupViewProps) => {
 };
 
 interface SoupViewListProps {
-  /** Return true when the host handles ordinary activation in its own detail view. */
-  onOpenEntity?: (entity: EntityData) => boolean;
   emptyState?: () => JSX.Element;
   timestamp?: (entity: EntityData) => DateValue | null | undefined;
   navigationKey?: string;
@@ -1077,15 +1075,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     }
 
     markReminderSeenOnOpen(entity, notificationSource);
-
-    if (
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.shiftKey &&
-      !event.altKey &&
-      props.onOpenEntity?.(entity)
-    )
-      return;
 
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {
