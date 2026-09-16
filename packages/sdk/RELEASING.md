@@ -33,9 +33,10 @@ npm pack --dry-run --ignore-scripts
 
 The compiled JavaScript and declaration files referenced by `exports` must
 appear in the package listing. `coverage` checks endpoint wrappers, not test
-coverage. SDK CI separately checks generated-code freshness; if it reports
-staleness, run `just update-generated` and review the diff. Run `just check`
-from the repository root before committing.
+coverage. `SDK Check` runs the same package suite on the PR and again on the
+merge to `main`, and additionally checks generated-code freshness on the PR; if
+it reports staleness, run `just update-generated` and review the diff. Run
+`just check` from the repository root before committing.
 
 Forgetting to bump publishes nothing, which is the intended failure mode: open a
 follow-up PR with the bump.
