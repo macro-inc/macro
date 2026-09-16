@@ -66,8 +66,8 @@ export function EntityIcon(props: EntityIconProps) {
   const isChatEntity = () => props.entity.type === 'chat';
   const channelId = () => {
     const entity = props.entity;
-    if (isChannelEntity(entity)) return entity.id;
-    if (isChannelMessageEntity(entity)) return entity.channelId;
+    if (entity.type === 'channel') return entity.id;
+    if (entity.type === 'channel_message') return entity.channelId;
   };
 
   return (
@@ -95,7 +95,7 @@ export function EntityIcon(props: EntityIconProps) {
             class={`size-full ${props.class ?? ''}`}
             fallback={
               <CoreEntityIcon
-                targetType={validIconType()}
+                targetType={iconType()}
                 size="fill"
                 class={props.class}
               />

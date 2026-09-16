@@ -364,6 +364,7 @@ export const storageBacklog = [
   'postActivity',
   'presaveDocumentHandler',
   'saveDocumentHandler',
+  'setChannelPicture',
   'simpleSave',
   'toggleShareWithTeam',
   'unassignInitiativeTask',

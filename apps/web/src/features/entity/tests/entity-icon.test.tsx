@@ -11,12 +11,24 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomeEntityIcon } from '../../inbox-view/components/HomeEntityIcon';
 import { EntityIcon } from '../extractors/entity-icon';
 import type {
+  ChannelEntity,
+  ChannelMessageEntity,
   EmailEntity,
   GithubPullRequestEntity,
   UnknownForeignEntity,
 } from '../types/entity';
 
 const flags = vi.hoisted(() => ({ wideIcons: false }));
+const channelPicture = vi.hoisted(() => ({
+  url: undefined as string | undefined,
+  channelIds: [] as string[],
+}));
+vi.mock('@queries/channel/picture', () => ({
+  useChannelPicture: (channelId: () => string) => {
+    channelPicture.channelIds.push(channelId());
+    return { url: () => channelPicture.url };
+  },
+}));
 vi.mock('@core/constant/featureFlags', () => ({
   get USE_WIDE_ICONS() {
     return flags.wideIcons;
@@ -82,6 +94,53 @@ afterEach(cleanup);
 describe.each([false, true])('Entity.Icon with wide icons %s', (wideIcons) => {
   beforeEach(() => {
     flags.wideIcons = wideIcons;
+    channelPicture.url = undefined;
+    channelPicture.channelIds = [];
+  });
+
+  const channel: ChannelEntity = {
+    type: 'channel',
+    id: 'channel-id',
+    name: 'Channel',
+    ownerId: 'user',
+    channelType: 'private',
+  };
+
+  it('renders a channel picture when available', () => {
+    channelPicture.url = 'https://example.com/channel.png';
+    const { container } = render(() => <EntityIcon entity={channel} />);
+    expect(container.querySelector('img')?.getAttribute('src')).toBe(
+      channelPicture.url
+    );
+    expect(channelPicture.channelIds).toEqual(['channel-id']);
+  });
+
+  it('renders a channel glyph when there is no picture', () => {
+    const { container } = render(() => <EntityIcon entity={channel} />);
+    expect(container.querySelector('img')).toBeNull();
+    expect(container.querySelector('svg')).not.toBeNull();
+  });
+
+  it('loads the parent channel picture for a channel message', () => {
+    const message: ChannelMessageEntity = {
+      ...channel,
+      type: 'channel_message',
+      id: 'message-id',
+      channelId: channel.id,
+      channelName: channel.name,
+      messageId: 'message-id',
+      senderId: 'user',
+      content: 'Message',
+    };
+    render(() => <EntityIcon entity={message} />);
+    expect(channelPicture.channelIds).toEqual(['channel-id']);
+  });
+
+  it('keeps direct messages on their participant avatar', () => {
+    render(() => (
+      <EntityIcon entity={{ ...channel, channelType: 'direct_message' }} />
+    ));
+    expect(channelPicture.channelIds).toEqual([]);
   });
 
   it.each([
