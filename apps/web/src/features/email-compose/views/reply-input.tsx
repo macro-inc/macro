@@ -293,7 +293,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           onSelect: handleAddAttachments,
         }))
       }
-      size="icon-sm"
+      size="icon-composer"
       tooltip="Attach"
     >
       <Paperclip />
@@ -411,8 +411,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           <MarkdownShell
             config={editorConfig}
             class={cn(
-              'ph-no-capture cursor-text wrap-break-word text-ink h-auto overflow-visible',
-              isMobileDrawer() ? 'text-[17px] leading-6' : 'text-sm',
+              'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible',
               // Quoted thread collapses behind the "⋯" pill below
               // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
               // variants turn the underscore in .macro_quote into a space)
@@ -527,49 +526,39 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               />
             )}
           </Show>
-          {/* No fixed height: the send button (size-7.5) is taller than the icon
-              buttons, and a fixed h-9 minus the vertical padding left it 4px short
-              — with items-end it bled upward over the signature bar above. */}
+          {/* Keep the footer intrinsic-height so it cannot overlap the signature. */}
           <div
             ref={bottomBarRef}
-            class="shrink-0 flex flex-row w-full justify-between items-end space-x-2 px-0 pb-0 pt-1.5"
+            class="shrink-0 flex items-center justify-end gap-1 pt-1.5"
           >
-            <div class="flex flex-row items-center gap-1">
-              <div class="relative flex">
-                <AttachButton />
-              </div>
-
-              <Button
-                onclick={deleteDraftAndReset}
-                tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-                size="icon-sm"
-              >
-                <Trash />
-              </Button>
-            </div>
-
-            <div class="flex flex-row items-center gap-1">
-              <Show
-                when={
-                  composeContext.presentation.scheduleEnabled &&
-                  !sendActionHidden()
-                }
-              >
-                <EmailDateSelector
-                  mobile={composeContext.presentation.isMobile()}
-                  sendTime={form.sendTime() ?? null}
-                  onSendTimeChange={handleSendTimeChange}
-                  disabled={scheduleSendDisabled()}
-                  disablePortal={composeContext.presentation.isTouch()}
-                />
-              </Show>
-              <SendButton
-                disabled={sendActionDisabled()}
-                pending={isSending()}
-                hidden={sendActionHidden()}
-                onClick={() => sendEmail()}
+            <Button
+              onClick={deleteDraftAndReset}
+              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
+              size="icon-composer"
+            >
+              <Trash />
+            </Button>
+            <AttachButton />
+            <Show
+              when={
+                composeContext.presentation.scheduleEnabled &&
+                !sendActionHidden()
+              }
+            >
+              <EmailDateSelector
+                mobile={false}
+                sendTime={form.sendTime() ?? null}
+                onSendTimeChange={handleSendTimeChange}
+                disabled={scheduleSendDisabled()}
               />
-            </div>
+            </Show>
+            <SendButton
+              appearance="composer"
+              disabled={sendActionDisabled()}
+              pending={isSending()}
+              hidden={sendActionHidden()}
+              onClick={() => sendEmail()}
+            />
           </div>
         </Show>
       </div>

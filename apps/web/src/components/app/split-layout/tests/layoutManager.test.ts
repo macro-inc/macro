@@ -5,6 +5,7 @@ import {
   withListNavigationSource,
 } from '@app/features/soup/collection/list-navigation-source';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
+import { toast } from '@core/component/Toast/Toast';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -15,6 +16,10 @@ import {
 } from '../layoutManager';
 import { createMobileSwipeLayout } from '../mobile/createMobileSwipeLayout';
 import { previewControllerWidthForContent } from '../previewController';
+
+vi.mock('@core/component/Toast/Toast', () => ({
+  toast: { alert: vi.fn() },
+}));
 
 vi.mock('../componentRegistry', () => ({
   resolveComponent: vi.fn((id: string, params: Record<string, string>) => ({
@@ -48,6 +53,7 @@ beforeAll(() => {
 
 function createMockOrchestrator(): BlockOrchestrator {
   return {
+    isBlockMounted: vi.fn(() => false),
     createBlockInstance: vi.fn((_type, id, _splitId) => ({
       node: { type: 'mock-node', id },
       detach: vi.fn(),
@@ -58,6 +64,35 @@ function createMockOrchestrator(): BlockOrchestrator {
 }
 
 describe('layoutManager', () => {
+  it('rejects opening a previewed block until its mount is released', () => {
+    createRoot((dispose) => {
+      const orchestrator = createMockOrchestrator();
+      const manager = createSplitLayout(orchestrator, [
+        { type: 'component', id: 'inbox' },
+      ]);
+      vi.mocked(orchestrator.isBlockMounted).mockReturnValue(true);
+
+      expect(
+        manager.openWithSplit(
+          { type: 'channel', id: 'preview-channel' },
+          { preferNewSplit: true }
+        )
+      ).toBeUndefined();
+      expect(manager.splits()).toHaveLength(1);
+      expect(orchestrator.createBlockInstance).not.toHaveBeenCalled();
+      expect(toast.alert).toHaveBeenCalledWith('Content already open.');
+
+      vi.mocked(orchestrator.isBlockMounted).mockReturnValue(false);
+      manager.openWithSplit(
+        { type: 'channel', id: 'preview-channel' },
+        { preferNewSplit: true }
+      );
+      expect(manager.splits()).toHaveLength(2);
+      expect(orchestrator.createBlockInstance).toHaveBeenCalledOnce();
+      dispose();
+    });
+  });
+
   describe('swapSplit', () => {
     it('swaps adjacent splits and delegates the panel reorder to Resize', () => {
       createRoot((dispose) => {

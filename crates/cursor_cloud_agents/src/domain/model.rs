@@ -149,12 +149,20 @@ pub struct RunOutcome {
     pub text: Option<String>,
 }
 
-impl RunOutcome {
+impl RunStatus {
     /// Whether the run has ended, in any way. `Unknown` counts as terminal:
     /// a status this crate cannot read is not one worth polling forever on.
     #[must_use]
     pub fn is_terminal(&self) -> bool {
-        !matches!(self.status, RunStatus::Creating | RunStatus::Running)
+        !matches!(self, Self::Creating | Self::Running)
+    }
+}
+
+impl RunOutcome {
+    /// Whether the run has ended, in any way. See [`RunStatus::is_terminal`].
+    #[must_use]
+    pub fn is_terminal(&self) -> bool {
+        self.status.is_terminal()
     }
 }
 

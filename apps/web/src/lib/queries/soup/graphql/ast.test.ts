@@ -370,12 +370,36 @@ describe('makeGraphqlSoupInput', () => {
     ).toThrow('Unsupported GraphQL Soup AST');
   });
 
-  it('throws for REST-only file association literals so callers can fall back', () => {
+  it('translates skill inclusion and markdown skill exclusions without falling back', () => {
+    expect(makeInput({ include: { subType: ['skill'] } })).toMatchObject({
+      initial: {
+        filters: { documentFilter: { literal: { subType: 'SKILL' } } },
+      },
+    });
+    expect(makeInput({ exclude: { subType: ['skill'] } })).toMatchObject({
+      initial: {
+        filters: { documentFilter: { not: { literal: { subType: 'SKILL' } } } },
+      },
+    });
+  });
+
+  it('expands file associations into native-evaluatable GraphQL file types', () => {
+    expect(makeInput({ include: { fileAssoc: ['assoc:pdf'] } })).toMatchObject({
+      initial: {
+        filters: { documentFilter: { literal: { fileType: 'pdf' } } },
+      },
+    });
+    const code = makeInput({ include: { fileAssoc: ['assoc:code'] } });
+    const depth = (value: unknown): number =>
+      value && typeof value === 'object'
+        ? 1 + Math.max(0, ...Object.values(value).map(depth))
+        : 0;
+    expect(depth(code)).toBeLessThan(32);
+    expect(JSON.stringify(code)).toContain('"fileType":"ts"');
+    expect(JSON.stringify(code)).not.toContain('assoc:code');
     expect(() =>
-      makeInput({
-        include: { fileAssoc: ['assoc:pdf'] },
-      })
-    ).toThrow('Unsupported GraphQL Soup AST');
+      makeInput({ include: { fileAssoc: ['assoc:unknown'] } })
+    ).toThrow('unknown file association');
   });
 
   it('throws for REST-only top-level filters instead of silently widening the query', () => {

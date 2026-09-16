@@ -228,8 +228,7 @@ and each `*InTargetCaches` helper applies the change to all three cache families
 
 ## 6. Input wiring
 
-- Component stack: `TaskModeChannelInput` (message face + task composer morph,
-  `Input/TaskModeChannelInput.tsx`) → `ChannelInput` (`Input/ChannelInput.tsx`, lexical
+- Component stack: `ChannelInput` (`Input/ChannelInput.tsx`, lexical
   markdown editor + mentions tracker + attachment tracker + typing tracker + hotkeys) →
   `Input` primitives.
 - **Contract**: `InputSnapshot = { value, mentions, attachments }` (`Input/types.ts:52`);
@@ -299,7 +298,7 @@ messages in a `Scroll` (component/Block.tsx), `AgentInput` with an unwired `onSe
    not the retired Virtua cache or a second pinning loop.
 6. **Entry-state captor** (`splitPanel.handle.registerEntryStateCaptor`) for scroll position +
    composer-adjacent state so split history restore doesn't reset the view.
-7. **Input**: reuse `ChannelInput` (not `TaskModeChannelInput`) or keep `AgentInput` but adopt
+7. **Input**: reuse `ChannelInput` or keep `AgentInput` but adopt
    the `InputSnapshot`/`InputHandle` contract, `persistenceKey` draft persistence
    (`makeInputValuePersistenceKey`-style, keyed by session id), and the send/restore flow.
 8. **WS routing**: nothing new needed — `SyncProvider` already routes `agent_session_log`

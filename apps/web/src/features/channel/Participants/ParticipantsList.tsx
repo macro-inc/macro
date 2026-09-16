@@ -10,7 +10,10 @@ export function ParticipantsList(props: {
   searchQuery: Accessor<string>;
   currentUserId?: string;
   editable: boolean;
-  onParticipantClick: (participantId: string) => void | Promise<void>;
+  onParticipantClick: (
+    participantId: string,
+    event: MouseEvent
+  ) => void | Promise<void>;
   onRemoveParticipant: (participantId: string) => void;
 }) {
   const [listWrapperRef, setListWrapperRef] = createSignal<HTMLDivElement>();
@@ -47,7 +50,9 @@ export function ParticipantsList(props: {
               currentUserId={props.currentUserId}
               editable={props.editable}
               isLast={index() === props.participants().length - 1}
-              onClick={() => props.onParticipantClick(participant.user_id)}
+              onClick={(event) =>
+                props.onParticipantClick(participant.user_id, event)
+              }
               onRemove={() => props.onRemoveParticipant(participant.user_id)}
             />
           )}

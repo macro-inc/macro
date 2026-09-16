@@ -63,14 +63,20 @@ function ChannelsViewRoot() {
           preserveDuringResize: false,
         };
 
-  const sources = useChannelsSources((scope) => {
-    if (isTouchDevice()) return scope !== 'search' && state.mobileTab === scope;
-    if (railSearchOpen()) return scope === 'search';
-    if (scope === 'search') return false;
-    return scope === 'recents'
-      ? state.tab === 'recents'
-      : state.tab === 'browse';
-  });
+  const sources = useChannelsSources(
+    (scope) => {
+      if (isTouchDevice())
+        return scope !== 'search' && state.mobileTab === scope;
+      if (railSearchOpen()) return scope === 'search';
+      if (scope === 'search') return false;
+      if (scope === 'recents') return state.tab === 'recents';
+      return (
+        state.tab === 'browse' &&
+        (railMode() === 'full' || state.slimGroups[scope])
+      );
+    },
+    (group) => state.sortBy[group]
+  );
   const loadedChannels = createMemo(() =>
     deduplicateChannels([
       sources.channels.items(),
@@ -157,14 +163,6 @@ function ChannelsViewRoot() {
                               selectedEntity={channel()}
                               orchestrator={orchestrator}
                               splitPanelContext={panel}
-                              headerLeading={
-                                <Show when={railMode() === 'slim'}>
-                                  <SplitPanel.ControlGroup class="mr-1">
-                                    <SplitPanel.BackButton />
-                                    <SplitPanel.ForwardButton />
-                                  </SplitPanel.ControlGroup>
-                                </Show>
-                              }
                             />
                           </Suspense>
                         )}

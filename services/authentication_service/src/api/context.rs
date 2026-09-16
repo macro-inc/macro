@@ -118,6 +118,8 @@ pub(crate) struct ApiContext {
     pub microsoft_token_cipher: Option<Arc<dyn MicrosoftTokenCipher>>,
     /// Encrypts users' Cursor API keys.
     pub cursor_api_key_cipher: Arc<dyn CursorApiKeyCipher>,
+    /// Owner-bound Codex OAuth lifecycle and cloud target settings.
+    pub codex_connection: Option<Arc<dyn codex_connection::domain::ConnectionService>>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
     pub document_storage_service_client:

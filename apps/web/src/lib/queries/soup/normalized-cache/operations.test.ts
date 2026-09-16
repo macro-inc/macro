@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { withDocumentTabItemScope } from '@app/features/next-soup/soup-view/document-tab-scope';
 import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
 import type { SoupApiItem } from '@service-storage/generated/schemas';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
@@ -1141,6 +1142,111 @@ describe('insertSoupEntity — folder membership gate', () => {
         key
       )!.pages[0];
     expect(page.items.map(getSoupItemId)).toEqual(['d-new', 'd-in']);
+  });
+});
+
+/** Shared's request scope must also gate immediate cache admission, even when
+ * restored/mutable client predicates no longer contain `shared-entity`. */
+describe('insertSoupEntity — Shared Files ownership gate', () => {
+  const ME = 'macro|me@example.com';
+  const OTHER = 'macro|other@example.com';
+  const FOLDER = 'folder-1';
+  const GROUP = 'in_progress';
+
+  function document(
+    id: string,
+    ownerId: string,
+    projectId = FOLDER
+  ): SoupApiItem {
+    const item = mockTaskItem(id, GROUP);
+    if (item.tag !== 'document') throw new Error('expected document fixture');
+    return { ...item, data: { ...item.data, ownerId, projectId } };
+  }
+
+  function seed(viewer: string | undefined) {
+    const existing = document('existing', OTHER);
+    const filter = withDocumentTabItemScope('shared', viewer, (item) =>
+      soupItemMatchesProjectMembership(item, FOLDER)
+    );
+    const legacy = [...soupKeys.items._def, 'shared-admission'];
+    const flat = [
+      ...soupKeys.astItems._def,
+      {},
+      {},
+      undefined,
+      'shared-admission',
+    ];
+    const grouped = [
+      ...soupKeys.astItems._def,
+      {},
+      {},
+      STATUS_GROUP_BY,
+      'shared-admission',
+    ];
+    const expanded = [...soupKeys.groupedGroup._def, 'shared-admission'];
+    for (const key of [legacy, flat, grouped, expanded])
+      testQueryClient.setQueryDefaults(key, {
+        meta: { itemFilter: filter, groupBy: STATUS_GROUP_BY, groupKey: GROUP },
+      });
+    testQueryClient.setQueryData(legacy, mockSoupCache([[existing]]));
+    testQueryClient.setQueryData(flat, {
+      pages: [{ kind: 'flat', items: [existing], nextCursor: null }],
+      pageParams: [null],
+    });
+    testQueryClient.setQueryData(
+      grouped,
+      mockGroupedParentCache([existing], [buildGroup(GROUP, ['existing'])])
+    );
+    testQueryClient.setQueryData(expanded, {
+      pages: [{ items: { existing }, group: buildGroup(GROUP, ['existing']) }],
+      pageParams: [null],
+    });
+    return { legacy, flat, grouped, expanded };
+  }
+
+  function expectIds(keys: ReturnType<typeof seed>, ids: string[]) {
+    expect(
+      testQueryClient
+        .getQueryData<InfiniteData<SoupPage>>(keys.legacy)!
+        .pages[0].items.map(getSoupItemId)
+    ).toEqual(ids);
+    expect(
+      testQueryClient
+        .getQueryData<InfiniteData<SoupAstItemsFlatPage>>(keys.flat)!
+        .pages[0].items.map(getSoupItemId)
+    ).toEqual(ids);
+    const grouped = testQueryClient.getQueryData<
+      InfiniteData<SoupAstItemsGroupedPage>
+    >(keys.grouped)!.pages[0];
+    expect(grouped.groups[0].itemIds).toEqual(ids);
+    expect(Object.keys(grouped.items).sort()).toEqual([...ids].sort());
+    const expanded = testQueryClient.getQueryData<
+      InfiniteData<{ items: Record<string, SoupApiItem>; group: GroupMeta }>
+    >(keys.expanded)!.pages[0];
+    expect(expanded.group.itemIds).toEqual(ids);
+    expect(Object.keys(expanded.items).sort()).toEqual([...ids].sort());
+  }
+
+  it('rejects owned documents in flat, grouped-parent and expanded-group caches', () => {
+    const keys = seed(ME);
+    insertSoupEntity(document('owned-new', ME));
+    expectIds(keys, ['existing']);
+  });
+
+  it('rejects document admission before viewer identity is known', () => {
+    const keys = seed(undefined);
+    insertSoupEntity(document('unverified-new', OTHER));
+    expectIds(keys, ['existing']);
+  });
+
+  it('retains the project gate and allows eligible shared documents with rollback', () => {
+    const keys = seed(ME);
+    insertSoupEntity(document('outside-folder', OTHER, 'other-folder'));
+    expectIds(keys, ['existing']);
+    const tx = insertSoupEntity(document('shared-new', OTHER));
+    expectIds(keys, ['shared-new', 'existing']);
+    tx.rollback();
+    expectIds(keys, ['existing']);
   });
 });
 

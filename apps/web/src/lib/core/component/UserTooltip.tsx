@@ -2,6 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { enableCrm } from '@core/constant/featureFlags';
+import { isBotPrincipalId } from '@core/constant/macroAgent';
 import { useUserId } from '@core/context/user';
 import { useIsConnectedSecondaryInbox } from '@core/user';
 import WideChat from '@icon/wide-chat.svg';
@@ -46,6 +47,12 @@ export function UserTooltip(props: UserTooltipProps) {
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
   const canTreatAsUser = () =>
     !!props.id && !props.isDeleted && !isConnectedSecondaryInbox(props.id);
+  // An agent is mentioned like a person and hovers like one, but there is
+  // nobody on the other end of a direct message to it: an agent answers where
+  // it was mentioned, and a DM channel it never reads would look like a
+  // conversation that is simply being ignored.
+  const canDirectMessage = () =>
+    canTreatAsUser() && !isBotPrincipalId(props.id);
   const { openWithSplit, popoverSplit } = useSplitLayout();
   const crmFlag = useFeatureFlag(enableCrm);
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation({
@@ -148,7 +155,7 @@ export function UserTooltip(props: UserTooltipProps) {
                 </Suspense>
               )}
             </Show>
-            <Show when={canTreatAsUser() && props.id !== currentUserId()}>
+            <Show when={canDirectMessage() && props.id !== currentUserId()}>
               <ActionItem onClick={openDM}>
                 <WideChat class="size-3.5" />
                 DM

@@ -5,33 +5,6 @@ fn slug(name: &str) -> McpServerSlug {
     McpServerSlug::parse(name).expect("a valid app slug")
 }
 
-#[test]
-fn reads_the_repository_out_of_a_configured_url() {
-    for url in [
-        "https://github.com/macro-inc/macro",
-        "https://github.com/macro-inc/macro/",
-        "https://github.com/macro-inc/macro.git",
-    ] {
-        let repo = repo_slug(url).expect(url);
-        assert_eq!(repo.to_string(), "macro-inc/macro", "for {url}");
-    }
-}
-
-#[test]
-fn refuses_a_url_that_does_not_name_a_repository() {
-    for url in [
-        "",
-        "not a url",
-        "https://github.com",
-        "https://github.com/macro-inc",
-        "https://gitlab.com/macro-inc/macro",
-        "https://github.com.evil.example/macro-inc/macro",
-        "https://github.com/macro-inc/macro/tree/main",
-    ] {
-        assert!(repo_slug(url).is_err(), "accepted {url}");
-    }
-}
-
 struct FixedConnections(Vec<pipedream_mcp::domain::models::PipedreamConnection>);
 
 impl ConnectionStore for FixedConnections {
@@ -97,7 +70,6 @@ async fn lists_enabled_app_slugs_verbatim() {
         .provision(
             AgentSessionId::new(),
             &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            "https://github.com/macro-inc/macro",
             &AgentMcpServers::OwnerConnections,
         )
         .await
@@ -169,7 +141,6 @@ async fn a_selected_list_is_advertised_regardless_of_connections() {
         .provision(
             AgentSessionId::new(),
             &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            "https://github.com/macro-inc/macro",
             &selected(&["notion", "linear", "Not A Slug!"]),
         )
         .await
@@ -212,7 +183,6 @@ async fn an_empty_selection_offers_nothing_of_the_owners() {
         .provision(
             AgentSessionId::new(),
             &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            "https://github.com/macro-inc/macro",
             &selected(&[]),
         )
         .await

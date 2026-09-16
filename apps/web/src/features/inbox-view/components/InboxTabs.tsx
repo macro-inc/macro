@@ -40,7 +40,7 @@ export function InboxTabs() {
       fallback={
         <div class="flex h-8 min-w-0 flex-1 items-center gap-3">
           <Tabs
-            aria-label="Notification views"
+            aria-label="Home views"
             list={INBOX_TABS}
             value={state.tab}
             onChange={handleTabChange}

@@ -11,6 +11,7 @@ import {
 import { buildEntityData } from '@entity';
 import { EmailDebouncedReadMarker } from '@notifications';
 import { useThreadQuery } from '@queries/email/thread';
+import { representativeThreadMessage } from '@queries/email/thread-subject';
 import { createMemo, Show, Suspense } from 'solid-js';
 import { EmailBlockAdapter } from '../EmailBlockAdapter';
 
@@ -33,14 +34,16 @@ export default function BlockEmail() {
     if (!thread) return undefined;
     return buildEntityData({
       id: thread.db_id,
-      name: displaySubject(thread.messages[0]?.subject),
+      name: displaySubject(
+        representativeThreadMessage(thread.messages)?.subject
+      ),
       blockName: 'email',
       isRead: thread.is_read,
       done: !thread.inbox_visible,
     });
   });
 
-  useBlockEntityCommands(commandEntity);
+  useBlockEntityCommands({ resolveEntity: commandEntity });
 
   // The gate owns the load policy: structural errors are authoritative even
   // over cached data, a transport failure over cached data still renders the
@@ -66,7 +69,9 @@ export default function BlockEmail() {
   const title = () => {
     const data = threadData();
     if (!data || !data.thread || data.thread.messages.length === 0) return '';
-    return displaySubject(data.thread.messages[0].subject);
+    return displaySubject(
+      representativeThreadMessage(data.thread.messages)?.subject
+    );
   };
 
   return (

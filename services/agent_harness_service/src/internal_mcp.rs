@@ -81,6 +81,9 @@ impl ServerHandler for InternalTools {
             env!("CARGO_PKG_VERSION"),
         )
         .with_title("Macro Internal MCP");
+        info.instructions = Some(
+            "When you create or start working on a pull request, register its URL with Macro using macro_internal.set_pull_request.".into(),
+        );
         info
     }
 

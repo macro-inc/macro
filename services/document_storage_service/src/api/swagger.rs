@@ -81,6 +81,11 @@ use favorites::inbound::axum_router::{
     AddFavoriteRequest, FavoriteEntityRef, ReorderFavoritesRequest,
 };
 use foreign_entity::domain::models::ForeignEntity;
+use initiative::domain::models::{
+    AssignTaskStatus, AssignTasksRequest, AssignTasksResponse, AssignTasksResult,
+    CreateInitiativeRequest, InitiativeDetail, InitiativeId, InitiativeList, InitiativeSummary,
+    UpdateInitiativeRequest,
+};
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -341,6 +346,14 @@ use utoipa::OpenApi;
         reminders::inbound::axum_router::get_reminder_handler,
         reminders::inbound::axum_router::update_reminder_handler,
         reminders::inbound::axum_router::delete_reminder_handler,
+        // initiatives
+        initiative::inbound::axum_router::list::list_initiatives_handler,
+        initiative::inbound::axum_router::create::create_initiative_handler,
+        initiative::inbound::axum_router::get::get_initiative_handler,
+        initiative::inbound::axum_router::update::update_initiative_handler,
+        initiative::inbound::axum_router::delete::delete_initiative_handler,
+        initiative::inbound::axum_router::assign_tasks::assign_initiative_tasks_handler,
+        initiative::inbound::axum_router::unassign_task::unassign_initiative_task_handler,
         // collab surfaces
         collab_surface::inbound::axum_router::ensure_surface_handler,
         collab_surface::inbound::axum_router::get_surface_handler,
@@ -498,6 +511,16 @@ use utoipa::OpenApi;
             ReminderSchedule,
             CreateReminderRequest,
             UpdateReminderRequest,
+            InitiativeId,
+            InitiativeSummary,
+            InitiativeDetail,
+            InitiativeList,
+            CreateInitiativeRequest,
+            UpdateInitiativeRequest,
+            AssignTasksRequest,
+            AssignTasksResult,
+            AssignTasksResponse,
+            AssignTaskStatus,
             CollabSurfaceResponse,
             CollabSurfaceTokenResponse,
             EnsureCollabSurfaceRequest,

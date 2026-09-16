@@ -21,7 +21,7 @@ const nil = id(0);
 const previewFields =
   'id subject snippet isDraft senderEmail senderName senderPhotoUrl';
 const previews = `mailAllPreview { ${previewFields} } mailDraftPreview { ${previewFields} } mailSentPreview { ${previewFields} }`;
-const query = `query MailSeed { user { id emailLinks { id } soup(input:{initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection ... on GraphqlSoupEmailThread { name linkId ownerId isRead inboxVisible isSignal latestInboundMessageTs ${previews} updatedAt } } } } }`;
+const query = `query MailSeed { user { id emailLinks { id } soup(input:{initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection ... on GraphqlSoupEmailThread { name linkId ownerId isRead inboxVisible isSignal latestInboundMessageTs ${previews} updatedAt properties { id } } } } } }`;
 const fragment = `fragment MailRow on GraphqlSoupEmailThread { __typename id emailName:name isRead inboxVisible ${previews} }`;
 const preview = (n: number, subject: string, isDraft: boolean) => ({
   id: id(n),
@@ -136,6 +136,7 @@ await host.writeQuery({
             ownerId:
               n <= 50 ? 'offline-mail-viewer' : 'macro|other@example.com',
             cacheProjection: mailProjectionCapsules[index],
+            properties: [],
             mailAllPreview:
               n === 7 ? null : preview(n + 10000, `Email ${n}`, false),
             mailDraftPreview:

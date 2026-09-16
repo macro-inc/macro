@@ -1,5 +1,3 @@
-import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
-import { mdStore } from '@block-md/signal/markdownBlockData';
 import {
   DO_REPLACE_COMMAND,
   DO_REPLACE_ONCE_COMMAND,
@@ -7,8 +5,6 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { useCanEdit } from '@core/signal/permissions';
 import ReplaceAll from '@phosphor/arrow-bend-double-up-right.svg';
 import Replace from '@phosphor/arrow-bend-up-right.svg';
 import CaretDown from '@phosphor/caret-down.svg';
@@ -20,18 +16,22 @@ import { createCallback } from '@solid-primitives/rootless';
 import { cn, Panel, Tooltip } from '@ui';
 import type { JSX } from 'solid-js';
 import { createEffect, createSignal, on, onCleanup, Show } from 'solid-js';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 
-export function FindAndReplace() {
-  const mdData = mdStore.get;
-  const canEdit = useCanEdit();
+export function FindAndReplace(props: { hotkeyScope?: string } = {}) {
+  const { permissions, state } = useMarkdownDocument();
+  const canEdit = permissions.canEdit;
+  const {
+    md: mdData,
+    findAndReplace: findAndReplaceStore,
+    setFindAndReplace: setFindAndReplaceStore,
+  } = state.editor;
   const editor = () => mdData.editor;
-  const scopeId = blockHotkeyScopeSignal.get;
+  const scopeId = () => props.hotkeyScope;
 
   let inputRef: HTMLInputElement | undefined;
   let inputReplaceRef: HTMLInputElement | undefined;
   let performSearchTimeout: ReturnType<typeof setTimeout>;
-
-  const [findAndReplaceStore, setFindAndReplaceStore] = FindAndReplaceStore;
 
   const closeSearch = () => {
     setFindAndReplaceStore('searchIsOpen', false);
@@ -260,11 +260,12 @@ export function FindAndReplace() {
     });
 
   createEffect(() => {
-    if (!scopeId()) return;
+    const currentScopeId = scopeId();
+    if (!currentScopeId) return;
 
     const registration = registerHotkey({
       hotkey: 'cmd+f',
-      scopeId: scopeId(),
+      scopeId: currentScopeId,
       hotkeyToken: TOKENS.md.find,
       description: 'Find in Document',
       runWithInputFocused: true,

@@ -23,18 +23,10 @@ import {
   type VoidComponent,
 } from 'solid-js';
 import { reconcile } from 'solid-js/store';
+import { useMarkdownDocument } from '../context/markdown-document-context';
+import { useMarkdownCommentsQuery } from '../queries/markdown-comments';
 import { useDeleteComment, useDeleteNewComments } from './commentOperations';
-import {
-  activeCommentThreadSignal,
-  activeMarkIdsSignal,
-  commentMarksInitializedSignal,
-  commentsStore,
-  highlightedCommentIdSignal,
-  highlightedCommentThreadsSignal,
-  markStore,
-  threadStore,
-} from './commentStore';
-import { commentThreadsResource, sortComments } from './commentsResource';
+import { sortComments, useCommentRealtime } from './commentsResource';
 import type { Mark, ThreadMetadata, ThreadStore } from './commentType';
 
 const DISCUSSION_MARK_PREFIX = 'DISCUSSION:';
@@ -90,17 +82,16 @@ export const CommentsProvider: VoidComponent<{
     return null;
   }
   const { plugins, editor } = wrapper;
+  const { documentId, state } = useMarkdownDocument();
+  const { comments: commentState, setCommentState } = state;
 
   const currentPeerId = () => props.loroManager.peerIdStr;
 
-  const [marks, setMarks] = markStore;
-  const [commentThreadsData] = commentThreadsResource;
-  const [, setCommentsInitialized] = commentMarksInitializedSignal;
-  const [highlightedId, setHighlightedId] = highlightedCommentIdSignal;
-  const setActiveMarkIds = activeMarkIdsSignal.set;
+  const commentThreadsQuery = useMarkdownCommentsQuery(documentId);
+  useCommentRealtime();
 
   /** Communicates comment ready to block. */
-  const initComments = () => setCommentsInitialized(true);
+  const initComments = () => setCommentState('commentMarksInitialized', true);
 
   const addCommentMark = (
     markId: string,
@@ -111,10 +102,10 @@ export const CommentsProvider: VoidComponent<{
     isLocal: boolean
   ) => {
     const markNodeKey = markNode.getKey();
-    const existing = marks[markId];
+    const existing = commentState.marks[markId];
 
     if (!isDraft && existing) {
-      setMarks(markId, 'markNodes', markNodeKey, markElement);
+      setCommentState('marks', markId, 'markNodes', markNodeKey, markElement);
       return;
     }
 
@@ -122,7 +113,7 @@ export const CommentsProvider: VoidComponent<{
       return;
     }
 
-    setMarks(markId, {
+    setCommentState('marks', markId, {
       id: markId,
       existsOnServer: hasServerThread,
       isDraft,
@@ -136,12 +127,12 @@ export const CommentsProvider: VoidComponent<{
   const deleteNewComments = useDeleteNewComments();
 
   const removeCommentMark = (markId: string, markNodeKey: string) => {
-    const existing = marks[markId];
+    const existing = commentState.marks[markId];
 
     if (!existing) return;
     if (existing) {
       if (Object.keys(existing.markNodes).length <= 1) {
-        setMarks(markId, undefined);
+        setCommentState('marks', markId, undefined);
         const rootId = existing.thread?.rootId;
         if (!rootId) {
           return;
@@ -149,24 +140,24 @@ export const CommentsProvider: VoidComponent<{
         deleteComment({ commentId: rootId });
         return;
       }
-      setMarks(markId, 'markNodes', markNodeKey, undefined);
+      setCommentState('marks', markId, 'markNodes', markNodeKey, undefined);
       return;
     }
   };
 
   // Remove the temporary draft comment when the active thread is cleared
   createEffect(() => {
-    const activeThreadId = activeCommentThreadSignal();
+    const activeThreadId = commentState.activeCommentThread;
     if (!activeThreadId) {
       deleteNewComments(false);
       return;
     }
 
-    const thread = threadStore.get[activeThreadId];
+    const thread = commentState.threads[activeThreadId];
     if (!thread) return;
 
     const markId = thread.anchorId;
-    const existingMarkIds = untrack(activeMarkIdsSignal);
+    const existingMarkIds = untrack(() => commentState.activeMarkIds);
     if (
       existingMarkIds.length > 0 &&
       existingMarkIds.every((id) => id === markId)
@@ -179,19 +170,19 @@ export const CommentsProvider: VoidComponent<{
 
   // Sync active mark selections to thread signals
   createEffect(() => {
-    const activeMarkIds = activeMarkIdsSignal();
-    if (activeMarkIds.length === 0) {
-      activeCommentThreadSignal.set(null);
-      highlightedCommentThreadsSignal.set([]);
+    const activeIds = commentState.activeMarkIds;
+    if (activeIds.length === 0) {
+      setCommentState('activeCommentThread', null);
+      setCommentState('highlightedCommentThreads', []);
       return;
     }
 
     const threadIds: number[] = [];
-    for (const id of activeMarkIds) {
-      const mark = marks[id];
+    for (const id of activeIds) {
+      const mark = commentState.marks[id];
       if (!mark) continue;
       if (mark.thread == null) {
-        activeCommentThreadSignal.set(-1);
+        setCommentState('activeCommentThread', -1);
         return;
       } else {
         threadIds.push(mark.thread.threadId);
@@ -202,10 +193,10 @@ export const CommentsProvider: VoidComponent<{
     // "Show comment") active while the caret still sits in its mark — this
     // effect re-runs on every editor update, and clobbering it would snap
     // the comment drawer shut right after it opens.
-    activeCommentThreadSignal.set((current) =>
+    setCommentState('activeCommentThread', (current) =>
       current != null && threadIds.includes(current) ? current : null
     );
-    highlightedCommentThreadsSignal.set(threadIds);
+    setCommentState('highlightedCommentThreads', threadIds);
   });
 
   // Compute visible comment threads from marks
@@ -213,7 +204,7 @@ export const CommentsProvider: VoidComponent<{
   const highlightComments = createMemo(() => {
     const currentUserId = userId();
     const out: (Root | Reply)[] = [];
-    for (const mark of Object.values(marks ?? {})) {
+    for (const mark of Object.values(commentState.marks)) {
       if (!mark) continue;
 
       if (!mark.existsOnServer) {
@@ -247,10 +238,7 @@ export const CommentsProvider: VoidComponent<{
 
   // Sync highlight comments to commentsStore and threadStore
   createEffect(() => {
-    const setComments = commentsStore.set;
-    const setThreads = threadStore.set;
-
-    setComments(reconcile({}));
+    setCommentState('comments', reconcile({}));
 
     const combinedComments = highlightComments() ?? [];
     const serverThreads: ThreadStore = {};
@@ -259,18 +247,21 @@ export const CommentsProvider: VoidComponent<{
       if (isRoot(comment)) {
         serverThreads[comment.threadId] = comment;
       }
-      setComments(comment.id, comment);
+      setCommentState('comments', comment.id, comment);
     }
 
-    setThreads(reconcile(serverThreads, { merge: true, key: 'id' }));
+    setCommentState(
+      'threads',
+      reconcile(serverThreads, { merge: true, key: 'id' })
+    );
   });
 
   // Map server comment threads to mark metadata once marks are initialized
   createEffect(() => {
-    if (!commentMarksInitializedSignal()) return;
-    if (commentThreadsData.loading || commentThreadsData.error) return;
+    if (!commentState.commentMarksInitialized) return;
+    if (!commentThreadsQuery.isSuccess) return;
 
-    const commentThreads = commentThreadsData() ?? [];
+    const commentThreads = commentThreadsQuery.data ?? [];
     const validAnchorIds = new Set<string>();
 
     const mappedAnchors = commentThreads.map((commentThread) => {
@@ -286,9 +277,9 @@ export const CommentsProvider: VoidComponent<{
       }
       validAnchorIds.add(anchorId);
 
-      const sortedComments = commentThread.comments.sort(sortComments);
+      const sortedComments = [...commentThread.comments].sort(sortComments);
       const rootComment = sortedComments[0];
-      const markNodes = marks[anchorId]?.markNodes;
+      const markNodes = commentState.marks[anchorId]?.markNodes;
       if (!markNodes) return undefined;
 
       const highlight: Mark = {
@@ -311,7 +302,7 @@ export const CommentsProvider: VoidComponent<{
 
     for (const anchor of mappedAnchors) {
       if (!anchor) continue;
-      setMarks(anchor.id, anchor);
+      setCommentState('marks', anchor.id, anchor);
     }
 
     editor.dispatchCommand(
@@ -336,11 +327,12 @@ export const CommentsProvider: VoidComponent<{
     const rawId = pendingTargetCommentId;
     if (!rawId) return;
 
-    if (!commentMarksInitializedSignal()) return;
+    if (!commentState.commentMarksInitialized) return;
+    if (!commentThreadsQuery.isSuccess) return;
     const commentId = Number(rawId);
     if (isNaN(commentId)) return;
 
-    const commentThreads = commentThreadsData() ?? [];
+    const commentThreads = commentThreadsQuery.data ?? [];
     const targetThread = commentThreads.find((thread) =>
       thread.comments.some((comment) => comment.commentId === commentId)
     );
@@ -348,21 +340,21 @@ export const CommentsProvider: VoidComponent<{
       | ThreadMetadata
       | undefined;
     if (targetMetadata?.markId?.startsWith(DISCUSSION_MARK_PREFIX)) {
-      activeCommentThreadSignal.set(null);
-      highlightedCommentIdSignal.set(null);
+      setCommentState('activeCommentThread', null);
+      setCommentState('highlightedCommentId', null);
       pendingTargetCommentId = undefined;
       return;
     }
 
-    const comment = commentsStore.get[commentId];
+    const comment = commentState.comments[commentId];
     if (!comment) return;
-    highlightedCommentIdSignal.set(commentId);
-    const mark = marks[comment.anchorId];
+    setCommentState('highlightedCommentId', commentId);
+    const mark = commentState.marks[comment.anchorId];
     if (mark) {
       const firstEl = Object.values(mark.markNodes)[0];
       firstEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
-    activeCommentThreadSignal.set(comment.threadId);
+    setCommentState('activeCommentThread', comment.threadId);
     pendingTargetCommentId = undefined;
   });
 
@@ -370,8 +362,8 @@ export const CommentsProvider: VoidComponent<{
     editor.registerCommand(
       SELECTION_CHANGE_COMMAND,
       () => {
-        if (highlightedId() === null) return false;
-        setHighlightedId(null);
+        if (commentState.highlightedCommentId === null) return false;
+        setCommentState('highlightedCommentId', null);
         return false;
       },
       COMMAND_PRIORITY_LOW
@@ -383,7 +375,7 @@ export const CommentsProvider: VoidComponent<{
       ops: {
         add: addCommentMark,
         remove: removeCommentMark,
-        setActiveIds: setActiveMarkIds,
+        setActiveIds: (markIds) => setCommentState('activeMarkIds', markIds),
         init: initComments,
       },
       peerId: currentPeerId,

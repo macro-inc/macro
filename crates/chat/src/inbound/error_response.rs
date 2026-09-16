@@ -2,6 +2,9 @@
 //!
 //! Lives in inbound so the domain error type stays transport-free.
 
+#[cfg(test)]
+mod test;
+
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use entity_access::domain::models::AccessError;
@@ -13,6 +16,7 @@ impl IntoResponse for ChatErr {
         let (status, msg) = match &self {
             ChatErr::NotFound => (StatusCode::NOT_FOUND, "Not found"),
             ChatErr::BadRequest(_) => (StatusCode::BAD_REQUEST, "Bad request"),
+            ChatErr::Conflict(_) => (StatusCode::CONFLICT, "Conflict"),
             ChatErr::Access(
                 AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_),
             ) => (StatusCode::FORBIDDEN, "Forbidden"),

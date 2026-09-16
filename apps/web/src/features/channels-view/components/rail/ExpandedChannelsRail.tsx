@@ -8,12 +8,22 @@ import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
-import type { ChannelEntity } from '@entity';
+import { type ChannelEntity, Entity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
+import FunnelIcon from '@phosphor/funnel-simple.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import XIcon from '@phosphor/x.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { Button, cn, EmptyStatePanel, Hotkey, Tabs } from '@ui';
+import {
+  Button,
+  cn,
+  Dropdown,
+  EmptyStatePanel,
+  Hotkey,
+  Tabs,
+  Tooltip,
+} from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -23,8 +33,8 @@ import {
   Switch,
 } from 'solid-js';
 import { Virtualizer } from 'virtua/solid';
-import type { ChannelsGroup } from '../../types';
-import { channelMentionsUser, isDirectMessage } from '../../utils';
+import type { ChannelListSort, ChannelsGroup } from '../../types';
+import { channelMentionsUser, formatDetailedTimestamp } from '../../utils';
 import { ChannelsEmptyState } from '../ChannelsEmptyState';
 import {
   ChannelAvatar,
@@ -40,7 +50,6 @@ import {
   domIdForRow,
   rowKeyForChannel,
   rowKeyForFavorite,
-  rowKeyForSection,
   useChannelsRail,
 } from './ChannelsRailContext';
 import {
@@ -103,6 +112,55 @@ const GROUPS: GroupConfig[] = [
   },
 ];
 
+const CHANNEL_SORT_OPTIONS: {
+  value: ChannelListSort;
+  label: string;
+}[] = [
+  { value: 'viewed_at', label: 'Last viewed' },
+  { value: 'updated_at', label: 'Last updated' },
+  { value: 'created_at', label: 'Date created' },
+];
+
+function ChannelSortDropdown(props: { group: ChannelsGroup; label: string }) {
+  const rail = useChannelsRail();
+  const setSort = (value: string) => {
+    const option = CHANNEL_SORT_OPTIONS.find((item) => item.value === value);
+    if (option) rail.setSortBy(props.group, option.value);
+  };
+
+  return (
+    <Dropdown placement="bottom-end">
+      <Dropdown.Trigger
+        variant="ghost"
+        size="icon-sm"
+        class="size-7 rounded-lg"
+        label={`Sort ${props.label.toLowerCase()}`}
+      >
+        <FunnelIcon class="size-3.5" />
+      </Dropdown.Trigger>
+      <Dropdown.Content class="min-w-40">
+        <Dropdown.Group>
+          <Dropdown.RadioGroup
+            value={rail.sortBy(props.group)}
+            onChange={setSort}
+          >
+            <For each={CHANNEL_SORT_OPTIONS}>
+              {(option) => (
+                <Dropdown.RadioItem closeOnSelect value={option.value}>
+                  <span class="flex-1">{option.label}</span>
+                  <Dropdown.ItemIndicator>
+                    <CheckIcon class="size-3.5 text-accent" />
+                  </Dropdown.ItemIndicator>
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
+
 function FavoriteOption(props: { favorite: Favorite }) {
   const rail = useChannelsRail();
   const displayName = useFavoriteDisplayName(props.favorite);
@@ -128,10 +186,12 @@ function FavoriteOption(props: { favorite: Favorite }) {
           'hover:bg-hover hover:text-ink'
       )}
       aria-current={item().selected ? 'page' : undefined}
-      onClick={() => rail.activateRow(rowKeyForFavorite(props.favorite))}
+      onClick={(event) =>
+        rail.activateRow(rowKeyForFavorite(props.favorite), event)
+      }
     >
       <span class="flex size-6 shrink-0 items-center justify-center">
-        <FavoriteIcon favorite={props.favorite} class="size-4" />
+        <FavoriteIcon favorite={props.favorite} avatarSize="md" />
       </span>
       <span class="min-w-0 flex-1 truncate text-sm font-medium">
         {displayName()}
@@ -143,6 +203,8 @@ function FavoriteOption(props: { favorite: Favorite }) {
 function ChannelOption(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
   const item = useChannelRailItemState(() => props.channel.id);
+  const timestamp = () =>
+    props.channel.latestRootMessage?.createdAt ?? props.channel.updatedAt;
 
   return (
     <ChannelRailItemContextMenu channel={props.channel} class="block w-full">
@@ -151,8 +213,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         role="treeitem"
         tabIndex={-1}
         class={cn(
-          'relative flex w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none',
-          isDirectMessage(props.channel) ? 'min-h-10 py-2' : 'h-8',
+          'group/channel-option relative flex h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none',
           item().selected && !isTouchDevice() && 'bg-active text-ink',
           (!item().selected || isTouchDevice()) && 'text-ink-muted',
           !item().selected &&
@@ -167,27 +228,56 @@ function ChannelOption(props: { channel: ChannelEntity }) {
         aria-current={item().selected ? 'page' : undefined}
         onMouseDown={(event) => {
           if (!isPrimaryMouseDown(event)) return;
-          rail.activateRow(rowKeyForChannel(props.channel.id));
+          rail.activateRow(rowKeyForChannel(props.channel.id), event);
         }}
       >
         <ChannelAvatar channel={props.channel} />
         <span class="min-w-0 flex-1 truncate text-sm font-medium">
           {props.channel.name}
         </span>
-        <ChannelMutedIndicator muted={item().muted} />
-        <ChannelCallIndicator
-          status={item().incomingCallId ? undefined : item().callStatus}
-        />
+        <span class="flex shrink-0 items-center gap-2">
+          <ChannelMutedIndicator muted={item().muted} />
+          <ChannelCallIndicator
+            status={item().incomingCallId ? undefined : item().callStatus}
+          />
+          <Show when={item().unread}>
+            <span
+              aria-label="Unread"
+              class="size-2 shrink-0 rounded-full bg-accent"
+            />
+          </Show>
+          <Show when={!item().incomingCallId && timestamp()}>
+            {(value) => (
+              <span class="relative hidden shrink-0 group-hover/channel-option:block touch:hidden">
+                <span
+                  aria-hidden="true"
+                  class="invisible whitespace-nowrap text-xs font-light"
+                >
+                  <Entity.Timestamp
+                    entity={props.channel}
+                    overrideTimeStamp={value()}
+                  />
+                </span>
+                <Tooltip
+                  label={formatDetailedTimestamp(value())}
+                  placement="top"
+                  class="absolute inset-0 flex items-center"
+                >
+                  <span class="whitespace-nowrap text-xs font-light text-ink-extra-muted">
+                    <Entity.Timestamp
+                      entity={props.channel}
+                      overrideTimeStamp={value()}
+                    />
+                  </span>
+                </Tooltip>
+              </span>
+            )}
+          </Show>
+        </span>
         <IncomingCallActions
           callId={item().incomingCallId}
           channelId={props.channel.id}
         />
-        <Show when={item().unread}>
-          <span
-            aria-label="Unread"
-            class="size-2 shrink-0 rounded-full bg-accent"
-          />
-        </Show>
       </div>
     </ChannelRailItemContextMenu>
   );
@@ -210,17 +300,22 @@ function ExpandedFavoritesSection() {
             type="button"
             role="treeitem"
             tabIndex={-1}
-            class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none"
+            class="relative flex h-full min-w-0 flex-1 items-center gap-1 rounded-xl px-2 text-left outline-none"
             aria-expanded={section().open}
-            onClick={() => rail.activateRow(rowKeyForSection('favorites'))}
+            onMouseDown={(event) => {
+              if (!isPrimaryMouseDown(event)) return;
+              event.preventDefault();
+              rail.toggleGroup('favorites');
+            }}
           >
+            <span class="min-w-0 truncate">Favorites</span>
             <CaretDownIcon
               class={cn(
-                'size-3 shrink-0 transition-transform',
-                !section().open && '-rotate-90'
+                'size-2.5 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
+                section().focused && 'opacity-100',
+                !section().open && '-rotate-90 opacity-100'
               )}
             />
-            <span class="min-w-0 truncate">Favorites</span>
           </button>
         </CollapsibleSection.Header>
         <CollapsibleSection.Content
@@ -253,8 +348,6 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           <ViewSidebar.Title>Chat</ViewSidebar.Title>
         </div>
         <SplitPanel.ControlGroup>
-          <SplitPanel.BackButton />
-          <SplitPanel.ForwardButton />
           <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
         </SplitPanel.ControlGroup>
       </ViewSidebar.Header>
@@ -415,34 +508,40 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
       <CollapsibleSection.Header
         focused={section().focused}
         focusWithin={section().containsFocus}
-        class="h-9 has-[[data-section-action]:hover]:bg-transparent has-[[data-section-action]:focus-within]:bg-transparent"
+        class="h-9"
       >
         <button
           id={section().domId}
           type="button"
           role="treeitem"
           tabIndex={-1}
-          class="relative flex h-full min-w-0 flex-1 items-center gap-2 rounded-xl px-2 text-left outline-none"
+          class="relative flex h-full min-w-0 flex-1 items-center gap-1 rounded-xl px-2 text-left outline-none"
           aria-expanded={section().open}
           onMouseDown={(event) => {
             if (!isPrimaryMouseDown(event)) return;
-            rail.activateRow(rowKeyForSection(props.config.group));
+            event.preventDefault();
+            rail.toggleGroup(props.config.group);
           }}
         >
+          <span class="min-w-0 truncate">{props.config.label}</span>
           <CaretDownIcon
             class={cn(
-              'size-3 shrink-0 transition-transform',
-              !section().open && '-rotate-90'
+              'size-2.5 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
+              section().focused && 'opacity-100',
+              !section().open && '-rotate-90 opacity-100'
             )}
           />
-          <span class="min-w-0 truncate">{props.config.label}</span>
           <Show when={section().unreadCount > 0}>
             <span class="flex h-4 min-w-4 items-center justify-center rounded-full bg-accent px-1 text-xs font-medium leading-none tabular-nums text-accent-contrast">
               {section().unreadCount}
             </span>
           </Show>
         </button>
-        <div data-section-action="" class="pr-1">
+        <div data-section-action="" class="flex items-center gap-0.5 pr-1">
+          <ChannelSortDropdown
+            group={props.config.group}
+            label={props.config.label}
+          />
           <CreateRailAction
             label={props.config.createLabel}
             onClick={props.config.onCreate}
@@ -472,7 +571,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
               ref={pagination.registerVirtualizer}
               data={section().items}
               scrollRef={scrollRoot()}
-              itemSize={props.config.group === 'channels' ? 34 : 42}
+              itemSize={34}
               bufferSize={240}
               keepMounted={section().keepMounted}
               onScroll={pagination.loadMoreNearEnd}
@@ -526,7 +625,7 @@ function ExpandedBrowse() {
         <ChannelsEmptyState scope="channels" topAligned />
       </Match>
       <Match when={true}>
-        <div class="flex h-full min-h-0 flex-col gap-3 px-4">
+        <div class="flex h-full min-h-0 flex-col gap-2 px-4">
           <ExpandedFavoritesSection />
           <For each={GROUPS}>
             {(config) => <ExpandedGroupSection config={config} />}
@@ -559,7 +658,9 @@ function RecentConversationCard(props: { channel: ChannelEntity }) {
         incomingCallId={item().incomingCallId}
         selected={item().selected}
         focused={item().focused}
-        onActivate={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
+        onActivate={(event) =>
+          rail.activateRow(rowKeyForChannel(props.channel.id), event)
+        }
       />
     </ChannelRailItemContextMenu>
   );

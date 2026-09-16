@@ -8,14 +8,14 @@
  */
 
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
-import { Button, ComposerSurface, cn, SendButton } from '@ui';
+import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 
 /**
@@ -183,20 +183,14 @@ export function AgentInput(props: AgentInputProps) {
             the whole width and the controls drop to a footer row (model
             left, send right) — the chat-tall / channel footer shape. */}
         <div
-          class="flex items-end gap-1 px-2 py-1.5 touch:flex-col touch:items-stretch touch:gap-0 touch:p-0"
+          class="flex items-end gap-[3.75px] p-[7.5px] min-h-[48.75px] touch:min-h-0 touch:flex-col touch:items-stretch touch:gap-0 touch:p-0"
           onPointerDown={focusEditor}
           onMouseDown={focusEditor}
         >
-          {/* No vertical padding of its own: the shell is min-h-8 and editor
-            paragraphs carry my-1.5, so the row's py-1.5 is the whole frame —
-            the same 44px single-line height as ChatInput. */}
           <div
             id={AGENT_INPUT_TEXT_AREA_ID}
             ref={bodyRef}
-            class={cn(
-              'min-w-0 flex-1 pl-1 text-sm text-ink touch:px-3 touch:py-2',
-              !isTouchDevice() && isMultiline() && 'pl-3'
-            )}
+            class="min-w-0 flex-1 text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"
             classList={{
               // While empty only the placeholder renders; keep it to one clipped
               // line so it doesn't wrap into the single-line height.
@@ -207,7 +201,7 @@ export function AgentInput(props: AgentInputProps) {
                 isMultiline() && isMobile(),
             }}
           >
-            <MarkdownShell
+            <ComposerEditor
               config={editor}
               placeholder={
                 props.placeholder ?? 'Message the agent, @mention anything'
@@ -217,7 +211,7 @@ export function AgentInput(props: AgentInputProps) {
           </div>
 
           {/* In-flow — never absolute over the text. */}
-          <div class="flex shrink-0 items-center gap-1 pb-0.5 touch:h-8 touch:gap-2 touch:p-2 touch:mb-2">
+          <div class="flex shrink-0 items-center gap-[3.75px] touch:h-8 touch:gap-2 touch:p-2 touch:mb-2">
             <Show when={isTouchDevice() && props.modelControl}>
               <div class="min-w-0">{props.modelControl}</div>
             </Show>
@@ -226,6 +220,7 @@ export function AgentInput(props: AgentInputProps) {
                 when={props.busy && props.onStop}
                 fallback={
                   <SendButton
+                    appearance="composer"
                     tooltip="Send"
                     disabled={!canSend()}
                     onClick={send}
@@ -237,20 +232,21 @@ export function AgentInput(props: AgentInputProps) {
                   fallback={
                     <Button
                       variant={isTouchDevice() ? 'ghost' : 'strong'}
-                      size="icon-sm"
+                      size="icon-composer"
                       label="Stop"
                       onClick={() => props.onStop?.()}
                       class={
                         isTouchDevice()
                           ? 'rounded-full size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
-                          : 'rounded-full size-7'
+                          : undefined
                       }
                     >
-                      <div class="size-3.5 rounded-sm bg-current" />
+                      <div class="size-3.5 not-touch:size-[13.125px] rounded-sm bg-current" />
                     </Button>
                   }
                 >
                   <SendButton
+                    appearance="composer"
                     aria-label="Send next queued message"
                     tooltip="Send next queued message"
                     shortcut="Enter"

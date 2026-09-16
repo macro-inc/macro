@@ -19,6 +19,7 @@ export function EditToolCall(props: {
       trailing={props.common.trailing ?? <DiffChanges {...changes()} />}
       status={props.common.status}
       muted={props.common.muted}
+      hasContent={props.detail.diffs.length > 0}
     >
       <Show when={props.detail.diffs.length > 0}>
         <PierreDiff diffs={props.detail.diffs} />

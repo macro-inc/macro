@@ -2,7 +2,13 @@ import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { DropdownMenu as KobalteDropdownMenu } from '@kobalte/core/dropdown-menu';
 import CheckIcon from '@phosphor/check.svg';
-import { type ComponentProps, onCleanup, splitProps } from 'solid-js';
+import {
+  type ComponentProps,
+  createSignal,
+  onCleanup,
+  Show,
+  splitProps,
+} from 'solid-js';
 import { cn } from '../utils/classname';
 import {
   addCtrlJKMenuNavigation,
@@ -50,6 +56,8 @@ export type DropdownContentProps = ComponentProps<
   depth?: SurfaceProps['depth'];
   mount?: PortalMount;
   portalScope?: DropdownPortalScope;
+  /** Block pointer interaction behind the menu with a transparent backdrop. */
+  blockingBackdrop?: boolean;
 };
 export type DropdownTriggerProps = ComponentProps<
   typeof KobalteDropdownMenu.Trigger
@@ -173,6 +181,7 @@ function callRef<T>(ref: ((el: T) => void) | undefined, el: T) {
 function DropdownContent(props: DropdownContentProps) {
   let searchRef: HTMLDivElement | undefined;
   let contentRef: HTMLElement | undefined;
+  const [backdropZIndex, setBackdropZIndex] = createSignal<string>();
   const [local, rest] = splitProps(props, [
     'depth',
     'class',
@@ -181,8 +190,13 @@ function DropdownContent(props: DropdownContentProps) {
     'children',
     'ref',
     'onOpenAutoFocus',
+    'blockingBackdrop',
   ]);
   const handleOpenAutoFocus = (event: Event) => {
+    if (local.blockingBackdrop && contentRef) {
+      // Match custom menu layers; the following menu paints above the backdrop.
+      setBackdropZIndex(getComputedStyle(contentRef).zIndex);
+    }
     local.onOpenAutoFocus?.(event);
     // A tap-opened menu shouldn't start with a hover-like highlight
     if (!event.defaultPrevented && contentRef && !isModality('touch')) {
@@ -202,6 +216,13 @@ function DropdownContent(props: DropdownContentProps) {
       <KobalteDropdownMenu.Portal
         mount={resolvePortalMount(searchRef, local.mount, local.portalScope)}
       >
+        <Show when={local.blockingBackdrop}>
+          <div
+            class="fixed inset-0 z-action-menu pointer-events-auto"
+            style={{ 'z-index': backdropZIndex() }}
+            aria-hidden="true"
+          />
+        </Show>
         <KobalteDropdownMenu.Content
           class={cn(
             // Paint the same surface as context menus, including custom

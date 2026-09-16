@@ -2,7 +2,7 @@
 
 ## Live updates in flat Soup lists
 
-With browser GraphQL caching enabled, locally supported flat lists reconcile their
+With browser or native Tauri GraphQL caching enabled, locally supported flat lists reconcile their
 loaded server pages with matching cached entities. Complete matching updates can
 appear without a list refetch; confirmed non-matches and explicit deletions disappear.
 Rows whose current predicate facts are unknown retain their previous server membership
@@ -11,7 +11,8 @@ notification-only cache records do not block other rows' updates. While recomput
 is pending, the last rendered result for the same query and cache generation stays
 visible; local results do not trigger the tab-loading bar. A fresh server response
 still replaces that result, and initial loads without usable data retain normal loading
-indicators.
+indicators. A transport failure does not hide usable current-query local results,
+including empty results; HTTP responses and GraphQL errors still surface.
 
 This is a best-effort display, not proof that every matching entity is cached. Outside
 the supported cached-Mail slice below, loading more follows the original server cursors
@@ -20,7 +21,7 @@ Newly loaded server rows join the retained display immediately, without duplicat
 waiting for local recomputation to succeed. Removing pages from the server baseline
 invalidates overlays built from those pages.
 Changing filters or resetting the cache discards prior reconciliation evidence. Grouped
-lists, unsupported filters/sorts, and native/non-cache transports keep their existing
+lists, unsupported filters/sorts, and non-cache transports keep their existing
 network behavior.
 
 For Documents (including Tasks), Projects, Chats, and participating Channels,
@@ -43,25 +44,119 @@ backfill checkpoint is refreshed to index channel rows; queued work is preserved
 Notification facts use the existing active-only GraphQL edge and primary entity
 association. Missing/partial or over-budget snapshots remain incomplete, never an
 empty notification set; display metadata decoding omissions remain a best-effort
-limitation. The v4 projection tracks individual notification IDs, bounded by the
-shared 256-fact per-entity budget. This cache-format upgrade resets old cached data
-and pending cache mutations, and the bumped backfill checkpoint rebuilds projections.
+limitation. The current `soup-flat-v5` projection retains notification IDs and
+adds complete select-option/entity-reference property snapshots. Tags, task status,
+priority and assignee selections compose with owner and type filters. The shared
+256-fact per-entity budget still applies: missing, malformed or over-budget property
+snapshots are unknown, never evidence of absence. Property-only mutations update
+these postings atomically; rollback does not restore unrelated property values.
+Checkpoint v14 rehydrates older projections without wiping normalized records or
+queued mutations. General Soup still uses its existing server pagination; filter-only
+offline checks use an ungrouped view with a created/updated timestamp sort.
 
 Realtime Soup batches coalesce repeated entity IDs (including entity type), keeping
 that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
 
-## Notifications — `/app/component/inbox`
+## Home — `/app/component/inbox`
 
-Unified triage list (emails, channel messages, task assignments, doc mentions, agent
-results). Tabs are `Signal` (default, AI-filtered "needs attention") and `Noise`, with a
-Filter menu. On desktop, selecting a row renders its block in the inline preview beside
-the notification sidebar. With the `enable-inbox-notified-sort` flag on, both tabs order
-rows and date headers by when you were last notified about the item, so a fresh comment
-on an old task sits under "Today"; with it off they order by content recency. Keyboard:
-`j`/`k` move between rows and update the preview; alternate activation opens a new split.
-On mobile, the filters float above the full-height scrolling list. On iOS, rows
+With the new app views enabled, Home defaults to a Signal feed merging
+notifications with Activity's `touched_by_me` recents, including sent emails and
+AI chats. Each entity appears once, ordered by its latest notification or own
+action. On desktop, the funnel button to the right of **Home** opens **Filter Home**.
+The first menu row is an **Unread only** toggle: on shows unread items; off shows
+all items. Entity type checkboxes start checked. Unchecking **Email** hides received
+and sent mail. **Channels** controls
+both channels and reply threads; **Chats** and **Agents** have separate toggles.
+Unchecking every type shows an empty feed. **Reset filters** shows every type and
+both read states again. A badge counts hidden types plus an active status filter.
+Older saved read-only selections restore as All. The mobile drawer uses the same toggle.
+There are no desktop Signal/Noise tabs. A **Home** heading
+labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, and
+**Agents** sidebar headings. The full-width **New chat** plus pill below the heading clears the preview and returns to the Home
+starting pane; it does not create a chat. Email and Tasks have matching top pills
+for **New email** and **New task**.
+
+The Inbox provider honors an explicit initial tab, search, grouping, and facet
+selection. Filters persist per user across reloads and fresh Home navigation;
+split history restores that entry's filter selection. An explicit facet selection
+overrides saved filters. Returning through split history resets navigation to Signal.
+
+Channel thread replies remain separate Home entries from their parent channel,
+using single-line rows and a reply arrow icon on desktop and touch devices, labeled
+with the sender and channel (for example, **Peter in #battlefield**). Channel names
+prefer the current channel cache, then a matching thread notification's name,
+then **Unknown channel** if neither source has a name. Selecting a
+thread opens that thread in the channel preview; Shift-click opens it in a split.
+
+Items in the 256px desktop rail use single-line pills with 16px icons: profile photos for
+DMs and model logos for AI chats (Claude sunburst or ChatGPT knot). Other items
+use the same glyphs as entity rows elsewhere: document file-type and
+task/snippet/skill variants, hashes for channels, read/unread envelopes or
+calendar invites for email, sparkles for agents, folders for projects, and alarms
+for reminders. Pull requests retain open, merged, and closed status glyphs and
+colors; unknown foreign sources use the generic file icon.
+There are no title tooltips, and timestamps are
+visible only while hovering the row. An unread
+dot remains visible. Click a row to preview it; `j`/`k` navigate and update the
+preview; alternate activation and Shift-click open a split.
+
+On desktop, before selecting a row, the main pane shows a centered single-line chat
+composer under “What should we get done in Macro?”. Attachment, text, model, and
+send controls share one row; longer prompts expand the input as needed.
+Home uses the shared app font and composer theme tokens; suggestion text and
+hover states use the same semantic colors as other app surfaces.
+Type in “Type @ to reference / for skills”, use the attachment button for
+attachments and the model menu to choose a model, then press Enter or Send to
+create and open an AI chat. If chat creation fails, the submitted text and attachments
+are restored, including before a chat-limit paywall opens. The input stays 32px above the vertical center as suggestions load. Up to three cached AI
+suggestions appear below the
+composer, using the existing fast/smart recommendation projections. Compact rows
+use one line: reason — Phosphor icon and item name, followed by Open, all at the same font size. Clicking a
+suggestion fills the input and replaces its context attachments without sending;
+the Open action opens its source item in a new split, preserving the editor type
+for tasks, skills, snippets, and other documents. Suggestion loading/errors
+are isolated from the input. If generation stalls for 45 seconds, the shimmer
+is replaced with a retry action; a late result still appears automatically.
+Generation status updates do not extend that deadline. Retry starts a fresh
+45-second wait. Shift+Enter adds a line. Selecting a Home row replaces
+the composer with its preview. Mobile continues to show the activity list alone.
+
+AI chat, agent, and channel message bodies use 15px text, including thread replies.
+Desktop AI chats, agents, and channel composers share Home's rounded composer
+surface: a muted dark fill or a white light-mode surface with a soft shadow,
+15px input text, and circular controls. Composer geometry is scaled to 15/16
+of the original design (48.75px single-line height); the Home composer is at most
+720px wide. In narrower desktop splits, the Home heading wraps and the composer
+shrinks to the available pane width; suggestion text truncates while Open stays
+visible. Plain channel messages use a compact row;
+multiline messages, formatting, and attachments retain a full-width editor and
+footer. Switching between compact and expanded layouts keeps the same editor and
+draft. Mobile composer styling and send behavior are unchanged.
+
+Sections are Last few minutes (under five minutes), Last hour, This evening
+(6pm onward), This afternoon (noon–6pm), This morning (6am–noon), Earlier today,
+Yesterday, and the existing older-date groups. Sections always follow this order,
+with newest rows first and entity identity breaking equal-timestamp ties.
+The reference clock uses whole minutes, so refreshing within the same minute
+preserves grouping. Rolling five-minute/hour windows continue across midnight;
+future timestamps caused by clock skew stay in the newest section, and invalid
+dates go last. Calendar sections use local time. The clock is checked every 30
+seconds without a new action. Scrolling near the bottom automatically
+loads older items. Home buffers older rows until both notification and own-activity
+pages have loaded through their timestamp, then advances the shallower feed first.
+Fetched rows still advance this boundary when display filters hide them;
+older cache-only rows do not.
+Rows tied at a page boundary appear together, so loading another page does not
+insert older history above already displayed rows. Live actions and refreshes
+can still reorder rows. Short or fully filtered pages continue loading until the list
+fills or there are no more results. A failed
+source shows a retry notice while the other source stays usable. Document typing
+alone is not yet attributed by Activity; Home reflects the actions the existing
+Activity system records.
+
+On mobile, Signal/Noise tabs and filters float above the full-height scrolling list. On iOS, rows
 fade underneath the filters and status bar using the shared top edge gradient.
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
@@ -90,8 +185,21 @@ Task navigation uses `My Tasks`, `All Tasks`, and `Created by me`. The desktop
 sidebar has a full-width `New task` action, a collapsible list of task favorites,
 and a collapsible list of tags. Selecting a tag filters the current task view;
 selecting it again clears that tag filter. Favorite rows open their tasks.
+Normal row and favorite activation replaces the list with the editable task
+document; its originating-tab breadcrumb returns to the list and its
+header exposes Share and the task Details/Properties panel. Shift-click opens
+the task in a new split instead. Keyboard navigation moves list focus without
+opening a task until activation.
+
+The desktop `Create` → `Task` modal uses the standard dialog panel, circular
+icon controls, and a pill-shaped `Create Task` button with 16px outer padding.
+The mobile task drawer retains its existing layout.
 
 ## Email — `/app/component/mail`
+
+Email's Tags sidebar uses the same [nested tag tree as Tasks](tasks.md#nested-sidebar-tags).
+Carets and folder-only parents expand branches; actual tags select their exact ID
+and switch the mailbox to All. Parent selection does not include descendant tags.
 
 Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `Shared` /
 `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
@@ -133,16 +241,17 @@ necessarily evaluated from the last synchronized grants.
 The lightweight metadata backfill runs before body hydration. Its refreshes scan all
 metadata: message-time watermarks alone miss archive/read changes on old threads.
 Filter availability therefore does not guarantee that opening every message body works offline. Missing
-projection proof is unknown, never false. Sender/recipient, attachment chips,
-property/tag refinements and non-created/updated sorts remain network-only or
-existing client refinements; durable offline sending/archiving is not added by this slice. No cache-format wipe is required: Mail uses a separate versioned profile
+projection proof is unknown, never false. Tag selections use cached property postings;
+attachment chips refine the cached rows on the client. Sender/recipient filters and
+non-created/updated sorts remain outside this local profile. Grouping and sort-selector
+coverage are separate from the filter-selection matrix. No cache-format wipe is required: Mail uses a separate versioned profile
 and a new backfill checkpoint, preserving existing queued work. Deploy the backend
 schema additions before the client: it selects canonical message eligibility/recency
 fields, body-free canonical preview references, and viewer-relative share facts.
-The `soup-mail-v2` profile and new backfill checkpoint rebuild Mail proof without
+The `soup-mail-v3` property-aware profile and new backfill checkpoint rebuild Mail proof without
 changing the persisted mutation queue format. Native Tauri maintains the same
 predicate projections and revision-bound local page contract as the browser.
-Checkpoint v13 restarts older scans to populate native indexes without wiping
+Checkpoint v14 restarts older scans to populate property-aware indexes without wiping
 queued work. A background network failure does not hide a usable current-query
 cached Mail page; server-reported GraphQL errors still surface.
 
@@ -163,8 +272,16 @@ conversation. A link with `?email_message_id=<message-id>` reveals that message.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
-keeps the framed cards.
+keeps rounded cards matching the chat composer: soft shadows in light mode,
+the same subtle 3D rim in dark mode, and a faint hover tint. Desktop selection
+does not add an accent-colored ring; keyboard focus has a neutral outline.
 Replies appear inline on desktop and in a composer drawer on touch devices.
+Desktop draft bodies and app-controlled message text use 15px, matching channels.
+HTML messages with preserved sender typography retain their explicit sizes.
+Desktop reply actions sit together at the bottom right: discard, attach, schedule,
+then Send, with circular hover backgrounds inside the card's 16px padding.
+Standalone compose uses one right-aligned row inside its 16px content padding:
+delete, attach, format, schedule, and send. Touch compose uses its header toolbar.
 `R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
 or the latest message when none is selected. `F` opens a forward and focuses To.
 While an editable field is focused, Escape is handled by that field before the
@@ -234,6 +351,33 @@ copy, and move-to-folder actions are not offered on agent-session search rows.
 
 Tabs `Owned` / `Shared` / `Attachments` / `Folders` / `All`; `New` menu; rows show title,
 tags, updated time. Clicking a row opens the doc.
+
+Shared always excludes files owned by you. Selecting **Created by → Me** therefore
+returns no files; selecting Me together with another creator returns only that
+other creator's shared files. Clearing the creator selection restores all Shared
+results. This applies to restored filters and flat/grouped list requests—not
+just client-side row filtering. Cached inserts enforce the same rule before a
+refetch, including expanded groups and inactive cached Shared queries. Until
+viewer identity is available, document inserts into Shared are rejected.
+
+With `enable-new-app-views` enabled, Files opens **Drive** using the same
+shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+`Shared with me`, collapsible Favorites, and a searchable folder hierarchy.
+The `Drive` folder row opens the folder overview. Click a folder name to browse
+its contents in the main pane; its separate expand/collapse button reveals child
+folders without navigating. Folder breadcrumbs in the top bar use `/` separators
+and navigate to ancestors. Empty folders show `This folder is empty` and a
+`Back to Drive` action that returns to the folder overview. Folder
+search retains matching descendants' ancestors and reveals their branches.
+
+`Search Drive` searches the current tab or folder. `Filter files` includes all-files
+and email-attachment scopes; `Sort files` offers modified, created, and viewed dates.
+Recent uses the viewer's own interaction order and does not offer a sort override.
+The New menu and drag/drop uploads target the selected folder. File rows retain
+selection and context menus; ordinary folder clicks and Enter browse inside Drive,
+while modified clicks retain existing split navigation. On narrow layouts, use
+`Select Drive view` for tabs, favorites, and folders. Navigation state and expanded
+folders are restored when returning from an opened file.
 
 ## Calendar — `/app/calendar/view`
 
@@ -315,6 +459,10 @@ Board/List views, `Company` create button. Requires a team ("Join a team to enab
 `Open team settings`).
 
 ## Activity — `/app/component/activity`
+
+Requires authentication and the `enable-activity-feed` flag. Direct navigation and
+restored splits wait for flags to load; when disabled, they redirect to Home
+(`/app/component/inbox`) without loading the activity feed.
 
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)
@@ -398,8 +546,26 @@ a retryable error without hiding the other harnesses. Editing preserves a saved 
 is no longer offered and labels it `saved, unavailable`. A macrod with no responding runtime
 can remain loading until the 10-second discovery timeout; use Retry after reconnecting it.
 
-`Harness` configures Cursor and paired macrod runtimes. Cursor's default-model picker uses
+`Harness` configures Cursor, Codex, and paired macrod runtimes. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
+
+The Codex row uses the OpenAI logo and the same icon, button, and status styling
+as Cursor. Under **Codex**, choose **Connect with ChatGPT**, copy the displayed device code,
+and use **Continue to ChatGPT** to finish sign-in in the provider tab. The Macro
+page displays pending, expired, failed, and retryable error states; **Cancel
+sign-in** cancels the attempt. After connecting, choose a **Cloud environment**
+and click **Save Codex settings** before using Codex. Options show their
+repositories. New sessions always use the `main` branch; there is no branch
+picker or automatic repository selection. Changed selections display **Unsaved
+changes** until the server confirms them. The save button is disabled until an
+environment is selected, and when it matches the saved environment.
+These choices apply to new sessions. **Disconnect** in the Codex row (accessible
+name **Disconnect ChatGPT**) removes the connection. The UI never asks for an
+OAuth token.
+
+The Codex section and its auth/config requests were exercised in Chromium with
+mocked backend responses on 2026-09-15. Provider login and a full deployed Macro
+session were not exercised by that UI check.
 
 ## Notifications
 
@@ -412,9 +578,11 @@ Those rows are available on the next fetch/refetch. Signal delivery and the exis
 staff/customer eligibility rules are unchanged; no browser eligibility request is needed.
 
 Discussion composers on companies, contacts, documents, tasks, and PRs use the
-shared channel/AI glass surface, 22px desktop corners, 15px desktop text, and
-a circular neutral Send button. Document comment replies/edits and Edit with AI
-use the same composer treatment. Attachment and formatting actions stay available.
+shared channel/AI composer surface, 26.25px desktop corners, 15px desktop text, and
+a circular neutral Send button. Edit with AI uses the same composer treatment.
+Inline comments, replies, and their edits use a plain
+input without a surface background, rounded frame, or shadow. Attachment and
+formatting actions stay available.
 On mobile, open documents and tasks put their new-comment composer in the
 accessory dock above navigation, using the channel input's compact pill and
 expanded surface. Ask AI and New are hidden in these open views only when the
@@ -444,3 +612,9 @@ spinner while sending.
 The mobile new-email composer nests the channel-style Send button inside its
 top-right glass toolbar, with an even 5px inset on the top, bottom, and right.
 The toolbar is 46px tall; attachment and schedule controls align with Send.
+
+Channel, email, Markdown, and composer body text use `text-base`: 15px at the
+default root size. Supporting `text-sm` text is 14px and `text-xs` is 12px.
+Desktop and mobile share this scale, with accessibility text scaling preserved.
+
+Desktop channel and AI composers use an `Attach files` paperclip that opens the file picker directly, without a plus menu. Comment composers open the image picker directly. Channels and DMs always open in message mode; create tasks through the task creation dialog. Shift+Enter, including an empty new line, expands channel and AI inputs so text starts above the toolbar at the left inset. Sent AI message bubbles use the ink fill with a contrasting foreground in each theme.

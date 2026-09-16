@@ -1,6 +1,6 @@
 use crate::api::context::ApiContext;
 use agent::PredefinedModel;
-use chat::domain::models::PatchChatArgs;
+use chat::domain::models::PatchChatRepoArgs;
 use chat::domain::ports::ChatRepo;
 use chat::outbound::postgres::PgChatRepo;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -71,10 +71,11 @@ async fn rename_initial_chat(
         .patch(
             user_id,
             &chat_id,
-            PatchChatArgs {
+            PatchChatRepoArgs {
                 name: Some(name.clone()),
                 project_id: None,
                 share_permission: None,
+                team_share: None,
             },
         )
         .await

@@ -81,7 +81,6 @@ import { AnimatedCompanyIcon } from '@icon/wide-company';
 import { AnimatedEmailIcon } from '@icon/wide-email';
 import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
 import { AnimatedHomeIcon } from '@icon/wide-home';
-import { AnimatedInboxIcon } from '@icon/wide-inbox';
 import { AnimatedSearchIcon } from '@icon/wide-search';
 import { AnimatedStarIcon } from '@icon/wide-star';
 import { AnimatedTaskIcon } from '@icon/wide-task';
@@ -134,7 +133,7 @@ export interface SidebarItem {
   icon?: Component<
     JSX.SvgSVGAttributes<SVGSVGElement> & { triggerAnimation?: boolean }
   >;
-  hotkey: ValidHotkey;
+  hotkey?: ValidHotkey | ValidHotkey[];
   hotkeyToken: HotkeyToken;
   standaloneHotkey?: boolean;
   hiddenFromSidebar?: boolean;
@@ -189,10 +188,10 @@ const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 const SIDEBAR_LINKS = [
   {
     id: 'inbox',
-    label: 'Notifications',
+    label: 'Home',
     href: LIST_VIEW_PATHS.inbox,
-    icon: AnimatedInboxIcon,
-    hotkey: 'i',
+    icon: AnimatedHomeIcon,
+    hotkey: ['h', 'i'],
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {
@@ -397,7 +396,7 @@ const resetGoToHotkeysState = () => {
 /**
  * Hosts the always-on global shortcuts that must keep working even on
  * full-cover routes like solo settings: the "g" leader key with its per-link
- * "go to" nav hotkeys (e.g. "g i" for inbox), plus Send Invites. Rendered
+ * "go to" nav hotkeys (e.g. "g h" for Home), plus Send Invites. Rendered
  * unconditionally from `Layout` — unlike `AppSidebar`, which unmounts on those
  * routes — so none of them go dead there.
  */
@@ -463,7 +462,7 @@ export const GoToHotkeys = () => {
   });
 
   const registeredGoToKeys = () =>
-    new Set<ValidHotkey>(links().map((link) => link.hotkey));
+    new Set<ValidHotkey>(links().flatMap((link) => link.hotkey ?? []));
 
   // When the go to command scope is active, we want to prevent
   // other default hotkeys from running. So doing "g" + some key
@@ -1026,10 +1025,9 @@ const COMPANIES_LINK: SidebarItem = {
 
 const DASHBOARD_LINK: SidebarItem = {
   id: 'home',
-  label: 'Home',
+  label: 'Assistant',
   href: '/home',
   icon: AnimatedHomeIcon,
-  hotkey: 'h',
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
@@ -1493,7 +1491,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar flex flex-col gap-0 overflow-hidden bg-surface px-3 pb-3 pt-4 text-[13px]',
         isExpanded() &&
-          'relative h-full shrink-0 max-w-55 w-55 border-r border-thread-rail opacity-100',
+          'relative h-full shrink-0 max-w-55 w-55 border-r border-edge-muted opacity-100',
         props.sidebarState === 'hidden' &&
           'fixed left-0 top-0 bottom-0 h-full -translate-x-full max-w-0 w-0 opacity-0 pointer-events-none',
         isCollapsed() && 'fixed z-modal-content',
@@ -1871,9 +1869,11 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
       onMouseEnter={() => setIsHovering(true)}
       label={`Go to ${props.label}`}
       hotkey={
-        props.standaloneHotkey
-          ? props.hotkeyToken
-          : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
+        props.hotkey
+          ? props.standaloneHotkey
+            ? props.hotkeyToken
+            : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
+          : undefined
       }
       tooltipDisabled={props.sidebarState !== 'slim' || props.id === 'calendar'}
       onMouseLeave={() => setIsHovering(false)}
@@ -1988,6 +1988,7 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
 
       <Show
         when={
+          props.hotkey &&
           isHovering() &&
           !props.hotkeyVisible &&
           !(isActive() && props.trailingWhenActive !== undefined)
@@ -2011,7 +2012,7 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
           </div>
         </div>
       </Show>
-      <Show when={props.hotkeyVisible}>
+      <Show when={props.hotkey && props.hotkeyVisible}>
         <div
           class={cn(
             'text-xs size-4 rounded-xs flex items-center justify-center overflow-hidden bg-accent/10 border border-accent/30 text-accent',

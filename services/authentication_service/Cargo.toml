@@ -24,10 +24,15 @@ path = "src/doppler_config.rs"
 [features]
 default = ["rate_limit"]
 local = []
+# Local opt-out for the throttles `rate_limit` installs — additive, so local
+# builds stay in the one unified `cargo` invocation. See `RATE_LIMIT_ENABLED`.
+no_rate_limit = []
 rate_limit = []
 return_passwordless_code = []
 
 [dependencies]
+codex_connection = { path = "../../crates/codex_connection" }
+codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
 aes-gcm = { workspace = true }

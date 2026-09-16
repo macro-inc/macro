@@ -105,7 +105,11 @@ export function TaskListEntity(props: TaskListEntityProps) {
   const [snippetContainerRef, setSnippetContainerRef] = createSignal<
     HTMLElement | undefined
   >();
-  const chars = useCharacterCount(snippetContainerRef);
+  const chars = useCharacterCount(() =>
+    props.deferInteractions && !hasSearchContentHits(props.entity)
+      ? undefined
+      : snippetContainerRef()
+  );
 
   const showHitSnippet = () =>
     !props.hideContentHits && hasSearchContentHits(props.entity);
@@ -130,6 +134,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
   const draggable = createEntityDraggable({
     entity: props.entity,
     splitId: useSplitPanel()?.handle?.id,
+    deferUntilInteraction: () => props.deferInteractions === true,
   });
 
   const isWide = useListLayout()?.isWide ?? (() => true);

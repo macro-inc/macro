@@ -149,9 +149,8 @@ function Row(props: { label: string; children: JSX.Element }) {
 }
 
 function FolderLink(props: { projectId: string; projectName: string }) {
-  const open = createCallback((e: MouseEvent) => {
-    // Default: open in new split. Shift-click: replace current split.
-    openDocument('project', props.projectId, undefined, !e.shiftKey);
+  const open = createCallback(() => {
+    openDocument('project', props.projectId, undefined, true);
   });
   const navHandlers = useSplitNavigationHandler<HTMLSpanElement>(open);
   return (

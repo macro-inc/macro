@@ -16,6 +16,7 @@ query NativeMailBackfill {
           isSignal
           latestInboundMessageTs
           updatedAt
+          properties { id }
           mailAllPreview { id subject snippet isDraft senderEmail senderName senderPhotoUrl }
           mailDraftPreview { id subject snippet isDraft senderEmail senderName senderPhotoUrl }
           mailSentPreview { id subject snippet isDraft senderEmail senderName senderPhotoUrl }

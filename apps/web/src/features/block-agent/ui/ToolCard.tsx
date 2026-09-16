@@ -10,13 +10,7 @@
 
 import { Collapsible } from '@kobalte/core/collapsible';
 import CaretRight from '@phosphor/caret-right.svg';
-import {
-  createMemo,
-  For,
-  type JSX,
-  children as resolveChildren,
-  Show,
-} from 'solid-js';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import { TextShimmer } from './TextShimmer';
 import { isToolActive, type ToolStatus } from './types';
 
@@ -35,6 +29,8 @@ export interface ToolCardProps {
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
+  /** Whether conditional children have content, without constructing them. */
+  hasContent?: boolean;
   /** Expandable body. Without children the row has no collapse affordance. */
   children?: JSX.Element;
 }
@@ -44,11 +40,17 @@ const ROW_CLASS =
 
 export function ToolCard(props: ToolCardProps) {
   const active = () => isToolActive(props.status);
-  const resolved = resolveChildren(() => props.children);
-  const hasChildren = createMemo(() => {
-    const body = resolved();
-    return Array.isArray(body) ? body.length > 0 : body != null;
-  });
+  const [uncontrolledOpen, setUncontrolledOpen] = createSignal(
+    props.defaultOpen ?? false
+  );
+  const open = () => props.open ?? uncontrolledOpen();
+  const setOpen = (value: boolean) => {
+    setUncontrolledOpen(value);
+    props.onOpenChange?.(value);
+  };
+  // Reading children to inspect them mounts expensive bodies even while closed.
+  // Conditional callers supply presence separately; Kobalte mounts the body.
+  const hasChildren = () => props.hasContent ?? 'children' in props;
 
   const row = (expandable: boolean) => (
     <>
@@ -101,16 +103,14 @@ export function ToolCard(props: ToolCardProps) {
         when={hasChildren()}
         fallback={<div class={ROW_CLASS}>{row(false)}</div>}
       >
-        <Collapsible
-          open={props.open}
-          defaultOpen={props.defaultOpen}
-          onOpenChange={props.onOpenChange}
-        >
+        <Collapsible open={open()} onOpenChange={setOpen}>
           <Collapsible.Trigger class={`group hover:bg-hover ${ROW_CLASS}`}>
             {row(true)}
           </Collapsible.Trigger>
           <Collapsible.Content class="data-closed:hidden">
-            <div class="min-w-0 px-3 pb-2">{resolved()}</div>
+            <Show when={open()}>
+              <div class="min-w-0 px-3 pb-2">{props.children}</div>
+            </Show>
           </Collapsible.Content>
         </Collapsible>
       </Show>

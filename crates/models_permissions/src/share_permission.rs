@@ -95,6 +95,12 @@ impl SharePermissionV2 {
         let (link_share, link_share_access_level) = Self::resolve(team_default, (None, None));
         Self::new(link_share, link_share_access_level)
     }
+
+    /// Creates a new share permission object for an initiative
+    pub fn new_initiative_share_permission(team_default: Option<TeamLinkShareDefault>) -> Self {
+        let (link_share, link_share_access_level) = Self::resolve(team_default, (None, None));
+        Self::new(link_share, link_share_access_level)
+    }
 }
 
 /// Deserializes an optional field while preserving explicit `null` values.

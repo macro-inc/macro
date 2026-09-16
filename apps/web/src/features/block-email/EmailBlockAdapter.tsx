@@ -120,7 +120,7 @@ export function EmailBlockAdapter(props: {
       actions={<ThreadActions title={props.title} onCreateTask={createTask} />}
       frame={(content) => (
         <ModalsProvider subject={props.title}>
-          <SidePanel.Layout>
+          <SidePanel.Layout defaultOpen={false}>
             {content()}
             <EmailSidePanelSections
               threadId={props.threadId()}

@@ -99,6 +99,21 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
             .0,
             StatusCode::UNAUTHORIZED
         );
+        let (status, initialized) = rpc(
+            app.clone(),
+            Some("secret"),
+            "initialize",
+            serde_json::json!({
+                "protocolVersion": "2025-03-26",
+                "capabilities": {},
+                "clientInfo": { "name": "test", "version": "1.0.0" },
+            }),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{initialized}");
+        let instructions = initialized["result"]["instructions"].as_str().unwrap();
+        assert!(instructions.contains("macro_internal.set_pull_request"));
+        assert!(instructions.contains("register its URL"));
         let (status, listed) = rpc(
             app.clone(),
             Some("secret"),

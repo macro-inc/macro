@@ -9865,6 +9865,517 @@
         }
       }
     },
+    "/initiatives": {
+      "get": {
+        "tags": ["initiative"],
+        "summary": "List initiatives the caller can view.",
+        "operationId": "list_initiatives",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["initiative"],
+        "summary": "Create an initiative owned by the caller.",
+        "operationId": "create_initiative",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateInitiativeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/initiatives/{initiative_id}": {
+      "get": {
+        "tags": ["initiative"],
+        "summary": "Fetch one initiative the caller can view.",
+        "operationId": "get_initiative",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["initiative"],
+        "summary": "Delete the initiative the caller owns.",
+        "operationId": "delete_initiative",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericSuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["initiative"],
+        "summary": "Update fields the caller can edit.",
+        "operationId": "update_initiative",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateInitiativeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InitiativeDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Name exceeds the maximum length",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/initiatives/{initiative_id}/tasks": {
+      "put": {
+        "tags": ["initiative"],
+        "summary": "Assign tasks the caller can edit.",
+        "operationId": "assign_initiative_tasks",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignTasksRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AssignTasksResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/initiatives/{initiative_id}/tasks/{task_id}": {
+      "delete": {
+        "tags": ["initiative"],
+        "summary": "Unassign one task the caller can edit.",
+        "operationId": "unassign_initiative_task",
+        "parameters": [
+          {
+            "name": "initiative_id",
+            "in": "path",
+            "description": "Initiative identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "task_id",
+            "in": "path",
+            "description": "Task identifier.",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericSuccessResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/instructions": {
       "get": {
         "tags": ["instructions::get_instructions"],
@@ -14621,6 +15132,60 @@
           }
         }
       },
+      "AssignTaskStatus": {
+        "type": "string",
+        "description": "Status written onto one assign result.",
+        "enum": [
+          "assigned",
+          "moved",
+          "notATask",
+          "notFound",
+          "skippedNoPermission"
+        ]
+      },
+      "AssignTasksRequest": {
+        "type": "object",
+        "description": "Assign-tasks HTTP body.",
+        "required": ["taskIds"],
+        "properties": {
+          "taskIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Task ids to assign, in request order."
+          }
+        }
+      },
+      "AssignTasksResponse": {
+        "type": "object",
+        "description": "Assign-tasks HTTP response.",
+        "required": ["results"],
+        "properties": {
+          "results": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AssignTasksResult"
+            },
+            "description": "Outcomes in request order after dedupe."
+          }
+        }
+      },
+      "AssignTasksResult": {
+        "type": "object",
+        "description": "Per-task outcome of an assign call.",
+        "required": ["taskId", "status"],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/AssignTaskStatus",
+            "description": "What happened to the task."
+          },
+          "taskId": {
+            "type": "string",
+            "description": "Task id this outcome describes."
+          }
+        }
+      },
       "AttendeeResponseStatus": {
         "type": "string",
         "description": "RSVP state for an attendee.",
@@ -17717,6 +18282,32 @@
           "user_id": {
             "type": ["string", "null"],
             "description": "User who recorded the mention."
+          }
+        }
+      },
+      "CreateInitiativeRequest": {
+        "type": "object",
+        "description": "Create-initiative HTTP body.",
+        "required": ["name"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "memberIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Optional member user ids. Invalid ids fail at the service boundary."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "shareWithTeam": {
+            "type": ["boolean", "null"],
+            "description": "When true, share with the owner's team at create time."
           }
         }
       },
@@ -22588,6 +23179,114 @@
             "format": "int32",
             "description": "Position in the session's log.",
             "minimum": 0
+          }
+        }
+      },
+      "InitiativeDetail": {
+        "type": "object",
+        "description": "Full initiative returned to a caller, including members, tasks, and share state.",
+        "required": [
+          "id",
+          "name",
+          "ownerId",
+          "memberIds",
+          "taskIds",
+          "sharePermission",
+          "userAccessLevel",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the initiative was created."
+          },
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "id": {
+            "$ref": "#/components/schemas/InitiativeId",
+            "description": "Opaque identifier."
+          },
+          "memberIds": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MacroUserIdStr"
+            },
+            "description": "Member user ids. The owner is never stored here."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "ownerId": {
+            "$ref": "#/components/schemas/MacroUserIdStr",
+            "description": "Owner of the initiative."
+          },
+          "sharePermission": {
+            "$ref": "#/components/schemas/SharePermissionV2",
+            "description": "Current share permission."
+          },
+          "taskIds": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Task ids currently assigned to the initiative."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the initiative was last updated."
+          },
+          "userAccessLevel": {
+            "$ref": "#/components/schemas/AccessLevel",
+            "description": "Caller's access level on this initiative."
+          }
+        }
+      },
+      "InitiativeId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Opaque identifier for an initiative. Minted as UUIDv7 in application code."
+      },
+      "InitiativeList": {
+        "type": "object",
+        "description": "Accessible-initiative list.",
+        "required": ["initiatives"],
+        "properties": {
+          "initiatives": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/InitiativeSummary"
+            },
+            "description": "Initiatives the caller can view."
+          }
+        }
+      },
+      "InitiativeSummary": {
+        "type": "object",
+        "description": "List-row view of an initiative.",
+        "required": ["id", "name", "updatedAt"],
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "Optional description."
+          },
+          "id": {
+            "$ref": "#/components/schemas/InitiativeId",
+            "description": "Opaque identifier."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the initiative was last updated."
           }
         }
       },
@@ -27621,6 +28320,38 @@
           },
           "team_views": {
             "description": "Replacement team-views array (whole-blob, last write wins)."
+          }
+        }
+      },
+      "UpdateInitiativeRequest": {
+        "type": "object",
+        "description": "Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace.",
+        "properties": {
+          "description": {
+            "type": ["string", "null"],
+            "description": "Replacement description. `Some(\"\")` clears it after trim."
+          },
+          "memberIds": {
+            "type": ["array", "null"],
+            "items": {
+              "type": "string"
+            },
+            "description": "Full replacement member list when present."
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Replacement name."
+          },
+          "sharePermission": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UpdateSharePermissionRequestV2",
+                "description": "Share permission patch. Only the owner may send this field."
+              }
+            ]
           }
         }
       },

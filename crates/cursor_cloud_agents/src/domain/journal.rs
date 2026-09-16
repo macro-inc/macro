@@ -48,6 +48,24 @@ pub enum JournalInput {
     PromptAborted(i64),
     /// Transport failure, retained without prematurely closing running tools.
     TransportError(String),
+    /// The run's stream broke or went silent and a reconnect was attempted.
+    ///
+    /// Journaled rather than merely logged because the journal is the durable
+    /// record of what the transport did: a transcript with a gap in it is only
+    /// explicable if the gap's cause is in the same ordered record as the
+    /// content around it, and a later replay of the session has no other way
+    /// to know a reconnect happened here. Like
+    /// [`JournalInput::TransportError`] it projects to nothing — it is a fact
+    /// about the connection, never about the conversation.
+    StreamInterrupted {
+        /// What broke, in the transport's own words.
+        reason: String,
+        /// The last provider event id captured before the break, if any; what
+        /// the reconnect resumed from.
+        last_event_id: Option<String>,
+        /// Which reconnect attempt this interruption started, from one.
+        attempt: u32,
+    },
     /// Raw complete provider message, including unknown payloads.
     Sse(NativeRecord),
     /// Original successful polling response body.
@@ -119,6 +137,15 @@ impl ReplayMachine {
         self.runs.get(run).and_then(|s| s.terminal.clone())
     }
     /// Process one journal input, identically during capture and replay.
+    ///
+    /// Every error here costs the whole session, permanently. Capture appends
+    /// before it projects, so a payload that reaches this point is already
+    /// durable: refusing it now refuses it again on every later replay, and a
+    /// session whose journal cannot be replayed can never be loaded or
+    /// prompted again. So failing is only right where the alternative is
+    /// worse than losing the session - reporting an outcome nobody has read
+    /// as a success, say. Wherever a sound reading of the payload exists,
+    /// take it and report the surprise instead.
     pub fn push(
         &mut self,
         run: Option<&CursorRunId>,
@@ -192,7 +219,8 @@ impl ReplayMachine {
             | JournalInput::Reconciled
             | JournalInput::PromptAccepted(_)
             | JournalInput::PromptAborted(_)
-            | JournalInput::TransportError(_) => Ok(Vec::new()),
+            | JournalInput::TransportError(_)
+            | JournalInput::StreamInterrupted { .. } => Ok(Vec::new()),
         }
     }
     fn event(
@@ -202,6 +230,17 @@ impl ReplayMachine {
     ) -> Result<Vec<SessionUpdate>, rootcause::Report> {
         let state = self.runs.entry(run.clone()).or_default();
         match event {
+            // A terminal lifecycle frame is a terminal fact here for the same
+            // reason it is one in the session service: a run whose `result`
+            // never arrives still ended, and a projection that only learns
+            // outcomes from `result` leaves such a turn open forever on every
+            // replay — no `turn_complete`, and tool calls still rendering as
+            // in progress. Ordinarily `result` follows a frame later and does
+            // the rest; this is what happens when it does not.
+            CursorEvent::Status { status, .. } if status.is_terminal() => {
+                state.terminal = Some(status);
+                Ok(self.translator.close_open_calls())
+            }
             CursorEvent::Interaction(InteractionUpdate::Other { kind })
                 if kind == "step-started" =>
             {
@@ -238,19 +277,29 @@ impl ReplayMachine {
                 }
                 let mut updates = Vec::new();
                 if let Some(text) = text {
-                    // Polling can overlap an interrupted stream. Only append the
-                    // missing suffix; divergent answers cannot safely be guessed.
-                    if let Some(suffix) = text.strip_prefix(&state.text) {
-                        if !suffix.is_empty() {
-                            updates.extend(self.translator.push(CursorEvent::Assistant {
-                                text: suffix.to_owned(),
-                            }));
+                    // The final text restates the answer rather than continuing
+                    // it, and the restatement is not the streamed text: Cursor
+                    // drops inline images from it, and nothing promises that is
+                    // the only rewrite. So text that literally continues what
+                    // was captured is the missing suffix of a stream that
+                    // polling overtook, and is appended; anything else is the
+                    // same answer said differently, and the captured stream -
+                    // what the user watched arrive - stays as it is.
+                    match text.strip_prefix(state.text.as_str()) {
+                        Some(suffix) => {
+                            if !suffix.is_empty() {
+                                updates.extend(self.translator.push(CursorEvent::Assistant {
+                                    text: suffix.to_owned(),
+                                }));
+                            }
+                            state.text = text;
                         }
-                        state.text = text;
-                    } else if !state.text.is_empty() {
-                        return Err(rootcause::report!(
-                            "Cursor final text diverged from the captured stream for {run}"
-                        ));
+                        None => tracing::warn!(
+                            %run,
+                            captured = state.text.len(),
+                            restated = text.len(),
+                            "Cursor restated the answer; keeping the streamed text"
+                        ),
                     }
                 }
                 updates.extend(self.translator.push(CursorEvent::Result {

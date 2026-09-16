@@ -9411,6 +9411,413 @@ export const deleteHistoryHandlerResponse = zod.object({
 });
 
 /**
+ * @summary List initiatives the caller can view.
+ */
+export const listInitiativesResponse = zod
+  .object({
+    initiatives: zod
+      .array(
+        zod
+          .object({
+            description: zod
+              .string()
+              .nullish()
+              .describe('Optional description.'),
+            id: zod
+              .uuid()
+              .describe(
+                'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+              ),
+            name: zod.string().describe('Display name.'),
+            updatedAt: zod.iso
+              .datetime({})
+              .describe('When the initiative was last updated.'),
+          })
+          .describe('List-row view of an initiative.')
+      )
+      .describe('Initiatives the caller can view.'),
+  })
+  .describe('Accessible-initiative list.');
+
+/**
+ * @summary Create an initiative owned by the caller.
+ */
+export const createInitiativeBody = zod
+  .object({
+    description: zod.string().nullish().describe('Optional description.'),
+    memberIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe(
+        'Optional member user ids. Invalid ids fail at the service boundary.'
+      ),
+    name: zod.string().describe('Display name.'),
+    shareWithTeam: zod
+      .boolean()
+      .nullish()
+      .describe("When true, share with the owner's team at create time."),
+  })
+  .describe('Create-initiative HTTP body.');
+
+export const createInitiativeResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was created.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    id: zod
+      .uuid()
+      .describe(
+        'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+      ),
+    memberIds: zod
+      .array(zod.string())
+      .describe('Member user ids. The owner is never stored here.'),
+    name: zod.string().describe('Display name.'),
+    ownerId: zod.string(),
+    sharePermission: zod.object({
+      channelSharePermissions: zod
+        .array(
+          zod
+            .object({
+              access_level: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+              channel_id: zod.string().describe('The channel id'),
+            })
+            .describe('The channel share permission')
+        )
+        .nullish()
+        .describe('The channel share permissions for the item'),
+      id: zod.string().describe('The share permission id'),
+      linkShare: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['PUBLIC', 'TEAM'])
+            .describe('Defines who can access an item through its share link.'),
+        ])
+        .optional(),
+      linkShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+      owner: zod.string().describe('The owner of the item'),
+      teamShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+    }),
+    taskIds: zod
+      .array(zod.string())
+      .describe('Task ids currently assigned to the initiative.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was last updated.'),
+    userAccessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+  })
+  .describe(
+    'Full initiative returned to a caller, including members, tasks, and share state.'
+  );
+
+/**
+ * @summary Fetch one initiative the caller can view.
+ */
+export const getInitiativeParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const getInitiativeResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was created.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    id: zod
+      .uuid()
+      .describe(
+        'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+      ),
+    memberIds: zod
+      .array(zod.string())
+      .describe('Member user ids. The owner is never stored here.'),
+    name: zod.string().describe('Display name.'),
+    ownerId: zod.string(),
+    sharePermission: zod.object({
+      channelSharePermissions: zod
+        .array(
+          zod
+            .object({
+              access_level: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+              channel_id: zod.string().describe('The channel id'),
+            })
+            .describe('The channel share permission')
+        )
+        .nullish()
+        .describe('The channel share permissions for the item'),
+      id: zod.string().describe('The share permission id'),
+      linkShare: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['PUBLIC', 'TEAM'])
+            .describe('Defines who can access an item through its share link.'),
+        ])
+        .optional(),
+      linkShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+      owner: zod.string().describe('The owner of the item'),
+      teamShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+    }),
+    taskIds: zod
+      .array(zod.string())
+      .describe('Task ids currently assigned to the initiative.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was last updated.'),
+    userAccessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+  })
+  .describe(
+    'Full initiative returned to a caller, including members, tasks, and share state.'
+  );
+
+/**
+ * @summary Delete the initiative the caller owns.
+ */
+export const deleteInitiativeParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const deleteInitiativeResponse = zod.object({
+  success: zod.boolean().describe('Indicates if the request was successful'),
+});
+
+/**
+ * @summary Update fields the caller can edit.
+ */
+export const updateInitiativeParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const updateInitiativeBody = zod
+  .object({
+    description: zod
+      .string()
+      .nullish()
+      .describe('Replacement description. `Some(\"\")` clears it after trim.'),
+    memberIds: zod
+      .array(zod.string())
+      .nullish()
+      .describe('Full replacement member list when present.'),
+    name: zod.string().nullish().describe('Replacement name.'),
+    sharePermission: zod
+      .union([
+        zod.null(),
+        zod.object({
+          channelSharePermissions: zod
+            .array(
+              zod.object({
+                accessLevel: zod
+                  .union([
+                    zod.null(),
+                    zod
+                      .enum(['view', 'comment', 'edit', 'owner'])
+                      .describe(
+                        'Ordered from least to most access top -> bottom'
+                      ),
+                  ])
+                  .optional(),
+                channelId: zod.string().describe('The channel id'),
+                operation: zod.enum(['add', 'remove', 'replace']),
+              })
+            )
+            .nullish()
+            .describe(
+              'Any channel share permissions to be created\/updated\/removed'
+            ),
+          linkShare: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['PUBLIC', 'TEAM'])
+                .describe(
+                  'Defines who can access an item through its share link.'
+                ),
+            ])
+            .optional(),
+          linkShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
+          teamShareAccessLevel: zod
+            .union([
+              zod.null(),
+              zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+            ])
+            .optional(),
+        }),
+      ])
+      .optional(),
+  })
+  .describe(
+    'Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace.'
+  );
+
+export const updateInitiativeResponse = zod
+  .object({
+    createdAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was created.'),
+    description: zod.string().nullish().describe('Optional description.'),
+    id: zod
+      .uuid()
+      .describe(
+        'Opaque identifier for an initiative. Minted as UUIDv7 in application code.'
+      ),
+    memberIds: zod
+      .array(zod.string())
+      .describe('Member user ids. The owner is never stored here.'),
+    name: zod.string().describe('Display name.'),
+    ownerId: zod.string(),
+    sharePermission: zod.object({
+      channelSharePermissions: zod
+        .array(
+          zod
+            .object({
+              access_level: zod
+                .enum(['view', 'comment', 'edit', 'owner'])
+                .describe('Ordered from least to most access top -> bottom'),
+              channel_id: zod.string().describe('The channel id'),
+            })
+            .describe('The channel share permission')
+        )
+        .nullish()
+        .describe('The channel share permissions for the item'),
+      id: zod.string().describe('The share permission id'),
+      linkShare: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['PUBLIC', 'TEAM'])
+            .describe('Defines who can access an item through its share link.'),
+        ])
+        .optional(),
+      linkShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+      owner: zod.string().describe('The owner of the item'),
+      teamShareAccessLevel: zod
+        .union([
+          zod.null(),
+          zod
+            .enum(['view', 'comment', 'edit', 'owner'])
+            .describe('Ordered from least to most access top -> bottom'),
+        ])
+        .optional(),
+    }),
+    taskIds: zod
+      .array(zod.string())
+      .describe('Task ids currently assigned to the initiative.'),
+    updatedAt: zod.iso
+      .datetime({})
+      .describe('When the initiative was last updated.'),
+    userAccessLevel: zod
+      .enum(['view', 'comment', 'edit', 'owner'])
+      .describe('Ordered from least to most access top -> bottom'),
+  })
+  .describe(
+    'Full initiative returned to a caller, including members, tasks, and share state.'
+  );
+
+/**
+ * @summary Assign tasks the caller can edit.
+ */
+export const assignInitiativeTasksParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+});
+
+export const assignInitiativeTasksBody = zod
+  .object({
+    taskIds: zod
+      .array(zod.string())
+      .describe('Task ids to assign, in request order.'),
+  })
+  .describe('Assign-tasks HTTP body.');
+
+export const assignInitiativeTasksResponse = zod
+  .object({
+    results: zod
+      .array(
+        zod
+          .object({
+            status: zod
+              .enum([
+                'assigned',
+                'moved',
+                'notATask',
+                'notFound',
+                'skippedNoPermission',
+              ])
+              .describe('Status written onto one assign result.'),
+            taskId: zod.string().describe('Task id this outcome describes.'),
+          })
+          .describe('Per-task outcome of an assign call.')
+      )
+      .describe('Outcomes in request order after dedupe.'),
+  })
+  .describe('Assign-tasks HTTP response.');
+
+/**
+ * @summary Unassign one task the caller can edit.
+ */
+export const unassignInitiativeTaskParams = zod.object({
+  initiative_id: zod.string().describe('Initiative identifier.'),
+  task_id: zod.string().describe('Task identifier.'),
+});
+
+export const unassignInitiativeTaskResponse = zod.object({
+  success: zod.boolean().describe('Indicates if the request was successful'),
+});
+
+/**
  * @summary Gets the instructions document for the current user
  */
 export const getInstructionsHandlerResponse = zod.object({

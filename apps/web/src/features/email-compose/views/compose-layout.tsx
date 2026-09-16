@@ -3,7 +3,15 @@ import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 
 import { Button, cn } from '@ui';
-import { createSignal, type JSX, onMount, Show, Suspense } from 'solid-js';
+import {
+  type Component,
+  createSignal,
+  type JSX,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { useCompose } from '../context/compose-context';
 import { ComposeBody } from './compose-body';
@@ -25,6 +33,9 @@ type ComposeLayoutRefs = {
  * Does NOT render any split-panel chrome — the caller is responsible for that.
  */
 export function ComposeLayout(props: {
+  as?: Component<
+    Pick<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'class' | 'ref'>
+  >;
   toolbar?: JSX.Element;
   header?: JSX.Element;
   notice?: JSX.Element;
@@ -181,7 +192,8 @@ export function ComposeLayout(props: {
   };
 
   return (
-    <div
+    <Dynamic
+      component={props.as ?? 'div'}
       ref={registerRef('containerRef')}
       class={cn(
         'touch:pt-[calc(var(--mobile-content-inset-top)+.5rem)]',
@@ -284,6 +296,6 @@ export function ComposeLayout(props: {
         />
         {props.toolbar}
       </div>
-    </div>
+    </Dynamic>
   );
 }

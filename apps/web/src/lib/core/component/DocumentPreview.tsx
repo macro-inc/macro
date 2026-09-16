@@ -527,10 +527,13 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     return undefined;
   };
 
-  const openDocument = createCallback(async () => {
+  const openDocument = createCallback(async (event: MouseEvent) => {
     const calendarTarget = calendarOpenTarget();
     if (calendarTarget) {
-      await openCalendarEventSplit(calendarTarget);
+      await openCalendarEventSplit({
+        ...calendarTarget,
+        openInNewSplit: event.shiftKey,
+      });
       return;
     }
     const type = targetBlockType();
@@ -545,6 +548,14 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
         link += `?${queryParams}`;
       }
       navigate(link);
+      return;
+    }
+
+    if (event.shiftKey) {
+      splitManager.openWithSplit(
+        { type, id: props.documentInfo.id, params: props.documentInfo.params },
+        { preferNewSplit: true }
+      );
       return;
     }
 
@@ -682,7 +693,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
           class="min-w-0 text-left wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
           onClick={(event) => {
             event.stopPropagation();
-            void openDocument();
+            void openDocument(event);
           }}
         >
           {local.name}
@@ -704,7 +715,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
         >
           <DotsThree />
         </Dropdown.Trigger>
-        <Dropdown.Content class="z-nested-action-menu">
+        <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
           <Dropdown.Group>
             <Show when={props.previewInfo?.showPreview}>
               <Dropdown.Item
@@ -732,7 +743,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
             <Show when={canOpenInChat()}>
               <Dropdown.Item onSelect={handleOpenInChat}>
                 <SparkleIcon class="size-4" />
-                Open Document in AI Chat
+                Ask Macro
               </Dropdown.Item>
             </Show>
             <Dropdown.Item onSelect={handleCopy}>

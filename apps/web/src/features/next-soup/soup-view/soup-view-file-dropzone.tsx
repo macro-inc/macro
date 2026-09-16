@@ -6,11 +6,17 @@ import { createSignal, type FlowComponent, Show } from 'solid-js';
 
 false && fileFolderDrop;
 
-export const SoupViewFileDropzone: FlowComponent = (props) => {
+export const SoupViewFileDropzone: FlowComponent<{ projectId?: string }> = (
+  props
+) => {
   const [isDragging, setIsDragging] = createSignal(false);
   const [isValidDrag, setIsValidDrag] = createSignal(true);
 
-  const handleFileUpload = useHandleFileUpload();
+  const handleFileUpload = useHandleFileUpload({
+    get projectId() {
+      return props.projectId;
+    },
+  });
 
   return (
     <div

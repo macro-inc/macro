@@ -2,6 +2,7 @@ import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import {
   config,
+  CODEX_OAUTH_KMS_ALIAS,
   getAiToolsInfra,
   getMacroApiToken,
   getServiceUrl,
@@ -86,6 +87,10 @@ const service = new AgentHarnessService(`agent-harness-service-${stack}`, {
   queueArns: [...aiTools.queueArns],
   bucketArns: [...aiTools.bucketArns],
   containerEnvVars: [
+    {
+      name: 'CODEX_OAUTH_KMS_KEY_ID',
+      value: CODEX_OAUTH_KMS_ALIAS,
+    },
     {
       name: 'ENVIRONMENT',
       value: stack,

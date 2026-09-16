@@ -95,9 +95,12 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
     return map;
   });
 
-  const { replaceOrInsertSplit } = useSplitLayout();
-  const handleEntityClick = (entity: EntityData) =>
-    replaceOrInsertSplit(getEntityClickContent(entity));
+  const { openWithSplit } = useSplitLayout();
+  const handleEntityClick = (entity: EntityData, event: MouseEvent) =>
+    openWithSplit(getEntityClickContent(entity), {
+      activate: true,
+      preferNewSplit: event.shiftKey,
+    });
 
   const rows = createMemo<AttachmentEntityListRow[]>(() => {
     const entities = soupQuery.data?.entities ?? [];
@@ -115,7 +118,7 @@ export function ChannelAttachmentEntitySection(props: { channelId: string }) {
           entity,
           timestamp: attachment?.created_at,
           senderId: attachment?.sender_id,
-          onClick: () => handleEntityClick(entity),
+          onClick: (event) => handleEntityClick(entity, event),
         };
       });
   });

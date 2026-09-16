@@ -1,27 +1,27 @@
 import { LIST_VIEW_PATHS } from '@app/constants/list-views';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
-import BellIcon from '@phosphor/bell.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import ChatsCircleIcon from '@phosphor/chats-circle.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FolderSimpleIcon from '@phosphor/folder-simple.svg';
+import HouseIcon from '@phosphor/house.svg';
 import ListChecksIcon from '@phosphor/list-checks.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
-import BellFillIcon from '@phosphor-fill/bell-fill.svg';
 import BuildingsFillIcon from '@phosphor-fill/buildings-fill.svg';
 import CalendarBlankFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
 import ChatsCircleFillIcon from '@phosphor-fill/chats-circle-fill.svg';
 import EnvelopeFillIcon from '@phosphor-fill/envelope-fill.svg';
 import FolderSimpleFillIcon from '@phosphor-fill/folder-simple-fill.svg';
+import HouseFillIcon from '@phosphor-fill/house-fill.svg';
 import ListChecksFillIcon from '@phosphor-fill/list-checks-fill.svg';
 import SparkleFillIcon from '@phosphor-fill/sparkle-fill.svg';
 import type { NavIcon } from './nav-glyph';
 
 /**
  * A SidebarRail nav button's definition: a `SidebarItem` plus the filled icon
- * the button cross-fades to while its view is active. Both are required here,
+ * the button switches to while its view is active. Both are required here,
  * unlike `SidebarItem['icon']` — a rail button is nothing but its glyph.
  */
 export type SidebarNextNavItem = SidebarItem & {
@@ -35,22 +35,22 @@ export type SidebarNextNavItem = SidebarItem & {
  *
  * Phosphor icons rather than the animated `wide-*` set the old sidebar uses:
  * they are plain `fill="currentColor"` SVGs, so the active button's
- * `text-accent` colours the glyph.
+ * `text-ink-muted` colours the glyph.
  *
  * The labels are new but every destination is an existing view id, so the
- * `hotkeyToken`s are the ones `GoToHotkeys` already registers — `g i` still
- * reaches Notifications, `g f` still reaches Drive. `GoToHotkeys` is mounted from
+ * `hotkeyToken`s are the ones `GoToHotkeys` already registers — `g h`
+ * reaches Home, `g f` still reaches Drive. `GoToHotkeys` is mounted from
  * `Layout` off `buildSidebarLinks` and is independent of which sidebar renders,
  * so the shortcuts work unchanged; these tokens only label the tooltips.
  */
 const SIDEBAR_NEXT_NAV_ITEMS = [
   {
     id: 'inbox',
-    label: 'Notifications',
+    label: 'Home',
     href: LIST_VIEW_PATHS.inbox,
-    icon: BellIcon,
-    iconActive: BellFillIcon,
-    hotkey: 'i',
+    icon: HouseIcon,
+    iconActive: HouseFillIcon,
+    hotkey: 'h',
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {

@@ -11,7 +11,6 @@ import {
   toEntityActionListState,
   useEntityActionHotkeys,
 } from '@app/features/next-soup/actions';
-import { InboxListEntity } from '@app/features/next-soup/soup-view/views/inbox/InboxListEntity';
 import {
   createSoupEntityActions,
   MaybeSoupEntityActionDrawerManager,
@@ -28,6 +27,7 @@ import {
   useSplitPanelOrThrow,
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
+import { useChannelsContext } from '@core/context/channels';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
@@ -35,12 +35,12 @@ import {
   isNonMemberChannelEntity,
   type WithNotification,
 } from '@entity';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import { getChannelThreadName } from '@entity/utils/channel-thread-name';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
-import { Button, cn } from '@ui';
+import { Button } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -71,6 +71,7 @@ import {
   type InboxDataSourceItem,
   useInboxDataSource,
 } from '../queries/use-inbox-query';
+import { HomeListEntity } from './HomeListEntity';
 import { InboxDateGroupHeader } from './InboxDateGroupHeader';
 import { InboxEmptyState } from './InboxEmptyState';
 
@@ -91,6 +92,11 @@ type InboxListProps = {
 
 /** Compact notification list used by the Notifications workspace. */
 export function InboxList(props: InboxListProps) {
+  const channels = useChannelsContext();
+  const channelName = (entity: WithNotification<EntityData>) =>
+    entity.type === 'channel_thread'
+      ? getChannelThreadName(entity, channels.channelsById())
+      : undefined;
   const { state } = useInboxView();
   const panel = useSplitPanelOrThrow();
   const notificationSource = useGlobalNotificationSource();
@@ -106,7 +112,7 @@ export function InboxList(props: InboxListProps) {
       selection: {
         getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
       },
-      isNavigable: (row) => row.kind === 'entity' || row.kind === 'load-more',
+      isNavigable: (row) => row.kind === 'entity',
       isSelectable: (row) => row.kind === 'entity',
       onActivate,
     })
@@ -139,12 +145,6 @@ export function InboxList(props: InboxListProps) {
     item,
     metadata,
   }: ListActivation<InboxDataSourceItem, InboxListActivationMetadata>) {
-    if (item.kind === 'load-more') {
-      if (!item.isLoading) void source.loadMore();
-
-      return;
-    }
-
     if (item.kind !== 'entity') return;
 
     const sourceRow = source.items().find((row) => row.id === item.id);
@@ -431,29 +431,64 @@ export function InboxList(props: InboxListProps) {
   });
 
   function checkNearEnd() {
-    const handle = virtualizer();
-    if (!handle) return;
+    if (
+      forceEmptyState() ||
+      source.isLoading() ||
+      source.isFetching() ||
+      source.error() ||
+      !source.hasMore()
+    )
+      return;
 
-    if (!source.hasMore()) return;
+    const container = pullScrollContainer();
+    if (!container || container.clientHeight === 0) return;
 
     const distance =
-      handle.scrollSize - handle.scrollOffset - handle.viewportSize;
-    if (distance < 300 && !source.isLoadingMore()) {
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    if (distance < 300) {
       void source.loadMore();
     }
   }
+
+  const scrollContainerSize = createElementSize(pullScrollContainer);
+  createEffect(() => {
+    rows();
+    source.isFetching();
+    scrollContainerSize.height;
+
+    // Fill short or filtered pages without waiting for a scroll event.
+    const frame = requestAnimationFrame(checkNearEnd);
+    onCleanup(() => cancelAnimationFrame(frame));
+  });
 
   return (
     <MaybeSoupEntityActionDrawerManager>
       <div
         ref={listRoot}
         role="grid"
-        aria-label="Notifications"
+        aria-label="Home"
         aria-multiselectable="true"
         aria-activedescendant={list.focus.key()}
         tabIndex={0}
         class="soup-list relative mt-3 flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none touch:mt-0"
       >
+        <Show when={source.warning()}>
+          {(warning) => (
+            <div
+              role="status"
+              class="flex items-center gap-2 px-4 pb-2 text-xs text-ink-muted"
+            >
+              <span>{warning()}</span>
+              <button
+                type="button"
+                class="underline"
+                onClick={() => void source.refresh()}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+        </Show>
         <PullToRefresh
           scrollContainer={pullScrollContainer}
           onRefresh={pullRefresh}
@@ -485,7 +520,7 @@ export function InboxList(props: InboxListProps) {
             >
               <div class="grid min-h-0 flex-1 place-items-center text-ink-muted touch:pt-(--mobile-content-inset-top)">
                 <SpinnerIcon
-                  aria-label="Loading notifications"
+                  aria-label="Loading Home"
                   class="size-5 animate-spin"
                 />
               </div>
@@ -496,7 +531,7 @@ export function InboxList(props: InboxListProps) {
                 ref={setEmptyViewport}
                 class="flex min-h-0 flex-1 flex-col items-center justify-center gap-3 overflow-y-auto pb-[max(1rem,var(--mobile-content-inset-bottom,0px))] touch:pt-(--mobile-content-inset-top) text-sm text-ink-muted"
               >
-                <span>Notifications couldn’t be loaded.</span>
+                <span>Home couldn’t be loaded.</span>
                 <Button
                   variant="outline"
                   size="sm"
@@ -523,6 +558,7 @@ export function InboxList(props: InboxListProps) {
                   soupNavigationTouchHighlight(element);
                 }}
                 class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto overscroll-none pb-[max(0.5rem,var(--mobile-content-inset-bottom,0px))]"
+                onScroll={checkNearEnd}
               >
                 {/* The spacer scrolls away; the viewport stays behind the filters. */}
                 <div
@@ -538,11 +574,10 @@ export function InboxList(props: InboxListProps) {
                     isTouchDevice() ? (topSpacerSize.height ?? 0) : 0
                   }
                   bufferSize={500}
-                  itemSize={88}
+                  itemSize={36}
                   keepMounted={
                     list.focus.index() >= 0 ? [list.focus.index()] : undefined
                   }
-                  onScroll={checkNearEnd}
                 >
                   {(row) => (
                     <Switch>
@@ -577,9 +612,14 @@ export function InboxList(props: InboxListProps) {
                               data-soup-entity
                             >
                               <div role="gridcell">
-                                <InboxListEntity
-                                  class="mx-0 w-full border-b-[1px] border-thread-rail touch:border-b-0"
-                                  cardClass="rounded-none px-4 py-3 mobile:pl-(--soup-row-padding-l)"
+                                <HomeListEntity
+                                  channelName={channelName(entityRow().entity)}
+                                  timestamp={
+                                    state.tab === 'signal'
+                                      ? entityRow().entity.sortTs
+                                      : (entityRow().entity.notifiedAt ??
+                                        entityRow().entity.sortTs)
+                                  }
                                   entity={entityRow().entity}
                                   occurrenceKey={entityRow().id}
                                   checked={list.selection.isSelected(
@@ -590,7 +630,6 @@ export function InboxList(props: InboxListProps) {
                                     !isTouchDevice() &&
                                     list.focus.key() === entityRow().id
                                   }
-                                  focusable={false}
                                   entityRowConfig={{
                                     swipeLeftColor: 'bg-success',
                                     swipeLeftRevealedComponent: (
@@ -619,47 +658,6 @@ export function InboxList(props: InboxListProps) {
                               </div>
                             </div>
                           </SoupEntityContextMenu>
-                        )}
-                      </Match>
-                      <Match when={row.kind === 'load-more' ? row : undefined}>
-                        {(loadMore) => (
-                          <div id={loadMore().id} role="row">
-                            <div
-                              role="gridcell"
-                              aria-busy={loadMore().isLoading}
-                              class={cn(
-                                'flex min-h-12 items-center justify-center',
-                                !isTouchDevice() &&
-                                  list.focus.key() === loadMore().id &&
-                                  'bg-active/60'
-                              )}
-                              onClick={() =>
-                                list.activate.key(loadMore().id, {
-                                  reason: 'pointer',
-                                })
-                              }
-                            >
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                depth={2}
-                                disabled={loadMore().isLoading}
-                                class="bg-surface"
-                              >
-                                <Show
-                                  when={!loadMore().isLoading}
-                                  fallback={
-                                    <SpinnerIcon class="size-3 animate-spin" />
-                                  }
-                                >
-                                  <CaretDownIcon class="size-2.5" />
-                                </Show>
-                                {loadMore().isLoading
-                                  ? 'Loading...'
-                                  : 'Load More'}
-                              </Button>
-                            </div>
-                          </div>
                         )}
                       </Match>
                     </Switch>

@@ -1,3 +1,7 @@
+import {
+  entityDetailTarget,
+  useEntityDetailNavigationStack,
+} from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { makePersistedState } from '@app/lib/persistence';
@@ -5,6 +9,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
+import type { Accessor } from 'solid-js';
 import {
   createStore,
   produce,
@@ -16,6 +21,7 @@ import { TASK_DEFAULT_GROUP_BY } from './constants';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
 import { createTasksViewPersistence } from './persistence';
 import type {
+  TaskDetailTarget,
   TaskSortId,
   TasksViewState,
   TasksViewStateOptions,
@@ -29,6 +35,9 @@ type TasksViewProviderProps = ContextProviderProps & {
 export type TasksViewContext = {
   state: Store<TasksViewState>;
   setState: SetStoreFunction<TasksViewState>;
+  selectedTask: Accessor<TaskDetailTarget | undefined>;
+  openTask: (task: TaskDetailTarget) => void;
+  closeTask: () => void;
   setTab: (tab: TaskTab) => void;
   setFacets: (facets: TasksViewState['facets']) => void;
   setPrimarySort: (id: TaskSortId) => void;
@@ -41,6 +50,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   TasksViewProviderProps
 >('TasksView', (props) => {
   const panel = useSplitPanelOrThrow();
+  const navigationStack = useEntityDetailNavigationStack();
   const userId = useUserId();
 
   const initial = props.initialState ?? {};
@@ -70,7 +80,39 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     })
   );
 
+  const selectedTask = (): TaskDetailTarget | undefined => {
+    const taskEntry = navigationStack.entries.find(
+      (entry) =>
+        entry.data.type === 'document' && entry.data.subType?.type === 'task'
+    );
+    if (!taskEntry) return undefined;
+
+    if (
+      taskEntry.data.type !== 'document' ||
+      taskEntry.data.subType?.type !== 'task'
+    ) {
+      return undefined;
+    }
+    return {
+      id: taskEntry.data.id,
+      fallbackName: taskEntry.data.fallbackName,
+    };
+  };
+
+  const openTask = (task: TaskDetailTarget) => {
+    navigationStack.reset(
+      entityDetailTarget.document({
+        id: task.id,
+        fileType: 'md',
+        subType: { type: 'task' },
+        fallbackName: task.fallbackName,
+      })
+    );
+  };
+  const closeTask = navigationStack.clear;
+
   const setTab = (tab: TaskTab) => {
+    closeTask();
     if (state.tab === tab) return;
 
     setState(
@@ -84,6 +126,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   };
 
   const setFacets = (facets: TasksViewState['facets']) => {
+    closeTask();
     setState('facets', reconcile(normalizeFacetSelection(facets)));
   };
 
@@ -106,6 +149,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   return {
     state,
     setState,
+    selectedTask,
+    openTask,
+    closeTask,
     setTab,
     setFacets,
     setPrimarySort,

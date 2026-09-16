@@ -11,6 +11,10 @@ fn initiative() -> Entity<'static> {
     EntityType::Initiative.with_entity_string("20000000-0000-0000-0000-000000000007".to_string())
 }
 
+fn chat() -> Entity<'static> {
+    EntityType::Chat.with_entity_string("20000000-0000-0000-0000-000000000003".to_string())
+}
+
 fn command(facts: &TeamShareFacts, level: Option<AccessLevel>) -> AuthorizedTeamShareCommand {
     authorize_team_share(
         Some(&facts.owner),
@@ -121,6 +125,17 @@ async fn apply_inserts_updates_and_deletes_direct_team_entity_access_for_initiat
 ) -> rootcause::Result<()> {
     let mut tx = pool.begin().await?;
     apply_comment_view_and_clear(&mut tx, &initiative()).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn apply_inserts_updates_and_deletes_direct_team_entity_access_for_chat(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    let mut tx = pool.begin().await?;
+    apply_comment_view_and_clear(&mut tx, &chat()).await
 }
 
 #[sqlx::test(

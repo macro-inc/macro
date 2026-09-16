@@ -14,7 +14,7 @@ export const PERSONAL_TASK_TABS: TaskTabItem[] = [
 ];
 
 export const TEAM_TASK_TABS: TaskTabItem[] = [
-  { id: 'team-tasks', label: 'Team tasks' },
+  { id: 'team-tasks', label: 'All tasks' },
 ];
 
 export const TASK_TABS = [...PERSONAL_TASK_TABS, ...TEAM_TASK_TABS];

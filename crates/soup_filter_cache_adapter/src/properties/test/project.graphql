@@ -1,0 +1,21 @@
+query PropertySeed {
+  user {
+    id
+    soup(input: {initial: {limit: 100}}) {
+      items {
+        __typename id cacheProjection
+        ... on GraphqlSoupProject {
+          ownerId parentId createdAt updatedAt notifications { id }
+          properties {
+            id propertyDefinitionId
+            value {
+              __typename
+              ... on GraphqlSelectOptionPropertyValue { optionIds }
+              ... on GraphqlEntityReferencePropertyValue { references { entityId } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

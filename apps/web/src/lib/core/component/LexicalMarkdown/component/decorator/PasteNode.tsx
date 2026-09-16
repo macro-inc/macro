@@ -1,4 +1,5 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { isInBlock } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -31,6 +32,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const editor = () => wrapper?.editor;
   const selection = () => wrapper?.selection;
+  const portalMount = isInBlock() ? blockElementSignal.get : () => undefined;
 
   const [open, setOpen] = createSignal(false);
   const [menuOpen, setMenuOpen] = createSignal(false);
@@ -135,7 +137,7 @@ export function PasteNode(props: PasteNodeDecoratorProps) {
               <Dropdown.Trigger size="icon-sm" variant="ghost">
                 <DotsThree />
               </Dropdown.Trigger>
-              <Dropdown.Content mount={blockElementSignal.get()}>
+              <Dropdown.Content mount={portalMount()}>
                 <Dropdown.Group>
                   <Dropdown.Item onSelect={copyText}>
                     <Copy class="size-4 shrink-0" />

@@ -49,7 +49,10 @@ mod test;
 /// Maximum accepted GraphQL filter expression depth.
 pub const MAX_FILTER_DEPTH: usize = 64;
 /// Maximum accepted JSON values in one GraphQL filter input.
-pub const MAX_FILTER_NODES: usize = 2_048;
+/// JSON literal/Boolean wrappers need more nodes than the resulting expression:
+/// combined Files associations expand the finite file-type registry past 2,048
+/// JSON values while staying inside the cache's 2,048-expression-node budget.
+pub const MAX_FILTER_NODES: usize = 4_096;
 /// Maximum bytes accepted in one string value.
 pub const MAX_FILTER_STRING_BYTES: usize = 16 * 1_024;
 /// Maximum aggregate bytes across string values.

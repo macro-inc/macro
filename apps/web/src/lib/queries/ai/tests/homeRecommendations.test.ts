@@ -143,6 +143,12 @@ describe('pickRecommendations', () => {
 });
 
 describe('recommendationSchema', () => {
+  it('accepts three recommendations', () => {
+    expect(
+      recommendationSchema.safeParse(recommendations('a', 'b', 'c')).success
+    ).toBe(true);
+  });
+
   it(`rejects more than ${MAX_RECOMMENDATIONS} recommendations`, () => {
     expect(
       recommendationSchema.safeParse(recommendations('a', 'b', 'c', 'd'))

@@ -5,11 +5,10 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import EmptyStatePreviewIcon from '@design/empty-state-doc.svg';
 import { type EntityData, ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { EmptyStatePanel } from '@ui';
 import { createEffect, createSignal, onMount, Show, Suspense } from 'solid-js';
+import { HomeChatStart } from './components/HomeChatStart';
 import { InboxListLayout } from './components/InboxHeader';
 import { InboxList } from './components/InboxList';
 import { InboxTabs } from './components/InboxTabs';
@@ -24,20 +23,18 @@ export type InboxViewProps = {
 function InboxFallback() {
   return (
     <div class="grid min-h-0 min-w-0 flex-1 place-items-center text-ink-muted">
-      <SpinnerIcon
-        aria-label="Loading notifications"
-        class="size-5 animate-spin"
-      />
+      <SpinnerIcon aria-label="Loading Home" class="size-5 animate-spin" />
     </div>
   );
 }
 
-function NotificationsListPane(props: {
+function HomeListPane(props: {
   previewEntity: EntityData | undefined;
   onPreviewEntityChange: (entity: EntityData | undefined) => void;
+  onNewChat: () => void;
 }) {
   return (
-    <InboxListLayout tabs={<InboxTabs />}>
+    <InboxListLayout tabs={<InboxTabs />} onNewChat={props.onNewChat}>
       <Suspense fallback={<InboxFallback />}>
         <InboxList
           previewEntity={props.previewEntity}
@@ -58,18 +55,16 @@ function InboxViewRoot() {
   createEffect(() => {
     const nextTab = state.tab;
     if (nextTab === activeTab) return;
-
     activeTab = nextTab;
     setPreviewEntity(undefined);
   });
 
   createEffect(() => {
-    if (state.tab !== 'reminders') return;
-
-    setTab('signal');
+    if (state.tab === 'reminders') setTab('signal');
   });
+  const newChat = () => setPreviewEntity(undefined);
 
-  onMount(() => panel.handle.setDisplayName('Notifications'));
+  onMount(() => panel.handle.setDisplayName('Home'));
 
   return (
     <ListEntityMetadataQueryProvider>
@@ -82,8 +77,8 @@ function InboxViewRoot() {
                 <div class="size-full min-h-0 bg-panel">
                   <ViewShell.Root
                     aside={{
-                      width: 360,
-                      min: 300,
+                      width: 256,
+                      min: 224,
                       max: 420,
                       preserveDuringResize: false,
                     }}
@@ -93,21 +88,19 @@ function InboxViewRoot() {
                     resizable
                   >
                     <ViewShell.Aside class="flex flex-col bg-panel">
-                      <NotificationsListPane
+                      <HomeListPane
                         previewEntity={previewEntity()}
                         onPreviewEntityChange={setPreviewEntity}
+                        onNewChat={newChat}
                       />
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
                       <Show
                         when={previewEntity()}
                         fallback={
-                          <EmptyStatePanel
-                            graphic={EmptyStatePreviewIcon}
-                            title="No content selected"
-                            description="Select an item from the connected list to preview it here"
-                            centered
-                          />
+                          <Suspense fallback={<InboxFallback />}>
+                            <HomeChatStart />
+                          </Suspense>
                         }
                       >
                         {(entity) => (
@@ -127,9 +120,10 @@ function InboxViewRoot() {
             >
               <ViewShell.Root aside={false} main={{ min: 224 }}>
                 <ViewShell.Main>
-                  <NotificationsListPane
+                  <HomeListPane
                     previewEntity={previewEntity()}
                     onPreviewEntityChange={setPreviewEntity}
+                    onNewChat={newChat}
                   />
                 </ViewShell.Main>
               </ViewShell.Root>
