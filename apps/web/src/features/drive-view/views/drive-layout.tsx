@@ -130,7 +130,7 @@ export function DriveLayout(props: {
             variant="ghost"
             size="sm"
             square
-            class="size-6 shrink-0 rounded-lg not-disabled:hover:bg-transparent not-disabled:hover:bg-none not-disabled:active:bg-none"
+            class="size-6 shrink-0 rounded-lg not-disabled:hover:bg-transparent not-touch:not-disabled:hover:bg-none not-touch:not-disabled:active:bg-none"
             aria-label={
               props.state.rootOpen
                 ? 'Collapse Drive folders'
@@ -148,7 +148,7 @@ export function DriveLayout(props: {
           </Button>
           <ViewSidebar.Item
             class={cn(
-              'min-w-0 flex-1 px-2 font-normal bg-transparent not-disabled:hover:bg-transparent not-disabled:hover:bg-none not-disabled:active:bg-none',
+              'min-w-0 flex-1 px-2 font-normal bg-transparent not-disabled:hover:bg-transparent not-touch:not-disabled:hover:bg-none not-touch:not-disabled:active:bg-none',
               selectedFolder() === null && 'text-ink'
             )}
             aria-current={selectedFolder() === null ? 'page' : undefined}
