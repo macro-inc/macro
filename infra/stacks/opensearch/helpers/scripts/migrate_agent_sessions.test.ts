@@ -138,39 +138,38 @@ test('resumes after destination creation without recreating it', async () => {
   expect(writes.map((write) => write.path)).toEqual(['/_aliases']);
 });
 
-test.each([
-  'text',
-  'missing',
-  'wrong relation',
-  'wrong alias',
-  'wrong date',
-])('refuses an existing destination with %s mapping', async (defect) => {
-  const mapping = structuredClone(spec.body.mappings) as {
-    properties: Record<string, unknown>;
-  };
-  if (defect === 'missing') delete mapping.properties.content;
-  if (defect === 'text') {
-    mapping.properties.agent_session_relation = { type: 'text' };
-  }
-  if (defect === 'wrong relation') {
-    mapping.properties.agent_session_relation = {
-      type: 'join',
-      relations: { agent_session: 'other' },
+test.each(['text', 'missing', 'wrong relation', 'wrong alias', 'wrong date'])(
+  'refuses an existing destination with %s mapping',
+  async (defect) => {
+    const mapping = structuredClone(spec.body.mappings) as {
+      properties: Record<string, unknown>;
     };
+    if (defect === 'missing') delete mapping.properties.content;
+    if (defect === 'text') {
+      mapping.properties.agent_session_relation = { type: 'text' };
+    }
+    if (defect === 'wrong relation') {
+      mapping.properties.agent_session_relation = {
+        type: 'join',
+        relations: { agent_session: 'other' },
+      };
+    }
+    if (defect === 'wrong alias') {
+      mapping.properties.entity_id = { type: 'alias', path: 'owner_id' };
+    }
+    if (defect === 'wrong date') {
+      mapping.properties.created_at_millis = {
+        type: 'date',
+        format: 'epoch_second',
+      };
+    }
+    const { client, writes } = cluster({ destination: mapping });
+    await expect(migrateAgentSessions(client, false)).rejects.toThrow(
+      'mapping'
+    );
+    expect(writes).toEqual([]);
   }
-  if (defect === 'wrong alias') {
-    mapping.properties.entity_id = { type: 'alias', path: 'owner_id' };
-  }
-  if (defect === 'wrong date') {
-    mapping.properties.created_at_millis = {
-      type: 'date',
-      format: 'epoch_second',
-    };
-  }
-  const { client, writes } = cluster({ destination: mapping });
-  await expect(migrateAgentSessions(client, false)).rejects.toThrow('mapping');
-  expect(writes).toEqual([]);
-});
+);
 
 test('accepts normalized default-true field parameters', async () => {
   const mapping = structuredClone(spec.body.mappings) as {
@@ -197,14 +196,14 @@ test('propagates read failures rather than treating them as missing indices', as
   expect(writes).toEqual([]);
 });
 
-test.each([
-  'createFails',
-  'healthFails',
-] as const)('%s leaves the old index intact', async (failure) => {
-  const { client, writes } = cluster({ [failure]: true });
-  await expect(migrateAgentSessions(client, false)).rejects.toThrow();
-  expect(writes.map((write) => write.path)).toEqual([`/${index}`]);
-});
+test.each(['createFails', 'healthFails'] as const)(
+  '%s leaves the old index intact',
+  async (failure) => {
+    const { client, writes } = cluster({ [failure]: true });
+    await expect(migrateAgentSessions(client, false)).rejects.toThrow();
+    expect(writes.map((write) => write.path)).toEqual([`/${index}`]);
+  }
+);
 
 test('reports an unacknowledged cutover as a failure', async () => {
   const { client } = cluster({ swapAcknowledged: false });
