@@ -14,8 +14,7 @@ import { isImageAttachment } from '@core/component/AI/util/attachment';
 import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
-import { createHasMultilineStructure } from '@core/component/LexicalMarkdown/utils/create-has-multiline-structure';
-import { createHasWrappedLines } from '@core/component/LexicalMarkdown/utils/create-has-wrapped-lines';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -171,8 +170,18 @@ export function ChatInput(props: ChatInputComponentProps) {
     !hasUploadingAttachments();
 
   let mdRef: undefined | HTMLDivElement;
-  const isMultiline = (): boolean =>
-    !isCollapsed() && (hasMultilineStructure() || hasWrappedLines());
+
+  const isTallVariant = createMemo(
+    () =>
+      props.variant === 'tall' ||
+      (isTouchDevice() && props.variant !== 'default')
+  );
+  const isCollapsed = () =>
+    props.collapseOnBlur &&
+    isTouchDevice() &&
+    !isTallVariant() &&
+    !isFocused() &&
+    !isEmptyInput();
 
   const sendMessage = createCallback(
     async (opts?: { modelOverride?: Model; metaKey?: boolean }) => {
@@ -220,13 +229,18 @@ export function ChatInput(props: ChatInputComponentProps) {
       props.onChange?.(md);
     });
 
-  const hasMultilineStructure = createHasMultilineStructure(
-    props.editor.buildHandle().lexical
+  const composerLayout = createComposerLayout(
+    props.editor.buildHandle().lexical,
+    {
+      container: lineEl,
+      mode: () => {
+        if (isTallVariant()) return 'expanded';
+        return isCollapsed() ? 'collapsed' : 'auto';
+      },
+    }
   );
-  const hasWrappedLines = createHasWrappedLines(props.editor.lexical, {
-    container: lineEl,
-    isCompact: () => !isMultiline() && !isTallVariant(),
-  });
+  const isMultiline = () =>
+    !isCollapsed() && composerLayout.hasMultilineContent();
 
   const hasAttachments = () =>
     attachments.attached().some(isImageAttachment) ||
@@ -313,19 +327,7 @@ export function ChatInput(props: ChatInputComponentProps) {
     </Show>
   );
 
-  const isTallVariant = createMemo(
-    () =>
-      props.variant === 'tall' ||
-      (isTouchDevice() && props.variant !== 'default')
-  );
-  const isCollapsed = () =>
-    props.collapseOnBlur &&
-    isTouchDevice() &&
-    !isTallVariant() &&
-    !isFocused() &&
-    !isEmptyInput();
-  const isCompactMobile = () =>
-    isTouchDevice() && !isTallVariant() && !isMultiline();
+  const isCompactMobile = () => isTouchDevice() && composerLayout.isCompact();
 
   return (
     <div class="relative">
@@ -353,9 +355,8 @@ export function ChatInput(props: ChatInputComponentProps) {
       <ComposerSurface
         class={cn(
           'h-auto',
-          !isMultiline() &&
+          composerLayout.isCompact() &&
             !hasAttachments() &&
-            !isTallVariant() &&
             'touch:rounded-full',
           props.class
         )}
@@ -440,10 +441,10 @@ export function ChatInput(props: ChatInputComponentProps) {
               class={cn(
                 'text-base text-ink touch:px-3 touch:py-2 not-touch:leading-[24.375px] not-touch:text-composer-ink',
                 isCompactMobile() && 'w-full touch:py-0',
-                (isMultiline() || isTallVariant()) && 'not-touch:px-[9.375px]'
+                !composerLayout.isCompact() && 'not-touch:px-[9.375px]'
               )}
               classList={{
-                'pl-[41.25px] touch:pl-10': !isMultiline() && !isTallVariant(),
+                'pl-[41.25px] touch:pl-10': composerLayout.isCompact(),
                 'pb-[37.5px] touch:pb-10': isMultiline() && !isTallVariant(),
                 'max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto':
                   isMobile() && isMultiline(),
@@ -458,7 +459,7 @@ export function ChatInput(props: ChatInputComponentProps) {
                   isCollapsed(),
               }}
               style={
-                !isMultiline() && !isTallVariant()
+                composerLayout.isCompact()
                   ? { 'padding-right': `${rightControlsInset()}px` }
                   : undefined
               }

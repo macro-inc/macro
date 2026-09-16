@@ -1,17 +1,31 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import type { LexicalEditor } from 'lexical';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { match } from 'ts-pattern';
+import { createHasMultilineStructure } from './create-has-multiline-structure';
 
-/** Track wrapping at the compact layout's width, even after the editor expands. */
-export function createHasWrappedLines(
+/** Auto fits the content; expanded and collapsed are host presentation overrides. */
+export type ComposerLayoutMode = 'auto' | 'expanded' | 'collapsed';
+
+/** Own the layout decision and measure wrapping at the compact layout's width. */
+export function createComposerLayout(
   editor: LexicalEditor,
   options: {
     container: Accessor<HTMLElement | undefined>;
-    isCompact: Accessor<boolean>;
+    mode?: Accessor<ComposerLayoutMode>;
   }
 ) {
   const [root, setRoot] = createSignal<HTMLElement | null>(null);
+  const hasMultilineStructure = createHasMultilineStructure(editor);
   const [hasWrappedLines, setHasWrappedLines] = createSignal(false);
+  const hasMultilineContent = () =>
+    hasMultilineStructure() || hasWrappedLines();
+  const isCompact = () =>
+    match(options.mode?.() ?? 'auto')
+      .with('auto', () => !hasMultilineContent())
+      .with('expanded', () => false)
+      .with('collapsed', () => true)
+      .exhaustive();
   let compactInset: number | undefined;
   let queued = false;
   let disposed = false;
@@ -27,7 +41,7 @@ export function createHasWrappedLines(
     // Moving the buttons below the text gives it more room. Keep measuring at
     // the original inline width so a borderline draft cannot oscillate between
     // layouts. Resizing the container still changes the available typing room.
-    if (options.isCompact()) compactInset = containerWidth - editorWidth;
+    if (isCompact()) compactInset = containerWidth - editorWidth;
     const width =
       containerWidth - (compactInset ?? containerWidth - editorWidth);
     if (width <= 0) return;
@@ -79,7 +93,7 @@ export function createHasWrappedLines(
   onCleanup(editor.registerUpdateListener(schedule));
   createResizeObserver(() => [root(), options.container()], schedule);
   createEffect(() => {
-    options.isCompact();
+    isCompact();
     options.container();
     schedule();
   });
@@ -106,5 +120,5 @@ export function createHasWrappedLines(
     disposed = true;
   });
 
-  return hasWrappedLines;
+  return { isCompact, hasMultilineContent };
 }

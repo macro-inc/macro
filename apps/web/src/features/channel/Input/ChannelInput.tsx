@@ -7,8 +7,7 @@ import {
   INSERT_DOCUMENT_MENTION_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import { createHasMultilineStructure } from '@core/component/LexicalMarkdown/utils/create-has-multiline-structure';
-import { createHasWrappedLines } from '@core/component/LexicalMarkdown/utils/create-has-wrapped-lines';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import {
   clearDragInsertPreview,
   insertDocumentMentionAtDragCoordinates,
@@ -346,16 +345,14 @@ export function ChannelInput(props: ChannelInputProps) {
   });
   const markdownHandle = markdownEditor.buildHandle();
   const lexicalEditor = () => markdownHandle.lexical;
-  const hasMultilineStructure = createHasMultilineStructure(lexicalEditor());
-  const oneLineInput = (): boolean =>
-    !isReplyInput(inputState.view()) &&
-    !inputState.view().showFormatRibbon &&
-    !inputState.view().attachments?.length &&
-    !hasMultilineStructure() &&
-    !hasWrappedLines();
-  const hasWrappedLines = createHasWrappedLines(lexicalEditor(), {
+  const { isCompact: oneLineInput } = createComposerLayout(lexicalEditor(), {
     container: layout,
-    isCompact: oneLineInput,
+    mode: () =>
+      isReplyInput(inputState.view()) ||
+      inputState.view().showFormatRibbon ||
+      inputState.view().attachments?.length
+        ? 'expanded'
+        : 'auto',
   });
   const [entityDragInsertStore, setEntityDragInsertStore] =
     createDragInsertStore();

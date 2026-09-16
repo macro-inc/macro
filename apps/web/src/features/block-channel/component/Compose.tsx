@@ -20,8 +20,7 @@ import {
 } from '@components/app/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
-import { createHasMultilineStructure } from '@core/component/LexicalMarkdown/utils/create-has-multiline-structure';
-import { createHasWrappedLines } from '@core/component/LexicalMarkdown/utils/create-has-wrapped-lines';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -199,18 +198,17 @@ export function ChannelCompose() {
     },
   });
   clearComposer = () => markdownEditor.controls.clear();
-  const hasMultilineStructure = createHasMultilineStructure(
-    markdownEditor.buildHandle().lexical
+  const { isCompact: oneLineInput } = createComposerLayout(
+    markdownEditor.buildHandle().lexical,
+    {
+      container: layout,
+      mode: () =>
+        inputState.view().showFormatRibbon ||
+        inputState.view().attachments?.length
+          ? 'expanded'
+          : 'auto',
+    }
   );
-  const oneLineInput = (): boolean =>
-    !inputState.view().showFormatRibbon &&
-    !inputState.view().attachments?.length &&
-    !hasMultilineStructure() &&
-    !hasWrappedLines();
-  const hasWrappedLines = createHasWrappedLines(markdownEditor.lexical, {
-    container: layout,
-    isCompact: oneLineInput,
-  });
 
   const placeholder = createMemo(() => {
     const name = channelName();

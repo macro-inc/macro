@@ -19,8 +19,7 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import { createHasMultilineStructure } from '@core/component/LexicalMarkdown/utils/create-has-multiline-structure';
-import { createHasWrappedLines } from '@core/component/LexicalMarkdown/utils/create-has-wrapped-lines';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
@@ -158,18 +157,13 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   // Build the editor handle immediately to ensure lexical is available for commands
   markdownEditor.buildHandle();
-  const hasMultilineStructure = createHasMultilineStructure(
-    markdownEditor.lexical
+  const { isCompact: oneLineInput } = createComposerLayout(
+    markdownEditor.lexical,
+    {
+      container: layout,
+      mode: () => (isTouchDevice() || showFormatRibbon() ? 'expanded' : 'auto'),
+    }
   );
-  const oneLineInput = (): boolean =>
-    !isTouchDevice() &&
-    !showFormatRibbon() &&
-    !hasMultilineStructure() &&
-    !hasWrappedLines();
-  const hasWrappedLines = createHasWrappedLines(markdownEditor.lexical, {
-    container: layout,
-    isCompact: oneLineInput,
-  });
 
   const commands = {
     send: async () => {
