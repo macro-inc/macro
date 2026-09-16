@@ -8,21 +8,14 @@ import {
 } from '@codemirror/search';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap, type Panel } from '@codemirror/view';
-import { useBlockId } from '@core/block';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import {
-  blockMetadataSignal,
-  blockTextSignal,
-  blockUserAccessSignal,
-} from '@core/signal/load';
-import { storageServiceClient } from '@service-storage/client';
 import { debounce, throttle } from '@solid-primitives/scheduled';
 import { basicSetup } from 'codemirror';
 import {
   createEffect,
-  createMemo,
   createSignal,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -47,32 +40,51 @@ function readOnlyExtension(readOnly: boolean): Extension {
     : [];
 }
 
-// put this in your extensions array
-export function CodeMirror() {
+async function loadCodeLanguage(fileType?: string | null): Promise<Extension> {
+  if (fileType) {
+    return loadLanguageFromExtensionWithFallback(fileType);
+  }
+
+  const { javascript } = await import('@codemirror/lang-javascript');
+  return javascript({ jsx: true, typescript: true });
+}
+
+export type CodeMirrorProps = {
+  text: string;
+  fileType?: string | null;
+  readOnly: boolean;
+  onTextChange: (text: string) => void;
+  onSave: (text: string) => Promise<void>;
+};
+
+export function CodeMirror(props: CodeMirrorProps) {
   let containerRef!: HTMLDivElement;
 
-  const blockText = blockTextSignal.get;
-  const setBlockText = blockTextSignal.set;
-  const blockUserAccess = blockUserAccessSignal.get;
-  const blockMetadata = blockMetadataSignal.get;
-  const blockId = useBlockId();
-
-  const readOnly = createMemo(
-    () => blockUserAccess() !== 'owner' && blockUserAccess() !== 'edit'
-  );
-
-  let latestText = blockText() ?? '';
+  let latestText = props.text;
+  let lastSavedText = props.text;
   let saving = false;
+  let saveQueued = false;
+
   const saveNow = async () => {
-    if (saving || readOnly() || !blockId) return;
+    if (props.readOnly || latestText === lastSavedText) return;
+    if (saving) {
+      saveQueued = true;
+      return;
+    }
+
     saving = true;
+    const textToSave = latestText;
     try {
-      await storageServiceClient.simpleSave({
-        documentId: blockId,
-        file: new Blob([latestText], { type: 'text/plain' }),
-      });
+      await props.onSave(textToSave);
+      lastSavedText = textToSave;
+    } catch (error) {
+      console.error('error saving code document', error);
     } finally {
       saving = false;
+      if (saveQueued) {
+        saveQueued = false;
+        void saveNow();
+      }
     }
   };
 
@@ -85,6 +97,7 @@ export function CodeMirror() {
   const [languageExtension, setLanguageExtension] =
     createSignal<Extension | null>(null);
   let view: EditorView | undefined;
+  let applyingExternalText = false;
 
   // The find bar lives in CodeMirror's panel slot (so match highlighting keeps
   // working) but renders through Solid, into the host element the panel hands
@@ -189,12 +202,12 @@ export function CodeMirror() {
           basicSetup,
           keymap.of([indentWithTab]),
           search({ top: true, createPanel: createSearchPanel }),
-          readOnlyCompartment.of(readOnlyExtension(readOnly())),
+          readOnlyCompartment.of(readOnlyExtension(props.readOnly)),
           languageCompartment.of([]),
           EditorView.updateListener.of((update) => {
-            if (!update.docChanged) return;
+            if (!update.docChanged || applyingExternalText) return;
             latestText = update.state.doc.toString();
-            setBlockText(latestText);
+            props.onTextChange(latestText);
             debouncedSave();
             throttledSave();
           }),
@@ -203,19 +216,17 @@ export function CodeMirror() {
       }),
     });
 
-    createEffect(async () => {
-      const metadata = blockMetadata();
-      if (metadata?.fileType) {
-        const extension = await loadLanguageFromExtensionWithFallback(
-          metadata.fileType
-        );
-        setLanguageExtension(extension);
-      } else {
-        // Default to JavaScript if no file type is available
-        const { javascript } = await import('@codemirror/lang-javascript');
-        setLanguageExtension(javascript({ jsx: true, typescript: true }));
-      }
-    });
+    let languageLoadId = 0;
+    createEffect(
+      on(
+        () => props.fileType,
+        async (fileType) => {
+          const loadId = ++languageLoadId;
+          const extension = await loadCodeLanguage(fileType);
+          if (loadId === languageLoadId) setLanguageExtension(extension);
+        }
+      )
+    );
 
     createEffect(() => {
       if (!view) return;
@@ -225,36 +236,37 @@ export function CodeMirror() {
       });
     });
 
-    let firstApply = true;
     createEffect(() => {
-      const serverText = blockText();
-      if (view && typeof serverText === 'string') {
-        if (firstApply) {
-          firstApply = false;
-          const cur = view.state.doc.toString();
-          if (serverText !== cur) {
-            view.dispatch({
-              changes: {
-                from: 0,
-                to: view.state.doc.length,
-                insert: serverText,
-              },
-            });
-            latestText = serverText; // keep our local cache in sync
-          }
-        }
-      }
+      const externalText = props.text;
+      if (!view || externalText === latestText) return;
+
+      latestText = externalText;
+      lastSavedText = externalText;
+      applyingExternalText = true;
+      view.dispatch({
+        changes: {
+          from: 0,
+          to: view.state.doc.length,
+          insert: externalText,
+        },
+      });
+      applyingExternalText = false;
     });
 
     createEffect(() => {
       if (!view) return;
       view.dispatch({
-        effects: readOnlyCompartment.reconfigure(readOnlyExtension(readOnly())),
+        effects: readOnlyCompartment.reconfigure(
+          readOnlyExtension(props.readOnly)
+        ),
       });
     });
   });
 
   onCleanup(() => {
+    debouncedSave.clear();
+    throttledSave.clear();
+    void saveNow();
     view?.destroy();
   });
 
