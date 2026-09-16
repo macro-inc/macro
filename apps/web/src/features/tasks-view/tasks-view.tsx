@@ -1,10 +1,11 @@
+import { EntityDetailNavigationStack } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { ViewShell } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createSignal, Match, onMount, Suspense, Switch } from 'solid-js';
-import { TaskDetail } from './components/TaskDetail';
+import { TasksDetailView } from './components/TasksDetailView';
 import { TasksHeader, TasksTopBar } from './components/TasksHeader';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
@@ -46,7 +47,7 @@ function TasksViewRoot() {
             <ViewShell.Main>
               <Switch>
                 <Match when={selectedTask()}>
-                  {(task) => <TaskDetail task={task()} />}
+                  {(task) => <TasksDetailView task={task()} />}
                 </Match>
                 <Match when={!selectedTask()}>
                   <TasksTopBar />
@@ -73,8 +74,12 @@ function TasksViewRoot() {
 /** Production Tasks view. */
 export function TasksView(props: TasksViewProps) {
   return (
-    <TasksViewProvider initialState={props.initialState}>
-      <TasksViewRoot />
-    </TasksViewProvider>
+    <EntityDetailNavigationStack.Root
+      shouldNavigate={(_, options) => options?.event?.shiftKey !== true}
+    >
+      <TasksViewProvider initialState={props.initialState}>
+        <TasksViewRoot />
+      </TasksViewProvider>
+    </EntityDetailNavigationStack.Root>
   );
 }
