@@ -13,6 +13,7 @@
 //! justfile pulls all three from AWS Secrets Manager.
 
 use std::collections::BTreeMap;
+use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use anyhow::{Context, bail};
@@ -62,8 +63,8 @@ pub enum GmailCommand {
 #[derive(Debug, Args)]
 pub struct ForwardArgs {
     /// The local email-service webhook to deliver notifications to, through
-    /// the instance proxy (e.g. http://localhost:50009/email/gmail/webhook
-    /// for `--instance 2634`)
+    /// the instance proxy (e.g. https://localhost:50009/email/gmail/webhook
+    /// for `--instance 2634`). Local HTTPS uses `infra/local/certs/ca.pem`.
     #[arg(long, default_value = "https://localhost:8090/email/gmail/webhook")]
     target: String,
     /// The Pub/Sub pull subscription attached to the Gmail watch topic
@@ -136,6 +137,58 @@ fn http_client() -> anyhow::Result<reqwest::Client> {
         .timeout(Duration::from_secs(120))
         .build()
         .context("building the HTTP client")
+}
+
+/// Client for the local-stack webhook only. Google calls stay on
+/// [`http_client`] so public TLS verification is unchanged. Local HTTPS
+/// (the host default, through the reverse proxy) adds the checked-in CA;
+/// rustls does not honor `SSL_CERT_FILE`.
+fn webhook_client(target: &str) -> anyhow::Result<reqwest::Client> {
+    let mut builder = reqwest::Client::builder().timeout(Duration::from_secs(120));
+    if is_local_https(target) {
+        let cert = local_proxy_ca().with_context(|| {
+            format!(
+                "local HTTPS webhook {target} needs infra/local/certs/ca.pem \
+                 (run from the repo, or pass --target http://…)"
+            )
+        })?;
+        builder = builder.add_root_certificate(cert);
+    }
+    builder.build().context("building the webhook HTTP client")
+}
+
+fn is_local_https(url: &str) -> bool {
+    url.starts_with("https://localhost:")
+        || url.starts_with("https://localhost/")
+        || url == "https://localhost"
+        || url.starts_with("https://127.0.0.1:")
+        || url.starts_with("https://127.0.0.1/")
+}
+
+fn local_proxy_ca() -> Option<reqwest::Certificate> {
+    local_proxy_ca_pem().and_then(|pem| reqwest::Certificate::from_pem(&pem).ok())
+}
+
+fn local_proxy_ca_pem() -> Option<Vec<u8>> {
+    local_proxy_ca_paths()
+        .into_iter()
+        .find(|path| path.is_file())
+        .and_then(|path| std::fs::read(path).ok())
+}
+
+fn local_proxy_ca_paths() -> Vec<PathBuf> {
+    const REL: &str = "infra/local/certs/ca.pem";
+    let mut paths = Vec::new();
+    if let Ok(mut dir) = std::env::current_dir() {
+        loop {
+            paths.push(dir.join(REL));
+            if !dir.pop() {
+                break;
+            }
+        }
+    }
+    paths.push(PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../../infra/local/certs/ca.pem"));
+    paths
 }
 
 fn require_test_account(email: &str) -> anyhow::Result<()> {
@@ -808,6 +861,7 @@ async fn ensure_subscription(
 /// them, so a stack that is down redelivers instead of losing sync events.
 async fn forward(args: ForwardArgs) -> anyhow::Result<()> {
     let http = http_client()?;
+    let webhook = webhook_client(&args.target)?;
     let mut sa = SaToken::from_env(http.clone()).await?;
     ensure_subscription(&http, &mut sa, &args.subscription, &args.topic).await?;
     let pull_url = format!(
@@ -878,7 +932,7 @@ async fn forward(args: ForwardArgs) -> anyhow::Result<()> {
                 "subscription": args.subscription,
             });
             let webhook_token = sa.webhook_bearer(&args.webhook_audience).await?.to_string();
-            match http
+            match webhook
                 .post(&args.target)
                 .bearer_auth(webhook_token)
                 .json(&envelope)
