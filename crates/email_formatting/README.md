@@ -38,3 +38,9 @@ from the repository root to preview a digest using sample notifications and an
 embedded local logo, so it works before the new asset is deployed. This
 convenience preview translates Askama expressions to Jinja2; Rust compilation
 and package tests remain the check for production template compatibility.
+
+## Styling reference
+
+Login code and notification digest, rendered with sample data:
+
+![Login code and notification digest styling](previews/transactional-emails.png)
