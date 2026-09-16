@@ -4,7 +4,7 @@ import type { AgentKind } from './agent-kind';
 import {
   type AgentConversationEntity,
   botUsage,
-  conversationsForMode,
+  conversationMode,
   groupConversations,
   selectRecentAgentConversations,
 } from './recent-conversations';
@@ -61,60 +61,41 @@ describe('selectRecentAgentConversations', () => {
   });
 });
 
-describe('conversationsForMode', () => {
-  const coder = session('coder', { botId: 'bot-coder' });
-  const chatAgent = session('agent', { botId: 'bot-chat' });
-  const plain = chat('plain');
-  const unknown = session('unknown', { botId: 'bot-unknown' });
-  const all: AgentConversationEntity[] = [coder, chatAgent, plain, unknown];
-
-  it('shows plain chats and chat-agent sessions in Chat', () => {
-    expect(conversationsForMode(all, 'chat', kindOf)).toEqual([
-      chatAgent,
-      plain,
-      unknown,
-    ]);
-  });
-
-  it('shows coder sessions in Code', () => {
-    expect(conversationsForMode(all, 'code', kindOf)).toEqual([coder]);
+describe('mixed conversation navigation', () => {
+  it('resolves each conversation mode independently of the new composer', () => {
+    expect(
+      conversationMode(session('code', { botId: 'bot-coder' }), kindOf)
+    ).toBe('code');
+    expect(conversationMode(session('agent'), kindOf)).toBe('chat');
+    expect(conversationMode(chat('plain'), kindOf)).toBe('chat');
+    expect(
+      conversationMode(session('unknown', { botId: 'unknown' }), kindOf)
+    ).toBe('chat');
   });
 
   it('prefers the bot on the row over the stored bot id', () => {
-    const relabeled = session('x', {
-      botId: 'bot-chat',
-      bot: { id: 'bot-coder', name: 'Coder' },
-    });
-    expect(conversationsForMode([relabeled], 'code', kindOf)).toEqual([
-      relabeled,
-    ]);
-  });
-});
-
-describe('groupConversations', () => {
-  it('is empty for nothing', () => {
-    expect(groupConversations([], 'chat')).toEqual([]);
-    expect(groupConversations([], 'code')).toEqual([]);
+    expect(
+      conversationMode(
+        session('x', {
+          botId: 'bot-chat',
+          bot: { id: 'bot-coder', name: 'Code agent' },
+        }),
+        kindOf
+      )
+    ).toBe('code');
   });
 
-  it('keeps Chat as one unlabeled group', () => {
-    const rows = [session('a'), chat('b')];
-    expect(groupConversations(rows, 'chat')).toEqual([
+  it('keeps chat and coding sessions together in their original date order', () => {
+    const rows: AgentConversationEntity[] = [
+      session('code', { botId: 'bot-coder' }),
+      chat('chat'),
+      session('ended', { botId: 'bot-coder', status: 'disconnected' }),
+      session('agent'),
+    ];
+    expect(groupConversations(rows)).toEqual([
       { id: 'recent', label: undefined, conversations: rows },
     ]);
-  });
-
-  it('splits Code into live and ended sessions', () => {
-    const starting = session('s', { status: 'no_messages' });
-    const ready = session('r', { status: 'acp_ready' });
-    const gone = session('g', { status: 'disconnected' });
-    expect(groupConversations([gone, starting, ready], 'code')).toEqual([
-      { id: 'active', label: 'Active', conversations: [starting, ready] },
-      { id: 'past', label: 'Past', conversations: [gone] },
-    ]);
-    expect(groupConversations([gone], 'code')).toEqual([
-      { id: 'past', label: 'Past', conversations: [gone] },
-    ]);
+    expect(groupConversations([])).toEqual([]);
   });
 });
 

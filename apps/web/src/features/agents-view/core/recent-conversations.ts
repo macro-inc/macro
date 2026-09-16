@@ -1,6 +1,5 @@
 import type { AgentSessionEntity, ChatEntity, EntityData } from '@entity';
-import type { AgentKind } from './agent-kind';
-import { conversationState } from './conversation-state';
+import { type AgentKind, modeForKind } from './agent-kind';
 import type { AgentsMode } from './mode';
 
 export type AgentConversationEntity = AgentSessionEntity | ChatEntity;
@@ -61,23 +60,17 @@ export function selectRecentAgentConversations(
 /** Names the bot behind a session. Plain chats are always Macro's. */
 export type ConversationKindResolver = (botId: string | undefined) => AgentKind;
 
-/**
- * The conversations a mode shows: Chat keeps plain chats and sessions with
- * chat agents, Code keeps sessions with coders.
- */
-export function conversationsForMode(
-  conversations: readonly AgentConversationEntity[],
-  mode: AgentsMode,
+/** Resolve navigation from the conversation itself, independent of composer mode. */
+export function conversationMode(
+  conversation: AgentConversationEntity,
   kindOf: ConversationKindResolver
-): AgentConversationEntity[] {
-  return conversations.filter((conversation) => {
-    if (conversation.type === 'chat') return mode === 'chat';
-    const kind = kindOf(conversationBotId(conversation));
-    return mode === 'code' ? kind === 'coder' : kind === 'agent';
-  });
+): AgentsMode {
+  return conversation.type === 'chat'
+    ? 'chat'
+    : modeForKind(kindOf(conversationBotId(conversation)));
 }
 
-type ConversationGroupId = 'recent' | 'active' | 'past';
+type ConversationGroupId = 'recent';
 
 export type ConversationGroup = {
   id: ConversationGroupId;
@@ -86,37 +79,13 @@ export type ConversationGroup = {
   conversations: AgentConversationEntity[];
 };
 
-/**
- * How the list is sectioned. Chat is one flat list, newest first. Code splits
- * sessions whose runtime is still up (starting or ready) from the ones whose
- * runtime has gone, so live work stays at the top.
- */
+/** One mixed list, retaining the query's newest-first order. */
 export function groupConversations(
-  conversations: readonly AgentConversationEntity[],
-  mode: AgentsMode
+  conversations: readonly AgentConversationEntity[]
 ): ConversationGroup[] {
-  if (conversations.length === 0) return [];
-  if (mode === 'chat') {
-    return [
-      { id: 'recent', label: undefined, conversations: [...conversations] },
-    ];
-  }
-
-  const active: AgentConversationEntity[] = [];
-  const past: AgentConversationEntity[] = [];
-  for (const conversation of conversations) {
-    const live =
-      conversation.type === 'agent_session' &&
-      conversationState(conversation.status) !== 'ended';
-    (live ? active : past).push(conversation);
-  }
-
-  const groups: ConversationGroup[] = [];
-  if (active.length)
-    groups.push({ id: 'active', label: 'Active', conversations: active });
-  if (past.length)
-    groups.push({ id: 'past', label: 'Past', conversations: past });
-  return groups;
+  return conversations.length
+    ? [{ id: 'recent', label: undefined, conversations: [...conversations] }]
+    : [];
 }
 
 export type BotUsage = {

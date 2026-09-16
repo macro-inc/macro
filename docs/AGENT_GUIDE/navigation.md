@@ -98,6 +98,11 @@ do not fetch additional pages to find every unread item. Opening a view alone do
 not clear its dot — reading or completing the represented items does. The button's
 accessible description is `Unread items` while its dot is active.
 
+The Agents sidebar mixes chat and coding sessions in one newest-first list.
+Its **New conversation** button opens the unified composer. The **Chat / Code**
+switch lives inside that composer beside the agent selector. Opening an existing
+row chooses its own mode and URL, independently of the new composer's mode.
+
 Home's inner rail starts with a full-width **New chat** plus button that returns
 to Home's starting pane without creating a chat. Email and Tasks use the same
 pill styling and top placement for **New email** and **New task**, replacing

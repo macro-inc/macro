@@ -1,32 +1,23 @@
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
-import {
-  modelProvider,
-  ProviderIcon,
-} from '@core/component/AI/component/ProviderIcon';
-import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
+import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
-import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import { useSettingsState } from '@core/constant/SettingsState';
-import { useAuthor, useUserId } from '@core/context/user';
+import { useUserId } from '@core/context/user';
 import CaretDownIcon from '@phosphor/caret-down.svg';
+import CheckIcon from '@phosphor/check.svg';
 import CodeIcon from '@phosphor/code.svg';
-import GearIcon from '@phosphor/gear.svg';
 import GithubIcon from '@phosphor/github-logo.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import XIcon from '@phosphor/x.svg';
-import { useCursorModelsQuery } from '@queries/auth/cursor-api-key';
+import { Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
-import { AgentAvatar, AgentIcon } from '../components/AgentGlyph';
+import { AgentIcon } from '../components/AgentGlyph';
 import { ChatComposer } from '../components/ChatComposer';
+import { ComposerModeSwitch } from '../components/ComposerModeSwitch';
 import { MenuAnchor, MenuGroup, MenuOption } from '../components/Menu';
 import { type ModelChoice, ModelSelector } from '../components/ModelSelector';
 import type { AgentKind } from '../core/agent-kind';
-import { relativeAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
-import {
-  type AgentConversationEntity,
-  botUsage,
-} from '../core/recent-conversations';
 import { parseRepositoryInput, repositoryLabel } from '../core/repository';
 import {
   MACRO_PERSONA_ID,
@@ -34,7 +25,7 @@ import {
   rosterForMode,
 } from '../core/roster';
 import { createRecentRepositories } from '../primitives/recent-repositories';
-import { CodeComposer } from './code-composer';
+import { createComposerModels } from '../queries/composer-models';
 
 /** What the composer hands the workspace to start a session with. */
 export type StartConversation = {
@@ -45,41 +36,17 @@ export type StartConversation = {
   repoUrl?: string;
 };
 
-const IN_MEMORY_MODELS: ModelChoice[] = Object.values(Model).map((id) => ({
-  id,
-  name: MODEL_PRETTYNAME[id],
-  provider: modelProvider(id) ?? 'other',
-}));
-
-function greetingForHour(hour: number): string {
-  if (hour < 12) return 'Good morning';
-  if (hour < 18) return 'Good afternoon';
-  return 'Good evening';
-}
-
-function firstName(author: string): string {
-  return author.includes('@') ? author.split('@')[0] : author.split(' ')[0];
-}
-
-/**
- * The New chat / New session page: who you are talking to, and the composer
- * that starts the conversation. Chat picks the agent from a pill; Code picks
- * the coder from cards and can hand it a repository.
- */
+/** One composer with mode-specific agents, drafts, models, and repository context. */
 export function NewChatPage(props: {
   mode: AgentsMode;
+  onModeChange: (mode: AgentsMode) => void;
   roster: RosterAgent[];
   rosterLoading: boolean;
-  /** The loaded conversations, for each coder's usage footer. */
-  conversations: AgentConversationEntity[];
   onStart: (start: StartConversation) => void;
   /** Opens the roster page on the given kind's tab. */
   onOpenRoster: (kind: AgentKind) => void;
-  /** Opens a saved coder in the editor. */
-  onConfigure: (agent: RosterAgent) => void;
 }) {
   const userId = useUserId();
-  const author = useAuthor();
   const { openSettings } = useSettingsState();
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
@@ -102,7 +69,7 @@ export function NewChatPage(props: {
   const [repoInput, setRepoInput] = createSignal('');
 
   // Code leads with the coder used most recently that can still be started;
-  // Macro's sandboxed coder is the fallback.
+  // Cursor is the default coding runtime.
   const defaultCoderId = () =>
     recentAgents
       .ids()
@@ -110,7 +77,7 @@ export function NewChatPage(props: {
         options().some((agent) => agent.id === id && !agent.unavailableReason)
       ) ??
     options().find((agent) => !agent.unavailableReason)?.id ??
-    MACRO_CODER_BOT_ID;
+    CURSOR_BOT_ID;
   const selected = createMemo(() => {
     const wanted =
       props.mode === 'code' ? (coderId() ?? defaultCoderId()) : chatAgentId();
@@ -130,38 +97,19 @@ export function NewChatPage(props: {
     if (agent.harness === 'cursor') openSettings('Harness');
   };
 
-  const cursorConnected = () =>
-    props.roster.find((agent) => agent.id === CURSOR_BOT_ID)?.runtime
-      .connected ?? false;
-  const cursorModels = useCursorModelsQuery(cursorConnected);
-  const models = (): ModelChoice[] => {
-    const persona = selected();
-    if (!persona) return [];
-    if (persona.harness === 'cursor') {
-      return cursorModels.isSuccess
-        ? cursorModels.data.models.map((model) => ({
-            id: model.id,
-            name: model.displayName,
-            provider: modelProvider(model.id) ?? 'other',
-          }))
-        : [];
-    }
-    if (persona.harness === 'in-memory' || persona.harness === 'macro-inmem') {
-      return IN_MEMORY_MODELS;
-    }
-    return [];
-  };
+  const modelCatalog = createComposerModels(selected);
+  const models = (): ModelChoice[] =>
+    modelCatalog.models().map((model) => ({
+      id: model.id,
+      name: model.name,
+      description: model.description ?? undefined,
+      group: model.group ?? undefined,
+    }));
+  const defaultModel = () =>
+    selected()?.defaultModel ?? modelCatalog.currentModel();
   const modelName = (id: string | undefined) =>
     id ? (models().find((model) => model.id === id)?.name ?? id) : 'default';
-  const currentModelId = () => modelOverride() ?? selected()?.defaultModel;
-  const usage = createMemo(() => botUsage(props.conversations));
-  const coders = () =>
-    options().toSorted((left, right) => {
-      const used = (agent: RosterAgent) =>
-        agent.botId ? (usage().get(agent.botId)?.lastUsedAt ?? 0) : 0;
-      return used(right) - used(left);
-    });
-
+  const currentModelId = () => modelOverride() ?? defaultModel();
   const send = (prompt: string) => {
     const persona = selected();
     if (!prompt.trim() || !persona || blocked()) return;
@@ -184,8 +132,6 @@ export function NewChatPage(props: {
     setRepoInput('');
   };
 
-  const greeting = greetingForHour(new Date().getHours());
-
   const agentSelector = () => (
     <MenuAnchor
       menuLabel="Agent"
@@ -196,6 +142,7 @@ export function NewChatPage(props: {
           aria-haspopup="listbox"
           aria-expanded={menu.open()}
           title="Agent"
+          aria-label="Agent"
           onClick={(event) => {
             event.stopPropagation();
             menu.toggle();
@@ -219,26 +166,35 @@ export function NewChatPage(props: {
                 agent={agent}
                 checked={agent.id === selected()?.id}
                 onSelect={() => {
-                  pick(agent.id);
+                  if (agent.connectLabel) connect(agent);
+                  else pick(agent.id);
                   close();
                 }}
               />
             )}
           </For>
           <Show when={options().some((agent) => agent.share !== 'system')}>
-            <MenuGroup>Your agents</MenuGroup>
+            <MenuGroup>
+              {props.mode === 'code' ? 'Your coding agents' : 'Your agents'}
+            </MenuGroup>
             <For each={options().filter((agent) => agent.share !== 'system')}>
               {(agent) => (
                 <AgentOption
                   agent={agent}
                   checked={agent.id === selected()?.id}
                   onSelect={() => {
-                    pick(agent.id);
+                    if (agent.connectLabel) connect(agent);
+                    else pick(agent.id);
                     close();
                   }}
                 />
               )}
             </For>
+          </Show>
+          <Show when={props.rosterLoading}>
+            <div role="status" class="px-3 py-2 text-xs text-ink-muted">
+              Loading agents…
+            </div>
           </Show>
           <div class="foot">
             <span class="cnt">
@@ -249,11 +205,11 @@ export function NewChatPage(props: {
               class="cta sm"
               onClick={() => {
                 close();
-                props.onOpenRoster('agent');
+                props.onOpenRoster(props.mode === 'code' ? 'coder' : 'agent');
               }}
             >
               <PlusIcon class="ph" />
-              Create agent
+              {props.mode === 'code' ? 'Create coding agent' : 'Create agent'}
             </button>
           </div>
         </>
@@ -265,61 +221,53 @@ export function NewChatPage(props: {
     <Show when={selected()}>
       <ModelSelector
         model={currentModelId()}
-        selected={modelOverride()}
         options={models()}
-        searchable={props.mode === 'code'}
+        emptyMessage={modelCatalog.message()}
         onSelect={setModelOverride}
         label={
-          <Show
-            when={modelOverride()}
-            fallback={
+          <Show when={currentModelId()} fallback="Select model">
+            {(model) => (
               <Show
-                when={props.mode === 'code'}
+                when={modelOverride()}
                 fallback={
                   <>
-                    <span class="k">default</span> (
-                    {modelName(selected()?.defaultModel)})
+                    <span class="k">default</span> ({modelName(model())})
                   </>
                 }
               >
-                <span class="k">default</span>&nbsp;
-                <span class="mono">
-                  {selected()?.defaultModel ?? 'default'}
-                </span>
-              </Show>
-            }
-          >
-            {(override) => (
-              <Show
-                when={props.mode === 'code'}
-                fallback={modelName(override())}
-              >
-                <span class="mono">{override()}</span>
+                {modelName(model())}
               </Show>
             )}
           </Show>
         }
       >
-        {(close) => (
-          <MenuOption
-            checked={!modelOverride()}
-            onSelect={() => {
-              setModelOverride(undefined);
-              close();
-            }}
+        <Dropdown.Group>
+          <Show
+            when={!selected()?.connectLabel}
+            fallback={
+              <Dropdown.Item
+                closeOnSelect
+                onSelect={() => {
+                  const agent = selected();
+                  if (agent) connect(agent);
+                }}
+              >
+                {selected()?.connectLabel}
+              </Dropdown.Item>
+            }
           >
-            <span class="logo">
-              <ProviderIcon model={selected()?.defaultModel} class="size-4" />
-            </span>
-            <span class="nm">
-              Agent default{' '}
-              <span style={{ color: 'var(--ink-placeholder)' }}>
-                · {modelName(selected()?.defaultModel)}
-              </span>
-            </span>
-            <span class="id mono">{selected()?.defaultModel}</span>
-          </MenuOption>
-        )}
+            <Dropdown.Item
+              closeOnSelect
+              onSelect={() => setModelOverride(undefined)}
+            >
+              <ProviderIcon model={defaultModel()} class="size-4" />
+              <span class="min-w-0 flex-1 truncate">Agent default</span>
+              <Show when={!modelOverride()}>
+                <CheckIcon class="size-3.5 shrink-0 text-accent" />
+              </Show>
+            </Dropdown.Item>
+          </Show>
+        </Dropdown.Group>
       </ModelSelector>
     </Show>
   );
@@ -401,7 +349,7 @@ export function NewChatPage(props: {
             </For>
           </Show>
           <div class="foot">
-            <span>Optional · clones into the sandbox</span>
+            <span>Optional · repository for this session</span>
             <span>{repositories.urls().length} repos</span>
           </div>
         </>
@@ -410,182 +358,39 @@ export function NewChatPage(props: {
   );
 
   return (
-    <section class="page newchat" data-active aria-label="New chat">
+    <section class="page newchat" data-active aria-label="New conversation">
       <div class="col">
         <div class="greeting">
-          <p class="hello">
-            {greeting}, {firstName(author())}
-          </p>
           <h2>
-            <Show
-              when={props.mode === 'chat'}
-              fallback={
-                <>
-                  What should <em>{selected()?.name ?? 'a coder'}</em> work on?
-                </>
-              }
-            >
-              <span class="mark">
-                <Show when={selected()}>
-                  {(agent) => <AgentIcon agent={agent()} />}
-                </Show>
-              </span>
-              <span>
-                What should <em>{selected()?.name ?? 'Macro'}</em> work on?
-              </span>
-            </Show>
+            {props.mode === 'code'
+              ? 'What should we build?'
+              : 'What should we work on?'}
           </h2>
-          <p>Ask across your docs, mail, and channels. @mention anything.</p>
         </div>
-
-        <div class="agents-strip" aria-label="Agents">
-          <div class="head">
-            <div style={{ display: 'flex', 'align-items': 'baseline' }}>
-              <h3>Your coders</h3>
-              <span class="hint">by last used</span>
-            </div>
-            <button
-              type="button"
-              class="cta"
-              onClick={() => props.onOpenRoster('coder')}
-            >
-              <PlusIcon class="ph" />
-              Create coder
-            </button>
-          </div>
-          <div class="track" role="radiogroup" aria-label="Agent">
-            <For each={coders()}>
-              {(agent) => {
-                const used = () =>
-                  agent.botId ? usage().get(agent.botId) : undefined;
-                return (
-                  <button
-                    type="button"
-                    class="card"
-                    role="radio"
-                    aria-checked={agent.id === selected()?.id}
-                    aria-disabled={
-                      agent.unavailableReason && !agent.connectLabel
-                        ? true
-                        : undefined
-                    }
-                    title={agent.unavailableReason}
-                    onClick={(event) => {
-                      if ((event.target as HTMLElement).closest('.cfg')) return;
-                      if (agent.connectLabel) return connect(agent);
-                      if (agent.unavailableReason) return;
-                      pick(agent.id);
-                    }}
-                  >
-                    <Show when={agent.persisted}>
-                      <span
-                        class="cfg"
-                        role="button"
-                        tabIndex={0}
-                        aria-label={`Configure ${agent.name}`}
-                        onClick={(event) => {
-                          event.stopPropagation();
-                          props.onConfigure(agent);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            props.onConfigure(agent);
-                          }
-                        }}
-                      >
-                        <GearIcon class="ph" />
-                      </span>
-                    </Show>
-                    <span class="top">
-                      <AgentAvatar agent={agent} coder />
-                      <span class="truncate">
-                        <div class="name">
-                          <span class="truncate">{agent.name}</span>
-                          <Show when={agent.share === 'system'}>
-                            <span
-                              class="badge system"
-                              style={{ 'font-size': '9px', padding: '1px 6px' }}
-                            >
-                              system
-                            </span>
-                          </Show>
-                        </div>
-                        <div class="handle">@{agent.handle}</div>
-                      </span>
-                    </span>
-                    <span class="runtime">
-                      <span
-                        class={agent.runtime.connected ? 'conn' : 'conn off'}
-                      />
-                      <span>{agent.runtime.label}</span>
-                      <Show when={agent.defaultModel}>
-                        {(model) => (
-                          <>
-                            <span class="sep">·</span>
-                            <span class="mono truncate">{model()}</span>
-                          </>
-                        )}
-                      </Show>
-                    </span>
-                    <span class="foot">
-                      <span>
-                        <Show
-                          when={agent.connectLabel}
-                          fallback={
-                            <Show when={used()} fallback="Not used yet">
-                              {(stats) => (
-                                <>
-                                  Last used{' '}
-                                  <b>{relativeAge(stats().lastUsedAt)}</b>
-                                </>
-                              )}
-                            </Show>
-                          }
-                        >
-                          {(label) => <b>{label()}</b>}
-                        </Show>
-                      </span>
-                      <span class="mono num">
-                        {used()?.sessions ?? 0} sessions
-                      </span>
-                    </span>
-                  </button>
-                );
-              }}
-            </For>
-            <Show when={props.rosterLoading && coders().length === 0}>
-              <span class="hint" role="status">
-                Loading coders…
-              </span>
-            </Show>
-          </div>
-        </div>
-
-        <Show
-          when={props.mode === 'chat'}
-          fallback={
-            <CodeComposer
-              draft={codeDraft()}
-              onDraftChange={setCodeDraft}
-              placeholder={`Task for @${selected()?.handle ?? 'coder'}`}
-              blockedReason={blocked()}
-              modelSelector={modelSelector()}
-              repositorySelector={repositorySelector()}
-              onSend={send}
+        <ChatComposer
+          draftKey={props.mode}
+          draft={props.mode === 'code' ? codeDraft() : chatDraft()}
+          onDraftChange={(draft) =>
+            props.mode === 'code' ? setCodeDraft(draft) : setChatDraft(draft)
+          }
+          blockedReason={blocked()}
+          modeSelector={
+            <ComposerModeSwitch
+              mode={props.mode}
+              onChange={props.onModeChange}
             />
           }
-        >
-          <ChatComposer
-            draft={chatDraft()}
-            onDraftChange={setChatDraft}
-            blockedReason={blocked()}
-            agentSelector={agentSelector()}
-            modelSelector={modelSelector()}
-            onSend={send}
-          />
-        </Show>
+          agentSelector={agentSelector()}
+          modelSelector={modelSelector()}
+          drawer={repositorySelector()}
+          drawerOpen={props.mode === 'code'}
+          placeholder={
+            props.mode === 'code'
+              ? 'Describe what you want to build'
+              : undefined
+          }
+          onSend={send}
+        />
       </div>
     </section>
   );
@@ -599,16 +404,18 @@ function AgentOption(props: {
   return (
     <MenuOption
       checked={props.checked}
-      disabled={!!props.agent.unavailableReason}
+      disabled={!!props.agent.unavailableReason && !props.agent.connectLabel}
       onSelect={props.onSelect}
     >
       <span class="logo">
         <AgentIcon agent={props.agent} class="ph" />
       </span>
       <span class="nm">{props.agent.name}</span>
-      <span class="hint">@{props.agent.handle}</span>
+      <span class="hint">
+        {props.agent.connectLabel ?? `@${props.agent.handle}`}
+      </span>
       <Show when={props.agent.kind === 'coder'}>
-        <span class="badge coder" title="Coder">
+        <span class="badge coder" title="Coding agent">
           <CodeIcon class="ph" />
         </span>
       </Show>

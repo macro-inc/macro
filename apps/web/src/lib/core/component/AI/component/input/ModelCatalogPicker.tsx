@@ -1,27 +1,28 @@
 import CaretDown from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import { cn, Dropdown } from '@ui';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
+import { modelProvider, ProviderIcon } from '../ProviderIcon';
 import {
   buildModelCatalog,
   type CatalogModelOption,
+  MAX_RECOMMENDED_MODELS,
   matchesModelQuery,
   modelFamilyHint,
   moreModelFamilies,
 } from './modelCatalog';
-
-/**
- * Scrolling lists (search hits, More models) cap at roughly eight `h-8` rows
- * plus a label, so the popover never grows with the size of the catalog.
- */
-const LIST_HEIGHT_CLASS = 'max-h-72 overflow-y-auto overscroll-contain';
 
 type ModelCatalogPickerProps = {
   value: string | null;
   options: CatalogModelOption[];
   onSelect: (id: string) => void;
   disabled?: boolean;
+  pending?: boolean;
+  triggerLabel?: JSX.Element;
+  children?: JSX.Element;
+  emptyMessage?: string;
   triggerClass?: string;
   contentClass?: string;
   placeholder?: string;
@@ -29,6 +30,17 @@ type ModelCatalogPickerProps = {
   ariaLabel?: string;
   placement?: 'top-start' | 'top-end' | 'bottom-start' | 'bottom-end';
 };
+
+function ModelIcon(props: { model?: string | null }) {
+  return (
+    <Show
+      when={modelProvider(props.model)}
+      fallback={<SparkleIcon class="size-4 shrink-0" />}
+    >
+      <ProviderIcon model={props.model} class="size-4" />
+    </Show>
+  );
+}
 
 function ModelRow(props: {
   option: CatalogModelOption;
@@ -39,10 +51,12 @@ function ModelRow(props: {
 }) {
   return (
     <Dropdown.Item
+      closeOnSelect
       class={cn('h-8 gap-2', props.selected && 'bg-ink/5 text-ink font-medium')}
-      title={props.option.description ?? undefined}
+      title={props.option.description ?? props.option.label}
       onSelect={props.onSelect}
     >
+      <ModelIcon model={props.option.id} />
       <span class="min-w-0 flex-1 truncate text-sm">{props.option.label}</span>
       <Show when={props.hint}>
         <span class="shrink-0 text-xs text-ink-extra-muted">{props.hint}</span>
@@ -86,7 +100,9 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
     );
   });
   const catalog = createMemo(() =>
-    buildModelCatalog(props.options, props.value ?? undefined)
+    props.options.length <= MAX_RECOMMENDED_MODELS
+      ? { recommended: props.options, families: [] }
+      : buildModelCatalog(props.options, props.value ?? undefined)
   );
   const extraFamilies = createMemo(() => moreModelFamilies(catalog()));
   const extraCount = createMemo(() =>
@@ -103,14 +119,21 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
           props.triggerClass
         )}
         aria-label={props.ariaLabel}
-        disabled={props.disabled}
+        aria-busy={props.pending || undefined}
+        title={displayValue()}
+        disabled={props.disabled || props.pending}
       >
-        <span class="truncate">{displayValue()}</span>
-        <CaretDown class="size-3.5 rotate-[-90deg] opacity-70" />
+        <ModelIcon model={props.value} />
+        <span class="min-w-0 truncate">
+          {props.triggerLabel ?? displayValue()}
+        </span>
+        <CaretDown class="size-3.5 shrink-0 rotate-[-90deg] opacity-70" />
       </Dropdown.Trigger>
       <Dropdown.Content
+        onPointerDown={(event: PointerEvent) => event.stopPropagation()}
+        onMouseDown={(event: MouseEvent) => event.stopPropagation()}
         class={cn(
-          'w-72 max-w-[min(24rem,calc(100vw-1rem))]',
+          'w-72 max-w-[calc(100vw-1rem)] max-h-[min(28rem,var(--kb-popper-content-available-height))] overflow-y-auto overscroll-contain',
           props.contentClass
         )}
         onOpenAutoFocus={(event) => {
@@ -125,7 +148,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
             placeholder={props.searchPlaceholder ?? 'Search models'}
             value={query()}
             onInput={(event) => setQuery(event.currentTarget.value)}
-            onMouseDown={(event) => event.stopPropagation()}
+            onMouseDown={(event: MouseEvent) => event.stopPropagation()}
             onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
               if (event.key !== 'Escape') event.stopPropagation();
@@ -137,6 +160,12 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
           />
         </div>
 
+        {props.children}
+        <Show when={props.options.length === 0}>
+          <div class="bg-menu px-3 py-2 text-xs text-ink-muted" role="status">
+            {props.emptyMessage ?? 'No models available.'}
+          </div>
+        </Show>
         <Show
           when={normalizedQuery().length > 0}
           fallback={
@@ -168,8 +197,16 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
                         <CaretRight class="size-3" />
                       </span>
                     </Dropdown.SubTrigger>
-                    <Dropdown.SubContent class="w-72 max-w-[min(24rem,calc(100vw-1rem))]">
-                      <Dropdown.Group class={LIST_HEIGHT_CLASS}>
+                    <Dropdown.SubContent
+                      onPointerDown={(event: PointerEvent) =>
+                        event.stopPropagation()
+                      }
+                      onMouseDown={(event: MouseEvent) =>
+                        event.stopPropagation()
+                      }
+                      class="w-72 max-w-[calc(100vw-1rem)] max-h-[var(--kb-popper-content-available-height)] overflow-y-auto overscroll-contain"
+                    >
+                      <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
                         <For each={extraFamilies()}>
                           {(family) => (
                             <>
@@ -198,7 +235,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
             </>
           }
         >
-          <Dropdown.Group class={LIST_HEIGHT_CLASS}>
+          <Dropdown.Group class="max-h-72 overflow-y-auto overscroll-contain">
             <Dropdown.GroupLabel>
               {filtered().length === 1
                 ? '1 matching model'

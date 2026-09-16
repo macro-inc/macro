@@ -18,11 +18,6 @@ import {
   MACRO_AGENT_HANDLE,
   MACRO_AGENT_NAME,
 } from '@core/constant/macroAgent';
-import {
-  MACRO_CODER_BOT_ID,
-  MACRO_CODER_HANDLE,
-  MACRO_CODER_NAME,
-} from '@core/constant/macroCoder';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
@@ -68,10 +63,10 @@ const KIND = {
     empty: 'No agents here yet.',
   },
   coder: {
-    title: 'Coders',
+    title: 'Coding agents',
     desc: 'Agents that write code. They take a repository and run on a runtime you configure below.',
-    cta: 'Create coder',
-    empty: 'No coders here yet. Create one, or pair a runtime below.',
+    cta: 'Create coding agent',
+    empty: 'No coding agents here yet. Create one, or pair a runtime below.',
   },
 } as const satisfies Record<AgentKind, Record<string, string>>;
 
@@ -97,19 +92,6 @@ const MACRO_ROW: Row = {
   kind: 'agent',
   share: 'system',
   runtime: 'Macro Harness',
-  model: 'Default model',
-  channels: 'All channels',
-  canEdit: false,
-  canDelete: false,
-};
-
-const MACRO_CODER_ROW: Row = {
-  id: MACRO_CODER_BOT_ID,
-  name: MACRO_CODER_NAME,
-  handle: MACRO_CODER_HANDLE,
-  kind: 'coder',
-  share: 'system',
-  runtime: 'Macro sandbox',
   model: 'Default model',
   channels: 'All channels',
   canEdit: false,
@@ -198,7 +180,6 @@ export function RosterPage(props: {
   const teamAgents = () => [MACRO_ROW, ...of('agent', 'team')];
   const privateAgents = () => of('agent', 'private');
   const teamCoders = () => [
-    MACRO_CODER_ROW,
     cursorRow(cursorConnected()),
     ...of('coder', 'team'),
   ];
@@ -271,7 +252,7 @@ export function RosterPage(props: {
             onClick={() => props.onKindChange('coder')}
           >
             <CodeIcon class="ph" />
-            Coders
+            Coding agents
             <span class="n">{coderCount()}</span>
           </button>
         </div>
@@ -308,8 +289,8 @@ export function RosterPage(props: {
         <Show when={props.kind === 'coder'}>
           <div class="sections" data-kind="coders" role="tabpanel">
             <Section
-              title="Team coders"
-              description="Coders shared with your team."
+              title="Team coding agents"
+              description="Coding agents shared with your team."
             >
               <Rows
                 rows={teamCoders()}
@@ -320,8 +301,8 @@ export function RosterPage(props: {
               />
             </Section>
             <Section
-              title="Private coders"
-              description="Coders owned by you rather than your team."
+              title="Private coding agents"
+              description="Coding agents owned by you rather than your team."
             >
               <Rows
                 rows={privateCoders()}
@@ -333,7 +314,7 @@ export function RosterPage(props: {
             </Section>
             <Section
               title="Runtimes"
-              description="Where coders run. Built-in runtimes are always available; paired runtimes come and go with your machine."
+              description="Where coding agents run. Built-in runtimes are always available; paired runtimes come and go with your machine."
               card={false}
             >
               <div class="scard runtimes">

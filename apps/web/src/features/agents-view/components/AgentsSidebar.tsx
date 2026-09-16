@@ -2,9 +2,9 @@ import { useViewControlHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
-import MacroLogo from '@icon/macro-logo.svg';
+import ChatIcon from '@phosphor/chat-circle.svg';
+import CodeIcon from '@phosphor/code.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import RobotIcon from '@phosphor/robot.svg';
 import { Key } from '@solid-primitives/keyed';
 import { createSignal, For, Show } from 'solid-js';
 import {
@@ -15,35 +15,13 @@ import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
 import {
   type AgentConversationEntity,
-  type AgentConversationTarget,
   type ConversationGroup,
   conversationBotId,
   conversationTimestamp,
 } from '../core/recent-conversations';
 
-const MODE_COPY = {
-  chat: {
-    newAction: 'New chat',
-    listTitle: 'Chats',
-    searchLabel: 'Search agent chats',
-    searchPlaceholder: 'Search chats',
-    empty: 'No chats yet.',
-    loading: 'Loading chats…',
-  },
-  code: {
-    newAction: 'New session',
-    listTitle: 'Sessions',
-    searchLabel: 'Search coder sessions',
-    searchPlaceholder: 'Search sessions',
-    empty: 'No coder sessions yet.',
-    loading: 'Loading sessions…',
-  },
-} as const satisfies Record<AgentsMode, Record<string, string>>;
-
 export type AgentsSidebarProps = {
-  mode: AgentsMode;
-  /** Whether Code is offered at all. Off, the switch is hidden. */
-  modeSwitch: boolean;
+  modeForConversation: (conversation: AgentConversationEntity) => AgentsMode;
   activeConversationId: string | undefined;
   search: string;
   groups: ConversationGroup[];
@@ -53,11 +31,10 @@ export type AgentsSidebarProps = {
   loadingNextPage: boolean;
   /** The bot behind a session, as `@handle`, when the roster knows it. */
   handleForBot: (botId: string | undefined) => string | undefined;
-  onModeChange: (mode: AgentsMode) => void;
   onNewConversation: () => void;
   onSearchChange: (search: string) => void;
   onOpenConversation: (
-    conversation: AgentConversationTarget,
+    conversation: AgentConversationEntity,
     event?: MouseEvent
   ) => void;
   onRetry: () => void;
@@ -87,11 +64,22 @@ function Row(props: {
       type="button"
       class={props.active ? 'row active' : 'row'}
       title={title()}
+      data-kind={props.mode}
       aria-current={props.active ? 'page' : undefined}
       onClick={props.onOpen}
     >
       <span class="lead">
-        <Show when={state() === 'starting'}>
+        <Show
+          when={state() === 'starting'}
+          fallback={
+            <Show
+              when={props.mode === 'code'}
+              fallback={<ChatIcon class="ph" />}
+            >
+              <CodeIcon class="ph" />
+            </Show>
+          }
+        >
           <span class="spin" />
         </Show>
       </span>
@@ -122,7 +110,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
   const panel = useSplitPanelOrThrow();
   const [searchOpen, setSearchOpen] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
-  const copy = () => MODE_COPY[props.mode];
   const total = () =>
     props.groups.reduce((sum, group) => sum + group.conversations.length, 0);
 
@@ -156,47 +143,22 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
         </div>
       </ViewSidebar.Header>
 
-      <Show when={props.modeSwitch}>
-        <div class="seg side" role="tablist" aria-label="Section">
-          <button
-            type="button"
-            role="tab"
-            aria-pressed={props.mode === 'chat'}
-            aria-selected={props.mode === 'chat'}
-            onClick={() => props.onModeChange('chat')}
-          >
-            <MacroLogo class="ph" />
-            Chat
-          </button>
-          <button
-            type="button"
-            role="tab"
-            aria-pressed={props.mode === 'code'}
-            aria-selected={props.mode === 'code'}
-            onClick={() => props.onModeChange('code')}
-          >
-            <RobotIcon class="ph" />
-            Code
-          </button>
-        </div>
-      </Show>
-
       <div class="content" data-view="agents">
         <div class="top-actions">
           <SidebarCreateButton
-            label={copy().newAction}
+            label="New conversation"
             onCreate={props.onNewConversation}
           />
         </div>
 
         <section class="recent">
           <div class="sec-head">
-            <h2>{copy().listTitle}</h2>
+            <h2>Conversations</h2>
             <button
               type="button"
               class="icon-btn"
               aria-pressed={searchOpen()}
-              aria-label={copy().searchLabel}
+              aria-label="Search conversations"
               onClick={() => (searchOpen() ? closeSearch() : openSearch())}
             >
               <MagnifyingGlassIcon class="ph" />
@@ -207,8 +169,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               <MagnifyingGlassIcon class="ph" />
               <input
                 ref={searchInput}
-                placeholder={copy().searchPlaceholder}
-                aria-label={copy().searchLabel}
+                placeholder="Search conversations"
+                aria-label="Search conversations"
                 value={props.search}
                 onInput={(event) =>
                   props.onSearchChange(event.currentTarget.value)
@@ -221,7 +183,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           </Show>
           <nav
             class="list"
-            aria-label={`Recent ${copy().listTitle.toLowerCase()}`}
+            aria-label="Recent conversations"
             onScroll={(event) => {
               const list = event.currentTarget;
               if (!props.hasNextPage || props.loadingNextPage) return;
@@ -248,7 +210,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                     {(conversation) => (
                       <Row
                         conversation={conversation()}
-                        mode={props.mode}
+                        mode={props.modeForConversation(conversation())}
                         active={
                           props.activeConversationId === conversation().id
                         }
@@ -265,7 +227,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               )}
             </For>
             <Show when={props.loading}>
-              <p class="list-note">{copy().loading}</p>
+              <p class="list-note">Loading conversations…</p>
             </Show>
             <Show when={props.error}>
               <button type="button" class="row" onClick={props.onRetry}>
@@ -277,7 +239,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               <p class="list-note">
                 {props.search.trim()
                   ? `No results for "${props.search.trim()}"`
-                  : copy().empty}
+                  : 'No conversations yet.'}
               </p>
             </Show>
             <Show when={props.loadingNextPage}>

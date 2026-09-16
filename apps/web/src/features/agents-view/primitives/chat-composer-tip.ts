@@ -4,7 +4,7 @@ const TIPS = [
   'Connect your apps in Settings → Connections',
   'Type / to add a skill',
   'Type @ to mention docs, people, or channels',
-  'Choose an agent above to change who helps',
+  'Choose an agent to change who helps',
 ];
 
 /** Cycle one hint at a time, pausing while the user has a draft. */

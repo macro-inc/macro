@@ -14,7 +14,6 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import {
   type AgentWithHarnessId,
   type CreateAgentParams,
-  useAgentsQuery,
   useCreateAgentMutation,
   useDeleteAgentMutation,
   useUpdateAgentMutation,
@@ -46,12 +45,13 @@ import type { AgentKind } from '../core/agent-kind';
 import type { AgentsMode } from '../core/mode';
 import type { AgentsPage } from '../core/pages';
 import {
+  type AgentConversationEntity,
   type AgentConversationTarget,
-  conversationsForMode,
+  conversationMode,
   groupConversations,
   selectRecentAgentConversations,
 } from '../core/recent-conversations';
-import { kindForBot, type RosterAgent } from '../core/roster';
+import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
 import { createAgentsMode } from '../primitives/agents-mode';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
@@ -84,7 +84,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
-  const modeSwitch = () => true;
   const modeState = createAgentsMode(userId());
   const mode = (): AgentsMode => props.initialRoute?.mode ?? modeState.mode();
   const dataMode = () => dataModeFor(mode());
@@ -107,7 +106,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const [removingRuntime, setRemovingRuntime] = createSignal<Harness>();
 
   const rosterSource = createAgentRosterSource();
-  const agentsQuery = useAgentsQuery();
   const harnessesQuery = useHarnessesQuery();
   const cursorStatus = useCursorApiKeyStatusQuery();
   const currentTeamQuery = useCurrentTeamQuery();
@@ -149,14 +147,11 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       search()
     )
   );
-  const modeConversations = createMemo(() =>
-    conversationsForMode(conversations(), mode(), (botId) =>
+  const groups = createMemo(() => groupConversations(conversations()));
+  const modeForConversation = (conversation: AgentConversationEntity) =>
+    conversationMode(conversation, (botId) =>
       kindForBot(botId, rosterSource.roster())
-    )
-  );
-  const groups = createMemo(() =>
-    groupConversations(modeConversations(), mode())
-  );
+    );
   const handleForBot = (botId: string | undefined) =>
     botId
       ? rosterSource.roster().find((agent) => agent.botId === botId)?.handle
@@ -188,11 +183,12 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   };
   const openConversation = (
     conversation: AgentConversationTarget,
-    event?: MouseEvent
+    event?: MouseEvent,
+    targetMode: AgentsMode = mode()
   ) => {
     const next = {
       type: 'component' as const,
-      id: agentsRouteId({ mode: mode(), conversation }),
+      id: agentsRouteId({ mode: targetMode, conversation }),
     };
     if (event?.shiftKey) {
       layout.openWithSplit(next, {
@@ -237,13 +233,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       return { ...current, activeConversationId: sessionId };
     });
   };
-  const configure = (agent: RosterAgent) => {
-    const full = (agentsQuery.isSuccess ? agentsQuery.data : []).find(
-      (candidate) => candidate.bot.id === agent.botId
-    );
-    if (full) setEditor({ agent: full, kind: agent.kind });
-  };
-
   const saveAgent = async (params: CreateAgentParams): Promise<boolean> => {
     const current = editor();
     try {
@@ -324,8 +313,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
             >
               <ViewShell.Aside>
                 <AgentsSidebar
-                  mode={mode()}
-                  modeSwitch={modeSwitch()}
+                  modeForConversation={modeForConversation}
                   activeConversationId={selected()?.activeConversationId}
                   search={search()}
                   groups={groups()}
@@ -334,10 +322,15 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                   hasNextPage={Boolean(query.hasNextPage)}
                   loadingNextPage={query.isFetchingNextPage}
                   handleForBot={handleForBot}
-                  onModeChange={changeMode}
                   onNewConversation={showComposer}
                   onSearchChange={setSearch}
-                  onOpenConversation={openConversation}
+                  onOpenConversation={(conversation, event) =>
+                    openConversation(
+                      conversation,
+                      event,
+                      modeForConversation(conversation)
+                    )
+                  }
                   onRetry={() => void query.refetch()}
                   onLoadMore={() => void query.fetchNextPage()}
                 />
@@ -379,10 +372,9 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                                   mode={mode()}
                                   roster={rosterSource.roster()}
                                   rosterLoading={rosterSource.loading()}
-                                  conversations={conversations()}
+                                  onModeChange={changeMode}
                                   onStart={startConversation}
                                   onOpenRoster={openRoster}
-                                  onConfigure={configure}
                                 />
                               </Match>
                             </Switch>

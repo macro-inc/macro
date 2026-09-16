@@ -37,7 +37,6 @@ describe('buildAgentRoster', () => {
     const roster = buildAgentRoster(EMPTY);
     expect(roster.map((agent) => [agent.id, agent.kind])).toEqual([
       [MACRO_PERSONA_ID, 'agent'],
-      [MACRO_CODER_BOT_ID, 'coder'],
       [CURSOR_BOT_ID, 'coder'],
     ]);
     expect(roster[0]?.botId).toBeUndefined();
@@ -81,7 +80,7 @@ describe('buildAgentRoster', () => {
         persisted({ harness: 'macrod', harness_id: 'gone' }),
       ],
     });
-    const saved = roster.slice(3);
+    const saved = roster.slice(2);
     expect(saved.map((agent) => agent.kind)).toEqual([
       'agent',
       'coder',
@@ -127,7 +126,6 @@ describe('rosterForMode and kindForBot', () => {
       'bot-in-memory',
     ]);
     expect(rosterForMode(roster, 'code').map((a) => a.id)).toEqual([
-      MACRO_CODER_BOT_ID,
       CURSOR_BOT_ID,
       'bot-cursor',
     ]);

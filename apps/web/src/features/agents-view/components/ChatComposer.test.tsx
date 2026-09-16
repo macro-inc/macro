@@ -1,9 +1,11 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
 
 const editor = vi.hoisted(() => ({
   clear: vi.fn(),
+  setMarkdown: vi.fn(),
   enter: undefined as
     | ((event: unknown, markdown: string) => boolean)
     | undefined,
@@ -36,10 +38,15 @@ vi.mock(
         },
         controls: {
           clear: editor.clear,
+          setMarkdown: editor.setMarkdown,
           focus: vi.fn(),
           getMarkdown: () => editor.text,
         },
-        lexical: { update: vi.fn(), getRootElement: () => null },
+        lexical: {
+          update: vi.fn(),
+          dispatchCommand: vi.fn(),
+          getRootElement: () => null,
+        },
       };
       return builder;
     },
@@ -48,7 +55,7 @@ vi.mock(
 
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
   MarkdownShell: (props: { placeholder?: string }) => (
-    <div>{props.placeholder}</div>
+    <div data-testid="editor">{props.placeholder}</div>
   ),
 }));
 
@@ -71,7 +78,7 @@ describe('Chat session input', () => {
       <ChatSessionInput modelControl={<button>Model</button>} onSend={send} />
     ));
     expect(
-      screen.getByRole('group', { name: 'Chat settings' }).textContent
+      screen.getByRole('group', { name: 'Composer settings' }).textContent
     ).toBe('Model');
     type('  Follow up  ');
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
@@ -145,5 +152,51 @@ describe('Chat session input', () => {
     ));
     expect(screen.getByRole('button', { name: 'Agent' })).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Model' })).toBeTruthy();
+  });
+  it('switches drafts without remounting the editor and hides the closed repository drawer', () => {
+    const [mode, setMode] = createSignal('chat');
+    const { container } = render(() => (
+      <ChatComposer
+        draftKey={mode()}
+        draft={mode() === 'chat' ? 'Chat draft' : 'Code draft'}
+        onDraftChange={vi.fn()}
+        modelSelector={<button>Model</button>}
+        agentSelector={<button>Agent</button>}
+        modeSelector={<button>Mode</button>}
+        drawer={<button>Repository</button>}
+        drawerOpen={mode() === 'code'}
+        onSend={vi.fn()}
+      />
+    ));
+    const input = screen.getByTestId('editor');
+    const drawer = container.querySelector('.composer-drawer');
+    expect((drawer as HTMLElement).inert).toBe(true);
+    expect(drawer?.getAttribute('aria-hidden')).toBe('true');
+    setMode('code');
+    expect(editor.setMarkdown).toHaveBeenLastCalledWith('Code draft');
+    expect(screen.getByTestId('editor')).toBe(input);
+    expect((drawer as HTMLElement).inert).toBe(false);
+    expect(drawer?.hasAttribute('data-open')).toBe(true);
+    setMode('chat');
+    expect(editor.setMarkdown).toHaveBeenLastCalledWith('Chat draft');
+    expect((drawer as HTMLElement).inert).toBe(true);
+    const settings = screen.getByRole('group', { name: 'Composer settings' });
+    expect(settings.textContent).toBe('ModeAgentModel');
+  });
+  it('lets controls inside the composer receive pointer focus', () => {
+    render(() => (
+      <ChatComposer
+        draft=""
+        onDraftChange={vi.fn()}
+        onSend={vi.fn()}
+        modelSelector={<input aria-label="Filter models" />}
+      />
+    ));
+    const event = new MouseEvent('pointerdown', {
+      bubbles: true,
+      cancelable: true,
+    });
+    screen.getByRole('textbox', { name: 'Filter models' }).dispatchEvent(event);
+    expect(event.defaultPrevented).toBe(false);
   });
 });

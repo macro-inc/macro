@@ -225,16 +225,11 @@ function SessionContent(props: {
             </div>
             <div class="dock">
               <div class="composer-anchor">
-                <Show
-                  when={props.mode === 'chat'}
-                  fallback={<AgentComposer autofocus />}
-                >
-                  <AgentComposer
-                    autofocus
-                    input={ChatSessionInput}
-                    modelSelector={SessionModelSelector}
-                  />
-                </Show>
+                <AgentComposer
+                  autofocus
+                  input={ChatSessionInput}
+                  modelSelector={SessionModelSelector}
+                />
               </div>
             </div>
           </Show>

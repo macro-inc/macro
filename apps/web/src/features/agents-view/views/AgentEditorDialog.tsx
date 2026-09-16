@@ -64,7 +64,7 @@ export function AgentEditorDialog(props: {
       ? isCoderHarness(props.agent.harness)
       : props.initialKind === 'coder'
   );
-  const noun = () => (coder() ? 'coder' : 'agent');
+  const noun = () => (coder() ? 'coding agent' : 'agent');
   const [name, setName] = createSignal(props.agent?.bot.name ?? '');
   const [tag, setTag] = createSignal(props.agent?.bot.handle ?? '');
   const [tagEdited, setTagEdited] = createSignal(props.agent !== undefined);
@@ -652,11 +652,11 @@ export function AgentEditorDialog(props: {
             <div class="divider" />
             <div class="srow">
               <span class="lab">
-                Coder
+                Coding agent
                 <small>
                   {coderRuntimes().length === 0
-                    ? 'Connect Cursor or pair a runtime to make coders'
-                    : 'Writes code: takes a repository, runs on a runtime, and appears under Coders'}
+                    ? 'Connect Cursor or pair a runtime to make coding agents'
+                    : 'Writes code: takes a repository, runs on a runtime, and appears under Coding agents'}
                 </small>
               </span>
               <button

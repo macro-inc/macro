@@ -2,81 +2,62 @@
 
 ## Where chats live
 
-- List: `Go to Agents` → `/app/component/agents`. With AI agents enabled
-  (`enable-chat-v3-agents`), the Agents workspace has two halves picked by a **Chat | Code**
-  tab pair (`role="tablist"`, `aria-label="Section"`) at the top of its
-  sidebar; the choice persists per user on the device. **Chat** talks to
-  agents that answer from Macro's in-memory harness; **Code** hands work to
-  coders, which run in Macro Coder's sandbox, on Cursor, or on a machine
-  paired through macrod. Whether an agent is a coder follows from its
-  harness; it is not a separate setting.
-  Below the tabs sit a **New chat** / **New session** button and the mode's
-  conversations under a **Chats** / **Sessions** heading with a search
-  toggle. Chats is a flat list. Sessions is grouped **Active** / **Past** by
-  whether the runtime is still up, and each row shows the coder's `@handle`,
-  its state (Starting / Ready / Ended), and age, with a spinner while it
-  starts. Favorites, Routines, Connections, and Skills are not sidebar pages
-  here: routines live in their own view, connections under Settings →
-  Connections, and skills behind the composer's `/` menu. Selecting a row
-  opens it inside the workspace; Shift-click opens it in a new split.
-  Users outside the flag retain the Owned / Running / Shared / Automations /
-  Skills list.
-- The workspace uses the shared theme, sidebar create button, rounded composer,
-  and circular send control in both modes. Agent cards, menus, and dialogs
-  follow the same neutral surfaces in light and dark themes.
-- **New chat** (Chat): a greeting names the selected agent. A selector row
-  above the input has an **Agent** pill (Macro, then **Your agents**, then a
-  **Create agent** button that opens the Agents page inside the workspace),
-  and a **Model** pill (**Agent default** or a model grouped by provider).
-  The input starts as one line alongside **Send**, grows with wrapped text or
-  newlines, and shrinks when cleared. While empty, its placeholder cycles one
-  tip at a time for connectors, skills, `@` mentions, and agents. Rotation pauses
-  while writing. Type `@` to mention or `/` to open skills.
-  Sending starts an agent session with that agent and opens it in the workspace.
-  Opening a sidebar conversation updates the URL: `/app/agents/<id>` for Chat,
-  `/app/coders/<id>` for Code, and `/app/agent-chats/<id>` for legacy chats.
-  Reload and back/forward restore the selected conversation and its workspace
-  mode. A new session replaces its temporary URL with its real id without
-  remounting the composer or leaving the temporary id as a history step.
-- **New session** (Code): a **Your coders** strip (`role="radiogroup"`,
-  `aria-label="Agent"`) lists Macro Coder, Cursor, and saved coders, most
-  recently used first, each with its runtime dot, default model, last use,
-  and session count. Its **Create coder** button opens the Agents page on the
-  Coders tab; a gear on a saved coder opens its editor. Cursor without an API
-  key reads **Connect Cursor** and opens Settings → Harness instead of being
-  picked. A coder on a macrod runtime is listed but cannot be started from
-  here (start it from a channel mention). Code has its own larger composer,
-  with the Model pill (with a filter box) and **Repository** pill below the
-  editor. Repository choices are **No repository**,
-  recent repositories, or a box that accepts `owner/repo` or a URL and is
-  remembered per user on the device. The repository is sent as the session's
-  `repoUrl`.
-- Chat and Code preserve separate drafts and model selections when switching
-  modes. Model menus list the available models without a runtime attribution footer.
-- **Agents page** (inside the workspace; Settings → Agents is unchanged): a
-  **Close** button returns to the composer. Tabs **Agents** | **Coders**
-  (`aria-label="Agent kind"`) split the roster by kind into Team and Private
-  cards, each row with Edit / Delete. Coders adds a **Runtimes** card (Macro
-  Harness, Cursor with a gear to Harness settings, each paired macrod runtime
-  with its connection state and a Remove action) and a **Bring your own
-  agent** footer whose **Pair a runtime** button opens the pairing dialog
-  (`aria-label="Pairing code"`, the eight-character code macrod prints). The
-  create/edit dialog has Private | Team sharing, name and `@tag`, a
-  **Runtime** radio list (coders only), **Default model**, Connections and
-  Channels pickers, a **Coder** switch (`role="switch"`, disabled until a
-  coding runtime exists), and an Instructions editor.
-- **Session** (either mode): the header shows the title with favorite,
-  **Share**, **Side panel**, and a **More** menu (Rename, Copy link, Delete
-  session). A monospace strip under it lists the session id, agent `@handle`,
-  harness, model, repository, pull request link, and a status dot (Starting /
-  Running / Needs input / Ready / Disconnected); the transcript and composer
-  follow. Chat sessions use the same compact, growing input as New chat, with
-  only the model selector above it. The model pill and dropdown match New chat,
-  including provider icons and grouped model rows. There is no agent selector
-  inside a session.
-  Empty inputs cycle connector, skill-reference, and mention tips. Stop,
-  queued-message advancement, and quoting transcript text remain available.
-- A chat is `/app/chat/<uuid>`. A doc-scoped chat is `/app/md/<doc>/chat/<chat>` (split view).
+- Open **Go to Agents** → `/app/component/agents`. With AI agents enabled
+  (`enable-chat-v3-agents`), the workspace uses one sidebar for Chat and Code.
+  **New conversation** opens the composer. **Conversations** is a mixed list
+  of chats and coding sessions, newest first, with one search across both.
+  Chat rows use a chat icon; coding rows use `</>` and show their agent and
+  runtime status. Changing the composer mode does not filter the sidebar.
+  Selecting a row opens its own mode; Shift-click opens it in a new split.
+- The starting page has one multiline composer under **What should we work on?**
+  in Chat and **What should we build?** in Code.
+  Both modes start four lines tall and grow with longer prompts. Inside the
+  bottom of the input, the **Chat / Code** control (`role="group"`,
+  `aria-label="Conversation mode"`) sits on the left, followed by **Agent**.
+  **Model** and **Send** sit on the right. The controls wrap on narrow screens.
+- **Chat** only offers in-memory agents: Macro and saved chat agents.
+  **Code** only offers Cursor and saved Cursor coding agents. Both modes use
+  the same compact agent dropdown; there are no coding-agent cards. The menu's
+  **Create agent** / **Create coding agent** opens the matching roster tab.
+  Disconnected Cursor offers **Connect Cursor**, opening Settings → Harness.
+  Chat and Code retain independent drafts, agent choices, and model choices
+  when toggled; changing the chosen agent resets that mode's model override.
+- Switching to **Code** reveals a repository drawer directly under the input
+  with a short slide and fade. Switching back retracts it. Reduced-motion
+  preferences disable the animation. The hidden drawer is inert, so its
+  controls cannot receive focus. Its **Repository** menu offers **No repository**,
+  recent repositories, or `owner/repo` / URL entry. The chosen repository
+  survives mode changes and is sent as `repoUrl` only for Code.
+- Both modes use the same model pill and dropdown: provider icon, readable
+  model name, and the same searchable catalog as Settings. A short
+  **Recommended** list leads to **More models**, grouped by model family in a
+  scrollable submenu. The menus stay within the available viewport height. Choices
+  and defaults come from discovery before session creation. Loading and failed
+  discovery appear in the menu. A disconnected Cursor menu offers **Connect
+  Cursor**. The built-in sandbox is not offered in the agent picker.
+- Chat's empty input cycles tips about connectors, skills, mentions, and agents;
+  Code says **Describe what you want to build**. Type `@` for mentions and `/`
+  for skills. Sending starts a session with the chosen agent and model.
+- Opening a conversation updates the URL based on that conversation's kind:
+  `/app/agents/<id>` for Chat sessions, `/app/coders/<id>` for Code sessions,
+  and `/app/agent-chats/<id>` for legacy chats. Reload and back/forward restore
+  its mode and conversation. Newly created sessions replace their temporary
+  URL with the real id without remounting the composer or adding a temporary
+  history step.
+- **Agents page** (inside the workspace; Settings → Agents is unchanged):
+  **Close** returns to the composer. **Agents / Coding agents** tabs split
+  the roster into Team and Private, with Edit / Delete actions. The coding
+  tab includes runtime setup. The create/edit dialog has sharing, name,
+  `@tag`, runtime, default model, connections, channels, and instructions.
+- **Session**: the header has favorite, Share, Side panel, and a More menu
+  (Rename, Copy link, Delete). A metadata strip lists the agent, runtime,
+  model, repository, pull request, and status. Chat and Code session inputs
+  use the same multiline surface with the model selector inside on the right.
+  Existing sessions retain their agent and mode; use **New conversation** to
+  choose another. Stop, queued-message advancement, and quoting remain available.
+- Users outside the flag retain the Owned / Running / Shared / Automations /
+  Skills list. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
+  is `/app/md/<doc>/chat/<chat>` (split view).
 
 ## Start a standalone chat
 

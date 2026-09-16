@@ -50,7 +50,8 @@ describe('modes and kinds', () => {
   });
 
   it('names the kind', () => {
-    expect(agentKindNoun('coder')).toBe('coder');
+    expect(agentKindNoun('coder')).toBe('coding agent');
+    expect(agentKindNoun('coder', true)).toBe('coding agents');
     expect(agentKindNoun('agent', true)).toBe('agents');
   });
 });

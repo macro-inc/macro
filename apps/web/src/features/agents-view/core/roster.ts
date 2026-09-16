@@ -8,11 +8,11 @@ import {
   MACRO_AGENT_NAME,
 } from '@core/constant/macroAgent';
 import {
-  MACRO_CODER_BOT_ID,
-  MACRO_CODER_HANDLE,
-  MACRO_CODER_NAME,
-} from '@core/constant/macroCoder';
-import { type AgentKind, kindForHarness, kindForMode } from './agent-kind';
+  type AgentKind,
+  kindForHarness,
+  kindForMode,
+  systemBotKind,
+} from './agent-kind';
 import type { AgentsMode } from './mode';
 
 /**
@@ -130,10 +130,8 @@ function runtimeConnected(
 }
 
 /**
- * Harness slugs whose runtimes this deployment provisions itself — the only
- * personas the composer can start. A persona on a registered macrod daemon
- * opens its own sessions from a channel mention, so the composer lists it but
- * cannot start it.
+ * Supported runtimes for starting sessions from the composer. Paired runtimes
+ * remain in the roster for existing sessions, but start from channel mentions.
  */
 function startableFromComposer(harness: string): boolean {
   return (
@@ -168,8 +166,14 @@ function persistedAgent(
       agent.bot.owner?.type === 'user'
         ? agent.bot.owner.user_id
         : (agent.bot.created_by ?? undefined),
+    connectLabel:
+      agent.harness === 'cursor' && input.cursorNeedsConnection
+        ? 'Connect Cursor'
+        : undefined,
     unavailableReason: startable
-      ? undefined
+      ? agent.harness === 'cursor' && !connected
+        ? 'Connect Cursor to start it'
+        : undefined
       : connected
         ? 'Runs on its own machine · start it from a channel mention'
         : 'Its runtime is disconnected',
@@ -193,18 +197,6 @@ export function buildAgentRoster(input: RosterInput): RosterAgent[] {
       defaultModel: input.macroDefaultModel,
       share: 'system',
       runtime: { label: 'Macro', connected: true },
-    },
-    {
-      id: MACRO_CODER_BOT_ID,
-      botId: MACRO_CODER_BOT_ID,
-      kind: 'coder',
-      name: MACRO_CODER_NAME,
-      handle: MACRO_CODER_HANDLE,
-      description:
-        'Writes code in a sandbox Macro provisions for each session.',
-      harness: 'sandbox',
-      share: 'system',
-      runtime: { label: 'Macro sandbox', connected: true },
     },
     {
       id: CURSOR_BOT_ID,
@@ -232,7 +224,9 @@ export function rosterForMode(
   mode: AgentsMode
 ): RosterAgent[] {
   const kind = kindForMode(mode);
-  return roster.filter((agent) => agent.kind === kind);
+  return roster.filter(
+    (agent) => agent.kind === kind && startableFromComposer(agent.harness)
+  );
 }
 
 /**
@@ -246,5 +240,9 @@ export function kindForBot(
 ): AgentKind {
   if (!botId) return 'agent';
   const bare = botId.startsWith('bot|') ? botId.slice('bot|'.length) : botId;
-  return roster.find((agent) => agent.botId === bare)?.kind ?? 'agent';
+  return (
+    systemBotKind(bare) ??
+    roster.find((agent) => agent.botId === bare)?.kind ??
+    'agent'
+  );
 }

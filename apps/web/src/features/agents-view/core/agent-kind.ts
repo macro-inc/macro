@@ -53,8 +53,8 @@ export function kindForMode(mode: AgentsMode): AgentKind {
   return mode === 'code' ? 'coder' : 'agent';
 }
 
-/** "agent" / "coder", capitalized for headings and buttons. */
+/** Display nouns for headings and buttons. */
 export function agentKindNoun(kind: AgentKind, plural = false): string {
-  const noun = kind === 'coder' ? 'coder' : 'agent';
+  const noun = kind === 'coder' ? 'coding agent' : 'agent';
   return plural ? `${noun}s` : noun;
 }
