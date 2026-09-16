@@ -18,6 +18,7 @@ import {
   useCreatableEnabled,
 } from '@app/features/command/Launcher';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
+import { makeShareAction } from '@app/features/next-soup/actions';
 import type { Query } from '@app/features/next-soup/filters/filter-store';
 import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
@@ -27,6 +28,7 @@ import { FilterSubmenu } from '@app/features/next-soup/soup-view/filters-bar/fil
 import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { SoupViewList } from '@app/features/next-soup/soup-view/soup-view';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import {
   favoriteBlockName,
   favoriteSplitContent,
@@ -37,6 +39,7 @@ import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   handleFolderSelect,
   openFilePicker,
@@ -126,6 +129,7 @@ function DriveViewContent(props: DriveViewProps) {
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
   const navigationStack = useEntityDetailNavigationStack();
+  const shareAction = makeShareAction();
   const userId = useUserId();
   const view = useSoupView();
   const projects = useProjectsQuery();
@@ -416,7 +420,30 @@ function DriveViewContent(props: DriveViewProps) {
         navigate(location);
       }}
     >
-      <DriveLocationBreadcrumbItems entries={locationBreadcrumbs()} />
+      <DriveLocationBreadcrumbItems
+        entries={locationBreadcrumbs()}
+        folders={folders()}
+        userId={userId()}
+        onOpenFolderInNewSplit={
+          !isTouchDevice() && globalSplitManager()?.canAppendSplit()
+            ? (folder) =>
+                layout.openWithSplit(
+                  { type: 'project', id: folder.id },
+                  {
+                    preferNewSplit: true,
+                    referredFrom: 'entity-actions-menu',
+                  }
+                )
+            : undefined
+        }
+        onShareFolder={(folder) => void shareAction.execute(folder)}
+        onDeleteFolder={(folder) => {
+          const parentId = folders().some(({ id }) => id === folder.parentId)
+            ? folder.parentId
+            : null;
+          selectFolder(parentId ?? null);
+        }}
+      />
       <DriveLayout
         state={state()}
         folders={folders()}
