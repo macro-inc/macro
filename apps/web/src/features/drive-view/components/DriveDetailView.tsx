@@ -12,10 +12,6 @@ import {
   useEntityDetailNavigationStack,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
-import {
-  MarkdownDetail,
-  MarkdownDetailBodyState,
-} from '@block-md/component/MarkdownDetail';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import type { MarkdownDocumentKind } from '@block-md/types';
 import { SidePanel } from '@components/app/side-panel';
@@ -32,6 +28,10 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import {
+  MarkdownDetail,
+  MarkdownDetailBodyState,
+} from '../views/MarkdownDetail';
 import { FileDetailBreadcrumbItem } from './FileDetailBreadcrumbItem';
 
 const DRIVE_VIEW_BREADCRUMB = 'drive-view';

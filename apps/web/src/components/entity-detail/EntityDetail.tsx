@@ -1,8 +1,8 @@
 import { CodeDetail } from '@app/features/drive-view/views/CodeDetail';
 import { ImageDetail } from '@app/features/drive-view/views/ImageDetail';
+import { MarkdownDetail } from '@app/features/drive-view/views/MarkdownDetail';
 import { UnknownDetail } from '@app/features/drive-view/views/UnknownDetail';
 import { VideoDetail } from '@app/features/drive-view/views/VideoDetail';
-import { MarkdownDetail } from '@block-md/component/MarkdownDetail';
 import type { MarkdownDocumentKind } from '@block-md/types';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';

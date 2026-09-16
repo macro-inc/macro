@@ -1,3 +1,17 @@
+import { FindAndReplace } from '@block-md/component/FindAndReplace';
+import {
+  MarkdownDocument,
+  MarkdownDocumentContent,
+} from '@block-md/component/MarkdownDocument';
+import { ModalsProvider } from '@block-md/component/ModalsProvider';
+import { MarkdownSidePanelSections } from '@block-md/component/sidepanel/MarkdownSidePanelSections';
+import { OldOverlay } from '@block-md/history/OldOverlay';
+import {
+  loadMarkdownDocument,
+  type MarkdownDocumentData,
+} from '@block-md/queries/markdown-document';
+import { loadMarkdownCachedSnapshot } from '@block-md/queries/markdown-document-operations';
+import type { MarkdownDocumentKind } from '@block-md/types';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -14,17 +28,6 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { OldOverlay } from '../history/OldOverlay';
-import {
-  loadMarkdownDocument,
-  type MarkdownDocumentData,
-} from '../queries/markdown-document';
-import { loadMarkdownCachedSnapshot } from '../queries/markdown-document-operations';
-import type { MarkdownDocumentKind } from '../types';
-import { FindAndReplace } from './FindAndReplace';
-import { MarkdownDocument, MarkdownDocumentContent } from './MarkdownDocument';
-import { ModalsProvider } from './ModalsProvider';
-import { MarkdownSidePanelSections } from './sidepanel/MarkdownSidePanelSections';
 
 export type MarkdownDetailContext = {
   data: MarkdownDocumentData;
