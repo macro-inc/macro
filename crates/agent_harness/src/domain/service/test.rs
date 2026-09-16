@@ -1462,7 +1462,7 @@ fn cancel_count(agent: &FakeAgent) -> usize {
 
 #[tokio::test]
 async fn a_channel_follow_up_stops_the_running_turn_announces_and_flushes() {
-    let ((service, _repo, containers, announcer, _runtimes), _turns) =
+    let ((service, _repo, containers, announcer, _runtimes), mut turns) =
         harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
     let id = AgentSessionId::new();
     let container = session_with_a_running_turn(&service, &containers, id).await;
@@ -1470,11 +1470,26 @@ async fn a_channel_follow_up_stops_the_running_turn_announces_and_flushes() {
     let announcements_before = announcer.announced().len();
     let prompts_before = prompts(&agent).len();
 
-    let outcome = service
-        .execute(
+    // Work already waiting from the session page: the follow-up jumps it.
+    let waiting = service
+        .control_event(
             id,
-            HarnessCommand::Deliver(forward_message("steer from the channel")),
+            ControlEvent {
+                action: AgentAction::prompt("queued earlier from the session page"),
+                actor: Some(staff_sender()),
+            },
         )
+        .await
+        .expect("a mid-turn session-page prompt queues");
+    assert_eq!(
+        waiting.disposition,
+        agent_session::domain::ports::ControlDisposition::Queued
+    );
+
+    let follow_up = forward_message("steer from the channel");
+    let follow_up_id = follow_up.id;
+    let outcome = service
+        .execute(id, HarnessCommand::Deliver(follow_up))
         .await
         .expect("a channel follow-up is accepted");
     assert_eq!(outcome, CommandOutcome::Queued);
@@ -1488,6 +1503,15 @@ async fn a_channel_follow_up_stops_the_running_turn_announces_and_flushes() {
         prompts(&agent).len(),
         prompts_before,
         "the follow-up waits for the cancelled turn to end"
+    );
+    let queued = service.queued_controls(id).await.expect("queue lists");
+    assert_eq!(
+        queued
+            .iter()
+            .map(|entry| entry.action_id)
+            .collect::<Vec<_>>(),
+        [follow_up_id, waiting.action_id],
+        "the follow-up is at the front, ahead of the earlier prompt"
     );
 
     let announced = announcer.announced();
@@ -1513,12 +1537,23 @@ async fn a_channel_follow_up_stops_the_running_turn_announces_and_flushes() {
 
     assert_eq!(
         prompts(&agent)[1],
-        vec![ContentBlock::from(context_prompt("steer from the channel"))]
+        vec![ContentBlock::from(context_prompt("steer from the channel"))],
+        "the follow-up flushes first"
     );
     assert_eq!(
         announcer.announced().len(),
         announcements_before + 1,
         "dispatch does not post a second chip for the same follow-up"
+    );
+
+    agent.completes_prompt().await;
+    agent.wait_for_requests(5).await;
+    turns.settled(id).await;
+    // No channel origin, so no composed context: the raw text goes out.
+    assert_eq!(
+        prompts(&agent)[2],
+        vec![ContentBlock::from("queued earlier from the session page")],
+        "the displaced prompt runs after the follow-up"
     );
 }
 

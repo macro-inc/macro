@@ -492,8 +492,9 @@ where
     /// action - still waiting, or on the wire.
     ///
     /// A channel follow-up (`announce` set) that lands on a running turn
-    /// steers: the chip is posted on that follow-up immediately, and a stop
-    /// cancels the current turn so this prompt flushes next.
+    /// steers: it goes to the front of the queue, a stop cancels the current
+    /// turn, and the chip is posted on that follow-up immediately - so it
+    /// flushes next, ahead of anything queued before it.
     pub(super) async fn enqueue_then_dispatch(
         &self,
         session_id: AgentSessionId,
@@ -507,20 +508,21 @@ where
         let actor = command.actor.clone();
         let announce = command.announce.clone();
         let action = command.action.clone();
-        queue_result(
-            self.queues.enqueue(
-                session_id,
-                QueuedEntry {
-                    action_id,
-                    action: command.action,
-                    actor: command.actor,
-                    announce: command.announce,
-                    announced: None,
-                    created_at: chrono::Utc::now(),
-                },
-            ),
-            session_id,
-        )?;
+        let steers = announce.is_some() && self.busy.turn(session_id).is_some();
+        let entry = QueuedEntry {
+            action_id,
+            action: command.action,
+            actor: command.actor,
+            announce: command.announce,
+            announced: None,
+            created_at: chrono::Utc::now(),
+        };
+        let enqueued = if steers {
+            self.queues.enqueue_front(session_id, entry)
+        } else {
+            self.queues.enqueue(session_id, entry)
+        };
+        queue_result(enqueued, session_id)?;
         // Mentions are a fact about the prompt, not the turn: published as
         // soon as the prompt is accepted, whether it dispatches now or waits.
         if let Some(prompt) = prompt {
@@ -528,7 +530,7 @@ where
                 .await;
         }
 
-        if announce.is_some() && self.busy.turn(session_id).is_some() {
+        if steers {
             self.steer_channel_follow_up(session_id, action_id, &action, actor.as_ref(), announce)
                 .await?;
         }
@@ -563,7 +565,8 @@ where
     }
 
     /// Cancel a running turn and post the chip on the channel follow-up that
-    /// interrupted it, so the follow-up flushes as the next prompt.
+    /// interrupted it. The follow-up is already at the front of the queue,
+    /// so it flushes as the next prompt once the cancelled turn ends.
     ///
     /// Stop is delivered first: the fold records it as its own control turn,
     /// and the chip has to name the prompt turn that comes after that, not
@@ -597,7 +600,8 @@ where
             );
         }
 
-        let prompted_message_id = self.queued_prompt_message_id(session_id, action_id).await?;
+        // Front of the queue, so the next prompt turn is this one's.
+        let prompted_message_id = self.sessions.next_prompt_message_id(session_id).await?;
         let announcement = self
             .announcement(session_id, action, actor, announce, prompted_message_id)
             .await?;
@@ -610,20 +614,6 @@ where
             )?;
         }
         Ok(())
-    }
-
-    /// The fold id this queued prompt will open, counting entries ahead of it
-    /// that have not opened a turn yet.
-    async fn queued_prompt_message_id(
-        &self,
-        session_id: AgentSessionId,
-        action_id: AgentActionId,
-    ) -> Result<MessageId> {
-        let mut prompted = self.sessions.next_prompt_message_id(session_id).await?;
-        if let Some(index) = self.queues.position(session_id, action_id) {
-            prompted.turn.0 = prompted.turn.0.saturating_add(index as u32);
-        }
-        Ok(prompted)
     }
 
     /// Push the queue as it now stands to the session's viewers.

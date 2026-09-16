@@ -6,8 +6,9 @@
 //! composition happens at dispatch, which is what makes a queued prompt
 //! editable and gives it fresh channel context when it actually runs. The
 //! chip is usually announced then too, except a channel follow-up that
-//! steers a running turn posts its chip when it is accepted so the reply
-//! sits on the follow-up rather than after the cancelled turn.
+//! steers a running turn: it goes to the front and posts its chip when it is
+//! accepted, so the reply sits on the follow-up rather than after the
+//! cancelled turn or behind work queued earlier.
 //!
 //! In-memory on purpose. The queue lives beside the session's live actor on
 //! the replica that manages it, and dies with the process - a restart loses
@@ -144,11 +145,31 @@ impl SessionQueues {
 
     /// Append an entry to its session's queue.
     pub fn enqueue(&self, session: AgentSessionId, entry: QueuedEntry) -> Result<(), QueueError> {
+        self.insert(session, entry, VecDeque::push_back)
+    }
+
+    /// Put an entry ahead of everything already waiting, for a channel
+    /// follow-up that steers the running turn: it runs next, not after work
+    /// that was queued before it.
+    pub fn enqueue_front(
+        &self,
+        session: AgentSessionId,
+        entry: QueuedEntry,
+    ) -> Result<(), QueueError> {
+        self.insert(session, entry, VecDeque::push_front)
+    }
+
+    fn insert(
+        &self,
+        session: AgentSessionId,
+        entry: QueuedEntry,
+        push: fn(&mut VecDeque<QueuedEntry>, QueuedEntry),
+    ) -> Result<(), QueueError> {
         let mut queue = self.queues.entry(session).or_default();
         if queue.len() >= QUEUE_CAP {
             return Err(QueueError::Full);
         }
-        queue.push_back(entry);
+        push(&mut queue, entry);
         Ok(())
     }
 
@@ -187,14 +208,6 @@ impl SessionQueues {
         self.queues
             .get(&session)
             .is_some_and(|queue| queue.iter().any(|entry| entry.action_id == action_id))
-    }
-
-    /// How many entries sit ahead of this one, when it is still waiting.
-    #[must_use]
-    pub fn position(&self, session: AgentSessionId, action_id: AgentActionId) -> Option<usize> {
-        self.queues
-            .get(&session)
-            .and_then(|queue| queue.iter().position(|entry| entry.action_id == action_id))
     }
 
     /// Remember that this entry's chip has been posted, so dispatch does not
