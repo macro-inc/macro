@@ -400,9 +400,13 @@ export function ChatInput(props: ChatInputComponentProps) {
 
           <div
             data-chat-input-layout=""
+            data-composer-compact={
+              composerLayout.isCompact() ? 'true' : 'false'
+            }
             ref={setLineEl}
             class={cn(
-              'relative px-[7.5px] touch:px-2 touch:min-h-12.5 touch:py-[9px]',
+              'group/composer relative px-[7.5px] touch:px-2 touch:min-h-12.5 touch:py-[9px]',
+              'data-[composer-compact=true]:px-[7.5px] data-[composer-compact=true]:touch:px-2',
               {
                 'flex flex-col pt-[11.25px] pb-[7.5px] touch:p-0':
                   isTallVariant(),
@@ -440,11 +444,11 @@ export function ChatInput(props: ChatInputComponentProps) {
               id={CHAT_INPUT_TEXT_AREA_ID}
               class={cn(
                 'text-base text-ink touch:px-3 touch:py-2 not-touch:leading-[24.375px] not-touch:text-composer-ink',
-                isCompactMobile() && 'w-full touch:py-0',
-                !composerLayout.isCompact() && 'not-touch:px-[9.375px]'
+                'group-data-[composer-compact=true]/composer:touch:w-full group-data-[composer-compact=true]/composer:touch:py-0',
+                'group-data-[composer-compact=false]/composer:not-touch:px-[9.375px]',
+                'group-data-[composer-compact=true]/composer:pl-[41.25px] group-data-[composer-compact=true]/composer:touch:pl-10 group-data-[composer-compact=true]/composer:pr-(--composer-right-inset)'
               )}
               classList={{
-                'pl-[41.25px] touch:pl-10': composerLayout.isCompact(),
                 'pb-[37.5px] touch:pb-10': isMultiline() && !isTallVariant(),
                 'max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto':
                   isMobile() && isMultiline(),
@@ -458,11 +462,7 @@ export function ChatInput(props: ChatInputComponentProps) {
                 'max-h-5 overflow-hidden [&_[contenteditable]>:first-child]:mt-0!':
                   isCollapsed(),
               }}
-              style={
-                composerLayout.isCompact()
-                  ? { 'padding-right': `${rightControlsInset()}px` }
-                  : undefined
-              }
+              style={{ '--composer-right-inset': `${rightControlsInset()}px` }}
               ref={mdRef}
             >
               <ComposerEditor

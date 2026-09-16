@@ -7,7 +7,7 @@ import {
   $getRoot,
   createEditor,
 } from 'lexical';
-import { createRoot, createSignal } from 'solid-js';
+import { createEffect, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   type ComposerLayoutMode,
@@ -41,7 +41,7 @@ beforeEach(() => {
     configurable: true,
     value: vi.fn(function (this: Range) {
       const probe = this.commonAncestorContainer as HTMLElement;
-      const width = Number.parseFloat(probe.style.width);
+      const width = probe.getBoundingClientRect().width;
       const lines = Math.max(
         1,
         Math.ceil(((probe.textContent?.length ?? 0) * 10) / width)
@@ -56,7 +56,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function setup(initialText = '') {
+function setup(initialText = '', initialQuote = false) {
   const container = document.createElement('div');
   const element = document.createElement('div');
   element.style.lineHeight = '20px';
@@ -77,8 +77,25 @@ function setup(initialText = '') {
       },
       { discrete: true }
     );
-  setText(initialText);
+  setText(initialText, initialQuote);
   let containerWidth = 400;
+  let controlsWidth = 80;
+  vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
+    function (this: HTMLElement) {
+      if (this.hasAttribute('data-composer-compact'))
+        return new DOMRect(0, 0, containerWidth, 60);
+      const compact =
+        this.closest('[data-composer-compact]')?.getAttribute(
+          'data-composer-compact'
+        ) === 'true';
+      return new DOMRect(
+        0,
+        0,
+        containerWidth - (compact ? controlsWidth : 0),
+        20
+      );
+    }
+  );
   return createRoot((dispose) => {
     cleanups.push(dispose);
     const [mode, setMode] = createSignal<ComposerLayoutMode>('auto');
@@ -86,22 +103,29 @@ function setup(initialText = '') {
       container: () => container,
       mode,
     });
-    vi.spyOn(container, 'getBoundingClientRect').mockImplementation(
-      () => new DOMRect(0, 0, containerWidth, 60)
-    );
-    vi.spyOn(element, 'getBoundingClientRect').mockImplementation(
-      () =>
-        new DOMRect(0, 0, containerWidth - (layout.isCompact() ? 80 : 0), 20)
-    );
+    const compactStates: boolean[] = [];
+    createEffect(() => {
+      compactStates.push(layout.isCompact());
+      container.setAttribute(
+        'data-composer-compact',
+        String(layout.isCompact())
+      );
+    });
     editor.setRootElement(element);
     cleanups.push(() => editor.setRootElement(null));
     return {
       ...layout,
       setText,
       setMode,
+      compactStates,
       element,
       container,
       dispose,
+      setControlsWidth: (width: number) => {
+        controlsWidth = width;
+        // A control change need not resize an already-expanded container.
+        container.append(document.createElement('button'));
+      },
       resize: (width: number) => {
         containerWidth = width;
         resize.notify();
@@ -134,7 +158,7 @@ describe('composer layout', () => {
     input.setText('short draft');
     await flushMeasurements();
     expect(input.isCompact()).toBe(true);
-    expect(input.container.children).toHaveLength(1);
+    expect(document.querySelectorAll('[data-lexical-editor]')).toHaveLength(1);
   });
 
   it('rechecks the same draft when its container narrows or widens', async () => {
@@ -167,7 +191,7 @@ describe('composer layout', () => {
     input.dispose();
     await flushMeasurements();
     expect(input.isCompact()).toBe(false);
-    expect(input.container.children).toHaveLength(1);
+    expect(document.querySelectorAll('[data-lexical-editor]')).toHaveLength(1);
   });
 
   it('expands when a short paragraph becomes a blockquote and compacts when converted back', async () => {
@@ -199,6 +223,29 @@ describe('composer layout', () => {
     input.setMode('auto');
     await flushMeasurements();
     expect(input.isCompact()).toBe(true);
+  });
+
+  it('never collapses a wrapping paragraph converted from a draft that mounted expanded', async () => {
+    const input = setup('a'.repeat(33), true);
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(false);
+
+    input.setText('a'.repeat(33));
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(false);
+    expect(input.compactStates).not.toContain(true);
+  });
+
+  it('remeasures controls changed while expanded without visiting compact mode', async () => {
+    const input = setup('a'.repeat(30), true);
+    await flushMeasurements();
+    input.setControlsWidth(120);
+    await flushMeasurements();
+
+    input.setText('a'.repeat(30));
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(false);
+    expect(input.compactStates).not.toContain(true);
   });
 
   it('tracks draft changes while collapsed and expands when auto mode resumes', async () => {

@@ -132,7 +132,7 @@ When the comment composer is unavailable, the default Ask AI row appears instead
 Tap `Leave a comment...`
 to expand the channel-style input; use Send comment to submit (Enter inserts a
 newline on mobile). Submitting clears and unfocuses the mobile input, returning
-it to its compact state and dismissing the keyboard. The compact input's plus
+it to its compact state and dismissing the keyboard. The compact input's paperclip
 opens the native photo library in the iOS app, with a file-picker fallback when
 unavailable; browsers use the file picker. Cancelling adds no images.
 While the main document editor is focused with the virtual keyboard

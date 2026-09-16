@@ -41,7 +41,9 @@ both mobile and desktop. Text that wraps onto a second line, explicit line
 breaks, non-paragraph blocks (lists, blockquotes, headings, etc.), and attachments
 expand the composer with its actions below the editor. Even a short or empty
 non-paragraph block uses the expanded layout; converting it back to a single
-short paragraph restores the compact layout. Open reply composers always place the editor
+short paragraph restores the compact layout. A restored block draft that becomes a
+wrapping paragraph should stay expanded without briefly collapsing; check this
+after reopening the channel with a draft already saved. Open reply composers always place the editor
 above the action row, including for empty and single-line drafts, so the
 attachment, delete-reply, and send controls have their own space.
 Attachment controls use a paperclip in both expanded and collapsed composers,

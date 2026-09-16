@@ -7,7 +7,11 @@ import { createHasMultilineStructure } from './create-has-multiline-structure';
 /** Auto fits the content; expanded and collapsed are host presentation overrides. */
 export type ComposerLayoutMode = 'auto' | 'expanded' | 'collapsed';
 
-/** Own the layout decision and measure wrapping at the compact layout's width. */
+/**
+ * Own the layout decision and measure wrapping at the compact layout's width.
+ * The container must use data-composer-compact="true"/"false" for width styles
+ * so an inert copy can measure the compact layout without changing the live one.
+ */
 export function createComposerLayout(
   editor: LexicalEditor,
   options: {
@@ -26,48 +30,55 @@ export function createComposerLayout(
       .with('expanded', () => false)
       .with('collapsed', () => true)
       .exhaustive();
-  let compactInset: number | undefined;
   let queued = false;
   let disposed = false;
 
   const measure = () => {
     const element = root();
     const container = options.container();
-    if (!element?.parentElement || !container) return;
+    if (!element || !container?.parentElement || !container.contains(element))
+      return;
     const containerWidth = container.getBoundingClientRect().width;
-    const editorWidth = element.getBoundingClientRect().width;
-    if (containerWidth <= 0 || editorWidth <= 0) return;
+    if (containerWidth <= 0) return;
 
-    // Moving the buttons below the text gives it more room. Keep measuring at
-    // the original inline width so a borderline draft cannot oscillate between
-    // layouts. Resizing the container still changes the available typing room.
-    if (isCompact()) compactInset = containerWidth - editorWidth;
-    const width =
-      containerWidth - (compactInset ?? containerWidth - editorWidth);
-    if (width <= 0) return;
-
-    const probe = element.cloneNode(true) as HTMLElement;
+    // Measure the actual compact CSS, including controls and padding, even if
+    // this composer mounted expanded or its controls changed while expanded.
+    const probe = container.cloneNode(true) as HTMLElement;
+    const probeEditor = probe.querySelector<HTMLElement>(
+      '[data-lexical-editor="true"]'
+    );
+    if (!probeEditor) return;
     probe.removeAttribute('id');
     for (const child of probe.querySelectorAll('[id]'))
       child.removeAttribute('id');
-    probe.contentEditable = 'false';
+    for (const editable of probe.querySelectorAll<HTMLElement>(
+      '[contenteditable]'
+    ))
+      editable.contentEditable = 'false';
     probe.inert = true;
     probe.setAttribute('aria-hidden', 'true');
+    probe.setAttribute('data-composer-compact', 'true');
     Object.assign(probe.style, {
       position: 'absolute',
       visibility: 'hidden',
       pointerEvents: 'none',
-      width: `${width}px`,
+      top: '0',
+      left: '0',
+      boxSizing: 'border-box',
+      width: `${containerWidth}px`,
       height: 'auto',
       minHeight: '0',
       maxHeight: 'none',
-      overflow: 'visible',
+      overflow: 'hidden',
     });
-    element.parentElement.append(probe);
+    container.parentElement.append(probe);
     try {
+      if (probeEditor.getBoundingClientRect().width <= 0) return;
       const range = element.ownerDocument.createRange();
-      range.selectNodeContents(probe);
-      const lineHeight = Number.parseFloat(getComputedStyle(probe).lineHeight);
+      range.selectNodeContents(probeEditor);
+      const lineHeight = Number.parseFloat(
+        getComputedStyle(probeEditor).lineHeight
+      );
       setHasWrappedLines(range.getBoundingClientRect().height > lineHeight + 1);
     } finally {
       probe.remove();
@@ -99,10 +110,12 @@ export function createComposerLayout(
   });
   createEffect(() => {
     const element = root();
-    if (!element) return;
-    // Mentions and other decorators can finish rendering after Lexical commits.
+    const container = options.container();
+    if (!element || !container) return;
+    // Decorators can finish rendering after Lexical commits; controls can also
+    // change the available inline width without resizing the expanded editor.
     const observer = new MutationObserver(schedule);
-    observer.observe(element, {
+    observer.observe(container, {
       childList: true,
       characterData: true,
       attributes: true,
