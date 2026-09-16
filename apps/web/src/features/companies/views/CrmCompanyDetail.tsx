@@ -52,7 +52,11 @@ export function CrmCompanyDetail(props: {
         if (value === `company:${props.company.id}`) closeContact();
       }}
     >
-      <ViewBreadcrumbs.Item value="crm-view" order={0}>
+      <ViewBreadcrumbs.Item
+        value="crm-view"
+        metadata={{ type: 'companies' }}
+        order={0}
+      >
         {(item) => (
           <Tooltip label={`Back to ${props.viewName}`} class="min-w-0">
             <ViewBreadcrumbs.Button
@@ -64,7 +68,11 @@ export function CrmCompanyDetail(props: {
           </Tooltip>
         )}
       </ViewBreadcrumbs.Item>
-      <ViewBreadcrumbs.Item value={`company:${props.company.id}`} order={1}>
+      <ViewBreadcrumbs.Item
+        value={`company:${props.company.id}`}
+        metadata={{ type: 'company', id: props.company.id }}
+        order={1}
+      >
         {(item) => (
           <Tooltip label={companyName()} class="min-w-0">
             <ViewBreadcrumbs.Button
@@ -80,7 +88,11 @@ export function CrmCompanyDetail(props: {
       </ViewBreadcrumbs.Item>
       <Show when={selectedContact()}>
         {(contact) => (
-          <ViewBreadcrumbs.Item value={`contact:${contact().id}`} order={2}>
+          <ViewBreadcrumbs.Item
+            value={`contact:${contact().id}`}
+            metadata={{ type: 'contact', id: contact().id }}
+            order={2}
+          >
             {(item) => (
               <Tooltip label={contactName()} class="min-w-0">
                 <ViewBreadcrumbs.Button
