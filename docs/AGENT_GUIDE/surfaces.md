@@ -266,9 +266,13 @@ The first scenario covers Signal → Noise → All after disconnecting both nati
 HTTP and WebSockets. iOS shares the native cache code but is not yet covered by
 that driver.
 
-Threads open at `/app/email/<thread-id>`. Click a message header to expand or
-collapse it; `Show N hidden messages` reveals the collapsed middle of a longer
-conversation. A link with `?email_message_id=<message-id>` reveals that message.
+In the new Email view, ordinary row activation opens the thread inside
+`/app/component/mail`; the Email breadcrumb returns to the filtered list.
+Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
+the destination for direct links and legacy surfaces. Click a message header to
+expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
+a longer conversation. A standalone link with
+`?email_message_id=<message-id>` reveals that message.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
@@ -596,9 +600,10 @@ They do not wrap; a thread opened without a source list has disabled arrows.
 Mark done archives the current thread and opens the next email in that same
 filtered list, loading pages until another email is found or the list ends.
 On native mobile, stepping replaces the current email while preserving the
-filtered list behind it for swipe-back. This works with both the legacy mobile
-list and the newer app views. To verify, open the first email from Signal or
-Noise, tap Next and then Previous, and swipe back to the same filtered list.
+filtered list behind it for swipe-back. In the newer Email view it retargets the
+view-owned detail stack instead of opening another block. To verify, open the
+first email from Signal or Noise, tap Next and then Previous, and return to the
+same filtered list.
 Leaving the email cancels pending
 navigation and archiving while a page loads. At the end it opens the previous
 email; with no neighboring email it stays on the archived thread. Mark as not done

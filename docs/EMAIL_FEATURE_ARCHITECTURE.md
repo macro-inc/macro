@@ -14,7 +14,7 @@ same application routes.
 | `email-message` | A received or sent message, its sender/header, body renderer lifecycle and policy, Macro Markdown, quote expansion controls, and attachment presentation | Thread ordering, pagination, selection policy, drafts, reply placement, navigation, block state |
 | `email-thread` | A conversation, chronological ordering, hidden middle messages, pagination, draft association, reading stops, selection, scroll coordination, and where a reply appears | Rendering the internals of an email, editing or sending a draft, block lifecycle |
 | `email-compose` | Form state, recipient rules, editor content, attachments, draft persistence, sending, scheduling, signatures, and undo recovery | Thread pagination/rendering, block identity, app routes or split navigation |
-| `block-email` | The document-block host: load gate, read marker, block hotkeys/focus, location registration, header, modals, side panel, and host actions | Reusable thread, message, or composer state |
+| `block-email` | The legacy document-block adapter plus host-neutral thread body shared with the Email view: load gate, read marker, modals, side panel, and host actions | Reusable thread, message, composer state, or a host's top bar |
 
 An email thread and an individual email are independent features. A message can be
 rendered without a thread provider. A composer can run without a thread: the
@@ -26,7 +26,9 @@ Dependency arrows mean “imports or consumes”:
 
 ```mermaid
 flowchart TD
-  Block[block-email adapter] --> ThreadRoot[email-thread production entry]
+  Block[block-email adapter] --> HostView[email thread host view]
+  EmailView[email view detail] --> HostView
+  HostView --> ThreadRoot[email-thread production entry]
   ThreadRoot --> Thread[email-thread surface and state]
   ThreadRoot --> Adapters[production adapters and shared queries]
   Thread --> Message[email-message view]
@@ -62,10 +64,18 @@ may import a block package, `@core/block`, or block-related signal modules.
   `email-thread/views/thread-reply-input.tsx` owns the keyed reply lifetime;
   `email-compose/primitives/reply-composer.ts` owns the compose workflow.
 - `block-email/EmailBlockAdapter.tsx` translates block focus, keyboard scope,
-  location parameters, and block methods into `EmailThreadHost` callbacks and
-  slots. The thread does not read a block ID or register a block method itself.
-  The adapter captures block signal accessors during setup; event callbacks use
-  those captured functions instead of resolving a provider after setup.
+  location parameters, and block methods into `EmailThreadHost` callbacks.
+  `block-email/EmailThreadHostView.tsx` composes the shared thread body without
+  reading block state, so the Email view can mount it directly and compose its
+  own top bar. The thread does not read a block ID or register a block method
+  itself. The adapter captures block signal accessors during setup; event
+  callbacks use those captured functions instead of resolving a provider after
+  setup.
+- `email-view` owns an `EntityDetailNavigationStack`. Ordinary list activation
+  mounts the thread inside `/app/component/mail`; Shift-open and Preview Pair
+  navigation continue through the standalone `/app/email/:threadId` block. The
+  filtered data source outlives the list UI so Previous, Next, Mark done, and
+  restored list focus keep their source order while detail is mounted.
 
 Capability contracts and provider/consumer modules live in `context/`. Prepared
 view-state types live in `primitives/`; views mount the providers.
