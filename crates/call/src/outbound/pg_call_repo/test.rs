@@ -1425,9 +1425,10 @@ async fn get_call_record_returns_active_call(pool: Pool<Postgres>) -> anyhow::Re
     assert_eq!(record.call_id, CALL1);
     assert_eq!(record.channel_id, CH1);
     assert!(record.is_active);
-    // The fixture permission carries no canonical team share.
+    // Live calls report the pending toggle (on by default); canonical state
+    // is only written when the call is archived.
     assert_eq!(record.team_share_access_level, None);
-    assert!(!record.share_with_team);
+    assert!(record.share_with_team);
     assert_eq!(record.status, None);
     assert!(record.ended_at.is_none());
     assert!(record.duration_ms.is_none());
@@ -2099,6 +2100,7 @@ async fn patch_call_record_sets_public_link_and_defaults_level_to_view(
                 channel_share_permissions: None,
             }),
             team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2129,6 +2131,7 @@ async fn patch_call_record_sets_team_link_and_explicit_level(
                 channel_share_permissions: None,
             }),
             team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2160,6 +2163,7 @@ async fn patch_call_record_explicit_null_disables_link_sharing(
                 channel_share_permissions: None,
             }),
             team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2196,6 +2200,7 @@ async fn patch_call_record_level_only_update_updates_link_share_access_level(
                 channel_share_permissions: None,
             }),
             team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2234,6 +2239,7 @@ async fn patch_call_record_adds_channel_share_permission(
                 }]),
             }),
             team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2310,6 +2316,7 @@ async fn patch_call_record_removes_channel_share_permission(
                 }]),
             }),
             team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2351,6 +2358,7 @@ async fn patch_call_record_empty_share_permission_update_is_noop(
                 channel_share_permissions: None,
             }),
             team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )
@@ -2377,6 +2385,7 @@ async fn patch_call_record_sets_custom_name_on_archived_record(
         &EditCallRecordRepoArgs {
             share_permission: None,
             team_share: None,
+            live_share_with_team: None,
             custom_name: Some("Q4 sync".to_string()),
         },
     )
@@ -2420,6 +2429,7 @@ async fn patch_call_record_custom_name_overwrites_existing(
         &EditCallRecordRepoArgs {
             share_permission: None,
             team_share: None,
+            live_share_with_team: None,
             custom_name: Some("New name".to_string()),
         },
     )
@@ -2457,6 +2467,7 @@ async fn patch_call_record_custom_name_empty_string_clears_existing(
         &EditCallRecordRepoArgs {
             share_permission: None,
             team_share: None,
+            live_share_with_team: None,
             custom_name: Some(String::new()),
         },
     )
@@ -2492,6 +2503,7 @@ async fn patch_call_record_custom_name_none_is_noop(pool: Pool<Postgres>) -> any
         &EditCallRecordRepoArgs {
             share_permission: None,
             team_share: None,
+            live_share_with_team: None,
             custom_name: None,
         },
     )

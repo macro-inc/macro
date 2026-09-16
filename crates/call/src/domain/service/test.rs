@@ -926,9 +926,9 @@ async fn failed_archive_does_not_publish_archived_event() {
     repo.expect_get_call_by_room_name()
         .times(1)
         .return_once(move |_| Box::pin(async move { Ok(Some(active_call)) }));
-    repo.expect_archive_call()
-        .times(1)
-        .returning(|_| Box::pin(async { Err(anyhow::anyhow!("archive failed")) }));
+    repo.expect_archive_call().times(1).returning(|_| {
+        Box::pin(async { Err(CallError::Internal(anyhow::anyhow!("archive failed"))) })
+    });
 
     let rtc_client = webhook_rtc_client("room_finished", None);
     let event_broker = RecordingEventBroker::default();
@@ -1422,6 +1422,7 @@ fn mock_edit_repo(
             assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
             assert_eq!(args.custom_name.as_deref(), expected_custom_name);
             assert!(args.team_share.is_none());
+            assert!(args.live_share_with_team.is_none());
             assert_eq!(args.share_permission.is_some(), expect_share_permission);
             Box::pin(async move { patch_result })
         });
@@ -1656,6 +1657,7 @@ fn mock_team_share_repo(
         .times(1)
         .returning(move |call_id, args| {
             assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
+            assert!(args.live_share_with_team.is_none());
             let command = args
                 .team_share
                 .as_ref()
@@ -1665,6 +1667,13 @@ fn mock_team_share_repo(
             Box::pin(async { Ok(()) })
         });
     repo
+}
+
+/// The archived record every canonical edit starts by loading.
+fn expect_archived_record(repo: &mut MockCallRepository) {
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Some(call_record_for_mutation())) }));
 }
 
 #[tokio::test]
@@ -1739,9 +1748,10 @@ async fn legacy_share_with_team_alias_maps_to_view_and_clear() {
 #[tokio::test]
 async fn team_share_rejects_non_view_levels_before_loading_facts() {
     for level in [AccessLevel::Comment, AccessLevel::Edit, AccessLevel::Owner] {
-        // No facts, record, or patch expectations: the view cap is checked
-        // before anything is loaded.
-        let repo = MockCallRepository::new();
+        // No facts or patch expectations: the view cap is checked before the
+        // canonical facts are loaded or anything is written.
+        let mut repo = MockCallRepository::new();
+        expect_archived_record(&mut repo);
         let event_broker = RecordingEventBroker::default();
         let service = build_mutation_service(repo, event_broker.clone());
 
@@ -1772,6 +1782,7 @@ async fn team_share_by_non_creator_is_forbidden_without_writes() {
             team_edit(None, Some(true)),
         ] {
             let mut repo = MockCallRepository::new();
+            expect_archived_record(&mut repo);
             repo.expect_get_team_share_facts()
                 .times(1)
                 .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
@@ -1793,6 +1804,7 @@ async fn team_share_by_non_creator_is_forbidden_without_writes() {
 async fn team_share_rejects_missing_team_and_contradictory_inputs() {
     // A creator without a team cannot enable sharing.
     let mut repo = MockCallRepository::new();
+    expect_archived_record(&mut repo);
     repo.expect_get_team_share_facts().times(1).returning(|_| {
         let mut facts = team_share_facts();
         facts.owner_team_id = None;
@@ -1812,6 +1824,7 @@ async fn team_share_rejects_missing_team_and_contradictory_inputs() {
 
     // An explicit clear and the legacy enable disagree.
     let mut repo = MockCallRepository::new();
+    expect_archived_record(&mut repo);
     repo.expect_get_team_share_facts()
         .times(1)
         .returning(|_| Box::pin(async { Ok(team_share_facts()) }));
@@ -1855,28 +1868,139 @@ async fn team_share_repo_conflict_publishes_nothing() {
     assert!(event_broker.events().is_empty());
 }
 
-#[tokio::test]
-async fn team_share_change_on_active_call_notifies_participants() {
+// -- live calls: the pending toggle -------------------------------------------
+
+fn live_record() -> CallRecord {
     let mut record = call_record_for_mutation();
     record.is_active = true;
-    let mut repo = mock_team_share_repo(team_share_facts(), record, Some(TeamShareLevel::View));
+    record
+}
+
+/// Repo for a live call: no canonical facts are loaded (there is no
+/// `get_team_share_facts` expectation) and the patch carries the pending
+/// toggle instead of a command.
+fn mock_live_edit_repo(expected_toggle: bool) -> MockCallRepository {
+    let mut repo = MockCallRepository::new();
+    repo.expect_get_call_record_by_call_id()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Some(live_record())) }));
+    repo.expect_patch_call_record()
+        .times(1)
+        .returning(move |call_id, args| {
+            assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
+            assert!(args.team_share.is_none());
+            assert_eq!(args.live_share_with_team, Some(expected_toggle));
+            // The team level never reaches the canonical writer for a live call.
+            assert_eq!(
+                args.share_permission
+                    .as_ref()
+                    .and_then(|p| p.team_share_access_level),
+                None
+            );
+            Box::pin(async { Ok(()) })
+        });
     // The realtime `call_share_with_team_toggled` message fans out to the
     // active participants.
+    repo.expect_get_participants()
+        .times(1)
+        .returning(|_| Box::pin(async { Ok(Vec::new()) }));
+    repo
+}
+
+#[tokio::test]
+async fn live_call_team_share_sets_pending_toggle_for_any_editor() {
+    // A channel member (not the creator) may flip the toggle while the call
+    // is live, through the explicit level or the legacy alias.
+    for (request, expected) in [
+        (
+            team_edit(Some(team_share_request(Some(AccessLevel::View))), None),
+            true,
+        ),
+        (team_edit(Some(team_share_request(None)), None), false),
+        (team_edit(None, Some(true)), true),
+        (team_edit(None, Some(false)), false),
+    ] {
+        let repo = mock_live_edit_repo(expected);
+        let event_broker = RecordingEventBroker::default();
+        let service = build_mutation_service(repo, event_broker.clone());
+
+        service
+            .edit_call_record(authenticated_mutation_receipt(), request)
+            .await
+            .expect("live toggle succeeds");
+
+        assert_updated_event(
+            &event_broker,
+            Some(MUTATED_EVENT_ACTOR),
+            None,
+            Some(expected),
+        );
+    }
+}
+
+#[tokio::test]
+async fn live_call_team_share_rejects_non_view_levels_and_contradictions() {
+    for request in [
+        team_edit(Some(team_share_request(Some(AccessLevel::Edit))), None),
+        team_edit(Some(team_share_request(None)), Some(true)),
+    ] {
+        let mut repo = MockCallRepository::new();
+        repo.expect_get_call_record_by_call_id()
+            .times(1)
+            .returning(|_| Box::pin(async { Ok(Some(live_record())) }));
+        let event_broker = RecordingEventBroker::default();
+        let service = build_mutation_service(repo, event_broker.clone());
+
+        let error = service
+            .edit_call_record(authenticated_mutation_receipt(), request)
+            .await
+            .unwrap_err();
+
+        assert!(matches!(error, CallError::InvalidRequest(_)));
+        assert!(event_broker.events().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn toggle_share_with_team_publishes_updated_event() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_toggle_share_with_team()
+        .times(1)
+        .returning(|call_id| {
+            assert_eq!(*call_id, MUTATED_EVENT_CALL_ID);
+            Box::pin(async { Ok((true, MUTATED_EVENT_CHANNEL_ID)) })
+        });
     repo.expect_get_participants()
         .times(1)
         .returning(|_| Box::pin(async { Ok(Vec::new()) }));
     let event_broker = RecordingEventBroker::default();
     let service = build_mutation_service(repo, event_broker.clone());
 
-    service
-        .edit_call_record(
-            creator_mutation_receipt(),
-            team_edit(Some(team_share_request(Some(AccessLevel::View))), None),
-        )
+    let share_with_team = service
+        .toggle_share_with_team(authenticated_mutation_receipt())
         .await
-        .expect("sharing an active call succeeds");
+        .expect("share toggle succeeds");
 
-    assert_updated_event(&event_broker, Some(CREATOR), None, Some(true));
+    assert!(share_with_team);
+    assert_updated_event(&event_broker, Some(MUTATED_EVENT_ACTOR), None, Some(true));
+}
+
+#[tokio::test]
+async fn toggle_share_with_team_on_archived_call_conflicts_without_events() {
+    let mut repo = MockCallRepository::new();
+    repo.expect_toggle_share_with_team()
+        .times(1)
+        .returning(|_| Box::pin(async { Err(CallError::Conflict("archived".to_string())) }));
+    let event_broker = RecordingEventBroker::default();
+    let service = build_mutation_service(repo, event_broker.clone());
+
+    assert!(matches!(
+        service
+            .toggle_share_with_team(authenticated_mutation_receipt())
+            .await,
+        Err(CallError::Conflict(_))
+    ));
+    assert!(event_broker.events().is_empty());
 }
 
 #[tokio::test]

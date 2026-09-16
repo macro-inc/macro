@@ -161,9 +161,12 @@ export function fetchCallRecord(
   });
 }
 
-/** Whether a call record is shared with its creator's team (always at `view`). */
+/**
+ * Whether a call is shared with its creator's team: the pending toggle while
+ * the call is live, the canonical `view` grant once it is archived.
+ */
 export function isCallSharedWithTeam(record: CallRecord): boolean {
-  return record.teamShareAccessLevel != null;
+  return record.shareWithTeam;
 }
 
 /** The `sharePermission` patch that shares a call with the team, or revokes it. */
@@ -180,8 +183,13 @@ export function setCallRecordTeamShareCache(callId: string, shared: boolean) {
       if (!prev) return prev;
       return {
         ...prev,
-        teamShareAccessLevel: shared ? 'view' : null,
         shareWithTeam: shared,
+        // A live call has no canonical level until it is archived.
+        teamShareAccessLevel: prev.isActive
+          ? prev.teamShareAccessLevel
+          : shared
+            ? 'view'
+            : null,
       };
     }
   );
@@ -192,8 +200,28 @@ function invalidateCallRecord(callId: string) {
 }
 
 /**
- * Share a call (active or archived) with the creator's team, or revoke it.
- * Only the creator may change this; the backend answers 403 otherwise.
+ * Flip the live call's share-with-team toggle. Any participant with edit
+ * access may do this; the toggle is applied as canonical team sharing when
+ * the call is archived.
+ */
+export function useToggleShareWithTeamMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: (callId: string) =>
+      throwOnErr(() => callServiceClient.toggleShareWithTeam(callId)),
+    onSuccess(newValue, callId) {
+      setCallRecordTeamShareCache(callId, newValue);
+      invalidateCallRecord(callId);
+    },
+    onError(error: Error) {
+      console.error('failed to toggle share with team', error);
+    },
+  }));
+}
+
+/**
+ * Share an archived call with the creator's team, or revoke it. Only the
+ * creator may change this; the backend answers 403 otherwise.
  */
 export function useSetCallRecordTeamShareMutation() {
   return useMutation(() => ({

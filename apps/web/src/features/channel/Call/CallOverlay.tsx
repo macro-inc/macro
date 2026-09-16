@@ -355,13 +355,9 @@ export function CallOverlay(props: { onLeave: () => void }) {
           <Tooltip
             placement="top"
             label={
-              !teamShare.canToggle() && !isConnecting()
-                ? callCtx.isSharedWithTeam()
-                  ? "The creator's team can view the transcript and AI summary"
-                  : 'Only the call creator can share it with their team'
-                : callCtx.isSharedWithTeam()
-                  ? 'Everyone on your team can view the transcript and AI summary'
-                  : 'Let everyone on your team view the transcript and AI summary'
+              callCtx.isSharedWithTeam()
+                ? "The creator's team can view the transcript and AI summary once the call ends"
+                : "Let the creator's team view the transcript and AI summary once the call ends"
             }
           >
             <button

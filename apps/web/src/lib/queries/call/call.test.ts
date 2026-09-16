@@ -122,20 +122,39 @@ describe('call team sharing helpers', () => {
     });
   });
 
-  it('isCallSharedWithTeam reads the canonical level, not the deprecated flag', () => {
+  it('isCallSharedWithTeam covers the live toggle and the archived canonical grant', () => {
+    // Live: the pending toggle, no canonical level yet.
     expect(
       isCallSharedWithTeam(
-        record({ teamShareAccessLevel: 'view', shareWithTeam: false })
+        record({
+          isActive: true,
+          shareWithTeam: true,
+          teamShareAccessLevel: null,
+        })
+      )
+    ).toBe(true);
+    // Archived: the boolean mirrors the canonical level.
+    expect(
+      isCallSharedWithTeam(
+        record({
+          isActive: false,
+          shareWithTeam: true,
+          teamShareAccessLevel: 'view',
+        })
       )
     ).toBe(true);
     expect(
       isCallSharedWithTeam(
-        record({ teamShareAccessLevel: null, shareWithTeam: true })
+        record({
+          isActive: false,
+          shareWithTeam: false,
+          teamShareAccessLevel: null,
+        })
       )
     ).toBe(false);
   });
 
-  it('setCallRecordTeamShareCache updates the level and the deprecated flag together', () => {
+  it('setCallRecordTeamShareCache updates the level and flag together for archived calls', () => {
     const key = callKeys.record('call-1').queryKey;
     queryClient.setQueryData(key, record({}));
 
@@ -149,6 +168,20 @@ describe('call team sharing helpers', () => {
     expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
       teamShareAccessLevel: null,
       shareWithTeam: false,
+    });
+  });
+
+  it('setCallRecordTeamShareCache only flips the toggle for live calls', () => {
+    const key = callKeys.record('call-live').queryKey;
+    queryClient.setQueryData(
+      key,
+      record({ callId: 'call-live', isActive: true, shareWithTeam: false })
+    );
+
+    setCallRecordTeamShareCache('call-live', true);
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      shareWithTeam: true,
+      teamShareAccessLevel: null,
     });
   });
 

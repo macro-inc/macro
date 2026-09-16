@@ -1,19 +1,23 @@
 //! Canonical team-share persistence for calls.
 //!
-//! Calls reuse the shared `SharePermission.team_share_*` state and the
-//! `entity_access` team grant managed by `share_permission_db_utils`; this
-//! module only adapts those helpers to the call repository's error type.
-//! Active and archived calls share one `SharePermission` row (and one call
-//! id), so the same state serves both tables.
+//! While a call is live, "share with team" is a pending intent on the active
+//! `calls` row (`share_with_team`), toggled by participants. Archiving
+//! translates that intent into the shared `SharePermission.team_share_*` state
+//! and the `entity_access` team grant managed by `share_permission_db_utils`;
+//! from then on the creator edits it through the canonical path. Active and
+//! archived calls share one `SharePermission` row (and one call id), so the
+//! same state serves both tables. This module only adapts the shared helpers
+//! to the call repository's error type.
 
 #[cfg(test)]
 mod test;
 
+use entity_access_db_utils::team_share::direct_level;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareCreation, TeamShareFacts,
+    AuthorizedTeamShareCommand, TeamShareCreation, TeamShareFacts, TeamShareGrant, TeamShareLevel,
 };
 use share_permission_db_utils::team_share::{self, TeamShareError};
 use sqlx::{PgPool, Postgres, Transaction};
@@ -53,39 +57,108 @@ fn call_entity(call_id: &Uuid) -> Entity<'static> {
     EntityType::Call.with_entity_string(call_id.to_string())
 }
 
-/// Read the authoritative facts in one guarded snapshot without writing anything.
-///
-/// Legacy `share_with_team` rows are reconciled by a data migration rather
-/// than adopted lazily, so unlike documents there is no adoption step here.
+/// A pre-canonical direct View grant for the creator's team that canonical
+/// sharing never touched: what the previous archive code and `shareWithTeam`
+/// edits wrote. Adopting it lets the creator's next edit succeed instead of
+/// conflicting with an untracked grant. Grants at any other level are not
+/// adopted (calls only share at View) and keep conflicting.
+async fn legacy_view_grant(
+    transaction: &mut Transaction<'_, Postgres>,
+    call_id: &Uuid,
+    facts: &TeamShareFacts,
+) -> Result<Option<TeamShareGrant>, CallError> {
+    if facts.current.is_some() || facts.revision != 0 {
+        return Ok(None);
+    }
+    let Some(team_id) = facts.owner_team_id else {
+        return Ok(None);
+    };
+    let level = direct_level(transaction.as_mut(), call_id, EntityType::Call, team_id).await?;
+    Ok(
+        (level == Some(AccessLevel::View)).then_some(TeamShareGrant {
+            team_id,
+            level: TeamShareLevel::View,
+        }),
+    )
+}
+
+/// Read the authoritative facts in one guarded snapshot, adopting a legacy
+/// View grant for the creator's team first (see [`legacy_view_grant`]).
 #[tracing::instrument(err, skip(pool))]
 pub(super) async fn get_team_share_facts(
     pool: &PgPool,
     call_id: &Uuid,
 ) -> Result<TeamShareFacts, CallError> {
+    let entity = call_entity(call_id);
     let mut transaction = pool.begin().await?;
-    let facts = team_share::load_facts(&mut transaction, &call_entity(call_id))
+    let mut facts = team_share::load_facts(&mut transaction, &entity)
         .await
         .map_err(|error| map_team_share_error(call_id, error))?;
+    if let Some(legacy) = legacy_view_grant(&mut transaction, call_id, &facts).await? {
+        team_share::adopt(&mut transaction, &facts, legacy)
+            .await
+            .map_err(|error| map_team_share_error(call_id, error))?;
+        facts = team_share::load_facts(&mut transaction, &entity)
+            .await
+            .map_err(|error| map_team_share_error(call_id, error))?;
+    }
     transaction.commit().await?;
     Ok(facts)
 }
 
-/// Initialize canonical sharing for a call inserted earlier in `transaction`:
-/// `View` for the creator's current team, or nothing when they have no team.
+/// Translate the live `share_with_team` intent into canonical team sharing
+/// while archiving, inside the archive transaction (which must already hold
+/// the shared guard).
 ///
-/// The caller must already hold the shared guard (see `acquire_guard`), which
-/// `initialize` re-acquires reentrantly.
+/// An intent of `true` grants View to the creator's current team, adopting a
+/// legacy View grant an older archive left behind; a creator without a team
+/// promises nothing. Canonical state that already exists (revision above zero)
+/// is left alone: it was decided through the canonical path and outranks the
+/// intent. A legacy grant at another level is left for review rather than
+/// failing the archive.
 #[tracing::instrument(err, skip(transaction))]
-pub(super) async fn initialize_team_share(
+pub(super) async fn translate_live_share_with_team(
     transaction: &mut Transaction<'_, Postgres>,
     call_id: &Uuid,
+    share_with_team: bool,
 ) -> Result<(), CallError> {
-    team_share::initialize(transaction, &call_entity(call_id), TeamShareCreation::Call)
+    let entity = call_entity(call_id);
+    let facts = team_share::load_facts(transaction, &entity)
         .await
-        .map_err(|error| map_team_share_error(call_id, error))
+        .map_err(|error| map_team_share_error(call_id, error))?;
+    if facts.current.is_some() || facts.revision != 0 || !share_with_team {
+        return Ok(());
+    }
+    let Some(team_id) = facts.owner_team_id else {
+        return Ok(());
+    };
+    match direct_level(transaction.as_mut(), call_id, EntityType::Call, team_id).await? {
+        None => team_share::initialize(transaction, &entity, TeamShareCreation::Call)
+            .await
+            .map_err(|error| map_team_share_error(call_id, error)),
+        Some(AccessLevel::View) => team_share::adopt(
+            transaction,
+            &facts,
+            TeamShareGrant {
+                team_id,
+                level: TeamShareLevel::View,
+            },
+        )
+        .await
+        .map_err(|error| map_team_share_error(call_id, error)),
+        Some(level) => {
+            tracing::warn!(
+                %call_id,
+                %team_id,
+                ?level,
+                "archived call has an untracked team grant above view; leaving team sharing unset"
+            );
+            Ok(())
+        }
+    }
 }
 
-/// Apply the creator-authorized team-share command inside the patch
+/// Apply the creator-authorized canonical team-share command inside the patch
 /// transaction, or refuse a requested team level that arrived without one.
 ///
 /// The command must target this call, and when the share-permission patch

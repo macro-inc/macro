@@ -318,8 +318,10 @@ pub struct CallTranscriptCustomSpeakerResult {
 #[serde(rename_all = "camelCase")]
 pub struct EditCallRecordRequest {
     /// Updated share permissions. `teamShareAccessLevel` shares the call with
-    /// the creator's team: only `view` or `null` (revoke) are accepted, and
-    /// only the call's creator may change it.
+    /// the creator's team and only accepts `view` or `null` (revoke). While
+    /// the call is live it sets the pending share-with-team toggle, which is
+    /// applied when the call is archived; afterwards only the call's creator
+    /// may change it.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
     /// Deprecated alias for `sharePermission.teamShareAccessLevel`:
@@ -346,9 +348,13 @@ pub struct EditCallRecordRepoArgs {
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
     /// Display name update; see [`EditCallRecordRequest::custom_name`].
     pub custom_name: Option<String>,
-    /// Creator-authorized team-share write, present only when the request
-    /// carried an explicit `teamShareAccessLevel` or the legacy `shareWithTeam`.
+    /// Creator-authorized canonical team-share write for an archived call,
+    /// present only when the request carried an explicit
+    /// `teamShareAccessLevel` or the legacy `shareWithTeam`.
     pub team_share: Option<AuthorizedTeamShareCommand>,
+    /// Pending share-with-team intent for a call that is still live; applied
+    /// as canonical team sharing when the call is archived.
+    pub live_share_with_team: Option<bool>,
 }
 
 /// One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].
@@ -466,11 +472,14 @@ pub struct CallRecord {
     /// AI-generated summary of the call. Only set on archived `call_records`
     /// once summarization has run; active calls always return `None`.
     pub summary: Option<String>,
-    /// The explicit access level granted to the creator's team, or `None`
-    /// when the call is not shared with the team. Calls only ever grant `View`.
+    /// The canonical access level granted to the creator's team, or `None`
+    /// when the call is not shared with the team. Calls only ever grant
+    /// `View`, and only once archived: while the call is live this is `None`
+    /// and `share_with_team` carries the pending toggle.
     pub team_share_access_level: Option<AccessLevel>,
-    /// Deprecated: derived from `team_share_access_level`, kept for clients
-    /// that still read the boolean.
+    /// Whether the call is shared with the creator's team. While the call is
+    /// live this is the pending toggle applied at archive; afterwards it
+    /// mirrors `team_share_access_level`.
     pub share_with_team: bool,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,

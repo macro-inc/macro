@@ -268,9 +268,10 @@ type CallStoreState = {
   /** Which channel block has the Call tab selected (synced from channel UI). */
   callPageChannelId: string | null;
   backgroundEffect: BackgroundEffect;
-  // Mirrors the active call's canonical team sharing (`teamShareAccessLevel`
-  // on the call record). Seeded from the record once it loads and kept in
-  // sync by the `call_share_with_team_toggled` event and local edits.
+  // Mirrors the active call's pending share-with-team toggle (applied as
+  // canonical team sharing when the call is archived). Seeded from the call
+  // record once it loads and kept in sync by the
+  // `call_share_with_team_toggled` event and local toggles.
   isSharedWithTeam: boolean;
 };
 

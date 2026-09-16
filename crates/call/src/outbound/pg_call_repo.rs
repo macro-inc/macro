@@ -308,9 +308,6 @@ impl CallRepository for PgCallRepo {
         created_by: MacroUserIdStr<'_>,
     ) -> Result<Option<Call>, CallError> {
         let mut tx = self.pool.begin().await?;
-        // Canonical team sharing is initialized at the end of this transaction,
-        // so take the shared team-share guard before any permission rows exist.
-        share_permission_db_utils::team_share::acquire_guard(&mut tx).await?;
 
         // Create the share permission. Call access is channel-based by design,
         // so the team default link-share preference intentionally does not
@@ -366,14 +363,13 @@ impl CallRepository for PgCallRepo {
         )
         .await?;
 
-        // The legacy `share_with_team` column is no longer read. It is written
-        // FALSE so an older `archive_call`, which re-inserted the team grant
-        // from that flag, cannot collide with the canonical grant created
-        // below during a rollout; a follow-up migration drops the column.
+        // `share_with_team` keeps its column default (on): it is the pending
+        // intent participants toggle during the call, translated into
+        // canonical team sharing when the call is archived.
         let row = sqlx::query!(
             r#"
-            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id, share_with_team)
-            VALUES ($1, $2, $3, $4, $5, FALSE)
+            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id)
+            VALUES ($1, $2, $3, $4, $5)
             ON CONFLICT (channel_id) DO NOTHING
             RETURNING id, channel_id, room_name, created_by, created_at, egress_id
             "#,
@@ -391,10 +387,6 @@ impl CallRepository for PgCallRepo {
         let Some(r) = row else {
             return Ok(None);
         };
-
-        // Canonical team sharing: View for the creator's current team, or
-        // nothing when they have no team.
-        team_share::initialize_team_share(&mut tx, call_id).await?;
 
         tx.commit().await?;
 
@@ -736,13 +728,33 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn archive_call(&self, call_id: &Uuid) -> Result<ArchivedCall, Self::Err> {
+    async fn toggle_share_with_team(&self, call_id: &Uuid) -> Result<(bool, Uuid), CallError> {
+        let row = sqlx::query!(
+            r#"
+            UPDATE calls
+               SET share_with_team = NOT share_with_team
+             WHERE id = $1
+            RETURNING share_with_team, channel_id
+            "#,
+            call_id,
+        )
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or_else(|| edit::archived_call_conflict(call_id))?;
+        Ok((row.share_with_team, row.channel_id))
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn archive_call(&self, call_id: &Uuid) -> Result<ArchivedCall, CallError> {
         let mut tx = self.pool.begin().await?;
+        // The live share-with-team intent is translated into canonical team
+        // sharing below, so take the shared guard before moving any rows.
+        share_permission_db_utils::team_share::acquire_guard(&mut tx).await?;
 
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -751,11 +763,8 @@ impl CallRepository for PgCallRepo {
         )
         .fetch_optional(tx.as_mut())
         .await?
-        .ok_or(sqlx::Error::RowNotFound)?;
+        .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
 
-        // Sharing needs no work here: team sharing lives on the shared
-        // `SharePermission` row and its `entity_access` grant, both keyed by
-        // ids the archived record keeps.
         let ended_at = Utc::now().trunc_subsecs(6);
         let duration_ms = ended_at
             .signed_duration_since(call.created_at)
@@ -764,10 +773,12 @@ impl CallRepository for PgCallRepo {
         let has_recording = call.egress_id.is_some();
         // Insert into call_records (including egress_id and any early recording keys).
         // The record keeps the same id as the original call.
+        // The legacy column is still copied for older readers until it is
+        // dropped; new readers derive `share_with_team` from canonical state.
         sqlx::query!(
             r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, preview_url, recording_started_at, share_permission_id)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
             "#,
             call_id,
             call.channel_id,
@@ -781,9 +792,14 @@ impl CallRepository for PgCallRepo {
             call.preview_url,
             call.recording_started_at,
             &call.share_permission_id,
+            call.share_with_team,
         )
         .execute(tx.as_mut())
         .await?;
+
+        // Translate the live intent into canonical team sharing: View for the
+        // creator's current team when the toggle was on, nothing otherwise.
+        team_share::translate_live_share_with_team(&mut tx, call_id, call.share_with_team).await?;
 
         // Copy all lifetime-distinct participants (including soft-deleted) to
         // call_record_participants. Each inserted row represents one participant.
@@ -1131,6 +1147,7 @@ impl CallRepository for PgCallRepo {
         if let Some(active) = sqlx::query!(
             r#"
             SELECT c.id, c.channel_id, c.room_name, c.created_by, c.created_at, c.egress_id, c.recording_key, c.preview_url, c.recording_started_at,
+                   c.share_with_team,
                    sp.team_share_access_level AS "team_share_access_level?: AccessLevel"
             FROM calls c
             JOIN "SharePermission" sp ON sp.id = c.share_permission_id
@@ -1203,7 +1220,9 @@ impl CallRepository for PgCallRepo {
                 channel_name: None,
                 custom_name: None,
                 summary: None,
-                share_with_team: active.team_share_access_level.is_some(),
+                // Live calls report the pending toggle; canonical state is
+                // written when the call is archived.
+                share_with_team: active.share_with_team,
                 team_share_access_level: active.team_share_access_level,
                 is_active: true,
                 status: None,
@@ -1456,6 +1475,7 @@ impl CallRepository for PgCallRepo {
                     c.recording_started_at,
                     NULL::text AS custom_name,
                     NULL::text AS summary,
+                    c.share_with_team,
                     sp.team_share_access_level,
                     true AS is_active,
                     CASE
@@ -1515,6 +1535,7 @@ impl CallRepository for PgCallRepo {
                     cr.recording_started_at,
                     cr.custom_name,
                     cr.summary,
+                    (sp.team_share_access_level IS NOT NULL) AS share_with_team,
                     sp.team_share_access_level,
                     false AS is_active,
                     CASE
@@ -1574,6 +1595,7 @@ impl CallRepository for PgCallRepo {
                 recording_started_at,
                 custom_name,
                 summary,
+                share_with_team as "share_with_team!",
                 team_share_access_level as "team_share_access_level?: AccessLevel",
                 is_active as "is_active!",
                 status as "status!"
@@ -1666,7 +1688,7 @@ impl CallRepository for PgCallRepo {
                 channel_name: None,
                 custom_name: row.custom_name,
                 summary: row.summary,
-                share_with_team: row.team_share_access_level.is_some(),
+                share_with_team: row.share_with_team,
                 team_share_access_level: row.team_share_access_level,
                 is_active: row.is_active,
                 status: Some(call_status_from_sql(&row.status)),
@@ -1802,6 +1824,10 @@ impl CallRepository for PgCallRepo {
 
         if let Some(share_permission) = args.share_permission.as_ref() {
             edit::update_share_permission(&mut tx, call_record_id, share_permission).await?;
+        }
+
+        if let Some(share) = args.live_share_with_team {
+            edit::set_live_share_with_team(&mut tx, call_record_id, share).await?;
         }
 
         if let Some(custom_name) = args.custom_name.as_deref() {

@@ -68,9 +68,27 @@ export const callServiceClient = {
   },
 
   /**
+   * `POST /call/record/{id}/share-with-team/toggle`: flips the live call's
+   * share-with-team toggle and returns the new value. The toggle becomes
+   * canonical team sharing (view for the creator's team) when the call is
+   * archived; archived calls answer 409 and are edited via `editCallRecord`.
+   */
+  async toggleShareWithTeam(callId: string) {
+    // fetchWithToken requires T extends ObjectLike, but this endpoint returns a
+    // primitive JSON boolean. response.json() parses it correctly at runtime;
+    // we only need to satisfy the generic constraint.
+    const result = await fetchWithToken<Record<string, never>>(
+      `${host}/call/record/${callId}/share-with-team/toggle`,
+      { method: 'POST' }
+    );
+    return result.map((r) => r as unknown as boolean);
+  },
+
+  /**
    * `PATCH /call/record/{id}`. Team sharing goes through
-   * `sharePermission.teamShareAccessLevel`, which the backend authorizes
-   * against the call's creator and caps at `'view'` (`null` revokes).
+   * `sharePermission.teamShareAccessLevel`, capped at `'view'` (`null`
+   * revokes). While the call is live it sets the pending toggle; once the
+   * call is archived the backend authorizes it against the call's creator.
    */
   async editCallRecord(params: {
     callId: string;

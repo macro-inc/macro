@@ -12,6 +12,7 @@ import ClockIcon from '@phosphor/clock.svg';
 import {
   isCallSharedWithTeam,
   useSetCallRecordTeamShareMutation,
+  useToggleShareWithTeamMutation,
 } from '@queries/call/call';
 import { useAttachmentReferencesQuery } from '@queries/storage/attachment-references';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
@@ -148,25 +149,32 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
   const record = props.record;
   const callCtx = useCallContextOptional();
   const userId = useUserId();
+  const toggleLiveShare = useToggleShareWithTeamMutation();
   const setTeamShare = useSetCallRecordTeamShareMutation();
 
-  // Team sharing is canonical `SharePermission` state: `view` or nothing.
+  // While the call is live this is the pending toggle; once archived it is
+  // the canonical `SharePermission` team share (`view` or nothing).
   const isShared = () => isCallSharedWithTeam(record());
-  // Only the call's creator may change it (the backend enforces this too);
-  // everyone else sees the current state read-only.
-  const canEdit = () => record().createdBy === userId();
-  const isDisabled = () => setTeamShare.isPending || !canEdit();
+  // Any participant with edit access may flip the toggle during the call;
+  // once archived only the creator may change it (the backend enforces both).
+  const canEdit = () => record().isActive || record().createdBy === userId();
+  const isPending = () => toggleLiveShare.isPending || setTeamShare.isPending;
+  const isDisabled = () => isPending() || !canEdit();
 
   const handleChange = async (checked: boolean) => {
     const current = record();
     try {
-      await setTeamShare.mutateAsync({
-        callId: current.callId,
-        shared: checked,
-      });
+      const newValue = current.isActive
+        ? await toggleLiveShare.mutateAsync(current.callId)
+        : (
+            await setTeamShare.mutateAsync({
+              callId: current.callId,
+              shared: checked,
+            })
+          ).shared;
 
       if (callCtx?.activeCallId() === current.callId) {
-        callCtx.setSharedWithTeam(checked);
+        callCtx.setSharedWithTeam(newValue);
       }
     } catch (error) {
       console.error('failed to update call record team sharing', error);
@@ -174,6 +182,9 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
   };
 
   const description = () => {
+    if (record().isActive) {
+      return "Lets everyone on the creator's team view and search this call's transcript and AI summary once it ends.";
+    }
     if (canEdit()) {
       return "Lets everyone on your team view and search this call's transcript and AI summary.";
     }
@@ -197,7 +208,7 @@ function SharingSectionContent(props: { record: Accessor<CallRecord> }) {
           'text-ink-muted/70 hover:text-ink hover:bg-ink-muted/[0.06]',
           isShared() && 'text-ink',
           isDisabled() && 'pointer-events-none',
-          setTeamShare.isPending && 'opacity-50'
+          isPending() && 'opacity-50'
         )}
       >
         <InlineCheckbox checked={isShared()} />

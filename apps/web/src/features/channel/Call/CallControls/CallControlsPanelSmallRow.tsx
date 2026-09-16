@@ -142,7 +142,6 @@ export function CallControlsPanelSmallRow() {
               </span>
             </Dropdown.Item>
 
-            {/* Only the call's creator can change team sharing; others see the state. */}
             <Dropdown.Item
               closeOnSelect={false}
               disabled={!teamShare.canToggle() || teamShare.isPending()}

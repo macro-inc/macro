@@ -103,6 +103,7 @@ impl<S, Svc, Auth> FromRef<CallRouterState<S, Svc, Auth>> for MacroAuthorization
 /// - `PATCH /record/{call_id}` — edit a call record (share permissions, team sharing, name)
 /// - `PATCH /record/{call_id}/transcript` — set per-diarized-speaker custom_speaker overrides
 /// - `DELETE /record/{call_id}` — delete a call record
+/// - `POST /record/{call_id}/share-with-team/toggle` — flip the live call's share-with-team toggle
 /// - `POST /record/preview` — batch-fetch lightweight previews for many call ids
 pub fn call_router<S, Svc, Auth, T>(state: CallRouterState<S, Svc, Auth>) -> Router<T>
 where
@@ -135,6 +136,10 @@ where
         .route(
             "/record/{call_id}/transcript",
             patch(edit_call_transcript_handler::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/share-with-team/toggle",
+            post(toggle_share_with_team_handler::<S, Svc, Auth>),
         )
         .with_state(state)
 }
@@ -442,9 +447,10 @@ pub async fn delete_call_record_handler<
 /// Handler for `PATCH /call/record/{call_id}`.
 ///
 /// Edits a call record: link/channel share permissions, display name, and
-/// team sharing. Edit access (channel membership) is required for the request;
-/// `sharePermission.teamShareAccessLevel` is additionally authorized against
-/// the call's creator and only accepts `view` or `null`.
+/// team sharing. Edit access (channel membership) is required for the request.
+/// `sharePermission.teamShareAccessLevel` only accepts `view` or `null`; while
+/// the call is live it sets the pending share-with-team toggle, and once the
+/// call is archived it is additionally authorized against the call's creator.
 #[utoipa::path(
     patch,
     operation_id = "edit_call_record",
@@ -457,9 +463,9 @@ pub async fn delete_call_record_handler<
         (status = 204, description = "Call record updated"),
         (status = 400, description = "Invalid team-share level, contradictory inputs, or the creator has no team", body = ErrorResponse),
         (status = 401, body = ErrorResponse),
-        (status = 403, description = "Team sharing may only be changed by the call's creator", body = ErrorResponse),
+        (status = 403, description = "Team sharing of an archived call may only be changed by its creator", body = ErrorResponse),
         (status = 404, body = ErrorResponse),
-        (status = 409, description = "Team-sharing facts changed; reload and retry", body = ErrorResponse),
+        (status = 409, description = "Team-sharing facts changed, or the call was archived mid-request; reload and retry", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -516,6 +522,43 @@ pub async fn edit_call_transcript_handler<
         .edit_call_transcript(access.entity_access_receipt, request)
         .await?;
     Ok(StatusCode::NO_CONTENT)
+}
+
+/// Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
+///
+/// Flips the live call's share-with-team toggle and returns the new value as
+/// the JSON body. The toggle is applied as canonical team sharing (View for
+/// the creator's team) when the call is archived; archived calls answer 409
+/// and are edited through `PATCH /call/record/{call_id}` instead.
+#[utoipa::path(
+    post,
+    operation_id = "toggle_share_with_team",
+    path = "/call/record/{call_id}/share-with-team/toggle",
+    params(
+        ("call_id" = Uuid, Path, description = "Call ID"),
+    ),
+    responses(
+        (status = 200, body = bool, content_type = "application/json", description = "New value of the share-with-team toggle"),
+        (status = 401, body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 409, description = "The call is no longer active", body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+#[tracing::instrument(err, skip_all)]
+pub async fn toggle_share_with_team_handler<
+    S: CallService,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+>(
+    State(state): State<CallRouterState<S, Svc, Auth>>,
+    access: CallAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
+) -> Result<Json<bool>, CallError> {
+    let new_value = state
+        .service
+        .toggle_share_with_team(access.entity_access_receipt)
+        .await?;
+    Ok(Json(new_value))
 }
 
 /// Handler for `POST /call/record/preview`.

@@ -1,40 +1,26 @@
-import { useUserId } from '@core/context/user';
-import {
-  useCallRecordQuery,
-  useSetCallRecordTeamShareMutation,
-} from '@queries/call/call';
+import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { useCallContext } from './CallContext';
 
 /**
  * Team sharing controls for the active call.
  *
- * `toggle` flips the call's canonical team sharing (`view` ↔ none) through
- * `PATCH /call/record/{id}` and mirrors the new value into the local call
- * store. Only the call's creator may change it, so `canToggle` is false for
- * everyone else (and while the record has not loaded yet). No-op when there's
- * no active call.
+ * `toggle` flips the live call's share-with-team toggle through
+ * `POST /call/record/{id}/share-with-team/toggle` and mirrors the new value
+ * into the local call store. Any participant with edit access may flip it;
+ * the toggle becomes canonical team sharing (view for the creator's team)
+ * when the call is archived. No-op when there's no active call.
  */
 export function useActiveCallTeamShare() {
   const callCtx = useCallContext();
-  const userId = useUserId();
-  const record = useCallRecordQuery(() => callCtx.activeCallId() ?? '');
-  const mutation = useSetCallRecordTeamShareMutation();
+  const mutation = useToggleShareWithTeamMutation();
 
-  const canToggle = () => {
-    const current = record.data;
-    return (
-      !!current &&
-      current.callId === callCtx.activeCallId() &&
-      current.createdBy === userId()
-    );
-  };
+  const canToggle = () => callCtx.activeCallId() !== null;
 
   const toggle = async () => {
     const callId = callCtx.activeCallId();
-    if (!callId || !canToggle()) return;
-    const shared = !callCtx.isSharedWithTeam();
-    await mutation.mutateAsync({ callId, shared });
-    callCtx.setSharedWithTeam(shared);
+    if (!callId) return;
+    const newValue = await mutation.mutateAsync(callId);
+    callCtx.setSharedWithTeam(newValue);
   };
 
   return { toggle, canToggle, isPending: () => mutation.isPending };

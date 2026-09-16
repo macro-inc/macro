@@ -7,7 +7,7 @@ use models_permissions::share_permission::channel_share_permission::UpdateOperat
 use sqlx::{Postgres, QueryBuilder, Transaction};
 use uuid::Uuid;
 
-use crate::domain::models::CustomSpeakerAssignment;
+use crate::domain::models::{CallError, CustomSpeakerAssignment};
 
 /// Update link and channel share permissions for a call record.
 ///
@@ -50,6 +50,35 @@ pub(super) async fn update_share_permission(
         .await?;
     }
 
+    Ok(())
+}
+
+/// The conflict returned when a live-call operation reaches a call that has
+/// been archived meanwhile: its team sharing is canonical now.
+pub(super) fn archived_call_conflict(call_id: &Uuid) -> CallError {
+    CallError::Conflict(format!(
+        "call {call_id} is no longer active; edit team sharing through sharePermission.teamShareAccessLevel"
+    ))
+}
+
+/// Set the pending share-with-team intent on an active call. The intent is
+/// translated into canonical team sharing when the call is archived.
+pub(super) async fn set_live_share_with_team(
+    transaction: &mut Transaction<'_, Postgres>,
+    call_id: &Uuid,
+    share: bool,
+) -> Result<(), CallError> {
+    let updated = sqlx::query!(
+        r#"UPDATE calls SET share_with_team = $2 WHERE id = $1"#,
+        call_id,
+        share,
+    )
+    .execute(transaction.as_mut())
+    .await?
+    .rows_affected();
+    if updated == 0 {
+        return Err(archived_call_conflict(call_id));
+    }
     Ok(())
 }
 

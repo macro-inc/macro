@@ -1,4 +1,5 @@
-//! Canonical team sharing for calls: creation, edits, archive, and reads.
+//! Team sharing for calls: the live toggle, its translation into canonical
+//! state at archive, creator edits on archived records, and reads.
 
 use std::ops::Deref;
 
@@ -8,7 +9,7 @@ use macro_user_id::cowlike::CowLike;
 use model_entity::EntityType;
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareFacts, TeamShareLevel, TeamShareRequest,
+    AuthorizedTeamShareCommand, TeamShareFacts, TeamShareGrant, TeamShareLevel, TeamShareRequest,
     authorize_team_share,
 };
 use models_permissions::share_permission::{LinkShare, UpdateSharePermissionRequestV2};
@@ -16,8 +17,7 @@ use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use super::super::test::{
-    CALL_ARCHIVED, CALL1, CH1, CH2, USER_A, USER_B, give_user_a_team, repo,
-    team_entity_access_count,
+    CALL_ARCHIVED, CALL1, CH1, CH2, USER_A, give_user_a_team, repo, team_entity_access_count,
 };
 use crate::domain::models::{CallError, EditCallRecordRepoArgs};
 use crate::domain::ports::CallRepository;
@@ -42,6 +42,16 @@ fn args(
         share_permission,
         custom_name: None,
         team_share,
+        live_share_with_team: None,
+    }
+}
+
+fn live_args(share: bool, custom_name: Option<&str>) -> EditCallRecordRepoArgs {
+    EditCallRecordRepoArgs {
+        share_permission: None,
+        custom_name: custom_name.map(str::to_string),
+        team_share: None,
+        live_share_with_team: Some(share),
     }
 }
 
@@ -145,6 +155,16 @@ async fn team_row_level(pool: &Pool<Postgres>, call_id: Uuid) -> Option<AccessLe
         .unwrap()
 }
 
+async fn live_toggle(pool: &Pool<Postgres>, call_id: Uuid) -> bool {
+    sqlx::query_scalar!(
+        r#"SELECT share_with_team FROM calls WHERE id = $1"#,
+        call_id
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
 async fn permission_count(pool: &Pool<Postgres>) -> i64 {
     sqlx::query_scalar!(r#"SELECT COUNT(*) AS "count!" FROM "SharePermission""#)
         .fetch_one(pool)
@@ -162,6 +182,8 @@ async fn stored_custom_name(pool: &Pool<Postgres>, call_id: Uuid) -> Option<Stri
     .unwrap()
 }
 
+/// What the previous archive code and `shareWithTeam` edits wrote: a direct
+/// team grant with no canonical state behind it.
 async fn insert_legacy_team_row(
     pool: &Pool<Postgres>,
     call_id: Uuid,
@@ -212,13 +234,51 @@ async fn get_team_share_facts_reads_creator_team_and_null_state(
     Ok(())
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_team_share_facts_adopts_legacy_view_grant_but_not_other_levels(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
+    insert_legacy_team_row(&pool, CALL_ARCHIVED, AccessLevel::View).await?;
+    insert_legacy_team_row(&pool, CALL1, AccessLevel::Edit).await?;
+
+    // A View grant for the creator's team becomes explicit consent.
+    let adopted = repo.get_team_share_facts(&CALL_ARCHIVED).await?;
+    assert_eq!(
+        adopted.current,
+        Some(TeamShareGrant {
+            team_id: TEAM_ID,
+            level: TeamShareLevel::View,
+        })
+    );
+    assert_eq!(adopted.revision, 1);
+    assert_eq!(
+        stored_team_share(&pool, CALL_ARCHIVED).await,
+        shared_view(1)
+    );
+    assert_eq!(team_entity_access_count(&pool, CALL_ARCHIVED).await?, 1);
+
+    // Calls only share at View: any other level stays untracked.
+    let untouched = repo.get_team_share_facts(&CALL1).await?;
+    assert_eq!(untouched.current, None);
+    assert_eq!(untouched.revision, 0);
+    assert_eq!(team_row_level(&pool, CALL1).await, Some(AccessLevel::Edit));
+    Ok(())
+}
+
 // -- create_call --------------------------------------------------------------
 
 #[sqlx::test(
     fixtures(path = "../../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn create_call_initializes_view_for_creator_team(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn create_call_starts_with_toggle_on_and_no_canonical_state(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
     give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
     let id = Uuid::now_v7();
@@ -227,37 +287,13 @@ async fn create_call_initializes_view_for_creator_team(pool: Pool<Postgres>) -> 
         .await?
         .expect("call created");
 
-    assert_eq!(stored_team_share(&pool, id).await, shared_view(1));
-    assert_eq!(team_row_level(&pool, id).await, Some(AccessLevel::View));
-    let record = repo.get_call_record_by_call_id(&id).await?.unwrap();
-    assert_eq!(record.team_share_access_level, Some(AccessLevel::View));
-    assert!(record.share_with_team);
-    // The legacy column is written FALSE so an older archive_call never
-    // re-inserts the grant created here.
-    let legacy_flag = sqlx::query_scalar!(r#"SELECT share_with_team FROM calls WHERE id = $1"#, id)
-        .fetch_one(&pool)
-        .await?;
-    assert!(!legacy_flag);
-    Ok(())
-}
-
-#[sqlx::test(
-    fixtures(path = "../../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn create_call_without_team_starts_unshared(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
-    let id = Uuid::now_v7();
-
-    repo.create_call(&id, &CH2, "room-ch2", USER_B.deref().copied())
-        .await?
-        .expect("call created");
-
+    // The pending toggle defaults to on; nothing is granted until archive.
+    assert!(live_toggle(&pool, id).await);
     assert_eq!(stored_team_share(&pool, id).await, unshared());
     assert_eq!(team_entity_access_count(&pool, id).await?, 0);
     let record = repo.get_call_record_by_call_id(&id).await?.unwrap();
+    assert!(record.share_with_team);
     assert_eq!(record.team_share_access_level, None);
-    assert!(!record.share_with_team);
     Ok(())
 }
 
@@ -269,9 +305,7 @@ async fn create_call_lost_race_leaves_no_permission_or_grant_rows(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
-    give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
     let permissions_before = permission_count(&pool).await;
-    let existing = stored_team_share(&pool, CALL1).await;
     let id = Uuid::now_v7();
 
     // CH1 already has an active call (the fixture's CALL1).
@@ -281,7 +315,6 @@ async fn create_call_lost_race_leaves_no_permission_or_grant_rows(
 
     assert!(created.is_none());
     assert_eq!(permission_count(&pool).await, permissions_before);
-    assert_eq!(stored_team_share(&pool, CALL1).await, existing);
     let grants = sqlx::query_scalar!(
         r#"SELECT COUNT(*) AS "count!" FROM entity_access WHERE entity_id = $1"#,
         id
@@ -292,60 +325,206 @@ async fn create_call_lost_race_leaves_no_permission_or_grant_rows(
     Ok(())
 }
 
+// -- the live toggle ----------------------------------------------------------
+
 #[sqlx::test(
     fixtures(path = "../../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn create_call_conflicts_with_untracked_team_grant_and_rolls_back(
+async fn toggle_share_with_team_flips_live_call_and_conflicts_once_archived(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
-    give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
-    let id = Uuid::now_v7();
-    insert_legacy_team_row(&pool, id, AccessLevel::Edit).await?;
-    let permissions_before = permission_count(&pool).await;
 
-    let result = repo
-        .create_call(&id, &CH2, "conflict", USER_A.copied())
-        .await;
+    assert_eq!(repo.toggle_share_with_team(&CALL1).await?, (false, CH1));
+    assert!(!live_toggle(&pool, CALL1).await);
+    assert!(
+        !repo
+            .get_call_record_by_call_id(&CALL1)
+            .await?
+            .unwrap()
+            .share_with_team
+    );
 
-    assert!(matches!(result, Err(CallError::Conflict(_))));
-    assert!(repo.get_call_record_by_call_id(&id).await?.is_none());
-    assert_eq!(permission_count(&pool).await, permissions_before);
-    // The unexplained grant is left for review, not adopted or overwritten.
-    assert_eq!(team_row_level(&pool, id).await, Some(AccessLevel::Edit));
+    assert_eq!(repo.toggle_share_with_team(&CALL1).await?, (true, CH1));
+    assert!(live_toggle(&pool, CALL1).await);
+    // Flipping the toggle never touches canonical state or grants.
+    assert_eq!(stored_team_share(&pool, CALL1).await, unshared());
+    assert_eq!(team_entity_access_count(&pool, CALL1).await?, 0);
+
+    assert!(matches!(
+        repo.toggle_share_with_team(&CALL_ARCHIVED).await,
+        Err(CallError::Conflict(_))
+    ));
     Ok(())
 }
 
-// -- patch_call_record --------------------------------------------------------
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_live_share_with_team_sets_toggle_and_conflicts_once_archived(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+
+    repo.patch_call_record(&CALL1, &live_args(false, None))
+        .await?;
+    assert!(!live_toggle(&pool, CALL1).await);
+    assert_eq!(stored_team_share(&pool, CALL1).await, unshared());
+
+    repo.patch_call_record(&CALL1, &live_args(true, None))
+        .await?;
+    assert!(live_toggle(&pool, CALL1).await);
+
+    // The call was archived between the service's read and the write: the
+    // whole patch rolls back and the caller retries through the canonical path.
+    let result = repo
+        .patch_call_record(&CALL_ARCHIVED, &live_args(true, Some("must not persist")))
+        .await;
+    assert!(matches!(result, Err(CallError::Conflict(_))));
+    assert_eq!(stored_custom_name(&pool, CALL_ARCHIVED).await, None);
+    assert_eq!(stored_team_share(&pool, CALL_ARCHIVED).await, unshared());
+    Ok(())
+}
+
+// -- archive_call -------------------------------------------------------------
 
 #[sqlx::test(
     fixtures(path = "../../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn patch_applies_view_command_on_active_and_archived_calls(
+async fn archive_translates_toggle_on_into_canonical_view(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
+    assert!(live_toggle(&pool, CALL1).await);
+
+    repo.archive_call(&CALL1).await?;
+
+    assert_eq!(stored_team_share(&pool, CALL1).await, shared_view(1));
+    assert_eq!(team_row_level(&pool, CALL1).await, Some(AccessLevel::View));
+    assert_eq!(team_entity_access_count(&pool, CALL1).await?, 1);
+    let record = repo.get_call_record_by_call_id(&CALL1).await?.unwrap();
+    assert!(!record.is_active);
+    assert_eq!(record.team_share_access_level, Some(AccessLevel::View));
+    assert!(record.share_with_team);
+
+    // The creator can now edit the canonical state the archive produced.
+    set_team_share(&repo, CALL1, None).await?;
+    assert_eq!(stored_team_share(&pool, CALL1).await.revision, 2);
+    assert_eq!(team_entity_access_count(&pool, CALL1).await?, 0);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn archive_translates_toggle_off_into_unshared(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
+    repo.toggle_share_with_team(&CALL1).await?;
+    assert!(!live_toggle(&pool, CALL1).await);
+
+    repo.archive_call(&CALL1).await?;
+
+    assert_eq!(stored_team_share(&pool, CALL1).await, unshared());
+    assert_eq!(team_entity_access_count(&pool, CALL1).await?, 0);
+    let record = repo.get_call_record_by_call_id(&CALL1).await?.unwrap();
+    assert_eq!(record.team_share_access_level, None);
+    assert!(!record.share_with_team);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn archive_with_toggle_on_but_no_team_shares_nothing(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    assert!(live_toggle(&pool, CALL1).await);
+
+    repo.archive_call(&CALL1).await?;
+
+    assert_eq!(stored_team_share(&pool, CALL1).await, unshared());
+    assert_eq!(team_entity_access_count(&pool, CALL1).await?, 0);
+    // Once archived, the boolean mirrors canonical state, not the old toggle.
+    let record = repo.get_call_record_by_call_id(&CALL1).await?.unwrap();
+    assert!(!record.share_with_team);
+    assert_eq!(record.team_share_access_level, None);
+
+    // Joining a team afterwards does not reshare the archived record.
+    give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
+    assert_eq!(repo.get_team_share_facts(&CALL1).await?.current, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn archive_adopts_legacy_view_grant_and_leaves_other_levels(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
     give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
 
-    for call_id in [CALL1, CALL_ARCHIVED] {
-        set_team_share(&repo, call_id, Some(AccessLevel::View)).await?;
-        assert_eq!(stored_team_share(&pool, call_id).await, shared_view(1));
-        assert_eq!(
-            team_row_level(&pool, call_id).await,
-            Some(AccessLevel::View)
-        );
-        let record = repo.get_call_record_by_call_id(&call_id).await?.unwrap();
-        assert_eq!(record.team_share_access_level, Some(AccessLevel::View));
-        assert!(record.share_with_team);
+    // An older archive (or `shareWithTeam` edit) already wrote the View row.
+    let adopted = Uuid::now_v7();
+    repo.create_call(&adopted, &CH2, "adopted", USER_A.copied())
+        .await?
+        .expect("call created");
+    insert_legacy_team_row(&pool, adopted, AccessLevel::View).await?;
+    repo.archive_call(&adopted).await?;
+    assert_eq!(stored_team_share(&pool, adopted).await, shared_view(1));
+    assert_eq!(team_entity_access_count(&pool, adopted).await?, 1);
 
-        // Re-selecting the same level is a supplied operation: it advances the
-        // revision without adding a second grant.
-        set_team_share(&repo, call_id, Some(AccessLevel::View)).await?;
-        assert_eq!(stored_team_share(&pool, call_id).await, shared_view(2));
-        assert_eq!(team_entity_access_count(&pool, call_id).await?, 1);
-    }
+    // A grant above View is left for review; the archive itself still succeeds.
+    insert_legacy_team_row(&pool, CALL1, AccessLevel::Edit).await?;
+    repo.archive_call(&CALL1).await?;
+    assert_eq!(stored_team_share(&pool, CALL1).await, unshared());
+    assert_eq!(team_row_level(&pool, CALL1).await, Some(AccessLevel::Edit));
+    Ok(())
+}
+
+// -- creator edits on archived calls ------------------------------------------
+
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_applies_view_command_on_archived_call(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
+
+    set_team_share(&repo, CALL_ARCHIVED, Some(AccessLevel::View)).await?;
+    assert_eq!(
+        stored_team_share(&pool, CALL_ARCHIVED).await,
+        shared_view(1)
+    );
+    assert_eq!(
+        team_row_level(&pool, CALL_ARCHIVED).await,
+        Some(AccessLevel::View)
+    );
+    let record = repo
+        .get_call_record_by_call_id(&CALL_ARCHIVED)
+        .await?
+        .unwrap();
+    assert_eq!(record.team_share_access_level, Some(AccessLevel::View));
+    assert!(record.share_with_team);
+
+    // Re-selecting the same level is a supplied operation: it advances the
+    // revision without adding a second grant.
+    set_team_share(&repo, CALL_ARCHIVED, Some(AccessLevel::View)).await?;
+    assert_eq!(
+        stored_team_share(&pool, CALL_ARCHIVED).await,
+        shared_view(2)
+    );
+    assert_eq!(team_entity_access_count(&pool, CALL_ARCHIVED).await?, 1);
     Ok(())
 }
 
@@ -391,17 +570,29 @@ async fn patch_legacy_alias_command_enables_view_and_clears(
     give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
 
     // `shareWithTeam: true` carries no level in the share-permission patch.
-    let facts = repo.get_team_share_facts(&CALL1).await?;
-    repo.patch_call_record(&CALL1, &args(None, Some(legacy_command(&facts, true))))
-        .await?;
-    assert_eq!(stored_team_share(&pool, CALL1).await, shared_view(1));
-    assert_eq!(team_row_level(&pool, CALL1).await, Some(AccessLevel::View));
+    let facts = repo.get_team_share_facts(&CALL_ARCHIVED).await?;
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &args(None, Some(legacy_command(&facts, true))),
+    )
+    .await?;
+    assert_eq!(
+        stored_team_share(&pool, CALL_ARCHIVED).await,
+        shared_view(1)
+    );
+    assert_eq!(
+        team_row_level(&pool, CALL_ARCHIVED).await,
+        Some(AccessLevel::View)
+    );
 
-    let facts = repo.get_team_share_facts(&CALL1).await?;
-    repo.patch_call_record(&CALL1, &args(None, Some(legacy_command(&facts, false))))
-        .await?;
-    assert_eq!(stored_team_share(&pool, CALL1).await.revision, 2);
-    assert_eq!(team_entity_access_count(&pool, CALL1).await?, 0);
+    let facts = repo.get_team_share_facts(&CALL_ARCHIVED).await?;
+    repo.patch_call_record(
+        &CALL_ARCHIVED,
+        &args(None, Some(legacy_command(&facts, false))),
+    )
+    .await?;
+    assert_eq!(stored_team_share(&pool, CALL_ARCHIVED).await.revision, 2);
+    assert_eq!(team_entity_access_count(&pool, CALL_ARCHIVED).await?, 0);
     Ok(())
 }
 
@@ -422,6 +613,7 @@ async fn patch_with_team_level_but_no_command_is_forbidden_and_rolls_back(
                 share_permission: Some(level_request(Some(AccessLevel::View))),
                 custom_name: Some("must not persist".to_string()),
                 team_share: None,
+                live_share_with_team: None,
             },
         )
         .await;
@@ -505,14 +697,13 @@ async fn patch_stale_command_returns_conflict(pool: Pool<Postgres>) -> anyhow::R
     fixtures(path = "../../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn patch_untracked_legacy_team_row_returns_conflict_without_partial_writes(
+async fn patch_untracked_legacy_grant_returns_conflict_without_partial_writes(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
     give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
-    // A pre-canonical grant (what the seed tool and the old archive wrote)
-    // that the backfill migration did not reconcile.
-    insert_legacy_team_row(&pool, CALL_ARCHIVED, AccessLevel::View).await?;
+    // A grant above View is never adopted, so it stays an untracked conflict.
+    insert_legacy_team_row(&pool, CALL_ARCHIVED, AccessLevel::Edit).await?;
     let facts = repo.get_team_share_facts(&CALL_ARCHIVED).await?;
     assert_eq!(facts.current, None);
 
@@ -523,6 +714,7 @@ async fn patch_untracked_legacy_team_row_returns_conflict_without_partial_writes
                 share_permission: Some(level_request(Some(AccessLevel::View))),
                 custom_name: Some("must not persist".to_string()),
                 team_share: Some(command(&facts, Some(AccessLevel::View))),
+                live_share_with_team: None,
             },
         )
         .await;
@@ -555,6 +747,7 @@ async fn patch_team_share_link_share_and_name_in_one_call_persist_together(
             }),
             custom_name: Some("Q4 sync".to_string()),
             team_share: Some(command(&facts, Some(AccessLevel::View))),
+            live_share_with_team: None,
         },
     )
     .await?;
@@ -582,95 +775,39 @@ async fn patch_team_share_link_share_and_name_in_one_call_persist_together(
     Ok(())
 }
 
-// -- archive_call -------------------------------------------------------------
-
-#[sqlx::test(
-    fixtures(path = "../../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn archive_preserves_canonical_team_share(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
-    give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
-    let id = Uuid::now_v7();
-    repo.create_call(&id, &CH2, "room-ch2", USER_A.copied())
-        .await?
-        .expect("call created");
-    let before = repo.get_team_share_facts(&id).await?;
-
-    repo.archive_call(&id).await?;
-
-    assert_eq!(repo.get_team_share_facts(&id).await?, before);
-    assert_eq!(stored_team_share(&pool, id).await, shared_view(1));
-    assert_eq!(team_entity_access_count(&pool, id).await?, 1);
-    let record = repo.get_call_record_by_call_id(&id).await?.unwrap();
-    assert!(!record.is_active);
-    assert_eq!(record.team_share_access_level, Some(AccessLevel::View));
-    Ok(())
-}
-
-#[sqlx::test(
-    fixtures(path = "../../../../fixtures", scripts("call_repo")),
-    migrator = "MACRO_DB_MIGRATIONS"
-)]
-async fn archive_never_reconstructs_sharing_from_membership(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = repo(pool.clone());
-    give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
-
-    // Cleared during the call stays cleared afterwards.
-    let cleared = Uuid::now_v7();
-    repo.create_call(&cleared, &CH2, "cleared", USER_A.copied())
-        .await?
-        .expect("call created");
-    set_team_share(&repo, cleared, None).await?;
-    repo.archive_call(&cleared).await?;
-    assert_eq!(stored_team_share(&pool, cleared).await.level, None);
-    assert_eq!(stored_team_share(&pool, cleared).await.revision, 2);
-    assert_eq!(team_entity_access_count(&pool, cleared).await?, 0);
-
-    // The fixture's active call predates canonical state and its creator now
-    // has a team; archiving must not invent a grant.
-    repo.archive_call(&CALL1).await?;
-    assert_eq!(stored_team_share(&pool, CALL1).await, unshared());
-    assert_eq!(team_entity_access_count(&pool, CALL1).await?, 0);
-    assert!(
-        !repo
-            .get_call_record_by_call_id(&CALL1)
-            .await?
-            .unwrap()
-            .share_with_team
-    );
-    Ok(())
-}
-
 // -- reads --------------------------------------------------------------------
 
 #[sqlx::test(
     fixtures(path = "../../../../fixtures", scripts("call_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
-async fn list_read_returns_team_share_access_level(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn list_read_reports_live_toggle_and_canonical_state(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
     give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
-    set_team_share(&repo, CALL1, Some(AccessLevel::View)).await?;
+    repo.toggle_share_with_team(&CALL1).await?;
+    set_team_share(&repo, CALL_ARCHIVED, Some(AccessLevel::View)).await?;
 
     let records = repo
         .get_call_records_by_user(USER_A.deref().copied(), 10, &None)
         .await?;
 
+    // Live: the pending toggle (now off), no canonical level yet.
     let active = records
         .iter()
         .find(|record| record.call_id == CALL1)
         .expect("active call listed");
-    assert_eq!(active.team_share_access_level, Some(AccessLevel::View));
-    assert!(active.share_with_team);
+    assert!(!active.share_with_team);
+    assert_eq!(active.team_share_access_level, None);
 
+    // Archived: canonical state.
     let archived = records
         .iter()
         .find(|record| record.call_id == CALL_ARCHIVED)
         .expect("archived call listed");
-    assert_eq!(archived.team_share_access_level, None);
-    assert!(!archived.share_with_team);
+    assert!(archived.share_with_team);
+    assert_eq!(archived.team_share_access_level, Some(AccessLevel::View));
+
     Ok(())
 }
