@@ -45,7 +45,12 @@ function TopIcon(props: TopIconProps) {
   return (
     <Show
       when={props.channelType === ChannelType.direct_message && recipient()}
-      fallback={<ChannelAvatar channelId={props.channelId} />}
+      fallback={
+        <ChannelAvatar
+          channelId={props.channelId}
+          class="size-6 [&_img]:rounded-full"
+        />
+      }
     >
       {(recipient) => {
         return (
