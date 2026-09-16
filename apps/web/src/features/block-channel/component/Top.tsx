@@ -48,7 +48,7 @@ function TopIcon(props: TopIconProps) {
       fallback={
         <ChannelAvatar
           channelId={props.channelId}
-          class="size-6 [&_img]:rounded-full"
+          class="size-4 [&_img]:rounded-full"
         />
       }
     >

@@ -1,5 +1,8 @@
 /** @vitest-environment jsdom */
+
+import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
+import { QueryObserver } from '@tanstack/query-core';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { render } from 'solid-js/web';
@@ -22,16 +25,34 @@ vi.mock('../../preview/dataloader', () => ({
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { setChannelPicture: vi.fn() },
 }));
+vi.mock('@service-static-files/client', () => ({
+  staticFileClient: { getMetadata: vi.fn() },
+}));
 
-import { useSetChannelPictureMutation } from '../picture';
+import {
+  handleChannelPictureChanged,
+  invalidateChannelPictures,
+  useSetChannelPictureMutation,
+} from '../picture';
 
 beforeEach(() => {
   vi.clearAllMocks();
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
+  vi.mocked(staticFileClient.getMetadata).mockResolvedValue(
+    ok({
+      file_id: 'new-picture',
+      owner_id: 'owner',
+      content_type: 'image/png',
+      is_uploaded: true,
+      file_name: 'picture.png',
+      s3_key: 'file/new-picture',
+    })
+  );
 });
 afterEach(() => {
   dispose?.();
   client.clear();
+  vi.useRealTimers();
 });
 
 function setup(upload: (file: File) => Promise<string>) {
@@ -107,10 +128,92 @@ it('removes a picture without uploading a file or changing another channel', asy
   const mutation = setup(upload);
   await mutation.mutateAsync({ channelId: 'channel', file: null });
   expect(upload).not.toHaveBeenCalled();
+  expect(staticFileClient.getMetadata).not.toHaveBeenCalled();
   expect(
     client.getQueryData(channelKeys.picture('channel').queryKey)
   ).toBeNull();
   expect(client.getQueryData(channelKeys.picture('other').queryKey)).toBe(
     'other-picture'
   );
+});
+
+it('waits for asynchronous upload confirmation before assigning the picture', async () => {
+  vi.useFakeTimers();
+  vi.mocked(staticFileClient.getMetadata).mockResolvedValueOnce(
+    ok({
+      file_id: 'new-picture',
+      owner_id: 'owner',
+      content_type: 'image/png',
+      is_uploaded: false,
+      file_name: 'picture.png',
+      s3_key: 'file/new-picture',
+    })
+  );
+  vi.mocked(storageServiceClient.setChannelPicture).mockResolvedValue(
+    ok(undefined)
+  );
+  const mutation = setup(vi.fn().mockResolvedValue('new-picture'));
+  const pending = mutation.mutateAsync({
+    channelId: 'channel',
+    file: new File(['image'], 'picture.png'),
+  });
+  await vi.advanceTimersByTimeAsync(0);
+  expect(storageServiceClient.setChannelPicture).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(500);
+  await pending;
+  expect(staticFileClient.getMetadata).toHaveBeenCalledTimes(2);
+  expect(storageServiceClient.setChannelPicture).toHaveBeenCalledTimes(1);
+});
+
+it('preserves the existing picture if upload confirmation fails', async () => {
+  client.setQueryData(channelKeys.picture('channel').queryKey, 'old-picture');
+  vi.mocked(staticFileClient.getMetadata).mockRejectedValue(
+    new Error('Unavailable')
+  );
+  const mutation = setup(vi.fn().mockResolvedValue('new-picture'));
+  await expect(
+    mutation.mutateAsync({
+      channelId: 'channel',
+      file: new File(['image'], 'picture.png'),
+    })
+  ).rejects.toThrow('Unavailable');
+  expect(storageServiceClient.setChannelPicture).not.toHaveBeenCalled();
+  expect(client.getQueryData(channelKeys.picture('channel').queryKey)).toBe(
+    'old-picture'
+  );
+});
+
+it('refreshes another session immediately on picture events and after reconnect', async () => {
+  const queryKey = channelKeys.picture('channel').queryKey;
+  client.setQueryData(queryKey, 'old-picture');
+  client.setQueryData(
+    channelKeys.picture('other').queryKey,
+    'unrelated-picture'
+  );
+  const fetch = vi.fn().mockResolvedValue('new-picture');
+  const observer = new QueryObserver(client, {
+    queryKey,
+    queryFn: fetch,
+    staleTime: 60_000,
+  });
+  const unsubscribe = observer.subscribe(() => {});
+  try {
+    handleChannelPictureChanged({ channel_id: 'channel' });
+    await vi.waitFor(() =>
+      expect(client.getQueryData(queryKey)).toBe('new-picture')
+    );
+    expect(client.getQueryData(channelKeys.picture('other').queryKey)).toBe(
+      'unrelated-picture'
+    );
+    fetch.mockResolvedValue(null);
+    handleChannelPictureChanged({ channel_id: 'channel' });
+    await vi.waitFor(() => expect(client.getQueryData(queryKey)).toBeNull());
+    fetch.mockResolvedValue('changed-while-offline');
+    invalidateChannelPictures();
+    await vi.waitFor(() =>
+      expect(client.getQueryData(queryKey)).toBe('changed-while-offline')
+    );
+  } finally {
+    unsubscribe();
+  }
 });

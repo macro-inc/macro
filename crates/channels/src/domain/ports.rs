@@ -1132,6 +1132,26 @@ pub trait ChannelEventDispatcher: Send + Sync + 'static {
     fn dispatch(&self, event: ChannelEvent);
 }
 
+/// Metadata needed to authorize an uploaded channel picture.
+#[derive(Debug, Clone)]
+pub struct ChannelPictureFile {
+    /// User who uploaded the file.
+    pub owner_id: String,
+    /// Whether the file's upload has completed.
+    pub is_uploaded: bool,
+    /// Declared MIME type of the file.
+    pub content_type: String,
+}
+
+/// Fetches static-file facts; the channel service decides whether they permit use.
+pub trait ChannelPictureFiles: Send + Sync + 'static {
+    /// Look up a candidate picture, returning `None` when it does not exist.
+    fn get_picture_file(
+        &self,
+        file_id: Uuid,
+    ) -> impl Future<Output = anyhow::Result<Option<ChannelPictureFile>>> + Send;
+}
+
 /// Allows a boxed dispatcher to be used wherever a `ChannelEventDispatcher` is
 /// expected, so callers (e.g. the AI toolset) can inject a side-effect-wired
 /// dispatcher behind a uniform type.
