@@ -5,7 +5,8 @@
 - List: `Go to Agents` → `/app/component/agents`. With new app views enabled
   on desktop, an Agents sidebar opens New Chat, Routines, configured Agents,
   Connections, and Skills, followed by favorite and recent conversations.
-  Selecting a recent chat or agent session opens it inside the workspace.
+  Selecting a recent chat or agent session opens it inside the workspace;
+  Shift-clicking one opens it in a new split instead.
   Touch devices and users outside the flag retain the Owned / Running / Shared /
   Automations / Skills list.
 - A chat is `/app/chat/<uuid>`. A doc-scoped chat is `/app/md/<doc>/chat/<chat>` (split view).
@@ -21,8 +22,12 @@ More opens the full create menu in a glass bottom sheet. Other views show
 to the left of the navigation pill's right edge below. Agents has no separate
 create button; its AI input fills the row.
 The composer's compact height is 46px, matching the mobile chrome buttons,
-with a plus attachment control and centered text and actions. It expands for
-longer prompts while focused. Leaving the AI composer collapses a long draft to
+with a paperclip attachment control and centered text and actions. It expands for
+longer prompts while focused, including text that wraps without an explicit
+line break. Lists, blockquotes, headings, and other non-paragraph blocks also
+expand while editing, even when their text is short. Shortening a paragraph
+draft or widening the pane restores the compact layout when the text fits
+beside its controls. Leaving the AI composer collapses a long draft to
 a single-line preview in the accessory row; tapping it expands the same editor
 with the full draft intact. Screens with an available composer or reply controls show those
 instead; opening mobile search shows scope pills in their place. When neither
@@ -37,6 +42,8 @@ Ask AI itself, the composer stays above the software keyboard; the list reserves
 space for it so its last row remains reachable. This also follows focus when a
 hardware keyboard is attached.
 The area behind the composer is transparent, without a bottom gradient overlay.
+The composer has one editable field. Its placeholder appears only while empty;
+placeholder updates and disabled-state changes preserve the editor and draft.
 
 Almost every list surface (Home, Agents, Files, Tasks, Customers, Email) has a bottom
 composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text` the message,
@@ -53,7 +60,7 @@ An accent **Create agent** button stays fixed to the right of the strip.
 It closes the session composer and opens the new-agent form at
 `/app/settings/agents?createAgent=true`; it does not create a session.
 Recents are remembered per user on this device. With no history, **Macro**
-`@macro` (the default) and **Cursor** `@cursor` lead, followed by saved agents
+`@macro` (the default), **Cursor** `@cursor`, and **Codex** `@codex` lead, followed by saved agents
 the caller can start: their own, team-shared personas, and selected-channel
 personas they can `@` mention.
 Without a connected Cursor API key, Cursor is a **Connect Cursor** button:
@@ -61,6 +68,24 @@ clicking it closes the composer and opens Settings → Harness without creating
 a session. It is keyboard-accessible; arrow navigation focuses it without
 activating it. Connected Cursor remains a selectable agent. Setup navigation
 is disabled while a session is being created or its setup is being retried.
+Codex composer choices and its Settings → Harness section require both
+`enable-chat-v3-agents` and `enable-codex-agents`.
+Codex shows **Set up Codex** until ChatGPT is connected and a cloud environment
+is saved in Settings → Harness. New sessions use the saved environment and
+always start from `main`. The composer hides model overrides for
+Codex because this harness does not expose model selection. Codex assistant
+text appears when the provider supplies a completed message or final snapshot.
+Incomplete text fragments are withheld; tool activity and thinking still update
+during the turn. Verified Codex PR associations appear as a completed **Found
+pull request** activity containing the PR URL, alongside the clickable
+PR chip. This reports an existing PR; it does not publish one. Opening a detached
+session reads saved history; sending a message reattaches the runtime.
+Codex file citations render as inline code with the path and
+line range, such as `.gitkeep:1` or `src/main.rs:2-12`; they do not link to a local
+file or a guessed remote revision. A recorded two-turn Codex conversation is
+covered by ACP/fold snapshots and checked with the production Markdown renderer. Setup navigation,
+selection, and the create/prompt payloads were verified in Chromium with mocked
+app navigation and backend state; no remote session was created by that check.
 Each row shows its `@handle` beneath the name. There are no coding tags;
 default models appear only in the prompt's model selector.
 There is no search field or browse/expand control. Left/Right change the selected
@@ -112,12 +137,31 @@ Leaving Macro selected uses the backend's in-memory default in every
 environment, including production; it does not provision a Daytona container.
 Explicit coding-agent selections still use their configured runtimes.
 
+## Sharing a chat
+
+A standalone chat (`/app/chat/<uuid>`) has **Share** and **Copy Share Link** in
+the desktop header; the same **Share** action is on entity list menus and the
+entity sharing shortcut. It opens the same Share dialog (mobile: drawer) as
+documents:
+
+- People/channels: pick recipients and an access level and send the chat with
+  an optional message.
+- Link sharing: None / Public / Team link plus an access level.
+- **Team access** (owner only, and only when the owner belongs to a team): a
+  dropdown with None / View / Comment / Edit that shares the chat directly with
+  the owner's whole team. Teammates then open the chat with that level and see
+  it under Shared; setting it back to None revokes that access. This is
+  independent of the team-scoped link control. Only the chat's actual owner can
+  change it; someone with inherited owner access gets a "Failed to change team
+  access" toast.
+
 ## Start a doc-scoped chat
 
 Open a doc → side panel `Actions` → `Ask Macro`. Opens a chat pane with the document already
 attached as context (it appears as a link chip in the composer). New-chat pane shows tips:
 `@mention anything` to attach entities, `Ctrl+Enter` to send in the background (you get
-notified when the AI responds).
+notified when the AI responds). Background sends from Home preserve the submitted
+tool selection.
 
 ## Composer anatomy (a11y)
 
@@ -138,16 +182,22 @@ an additional 2px of space below them; mobile dock spacing is unchanged.
 On mobile the production AI, new agent, and channel composers share rounded
 glass chrome, text padding, and a footer toolbar with a circular Send button.
 The production AI composer has an `Attach files` paperclip, `Ask AI…` placeholder,
-and compact model picker. Both AI systems keep model selection in the toolbar
+and compact model picker. On desktop, `Attach files` opens the file picker directly; use `@` to reference existing workspace items. Both AI systems keep model selection in the toolbar
 and expand with longer drafts. The new agent editor supports context via `@`
 mentions; its existing attachment capabilities are unchanged. Stop and queued
 message controls remain available.
 
-User messages in both AI systems appear in right-aligned, filled gray bubbles
-with rounded corners, including on mobile. Long prompts wrap within the bubble;
+User messages in both AI systems appear in right-aligned bubbles with rounded
+corners, including on mobile. In dark mode, their fill and text follow the active
+theme; Macro Dark uses a dark gray fill and white text. Long prompts wrap within the bubble;
 production chat retains its Show more/Show less and editing controls.
 
 ## Waiting for a response
+
+On desktop, email drafts embedded in chat use the same rounded, elevated surface
+as email blocks: an opaque background, subtle border and shadow, and a raised
+rim in dark mode. The recipients, subject, body, and send controls stay inside
+that card. Touch-device styling is unchanged.
 
 The reliable completion signal is the disappearance of the `Stop generating` button — poll
 with `evaluate_script`. Do not wait on response text: the page displays
@@ -219,6 +269,24 @@ sits above the box. Tap the session title
 to open the title menu (caret), then **Rename** — that opens the generic entity
 rename dialog. Do not expect a tap on the name itself to start
 an inline edit.
+
+When the session has opened a pull request, a compact `#N` status chip
+appears in the header (top right) and in the side-panel Details. Click it
+to open the PR entity in a split; until GitHub has synced the entity the
+chip is a GitHub link instead. The icon and status word follow open /
+merged / closed.
+
+Tool groups and individual tool cards start collapsed. Expand a group to see
+its calls, then expand an edit card to view its file diffs. Diff bodies load
+only when their card opens; syntax highlighting may appear after the diff text.
+Opening a session or expanding a group should leave the app responsive, even
+when the session contains many file edits.
+
+A thought row reads **Thinking** and shimmers only while it is the last part
+of an open turn. Earlier thoughts settle to **Thought** as soon as a tool or
+answer follows, including during long Cursor turns. A trailing thought stays
+outside the tool group so the live reasoning row stays visible. Do not wait
+for every Thinking label to disappear — only the tail one is in flight.
 
 ### Sharing a session
 
@@ -343,7 +411,8 @@ Reopening or resuming the session must retain that selection and logo.
 
 Both AI composers display their model trigger label at the input text size
 (15px), using the softer secondary text color. This includes the agent model
-catalog trigger and mobile model sheet trigger.
+catalog trigger and mobile model sheet trigger. Opening the agent model
+catalog focuses the `Search models` field so you can type immediately.
 
 Soup and recent-chat icons recognize the provider in the saved model ID even
 when that model is no longer selectable. For example, `openai/gpt-5.5` retains

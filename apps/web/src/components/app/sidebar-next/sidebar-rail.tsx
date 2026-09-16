@@ -22,9 +22,6 @@ export type SidebarRailProps = {
   onOpenChange: (open: boolean) => void;
 };
 
-/** 36px buttons plus the 12px of padding either side. */
-const RAIL_WIDTH = 'w-15';
-
 /**
  * The rebuilt app sidebar, behind `enable-new-app-views`: a single always-narrow
  * column of 36px icon buttons, labels in tooltips.
@@ -73,7 +70,7 @@ export const SidebarRail = (props: SidebarRailProps) => {
     <div
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
-      class={`relative flex h-full ${RAIL_WIDTH} shrink-0 flex-col items-center gap-2 overflow-hidden border-r border-thread-rail bg-surface px-3 pb-3 pt-3`}
+      class="relative flex h-full w-14 shrink-0 flex-col items-center gap-2 overflow-hidden border-r border-edge-muted bg-surface px-2.5 pb-3 pt-3"
     >
       <SidebarRailCreateButton />
       <SearchRailButton />

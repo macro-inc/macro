@@ -10,7 +10,8 @@
 //! subprocesses remain outside the service.
 
 use crate::domain::model::{
-    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunListing,
+    ConversationLine, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
+    RunListing,
 };
 use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
@@ -90,6 +91,68 @@ pub trait CursorAgents: Sync {
         agent: &CursorAgentId,
         through: Option<&CursorRunId>,
     ) -> impl Future<Output = Result<Vec<RunListing>, rootcause::Report>> + Send;
+
+    /// The agent's prompts and replies in order, as Cursor still holds them.
+    ///
+    /// The longest-lived record Cursor keeps, and the reason this exists: a
+    /// run's stream expires within hours and its record drops its final text
+    /// within weeks, while this still answers for agents whose every other
+    /// trace is gone. It is where a prompt that was never captured here -
+    /// a run driven from cursor.com, mirrored after its stream aged out -
+    /// can still be found.
+    ///
+    /// Carries no run ids, so a line is tied to a run by matching text the
+    /// journal already holds, never by position. See
+    /// [`CursorSessionService::recover_lost_prompts`](crate::domain::service::CursorSessionService).
+    fn conversation(
+        &self,
+        agent: &CursorAgentId,
+    ) -> impl Future<Output = Result<Vec<ConversationLine>, rootcause::Report>> + Send;
+}
+
+/// One connected run stream, with what the provider said about resuming it.
+pub struct ConnectedStream<Records> {
+    /// Complete native records, captured before decoding or translation.
+    pub records: Records,
+    /// The provider's `X-Cursor-Stream-Retention-Seconds`, when it sent one.
+    ///
+    /// How long a dropped stream stays resumable. Not enforced here — the
+    /// provider answers an expired resume with
+    /// [`StreamConnectError::Expired`] — but worth logging, because a run
+    /// whose tool call outlives the window can never be resumed and the
+    /// number is the only warning of that.
+    pub retention_seconds: Option<u64>,
+}
+
+/// Why one connect did not produce a stream.
+///
+/// The domain acts differently on each: an unavailable stream is retried, an
+/// invalid resume position is retried without one, and an expired stream is
+/// gone for good and leaves polling as the only way to learn the outcome.
+#[derive(Debug)]
+pub enum StreamConnectError {
+    /// `stream_unavailable`: the stream is not there (yet). Carries the
+    /// provider's message.
+    Unavailable(String),
+    /// `invalid_last_event_id`: the resume position is not this run's.
+    InvalidResumePosition(String),
+    /// `stream_expired`: the retention window closed behind us.
+    Expired(String),
+    /// Every other failure.
+    Other(rootcause::Report),
+}
+
+impl std::fmt::Display for StreamConnectError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unavailable(message) => write!(formatter, "Cursor stream unavailable: {message}"),
+            Self::InvalidResumePosition(message) => {
+                write!(formatter, "Cursor rejected the resume position: {message}")
+            }
+            Self::Expired(message) => write!(formatter, "Cursor stream expired: {message}"),
+            Self::Other(report) => write!(formatter, "{report}"),
+        }
+    }
 }
 
 /// Observe a run as a stream of native SSE records.
@@ -99,15 +162,23 @@ pub trait CursorAgents: Sync {
 /// [`CursorEvent::Result`](super::event::CursorEvent::Result) must treat the run's outcome as unknown rather
 /// than successful.
 pub trait RunStream: Sync {
-    /// Complete native records, captured before decoding or translation.
+    /// Connect a run's stream, optionally resuming after an event id.
+    ///
+    /// `resume_from` is an id observed on an earlier record of this same run,
+    /// passed back verbatim: the provider's ids are opaque and a consumer that
+    /// parses or invents one gets [`StreamConnectError::InvalidResumePosition`].
+    /// `None` connects from the beginning of what the provider still retains.
     fn raw_stream(
         &self,
         agent: &CursorAgentId,
         run: &CursorRunId,
+        resume_from: Option<&str>,
     ) -> impl Future<
         Output = Result<
-            impl Stream<Item = Result<super::journal::NativeRecord, rootcause::Report>> + Send,
-            rootcause::Report,
+            ConnectedStream<
+                impl Stream<Item = Result<super::journal::NativeRecord, rootcause::Report>> + Send,
+            >,
+            StreamConnectError,
         >,
     > + Send;
 }

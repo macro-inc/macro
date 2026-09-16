@@ -11,54 +11,45 @@ import type {
   DocumentEntity,
   EmailEntity,
   EntityData,
+  ForeignEntity,
   NamedSubType,
   ReminderEntity,
 } from '@entity';
-import GithubIcon from '@icon/mcp-github.svg';
 import SkillIcon from '@icon/skill.svg';
-import WideAutomation from '@icon/wide-automation.svg';
 import WideBook from '@icon/wide-book.svg';
-import WideCalendar from '@icon/wide-calendar.svg';
-import PhoneCall from '@icon/wide-call.svg';
-import WideChannel from '@icon/wide-channel.svg';
-import WideChat from '@icon/wide-chat.svg';
-import { AnimatedCompanyIcon } from '@icon/wide-company';
-import { AnimatedContactIcon } from '@icon/wide-contact';
 import WideCsv from '@icon/wide-csv.svg';
 import WideDiagram from '@icon/wide-diagram.svg';
-import WideDocx from '@icon/wide-docx.svg';
-import WideEmail from '@icon/wide-email.svg';
 import WideFileCode from '@icon/wide-file-code.svg';
 import WideFileImage from '@icon/wide-file-image.svg';
-import WideFileMd from '@icon/wide-file-md.svg';
 import WideFiles from '@icon/wide-files.svg';
-import WideFolder from '@icon/wide-folder.svg';
-import WideGlobe from '@icon/wide-globe.svg';
 import WideSnippet from '@icon/wide-snippet.svg';
-import WideStar from '@icon/wide-star.svg';
-import WideTask from '@icon/wide-task.svg';
 import WideUnknown from '@icon/wide-unknown.svg';
 import WideVideo from '@icon/wide-video.svg';
-import BellSimple from '@phosphor/bell-simple.svg';
+import AlarmIcon from '@phosphor/alarm.svg';
+import ArticleIcon from '@phosphor/article.svg';
 import Building from '@phosphor/building.svg';
-import Chat from '@phosphor/chat.svg';
-import Check from '@phosphor/check-fat.svg';
+import BuildingsIcon from '@phosphor/buildings.svg';
+import CalendarIcon from '@phosphor/calendar-blank.svg';
+import ChatsIcon from '@phosphor/chats-circle.svg';
 import FileCode from '@phosphor/code.svg';
 import Email from '@phosphor/envelope.svg';
 import EmailRead from '@phosphor/envelope-open.svg';
 import File from '@phosphor/file.svg';
 import FileArchive from '@phosphor/file-archive.svg';
-import FileDoc from '@phosphor/file-doc.svg';
 import FileHtml from '@phosphor/file-html.svg';
-import FileMd from '@phosphor/file-md.svg';
 import FilePdf from '@phosphor/file-pdf.svg';
 import FileVideo from '@phosphor/file-video.svg';
 import Files from '@phosphor/files.svg';
 import Folder from '@phosphor/folder-simple.svg';
-import FolderUser from '@phosphor/folder-user.svg';
-import GlobeIcon from '@phosphor/globe.svg';
+import GitMergeIcon from '@phosphor/git-merge.svg';
+import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
+import HashIcon from '@phosphor/hash.svg';
 import FileImage from '@phosphor/image.svg';
+import LightningIcon from '@phosphor/lightning.svg';
+import ListChecksIcon from '@phosphor/list-checks.svg';
 import Canvas from '@phosphor/pencil-circle.svg';
+import PhoneIcon from '@phosphor/phone.svg';
+import SparkleIcon from '@phosphor/sparkle.svg';
 import Users from '@phosphor/users.svg';
 import type { PreviewItem } from '@queries/preview';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
@@ -82,10 +73,14 @@ export type EntityWithValidIcon =
   | ChannelType
   | 'organization'
   | 'default'
+  | 'document'
   | 'sharedProject'
   | 'emailRead'
   | 'emailInvite'
   | 'githubPullRequest'
+  | 'githubPullRequestOpen'
+  | 'githubPullRequestMerged'
+  | 'githubPullRequestClosed'
   | 'archive'
   | 'files'
   | 'crm_company'
@@ -99,14 +94,20 @@ const ARCHIVE_EXTENSIONS = new Set(
 );
 
 export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
+  document: {
+    icon: ArticleIcon,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Document',
+  },
   call: {
-    icon: PhoneCall,
+    icon: PhoneIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Call',
   },
   calendar: {
-    icon: WideCalendar,
+    icon: CalendarIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Calendar',
@@ -124,13 +125,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Webpage',
   },
   channel: {
-    icon: WideChannel,
+    icon: HashIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Channel',
   },
   public: {
-    icon: GlobeIcon,
+    icon: HashIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Public Channel',
@@ -142,19 +143,19 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Organization',
   },
   private: {
-    icon: WideChannel,
+    icon: HashIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Private Channel',
   },
   direct_message: {
-    icon: Users,
+    icon: ChatsIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Direct Message',
   },
   team: {
-    icon: Users,
+    icon: HashIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Team Channel',
@@ -184,7 +185,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'PDF',
   },
   md: {
-    icon: FileMd,
+    icon: ArticleIcon,
     foreground: 'text-note',
     background: 'bg-note/20',
     prettyName: 'Note',
@@ -196,13 +197,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Image',
   },
   write: {
-    icon: FileDoc,
+    icon: ArticleIcon,
     foreground: 'text-write',
     background: 'bg-write/20',
     prettyName: 'Document',
   },
   chat: {
-    icon: Chat,
+    icon: SparkleIcon,
     foreground: 'text-chat',
     background: 'bg-chat/20',
     prettyName: 'Chat',
@@ -214,7 +215,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Folder',
   },
   sharedProject: {
-    icon: FolderUser,
+    icon: Folder,
     foreground: 'text-folder',
     background: 'bg-folder/20',
     prettyName: 'Shared Folder',
@@ -244,7 +245,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Video',
   },
   contact: {
-    icon: AnimatedContactIcon,
+    icon: Users,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Contact',
@@ -262,31 +263,49 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Read Email',
   },
   emailInvite: {
-    icon: WideCalendar,
+    icon: CalendarIcon,
     foreground: 'text-calendar',
     background: 'bg-calendar/20',
     prettyName: 'Calendar Invite',
   },
   githubPullRequest: {
-    icon: GithubIcon,
+    icon: GitPullRequestIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'GitHub Pull Request',
   },
+  githubPullRequestOpen: {
+    icon: GitPullRequestIcon,
+    foreground: 'text-success',
+    background: 'bg-success/20',
+    prettyName: 'Open Pull Request',
+  },
+  githubPullRequestMerged: {
+    icon: GitMergeIcon,
+    foreground: 'text-note',
+    background: 'bg-note/20',
+    prettyName: 'Merged Pull Request',
+  },
+  githubPullRequestClosed: {
+    icon: GitPullRequestIcon,
+    foreground: 'text-failure',
+    background: 'bg-failure/20',
+    prettyName: 'Closed Pull Request',
+  },
   pr: {
-    icon: GithubIcon,
+    icon: GitPullRequestIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Pull Request',
   },
   agent: {
-    icon: WideStar,
+    icon: SparkleIcon,
     foreground: 'text-chat',
     background: 'bg-chat/20',
     prettyName: 'Agent',
   },
   task: {
-    icon: Check,
+    icon: ListChecksIcon,
     foreground: 'text-task',
     background: 'bg-task/20',
     prettyName: 'Task',
@@ -304,25 +323,25 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Skill',
   },
   automation: {
-    icon: WideAutomation,
+    icon: LightningIcon,
     foreground: 'text-chat',
     background: 'bg-chat/20',
     prettyName: 'Automation',
   },
   crm_company: {
-    icon: AnimatedCompanyIcon,
+    icon: BuildingsIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Company',
   },
   company: {
-    icon: AnimatedCompanyIcon,
+    icon: BuildingsIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Company',
   },
   reminder: {
-    icon: BellSimple,
+    icon: AlarmIcon,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Reminder',
@@ -354,50 +373,21 @@ function validateEntity(entity: string): EntityWithValidIcon {
   }
 }
 
-const WIDE_ICONS: Record<
-  EntityWithValidIcon,
-  Component<JSX.SvgSVGAttributes<SVGSVGElement>>
+// File-format icons retain their wide variants; entity glyphs live in the
+// shared registry above so the feature flag cannot replace their mapping.
+const WIDE_ICONS: Partial<
+  Record<EntityWithValidIcon, Component<JSX.SvgSVGAttributes<SVGSVGElement>>>
 > = {
-  call: PhoneCall,
-  calendar: WideCalendar,
   canvas: WideDiagram,
   html: WideFileCode,
-  channel: WideChannel,
-  public: WideGlobe,
-  organization: Building,
-  private: WideChannel,
-  direct_message: WideChat,
-  team: WideChannel,
-  email: WideEmail,
   code: WideFileCode,
-  csv: WideCsv,
   pdf: WideBook,
-  md: WideFileMd,
   image: WideFileImage,
-  write: WideDocx,
-  chat: WideStar,
-  project: WideFolder,
-  sharedProject: WideFolder,
   unknown: WideUnknown,
   files: WideFiles,
   archive: WideUnknown,
   video: WideVideo,
-  contact: AnimatedContactIcon,
   default: WideUnknown,
-  emailRead: WideEmail,
-  emailInvite: WideCalendar,
-  githubPullRequest: GithubIcon,
-  pr: GithubIcon,
-  agent: WideStar,
-  task: WideTask,
-  snippet: WideSnippet,
-  skill: SkillIcon,
-  automation: WideAutomation,
-  crm_company: AnimatedCompanyIcon,
-  company: AnimatedCompanyIcon,
-  // No wide bell asset exists; the phosphor one carries over, as it does for
-  // `organization` and the github icons.
-  reminder: BellSimple,
 };
 
 const ICON_SIZES = {
@@ -460,14 +450,7 @@ export function EntityIcon(props: EntityIconProps) {
     return validateEntity(props.targetType || 'default');
   };
 
-  const config = () => ENTITY_ICON_CONFIGS[getName()];
-  const icon = () => {
-    if (USE_WIDE_ICONS) {
-      return WIDE_ICONS[getName()];
-    } else {
-      return config().icon;
-    }
-  };
+  const config = () => getIconConfig(getName());
   const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
 
@@ -482,7 +465,7 @@ export function EntityIcon(props: EntityIconProps) {
       )}
     >
       {/* size-full: Safari needs a CSS size, not the SVG's % attributes. */}
-      <Dynamic component={icon()} class="size-full" />
+      <Dynamic component={config().icon} class="size-full" />
     </div>
   );
 }
@@ -519,7 +502,7 @@ export function getIconConfig(
   const key = validateEntity(targetType);
   const config = { ...ENTITY_ICON_CONFIGS[key] };
   if (USE_WIDE_ICONS) {
-    config.icon = WIDE_ICONS[key];
+    config.icon = WIDE_ICONS[key] ?? config.icon;
   }
   return config;
 }
@@ -529,26 +512,49 @@ type EntityIconData = Pick<EntityData, 'type'> & {
   fileType?: DocumentEntity['fileType'] | null;
   subType?: DocumentEntity['subType'];
   isRead?: EmailEntity['isRead'];
-  /** Reminders icon as the entity they reference. */
+  hasIcsAttachment?: EmailEntity['hasIcsAttachment'];
+  foreignSource?: ForeignEntity['foreignSource'];
+  metadata?: ForeignEntity['metadata'];
+  /** Reference metadata carried by reminder entities. */
   referencedEntity?: ReminderEntity['referencedEntity'];
 };
 
+/** The shared entity-to-icon mapping used by lists, previews, and drag images. */
 export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
-  const typeString = match(entity)
-    .with({ type: 'channel' }, (e) => e.channelType || 'channel')
-    .with({ type: 'channel_message' }, (e) => e.channelType || 'channel')
-    .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
-    .with({ type: 'email', isRead: true }, () => 'emailRead')
-    .with({ type: 'email' }, () => 'email')
-    // Always the bell, never the referenced entity's icon: a reminder is a
-    // reminder first, and what it points at is iconed beside its name instead
-    // — see `reminderReferenceIconType`.
-    .with({ type: 'reminder' }, () => 'reminder')
+  return match<EntityIconData, EntityWithValidIcon>(entity)
+    .with({ type: 'document' }, (e) => {
+      if (e.subType?.type === 'task') return 'task';
+      if (e.fileType && isArchiveType(e.fileType)) return 'archive';
+      const blockName = itemToBlockName(e, true);
+      return blockName === 'unknown' ? 'document' : blockName;
+    })
+    .with(
+      { type: 'channel' },
+      { type: 'channel_message' },
+      { type: 'channel_thread' },
+      (e) => (e.channelType === 'direct_message' ? 'direct_message' : 'channel')
+    )
+    .with({ type: 'email' }, (e) =>
+      e.hasIcsAttachment ? 'emailInvite' : e.isRead ? 'emailRead' : 'email'
+    )
+    .with({ type: 'chat' }, () => 'chat')
     .with({ type: 'agent_session' }, () => 'agent')
+    .with({ type: 'project' }, () => 'project')
     .with({ type: 'calendar_event' }, () => 'calendar')
-    .otherwise((e) => e.type);
-
-  return validateEntity(typeString);
+    .with({ type: 'reminder' }, () => 'reminder')
+    .with({ type: 'call' }, () => 'call')
+    .with({ type: 'automation' }, () => 'automation')
+    .with({ type: 'foreign' }, (e) => {
+      if (e.foreignSource !== 'github_pull_request') return 'default';
+      return match<unknown, EntityWithValidIcon>(e.metadata?.status)
+        .with('open', () => 'githubPullRequestOpen')
+        .with('merged', () => 'githubPullRequestMerged')
+        .with('closed', () => 'githubPullRequestClosed')
+        .otherwise(() => 'githubPullRequest');
+    })
+    .with({ type: 'crm_company' }, () => 'crm_company')
+    .with({ type: 'crm_contact' }, () => 'contact')
+    .exhaustive();
 }
 
 /** What the block resolvers return when they cannot place something. */
@@ -560,7 +566,7 @@ const UNRESOLVED_ICONS: ReadonlySet<string> = new Set(['default', 'unknown']);
  * Synchronous by design: the referenced entity's `fileType`/`subType` are
  * resolved server-side precisely so this costs no fetch per row.
  *
- * A reference that resolves to nothing gets the bell, not the unknown-file
+ * A reference that resolves to nothing gets the reminder icon, not the unknown-file
  * glyph, which on a reminder row reads as breakage rather than as a reminder.
  * That needs both sentinels and neither is falsy: `fileTypeToBlockName`
  * returns the literal `unknown`, and `validateEntity` returns `default`.

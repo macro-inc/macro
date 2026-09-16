@@ -23,7 +23,7 @@ import {
 const INPUT_GROUP_SIZE_VARIANTS: Record<InputSize, string> = {
   xs: 'h-5 text-xs',
   sm: 'h-6 text-xs',
-  md: 'h-8 text-sm',
+  md: 'h-8 text-base',
   lg: 'h-9 text-base',
   xl: 'h-12 text-base',
 };

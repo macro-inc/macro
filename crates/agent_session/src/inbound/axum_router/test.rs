@@ -789,3 +789,5 @@ async fn an_external_open_carries_its_instructions() {
         Some(INSTRUCTIONS)
     );
 }
+
+mod read;

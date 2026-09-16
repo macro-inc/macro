@@ -73,29 +73,20 @@ function useInboxSelection() {
   };
 }
 
-function InboxAvatar(props: { option: InboxOption; size: UserIconSize }) {
+function InboxAvatar(props: {
+  option: InboxOption;
+  size: UserIconSize;
+  class?: string;
+}) {
   return (
     <UserIcon
       {...inboxIconProps(props.option.label)}
       photoUrl={props.option.photoUrl}
       size={props.size}
+      class={props.class}
       suppressClick
       showTooltip={false}
     />
-  );
-}
-
-function AllInboxesIcon(props: { class?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      class={cn(
-        'flex size-6 shrink-0 items-center justify-center',
-        props.class
-      )}
-    >
-      <TrayIcon class="size-5" />
-    </span>
   );
 }
 
@@ -111,7 +102,7 @@ export function EmailInboxList(props: { class?: string }) {
     <Show when={selection.visible()}>
       <ViewSidebar.Nav
         aria-label="Inboxes"
-        class={cn('border-b border-edge pb-3', props.class)}
+        class={cn('border-b border-edge-muted pb-3', props.class)}
       >
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.Item
@@ -120,7 +111,9 @@ export function EmailInboxList(props: { class?: string }) {
             class="min-w-0 flex-1"
             {...pressHandlers(selection.selectAll)}
           >
-            <AllInboxesIcon />
+            <ViewSidebar.Icon>
+              <TrayIcon class="size-4" />
+            </ViewSidebar.Icon>
             <span class="truncate">All inboxes</span>
           </ViewSidebar.Item>
           <Show when={selection.canAddInbox()}>
@@ -146,12 +139,9 @@ export function EmailInboxList(props: { class?: string }) {
               }
               {...pressHandlers(() => selection.select(option.id))}
             >
-              <span
-                aria-hidden="true"
-                class="flex size-6 shrink-0 items-center"
-              >
-                <InboxAvatar option={option} size="md" />
-              </span>
+              <ViewSidebar.Icon>
+                <InboxAvatar option={option} size="sm" class="size-5" />
+              </ViewSidebar.Icon>
               <span class="truncate">{option.label}</span>
             </ViewSidebar.Item>
           )}

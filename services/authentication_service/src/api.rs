@@ -15,6 +15,7 @@ use utoipa_swagger_ui::SwaggerUi;
 pub(crate) mod context;
 
 // Routes
+mod codex;
 mod cursor_api_key;
 #[allow(unused_imports)]
 mod email;
@@ -117,6 +118,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/user", user::router())
         .nest("/link", link::router())
         .nest("/cursor-api-key", cursor_api_key::router())
+        .nest("/codex", codex::router())
         .nest("/github_pull_requests", github_pull_requests::router())
         .nest(
             "/team",

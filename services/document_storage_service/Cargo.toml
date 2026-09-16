@@ -115,6 +115,7 @@ graphql_soup = { path = "../../crates/graphql_soup" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
 http-body-util = { workspace = true }
+initiative = { path = "../../crates/initiative", features = ["inbound", "postgres"] }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
 lazy_static = { workspace = true }

@@ -236,7 +236,7 @@ export function ComposeRecipients(props: {
       fallback={
         <button
           type="button"
-          class="ph-no-capture w-full min-h-9 flex items-center text-sm text-ink text-left"
+          class="ph-no-capture w-full min-h-9 flex items-center text-base text-ink text-left"
           onClick={() => activate(field)}
         >
           <span class="truncate">{summaryParts(field).names}</span>

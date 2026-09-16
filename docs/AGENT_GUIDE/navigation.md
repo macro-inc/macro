@@ -6,7 +6,7 @@
 | --- | --- |
 | `/app` | Redirects to inbox |
 | `/app/welcome` | Login page (when unauthenticated) |
-| `/app/component/inbox` | Unified inbox |
+| `/app/component/inbox` | Home (notifications + recent activity) |
 | `/app/component/mail` | Email client |
 | `/app/component/channels` | Channels list |
 | `/app/component/documents` | Files (documents list) |
@@ -15,7 +15,7 @@
 | `/app/component/calls` | Calls list |
 | `/app/component/companies` | Customers (CRM; needs a team) |
 | `/app/component/activity` | Activity heatmap + feed |
-| `/app/component/home` | Home (AI-first landing) |
+| `/app/component/home` | Assistant (AI-first landing) |
 | `/app/calendar/view` | Calendar |
 | `/app/md/<uuid>` | A document |
 | `/app/chat/<uuid>` | A standalone AI chat |
@@ -25,7 +25,26 @@
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 
 Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
-(`/app/<left>/<right>`). Each pane has its own Close / Go Back / Go Forward buttons.
+(`/app/<left>/<right>`). Desktop panes expose Close when available and omit
+split-history back/forward buttons. Mobile content panes retain their back button.
+
+Shift-click on content links requests a new split wherever splits are supported,
+including mentions, references, folder links, and list rows with a linked preview.
+Unmodified clicks keep each surface’s default (same split, preview, or new split).
+Existing-content deduplication and split-capacity limits still apply; touch devices
+continue to navigate in place.
+
+A block mounted in an inline preview cannot also open in a split. An attempt
+shows `Content already open.` and keeps the preview in place. Select another
+preview item or leave that view before opening the block in a split. Duplicate
+mounts reached through direct layout paths show the same message instead of a
+second block instance.
+
+Desktop inline content previews use a 48px header with a muted bottom divider,
+aligned with the adjacent sidebar title bar (such as Home). Standalone block
+headers use the same height without a bottom divider. Preview headers and toolbars
+are transparent so they blend with the pane's inactive background. Header controls
+stay centered and the preview body fills the remaining height below the divider.
 
 ## Sidebar (a11y names are load-bearing)
 
@@ -36,20 +55,44 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
   new split, including when Search is already active. This left-click menu shares
   its surface and item styling with the sidebar right-click menus, in both the
   compact rail and expanded sidebar.
-- Nav: `Go to Home`, `Go to Getting Started`, `Go to Notifications`, `Go to Recent`, `Go to Activity`.
+- Nav: `Go to Assistant`, `Go to Getting Started`, `Go to Home`, `Go to Recent`, `Go to Activity`.
 - Workspace: `Go to Email`, `Go to Channels`, `Go to Calls`, `Go to Files`, `Go to Tasks`,
   `Go to Calendar`, `Go to Agents`, `Go to Customers`.
 - Then `Favorites` (pinned items) and `Latest` (recent channels/DMs with an `Unread` switch).
 - Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
   `Settings (Ctrl ;)`, `Log out`.
 
-With the new app views enabled, the outer sidebar is an icon rail. Notifications,
+With the new app views enabled, the outer sidebar is an icon rail. Its tooltips
+use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
-item. Notifications uses Signal; Email uses Important across all linked inboxes.
+item. Home uses Signal; Email uses Important across all linked inboxes.
 Noise does not light either dot. These are presence indicators, not counts; they
 do not fetch additional pages to find every unread item. Opening a view alone does
 not clear its dot — reading or completing the represented items does. The button's
 accessible description is `Unread items` while its dot is active.
+
+Home's inner rail starts with a full-width **New chat** plus button that returns
+to Home's starting pane without creating a chat. Email and Tasks use the same
+pill styling and top placement for **New email** and **New task**, replacing
+the sidebar title bars. When multiple desktop splits are open, a **Close** (X)
+button appears beside each sidebar's New button and closes that split. The last
+logical split has no close button; mobile chrome is unchanged.
+These buttons and Home items activate on primary-button
+press; keyboard activation remains supported. Home, Chat, Email,
+Tasks, and other views using the shared inner
+sidebar layout default to 256px; manually resized Chat widths remain saved.
+
+Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
+inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
+with regular-weight labels and consistent icon spacing.
+
+## List-row dragging
+
+GraphQL-backed Soup rows initialize dragging on the first primary-button press;
+a preparatory hover is not required. REST-backed rows retain eager registration.
+Verify first-press dragging after navigation as well as ordinary row clicks and
+right-click menus. A completed drop can move or copy real data; use a disposable
+test item when verifying drop actions.
 
 ## Favorites
 
@@ -67,7 +110,7 @@ changes roll back rather than becoming committed local favorites.
 
 ## Create menu
 
-On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
+On mobile, the bottom dock fits fixed-width buttons in this order: Home,
 Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
 dock and search scope pills only when the calendar UI flag is enabled.
 Resizing the screen moves views between the dock
@@ -169,7 +212,9 @@ category, Esc closes. The category strip and footer have transparent backgrounds
 - `Ctrl/Cmd+K` — jump to anything by name.
 - `c` then `d`/`t`/`e`/`m`/`a` — create doc / task / email / channel / AI chat.
   Single-letter shortcuts only work when no editor has focus; press `Escape` first.
-- `/` — search everything. `j`/`k` — move in lists. `e` — mark done. `g` then `i` — inbox.
+- `/` — search everything. `j`/`k` — move in lists. `e` — mark done.
+- `g` then `h` — Home (inbox); `g` then `i` remains an alias. Assistant is
+  available through its sidebar link or the `Go to Assistant` command.
 - In Email and Tasks search, `Escape` returns focus to the list and keeps the query.
   Use the search field's clear button to clear it.
 - Splits: `` ` `` split, `Shift+H`/`Shift+L` move focus, `Shift+Esc` maximize.

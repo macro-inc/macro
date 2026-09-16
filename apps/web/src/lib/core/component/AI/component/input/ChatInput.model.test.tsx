@@ -108,6 +108,15 @@ vi.mock('@service-cognition/client', () => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
+vi.mock('@core/component/LexicalMarkdown/utils/create-composer-layout', () => ({
+  createComposerLayout: (
+    _editor: unknown,
+    options: { mode?: () => 'auto' | 'expanded' | 'collapsed' }
+  ) => ({
+    isCompact: () => options.mode?.() !== 'expanded',
+    hasMultilineContent: () => false,
+  }),
+}));
 vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => true }));
 vi.mock('@core/component/AI/signal/attachment', () => ({
   useAttachments: () => ({ attached: () => [], setAttached: vi.fn() }),
@@ -175,6 +184,7 @@ vi.mock('@ui', async () => {
 it('preserves a real soup composer selection when creating and opening its first chat', async () => {
   mocks.mobile = true;
   const editor = {
+    buildHandle: () => ({ lexical: {} }),
     withFilePaste: () => editor,
     onEnter: () => editor,
     onEscape: () => editor,
@@ -280,6 +290,7 @@ it.each([true, false])(
     mocks.mobile = mobile;
     const onSend = vi.fn();
     const editor = {
+      buildHandle: () => ({ lexical: {} }),
       withFilePaste: () => editor,
       onEnter: () => editor,
       onEscape: () => editor,

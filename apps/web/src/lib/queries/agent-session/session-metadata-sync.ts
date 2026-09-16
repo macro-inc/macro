@@ -6,6 +6,7 @@ import type {
 } from './realtime-protocol';
 
 const renameListeners = new Set<(event: AgentSessionRenamedEvent) => void>();
+const updateListeners = new Set<(event: AgentSessionUpdatedEvent) => void>();
 
 /** Apply a server-persisted rename to active agent-session consumers. */
 export function handleAgentSessionRenamed(
@@ -22,10 +23,19 @@ export function subscribeAgentSessionRenamed(
   return () => renameListeners.delete(listener);
 }
 
+/** Follow committed session-row changes (e.g. a linked pull request). */
+export function subscribeAgentSessionUpdated(
+  listener: (event: AgentSessionUpdatedEvent) => void
+): () => void {
+  updateListeners.add(listener);
+  return () => updateListeners.delete(listener);
+}
+
 /** Cancel stale snapshots before refetching the committed session metadata. */
 export async function handleAgentSessionUpdated(
   event: AgentSessionUpdatedEvent
 ): Promise<void> {
+  for (const listener of updateListeners) listener(event);
   const filters = {
     queryKey: agentSessionKeys.detail(event.agentSessionId).queryKey,
     exact: true,

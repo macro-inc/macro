@@ -54,6 +54,21 @@ function ModelRow(props: {
   );
 }
 
+/**
+ * Kobalte menus still autofocus the collection on a deferred `setTimeout(0)`
+ * (`deferAutoFocus` in createSelectableList) after `onOpenAutoFocus` is
+ * prevented. A microtask loses that race; wait past the timeout so typing
+ * lands in search.
+ */
+function focusSearchAfterMenuOpen(input: () => HTMLInputElement | undefined) {
+  setTimeout(() => {
+    requestAnimationFrame(() => {
+      const search = input();
+      if (search?.isConnected) search.focus();
+    });
+  });
+}
+
 export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
   const [query, setQuery] = createSignal('');
   let searchRef: HTMLInputElement | undefined;
@@ -100,7 +115,7 @@ export function ModelCatalogPicker(props: ModelCatalogPickerProps) {
         )}
         onOpenAutoFocus={(event) => {
           event.preventDefault();
-          queueMicrotask(() => searchRef?.focus());
+          focusSearchAfterMenuOpen(() => searchRef);
         }}
       >
         <div class="border-b border-edge-muted bg-menu p-1.5">

@@ -39,16 +39,18 @@ async fn persists_and_publishes_once_and_rejects_another_owner() {
     let url = "https://github.com/org/repo/pull/123";
     let other = MacroUserIdStr::try_from_email("other@example.com").unwrap();
     assert!(matches!(
-        service.set_pull_request(session.id, &other, url).await,
+        service
+            .set_pull_request(session.id, &other, url, None)
+            .await,
         Err(AgentSessionError::Forbidden)
     ));
     assert!(repo.list_by_session(session.id).await.unwrap().is_empty());
     service
-        .set_pull_request(session.id, &session.owner_id, url)
+        .set_pull_request(session.id, &session.owner_id, url, None)
         .await
         .unwrap();
     service
-        .set_pull_request(session.id, &session.owner_id, url)
+        .set_pull_request(session.id, &session.owner_id, url, None)
         .await
         .unwrap();
     assert!(repo.list_by_session(session.id).await.unwrap().is_empty());
@@ -66,6 +68,7 @@ async fn persists_and_publishes_once_and_rejects_another_owner() {
             session.id,
             &session.owner_id,
             "https://github.com/org/repo/pull/124",
+            None,
         )
         .await
         .unwrap();
@@ -89,7 +92,7 @@ async fn gateway_failure_does_not_undo_the_persisted_link() {
     let service = SessionPullRequestService::new(repo.clone(), RecordingRealtime::down());
     let url = "https://github.com/org/repo/pull/123";
     service
-        .set_pull_request(session.id, &session.owner_id, url)
+        .set_pull_request(session.id, &session.owner_id, url, None)
         .await
         .unwrap();
     assert_eq!(
@@ -100,4 +103,42 @@ async fn gateway_failure_does_not_undo_the_persisted_link() {
             .as_deref(),
         Some(url)
     );
+}
+
+#[tokio::test]
+async fn superseded_claim_cannot_publish_even_an_unchanged_url() {
+    use crate::domain::model::ClaimOutcome;
+    use crate::domain::model::ReplicaId;
+    use crate::domain::ports::SessionOwnership;
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_agent_session(AgentSessionId::new());
+    repo.insert_session(session.clone());
+    let replica = ReplicaId::mint();
+    let ClaimOutcome::Claimed(old) = repo.claim(session.id, replica).await.unwrap() else {
+        panic!("claim")
+    };
+    let ClaimOutcome::Claimed(current) = repo.claim(session.id, replica).await.unwrap() else {
+        panic!("reclaim")
+    };
+    let realtime = RecordingRealtime::new();
+    let service = SessionPullRequestService::new(repo.clone(), realtime.clone());
+    let current_url = "https://github.com/org/repo/pull/2";
+    service
+        .set_pull_request(session.id, &session.owner_id, current_url, Some(current))
+        .await
+        .unwrap();
+    for url in ["https://github.com/org/repo/pull/1", current_url] {
+        assert!(
+            matches!(service.set_pull_request(session.id, &session.owner_id, url, Some(old)).await, Err(AgentSessionError::FencedOut(id)) if id == session.id)
+        );
+    }
+    assert_eq!(
+        repo.get(session.id)
+            .await
+            .unwrap()
+            .pull_request_url
+            .as_deref(),
+        Some(current_url)
+    );
+    assert_eq!(realtime.updated(), [session.id]);
 }

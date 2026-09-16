@@ -47,18 +47,18 @@ export async function checkpoints(browser: Browser) {
   );
 }
 
-export async function waitForBackfill(browser: Browser) {
+export async function waitForBackfill(browser: Browser, pages = 3) {
   await browser.waitUntil(
     async () =>
       (await checkpoints(browser)).some(
         (checkpoint) =>
           checkpoint.key.endsWith(':email-filter-metadata') &&
           checkpoint.completed &&
-          checkpoint.pagesFetched === 3
+          checkpoint.pagesFetched === pages
       ),
     {
       timeout: 120_000,
-      timeoutMsg: 'Real metadata backfill did not checkpoint all three pages',
+      timeoutMsg: `Real metadata backfill did not checkpoint all ${pages} pages`,
     }
   );
 }

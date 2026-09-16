@@ -120,6 +120,30 @@ fn project_constructor_follows_team_default() {
 }
 
 #[test]
+fn initiative_constructor_without_team_disables_link_sharing() {
+    assert_eq!(
+        SharePermissionV2::new_initiative_share_permission(None),
+        share(None, None)
+    );
+}
+
+#[test]
+fn initiative_constructor_follows_team_default() {
+    assert_eq!(
+        SharePermissionV2::new_initiative_share_permission(TEAM_PUBLIC),
+        share(Some(LinkShare::Public), Some(AccessLevel::View))
+    );
+    assert_eq!(
+        SharePermissionV2::new_initiative_share_permission(TEAM_TEAM),
+        share(Some(LinkShare::Team), Some(AccessLevel::View))
+    );
+    assert_eq!(
+        SharePermissionV2::new_initiative_share_permission(TEAM_OFF),
+        share(None, None)
+    );
+}
+
+#[test]
 fn resolved_permissions_never_have_a_level_without_a_scope() {
     // Mirrors the DB check constraint: linkShareAccessLevel must be NULL when linkShare is NULL.
     for team_default in [None, TEAM_PUBLIC, TEAM_TEAM, TEAM_OFF] {
@@ -129,6 +153,7 @@ fn resolved_permissions_never_have_a_level_without_a_scope() {
             SharePermissionV2::new_document_share_permission(None, team_default),
             SharePermissionV2::new_chat_share_permission(team_default),
             SharePermissionV2::new_project_share_permission(team_default),
+            SharePermissionV2::new_initiative_share_permission(team_default),
         ] {
             assert_eq!(permission.team_share_access_level, None);
             if permission.link_share.is_none() {

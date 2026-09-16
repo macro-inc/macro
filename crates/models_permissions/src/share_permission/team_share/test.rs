@@ -263,7 +263,7 @@ fn invalid_or_exhausted_revisions_cannot_produce_commands() {
 }
 
 #[test]
-fn creation_contract_distinguishes_ordinary_task_and_call_defaults() {
+fn creation_contract_distinguishes_ordinary_task_call_and_initiative_defaults() {
     let team_id = Uuid::from_u128(1);
     for team in [None, Some(team_id)] {
         assert_eq!(TeamShareCreation::Unshared.resolve(team), Ok(None));
@@ -284,6 +284,17 @@ fn creation_contract_distinguishes_ordinary_task_and_call_defaults() {
         Ok(Some(TeamShareGrant {
             team_id,
             level: TeamShareLevel::Comment,
+        }))
+    );
+    assert_eq!(
+        TeamShareCreation::Initiative.resolve(None),
+        Err(TeamSharePolicyError::MissingTeam)
+    );
+    assert_eq!(
+        TeamShareCreation::Initiative.resolve(Some(team_id)),
+        Ok(Some(TeamShareGrant {
+            team_id,
+            level: TeamShareLevel::Edit,
         }))
     );
 }

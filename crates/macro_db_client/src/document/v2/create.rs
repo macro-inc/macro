@@ -38,7 +38,6 @@ pub struct CreateDocumentArgs<'a> {
 }
 
 /// Creates a new document
-/// NOTE: this is only used in seed_cli at the moment and needs to be deprecated
 #[instrument(skip(db))]
 pub async fn create_document(
     db: &Pool<Postgres>,
@@ -217,6 +216,15 @@ pub async fn create_document_txn(
         user_id.as_ref(),
         entity_access_db_utils::EntityAccessSourceType::User,
         AccessLevel::Owner,
+    )
+    .await?;
+    entity_registry_db_utils::insert_entity(
+        transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            macro_uuid::string_to_uuid(&document_id)?,
+            entity_registry_db_utils::RegisteredEntityType::Document,
+            model_owner::Owner::User(user_id.clone()),
+        ),
     )
     .await?;
 

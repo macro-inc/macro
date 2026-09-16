@@ -1,4 +1,3 @@
-import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
@@ -37,11 +36,6 @@ function SectionScrollArea(props: {
           {props.children}
         </div>
       </Scroll>
-      <ScrollIndicators
-        scrollRef={scrollRoot}
-        appearance="gradient"
-        gradientColor="panel"
-      />
       <Show when={activity.direction()}>
         {(direction) => (
           <Tooltip
@@ -111,7 +105,7 @@ function CollapsibleSectionHeader(props: {
   return (
     <div
       class={cn(
-        'flex w-full items-center rounded-xl text-xs font-semibold uppercase tracking-wide text-ink-extra-muted hover:bg-hover hover:text-ink-muted',
+        'group/section-header flex w-full items-center rounded-xl text-xs font-medium uppercase tracking-wide text-ink-extra-muted transition-colors hover:text-ink-muted',
         props.focused && 'bg-hover text-ink-muted',
         !props.focused && props.focusWithin && 'text-ink-muted',
         props.class

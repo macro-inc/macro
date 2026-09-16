@@ -30,8 +30,6 @@ import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { idToDisplayName } from '@core/user/util';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
 import CircleDashedIcon from '@phosphor/circle-dashed.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
@@ -43,13 +41,11 @@ import { cn, Dropdown, Tooltip } from '@ui';
 import {
   type Accessor,
   batch,
-  createEffect,
   createMemo,
   createSignal,
   For,
   type JSX,
   Match,
-  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
@@ -58,31 +54,15 @@ import {
   filterInboxGithubPrOption,
 } from './filter-categories';
 import {
-  SearchableMultiSelectInline,
-  type SearchableOption,
-} from './searchable-multi-select';
+  FilterOptionItem,
+  FilterSubmenu,
+  SearchableFilterSubmenu,
+} from './filter-menu';
+import type { SearchableOption } from './searchable-multi-select';
+
 import { useTagFilter } from './tag-filter';
 
 export type { FilterCategory, FilterOption } from './filter-categories';
-
-export const TypeIndicator = (props: { active: boolean }) => (
-  <span
-    class={cn(
-      'size-3.5 flex items-center justify-center shrink-0 rounded-sm border text-surface',
-      props.active
-        ? 'bg-accent border-accent'
-        : 'border-transparent group-hover:not-hover:border-edge-muted group-data-highlighted:not-hover:border-edge-muted hover:border-accent'
-    )}
-  >
-    <Show when={props.active}>
-      <CheckIcon class="size-2.5" />
-    </Show>
-  </span>
-);
-
-// Sub-trigger rows differ from default Dropdown.Item only by
-// distributing label + caret to the row ends.
-// const FILTER_MENU_SUBTRIGGER_CLASS = 'justify-between gap-2';
 
 // Filter categories by view
 const INBOX_FILTER_CATEGORIES: FilterCategory[] = [
@@ -394,97 +374,9 @@ export const VIEW_FILTER_CATEGORIES: Record<ListView, FilterCategory[]> = {
   search: [],
 };
 
-/** Searchable submenu for filters with many options like assignees */
-const SearchableFilterSubmenu = (props: {
-  label: string;
-  options: Accessor<SearchableOption[]>;
-  activeIds: Accessor<string[]>;
-  onChange: (ids: string[]) => void;
-  placeholder?: string;
-  open?: Accessor<boolean>;
-  onOpenChange?: (v: boolean) => void;
-  /** Keep `options` in their given order instead of pinning selected first. */
-  preserveOrder?: boolean;
-}) => {
-  const [internalOpen, setInternalOpen] = createSignal(false);
-  const isOpen = () => props.open?.() ?? internalOpen();
-  const setIsOpen = (v: boolean) => {
-    if (props.onOpenChange) props.onOpenChange(v);
-    else setInternalOpen(v);
-  };
-  const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
-
-  // Focus the search input while the sub is open.
-  //
-  // Two issues conspire:
-  //   1. Initial focus has to wait for Kobalte's DismissableLayer to register
-  //      itself as a nested layer of the parent menu (done in its onMount).
-  //      The sub is portaled, so focusing the input before that registration
-  //      looks like "focus outside" to the parent and closes the whole menu
-  //      tree. One rAF is enough to get past those onMount callbacks.
-  //   2. After that, Kobalte's `onPointerMove` on the SubTrigger keeps
-  //      calling `focusWithoutScrolling(e.currentTarget)` on every mouse
-  //      move, stealing focus back to the trigger. Reclaim on blur — user
-  //      dismissal routes (Escape / click-outside) close the sub first,
-  //      which unregisters this listener before focus moves elsewhere.
-  createEffect(() => {
-    const el = inputRef();
-    if (!isOpen() || !el) return;
-
-    const raf = requestAnimationFrame(() => {
-      if (isOpen()) el.focus();
-    });
-
-    const onBlur = () => {
-      queueMicrotask(() => {
-        if (isOpen() && document.activeElement !== el) el.focus();
-      });
-    };
-    el.addEventListener('blur', onBlur);
-
-    onCleanup(() => {
-      cancelAnimationFrame(raf);
-      el.removeEventListener('blur', onBlur);
-    });
-  });
-
-  return (
-    <Dropdown.Sub open={isOpen()} onOpenChange={setIsOpen}>
-      <Dropdown.SubTrigger
-        onPointerEnter={(e: PointerEvent & { currentTarget: HTMLElement }) => {
-          // Kobalte's "grace polygon" keeps an open sub alive when the
-          // pointer crosses toward its content. For sibling In/From triggers,
-          // that means moving between them leaves the prior sub stuck open
-          // and the prior trigger stuck with data-highlighted. Force focus
-          // + open so Kobalte's parent selection manager updates to this
-          // trigger and the shared signal closes the sibling.
-          if (e.pointerType !== 'mouse') return;
-          e.currentTarget.focus({ preventScroll: true });
-          if (!isOpen()) setIsOpen(true);
-        }}
-      >
-        <span class="text-ink">{props.label}</span>
-        <CaretRightIcon class="size-3 text-ink-muted" />
-      </Dropdown.SubTrigger>
-
-      <Dropdown.SubContent class="w-65 max-w-[90vw]">
-        <Dropdown.Group class="p-0 gap-0">
-          <SearchableMultiSelectInline
-            onRequestClose={() => setIsOpen(false)}
-            placeholder={props.placeholder}
-            activeIds={props.activeIds}
-            onChange={props.onChange}
-            options={props.options}
-            inputRef={setInputRef}
-            preserveOrder={props.preserveOrder}
-          />
-        </Dropdown.Group>
-      </Dropdown.SubContent>
-    </Dropdown.Sub>
-  );
-};
-
 interface UnifiedFilterDropdownProps {
+  /** View-specific refinements alongside the shared filters. */
+  children?: JSX.Element;
   /** Optional controlled open state */
   open?: Accessor<boolean>;
   onOpenChange?: (open: boolean) => void;
@@ -508,38 +400,14 @@ const ReadStatusSubmenu = (props: {
   onChange: (value: ReadFilter) => void;
 }) => {
   return (
-    <Dropdown.Sub>
-      <Dropdown.SubTrigger>
-        <span class="text-ink">Status</span>
-        <CaretRightIcon class="size-3 text-ink-muted" />
-      </Dropdown.SubTrigger>
-
-      <Dropdown.SubContent>
-        <Dropdown.Group>
-          <For each={READ_FILTER_OPTIONS}>
-            {(option) => {
-              const active = () => props.value === option.id;
-              return (
-                <Dropdown.Item
-                  onSelect={() => props.onChange(option.id)}
-                  closeOnSelect
-                >
-                  <TypeIndicator active={active()} />
-                  <span
-                    class={cn(
-                      'flex-1 truncate',
-                      active() ? 'text-ink' : 'text-ink-muted'
-                    )}
-                  >
-                    {option.label}
-                  </span>
-                </Dropdown.Item>
-              );
-            }}
-          </For>
-        </Dropdown.Group>
-      </Dropdown.SubContent>
-    </Dropdown.Sub>
+    <FilterSubmenu
+      label="Status"
+      active={props.value !== 'all'}
+      options={READ_FILTER_OPTIONS}
+      isSelected={(id) => props.value === id}
+      onSelect={props.onChange}
+      closeOnSelect
+    />
   );
 };
 
@@ -992,47 +860,13 @@ export const UnifiedFilterDropdown = (
 
                   <For each={categories()}>
                     {(category) => (
-                      <Dropdown.Sub>
-                        <Dropdown.SubTrigger>
-                          <span class="text-ink">{category.label}</span>
-                          <CaretRightIcon class="size-3 text-ink-muted" />
-                        </Dropdown.SubTrigger>
-
-                        <Dropdown.SubContent>
-                          <Dropdown.Group>
-                            <For each={category.options}>
-                              {(option) => {
-                                const active = () => isOptionActive(option.id);
-                                return (
-                                  <Dropdown.Item
-                                    onSelect={() => toggleFilter(option.id)}
-                                    closeOnSelect={!category.multiple}
-                                  >
-                                    <TypeIndicator active={active()} />
-
-                                    <Show when={option.icon}>
-                                      {(icon) => (
-                                        <span class="size-4 flex items-center justify-center shrink-0">
-                                          {icon()()}
-                                        </span>
-                                      )}
-                                    </Show>
-
-                                    <span
-                                      class={cn(
-                                        'flex-1 truncate',
-                                        active() ? 'text-ink' : 'text-ink-muted'
-                                      )}
-                                    >
-                                      {option.label}
-                                    </span>
-                                  </Dropdown.Item>
-                                );
-                              }}
-                            </For>
-                          </Dropdown.Group>
-                        </Dropdown.SubContent>
-                      </Dropdown.Sub>
+                      <FilterSubmenu
+                        label={category.label}
+                        options={category.options}
+                        isSelected={isOptionActive}
+                        onSelect={toggleFilter}
+                        closeOnSelect={!category.multiple}
+                      />
                     )}
                   </For>
 
@@ -1061,6 +895,7 @@ export const UnifiedFilterDropdown = (
                   <Show when={isCompaniesView()}>
                     <SearchableFilterSubmenu
                       label="Stage"
+                      active={stageFilter().length > 0}
                       options={stageOptions}
                       activeIds={effectiveStageFilter}
                       onChange={handleStageChange}
@@ -1083,29 +918,13 @@ export const UnifiedFilterDropdown = (
                 {(option) => {
                   const active = () => isOptionActive(option.id);
                   return (
-                    <Dropdown.Item
+                    <FilterOptionItem
+                      label={option.label}
+                      icon={option.icon}
+                      active={active()}
                       onSelect={() => toggleFilter(option.id)}
                       closeOnSelect={!categories()[0]!.multiple}
-                    >
-                      <TypeIndicator active={active()} />
-
-                      <Show when={option.icon}>
-                        {(icon) => (
-                          <span class="size-4 flex items-center justify-center shrink-0">
-                            {icon()()}
-                          </span>
-                        )}
-                      </Show>
-
-                      <span
-                        class={cn(
-                          'flex-1 truncate',
-                          active() ? 'text-ink' : 'text-ink-muted'
-                        )}
-                      >
-                        {option.label}
-                      </span>
-                    </Dropdown.Item>
+                    />
                   );
                 }}
               </For>
@@ -1120,6 +939,7 @@ export const UnifiedFilterDropdown = (
                 placeholder="Filter by tag..."
               />
             </Show>
+            {props.children}
           </Dropdown.Group>
         </Dropdown.Content>
       </Dropdown>

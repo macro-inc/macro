@@ -6,13 +6,15 @@ import {
   defaultModelForPlan,
   Model,
   modelsForPlan,
+  SUPPORTED_ATTACHMENT_EXTENSIONS,
 } from '@core/component/AI/constant';
 import { useChatInputContext } from '@core/component/AI/context';
 import type { ToolSet } from '@core/component/AI/types';
 import { isImageAttachment } from '@core/component/AI/util/attachment';
 import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -24,7 +26,6 @@ import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideTo
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, ComposerSurface, cn, SendButton as UiSendButton } from '@ui';
@@ -51,6 +52,8 @@ type ChatInputProps = {
 
 type ChatInputComponentProps = {
   variant?: 'default' | 'tall';
+  class?: string;
+  placeholder?: string;
   /** Keep an unfocused mobile accessory to one line without unmounting its editor. */
   collapseOnBlur?: boolean;
   editor: EditorConfigBuilder;
@@ -93,6 +96,7 @@ export function ChatInput(props: ChatInputComponentProps) {
   });
 
   let containerRef!: HTMLDivElement;
+  let fileInputRef: HTMLInputElement | undefined;
   useTouchOutsideToDismissKeyboard(() => containerRef);
 
   // The model selector lives inside the input, directly left of the send
@@ -122,7 +126,10 @@ export function ChatInput(props: ChatInputComponentProps) {
   // the right-hand controls (whose width changes with the selector's state).
   const [rightControlsEl, setRightControlsEl] = createSignal<HTMLElement>();
   const rightControlsSize = createElementSize(rightControlsEl);
-  const rightControlsInset = () => (rightControlsSize.width ?? 44) + 10;
+  const rightControlsInset = () =>
+    isTouchDevice()
+      ? (rightControlsSize.width ?? 44) + 10
+      : (rightControlsSize.width ?? 41.25) + 9.375;
 
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
   const { hasConsent, requestConsent, ConsentDialog } = useAiDataConsentGate();
@@ -162,16 +169,19 @@ export function ChatInput(props: ChatInputComponentProps) {
     !generating() &&
     !hasUploadingAttachments();
 
-  const LINE_HEIGHT_THRESHOLD = 40;
   let mdRef: undefined | HTMLDivElement;
-  const isMultiline = () => {
-    if (isCollapsed()) return false;
-    // Access markdownText to create reactive dependency
-    const text = markdownText();
-    if (text.trim().length === 0) return false;
-    if (!mdRef) return false;
-    return mdRef.scrollHeight > LINE_HEIGHT_THRESHOLD;
-  };
+
+  const isTallVariant = createMemo(
+    () =>
+      props.variant === 'tall' ||
+      (isTouchDevice() && props.variant !== 'default')
+  );
+  const isCollapsed = () =>
+    props.collapseOnBlur &&
+    isTouchDevice() &&
+    !isTallVariant() &&
+    !isFocused() &&
+    !isEmptyInput();
 
   const sendMessage = createCallback(
     async (opts?: { modelOverride?: Model; metaKey?: boolean }) => {
@@ -219,6 +229,19 @@ export function ChatInput(props: ChatInputComponentProps) {
       props.onChange?.(md);
     });
 
+  const composerLayout = createComposerLayout(
+    props.editor.buildHandle().lexical,
+    {
+      container: lineEl,
+      mode: () => {
+        if (isTallVariant()) return 'expanded';
+        return isCollapsed() ? 'collapsed' : 'auto';
+      },
+    }
+  );
+  const isMultiline = () =>
+    !isCollapsed() && composerLayout.hasMultilineContent();
+
   const hasAttachments = () =>
     attachments.attached().some(isImageAttachment) ||
     uploadQueue.uploading().length > 0;
@@ -227,38 +250,40 @@ export function ChatInput(props: ChatInputComponentProps) {
     <Button
       ref={setAttachMenuAnchorRef}
       variant="ghost"
-      size="icon-sm"
-      class="text-ink rounded-full size-7 touch:size-6"
+      size="icon-composer"
+      class="rounded-full text-ink not-touch:text-composer-ink touch:size-6"
       label="Attach files"
       aria-label="Attach files"
-      onClick={() => setShowAttachMenu((prev) => !prev)}
+      onClick={() => {
+        if (isTouchDevice()) setShowAttachMenu((prev) => !prev);
+        else fileInputRef?.click();
+      }}
     >
-      <Show when={isTouchDevice()} fallback={<PaperclipIcon />}>
-        <PlusIcon />
-      </Show>
+      <PaperclipIcon />
     </Button>
   );
 
   const StopButton = () => (
     <Button
       variant={isTouchDevice() ? 'ghost' : 'strong'}
-      size="icon-sm"
+      size="icon-composer"
       label="Stop generating"
       hotkey={TOKENS.chat.stop}
       onClick={() => props.onStop?.()}
       class={cn(
-        'rounded-full size-7 touch:size-7.5 [&_svg]:stroke-[4px]',
+        'rounded-full touch:size-7.5 [&_svg]:stroke-[4px]',
         isTouchDevice() &&
           'text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10',
         'data-disabled:opacity-100 data-disabled:text-ink-extra-muted data-disabled:bg-ink-muted/5'
       )}
     >
-      <div class="size-3.5 rounded-sm bg-current" />
+      <div class="size-3.5 not-touch:size-[13.125px] rounded-sm bg-current" />
     </Button>
   );
 
   const SendButton = () => (
     <UiSendButton
+      appearance="composer"
       tooltip={'Ask AI'}
       shortcut="enter"
       tooltipPlacement="top"
@@ -269,7 +294,10 @@ export function ChatInput(props: ChatInputComponentProps) {
   );
 
   const RightControls = () => (
-    <div ref={setRightControlsEl} class="flex shrink-0 items-center gap-1">
+    <div
+      ref={setRightControlsEl}
+      class="flex shrink-0 items-center gap-1 not-touch:gap-[3.75px]"
+    >
       <ModelSelector
         selectedModel={model()}
         models={modelOptions()}
@@ -299,29 +327,38 @@ export function ChatInput(props: ChatInputComponentProps) {
     </Show>
   );
 
-  const isTallVariant = createMemo(
-    () =>
-      props.variant === 'tall' ||
-      (isTouchDevice() && props.variant !== 'default')
-  );
-  const isCollapsed = () =>
-    props.collapseOnBlur &&
-    isTouchDevice() &&
-    !isTallVariant() &&
-    !isFocused() &&
-    !isEmptyInput();
-  const isCompactMobile = () =>
-    isTouchDevice() && !isTallVariant() && !isMultiline();
+  const isCompactMobile = () => isTouchDevice() && composerLayout.isCompact();
 
   return (
     <div class="relative">
+      <Show when={!isTouchDevice()}>
+        <input
+          ref={fileInputRef}
+          type="file"
+          class="hidden"
+          multiple
+          accept={SUPPORTED_ATTACHMENT_EXTENSIONS.map((ext) => `.${ext}`).join(
+            ','
+          )}
+          onChange={(event) => {
+            const files = Array.from(event.currentTarget.files ?? []).filter(
+              (file) =>
+                SUPPORTED_ATTACHMENT_EXTENSIONS.includes(
+                  file.name.split('.').pop()?.toLowerCase() ?? ''
+                )
+            );
+            event.currentTarget.value = '';
+            if (files.length > 0) uploadQueue.upload(files);
+          }}
+        />
+      </Show>
       <ComposerSurface
         class={cn(
           'h-auto',
-          !isMultiline() &&
+          composerLayout.isCompact() &&
             !hasAttachments() &&
-            !isTallVariant() &&
-            'touch:rounded-full'
+            'touch:rounded-full',
+          props.class
         )}
       >
         <div
@@ -362,12 +399,22 @@ export function ChatInput(props: ChatInputComponentProps) {
           </Show>
 
           <div
+            data-chat-input-layout=""
+            data-composer-compact={
+              composerLayout.isCompact() ? 'true' : 'false'
+            }
             ref={setLineEl}
-            class={cn('relative px-2 py-1.5 touch:min-h-12.5 touch:py-[9px]', {
-              'flex flex-col px-2 py-2 touch:p-0': isTallVariant(),
-              'touch:h-(--mobile-chrome-button-size) touch:min-h-0 touch:py-0 touch:flex touch:items-center':
-                isCompactMobile(),
-            })}
+            class={cn(
+              'group/composer relative px-[7.5px] touch:px-2 touch:min-h-12.5 touch:py-[9px]',
+              'data-[composer-compact=true]:px-[7.5px] data-[composer-compact=true]:touch:px-2',
+              {
+                'flex flex-col pt-[11.25px] pb-[7.5px] touch:p-0':
+                  isTallVariant(),
+                'not-touch:min-h-[48.75px] py-[12.1875px]': !isTallVariant(),
+                'touch:h-(--mobile-chrome-button-size) touch:min-h-0 touch:py-0 touch:flex touch:items-center':
+                  isCompactMobile(),
+              }
+            )}
           >
             {/* Invisible reference of the fully-expanded control row laid out
                 inline (paperclip + min editor room + full selector + send). Its
@@ -378,9 +425,9 @@ export function ChatInput(props: ChatInputComponentProps) {
                 ref={setProbeEl}
                 aria-hidden="true"
                 inert
-                class="pointer-events-none invisible absolute flex w-max items-center gap-1"
+                class="pointer-events-none invisible absolute flex w-max items-center gap-1 not-touch:gap-[3.75px]"
               >
-                <div class="size-7 shrink-0" />
+                <div class="size-7 not-touch:size-[33.75px] shrink-0" />
                 <div
                   class="shrink-0"
                   style={{ width: `${MIN_EDITOR_WIDTH}px` }}
@@ -390,19 +437,19 @@ export function ChatInput(props: ChatInputComponentProps) {
                   models={modelOptions()}
                   onSelect={() => {}}
                 />
-                <div class="size-7 shrink-0" />
+                <div class="size-7 not-touch:size-[33.75px] shrink-0" />
               </div>
             </Show>
             <div
               id={CHAT_INPUT_TEXT_AREA_ID}
               class={cn(
-                'text-sm text-ink touch:px-3 touch:py-2',
-                isCompactMobile() && 'w-full touch:py-0',
-                !isTouchDevice() && (isMultiline() || isTallVariant()) && 'pl-2'
+                'text-base text-ink touch:px-3 touch:py-2 not-touch:leading-[24.375px] not-touch:text-composer-ink',
+                'group-data-[composer-compact=true]/composer:touch:w-full group-data-[composer-compact=true]/composer:touch:py-0',
+                'group-data-[composer-compact=false]/composer:not-touch:px-[9.375px]',
+                'group-data-[composer-compact=true]/composer:pl-[41.25px] group-data-[composer-compact=true]/composer:touch:pl-10 group-data-[composer-compact=true]/composer:pr-(--composer-right-inset)'
               )}
               classList={{
-                'pl-8 touch:pl-10': !isMultiline() && !isTallVariant(),
-                'pb-8 touch:pb-10': isMultiline() && !isTallVariant(),
+                'pb-[37.5px] touch:pb-10': isMultiline() && !isTallVariant(),
                 'max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto':
                   isMobile() && isMultiline(),
                 // While empty, the only thing rendered is the placeholder.
@@ -415,18 +462,15 @@ export function ChatInput(props: ChatInputComponentProps) {
                 'max-h-5 overflow-hidden [&_[contenteditable]>:first-child]:mt-0!':
                   isCollapsed(),
               }}
-              style={
-                !isMultiline() && !isTallVariant()
-                  ? { 'padding-right': `${rightControlsInset()}px` }
-                  : undefined
-              }
+              style={{ '--composer-right-inset': `${rightControlsInset()}px` }}
               ref={mdRef}
             >
-              <MarkdownShell
+              <ComposerEditor
                 class={isCompactMobile() ? 'min-h-5' : undefined}
                 config={props.editor}
                 placeholder={
-                  isTouchDevice() ? 'Ask AI…' : 'Ask AI, @mention anything'
+                  props.placeholder ??
+                  (isTouchDevice() ? 'Ask AI…' : 'Ask AI, @mention anything')
                 }
                 initialValue={props.initialValue}
                 autofocus={
@@ -436,7 +480,7 @@ export function ChatInput(props: ChatInputComponentProps) {
                 }
               />
               <Show when={isTallVariant()}>
-                <div class="h-4 touch:hidden" />
+                <div class="h-[15px] touch:hidden" />
               </Show>
               <Show when={isTallVariant()}>
                 <Attachments />
@@ -452,7 +496,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               <div
                 class={cn(
                   !isTallVariant() &&
-                    'absolute left-2 bottom-2 touch:bottom-[7px]',
+                    'absolute left-[7.5px] bottom-[7.5px] touch:left-2 touch:bottom-[7px]',
                   isCompactMobile() &&
                     'touch:top-1/2 touch:bottom-auto touch:-translate-y-1/2'
                 )}
@@ -463,7 +507,7 @@ export function ChatInput(props: ChatInputComponentProps) {
               <div
                 class={cn(
                   !isTallVariant() &&
-                    'absolute right-2 bottom-2 touch:right-2 touch:bottom-[7px]',
+                    'absolute right-[7.5px] bottom-[7.5px] touch:right-2 touch:bottom-[7px]',
                   isCompactMobile() &&
                     'touch:right-[5px] touch:top-1/2 touch:bottom-auto touch:-translate-y-1/2'
                 )}

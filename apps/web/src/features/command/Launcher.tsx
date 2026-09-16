@@ -279,7 +279,7 @@ const createComponent = async (spec: {
 
 export function runCreateAction(
   blockName: CreatableName,
-  options: { shouldInsert?: boolean; source?: string } = {}
+  options: { shouldInsert?: boolean; source?: string; projectId?: string } = {}
 ) {
   const shouldInsert = options.shouldInsert ?? false;
   // Creation analytics fire at the data-layer chokepoints (create.ts /
@@ -301,7 +301,7 @@ export function runCreateAction(
               createMarkdownFile({
                 title: '',
                 content: '',
-                projectId: undefined,
+                projectId: options.projectId,
                 source,
               }),
             shouldInsert,
@@ -322,6 +322,7 @@ export function runCreateAction(
           const result = await createCanvasFileFromJsonString({
             json: JSON.stringify({ nodes: [], edges: [] }),
             title: 'New Canvas',
+            projectId: options.projectId,
             source,
           });
           if ('error' in result) return;
@@ -342,6 +343,7 @@ export function runCreateAction(
         loading: true,
         createFn: () =>
           createSnippet({
+            projectId: options.projectId,
             title: '',
             content: '',
             source,
@@ -392,7 +394,12 @@ export function runCreateAction(
     case 'project':
       createBlock({
         blockName: 'project',
-        createFn: () => createProject({ name: 'New Folder', source }),
+        createFn: () =>
+          createProject({
+            name: 'New Folder',
+            source,
+            parentId: options.projectId,
+          }),
         shouldInsert,
       });
       return;
@@ -405,6 +412,7 @@ export function runCreateAction(
             code: 'print("Hello, World!")',
             extension: 'py',
             title: 'New Code File',
+            projectId: options.projectId,
             source,
           });
           if (result.isErr()) return;

@@ -401,6 +401,35 @@ describe('createAgentSessionFeed live updates', () => {
     expect(feed.session()?.name).toBe('Fix Flaky Tests');
   });
 
+  it('adopts a linked pull request when the session row updates', async () => {
+    const { createAgentSessionFeed } = await import(
+      './create-agent-session-feed'
+    );
+    const { handleAgentSessionUpdated } = await import(
+      '@queries/agent-session/session-metadata-sync'
+    );
+    const feed = createRoot(() => createAgentSessionFeed(() => 'session'));
+    await flush();
+
+    expect(feed.session()?.pullRequestUrl).toBeUndefined();
+    worker.getSession = async () => ({
+      isErr: () => false,
+      value: {
+        id: 'session',
+        name: 'Agent Session',
+        modifiedAt: '2026-08-24T12:00:02Z',
+        harness: 'claude-code',
+        pullRequestUrl: 'https://github.com/macro-inc/macro/pull/6303',
+      },
+    });
+    await handleAgentSessionUpdated({ agentSessionId: 'session' });
+    await flush();
+
+    expect(feed.session()?.pullRequestUrl).toBe(
+      'https://github.com/macro-inc/macro/pull/6303'
+    );
+  });
+
   it('uses persisted state instead of a stale event payload', async () => {
     const { createAgentSessionFeed } = await import(
       './create-agent-session-feed'

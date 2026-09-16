@@ -1,5 +1,4 @@
 export { InputActionButton } from './ActionButton';
-export { Actions } from './Actions';
 export { Attachments } from './Attachments';
 export { createInputAttachmentTracker } from './attachment-tracker';
 export { ChannelInput } from './ChannelInput';
@@ -10,8 +9,6 @@ export { createInputState } from './create-input-state';
 export { DropOverlay } from './DropOverlay';
 export { DropZone } from './DropZone';
 export { Editor } from './Editor';
-export { EditorShell } from './EditorShell';
-export { Footer } from './Footer';
 export { FormatButtons } from './FormatButtons';
 export { FormatRibbon } from './FormatRibbon';
 export { Input } from './Input';

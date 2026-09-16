@@ -1,4 +1,8 @@
 import {
+  CODEX_BOT_NAME,
+  CODEX_BOT_PRINCIPAL_ID,
+} from '@core/constant/codexAgent';
+import {
   CURSOR_BOT_NAME,
   CURSOR_BOT_PRINCIPAL_ID,
 } from '@core/constant/cursorAgent';
@@ -79,5 +83,14 @@ export function cursorMentionUser(): IUser {
     id: CURSOR_BOT_PRINCIPAL_ID,
     name: CURSOR_BOT_NAME,
     email: CURSOR_BOT_NAME,
+  };
+}
+
+/** Codex as a bot mention, using the canonical principal identifier. */
+export function codexMentionUser(): IUser {
+  return {
+    id: CODEX_BOT_PRINCIPAL_ID,
+    name: CODEX_BOT_NAME,
+    email: CODEX_BOT_NAME,
   };
 }

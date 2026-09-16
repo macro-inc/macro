@@ -8,7 +8,7 @@ export function CompanyContactsSection(props: {
   contacts?: CompanyContact[];
 }) {
   const contacts = () => props.contacts ?? [];
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   const [search, setSearch] = createSignal('');
   const filtered = createMemo(() => {
@@ -56,11 +56,14 @@ export function CompanyContactsSection(props: {
                 {(contact) => (
                   <button
                     type="button"
-                    onClick={() =>
-                      replaceOrInsertSplit({
-                        type: 'contact',
-                        id: contact.id,
-                      })
+                    onClick={(event) =>
+                      openWithSplit(
+                        {
+                          type: 'contact',
+                          id: contact.id,
+                        },
+                        { activate: true, preferNewSplit: event.shiftKey }
+                      )
                     }
                     class="flex min-w-0 flex-col gap-0.5 rounded-md px-1 py-0.5 text-left hover:bg-ink-muted/[0.06]"
                   >

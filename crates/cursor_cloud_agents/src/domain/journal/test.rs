@@ -100,8 +100,11 @@ fn polling_appends_only_missing_suffix_and_never_repeats_a_final_answer() {
                 Some(&run),
                 &JournalInput::Poll(r#"{"status":"FINISHED","result":"different"}"#.into())
             )
-            .is_err()
+            .unwrap()
+            .is_empty(),
+        "a divergent answer is reported, never guessed at or replaced"
     );
+    assert_eq!(machine.runs[&run].text, "hello");
 }
 
 #[test]
@@ -218,6 +221,80 @@ fn streamed_answer_and_pr_metadata_are_not_duplicated() {
     assert!(machine.push(Some(&run), &result).unwrap().is_empty());
 }
 
+/// Cursor drops the image it streamed from the run's final text. Seen live
+/// twice, once with the `src` an absolute path under Cursor's artifact
+/// directory and once with it a bare file name, so neither shape can be the
+/// thing that identifies a dropped image. Both runs failed to project, and
+/// because the frame was already journaled neither session could ever load
+/// or be prompted again.
+#[test]
+fn final_text_without_the_streamed_image_is_the_same_answer() {
+    for source in ["/opt/cursor/artifacts/pr_6408.webp", "screenshot.png"] {
+        let run = CursorRunId::new("image-run");
+        let mut machine = ReplayMachine::default();
+        let streamed = format!(
+            "Here's proof from the GitHub files view.\n\n<img src=\"{source}\" alt=\"the README diff\" />\n\n**PR:** https://github.com/macro-inc/macro/pull/6408"
+        );
+        let restated = "Here's proof from the GitHub files view.\n\n**PR:** https://github.com/macro-inc/macro/pull/6408";
+        machine
+            .push(
+                Some(&run),
+                &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: streamed.clone(),
+                })),
+            )
+            .unwrap();
+        let result = JournalInput::Sse(NativeRecord {
+            event: "result".into(),
+            id: None,
+            data: serde_json::json!({
+                "runId": run.as_str(), "status": "FINISHED", "text": restated,
+            })
+            .to_string(),
+        });
+        let updates = machine.push(Some(&run), &result).unwrap();
+        assert!(
+            updates.is_empty(),
+            "restating the answer without the image must not repeat it"
+        );
+        assert_eq!(machine.terminal_status(&run), Some(RunStatus::Finished));
+        assert_eq!(
+            machine.runs[&run].text, streamed,
+            "the streamed answer, image included, stays the answer of record"
+        );
+    }
+}
+
+/// A restatement that also adds text is still a restatement: the added part
+/// cannot be told from the rewritten part, so the stream the user watched
+/// arrive is kept whole rather than spliced. The session stays projectable,
+/// which is the property that matters.
+#[test]
+fn a_restatement_that_also_adds_text_keeps_the_streamed_answer() {
+    let run = CursorRunId::new("restated-run");
+    let mut machine = ReplayMachine::default();
+    let streamed = "Shipped.\n\n<img src=\"proof.webp\" />";
+    machine
+        .push(
+            Some(&run),
+            &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                text: streamed.into(),
+            })),
+        )
+        .unwrap();
+    let result = JournalInput::Sse(NativeRecord {
+        event: "result".into(),
+        id: None,
+        data: serde_json::json!({
+            "runId": run.as_str(), "status": "FINISHED", "text": "Shipped. Tests pass.",
+        })
+        .to_string(),
+    });
+    assert!(machine.push(Some(&run), &result).unwrap().is_empty());
+    assert_eq!(machine.runs[&run].text, streamed);
+    assert_eq!(machine.terminal_status(&run), Some(RunStatus::Finished));
+}
+
 #[test]
 fn polling_preserves_pr_metadata() {
     let run = CursorRunId::new("poll-run");
@@ -239,8 +316,12 @@ fn polling_preserves_pr_metadata() {
     assert!(machine.push(Some(&run), &poll).unwrap().is_empty());
 }
 
+/// A divergent final answer leaves the captured stream alone, but the run
+/// still ended and its branch still has a PR - those are facts of their own,
+/// and a session that refused them could never load again, because the frame
+/// carrying them is already journaled.
 #[test]
-fn divergent_terminal_text_is_rejected_before_recording_a_pr() {
+fn divergent_terminal_text_keeps_the_captured_answer_and_the_terminal_facts() {
     for polling in [false, true] {
         let run = CursorRunId::new("divergent");
         let mut machine = ReplayMachine::default();
@@ -271,8 +352,50 @@ fn divergent_terminal_text_is_rejected_before_recording_a_pr() {
                 }).to_string(),
             })
         };
-        assert!(machine.push(Some(&run), &input).is_err());
-        assert_eq!(machine.terminal_status(&run), None);
-        assert_eq!(machine.pull_request_url(), None);
+        machine
+            .push(Some(&run), &input)
+            .expect("a divergent answer is reported, not fatal");
+        assert_eq!(machine.runs[&run].text, "captured answer");
+        assert_eq!(machine.terminal_status(&run), Some(RunStatus::Finished));
+        assert_eq!(
+            machine.pull_request_url(),
+            Some("https://github.com/macro-inc/macro/pull/12")
+        );
     }
+}
+
+/// A stream interruption is a fact about the connection, not the conversation:
+/// it is durable so a gap in a transcript is explicable, and it must add
+/// nothing to the transcript it explains — on capture or on any later replay.
+#[test]
+fn a_stream_interruption_projects_to_nothing() {
+    let run = CursorRunId::new("run");
+    let interruption = JournalInput::StreamInterrupted {
+        reason: "error decoding response body".into(),
+        last_event_id: Some("1713033006000-0".into()),
+        attempt: 2,
+    };
+    let mut machine = ReplayMachine::default();
+    assert!(
+        machine
+            .push(
+                Some(&run),
+                &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: "before".into()
+                }))
+            )
+            .unwrap()
+            .len()
+            == 1
+    );
+    assert!(machine.push(Some(&run), &interruption).unwrap().is_empty());
+    assert!(machine.push(None, &interruption).unwrap().is_empty());
+    assert!(!machine.complete(&run), "no outcome was invented either");
+    // Durability is the point, so the variant has to survive the journal's
+    // own encoding unchanged.
+    let encoded = serde_json::to_string(&interruption).unwrap();
+    assert_eq!(
+        serde_json::from_str::<JournalInput>(&encoded).unwrap(),
+        interruption
+    );
 }

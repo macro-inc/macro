@@ -565,7 +565,7 @@ function Gutter(props: GutterProps) {
           their own spacing and do not draw it. */}
       <div
         class={cn(
-          'absolute border-thread-rail touch:hidden',
+          'absolute border-edge-muted touch:hidden',
           horizontal() ? 'border-l-[1px]' : 'border-t-[1px]'
         )}
         style={barStyle('1px')}

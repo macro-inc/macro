@@ -65,7 +65,11 @@ function SizesDemo() {
 function IconOnlyDemo() {
   return (
     <div class="flex flex-wrap items-end gap-3">
-      <For each={['icon-xs', 'icon-sm', 'icon-md', 'icon-lg'] as const}>
+      <For
+        each={
+          ['icon-xs', 'icon-sm', 'icon-md', 'icon-lg', 'icon-composer'] as const
+        }
+      >
         {(size) => (
           <div class="flex flex-col items-start gap-1.5">
             <span class="font-mono text-xs text-ink-subtle">{size}</span>

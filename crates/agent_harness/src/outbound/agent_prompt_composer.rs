@@ -41,3 +41,6 @@ impl AgentPromptComposer for LexicalAgentPromptComposer {
             .map_err(|error| HarnessError::PromptComposition(rootcause::report!(error).into()))
     }
 }
+
+#[cfg(test)]
+mod test;

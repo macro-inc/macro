@@ -21,7 +21,7 @@ function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge px-4 py-3',
+        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge-muted px-4 py-3',
         local.class
       )}
       data-view-sidebar-header=""
@@ -51,7 +51,10 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       {...rest}
-      class={cn('min-h-0 min-w-0 flex-1 overflow-auto px-4 pb-5', local.class)}
+      class={cn(
+        'min-h-0 min-w-0 flex-1 overflow-auto px-1.5 pb-5',
+        local.class
+      )}
       data-view-sidebar-content=""
     >
       {local.children}
@@ -62,7 +65,7 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
 function Nav(props: JSX.HTMLAttributes<HTMLElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   return (
-    <nav {...rest} class={cn('flex min-w-0 flex-col gap-0.5', local.class)}>
+    <nav {...rest} class={cn('flex min-w-0 flex-col gap-1', local.class)}>
       {local.children}
     </nav>
   );
@@ -87,11 +90,27 @@ function Item(props: NavRowProps) {
       active={local.active}
       aria-current={ariaCurrent()}
       class={cn(
-        'h-9 gap-2.5 rounded-xl px-3 py-2 text-sm font-medium text-ink-muted transition-none not-disabled:hover:bg-hover not-disabled:hover:text-ink',
+        'h-8 gap-2 rounded-xl border-0 px-2.5 py-0 text-sm font-normal text-ink-muted transition-none not-disabled:hover:bg-hover not-disabled:hover:text-ink touch:h-11',
         local.active && 'bg-active text-ink not-disabled:hover:bg-active',
         local.class
       )}
     />
+  );
+}
+
+function Icon(props: JSX.HTMLAttributes<HTMLSpanElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+  return (
+    <span
+      {...rest}
+      aria-hidden="true"
+      class={cn(
+        'flex size-5 shrink-0 items-center justify-center',
+        local.class
+      )}
+    >
+      {local.children}
+    </span>
   );
 }
 
@@ -102,4 +121,5 @@ export const ViewSidebar = Object.assign(Root, {
   Content,
   Nav,
   Item,
+  Icon,
 });

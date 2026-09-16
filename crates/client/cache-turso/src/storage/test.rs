@@ -1,4 +1,6 @@
 use super::*;
+
+mod predicate_cost;
 use cache_core::normalize::RecordUpdates;
 use pollster::block_on;
 use std::sync::atomic::{AtomicU8, Ordering};

@@ -21,7 +21,7 @@ function Trigger(props: ComponentProps<typeof Collapsible.Trigger>) {
     <Collapsible.Trigger
       {...rest}
       class={cn(
-        'group flex h-9 w-full min-w-0 items-center gap-2.5 rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-muted outline-none hover:text-ink focus-visible:ring-2 focus-visible:ring-accent/30',
+        'group flex h-9 w-full min-w-0 items-center gap-1 rounded-xl px-3 py-2 text-left text-sm font-medium text-ink-extra-muted outline-none hover:text-ink-muted',
         local.class
       )}
     >
@@ -37,13 +37,13 @@ function Indicator(props: JSX.HTMLAttributes<HTMLSpanElement>) {
       {...rest}
       aria-hidden="true"
       class={cn(
-        'ml-auto flex size-4 shrink-0 items-center justify-center text-ink-extra-muted transition-transform group-data-expanded:rotate-90',
+        'flex size-4 shrink-0 items-center justify-center text-ink-extra-muted opacity-0 transition-[opacity,transform] group-hover:opacity-100 group-focus-visible:opacity-100 group-data-closed:opacity-100 group-data-expanded:rotate-90',
         local.class
       )}
     >
       <Show
         when={local.children}
-        fallback={<CaretDownIcon class="size-3 -rotate-90" />}
+        fallback={<CaretDownIcon class="size-2.5 -rotate-90" />}
       >
         {local.children}
       </Show>

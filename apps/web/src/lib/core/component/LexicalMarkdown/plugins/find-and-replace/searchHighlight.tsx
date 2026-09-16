@@ -1,10 +1,9 @@
-import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
-import { mdStore } from '@block-md/signal/markdownBlockData';
 import { mergeRegister } from '@lexical/utils';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
-import { createEffect, For } from 'solid-js';
+import { createEffect, For, useContext } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import {
   autoRegister,
   lazyRegister,
@@ -33,13 +32,20 @@ function registerEventListener(
   return () => target.removeEventListener(type, listener);
 }
 
-export function SearchHighlight({
-  anchorElem = document.body,
-}: {
+type SearchHighlightItem = {
+  style: FloatingStyle;
+  idx: number | undefined;
+};
+
+export function SearchHighlight(props: {
   anchorElem?: HTMLElement;
+  listOffset: NodekeyOffset[];
+  onStylesChange: (styles: SearchHighlightItem[]) => void;
+  onMatchesChange: (matches: number) => void;
 }): null {
-  const mdData = mdStore.get;
-  const editor = () => mdData.editor;
+  const lexicalWrapper = useContext(LexicalWrapperContext);
+  const editor = () => lexicalWrapper?.editor;
+  const anchorElem = () => props.anchorElem ?? document.body;
   let stateListOffsetRef: NodekeyOffset[] = [];
   let animationFrame: number | undefined;
 
@@ -60,7 +66,7 @@ export function SearchHighlight({
           [...rects].map((rect) => {
             const newStyle = getFloatingSearchHighlightPosition(
               rect,
-              anchorElem
+              anchorElem()
             );
             const styleWidth = newStyle.width;
             if (
@@ -76,8 +82,8 @@ export function SearchHighlight({
         }
       });
 
-      FindAndReplaceStore.set('styles', newStyles);
-      FindAndReplaceStore.set('matches', matches);
+      props.onStylesChange(newStyles);
+      props.onMatchesChange(matches);
     }
   );
 
@@ -98,7 +104,7 @@ export function SearchHighlight({
   });
 
   createEffect(() => {
-    stateListOffsetRef = FindAndReplaceStore.get.listOffset;
+    stateListOffsetRef = props.listOffset;
     update();
   });
 
@@ -120,7 +126,7 @@ export function SearchHighlight({
   );
 
   autoRegister(
-    registerEventListener(anchorElem.parentElement, 'scroll', update),
+    registerEventListener(anchorElem().parentElement, 'scroll', update),
     () => {
       if (animationFrame !== undefined) {
         cancelAnimationFrame(animationFrame);
@@ -131,18 +137,20 @@ export function SearchHighlight({
   return null;
 }
 
-export function FloatingSearchHighlight(props: { anchorElem?: HTMLElement }) {
+export function FloatingSearchHighlight(props: {
+  anchorElem?: HTMLElement;
+  styles: SearchHighlightItem[];
+  currentMatch: number;
+}) {
   return (
     <Portal mount={props.anchorElem}>
-      <For each={FindAndReplaceStore.get.styles}>
+      <For each={props.styles}>
         {(item) => (
           <div
             style={item.style}
             class={cn(
               'z-10 m-0 text-transparent h-4.5 absolute top-0 left-0 opacity-50 pointer-events-none',
-              item.idx === FindAndReplaceStore.get.currentMatch + 1
-                ? 'bg-accent'
-                : 'bg-accent/50'
+              item.idx === props.currentMatch + 1 ? 'bg-accent' : 'bg-accent/50'
             )}
           />
         )}

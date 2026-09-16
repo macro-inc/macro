@@ -28,7 +28,8 @@ check *ARGS:
     if [ -z "$changed" ]; then echo "no changed files — nothing to check"; exit 0; fi
 
     rs=$(grep -E '^(crates|services|tooling)/.*\.rs$' <<<"$changed" || true)
-    js=$(grep -E '^(apps/web|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service))/.*\.(ts|tsx)$' <<<"$changed" || true)
+    # Match packages/sdk/biome.jsonc: preserve generator output verbatim.
+    js=$(grep -E '^(apps/web|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service))/.*\.(ts|tsx)$' <<<"$changed" | grep -v '^packages/sdk/generated/' || true)
     sg=$(grep -E '^(apps|crates|packages|services|tooling)/.*\.(rs|ts|tsx)$' <<<"$changed" || true)
 
     fail=0

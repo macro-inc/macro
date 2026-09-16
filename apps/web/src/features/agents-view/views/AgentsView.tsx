@@ -8,6 +8,7 @@ import { ConnectedAccounts } from '@app/features/settings/ConnectedAccounts';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ChatInputProvider } from '@core/component/AI/context';
@@ -53,12 +54,17 @@ function LoadingComposer() {
 
 function AgentsWorkspace() {
   const panel = useSplitPanelOrThrow();
+  const layout = useSplitLayout();
+
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
+
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
+
   const [page, setPage] = createSignal<AgentsPage>('new');
   const [selected, setSelected] = createSignal<SelectedConversation>();
   const [search, setSearch] = createSignal('');
+
   const query = useSoupItemsQuery(
     () => {
       const ownerId = userId();
@@ -76,6 +82,7 @@ function AgentsWorkspace() {
     },
     () => ({ enabled: Boolean(userId()) })
   );
+
   const conversations = () =>
     selectRecentAgentConversations(
       query.isSuccess ? query.data : [],
@@ -90,7 +97,21 @@ function AgentsWorkspace() {
     setPage(next);
   };
 
-  const openConversation = (conversation: AgentConversationTarget) => {
+  const openConversation = (
+    conversation: AgentConversationTarget,
+    event?: MouseEvent
+  ) => {
+    if (event?.shiftKey) {
+      layout.openWithSplit(
+        {
+          type: conversation.type === 'agent_session' ? 'agent' : 'chat',
+          id: conversation.id,
+        },
+        { preferNewSplit: true, referredFrom: 'agents' }
+      );
+      return;
+    }
+
     setPage('new');
     setSelected({
       conversation: { id: conversation.id, type: conversation.type },
@@ -156,7 +177,11 @@ function AgentsWorkspace() {
               keyed
               fallback={
                 <>
-                  <ViewShell.TopBar>{PAGE_TITLES[page()]}</ViewShell.TopBar>
+                  <ViewShell.TopBar>
+                    <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
+                      {PAGE_TITLES[page()]}
+                    </h1>
+                  </ViewShell.TopBar>
                   <div class="min-h-0 flex-1">
                     <Suspense fallback={<LoadingComposer />}>
                       <Switch>

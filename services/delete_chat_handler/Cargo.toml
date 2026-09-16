@@ -10,9 +10,14 @@ aws_lambda_events = { workspace = true, features = ["sqs"] }
 lambda_runtime = { workspace = true }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env_var = { path = "../../crates/macro_env_var" }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+tokio = { workspace = true }
 

@@ -59,14 +59,14 @@ export const EmailDateSelector: VoidComponent<EmailDateSelectorProps> = (
                     : 'Schedule this email'
                 }
               >
-                <Button size="icon-sm" disabled={props.disabled}>
+                <Button size="icon-composer" disabled={props.disabled}>
                   <ClockIcon class={state.selectedDate ? 'text-accent' : ''} />
                 </Button>
               </Tooltip>
             }
           >
             <Button
-              size="icon-sm"
+              size="icon-composer"
               disabled={props.disabled}
               class="size-auto gap-1 bg-accent/20 text-accent hover:bg-accent/15! hover:text-accent!"
             >

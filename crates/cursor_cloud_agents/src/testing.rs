@@ -3,11 +3,12 @@
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::NativeRecord;
 use crate::domain::model::{
-    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunListing,
-    RunOutcome,
+    ConversationLine, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
+    RunListing, RunOutcome,
 };
 use crate::domain::ports::{
-    CursorAgents, RepositoryChooser, RunStream, SessionIntent, SessionNotifier,
+    ConnectedStream, CursorAgents, RepositoryChooser, RunStream, SessionIntent, SessionNotifier,
+    StreamConnectError,
 };
 use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
@@ -115,6 +116,27 @@ impl ScriptSender {
     pub fn send(&self, event: CursorEvent) -> Result<(), mpsc::error::SendError<NativeRecord>> {
         self.0.send(raw_record(event))
     }
+
+    /// Enqueue an already-built native record, ids and all.
+    pub fn send_record(
+        &self,
+        record: NativeRecord,
+    ) -> Result<(), mpsc::error::SendError<NativeRecord>> {
+        self.0.send(record)
+    }
+
+    /// Enqueue an event carrying a provider event id, the way Cursor stamps
+    /// the records a resume position can point at.
+    pub fn send_with_id(
+        &self,
+        event: CursorEvent,
+        id: &str,
+    ) -> Result<(), mpsc::error::SendError<NativeRecord>> {
+        self.0.send(NativeRecord {
+            id: Some(id.to_owned()),
+            ..raw_record(event)
+        })
+    }
 }
 
 /// What a [`FakeCursor`] was asked to do.
@@ -134,6 +156,8 @@ pub enum CursorCall {
     CancelRun(CursorAgentId, CursorRunId),
     /// `run_result(agent, run)`.
     RunResult(CursorAgentId, CursorRunId),
+    /// `conversation(agent)`.
+    Conversation(CursorAgentId),
 }
 
 /// A scripted Cursor: hands out ids, records calls, and streams whatever the
@@ -148,12 +172,17 @@ pub struct FakeCursor {
 struct FakeCursorState {
     calls: Vec<CursorCall>,
     next_run: u64,
-    /// The receiver the next `raw_stream()` call will drain.
-    streams: Vec<mpsc::UnboundedReceiver<NativeRecord>>,
+    /// What the next `raw_stream()` calls answer with, consumed in order.
+    streams: Vec<ScriptedStream>,
+    /// The resume position every `raw_stream()` call received, in order.
+    resume_positions: Vec<Option<String>>,
+    /// The retention window every connected stream reports.
+    retention_seconds: Option<u64>,
     /// Answers for `run_result`, consumed in order.
     run_results: Vec<RunOutcome>,
     /// The answer every `list_runs` call gets.
     run_listings: Vec<RunListing>,
+    conversation: Vec<ConversationLine>,
     /// Errors the next `create_run` calls answer with, consumed in order.
     create_run_errors: Vec<String>,
     /// Held by the next create call until the test lets it finish.
@@ -182,12 +211,49 @@ impl FakeCursor {
 
     /// Queue original native records, including recorded wire fixtures.
     pub fn script_raw_stream(&self) -> mpsc::UnboundedSender<NativeRecord> {
+        self.queue_stream(None)
+    }
+
+    /// Queue a stream that dies with `failure` once its sender is dropped —
+    /// the mid-run transport break, after whatever records were sent first.
+    pub fn script_stream_failing_with(&self, failure: &str) -> ScriptSender {
+        ScriptSender(self.queue_stream(Some(failure.to_owned())))
+    }
+
+    /// Queue a connect that fails instead of producing a stream.
+    pub fn script_stream_connect_error(&self, error: StreamConnectError) {
+        self.inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .streams
+            .push(ScriptedStream::ConnectError(error));
+    }
+
+    /// Report `seconds` as the retention window on every connected stream.
+    pub fn script_stream_retention(&self, seconds: u64) {
+        self.inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .retention_seconds = Some(seconds);
+    }
+
+    /// The resume position each `raw_stream()` call was given, in order.
+    #[must_use]
+    pub fn resume_positions(&self) -> Vec<Option<String>> {
+        self.inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .resume_positions
+            .clone()
+    }
+
+    fn queue_stream(&self, failure: Option<String>) -> mpsc::UnboundedSender<NativeRecord> {
         let (sender, receiver) = mpsc::unbounded_channel();
         self.inner
             .lock()
             .expect("fake cursor poisoned")
             .streams
-            .push(receiver);
+            .push(ScriptedStream::Records { receiver, failure });
         sender
     }
 
@@ -243,6 +309,15 @@ impl FakeCursor {
     /// Set the models `list_models` answers with.
     pub fn script_models(&self, models: Vec<CursorModel>) {
         self.inner.lock().expect("fake cursor poisoned").models = models;
+    }
+
+    /// Set the agent's run history, newest first, for `list_runs`.
+    /// What `conversation()` answers with.
+    pub fn script_conversation(&self, lines: Vec<ConversationLine>) {
+        self.inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .conversation = lines;
     }
 
     /// Set the agent's run history, newest first, for `list_runs`.
@@ -427,6 +502,32 @@ impl CursorAgents for FakeCursor {
             .run_listings
             .clone())
     }
+
+    async fn conversation(
+        &self,
+        agent: &CursorAgentId,
+    ) -> Result<Vec<ConversationLine>, rootcause::Report> {
+        self.record(CursorCall::Conversation(agent.clone()));
+        Ok(self
+            .inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .conversation
+            .clone())
+    }
+}
+
+/// What one scripted `raw_stream()` call answers with.
+#[derive(Debug)]
+enum ScriptedStream {
+    /// Records the test pushes, optionally ending in a transport failure once
+    /// the sender is dropped.
+    Records {
+        receiver: mpsc::UnboundedReceiver<NativeRecord>,
+        failure: Option<String>,
+    },
+    /// A connect that never produces a stream.
+    ConnectError(StreamConnectError),
 }
 
 impl RunStream for FakeCursor {
@@ -434,18 +535,41 @@ impl RunStream for FakeCursor {
         &self,
         _agent: &CursorAgentId,
         _run: &CursorRunId,
-    ) -> Result<impl Stream<Item = Result<NativeRecord, rootcause::Report>> + Send, rootcause::Report>
-    {
-        let receiver = {
+        resume_from: Option<&str>,
+    ) -> Result<
+        ConnectedStream<impl Stream<Item = Result<NativeRecord, rootcause::Report>> + Send>,
+        StreamConnectError,
+    > {
+        let (receiver, failure, retention_seconds) = {
             let mut state = self.inner.lock().expect("fake cursor poisoned");
+            state.resume_positions.push(resume_from.map(str::to_owned));
             if state.streams.is_empty() {
-                return Err(rootcause::report!("no scripted stream queued"));
+                return Err(StreamConnectError::Other(rootcause::report!(
+                    "no scripted stream queued"
+                )));
             }
-            state.streams.remove(0)
+            let retention_seconds = state.retention_seconds;
+            match state.streams.remove(0) {
+                ScriptedStream::ConnectError(error) => return Err(error),
+                ScriptedStream::Records { receiver, failure } => {
+                    (receiver, failure, retention_seconds)
+                }
+            }
         };
-        Ok(futures::stream::unfold(receiver, |mut receiver| async {
-            receiver.recv().await.map(|event| (Ok(event), receiver))
-        }))
+        let records =
+            futures::stream::unfold((receiver, failure), |(mut receiver, failure)| async move {
+                match receiver.recv().await {
+                    Some(event) => Some((Ok(event), (receiver, failure))),
+                    // The channel closing is the connection closing: a
+                    // scripted failure is what the transport says as it goes.
+                    None => failure
+                        .map(|failure| (Err(rootcause::report!("{failure}")), (receiver, None))),
+                }
+            });
+        Ok(ConnectedStream {
+            records,
+            retention_seconds,
+        })
     }
 }
 

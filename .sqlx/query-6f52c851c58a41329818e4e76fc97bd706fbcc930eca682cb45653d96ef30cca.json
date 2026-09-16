@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO initiative_member (initiative_id, user_id)\n        SELECT $1, UNNEST($2::text[])\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6f52c851c58a41329818e4e76fc97bd706fbcc930eca682cb45653d96ef30cca"
+}

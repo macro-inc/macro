@@ -9,8 +9,7 @@ export function SidebarUnreadDot(props: { active?: boolean }) {
       data-sidebar-unread-dot
       class={cn(
         'pointer-events-none absolute right-1 top-1 rounded-full ring-2 ring-surface',
-        'transition-[opacity,transform] duration-150 ease-out motion-reduce:transition-none',
-        props.active ? 'scale-100 opacity-100' : 'scale-75 opacity-0'
+        props.active ? 'opacity-100' : 'opacity-0'
       )}
     >
       <UnreadIndicator active class="size-1.5" />

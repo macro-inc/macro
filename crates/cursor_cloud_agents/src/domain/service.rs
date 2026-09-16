@@ -42,9 +42,12 @@ use crate::domain::error::SessionError;
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMachine};
 use crate::domain::model::{
-    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunStatus,
+    ConversationLine, ConversationSpeaker, CursorAgentId, CursorModel, CursorRunId, McpServer,
+    ModelChoice, RepoUrl, RunStatus,
 };
-use crate::domain::ports::{CursorAgents, RepositoryChooser, RunStream, SessionNotifier};
+use crate::domain::ports::{
+    CursorAgents, RepositoryChooser, RunStream, SessionNotifier, StreamConnectError,
+};
 use agent_client_protocol::schema::v1::{
     ContentBlock, SessionId, SessionUpdate, StopReason, TextContent,
 };
@@ -72,6 +75,27 @@ const POLL_ERROR_TOLERANCE: usize = 5;
 /// still-running run (quiet tool work) just costs one status read per
 /// interval.
 const STREAM_QUIET_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
+
+/// Backoff before each reconnect of an interrupted stream.
+///
+/// Observed twice in production: the SSE body fails mid-run during a long tool
+/// call while the run itself carries on fine, and everything Cursor says
+/// between the drop and the run's end — tool results, prose, the images it
+/// writes into prose — never reaches the transcript. Resuming from the last
+/// event id gets that back; the ramp keeps a provider that is actually down
+/// from being hammered.
+const STREAM_RECONNECT_DELAYS: [std::time::Duration; 5] = [
+    std::time::Duration::from_millis(500),
+    std::time::Duration::from_secs(1),
+    std::time::Duration::from_secs(2),
+    std::time::Duration::from_secs(4),
+    std::time::Duration::from_secs(8),
+];
+
+/// Reconnects before a run gives up on its stream and polls instead. Counted
+/// since the last reconnect that delivered content, so a long run that drops
+/// repeatedly but recovers each time is never rationed.
+const STREAM_RECONNECT_ATTEMPTS: usize = 5;
 
 /// How long a prompt waits behind a run something else started (the same
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
@@ -110,6 +134,30 @@ async fn sleep_unless_cancelled(
         () = cancel.cancelled() => true,
         () = tokio::time::sleep(duration) => false,
     }
+}
+
+/// The run's content records already durable in this session's journal.
+///
+/// What a stream read from the beginning is reconciled against: every record
+/// here must arrive again, in order, before anything new is appended. Recomputed
+/// rather than captured once, because a reconnect that restarts the stream has
+/// to account for what the interrupted connection already appended.
+fn captured_content(
+    session: &Session,
+    run: &CursorRunId,
+) -> Vec<crate::domain::journal::NativeRecord> {
+    session
+        .state
+        .lock()
+        .expect("session state poisoned")
+        .journal_entries
+        .iter()
+        .filter(|entry| entry.run.as_ref() == Some(run))
+        .filter_map(|entry| match &entry.input {
+            JournalInput::Sse(record) if record.is_content() => Some(record.clone()),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Restate a repository rejection as something the person who prompted can
@@ -636,7 +684,7 @@ where
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
                 // from cursor.com too) instead of failing the prompt.
-                self.create_run_when_free(&agent, prompt, model.as_ref(), &cancel)
+                self.create_run_when_free(&session, &agent, prompt, model.as_ref(), &cancel)
                     .await
                     .map(|run| (agent, run))
             }
@@ -756,12 +804,20 @@ where
             state.active_run = None;
             state.cancelled
         };
-        if let Err(SessionError::Cursor(error)) = &outcome {
+        // Both variants are a turn that stopped without a terminal fact, and
+        // both have to leave that record: a `Rejected` here is the turn giving
+        // up on a run still going, not a prompt refused before it ran.
+        let interrupted = match &outcome {
+            Err(SessionError::Cursor(error)) => Some(error.to_string()),
+            Err(SessionError::Rejected(message)) => Some(message.clone()),
+            _ => None,
+        };
+        if let Some(interrupted) = interrupted {
             self.capture(
                 session_id,
                 &session,
                 Some(&run),
-                JournalInput::Interrupted(error.to_string()),
+                JournalInput::Interrupted(interrupted),
                 true,
             )
             .await?;
@@ -796,8 +852,14 @@ where
         }
         // A cancel that raced the stream's own ending still reports
         // Cancelled: ACP requires it once the client sent `session/cancel`.
+        // `Rejected` included, because giving up on a run still going takes
+        // that variant now — a stop landing near the end of the poll budget
+        // must still answer Cancelled, not "Cursor is still working". Journal
+        // failures stay unmasked by cancellation, as ever.
         match outcome {
-            Ok(_) | Err(SessionError::Cursor(_)) if cancelled => Ok(StopReason::Cancelled),
+            Ok(_) | Err(SessionError::Cursor(_) | SessionError::Rejected(_)) if cancelled => {
+                Ok(StopReason::Cancelled)
+            }
             Ok(stop_reason) => Ok(stop_reason),
             Err(error) => Err(error),
         }
@@ -994,6 +1056,8 @@ where
             cursor.ingest.emit = mode.emit,
             cursor.ingest.strict = mode.strict,
             cursor.ingest.attempt = mode.attempt,
+            cursor.stream.reconnects = tracing::field::Empty,
+            cursor.stream.fell_back_to_poll = tracing::field::Empty,
         ),
         err,
     )]
@@ -1048,120 +1112,280 @@ where
                 status => Err(rootcause::report!("cursor run {run} ended in {status:?}").into()),
             };
         }
-        let captured: Vec<_> = session
-            .state
-            .lock()
-            .expect("session state poisoned")
-            .journal_entries
-            .iter()
-            .filter(|e| e.run.as_ref() == Some(run))
-            .filter_map(|e| match &e.input {
-                JournalInput::Sse(r) if r.is_content() => Some(r.clone()),
-                _ => None,
-            })
-            .collect();
+        let mut captured = captured_content(session, run);
         let mut matched = 0;
         let mut terminal = None;
         let mut saw_content = false;
-        let stream = match self.cursor.raw_stream(agent, run).await {
-            Ok(stream) => Some(stream),
-            Err(error) => {
-                self.capture(
-                    session_id,
-                    session,
-                    Some(run),
-                    JournalInput::TransportError(error.to_string()),
-                    emit,
-                )
-                .await?;
-                None
-            }
-        };
-        if let Some(stream) = stream {
-            pin_mut!(stream);
-            loop {
-                let record = match tokio::time::timeout(STREAM_QUIET_TIMEOUT, stream.next()).await {
-                    Ok(Some(Ok(record))) => record,
-                    Ok(Some(Err(error))) => {
+        // The provider's most recent event id. Opaque: it is handed back
+        // verbatim as a resume position or not used at all.
+        let mut last_event_id: Option<String> = None;
+        // Reconnects since the last one that produced new records.
+        let mut reconnects: u32 = 0;
+        let mut fell_back_to_poll = false;
+        let mut ever_connected = false;
+        let mut resume_from: Option<String> = None;
+        // Cursor rejecting a resume position buys exactly one connect without
+        // one; a second rejection means something is wrong with the run, not
+        // with the id we sent.
+        let mut blind_reconnect_available = true;
+        // The run's latest `status` frame, kept to recognize the sticky copy
+        // Cursor re-sends at the top of every reconnect.
+        let mut last_status: Option<crate::domain::journal::NativeRecord> = None;
+        loop {
+            // The connected stream borrows the position it resumed from, so
+            // the position this iteration sends is its own owned copy.
+            let resuming = resume_from.clone();
+            let interruption = match self
+                .cursor
+                .raw_stream(agent, run, resuming.as_deref())
+                .await
+            {
+                Err(StreamConnectError::InvalidResumePosition(detail))
+                    if blind_reconnect_available && resuming.is_some() =>
+                {
+                    // Reading the run from the top still beats polling: the
+                    // prefix logic below matches what is already captured
+                    // instead of duplicating it. It has to be recomputed
+                    // first, because this ingestion has appended to it.
+                    blind_reconnect_available = false;
+                    tracing::warn!(
+                        cursor.run.id = %run,
+                        cursor.stream.last_event_id = resuming,
+                        cursor.stream.reason = %detail,
+                        "Cursor rejected the stream resume position; reconnecting from the start"
+                    );
+                    resume_from = None;
+                    captured = captured_content(session, run);
+                    matched = 0;
+                    continue;
+                }
+                // Past the retention window there is no stream left to resume,
+                // so the run record is the only remaining account of the run.
+                Err(StreamConnectError::Expired(detail)) => Some((detail, false)),
+                Err(error) => Some((error.to_string(), true)),
+                Ok(connected) => {
+                    let resumed = resuming.is_some();
+                    ever_connected = true;
+                    let retention_seconds = connected.retention_seconds;
+                    let records = connected.records;
+                    pin_mut!(records);
+                    let mut received = 0usize;
+                    let mut received_content = 0usize;
+                    let mut sticky_status_pending = resumed;
+                    let interruption = loop {
+                        let record = match tokio::time::timeout(
+                            STREAM_QUIET_TIMEOUT,
+                            records.next(),
+                        )
+                        .await
+                        {
+                            Ok(Some(Ok(record))) => record,
+                            Ok(Some(Err(error))) => break Some((error.to_string(), true)),
+                            // Cursor closes the stream after `done`, which
+                            // breaks below with an outcome. Reaching here
+                            // without one is a close mid-run.
+                            Ok(None) if terminal.is_some() => break None,
+                            Ok(None) => break Some(("stream closed".to_owned(), true)),
+                            Err(_) if strict => break None,
+                            Err(_) => {
+                                // Quiet streams are checked through the exact same raw
+                                // polling/capture path as disconnected streams.
+                                let status = self
+                                    .poll_once(session_id, session, agent, run, cancel, emit)
+                                    .await?;
+                                if status.is_terminal() {
+                                    terminal = Some(status.status);
+                                    break None;
+                                }
+                                if cancel.is_cancelled() {
+                                    break None;
+                                }
+                                // Cursor heartbeats an open stream, so a
+                                // gap this long on a run that has not
+                                // ended is a connection that stopped
+                                // delivering rather than an agent thinking.
+                                break Some((
+                                    format!(
+                                        "no records for {} seconds",
+                                        STREAM_QUIET_TIMEOUT.as_secs()
+                                    ),
+                                    true,
+                                ));
+                            }
+                        };
+                        if let Some(id) = &record.id {
+                            last_event_id = Some(id.clone());
+                        }
+                        // Cursor re-sends the run's `status` frame, without an
+                        // id, at the top of every reconnect. It is framing, not
+                        // a new fact: journaling it again would put the same
+                        // lifecycle event in the record twice.
+                        if std::mem::take(&mut sticky_status_pending)
+                            && record.id.is_none()
+                            && last_status.as_ref() == Some(&record)
+                        {
+                            continue;
+                        }
+                        if record.event == "status" {
+                            last_status = Some(record.clone());
+                        }
+                        received += 1;
+                        let content = record.is_content();
+                        if content && matched < captured.len() {
+                            if captured[matched] != record {
+                                return Err(rootcause::report!("Cursor stream prefix cannot be reconciled for {run}; refusing incomplete history").into());
+                            }
+                            matched += 1;
+                            if let CursorEvent::Result { status, .. } = record.decode() {
+                                terminal = Some(status);
+                            }
+                            continue;
+                        }
                         self.capture(
                             session_id,
                             session,
                             Some(run),
-                            JournalInput::TransportError(error.to_string()),
+                            JournalInput::Sse(record.clone()),
                             emit,
                         )
                         .await?;
-                        break;
-                    }
-                    Ok(None) => break,
-                    Err(_) if strict => break,
-                    Err(_) => {
-                        // Quiet streams are checked through the exact same raw
-                        // polling/capture path as disconnected streams.
-                        let status = self
-                            .poll_once(session_id, session, agent, run, cancel, emit)
-                            .await?;
-                        if status.is_terminal() {
-                            terminal = Some(status.status);
-                            break;
+                        saw_content |= content;
+                        received_content += usize::from(content);
+                        match record.decode() {
+                            CursorEvent::Error { code, .. }
+                                if code.as_deref() == Some("stream_unavailable")
+                                    && !saw_content
+                                    && attempt < 4 =>
+                            {
+                                if !sleep_unless_cancelled(
+                                    cancel,
+                                    std::time::Duration::from_millis(400),
+                                )
+                                .await
+                                {
+                                    return Box::pin(self.ingest_run(
+                                        session_id,
+                                        session,
+                                        agent,
+                                        run,
+                                        cancel,
+                                        IngestMode {
+                                            attempt: attempt + 1,
+                                            ..mode
+                                        },
+                                    ))
+                                    .await;
+                                }
+                                break None;
+                            }
+                            CursorEvent::Result { status, .. } => terminal = Some(status),
+                            // The stream's own account of the run's lifecycle, and a
+                            // terminal one is a terminal fact even with no `result`
+                            // frame behind it. Observed live: a run whose record
+                            // stayed `RUNNING` with a frozen `updatedAt` announced
+                            // `FINISHED` here and sent no `result` at all, so a turn
+                            // that accepted only `result` waited out its whole poll
+                            // budget against a record that was never going to move.
+                            //
+                            // Not a break: trailing content can still be in flight,
+                            // and `done`, the stream's end, or a quiet gap closes the
+                            // turn now that there is an outcome to close it with.
+                            CursorEvent::Status { status, .. } if status.is_terminal() => {
+                                terminal = Some(status);
+                            }
+                            // Cursor said its piece about this run; a fresh
+                            // connection would only be told the same thing.
+                            CursorEvent::Error { .. } => break None,
+                            CursorEvent::Done => break None,
+                            _ => {}
                         }
-                        if cancel.is_cancelled() {
-                            break;
+                    };
+                    if resumed {
+                        tracing::info!(
+                            cursor.run.id = %run,
+                            cursor.stream.attempt = reconnects,
+                            cursor.stream.last_event_id = last_event_id,
+                            cursor.stream.retention_seconds = retention_seconds,
+                            cursor.stream.resumed_records = received,
+                            "Cursor stream resumed"
+                        );
+                        // A resume that delivered is a working stream again,
+                        // so the next drop gets the full budget rather than
+                        // whatever a much earlier one left over.
+                        if received_content > 0 {
+                            reconnects = 0;
                         }
-                        continue;
                     }
-                };
-                let content = record.is_content();
-                if content && matched < captured.len() {
-                    if captured[matched] != record {
-                        return Err(rootcause::report!("Cursor stream prefix cannot be reconciled for {run}; refusing incomplete history").into());
-                    }
-                    matched += 1;
-                    if let CursorEvent::Result { status, .. } = record.decode() {
-                        terminal = Some(status);
-                    }
-                    continue;
+                    interruption
                 }
+            };
+            let Some((reason, recoverable)) = interruption else {
+                break;
+            };
+            fell_back_to_poll = true;
+            if !ever_connected {
+                // Nothing to resume: the stream never opened, and the client
+                // has already retried an unavailable one on its own.
                 self.capture(
                     session_id,
                     session,
                     Some(run),
-                    JournalInput::Sse(record.clone()),
+                    JournalInput::TransportError(reason.clone()),
                     emit,
                 )
                 .await?;
-                saw_content |= content;
-                match record.decode() {
-                    CursorEvent::Error { code, .. }
-                        if code.as_deref() == Some("stream_unavailable")
-                            && !saw_content
-                            && attempt < 4 =>
-                    {
-                        if !sleep_unless_cancelled(cancel, std::time::Duration::from_millis(400))
-                            .await
-                        {
-                            return Box::pin(self.ingest_run(
-                                session_id,
-                                session,
-                                agent,
-                                run,
-                                cancel,
-                                IngestMode {
-                                    attempt: attempt + 1,
-                                    ..mode
-                                },
-                            ))
-                            .await;
-                        }
-                        break;
-                    }
-                    CursorEvent::Result { status, .. } => terminal = Some(status),
-                    CursorEvent::Error { .. } => break,
-                    CursorEvent::Done => break,
-                    _ => {}
-                }
+                tracing::warn!(
+                    cursor.run.id = %run,
+                    cursor.stream.reason = %reason,
+                    "Cursor stream never connected; polling the run record instead"
+                );
+                break;
             }
+            let attempt = reconnects + 1;
+            self.capture(
+                session_id,
+                session,
+                Some(run),
+                JournalInput::StreamInterrupted {
+                    reason: reason.clone(),
+                    last_event_id: last_event_id.clone(),
+                    attempt,
+                },
+                emit,
+            )
+            .await?;
+            // Hydration verifies the whole captured prefix against a stream it
+            // reads from the beginning, which a resumed stream cannot offer.
+            let resumable = recoverable && !strict && attempt <= STREAM_RECONNECT_ATTEMPTS as u32;
+            if !resumable {
+                tracing::warn!(
+                    cursor.run.id = %run,
+                    cursor.stream.last_event_id = last_event_id,
+                    cursor.stream.attempt = attempt,
+                    cursor.stream.reason = %reason,
+                    "Cursor stream is not resumable; polling the run record instead"
+                );
+                break;
+            }
+            tracing::warn!(
+                cursor.run.id = %run,
+                cursor.stream.last_event_id = last_event_id,
+                cursor.stream.attempt = attempt,
+                cursor.stream.reason = %reason,
+                "Cursor stream interrupted; reconnecting"
+            );
+            let delay = STREAM_RECONNECT_DELAYS
+                [(attempt as usize - 1).min(STREAM_RECONNECT_DELAYS.len() - 1)];
+            if sleep_unless_cancelled(cancel, delay).await {
+                break;
+            }
+            reconnects = attempt;
+            resume_from = last_event_id.clone();
+            fell_back_to_poll = false;
         }
+        let span = tracing::Span::current();
+        span.record("cursor.stream.reconnects", reconnects);
+        span.record("cursor.stream.fell_back_to_poll", fell_back_to_poll);
         if matched < captured.len() && strict {
             return Err(rootcause::report!(
                 "Cursor no longer exposes the captured stream prefix for {run}"
@@ -1205,8 +1429,22 @@ where
                 sleep_unless_cancelled(cancel, POLL_INTERVAL).await;
             }
         }
-        let status = terminal
-            .ok_or_else(|| rootcause::report!("Cursor run {run} did not reach a terminal state"))?;
+        let Some(status) = terminal else {
+            // Not a failure to describe in provider terms: the run is still
+            // going as far as Cursor is concerned, and this turn has simply
+            // run out of patience. The person who prompted gets told that in
+            // their own words; the diagnostics stay in the span.
+            tracing::warn!(
+                %run,
+                attempts = POLL_ATTEMPTS,
+                "gave up waiting; Cursor still reports a non-terminal status"
+            );
+            return Err(SessionError::Rejected(
+                "Cursor has not reported a result for this run, and has stopped saying \
+                 anything about it. Prompting again starts fresh and abandons this run."
+                    .into(),
+            ));
+        };
         if strict
             && !session
                 .state
@@ -1317,11 +1555,13 @@ where
     /// wait behind, not an error. A client cancel abandons the wait.
     async fn create_run_when_free(
         &self,
+        session: &Session,
         agent: &CursorAgentId,
         prompt: &str,
         model: Option<&ModelChoice>,
         cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<CursorRunId, SessionError> {
+        let mut released = false;
         for _ in 0..BUSY_ATTEMPTS {
             if cancel.is_cancelled() {
                 return Err(SessionError::Cursor(
@@ -1334,6 +1574,18 @@ where
             match self.cursor.create_run(agent, prompt, model).await {
                 Ok(run) => return Ok(run),
                 Err(error) if error.to_string().contains("agent_busy") => {
+                    // A run this session already gave up on still holds the
+                    // agent's single run slot, and it is not going to release
+                    // it by itself — waiting out the full budget would only
+                    // fail the prompt slower. Cancelling is terminal on
+                    // Cursor's side, so it frees the agent and gives the
+                    // abandoned run the terminal fact it needs to reconcile.
+                    // Done once: a run that is merely slow, or one driven from
+                    // cursor.com, is still something to wait behind.
+                    if !std::mem::replace(&mut released, true) {
+                        self.release_abandoned_runs(session, agent).await;
+                        continue;
+                    }
                     tracing::info!(%agent, "agent busy (a run is active, possibly from cursor.com); waiting");
                     if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
                         return Err(SessionError::Cursor(
@@ -1355,6 +1607,56 @@ where
             )))
             .into_dynamic(),
         ))
+    }
+
+    /// The runs a turn in this session already stopped waiting for.
+    ///
+    /// A journal fact, not a guess: a run recorded as
+    /// [`JournalInput::Interrupted`] and never reconciled is one a turn gave
+    /// up on. That is the only class of run this service may cancel or
+    /// decline to recover — a run merely still going, including one driven
+    /// from cursor.com, is someone's live conversation.
+    fn abandoned_runs(session: &Session) -> Vec<CursorRunId> {
+        let state = session.state.lock().expect("session state poisoned");
+        let reconciled: std::collections::HashSet<_> = state
+            .journal_entries
+            .iter()
+            .filter(|e| e.input == JournalInput::Reconciled)
+            .filter_map(|e| e.run.clone())
+            .collect();
+        let mut abandoned = Vec::new();
+        for run in state
+            .journal_entries
+            .iter()
+            .filter(|e| matches!(e.input, JournalInput::Interrupted(_)))
+            .filter_map(|e| e.run.as_ref())
+        {
+            if !reconciled.contains(run) && !abandoned.contains(run) {
+                abandoned.push(run.clone());
+            }
+        }
+        abandoned
+    }
+
+    /// Cancel the runs this session abandoned, freeing the agent's run slot.
+    ///
+    /// Cancellation is terminal on Cursor's side, so this both returns the
+    /// agent's single run slot and gives the abandoned run the terminal fact
+    /// it needs before it can ever reconcile.
+    ///
+    /// Best effort. A cancel that fails leaves the caller exactly where it
+    /// was, waiting out the busy agent, so there is nothing here to fail on.
+    async fn release_abandoned_runs(&self, session: &Session, agent: &CursorAgentId) {
+        for run in Self::abandoned_runs(session) {
+            match self.cursor.cancel_run(agent, &run).await {
+                Ok(()) => {
+                    tracing::info!(%agent, %run, "cancelled an abandoned run holding the agent");
+                }
+                Err(error) => {
+                    tracing::warn!(%agent, %run, %error, "could not cancel an abandoned run");
+                }
+            }
+        }
     }
 
     /// Catch up foreign runs through the same journal path as local prompts.
@@ -1397,6 +1699,22 @@ where
             .take_while(|r| Some(&r.id) != last.as_ref())
             .map(|r| r.id.clone())
             .collect();
+        // A run a turn already gave up on, which Cursor still has not ended,
+        // is not recoverable history: there is no terminal fact to reconcile
+        // against, and re-reading it cannot manufacture one. Retrying it here
+        // would fail every later prompt for as long as the run stays
+        // unfinished — which, when the provider wedges a run at `RUNNING`, is
+        // forever. Left pending instead, to be mirrored in once it does end.
+        //
+        // Deliberately not every unfinished run: one still going that no turn
+        // has abandoned — a prompt sent from cursor.com — is exactly what this
+        // backfill exists to stream in, and must still be followed.
+        let abandoned = Self::abandoned_runs(session);
+        let unfinished: std::collections::HashSet<_> = listings
+            .iter()
+            .filter(|r| !r.status.is_terminal() && abandoned.contains(&r.id))
+            .map(|r| r.id.clone())
+            .collect();
         let mut runs = Vec::new();
         // A pending run omitted by the provider listing still has to recover.
         for run in &pending {
@@ -1411,6 +1729,7 @@ where
                 runs.push(listing.id);
             }
         }
+        runs.retain(|run| !unfinished.contains(run));
         let mirrored = !runs.is_empty();
         for run in &runs {
             if !reconciled.contains(run) {
@@ -1442,7 +1761,9 @@ where
         if mirrored {
             let notify = {
                 let mut state = session.state.lock().expect("session state poisoned");
-                if let Err(error) = history_projection(&state.journal_entries) {
+                if let Err(error) =
+                    history_projection(&state.journal_entries, HistoryGap::DeclinesReplacement)
+                {
                     tracing::warn!(error = ?error, %session_id, "captured recovery cannot replace history yet");
                     return Ok(mirrored);
                 }
@@ -1476,7 +1797,17 @@ where
         let entries = self.journal.read(id).await?;
         let mut machine = ReplayMachine::default();
         for entry in &entries {
-            project_entry(&mut machine, entry, &entries)?;
+            // An entry that will not project is skipped rather than failed.
+            // It is already durable, so failing here fails identically every
+            // time this session is read, and a session whose journal cannot
+            // be read cannot be loaded or prompted ever again.
+            if let Err(error) = project_entry(&mut machine, entry, &entries) {
+                tracing::warn!(
+                    %error,
+                    sequence = entry.sequence,
+                    "skipping a Cursor journal entry that will not project"
+                );
+            }
         }
         let fresh = {
             let mut state = session.state.lock().expect("session state poisoned");
@@ -1613,6 +1944,88 @@ where
         Ok(())
     }
 
+    /// Fill in prompts the journal never captured, from Cursor's own record.
+    ///
+    /// A run driven from cursor.com and mirrored here after its stream aged
+    /// out has an answer and no question: the stream is the only thing that
+    /// carries the opening message, and the run record left behind does not.
+    /// The conversation endpoint outlives both, so it is asked once per load
+    /// that has a gap, and what it recovers is journaled - a prompt written
+    /// exactly as a live one is, so it projects into place rather than onto
+    /// the end of the transcript, and so the next load needs no lookup.
+    ///
+    /// Best effort throughout. Every failure here leaves the gap exactly as
+    /// it was, which the load already serves.
+    async fn recover_lost_prompts(
+        &self,
+        id: &SessionId,
+        session: &Session,
+        agent: Option<&CursorAgentId>,
+    ) {
+        let Some(agent) = agent else {
+            return;
+        };
+        let lost = {
+            let state = session.state.lock().expect("session state poisoned");
+            runs_without_prompts(&state.journal_entries, &state.machine)
+                .into_iter()
+                .filter_map(|run| {
+                    state
+                        .machine
+                        .answer(run)
+                        .filter(|answer| !answer.is_empty())
+                        .map(|answer| (run.clone(), answer.to_owned()))
+                })
+                .collect::<Vec<_>>()
+        };
+        if lost.is_empty() {
+            return;
+        }
+        let conversation = match self.cursor.conversation(agent).await {
+            Ok(conversation) => conversation,
+            Err(error) => {
+                tracing::warn!(%error, %agent, "could not read the Cursor conversation");
+                return;
+            }
+        };
+        for (run, answer) in lost {
+            let Some(prompt) = prompt_for_answer(&conversation, &answer) else {
+                tracing::warn!(%run, "no Cursor conversation line names this run's prompt");
+                continue;
+            };
+            let blocks = vec![ContentBlock::Text(TextContent::new(prompt))];
+            if let Err(error) = self
+                .capture(id, session, None, JournalInput::Prompt(blocks), false)
+                .await
+            {
+                tracing::warn!(%error, %run, "could not journal a recovered Cursor prompt");
+                return;
+            }
+            let sequence = session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .journal_entries
+                .last()
+                .expect("captured prompt")
+                .sequence;
+            if let Err(error) = self
+                .capture(
+                    id,
+                    session,
+                    Some(&run),
+                    JournalInput::PromptAccepted(sequence),
+                    false,
+                )
+                .await
+            {
+                tracing::warn!(%error, %run, "could not link a recovered Cursor prompt");
+                return;
+            }
+            tracing::info!(%run, "recovered a lost Cursor prompt from the conversation");
+        }
+    }
+
     /// Reconstruct the entire session before allowing a successful load reply.
     /// The returned guard serializes the reply itself with every live writer.
     ///
@@ -1681,13 +2094,21 @@ where
             self.capture(id, &session, None, JournalInput::HistoryComplete, false)
                 .await?;
         }
+        // Before projecting, not after: a prompt recovered here closes the gap
+        // rather than merely surviving it, and lands in the transcript this
+        // load is about to publish.
+        self.recover_lost_prompts(id, &session, agent.as_ref())
+            .await;
         let entries = session
             .state
             .lock()
             .expect("session state poisoned")
             .journal_entries
             .clone();
-        let (machine, updates) = history_projection(&entries)?;
+        // A gap here cannot be allowed to fail the load. The runtime reattaches
+        // to a disconnected session by loading it, so a load that refuses is
+        // also every future prompt refused as disconnected, with no way back.
+        let (machine, updates) = history_projection(&entries, HistoryGap::IsServedAnyway)?;
         if let Some(url) = machine.pull_request_url() {
             self.notifier.set_pull_request(id, url).await?;
         }
@@ -1855,8 +2276,74 @@ type HistoryUpdates = Vec<(
     Option<agent_runtime_protocol::domain::turn::TurnOutcome>,
 )>;
 
+/// Runs the journal holds frames for but no opening prompt.
+///
+/// The same condition [`history_projection`] reports a gap on, named once so
+/// recovery looks for exactly what the projection would complain about.
+fn runs_without_prompts<'a>(
+    entries: &'a [JournalEntry],
+    machine: &ReplayMachine,
+) -> Vec<&'a CursorRunId> {
+    let mut missing: Vec<&CursorRunId> = Vec::new();
+    for run in entries.iter().filter_map(|e| e.run.as_ref()) {
+        if missing.contains(&run) || machine.has_prompt(run) {
+            continue;
+        }
+        let accepted_only = entries
+            .iter()
+            .filter(|e| e.run.as_ref() == Some(run))
+            .all(|e| matches!(e.input, JournalInput::PromptAccepted(_)));
+        if !accepted_only {
+            missing.push(run);
+        }
+    }
+    missing
+}
+
+/// The prompt that produced `answer`, if the conversation says so plainly.
+///
+/// Anchored on the answer the journal already holds rather than on position:
+/// Cursor's conversation carries no run ids, and its turn numbering does not
+/// track the run list once runs are cancelled or fail. An answer that appears
+/// more than once names no single turn - an agent that replied the same thing
+/// twice is ordinary - so an ambiguous match yields nothing rather than a
+/// guess. Attaching the wrong question to an answer is worse than leaving the
+/// question blank, which is all a gap costs now.
+fn prompt_for_answer<'a>(conversation: &'a [ConversationLine], answer: &str) -> Option<&'a str> {
+    let mut spoken = conversation
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.speaker == ConversationSpeaker::Agent && line.text == answer);
+    let (at, _) = spoken.next()?;
+    if spoken.next().is_some() {
+        return None;
+    }
+    conversation[..at]
+        .iter()
+        .rev()
+        .find(|line| line.speaker == ConversationSpeaker::User)
+        .map(|line| line.text.as_str())
+}
+
+/// What a gap in the recovered history costs the caller asking for it.
+///
+/// Replacing a session's conversation is a choice, and a candidate missing a
+/// turn's opening is worse than the history already on screen, so a gap
+/// declines the replacement and what is there stands.
+///
+/// Loading is not a choice. The journal is the only history there is, and a
+/// load that refuses leaves a session that cannot be opened and cannot be
+/// prompted - the runtime reattaches by loading, so every later prompt is
+/// refused as disconnected too. A gap is reported and the rest is served.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum HistoryGap {
+    DeclinesReplacement,
+    IsServedAnyway,
+}
+
 fn history_projection(
     entries: &[JournalEntry],
+    gap: HistoryGap,
 ) -> Result<(ReplayMachine, HistoryUpdates), SessionError> {
     for entry in entries {
         if entry.run.is_none()
@@ -1865,6 +2352,13 @@ fn history_projection(
                 matches!(e.input, JournalInput::PromptAccepted(n) | JournalInput::PromptAborted(n) if n == entry.sequence)
             })
         {
+            if gap == HistoryGap::IsServedAnyway {
+                tracing::warn!(
+                    sequence = entry.sequence,
+                    "serving Cursor history whose prompt was never resolved"
+                );
+                break;
+            }
             return Err(rootcause::report!("Cursor prompt acceptance is unknown; refusing incomplete replacement history").into());
         }
     }
@@ -1917,6 +2411,13 @@ fn history_projection(
             .filter(|e| e.run.as_ref() == Some(run))
             .all(|e| matches!(e.input, JournalInput::PromptAccepted(_)));
         if !machine.has_prompt(run) && !accepted_only {
+            if gap == HistoryGap::IsServedAnyway {
+                // The run's own frames are already projected; only the line
+                // that opened it is missing. Serving the turn without it
+                // beats serving nothing, forever.
+                tracing::warn!(%run, "serving Cursor history without a run's original prompt");
+                continue;
+            }
             return Err(rootcause::report!(
                 "Cursor original prompt unavailable for {run}; preserving existing history"
             )

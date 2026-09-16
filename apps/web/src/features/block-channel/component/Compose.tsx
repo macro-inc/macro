@@ -19,7 +19,8 @@ import {
   StaticSplitLabel,
 } from '@components/app/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
-import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -43,6 +44,7 @@ import { ComposerSurface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
 export function ChannelCompose() {
+  const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [channelName, setChannelName] = createSignal<string>('');
 
   const { users: destinationOptions } = useCombinedRecipients();
@@ -196,6 +198,17 @@ export function ChannelCompose() {
     },
   });
   clearComposer = () => markdownEditor.controls.clear();
+  const { isCompact: oneLineInput } = createComposerLayout(
+    markdownEditor.buildHandle().lexical,
+    {
+      container: layout,
+      mode: () =>
+        inputState.view().showFormatRibbon ||
+        inputState.view().attachments?.length
+          ? 'expanded'
+          : 'auto',
+    }
+  );
 
   const placeholder = createMemo(() => {
     const name = channelName();
@@ -276,55 +289,53 @@ export function ChannelCompose() {
                     onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
                     onDragEnd={() => inputState.setIsDraggedOver(false)}
                   >
-                    <Input.Layout>
+                    <Input.Layout ref={setLayout} oneLineInput={oneLineInput()}>
                       <Input.DropOverlay />
-                      <Input.FormatRibbon>
-                        <FormatButtons
-                          selectionState={() => markdownEditor.selection}
-                          onInlineFormat={(format) =>
-                            applyInlineFormat(markdownEditor.lexical, format)
-                          }
-                          onNodeFormat={(format) =>
-                            applyNodeFormat(markdownEditor.lexical, format)
-                          }
-                        />
-                      </Input.FormatRibbon>
-                      <Input.EditorShell
-                        ref={setScrollContainer}
-                        on:click={(event) => {
-                          if (!isTouchDevice()) {
-                            event.stopPropagation();
-                            markdownEditor.controls.focus();
-                          }
-                        }}
-                      >
-                        <Input.Editor>
-                          <MarkdownShell
-                            config={markdownEditor}
-                            placeholder={placeholder()}
-                            autofocus={false}
-                            class="text-sm"
+                      <Input.Layout.Body>
+                        <Input.FormatRibbon>
+                          <FormatButtons
+                            selectionState={() => markdownEditor.selection}
+                            onInlineFormat={(format) =>
+                              applyInlineFormat(markdownEditor.lexical, format)
+                            }
+                            onNodeFormat={(format) =>
+                              applyNodeFormat(markdownEditor.lexical, format)
+                            }
                           />
-                        </Input.Editor>
-                      </Input.EditorShell>
-                      <Input.Attachments kind="media" />
-                      <Input.Attachments kind="document" />
-                      <Input.Footer>
-                        <Input.Actions>
-                          <Input.Actions.Left>
-                            <Show
-                              when={!isPlatform('ios')}
-                              fallback={<Input.AttachNativeMediaAction />}
-                            >
-                              <Input.AttachFilesAction />
-                            </Show>
-                            <Input.ToggleFormatAction />
-                          </Input.Actions.Left>
-                          <Input.Actions.Right>
-                            <Input.SendAction />
-                          </Input.Actions.Right>
-                        </Input.Actions>
-                      </Input.Footer>
+                        </Input.FormatRibbon>
+                        <Input.Layout.Editor
+                          ref={setScrollContainer}
+                          on:click={(event) => {
+                            if (!isTouchDevice()) {
+                              event.stopPropagation();
+                              markdownEditor.controls.focus();
+                            }
+                          }}
+                        >
+                          <Input.Editor>
+                            <ComposerEditor
+                              config={markdownEditor}
+                              placeholder={placeholder()}
+                              autofocus={false}
+                              class="text-base"
+                            />
+                          </Input.Editor>
+                        </Input.Layout.Editor>
+                        <Input.Attachments kind="media" />
+                        <Input.Attachments kind="document" />
+                      </Input.Layout.Body>
+
+                      <Input.Layout.ActionsLeft>
+                        <Show
+                          when={!isPlatform('ios')}
+                          fallback={<Input.AttachNativeMediaAction />}
+                        >
+                          <Input.AttachFilesAction />
+                        </Show>
+                      </Input.Layout.ActionsLeft>
+                      <Input.Layout.ActionsRight>
+                        <Input.SendAction />
+                      </Input.Layout.ActionsRight>
                     </Input.Layout>
                   </Input.DropZone>
                 </ComposerSurface>
