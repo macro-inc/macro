@@ -39,47 +39,83 @@ that can be swapped without a code deploy.
 | `add_alias.ts`               | Idempotent additive alias (no reindex).                                |
 | `reindex_with_alias_swap.ts` | Reindex + atomic swap (handles `remove_index` for bare physical case). |
 | `create_indices.ts`          | Creates every versioned index + alias, and converges existing mappings. |
-| `migrate_agent_sessions.ts` | Repairs agent-session indexing for future events, without copying or backfilling data. |
 
 All migration scripts default to `DRY_RUN=true`; pass `DRY_RUN=false` to apply.
 
-## Repair agent-session indexing without historical data
+## Deployment prerequisite
 
-Use `migrate_agent_sessions.ts` when `agent_sessions` was auto-created with
-incorrect mappings and only future session events need to be searchable. It
-uses the canonical schema in `create_indices.ts` to create `agent_sessions_v1`,
-then atomically replaces the bare `agent_sessions` index with a write alias.
-**Applying this deletes the bare index and its old search data.** Session data
-in Postgres is untouched. No reindex, backfill, or event replay is performed.
+Release deployments and single-service search-processing deployments run the
+`provision-search-indices` action on the VPC-connected `db-migrator` runner. It
+applies the canonical declaration and runs both verifiers before the consumer
+is deployed. The gate currently selects `INDEX=agent_sessions`; other index
+migrations remain explicit operations. All three helpers accept the same `INDEX`
+filter. Add required aliases to the deployment gate when introducing another
+consumer/index dependency.
 
-From this directory, configure `OPENSEARCH_URL`, `OPENSEARCH_USERNAME`, and
-`OPENSEARCH_PASSWORD` for the intended cluster (use a VPC connection/tunnel for
-production), then run:
+Creation and mapping conflicts fail with a nonzero exit status. Verification
+checks mapping parameters (including join relations, field aliases, and dates),
+as well as the alias target and write eligibility. Provisioning never swaps an
+existing alias or deletes an index. An incompatible live state blocks deployment
+until an operator repairs it.
+
+Normal agent-session writes require an alias at the OpenSearch API. Explicit
+backfill `index_override` requests may still target a physical index. This guard
+prevents accidental index creation; it does not provision a schema or recover
+events already dropped by the consumer.
+
+## One-time repair: incorrectly auto-created agent-session index
+
+This is an operator procedure, separate from deployment. Confirm that
+`agent_sessions` is a bare physical index with the incorrect mapping, not an
+existing alias. If it is already an alias, inspect its target before proceeding.
+Configure the intended cluster's usual `OPENSEARCH_*` credentials and use the
+production VPC connection/tunnel when appropriate.
+
+Create the versioned destination from the canonical declaration and verify it:
 
 ```sh
-ENVIRONMENT=prod DRY_RUN=true bun scripts/migrate_agent_sessions.ts
-ENVIRONMENT=prod DRY_RUN=false bun scripts/migrate_agent_sessions.ts
+ENVIRONMENT=prod INDEX=agent_sessions bun scripts/create_indices.ts
+ENVIRONMENT=prod INDEX=agent_sessions DRY_RUN=false bun scripts/create_indices.ts
+ENVIRONMENT=prod INDEX=agent_sessions bun scripts/verify_mappings.ts
 ```
 
-The preview prints the exact alias actions without changing anything. Apply
-validates the destination mapping and primary-shard availability before the
-atomic cutover, then checks the alias and mapping again. A correct existing
-destination is reused; a completed migration is a no-op. Incompatible destination
-mappings or unexpected alias targets cause a nonzero exit without a cutover.
-The script touches only the agent-session index and alias.
+A bare index blocks alias creation, so creation deliberately leaves the alias
+for this manual cutover. If the destination already contains data, inspect it
+before deciding to use it. Wait for `agent_sessions_v1` health to be at least
+yellow (all primary shards available), and recheck the source/alias state.
 
-The cutover has no gap where a writer can recreate the bare index. Events being
-processed during the cutover may fail or leave an incomplete projection; this
-script does not repair them. Once it completes, create a new session, complete a
-turn, and verify its name and a unique phrase from each author's message appear
-in search. Check search-processing logs for indexing errors. Historical sessions
-may become searchable if a later lifecycle event reconciles them normally.
+For a future-writes-only repair, submit this **single** request through the
+OpenSearch API after explicitly accepting deletion of the old search projection:
+
+```http
+POST /_aliases
+{
+  "actions": [
+    { "remove_index": { "index": "agent_sessions" } },
+    { "add": { "index": "agent_sessions_v1", "alias": "agent_sessions", "is_write_index": true } }
+  ]
+}
+```
+
+Do not issue a separate DELETE followed by alias creation: a writer could
+recreate the bare index between those operations. The atomic request deletes
+the old index and its search data; Postgres session data is untouched. It does
+not reindex or backfill. The generic `reindex_with_alias_swap.ts` helper copies
+old documents, so it is not a substitute for this no-copy operation.
+
+Require an acknowledged response, then run both `verify_aliases.ts` and
+`verify_mappings.ts` with `INDEX=agent_sessions`. Create a new session, complete
+a turn, and verify its title and unique phrases from both authors are searchable.
+Check indexing errors. In-flight reconciles can straddle the cutover; backfill
+those sessions and any desired historical sessions using the existing
+`POST /internal/backfill/agent-sessions` endpoint. Record the repair outcome in
+the incident runbook.
 
 ## Adding a field to an existing index
 
 The index bodies in `create_indices.ts` are the source of truth for mappings.
 Every body is `dynamic: 'false'`, so a field the service writes but the live
-mapping lacks is dropped silently — and a search over it matches nothing
+mapping lacks remains in `_source` but is not indexed — and a search over it matches nothing
 rather than erroring. That is how `call_records_v2` shipped without
 `properties`/`name` and left tag filters on calls returning empty (macro-2731).
 
@@ -95,7 +131,7 @@ So the flow for a new field is:
 4. Confirm with `bun scripts/verify_mappings.ts`.
 
 Convergence is additive only. A field whose live `type` disagrees with the
-body is reported, never rewritten — changing a live field's type needs the
+body fails the command, never rewritten — changing a live field's type needs the
 reindex runbook below.
 
 ## Runbook: reindex with new mapping (zero downtime)

@@ -174,6 +174,9 @@ pub(crate) async fn reconcile_agent_session(
             &args.agent_session_id,
         ))
         .routing(routing)
+        // Normal writes must never auto-create an index under the alias name.
+        // Backfills may explicitly target a pre-provisioned physical index.
+        .require_alias(index_override.is_none())
         .body(parent_document(args))
         .refresh(opensearch::params::Refresh::WaitFor)
         .send()
@@ -201,6 +204,7 @@ pub(crate) async fn reconcile_agent_session(
 
         let response = client
             .bulk(BulkParts::Index(index))
+            .require_alias(index_override.is_none())
             .body(body)
             .refresh(opensearch::params::Refresh::WaitFor)
             .send()

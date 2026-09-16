@@ -42,6 +42,12 @@ the parent and both authors' folded messages, refreshes them, then removes
 documents from older projection generations. Missing sessions delete their
 entire projection, even when triggered by an older event.
 
+Release and single-service deployments now provision and verify the
+`agent_sessions` schema on the VPC runner before deploying this consumer.
+Incompatible mappings or alias state block deployment; use the OpenSearch helper
+runbook for an explicit repair. Normal parent and bulk writes also require an
+alias, while an explicit backfill `index_override` permits physical indices.
+
 For rollout:
 
 1. Verify the `agent_sessions` alias exists with the join mapping defined in
