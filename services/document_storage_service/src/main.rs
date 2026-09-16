@@ -1074,7 +1074,9 @@ async fn run() -> anyhow::Result<()> {
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
     let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
-    let initiative_service = Arc::new(InitiativeServiceImpl::new(PgInitiativeRepo::new(db.clone())));
+    let initiative_service = Arc::new(InitiativeServiceImpl::new(PgInitiativeRepo::new(
+        db.clone(),
+    )));
 
     let collab_surface_service = CollabSurfaceServiceImpl::new(
         Arc::new(PgCollabSurfaceRepo::new(db.clone())),
