@@ -8,3 +8,4 @@ mod outbound;
 pub use api::context::SearchHandlerState;
 pub use api::router as search_router;
 pub use api::swagger::ApiDoc as SearchApiDoc;
+pub use domain::favorites::SearchFavoritesReader;

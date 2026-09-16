@@ -31,6 +31,7 @@ pub(super) async fn enrich_agent_sessions(
                 session.id,
                 AgentSessionSearchResponseItem {
                     id: session.id,
+                    is_favorited: false,
                     name: session.name,
                     owner_id: session.owner_id.to_string(),
                     bot_id: session.bot_id,

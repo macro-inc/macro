@@ -58,6 +58,8 @@ pub struct ChannelSearchResponseItem {
     pub channel_type: String,
     /// The id of the channel
     pub channel_id: uuid::Uuid,
+    /// Whether the requesting user has favorited the channel.
+    pub is_favorited: bool,
     /// The search results for the channel
     /// This may be empty if the search result match was not on content
     pub channel_message_search_results: Vec<ChannelSearchResult>,
@@ -105,6 +107,8 @@ pub struct ChannelNameSearchResponseItem {
     pub channel_type: String,
     /// The channel id.
     pub channel_id: uuid::Uuid,
+    /// Whether the requesting user has favorited the channel.
+    pub is_favorited: bool,
     /// The matched channel-name highlight.
     pub highlight: SearchHighlight,
     /// The score of the result.
@@ -135,6 +139,8 @@ pub struct ChannelMessageSearchResponseItem {
     pub channel_type: String,
     /// The id of the channel the message belongs to
     pub channel_id: uuid::Uuid,
+    /// Whether the requesting user has favorited the parent channel.
+    pub is_favorited: bool,
     /// The channel message id
     pub message_id: uuid::Uuid,
     /// The channel message thread id
@@ -173,6 +179,7 @@ impl From<SearchResponseItem<ChannelSearchResult, ChannelSearchMetadata>>
             owner_id: None,
             channel_type: response.metadata.channel_type.clone(),
             channel_id: response.metadata.channel_id,
+            is_favorited: false,
             channel_message_search_results: response.results,
         }
     }

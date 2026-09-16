@@ -233,6 +233,7 @@ fn to_response_item(
     } = c;
     CrmCompanySearchResponseItem {
         id: company.id,
+        is_favorited: false,
         team_id: company.team_id,
         name,
         name_highlighted,

@@ -8,6 +8,8 @@ import type { DocumentSearchResponseItemWithMetadataAllOfMetadata } from './docu
 import type { DocumentSearchResponseItemWithMetadataAllOfProperties } from './documentSearchResponseItemWithMetadataAllOfProperties';
 
 export type DocumentSearchResponseItemWithMetadataAllOf = {
+  /** Whether the requesting user has favorited the document. */
+  is_favorited: boolean;
   metadata?: DocumentSearchResponseItemWithMetadataAllOfMetadata;
   /** Entity properties (assignees, status, priority, etc.) for markdown documents. */
   properties?: DocumentSearchResponseItemWithMetadataAllOfProperties;

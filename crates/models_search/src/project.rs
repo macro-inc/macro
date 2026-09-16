@@ -57,6 +57,8 @@ pub struct ProjectMetadata {
 pub struct ProjectSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the project doesn't exist in the database.
     pub metadata: Option<ProjectMetadata>,
+    /// Whether the requesting user has favorited the project.
+    pub is_favorited: bool,
     /// Entity properties (e.g. tags) on the project.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]

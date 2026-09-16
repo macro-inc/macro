@@ -1,8 +1,62 @@
+use std::{
+    future::Future,
+    pin::Pin,
+    sync::{Arc, Mutex},
+};
+
 use chrono::{DateTime, Utc};
+use model_entity::Entity;
 use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
 
 use super::*;
+
+struct TestFavoritesReader {
+    requested: Arc<Mutex<Vec<Entity<'static>>>>,
+    favorited: HashSet<Entity<'static>>,
+}
+
+impl SearchFavoritesReader for TestFavoritesReader {
+    fn favorited_entities<'a>(
+        &'a self,
+        _user_id: &'a str,
+        entities: Vec<Entity<'static>>,
+    ) -> Pin<Box<dyn Future<Output = anyhow::Result<HashSet<Entity<'static>>>> + Send + 'a>> {
+        self.requested.lock().unwrap().extend(entities);
+        Box::pin(async move { Ok(self.favorited.clone()) })
+    }
+}
+
+#[tokio::test]
+async fn resolves_favorited_channel_ids() {
+    let favorited_id = Uuid::new_v4();
+    let other_id = Uuid::new_v4();
+    let requested = Arc::new(Mutex::new(Vec::new()));
+    let reader = TestFavoritesReader {
+        requested: requested.clone(),
+        favorited: HashSet::from([
+            EntityType::Channel.with_entity_string(favorited_id.to_string()),
+            EntityType::Document.with_entity_string(Uuid::new_v4().to_string()),
+        ]),
+    };
+
+    let favorited =
+        favorited_channel_ids(&reader, "user-id", [favorited_id, other_id, favorited_id]).await;
+
+    assert_eq!(favorited, HashSet::from([favorited_id]));
+    assert_eq!(
+        requested
+            .lock()
+            .unwrap()
+            .iter()
+            .cloned()
+            .collect::<HashSet<_>>(),
+        HashSet::from([
+            EntityType::Channel.with_entity_string(favorited_id.to_string()),
+            EntityType::Channel.with_entity_string(other_id.to_string()),
+        ])
+    );
+}
 
 /// Build a message_states map that marks every content-match hit's
 /// channel_message_id as existing-and-active. Tests that want to exercise
@@ -51,6 +105,7 @@ fn channel_name_hit_has_top_level_highlight() {
     let items = construct_channel_name_items(vec![hit], histories);
 
     assert_eq!(items.len(), 1);
+    assert!(!items[0].is_favorited);
     assert_eq!(
         items[0].highlight.name.as_deref(),
         Some("<macro_em>acme-h</macro_em>q")
@@ -104,6 +159,7 @@ fn test_construct_search_result_single_channel() {
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_id, channel_uuid);
     assert_eq!(result[0].extra.id, channel_uuid);
+    assert!(!result[0].extra.is_favorited);
     assert_eq!(
         result[0].extra.channel_message_search_results[0]
             .message_id
@@ -576,6 +632,7 @@ fn test_construct_channel_message_items_one_item_per_hit_in_hit_order() {
     let items = construct_channel_message_items(search_results, channel_histories, states);
 
     assert_eq!(items.len(), 3);
+    assert!(items.iter().all(|item| !item.is_favorited));
     assert_eq!(
         items
             .iter()

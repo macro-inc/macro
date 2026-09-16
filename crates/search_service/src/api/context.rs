@@ -9,6 +9,8 @@ use opensearch_client::OpensearchClient;
 use readonly_pool::ReadOnlyPool;
 use std::sync::Arc;
 
+use crate::domain::favorites::SearchFavoritesReader;
+
 /// Concrete entity-access service backing the team receipt extractor. Same
 /// type the parent app constructs, so its `Arc` can be passed in directly.
 pub type SearchEntityAccessService = EntityAccessServiceImpl<PgAccessRepository>;
@@ -31,6 +33,8 @@ pub struct SearchHandlerState {
     /// Agent-session domain service used after the search layer resolves its
     /// authorized session allowlist.
     pub agent_session_search_metadata: Arc<dyn AgentSessionSearchMetadataService>,
+    /// Resolves viewer-specific favorite state for returned search entities.
+    pub favorites: Arc<dyn SearchFavoritesReader>,
     /// Whether calendar events participate in search. Off in deployed
     /// environments until the calendar index has been created and backfilled;
     /// gating here covers every caller of the search API at once, the AI

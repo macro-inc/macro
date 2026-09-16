@@ -8,6 +8,8 @@ import type { CallRecordSearchResponseItemWithMetadataAllOfMetadata } from './ca
 import type { CallRecordSearchResponseItemWithMetadataAllOfProperties } from './callRecordSearchResponseItemWithMetadataAllOfProperties';
 
 export type CallRecordSearchResponseItemWithMetadataAllOf = {
+  /** Whether the requesting user has favorited the call. */
+  is_favorited: boolean;
   metadata?: CallRecordSearchResponseItemWithMetadataAllOfMetadata;
   /** Entity properties (e.g. tags) on the call. */
   properties?: CallRecordSearchResponseItemWithMetadataAllOfProperties;

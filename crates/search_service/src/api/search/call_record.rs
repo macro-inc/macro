@@ -168,6 +168,7 @@ pub(in crate::api::search) async fn enrich_call_records(
                     call_search_results: hits,
                 },
                 metadata,
+                is_favorited: false,
                 properties,
             }
         })

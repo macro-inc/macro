@@ -8,6 +8,8 @@ import type { ProjectSearchResponseItemWithMetadataAllOfMetadata } from './proje
 import type { ProjectSearchResponseItemWithMetadataAllOfProperties } from './projectSearchResponseItemWithMetadataAllOfProperties';
 
 export type ProjectSearchResponseItemWithMetadataAllOf = {
+  /** Whether the requesting user has favorited the project. */
+  is_favorited: boolean;
   metadata?: ProjectSearchResponseItemWithMetadataAllOfMetadata;
   /** Entity properties (e.g. tags) on the project. */
   properties?: ProjectSearchResponseItemWithMetadataAllOfProperties;

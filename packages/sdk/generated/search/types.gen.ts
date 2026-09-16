@@ -51,6 +51,10 @@ export type AgentSessionSearchResponseItem = {
      */
     id: string;
     /**
+     * Whether the requesting user has favorited the agent session.
+     */
+    is_favorited: boolean;
+    /**
      * Current persisted name.
      */
     name: string;
@@ -203,6 +207,10 @@ export type CalendarEventSearchResponseItem = {
  * CalendarEventSearchResponseItem with metadata fetched from macrodb.
  */
 export type CalendarEventSearchResponseItemWithMetadata = CalendarEventSearchResponseItem & {
+    /**
+     * Whether the requesting user has favorited the calendar event.
+     */
+    is_favorited: boolean;
     metadata?: null | CalendarEventMetadata;
     /**
      * Entity properties (e.g. tags) on the event.
@@ -304,6 +312,10 @@ export type CallRecordSearchResponseItem = {
 };
 
 export type CallRecordSearchResponseItemWithMetadata = CallRecordSearchResponseItem & {
+    /**
+     * Whether the requesting user has favorited the call.
+     */
+    is_favorited: boolean;
     metadata?: null | CallRecordMetadata;
     /**
      * Entity properties (e.g. tags) on the call.
@@ -408,6 +420,10 @@ export type ChannelMessageSearchResponseItem = {
      */
     id: string;
     /**
+     * Whether the requesting user has favorited the parent channel.
+     */
+    is_favorited: boolean;
+    /**
      * The channel message id
      */
     message_id: string;
@@ -463,6 +479,10 @@ export type ChannelNameSearchResponseItem = {
      * Standardized id field shared by all item types; the channel id.
      */
     id: string;
+    /**
+     * Whether the requesting user has favorited the channel.
+     */
+    is_favorited: boolean;
     metadata?: null | ChannelMetadata;
     /**
      * The channel owner.
@@ -542,6 +562,10 @@ export type ChannelSearchResponseItem = {
      * for consistency in our data model.
      */
     id: string;
+    /**
+     * Whether the requesting user has favorited the channel.
+     */
+    is_favorited: boolean;
     /**
      * we don't store this for channels atm but keeping it here for consistency
      */
@@ -760,6 +784,10 @@ export type ChatSearchResponseItem = {
  * every time the chat updates (specifically for updated_at and viewed_at)
  */
 export type ChatSearchResponseItemWithMetadata = ChatSearchResponseItem & {
+    /**
+     * Whether the requesting user has favorited the chat.
+     */
+    is_favorited: boolean;
     metadata?: null | ChatMetadata;
     /**
      * Entity properties (e.g. tags) on the chat.
@@ -833,6 +861,10 @@ export type CrmCompanySearchResponseItem = {
      * The id of the company.
      */
     id: string;
+    /**
+     * Whether the requesting user has favorited the company.
+     */
+    is_favorited: boolean;
     /**
      * Display name from the primary domain's directory entry.
      */
@@ -981,6 +1013,10 @@ export type DocumentSearchResponseItem = {
  * every time the document updates (specifically for updated_at and viewed_at)
  */
 export type DocumentSearchResponseItemWithMetadata = DocumentSearchResponseItem & {
+    /**
+     * Whether the requesting user has favorited the document.
+     */
+    is_favorited: boolean;
     metadata?: null | DocumentMetadata;
     /**
      * Entity properties (assignees, status, priority, etc.) for markdown documents.
@@ -1201,6 +1237,10 @@ export type EmailSearchResponseItemWithMetadata = EmailSearchResponseItem & {
     created_at: string;
     inbox_visible: boolean;
     is_draft: boolean;
+    /**
+     * Whether the requesting user has favorited the email thread.
+     */
+    is_favorited: boolean;
     is_important: boolean;
     is_read: boolean;
     /**
@@ -1544,6 +1584,10 @@ export type ProjectSearchResponseItem = {
  * database-sourced.
  */
 export type ProjectSearchResponseItemWithMetadata = ProjectSearchResponseItem & {
+    /**
+     * Whether the requesting user has favorited the project.
+     */
+    is_favorited: boolean;
     metadata?: null | ProjectMetadata;
     /**
      * Entity properties (e.g. tags) on the project.

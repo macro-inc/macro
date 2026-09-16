@@ -18,6 +18,8 @@ export interface AgentSessionSearchResponseItem {
   created_at: string;
   /** Session ID. */
   id: string;
+  /** Whether the requesting user has favorited the agent session. */
+  is_favorited: boolean;
   /** Current persisted name. */
   name: string;
   /** Session owner. */

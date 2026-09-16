@@ -23,6 +23,8 @@ This may be empty if the search result match was not on content */
 These field names are being aligned across all item types
 for consistency in our data model. */
   id: string;
+  /** Whether the requesting user has favorited the channel. */
+  is_favorited: boolean;
   /** we don't store this for channels atm but keeping it here for consistency */
   owner_id?: ChannelSearchResponseItemOwnerId;
 }

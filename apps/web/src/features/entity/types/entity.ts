@@ -16,6 +16,11 @@ export type EntityBase = {
   id: string;
   name: string;
   ownerId: string;
+  /**
+   * Viewer-specific favorite state when supplied by the entity source.
+   * Channel-message search rows carry their parent channel's state.
+   */
+  isFavorited?: boolean;
   frecencyScore?: number;
   /**
    * The viewer's latest own mutation of this entity, present only on rows

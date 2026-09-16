@@ -64,6 +64,8 @@ pub struct DocumentMetadata {
 pub struct DocumentSearchResponseItemWithMetadata {
     /// Metadata from the database. None if the document doesn't exist in the database.
     pub metadata: Option<DocumentMetadata>,
+    /// Whether the requesting user has favorited the document.
+    pub is_favorited: bool,
     /// Entity properties (assignees, status, priority, etc.) for markdown documents.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[schemars(skip)]

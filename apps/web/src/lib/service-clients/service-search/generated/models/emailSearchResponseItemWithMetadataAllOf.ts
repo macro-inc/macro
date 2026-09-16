@@ -12,6 +12,8 @@ export type EmailSearchResponseItemWithMetadataAllOf = {
   created_at: string;
   inbox_visible: boolean;
   is_draft: boolean;
+  /** Whether the requesting user has favorited the email thread. */
+  is_favorited: boolean;
   is_important: boolean;
   is_read: boolean;
   /** Entity properties (e.g. tags) on the thread. */

@@ -1135,6 +1135,10 @@ export interface DocumentSearchResponseItemWithMetadata {
    */
   metadata?: DocumentMetadata | null;
   /**
+   * Whether the requesting user has favorited the document.
+   */
+  is_favorited: boolean;
+  /**
    * Standardized fields that all item types will share.
    * These field names are being aligned across all item types
    * for consistency in our data model.
@@ -1236,6 +1240,10 @@ export interface ChatSearchResponseItemWithMetadata {
    */
   metadata?: ChatMetadata | null;
   /**
+   * Whether the requesting user has favorited the chat.
+   */
+  is_favorited: boolean;
+  /**
    * Standardized fields that all item types will share.
    * These field names are being aligned across all item types
    * for consistency in our data model.
@@ -1296,6 +1304,10 @@ export interface EmailSearchResponseItemWithMetadata {
   created_at: string;
   updated_at: string;
   viewed_at?: string | null;
+  /**
+   * Whether the requesting user has favorited the email thread.
+   */
+  is_favorited: boolean;
   snippet?: string | null;
   is_read: boolean;
   inbox_visible: boolean;
@@ -1418,6 +1430,10 @@ export interface ChannelMessageSearchResponseItem {
    */
   channel_id: string;
   /**
+   * Whether the requesting user has favorited the parent channel.
+   */
+  is_favorited: boolean;
+  /**
    * The channel message id
    */
   message_id: string;
@@ -1471,6 +1487,10 @@ export interface ChannelNameSearchResponseItem {
    * The channel id.
    */
   channel_id: string;
+  /**
+   * Whether the requesting user has favorited the channel.
+   */
+  is_favorited: boolean;
   highlight: SearchHighlight;
   /**
    * The score of the result.
@@ -1497,6 +1517,10 @@ export interface ProjectSearchResponseItemWithMetadata {
    * Metadata from the database. None if the project doesn't exist in the database.
    */
   metadata?: ProjectMetadata | null;
+  /**
+   * Whether the requesting user has favorited the project.
+   */
+  is_favorited: boolean;
   /**
    * Standardized fields that all item types will share.
    * These field names are being aligned across all item types
@@ -1531,6 +1555,10 @@ export interface CallRecordSearchResponseItemWithMetadata {
    * `None` if the call has been deleted.
    */
   metadata?: CallRecordMetadata | null;
+  /**
+   * Whether the requesting user has favorited the call.
+   */
+  is_favorited: boolean;
   id: string;
   name?: string | null;
   owner_id: string;
@@ -1567,6 +1595,10 @@ export interface CrmCompanySearchResponseItem {
    * The id of the company.
    */
   id: string;
+  /**
+   * Whether the requesting user has favorited the company.
+   */
+  is_favorited: boolean;
   /**
    * The id of the team that owns this company record.
    */
@@ -1629,6 +1661,10 @@ export interface CalendarEventSearchResponseItemWithMetadata {
    * Metadata from the database. None if the event no longer exists.
    */
   metadata?: CalendarEventMetadata | null;
+  /**
+   * Whether the requesting user has favorited the calendar event.
+   */
+  is_favorited: boolean;
   /**
    * Standardized fields that all item types will share.
    */
@@ -1728,6 +1764,10 @@ export interface AgentSessionSearchResponseItem {
    * Session ID.
    */
   id: string;
+  /**
+   * Whether the requesting user has favorited the agent session.
+   */
+  is_favorited: boolean;
   /**
    * Current persisted name.
    */

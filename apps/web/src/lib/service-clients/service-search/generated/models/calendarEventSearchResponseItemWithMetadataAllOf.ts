@@ -8,6 +8,8 @@ import type { CalendarEventSearchResponseItemWithMetadataAllOfMetadata } from '.
 import type { CalendarEventSearchResponseItemWithMetadataAllOfProperties } from './calendarEventSearchResponseItemWithMetadataAllOfProperties';
 
 export type CalendarEventSearchResponseItemWithMetadataAllOf = {
+  /** Whether the requesting user has favorited the calendar event. */
+  is_favorited: boolean;
   metadata?: CalendarEventSearchResponseItemWithMetadataAllOfMetadata;
   /** Entity properties (e.g. tags) on the event. */
   properties?: CalendarEventSearchResponseItemWithMetadataAllOfProperties;

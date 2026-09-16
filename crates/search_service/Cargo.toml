@@ -46,6 +46,7 @@ macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var" }
 macro_user_id = { path = "../macro_user_id" }
 model = { path = "../model" }
+model-entity = { path = "../model-entity" }
 models_email = { path = "../models_email" }
 models_opensearch = { path = "../models_opensearch" }
 models_search = { path = "../models_search" }

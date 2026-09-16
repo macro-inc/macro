@@ -54,6 +54,8 @@ pub struct AgentSessionSearchResult {
 pub struct AgentSessionSearchResponseItem {
     /// Session ID.
     pub id: Uuid,
+    /// Whether the requesting user has favorited the agent session.
+    pub is_favorited: bool,
     /// Current persisted name.
     pub name: String,
     /// Session owner.

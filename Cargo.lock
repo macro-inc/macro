@@ -14724,6 +14724,7 @@ dependencies = [
  "macro_env_var",
  "macro_user_id",
  "model",
+ "model-entity",
  "models_email",
  "models_opensearch",
  "models_properties",

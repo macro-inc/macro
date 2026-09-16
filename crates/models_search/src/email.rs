@@ -81,6 +81,8 @@ pub struct EmailSearchResponseItemWithMetadata {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
+    /// Whether the requesting user has favorited the email thread.
+    pub is_favorited: bool,
     pub snippet: Option<String>,
     pub is_read: bool,
     pub inbox_visible: bool,

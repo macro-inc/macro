@@ -177,6 +177,7 @@ pub fn construct_search_result(
                     organizer: to_organizer(info),
                     description: info.description.clone(),
                 }),
+                is_favorited: false,
                 properties: properties_map
                     .remove(&entity_id.to_string())
                     .filter(|p| !p.is_empty()),

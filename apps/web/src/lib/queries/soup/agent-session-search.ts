@@ -28,6 +28,7 @@ export function mapAgentSessionSearchResult(
     id: result.id,
     name: result.name,
     ownerId: result.owner_id,
+    isFavorited: result.is_favorited,
     botId: result.bot_id,
     // Search only returns sessions that were materialized from a folded event.
     status: 'event',

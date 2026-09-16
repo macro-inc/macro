@@ -11,6 +11,7 @@ pub(in crate::api) mod crm_company;
 pub(in crate::api) mod document;
 pub(in crate::api) mod email;
 pub(in crate::api::search) mod enrich;
+mod favorites;
 pub(in crate::api) mod project;
 pub mod simple;
 pub(in crate::api::search) mod terms;
