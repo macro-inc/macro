@@ -167,16 +167,16 @@ test('adds a missing field to an existing index before passing the gate', async 
   expect(writes).toEqual([`POST /${index}/_mapping`]);
 });
 
-test.each([
-  'physical',
-  'unexpected',
-] as const)('blocks %s alias state without swapping or deleting', async (source) => {
-  const { provision, writes } = cluster({ source });
-  const result = await provision();
-  expect(result.code).not.toBe(0);
-  expect(result.script).toBe('verify_aliases');
-  expect(writes).toEqual([`PUT /${index}`]);
-});
+test.each(['physical', 'unexpected'] as const)(
+  'blocks %s alias state without swapping or deleting',
+  async (source) => {
+    const { provision, writes } = cluster({ source });
+    const result = await provision();
+    expect(result.code).not.toBe(0);
+    expect(result.script).toBe('verify_aliases');
+    expect(writes).toEqual([`PUT /${index}`]);
+  }
+);
 
 test('rejects conflicting types before applying additive changes', async () => {
   const mapping = canonicalMapping();
@@ -189,27 +189,25 @@ test('rejects conflicting types before applying additive changes', async () => {
   expect(writes).toEqual([]);
 });
 
-test.each([
-  'relation',
-  'alias path',
-  'date format',
-  'dynamic',
-])('rejects incompatible %s parameters', async (defect) => {
-  const mapping = canonicalMapping();
-  if (defect === 'relation')
-    mapping.properties.agent_session_relation.relations = {
-      agent_session: 'wrong',
-    };
-  if (defect === 'alias path') mapping.properties.entity_id.path = 'owner_id';
-  if (defect === 'date format')
-    mapping.properties.created_at_millis.format = 'epoch_second';
-  if (defect === 'dynamic') mapping.dynamic = true;
-  const { provision, writes } = cluster({ source: 'ready', mapping });
-  const result = await provision();
-  expect(result.code).not.toBe(0);
-  expect(result.script).toBe('verify_mappings');
-  expect(writes).toEqual([]);
-});
+test.each(['relation', 'alias path', 'date format', 'dynamic'])(
+  'rejects incompatible %s parameters',
+  async (defect) => {
+    const mapping = canonicalMapping();
+    if (defect === 'relation')
+      mapping.properties.agent_session_relation.relations = {
+        agent_session: 'wrong',
+      };
+    if (defect === 'alias path') mapping.properties.entity_id.path = 'owner_id';
+    if (defect === 'date format')
+      mapping.properties.created_at_millis.format = 'epoch_second';
+    if (defect === 'dynamic') mapping.dynamic = true;
+    const { provision, writes } = cluster({ source: 'ready', mapping });
+    const result = await provision();
+    expect(result.code).not.toBe(0);
+    expect(result.script).toBe('verify_mappings');
+    expect(writes).toEqual([]);
+  }
+);
 
 test('accepts normalized default parameters and boolean dynamic', async () => {
   const mapping = canonicalMapping();
@@ -247,30 +245,29 @@ test('attaches a compatible existing destination to a missing alias', async () =
   expect(writes).toEqual([`PUT /${index}/_alias/${alias}`]);
 });
 
-test.each([
-  { readStatus: 403 },
-  { aliasReadStatus: 403 },
-])('read failures never masquerade as a missing index', async (options) => {
-  const { provision, writes } = cluster(options);
-  expect((await provision()).code).not.toBe(0);
-  expect(writes).toEqual([]);
-});
+test.each([{ readStatus: 403 }, { aliasReadStatus: 403 }])(
+  'read failures never masquerade as a missing index',
+  async (options) => {
+    const { provision, writes } = cluster(options);
+    expect((await provision()).code).not.toBe(0);
+    expect(writes).toEqual([]);
+  }
+);
 
-test.each([
-  { createFails: true },
-  { acknowledged: false },
-])('creation failures fail deployment', async (options) => {
-  const result = await cluster(options).provision();
-  expect(result.code).not.toBe(0);
-  expect(result.script).toBe('create_indices');
-});
+test.each([{ createFails: true }, { acknowledged: false }])(
+  'creation failures fail deployment',
+  async (options) => {
+    const result = await cluster(options).provision();
+    expect(result.code).not.toBe(0);
+    expect(result.script).toBe('create_indices');
+  }
+);
 
-test.each([
-  'create_indices',
-  'verify_mappings',
-  'verify_aliases',
-])('%s rejects unknown INDEX', async (script) => {
-  const { run, writes } = cluster();
-  expect((await run(script, { INDEX: 'typo' })).code).not.toBe(0);
-  expect(writes).toEqual([]);
-});
+test.each(['create_indices', 'verify_mappings', 'verify_aliases'])(
+  '%s rejects unknown INDEX',
+  async (script) => {
+    const { run, writes } = cluster();
+    expect((await run(script, { INDEX: 'typo' })).code).not.toBe(0);
+    expect(writes).toEqual([]);
+  }
+);
