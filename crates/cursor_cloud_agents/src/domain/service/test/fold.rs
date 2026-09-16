@@ -131,6 +131,28 @@ pub(super) async fn load(
             break;
         }
     }
+    // Commands are advertised after the load result, same as session/new.
+    // Drain that metadata notification so leftover catalog frames do not
+    // look like unsolicited history or poison the next load.
+    drain_available_commands_update(client).await;
+}
+
+/// Consume the `available_commands_update` that follows a successful load.
+async fn drain_available_commands_update(client: &mut agent_client_protocol::Channel) {
+    let frame = tokio::time::timeout(std::time::Duration::from_secs(5), client.rx.next())
+        .await
+        .expect("available_commands_update after session/load")
+        .expect("the connection stayed open");
+    let TransportFrame::Single(frame) = frame else {
+        panic!("single frame")
+    };
+    let value = serde_json::to_value(&frame).unwrap();
+    assert_eq!(value["method"], "session/update", "{value}");
+    assert_eq!(
+        value["params"]["update"]["sessionUpdate"],
+        "available_commands_update",
+        "session/load is followed by the slash-command catalog, got {value}"
+    );
 }
 
 /// The served transport stays silent: recovered history never streams live.

@@ -355,7 +355,9 @@ transcript at `/app/agent/<uuid>` whose replies also stream back into the thread
 An agent session is `/app/agent/<uuid>`. The composer placeholder is
 **`Message the agent, @mention anything`**. Creating one (`c` then `a`, or
 `Create` → `Agent`) leaves that composer focused — on mobile that is the same
-Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `@` to insert the same mention chips
+Create-menu `triggerFocusInput` as chat, so the keyboard opens. Type `/` to
+open slash commands the connected agent advertised (Claude, OpenCode, and
+Cursor). `/` stays ordinary text until that list arrives. Type `@` to insert the same mention chips
 used in chat and channels; they serialize as mention-chip tags in the prompt
 the agent sees (`<m-document-mention>` for docs/channels/chats/tasks/emails/calendar
 events/skills, `<m-date-mention>` for a day or time, `<m-agent-session-mention>`

@@ -17,6 +17,9 @@ pub mod model;
 /// Cursor model catalog expressed as ACP configuration.
 pub mod model_options;
 
+/// Slash commands advertised over ACP (`available_commands_update`).
+pub mod slash_commands;
+
 /// The capabilities the domain requires from the outside.
 pub mod ports;
 
