@@ -1,8 +1,8 @@
 /**
  * Renders one folded agent-session message. Pure composition: each part kind
  * has its own component under `parts/` (the chat block's handler-per-tool
- * split), user prompts get the chat block's bubble treatment, and thoughts
- * shimmer while the turn is in flight.
+ * split), user prompts get the chat block's bubble treatment, and the tail
+ * thought shimmers while the turn is in flight.
  */
 
 import { messageSendMotion } from '@core/util/message-send-motion';
@@ -14,6 +14,7 @@ import { UserMessageBubble } from '@ui';
 import { For, Index, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
+import { thoughtIsStreaming } from '../state/thought-streaming';
 import { segmentParts } from '../state/tool-groups';
 import {
   ActionLine,
@@ -35,7 +36,7 @@ function AgentMessagePart(props: {
   message: FoldedMessage;
   /** The part's index within its message, for the tool render context. */
   index: number;
-  /** The turn is still in flight — thoughts read "Thinking" and shimmer. */
+  /** The turn is still in flight — the tail thought reads "Thinking". */
   inFlight: boolean;
 }): JSX.Element {
   return match(props.part)
@@ -43,7 +44,14 @@ function AgentMessagePart(props: {
       <TextPart text={part.text} inFlight={props.inFlight} />
     ))
     .with({ kind: 'thought' }, (part) => (
-      <Thought text={part.text} active={props.inFlight} />
+      <Thought
+        text={part.text}
+        active={thoughtIsStreaming(
+          props.inFlight,
+          props.index,
+          props.message.parts.length
+        )}
+      />
     ))
     .with({ kind: 'tool_use' }, (part) => (
       <ToolCallPart
@@ -66,8 +74,9 @@ function AgentMessagePart(props: {
 }
 
 /**
- * A run of consecutive tool calls (see `segmentParts`), folded to one row
- * that opens to the calls themselves, each at its original part index.
+ * A run of consecutive tool calls and their accompanying thoughts (see
+ * `segmentParts`), folded to one row that opens to those parts, each at
+ * its original index.
  */
 function ToolGroupPart(props: {
   message: FoldedMessage;
@@ -76,10 +85,9 @@ function ToolGroupPart(props: {
   end: number;
   inFlight: boolean;
 }): JSX.Element {
+  const parts = () => props.message.parts.slice(props.start, props.end);
   const calls = () =>
-    props.message.parts
-      .slice(props.start, props.end)
-      .filter((part): part is ToolUsePart => part.kind === 'tool_use');
+    parts().filter((part): part is ToolUsePart => part.kind === 'tool_use');
   const active = () => calls().some((call) => isToolActive(call.status));
 
   return (
@@ -93,7 +101,7 @@ function ToolGroupPart(props: {
             detail: toolCallDetail(latest()),
           }}
         >
-          <For each={calls()}>
+          <For each={parts()}>
             {(part, offset) => (
               <AgentMessagePart
                 part={part}

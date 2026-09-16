@@ -30,6 +30,7 @@ export {
 export {
   ViewBreadcrumbs,
   type ViewBreadcrumbsButtonProps,
+  type ViewBreadcrumbsEntry,
   type ViewBreadcrumbsItemProps,
   type ViewBreadcrumbsItemState,
   type ViewBreadcrumbsOutletProps,

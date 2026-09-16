@@ -372,6 +372,8 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
   const addTagAction = makeAddTagAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
+  // Read shortcut availability from row getters so focus changes update only
+  // the hint, without recreating the action groups and losing menu focus.
   const activeHotkeyToken = (token: HotkeyToken): HotkeyToken | undefined => {
     return getActiveCommandByToken(token) ? token : undefined;
   };
@@ -401,7 +403,9 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       action: () => {
         void favoriteAction.execute([entity]);
       },
-      hotkeyToken: activeHotkeyToken(TOKENS.entity.action.favorite),
+      get hotkeyToken() {
+        return activeHotkeyToken(TOKENS.entity.action.favorite);
+      },
       group: 'macro' as const,
     };
   };
@@ -416,7 +420,9 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       action: () => {
         void muteAction.execute([entity]);
       },
-      hotkeyToken: activeHotkeyToken(TOKENS.entity.action.mute),
+      get hotkeyToken() {
+        return activeHotkeyToken(TOKENS.entity.action.mute);
+      },
       group: 'macro' as const,
     };
   };
@@ -442,7 +448,9 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
         setOpen(false);
         createReminderAction.execute([entity]);
       },
-      hotkeyToken: activeHotkeyToken(TOKENS.entity.action.createReminder),
+      get hotkeyToken() {
+        return activeHotkeyToken(TOKENS.entity.action.createReminder);
+      },
       group: 'macro' as const,
     };
   };
@@ -458,7 +466,9 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
         setOpen(false);
         addTagAction.execute([entity]);
       },
-      hotkeyToken: activeHotkeyToken(TOKENS.entity.action.tags),
+      get hotkeyToken() {
+        return activeHotkeyToken(TOKENS.entity.action.tags);
+      },
       group: 'macro' as const,
     };
   };
@@ -482,7 +492,9 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
           void copyLinkAction.executeByBlock(props.id, props.entityKind);
         }
       },
-      hotkeyToken: activeHotkeyToken(TOKENS.entity.action.copyLink),
+      get hotkeyToken() {
+        return activeHotkeyToken(TOKENS.entity.action.copyLink);
+      },
       group: 'sharing' as const,
     };
   };
@@ -493,7 +505,9 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     action: () => {
       void copyEntityIdAction.executeById(props.id);
     },
-    hotkeyToken: activeHotkeyToken(TOKENS.entity.action.copyEntityId),
+    get hotkeyToken() {
+      return activeHotkeyToken(TOKENS.entity.action.copyEntityId);
+    },
     group: 'sharing' as const,
   });
 
@@ -553,7 +567,9 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                   });
                 },
                 icon: Rename,
-                hotkeyToken: activeHotkeyToken(TOKENS.entity.action.rename),
+                get hotkeyToken() {
+                  return activeHotkeyToken(TOKENS.entity.action.rename);
+                },
                 group: 'file' as const,
               };
             })
@@ -609,9 +625,9 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                   });
                 },
                 icon: ArrowRight,
-                hotkeyToken: activeHotkeyToken(
-                  TOKENS.entity.action.moveToFolder
-                ),
+                get hotkeyToken() {
+                  return activeHotkeyToken(TOKENS.entity.action.moveToFolder);
+                },
                 group: 'file' as const,
               };
             })

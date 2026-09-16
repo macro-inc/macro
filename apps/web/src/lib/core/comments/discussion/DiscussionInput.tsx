@@ -19,7 +19,7 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
@@ -105,6 +105,7 @@ function DefaultActions(props: { input: InputData; isSending: boolean }) {
 }
 
 export function DiscussionInput(props: DiscussionInputProps) {
+  const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   const [value, setValue] = createSignal(props.input.value ?? '');
   const [mentions, setMentions] = createSignal<ItemMention[]>([]);
@@ -156,7 +157,13 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   // Build the editor handle immediately to ensure lexical is available for commands
   markdownEditor.buildHandle();
-  const hasLineBreaks = createHasLineBreaks(markdownEditor.lexical);
+  const { isCompact: oneLineInput } = createComposerLayout(
+    markdownEditor.lexical,
+    {
+      container: layout,
+      mode: () => (isTouchDevice() || showFormatRibbon() ? 'expanded' : 'auto'),
+    }
+  );
 
   const commands = {
     send: async () => {
@@ -285,11 +292,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
           collapsedInput.collapse();
         }}
       >
-        <Input.Layout
-          oneLineInput={
-            !isTouchDevice() && !showFormatRibbon() && !hasLineBreaks()
-          }
-        >
+        <Input.Layout ref={setLayout} oneLineInput={oneLineInput()}>
           <Input.Layout.Body>
             <Input.FormatRibbon>
               <FormatButtons

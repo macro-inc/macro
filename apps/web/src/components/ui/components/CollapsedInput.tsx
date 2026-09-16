@@ -1,7 +1,6 @@
 import { focusInput } from '@core/directive/focusInput';
 import { isMobile } from '@core/mobile/isMobile';
 import PaperclipIcon from '@phosphor/paperclip.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import { type Accessor, type JSX, Show } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button } from './Button';
@@ -67,7 +66,7 @@ export function CollapsedInput(props: CollapsedInputProps) {
           label="Attach files"
           onClick={() => props.onAttach?.()}
         >
-          <PlusIcon />
+          <PaperclipIcon />
         </Button>
         <button
           type="button"

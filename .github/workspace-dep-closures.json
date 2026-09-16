@@ -3032,6 +3032,7 @@
       "crates/harness_token",
       "crates/harnesses",
       "crates/import",
+      "crates/initiative",
       "crates/invite_email",
       "crates/ip_extractor",
       "crates/item_filter_index",

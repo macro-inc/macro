@@ -17,6 +17,7 @@ export function useTagFilterGroup(): Accessor<TagFilterGroup> {
     (): TagFilterGroup => ({
       id: TAG_FACET_ID,
       label: 'Tags',
+      searchPlaceholder: 'Filter by tag...',
       options: tagOptions().map((tag) => ({
         id: tag.id,
         label: tag.label,

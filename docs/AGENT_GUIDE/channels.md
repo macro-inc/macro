@@ -36,10 +36,23 @@ toolbar, consistent at narrow and wide composer widths.
 The new-message compose screen and channel message/reply inputs use the same
 attachment and send controls on mobile and desktop, with no format toggle.
 iOS uses the native media attachment picker.
-Short drafts place attachment, message text, and send on one row on both mobile
-and desktop. Multiline drafts and attachments expand the composer with its
-actions below the editor.
-When checking this transition, add and remove a line break or attachment and
+Short top-level drafts place attachment, message text, and send on one row on
+both mobile and desktop. Text that wraps onto a second line, explicit line
+breaks, non-paragraph blocks (lists, blockquotes, headings, etc.), and attachments
+expand the composer with its actions below the editor. Even a short or empty
+non-paragraph block uses the expanded layout; converting it back to a single
+short paragraph restores the compact layout. A restored block draft that becomes a
+wrapping paragraph should stay expanded without briefly collapsing; check this
+after reopening the channel with a draft already saved. Open reply composers always place the editor
+above the action row, including for empty and single-line drafts, so the
+attachment, delete-reply, and send controls have their own space.
+Attachment controls use a paperclip in both expanded and collapsed composers,
+including the iOS media picker. Input action and formatting buttons show the
+app tooltip without a second native browser tooltip.
+When checking this transition, type a long draft without pressing Enter, then
+shorten it and resize the pane. It should expand when the text no longer fits
+beside the buttons and collapse when it fits again, without flickering between
+layouts. Also add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
 should remain usable in both layouts, including when editing an existing message.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
@@ -88,6 +101,10 @@ own time zone (their primary calendar's), so it resolves relative times ("tomorr
 bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+A follow-up sent while that session is still working stops the current turn,
+posts a new Magic Chip on the follow-up message, and steers the agent with
+that text — the chip appears at the follow-up, not after the cancelled turn
+finishes.
 The reply renders a Magic Chip: a rounded card of constant height that is present
 from the moment the session boots. Its header names the persona (`Macro Agent`,
 `Cursor Agent`), the model, and what the turn is doing (`Booting agent`, `Running
@@ -210,6 +227,11 @@ A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 
 The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
 keyed by message ID; offscreen rows are normally absent from the DOM.
+
+On a cold channel open, verify that delayed bot/agent mention requests leave the
+messages and composer visible. Expand a thread while its replies are still
+loading: existing preview replies should remain visible until the full list
+arrives. Repeat after reopening the channel to cover both cold and cached data.
 
 Reopening a channel already loaded this session requests
 `GET /dss/channels/<id>/messages/catch-up?after=<newest cached created_at>&limit=50`

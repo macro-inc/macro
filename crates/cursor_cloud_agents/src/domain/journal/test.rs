@@ -363,3 +363,39 @@ fn divergent_terminal_text_keeps_the_captured_answer_and_the_terminal_facts() {
         );
     }
 }
+
+/// A stream interruption is a fact about the connection, not the conversation:
+/// it is durable so a gap in a transcript is explicable, and it must add
+/// nothing to the transcript it explains — on capture or on any later replay.
+#[test]
+fn a_stream_interruption_projects_to_nothing() {
+    let run = CursorRunId::new("run");
+    let interruption = JournalInput::StreamInterrupted {
+        reason: "error decoding response body".into(),
+        last_event_id: Some("1713033006000-0".into()),
+        attempt: 2,
+    };
+    let mut machine = ReplayMachine::default();
+    assert!(
+        machine
+            .push(
+                Some(&run),
+                &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: "before".into()
+                }))
+            )
+            .unwrap()
+            .len()
+            == 1
+    );
+    assert!(machine.push(Some(&run), &interruption).unwrap().is_empty());
+    assert!(machine.push(None, &interruption).unwrap().is_empty());
+    assert!(!machine.complete(&run), "no outcome was invented either");
+    // Durability is the point, so the variant has to survive the journal's
+    // own encoding unchanged.
+    let encoded = serde_json::to_string(&interruption).unwrap();
+    assert_eq!(
+        serde_json::from_str::<JournalInput>(&encoded).unwrap(),
+        interruption
+    );
+}

@@ -1,6 +1,5 @@
 import {
   CollapsibleSection,
-  ListFilterDropdown,
   ListSortDropdown,
   SearchBar,
   ViewShell,
@@ -8,10 +7,9 @@ import {
 } from '@app/components/view-shell';
 import { SplitPanel } from '@components/app/split-panel';
 import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
 import FolderIcon from '@phosphor/folder.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
-import { Button, cn, Dropdown } from '@ui';
+import { Button, Dropdown } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { DriveNavigation } from '../components/drive-navigation';
 import { FolderTree } from '../components/folder-tree';
@@ -20,13 +18,12 @@ import {
   filterFolderTree,
   folderAncestors,
 } from '../core/folder-tree';
-import {
-  DRIVE_TABS,
-  type DriveFolder,
-  type DriveScope,
-  type DriveSort,
-  type DriveState,
-  type DriveTab,
+import { driveLocationLabel } from '../core/location-label';
+import type {
+  DriveFolder,
+  DriveSort,
+  DriveState,
+  DriveTab,
 } from '../core/types';
 
 export function DriveLayout(props: {
@@ -40,7 +37,7 @@ export function DriveLayout(props: {
   searchRef: (element: HTMLInputElement) => void;
   onTab: (tab: DriveTab) => void;
   onFolder: (id: string | null) => void;
-  onScope: (scope: DriveScope) => void;
+  filterMenu: () => JSX.Element;
   onSort: (sort: DriveSort) => void;
   onToggleFolder: (id: string) => void;
   onFavoritesOpen: (open: boolean) => void;
@@ -64,14 +61,7 @@ export function DriveLayout(props: {
     const id = selectedFolder();
     return id ? folderAncestors(props.folders, id) : [];
   });
-  const title = () =>
-    props.state.location.kind === 'folder'
-      ? (breadcrumbs().at(-1)?.name ?? 'Drive')
-      : (DRIVE_TABS.find(
-          (tab) =>
-            props.state.location.kind === 'tab' &&
-            tab.id === props.state.location.tab
-        )?.label ?? 'My Files');
+  const title = () => driveLocationLabel(props.state.location, props.folders);
 
   const SidebarContent = () => (
     <>
@@ -87,122 +77,107 @@ export function DriveLayout(props: {
         onOpenChange={props.onFavoritesOpen}
       >
         <CollapsibleSection.Trigger class="text-xs">
-          <CollapsibleSection.Indicator class="order-first ml-0" />
-          Favorites
+          <span class="min-w-0 truncate">Favorites</span>
+          <CollapsibleSection.Indicator />
         </CollapsibleSection.Trigger>
         <CollapsibleSection.Content>
           <props.favorites />
         </CollapsibleSection.Content>
       </CollapsibleSection.Root>
-      <section aria-label="Folders" class="min-w-0">
-        <div class="mb-3 flex h-7 items-center justify-between px-3 text-xs text-ink-muted">
-          <span>Folders</span>
+      <CollapsibleSection.Root
+        open={props.state.rootOpen}
+        onOpenChange={props.onRootOpen}
+      >
+        <div class="flex items-center gap-1">
+          <CollapsibleSection.Trigger class="min-w-0 flex-1 text-xs">
+            <span class="min-w-0 truncate">Folders</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
           <Button
             variant="ghost"
-            size="sm"
-            square
-            class="size-7 rounded-lg"
-            aria-label="Search folders"
-            onClick={() => {
-              setSearchingFolders((value) => !value);
-              setFolderSearch('');
-            }}
-          >
-            <SearchIcon class="size-4" />
-          </Button>
-        </div>
-        <Show when={searchingFolders()}>
-          <SearchBar
+            size="icon-sm"
             label="Search folders"
-            placeholder="Search folders"
-            value={folderSearch()}
-            onValueChange={setFolderSearch}
-            class="mb-2"
-          />
-        </Show>
-        <div
-          class={cn(
-            'flex min-w-0 items-center rounded-xl',
-            selectedFolder() === null ? 'bg-active' : 'hover:bg-hover'
-          )}
-        >
-          <Button
-            variant="ghost"
-            size="sm"
-            square
-            class="size-6 shrink-0 rounded-lg not-disabled:hover:bg-transparent not-touch:not-disabled:hover:bg-none not-touch:not-disabled:active:bg-none"
-            aria-label={
-              props.state.rootOpen
-                ? 'Collapse Drive folders'
-                : 'Expand Drive folders'
-            }
-            aria-expanded={props.state.rootOpen}
-            onClick={() => props.onRootOpen(!props.state.rootOpen)}
-          >
-            <CaretRightIcon
-              class={cn(
-                'size-3 transition-transform',
-                props.state.rootOpen && 'rotate-90'
-              )}
-            />
-          </Button>
-          <ViewSidebar.Item
-            class={cn(
-              'min-w-0 flex-1 px-2 font-normal bg-transparent not-disabled:hover:bg-transparent not-touch:not-disabled:hover:bg-none not-touch:not-disabled:active:bg-none',
-              selectedFolder() === null && 'text-ink'
-            )}
-            aria-current={selectedFolder() === null ? 'page' : undefined}
+            class="ml-auto mr-2 shrink-0 rounded-lg"
             onClick={() => {
-              props.onFolder(null);
-              setNavigationOpen(false);
+              const open = !searchingFolders();
+              setSearchingFolders(open);
+              setFolderSearch('');
+              if (open) props.onRootOpen(true);
             }}
           >
-            <FolderIcon class="size-4 shrink-0" />
-            <span>Drive</span>
-          </ViewSidebar.Item>
+            <SearchIcon class="size-3.5" />
+          </Button>
         </div>
-        <Show when={props.state.rootOpen || folderSearch().trim()}>
-          <div class="ml-3 border-l border-edge pl-3">
-            <Show
-              when={!props.foldersLoading}
-              fallback={
-                <p role="status" class="px-3 py-2 text-sm text-ink-extra-muted">
-                  Loading folders…
-                </p>
-              }
+        <CollapsibleSection.Content>
+          <Show when={searchingFolders()}>
+            <SearchBar
+              label="Search folders"
+              placeholder="Search folders"
+              value={folderSearch()}
+              onValueChange={setFolderSearch}
+              class="mb-2"
+            />
+          </Show>
+          <ViewSidebar.Nav aria-label="Folders">
+            <ViewSidebar.Item
+              active={selectedFolder() === null}
+              onClick={() => {
+                props.onFolder(null);
+                setNavigationOpen(false);
+              }}
             >
+              <ViewSidebar.Icon>
+                <FolderIcon class="size-4" />
+              </ViewSidebar.Icon>
+              <span>Drive</span>
+            </ViewSidebar.Item>
+            <div class="ml-3 border-l border-edge pl-3">
               <Show
-                when={!props.foldersError}
+                when={!props.foldersLoading}
                 fallback={
-                  <div class="p-3 text-sm text-ink-muted">
-                    Folders couldn’t be loaded.
-                    <Button variant="ghost" onClick={props.onRetryFolders}>
-                      Try again
-                    </Button>
-                  </div>
+                  <p
+                    role="status"
+                    class="px-3 py-2 text-sm text-ink-extra-muted"
+                  >
+                    Loading folders…
+                  </p>
                 }
               >
-                <FolderTree
-                  nodes={filteredTree()}
-                  selectedId={selectedFolder()}
-                  expandedIds={props.state.expandedFolderIds}
-                  searching={!!folderSearch().trim()}
-                  onToggle={props.onToggleFolder}
-                  onSelect={(id) => {
-                    props.onFolder(id);
-                    setNavigationOpen(false);
-                  }}
-                />
-                <Show when={filteredTree().length === 0}>
-                  <p class="px-3 py-2 text-sm text-ink-extra-muted">
-                    {folderSearch() ? 'No matching folders' : 'No folders yet'}
-                  </p>
+                <Show
+                  when={!props.foldersError}
+                  fallback={
+                    <div class="p-3 text-sm text-ink-muted">
+                      Folders couldn’t be loaded.
+                      <Button variant="ghost" onClick={props.onRetryFolders}>
+                        Try again
+                      </Button>
+                    </div>
+                  }
+                >
+                  <FolderTree
+                    nodes={filteredTree()}
+                    selectedId={selectedFolder()}
+                    expandedIds={props.state.expandedFolderIds}
+                    searching={!!folderSearch().trim()}
+                    onToggle={props.onToggleFolder}
+                    onSelect={(id) => {
+                      props.onFolder(id);
+                      setNavigationOpen(false);
+                    }}
+                  />
+                  <Show when={filteredTree().length === 0}>
+                    <p class="px-3 py-2 text-sm text-ink-extra-muted">
+                      {folderSearch()
+                        ? 'No matching folders'
+                        : 'No folders yet'}
+                    </p>
+                  </Show>
                 </Show>
               </Show>
-            </Show>
-          </div>
-        </Show>
-      </section>
+            </div>
+          </ViewSidebar.Nav>
+        </CollapsibleSection.Content>
+      </CollapsibleSection.Root>
     </>
   );
 
@@ -224,10 +199,6 @@ export function DriveLayout(props: {
                   <SplitPanel.CloseButton />
                   <ViewSidebar.Title>Drive</ViewSidebar.Title>
                 </div>
-                <SplitPanel.ControlGroup>
-                  <SplitPanel.BackButton />
-                  <SplitPanel.ForwardButton />
-                </SplitPanel.ControlGroup>
               </ViewSidebar.Header>
               <ViewSidebar.Content class="flex flex-col gap-6">
                 <props.createMenu />
@@ -237,14 +208,22 @@ export function DriveLayout(props: {
           </ViewShell.Aside>
           <ViewShell.Main>
             <ViewShell.TopBar class="touch:flex">
+              <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
+              <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
+                Drive
+              </h1>
               <Show
                 when={props.state.location.kind === 'folder'}
-                fallback={title()}
+                fallback={
+                  <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:hidden">
+                    {title()}
+                  </h1>
+                }
               >
                 <span
                   role="navigation"
                   aria-label="Folder breadcrumbs"
-                  class="inline-flex max-w-full items-center gap-1 overflow-x-auto align-middle"
+                  class="inline-flex max-w-full items-center gap-1 overflow-x-auto align-middle @max-[720px]/view-shell:hidden"
                 >
                   <Button
                     variant="ghost"
@@ -281,28 +260,26 @@ export function DriveLayout(props: {
             <ViewShell.Header>
               <div class="flex min-w-0 flex-col gap-3">
                 <div class="hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
-                  <SplitPanel.ControlGroup>
-                    <SplitPanel.CloseButton />
-                    <SplitPanel.BackButton />
-                    <SplitPanel.ForwardButton />
-                  </SplitPanel.ControlGroup>
                   <Dropdown
                     open={navigationOpen()}
                     onOpenChange={setNavigationOpen}
                     placement="bottom-start"
                   >
-                    <Dropdown.Trigger
-                      variant="ghost"
-                      class="min-w-0 gap-1 rounded-lg text-lg font-semibold"
-                      aria-label="Select Drive view"
-                    >
-                      <span class="truncate">{title()}</span>
-                      <CaretDownIcon class="size-3 shrink-0" />
-                    </Dropdown.Trigger>
-                    <Dropdown.Content class="max-h-[70vh] w-72 overflow-auto rounded-2xl p-3">
-                      <div class="flex flex-col gap-5">
+                    <h1 class="min-w-0">
+                      <Dropdown.Trigger
+                        variant="ghost"
+                        size="sm"
+                        class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
+                        aria-label={`Select Drive view: ${title()}`}
+                      >
+                        <span class="truncate">{title()}</span>
+                        <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
+                      </Dropdown.Trigger>
+                    </h1>
+                    <Dropdown.Content class="max-h-[70vh] w-72 overflow-auto rounded-2xl">
+                      <Dropdown.Group class="gap-5 p-3">
                         <SidebarContent />
-                      </div>
+                      </Dropdown.Group>
                     </Dropdown.Content>
                   </Dropdown>
                   <div class="ml-auto shrink-0">
@@ -341,27 +318,7 @@ export function DriveLayout(props: {
                         ]}
                       />
                     </Show>
-                    <Show when={props.state.location.kind === 'tab'}>
-                      <ListFilterDropdown
-                        label="Filter files"
-                        groups={[
-                          {
-                            id: 'scope',
-                            label: 'Files',
-                            selectionMode: 'single',
-                            defaultOptionId: 'default',
-                            options: [
-                              { id: 'default', label: 'Default' },
-                              { id: 'all', label: 'All files' },
-                              { id: 'attachments', label: 'Email attachments' },
-                            ],
-                          },
-                        ]}
-                        isSelected={(_, id) => props.state.scope === id}
-                        onSelectionChange={(_, id) => props.onScope(id)}
-                        onClear={() => props.onScope('default')}
-                      />
-                    </Show>
+                    <props.filterMenu />
                   </div>
                 </div>
               </div>

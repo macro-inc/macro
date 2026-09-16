@@ -1,31 +1,33 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
-import { useIsNestedBlock } from '@core/block';
+import { useBlockId, useIsNestedBlock } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { blockMetadataSignal } from '@core/signal/load';
 import {
-  createEffect,
-  createMemo,
-  createSignal,
-  on,
-  Show,
-  Suspense,
-} from 'solid-js';
+  blockMetadataSignal,
+  blockTextSignal,
+  blockUserAccessSignal,
+} from '@core/signal/load';
+import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
+import { saveCodeDocument } from '../queries/code-document';
 import { isHtmlFileType } from '../util/fileMode';
+import { type CodeBlockMode, CodeContent } from './CodeContent';
 import { CodeMarkdown } from './CodeMarkdown';
-import { CodeMirror } from './CodeMirror';
-import { HtmlPreview } from './HtmlPreview';
 import { ModalsProvider } from './ModalsProvider';
 import { TopBar } from './TopBar';
-
-export type CodeBlockMode = 'code' | 'render';
 
 export default function BlockCode() {
   useBlockEntityCommands();
   const isNestedBlock = useIsNestedBlock();
+  const documentId = useBlockId();
   const blockMetadata = blockMetadataSignal.get;
+  const blockText = blockTextSignal.get;
+  const setBlockText = blockTextSignal.set;
+  const blockUserAccess = blockUserAccessSignal.get;
   const isHtmlFile = createMemo(() =>
     isHtmlFileType(blockMetadata()?.fileType)
+  );
+  const readOnly = createMemo(
+    () => blockUserAccess() !== 'owner' && blockUserAccess() !== 'edit'
   );
   const [mode, setMode] = createSignal<CodeBlockMode>('code');
 
@@ -48,11 +50,14 @@ export default function BlockCode() {
                   mode={mode()}
                   onModeChange={setMode}
                 />
-                <Show when={mode() === 'render'} fallback={<CodeMirror />}>
-                  <Suspense>
-                    <HtmlPreview />
-                  </Suspense>
-                </Show>
+                <CodeContent
+                  text={blockText() ?? ''}
+                  fileType={blockMetadata()?.fileType}
+                  readOnly={readOnly()}
+                  mode={mode()}
+                  onTextChange={setBlockText}
+                  onSave={(text) => saveCodeDocument(documentId, text)}
+                />
               </div>
             </SidePanel.Layout>
           </ModalsProvider>

@@ -22,8 +22,12 @@ More opens the full create menu in a glass bottom sheet. Other views show
 to the left of the navigation pill's right edge below. Agents has no separate
 create button; its AI input fills the row.
 The composer's compact height is 46px, matching the mobile chrome buttons,
-with a plus attachment control and centered text and actions. It expands for
-longer prompts while focused. Leaving the AI composer collapses a long draft to
+with a paperclip attachment control and centered text and actions. It expands for
+longer prompts while focused, including text that wraps without an explicit
+line break. Lists, blockquotes, headings, and other non-paragraph blocks also
+expand while editing, even when their text is short. Shortening a paragraph
+draft or widening the pane restores the compact layout when the text fits
+beside its controls. Leaving the AI composer collapses a long draft to
 a single-line preview in the accessory row; tapping it expands the same editor
 with the full draft intact. Screens with an available composer or reply controls show those
 instead; opening mobile search shows scope pills in their place. When neither
@@ -272,6 +276,12 @@ only when their card opens; syntax highlighting may appear after the diff text.
 Opening a session or expanding a group should leave the app responsive, even
 when the session contains many file edits.
 
+A thought row reads **Thinking** and shimmers only while it is the last part
+of an open turn. Earlier thoughts settle to **Thought** as soon as a tool or
+answer follows, including during long Cursor turns. A trailing thought stays
+outside the tool group so the live reasoning row stays visible. Do not wait
+for every Thinking label to disappear — only the tail one is in flight.
+
 ### Sharing a session
 
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;
@@ -395,7 +405,8 @@ Reopening or resuming the session must retain that selection and logo.
 
 Both AI composers display their model trigger label at the input text size
 (15px), using the softer secondary text color. This includes the agent model
-catalog trigger and mobile model sheet trigger.
+catalog trigger and mobile model sheet trigger. Opening the agent model
+catalog focuses the `Search models` field so you can type immediately.
 
 Soup and recent-chat icons recognize the provider in the saved model ID even
 when that model is no longer selectable. For example, `openai/gpt-5.5` retains

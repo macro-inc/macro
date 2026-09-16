@@ -159,7 +159,7 @@ const MIXED_CALENDARS = () => [
 ];
 
 describe('out of office', () => {
-  it('switching the kind forces a timed range and defaults the decline mode', () => {
+  it('keeps the all-day range on switch and defaults the decline mode', () => {
     const today = format(new Date(), 'yyyy-MM-dd');
     const controller = controllerFor({
       allDay: true,
@@ -170,7 +170,10 @@ describe('out of office', () => {
     controller.setEventKind('out_of_office');
 
     expect(controller.isOutOfOffice()).toBe(true);
-    expect(controller.state().allDay).toBe(false);
+    // The switch keeps all-day; an all-day out-of-office save is encoded as a
+    // full-day timed span, since Google has no date-based out-of-office event.
+    expect(controller.state().allDay).toBe(true);
+    expect(controller.submitValues()?.time.kind).toBe('timed');
     expect(controller.state().outOfOffice).toEqual({
       autoDeclineMode: 'decline_none',
       declineMessage: '',

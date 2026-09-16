@@ -9,44 +9,55 @@ import { toNotificationEntity } from '@entity/utils/notification';
 import { channelThreadRootId } from '@notifications/channel-thread-root';
 import type { NotificationSource } from '@notifications/notification-source';
 import {
-  getAllNotificationsFromGroup,
-  stackNotifications,
-} from '@notifications/notification-stacking';
-import {
   compositeEntity,
   type UnifiedNotification,
 } from '@notifications/types';
 import type { Accessor } from 'solid-js';
-import { match } from 'ts-pattern';
 
 function channelThreadNotificationIds(
-  notifications: UnifiedNotification[],
-  threadId?: string
+  notifications: UnifiedNotification[]
 ): Set<string> {
   const ids = new Set<string>();
 
-  if (threadId !== undefined) {
-    for (const notification of notifications) {
-      const belongsToThread = match(notification.notification_metadata)
-        .with(
-          { tag: 'channel_message_send' },
-          (metadata) => metadata.content.messageId === threadId
-        )
-        .otherwise(() => channelThreadRootId(notification) === threadId);
-      if (belongsToThread) ids.add(notification.id);
+  // Match channel stacking's membership rules without constructing or sorting
+  // display stacks. Inbox predicates call this for every channel in the list.
+  const mentionedMessageIds = new Set<string>();
+  const activeThreadIds = new Set<string>();
+  for (const notification of notifications) {
+    const metadata = notification.notification_metadata;
+    if (metadata.tag === 'channel_mention') {
+      mentionedMessageIds.add(metadata.content.messageId);
+      if (metadata.content.threadId != null) {
+        activeThreadIds.add(metadata.content.threadId);
+      }
+    } else if (metadata.tag === 'channel_message_reply') {
+      activeThreadIds.add(metadata.content.threadId);
     }
-    return ids;
   }
 
-  for (const stack of stackNotifications(notifications)) {
-    if (
-      stack.type !== 'channel_message_reply' &&
-      stack.type !== 'channel_mention'
+  for (const notification of notifications) {
+    const metadata = notification.notification_metadata;
+    if (metadata.tag === 'channel_mention') {
+      const { messageId, threadId } = metadata.content;
+      // Empty thread keys are discarded by the stacker. An orphan root
+      // mention is still a standalone mention stack, even with an empty id.
+      const key = threadId ?? messageId;
+      if (key !== '' || (threadId == null && !activeThreadIds.has(key))) {
+        ids.add(notification.id);
+      }
+    } else if (
+      metadata.tag === 'channel_message_send' ||
+      metadata.tag === 'channel_message_reply'
     ) {
-      continue;
-    }
-    for (const notification of getAllNotificationsFromGroup(stack)) {
-      ids.add(notification.id);
+      const { messageId } = metadata.content;
+      if (mentionedMessageIds.has(messageId)) continue;
+      const key =
+        metadata.tag === 'channel_message_reply'
+          ? metadata.content.threadId
+          : activeThreadIds.has(messageId)
+            ? messageId
+            : undefined;
+      if (key) ids.add(notification.id);
     }
   }
   return ids;
@@ -72,10 +83,15 @@ export function scopeChannelNotificationsForEntity(
     );
   }
   if (entity.type === 'channel_thread') {
-    const threadIds = channelThreadNotificationIds(
-      notifications,
-      entity.messageId
-    );
+    const threadIds = new Set<string>();
+    for (const notification of notifications) {
+      const metadata = notification.notification_metadata;
+      const belongsToThread =
+        metadata.tag === 'channel_message_send'
+          ? metadata.content.messageId === entity.messageId
+          : channelThreadRootId(notification) === entity.messageId;
+      if (belongsToThread) threadIds.add(notification.id);
+    }
     return notifications.filter((notification) =>
       threadIds.has(notification.id)
     );

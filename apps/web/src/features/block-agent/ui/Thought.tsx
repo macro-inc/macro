@@ -2,7 +2,9 @@
  * The agent's reasoning, modeled on the chat block's `ThinkingBlock`
  * (`@core/component/AI/component/message/ThinkingBlock.tsx`): a bare,
  * borderless row — caret, then a "Thinking"/"Thought" label that shimmers
- * while the turn is in flight — expanding to the reasoning text.
+ * while this thought is still the tail of an open turn — expanding to the
+ * reasoning text. Earlier thoughts settle the moment the next part arrives,
+ * the same rule production chat uses for `ThinkingBlock`.
  */
 
 import CaretRight from '@phosphor/caret-right.svg';
@@ -11,7 +13,7 @@ import { TextShimmer } from './TextShimmer';
 
 export interface ThoughtProps {
   text: string;
-  /** The turn is still in flight: label reads "Thinking" and shimmers. */
+  /** This thought is still the tail of an open turn: "Thinking" and shimmer. */
   active?: boolean;
   defaultOpen?: boolean;
 }

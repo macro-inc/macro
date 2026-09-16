@@ -30,7 +30,7 @@ use crate::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, ModelParam, ModelVariant,
     RepoUrl, RunListing,
 };
-use crate::domain::ports::{CursorAgents, RunStream};
+use crate::domain::ports::{ConnectedStream, CursorAgents, RunStream, StreamConnectError};
 use futures::{Stream, StreamExt as _};
 use sse_core::SseEvent;
 use std::collections::VecDeque;
@@ -549,44 +549,42 @@ const STREAM_CONNECT_ATTEMPTS: usize = 5;
 /// the second or so between a run's creation and its stream existing.
 const STREAM_RETRY_DELAY: std::time::Duration = std::time::Duration::from_millis(400);
 
+/// Cursor's header naming how long a dropped stream stays resumable.
+const RETENTION_HEADER: &str = "x-cursor-stream-retention-seconds";
+
+/// The SSE resume header. Not in `http`'s constant set, so it is spelled here.
+const LAST_EVENT_ID_HEADER: &str = "last-event-id";
+
 impl RunStream for CursorClient {
     // Covers connecting the stream, retries included; reading it belongs to
     // the caller's `cursor.run.ingest` span.
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self), fields(cursor.stream.resumed = resume_from.is_some()))]
     async fn raw_stream(
         &self,
         agent: &CursorAgentId,
         run: &CursorRunId,
+        resume_from: Option<&str>,
     ) -> Result<
-        impl Stream<Item = Result<crate::domain::journal::NativeRecord, rootcause::Report>> + Send,
-        rootcause::Report,
+        ConnectedStream<
+            impl Stream<Item = Result<crate::domain::journal::NativeRecord, rootcause::Report>> + Send,
+        >,
+        StreamConnectError,
     > {
-        // Only retry failed HTTP connects. Successful SSE records, including
-        // stream_unavailable, must reach the domain journal before inspection.
+        // Only retry an unavailable stream. Successful SSE records, including
+        // a `stream_unavailable` record, must reach the domain journal before
+        // inspection, and a rejected or expired resume position is the
+        // domain's decision to make, not a thing to sit and retry.
         for attempt in 1..=STREAM_CONNECT_ATTEMPTS {
-            match self.connect_stream(agent, run).await {
+            match self.connect_stream(agent, run, resume_from).await {
                 Ok(stream) => return Ok(stream),
                 Err(StreamConnectError::Unavailable(_)) if attempt < STREAM_CONNECT_ATTEMPTS => {
                     tokio::time::sleep(STREAM_RETRY_DELAY).await
                 }
-                Err(StreamConnectError::Unavailable(message)) => {
-                    return Err(rootcause::report!("Cursor stream unavailable: {message}"));
-                }
-                Err(StreamConnectError::Other(error)) => return Err(error),
+                Err(error) => return Err(error),
             }
         }
         unreachable!("connect attempts are nonzero")
     }
-}
-
-/// Why one stream connect did not produce a stream: the endpoint saying the
-/// stream is not there (retryable — it appears seconds after run creation),
-/// or anything else (not).
-enum StreamConnectError {
-    /// `stream_unavailable`, as an HTTP status. Carries the server's message.
-    Unavailable(String),
-    /// Every other failure.
-    Other(rootcause::Report),
 }
 
 impl CursorClient {
@@ -594,28 +592,50 @@ impl CursorClient {
         &self,
         agent: &CursorAgentId,
         run: &CursorRunId,
+        resume_from: Option<&str>,
     ) -> Result<
-        impl Stream<Item = Result<crate::domain::journal::NativeRecord, rootcause::Report>>
-        + Send
-        + use<>,
+        ConnectedStream<
+            impl Stream<Item = Result<crate::domain::journal::NativeRecord, rootcause::Report>>
+            + Send
+            + use<>,
+        >,
         StreamConnectError,
     > {
-        let response = self
+        let mut request = self
             .http
             .get(self.url(&format!("/v1/agents/{agent}/runs/{run}/stream")))
             .basic_auth(self.config.api_key.expose(), Some(""))
-            .header(reqwest::header::ACCEPT, "text/event-stream")
+            .header(reqwest::header::ACCEPT, "text/event-stream");
+        if let Some(resume_from) = resume_from {
+            request = request.header(LAST_EVENT_ID_HEADER, resume_from);
+        }
+        let response = request
             .send()
             .await
             .map_err(|error| StreamConnectError::Other(rootcause::report!(error).into()))?;
         let status = response.status();
+        // Read before the body is consumed; a resumed stream's window is the
+        // only thing that says whether the next drop is recoverable at all.
+        let retention_seconds = response
+            .headers()
+            .get(RETENTION_HEADER)
+            .and_then(|value| value.to_str().ok())
+            .and_then(|value| value.parse().ok());
         if !status.is_success() {
             let text = response.text().await.unwrap_or_default();
+            let detail = format!("{status}: {text}");
             if text.contains("stream_unavailable") {
-                return Err(StreamConnectError::Unavailable(format!("{status}: {text}")));
+                return Err(StreamConnectError::Unavailable(detail));
+            }
+            if status == reqwest::StatusCode::BAD_REQUEST && text.contains("invalid_last_event_id")
+            {
+                return Err(StreamConnectError::InvalidResumePosition(detail));
+            }
+            if status == reqwest::StatusCode::GONE || text.contains("stream_expired") {
+                return Err(StreamConnectError::Expired(detail));
             }
             return Err(StreamConnectError::Other(rootcause::report!(
-                "cursor stream -> {status}: {text}"
+                "cursor stream -> {detail}"
             )));
         }
 
@@ -636,7 +656,7 @@ impl CursorClient {
             VecDeque::new(),
             recording,
         );
-        Ok(futures::stream::try_unfold(
+        let records = futures::stream::try_unfold(
             state,
             |(mut bytes, mut decoder, mut pending, mut recording)| async move {
                 loop {
@@ -665,7 +685,7 @@ impl CursorClient {
                                     }
                                 };
                                 let SseEvent::Message(message) = record else {
-                                    continue; // `retry:`; nothing reconnects yet
+                                    continue; // `retry:`; the domain drives reconnects
                                 };
                                 pending.push_back(Ok(crate::domain::journal::NativeRecord {
                                     event: message.event.into_owned(),
@@ -681,6 +701,10 @@ impl CursorClient {
                     }
                 }
             },
-        ))
+        );
+        Ok(ConnectedStream {
+            records,
+            retention_seconds,
+        })
     }
 }

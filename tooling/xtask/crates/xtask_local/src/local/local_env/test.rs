@@ -206,12 +206,33 @@ fn emits_in_network_service_url_overrides() {
             "http://document-storage-service:8080",
         ),
         (
+            "OVERRIDE_STATIC_FILE_SERVICE_URL",
+            "http://static-file-service:8080",
+        ),
+        (
             "OVERRIDE_LEXICAL_SERVICE_URL",
             "http://lexical-service:8096",
         ),
     ] {
         assert_eq!(env.get(key).map(String::as_str), Some(expected));
     }
+}
+
+/// Permalinks the static file service mints must be loadable by a browser on
+/// the host: the instance proxy's `/static-file/*` block, not the
+/// single-instance CDN port.
+#[test]
+fn static_file_permalinks_go_through_the_instance_proxy() {
+    let env = local_env();
+    let permalink_base = env
+        .get("STATIC_FILE_SERVICE_URL")
+        .expect("static file permalink base");
+    assert!(
+        permalink_base.starts_with("http://localhost:"),
+        "{permalink_base}"
+    );
+    assert!(permalink_base.ends_with("/static-file"), "{permalink_base}");
+    assert!(!permalink_base.contains(":8100"), "{permalink_base}");
 }
 
 /// The auth service presents `SERVICE_INTERNAL_AUTH_KEY` to document storage,

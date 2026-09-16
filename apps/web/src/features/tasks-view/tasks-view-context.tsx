@@ -1,3 +1,7 @@
+import {
+  entityDetailTarget,
+  useEntityDetailNavigationStack,
+} from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { makePersistedState } from '@app/lib/persistence';
@@ -5,7 +9,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import type { ContextProviderProps } from '@solid-primitives/context';
-import { type Accessor, createSignal } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import {
   createStore,
   produce,
@@ -46,11 +50,11 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   TasksViewProviderProps
 >('TasksView', (props) => {
   const panel = useSplitPanelOrThrow();
+  const navigationStack = useEntityDetailNavigationStack();
   const userId = useUserId();
 
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'my-tasks';
-  const [selectedTask, setSelectedTask] = createSignal<TaskDetailTarget>();
 
   const [state, setState] = makePersistedState(
     createStore<TasksViewState>({
@@ -76,8 +80,36 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     })
   );
 
-  const openTask = (task: TaskDetailTarget) => setSelectedTask(task);
-  const closeTask = () => setSelectedTask();
+  const selectedTask = (): TaskDetailTarget | undefined => {
+    const taskEntry = navigationStack.entries.find(
+      (entry) =>
+        entry.data.type === 'document' && entry.data.subType?.type === 'task'
+    );
+    if (!taskEntry) return undefined;
+
+    if (
+      taskEntry.data.type !== 'document' ||
+      taskEntry.data.subType?.type !== 'task'
+    ) {
+      return undefined;
+    }
+    return {
+      id: taskEntry.data.id,
+      fallbackName: taskEntry.data.fallbackName,
+    };
+  };
+
+  const openTask = (task: TaskDetailTarget) => {
+    navigationStack.reset(
+      entityDetailTarget.document({
+        id: task.id,
+        fileType: 'md',
+        subType: { type: 'task' },
+        fallbackName: task.fallbackName,
+      })
+    );
+  };
+  const closeTask = navigationStack.clear;
 
   const setTab = (tab: TaskTab) => {
     closeTask();

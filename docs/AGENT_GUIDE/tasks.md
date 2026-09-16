@@ -4,7 +4,9 @@
 
 `Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, and `Team tasks`.
 The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, and `Filter`;
-task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
+the filter uses the legacy compact option rows and searchable Assignee, Created by,
+and Tags submenus. Multi-select choices keep the menu open; Escape dismisses it.
+Task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
 sidebar has a collapsible `Tags` section listing every personal and team tag, with a
 `New tag` button beside the heading. Clicking a tag narrows the current tab to tasks
 carrying it (the same selection as the `Tags` group of the `Filter` menu); clicking it again
@@ -17,9 +19,12 @@ New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced tas
 `How we use tasks at Macro`).
 
 Click a task row or favorite to replace the list with the editable task document. Its top
-bar shows the originating task tab as a breadcrumb, the task name and actions, Share, and
-the Details/Properties side-panel toggle. Choose the originating tab breadcrumb, a task tab,
-or a tag to return to the list. Shift-click a row or favorite to open it in a new split
+bar shows the originating task tab as a text-only return breadcrumb,
+followed by the task name and actions, Share, and the Details/Properties side-panel
+toggle. The return label matches the task title's font weight in both wide and narrow
+layouts. Narrow splits also show a close button when multiple splits are open. Choose
+the originating tab breadcrumb, a task tab, or a tag to return to the list.
+Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
 ## Create a task
@@ -53,3 +58,13 @@ Users with view or comment access see the same pills read-only.
 
 In any channel composer, toggle the `Task` switch before sending to create a task from the
 message.
+
+### Nested sidebar tags
+
+Tag names containing `/` render with one child level (for example, `Work/Urgent`).
+Deeper paths remain in the child label: `Work/Customers/Acme` appears as
+`Customers/Acme` under `Work`, alongside any actual `Customers` tag.
+Use the caret to expand or collapse a branch. A folder-only parent expands without
+filtering; clicking an actual tag selects only that tag, including when it has
+children. Personal and team paths stay separate. Ancestors of restored selected
+tags start expanded. Filter-menu options continue to show full tag names.

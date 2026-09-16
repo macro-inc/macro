@@ -361,14 +361,12 @@ function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex h-12 min-w-0 shrink-0 items-center border-b border-edge-muted px-4 py-3 touch:hidden',
+        'flex h-12 min-w-0 shrink-0 items-center gap-1 border-b border-edge-muted px-4 py-3 touch:hidden',
         local.class
       )}
       data-view-shell-top-bar=""
     >
-      <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-        {local.children}
-      </h1>
+      {local.children}
     </div>
   );
 }
