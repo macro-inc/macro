@@ -1,5 +1,9 @@
 import { createRoot, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
+import type {
+  EmailThreadHost,
+  EmailThreadListNavigation,
+} from '../context/email-thread-context';
 import type { EmailThreadKeyboardHandlers } from '../core/thread-keyboard';
 import { createThreadContext, message, thread } from '../tests/fixtures';
 import { createEmailThreadState } from './email-thread-state';
@@ -52,7 +56,10 @@ it('leaves Enter to a focused button and still activates the thread container', 
   }
 });
 
-function navigationWithList(ids: string[]) {
+function navigationWithList(
+  ids: string[],
+  listNavigation?: EmailThreadListNavigation
+) {
   vi.useFakeTimers();
   vi.stubGlobal('CSS', { escape: (value: string) => value });
   const container = document.createElement('div');
@@ -70,11 +77,12 @@ function navigationWithList(ids: string[]) {
       thread(ids.map((id) => message(id)))
     );
     const threadContext = createThreadContext({ thread: snapshot });
-    const host = {
+    const host: EmailThreadHost = {
       focusContainer: () => container.focus({ preventScroll: true }),
       registerKeyboard: (registered: EmailThreadKeyboardHandlers) => {
         handlers = registered;
       },
+      listNavigation,
     };
     const context = createEmailThreadState(threadContext, host);
     const navigation = createThreadNavigation(
@@ -96,6 +104,24 @@ function navigationWithList(ids: string[]) {
     },
   };
 }
+
+it('delegates keyboard mark done to host list navigation', () => {
+  const markDone = vi.fn();
+  const state = navigationWithList(['last'], {
+    canPrevious: () => false,
+    canNext: () => false,
+    previous: vi.fn(),
+    next: vi.fn(),
+    markDone,
+  });
+
+  try {
+    expect(state.handlers()?.markDone()).toBe(true);
+    expect(markDone).toHaveBeenCalledWith(state.context.archiveThread);
+  } finally {
+    state.dispose();
+  }
+});
 
 it.each(['next', 'previous'] as const)(
   '%s-message navigation takes focus from the old details button before Enter expands the selected message',

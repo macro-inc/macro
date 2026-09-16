@@ -1,13 +1,22 @@
+import {
+  createEntityDetailTarget,
+  useEntityDetailNavigationStack,
+} from '@app/components/entity-detail/EntityDetailNavigationStack';
+import { listOwnedSlotName } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { registerInboxFilterSplit } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { makePersistedState } from '@app/lib/persistence';
 import { usePreference } from '@app/lib/preferences/use-preference';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitPanelOrThrow,
+  withSplitPanelOwner,
+} from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
+import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import type { ContextProviderProps } from '@solid-primitives/context';
-import { type Accessor, onCleanup, type Setter } from 'solid-js';
+import { type Accessor, createSignal, onCleanup, type Setter } from 'solid-js';
 import {
   createStore,
   produce,
@@ -17,7 +26,16 @@ import {
 } from 'solid-js/store';
 import { DEFAULT_EMAIL_TAB } from './constants';
 import { createEmailViewPersistence } from './persistence';
-import type { EmailTab, EmailViewState, EmailViewStateOptions } from './types';
+import {
+  type EmailDataSource,
+  useEmailDataSource,
+} from './queries/use-email-query';
+import type {
+  EmailTab,
+  EmailThreadTarget,
+  EmailViewState,
+  EmailViewStateOptions,
+} from './types';
 
 type EmailViewProviderProps = ContextProviderProps & {
   initialState?: EmailViewStateOptions;
@@ -34,7 +52,12 @@ export type EmailViewContext = {
    * lands on the All tab. Clearing keeps the current tab.
    */
   showTags: (tagIds: string[]) => void;
-  setOpenThreadId: (threadId: string | undefined) => void;
+  source: EmailDataSource;
+  selectedThread: Accessor<EmailThreadTarget | undefined>;
+  listFocusTarget: Accessor<string | undefined>;
+  clearListFocusTarget: () => void;
+  openThread: (thread: EmailThreadTarget) => void;
+  closeThread: () => void;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
   /**
@@ -51,7 +74,10 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
   EmailViewProviderProps
 >('EmailView', (props) => {
   const panel = useSplitPanelOrThrow();
+  const navigationStack = useEntityDetailNavigationStack();
   const userId = useUserId();
+  const tagSets = useTagSets();
+  const tagSetsReady = useTagSetsReady();
   const initial = props.initialState ?? {};
   const [previewOpen, setPreviewOpen] = usePreference<boolean>(
     'macro:pref:soup:mail:preview-open',
@@ -79,9 +105,47 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     })
   );
 
+  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
+    useEmailDataSource(state, { tagSets, tagSetsReady })
+  );
+  const [listFocusTarget, setListFocusTarget] = createSignal<string>();
+
+  const selectedThread = (): EmailThreadTarget | undefined => {
+    const entry = navigationStack.entries.find(
+      (candidate) => candidate.data.type === 'email'
+    );
+    if (!entry || entry.data.type !== 'email') return undefined;
+    return {
+      id: entry.data.id,
+      fallbackName: entry.data.fallbackName,
+    };
+  };
+
+  const openThread = (thread: EmailThreadTarget) => {
+    setListFocusTarget(thread.id);
+    setState('openThreadId', thread.id);
+    navigationStack.reset(
+      createEntityDetailTarget(
+        { type: 'email', id: thread.id },
+        thread.fallbackName
+      )
+    );
+  };
+
+  const closeThread = () => {
+    setState('openThreadId', undefined);
+    navigationStack.clear();
+  };
+
+  if (state.openThreadId) {
+    openThread({ id: state.openThreadId });
+  }
+
   // A tab is a fresh slice of the mailbox: filters chosen for one tab (Done
   // on Signal, say) would silently narrow the next, so they reset with it.
   const setTab = (tab: EmailTab) => {
+    closeThread();
+    setListFocusTarget();
     if (state.tab === tab) return;
 
     setState(
@@ -92,16 +156,23 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     );
   };
 
-  const setInboxIds = (ids: string[] | undefined) =>
+  const setInboxIds = (ids: string[] | undefined) => {
+    closeThread();
+    setListFocusTarget();
     setState('inboxIds', ids === undefined ? undefined : [...ids]);
+  };
 
   const setFacets = (facets: EmailViewState['facets']) => {
+    closeThread();
+    setListFocusTarget();
     setState('facets', reconcile(normalizeFacetSelection(facets)));
   };
 
   // A tag reaches across every mailbox slice, so choosing one from a narrower
   // tab moves to All; as with `setTab`, that move drops the tab's other filters.
   const showTags = (tagIds: string[]) => {
+    closeThread();
+    setListFocusTarget();
     setState(
       produce((draft) => {
         const movesToAll = tagIds.length > 0 && draft.tab !== 'all';
@@ -113,9 +184,6 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       })
     );
   };
-
-  const setOpenThreadId = (threadId: string | undefined) =>
-    setState('openThreadId', threadId);
 
   const isSidebarSectionOpen = (id: string) =>
     !state.collapsedSidebarSectionIds.includes(id);
@@ -143,7 +211,12 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     setInboxIds,
     setFacets,
     showTags,
-    setOpenThreadId,
+    source,
+    selectedThread,
+    listFocusTarget,
+    clearListFocusTarget: () => setListFocusTarget(),
+    openThread,
+    closeThread,
     isSidebarSectionOpen,
     setSidebarSectionOpen,
     previewOpen,

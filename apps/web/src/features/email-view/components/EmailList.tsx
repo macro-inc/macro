@@ -36,7 +36,6 @@ import {
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
@@ -63,10 +62,7 @@ import {
   DEFAULT_EMAIL_LIST_STATE,
   type EmailListStateSnapshot,
 } from '../persistence';
-import {
-  type EmailDataSourceItem,
-  useEmailDataSource,
-} from '../queries/use-email-query';
+import type { EmailDataSourceItem } from '../queries/use-email-query';
 import { useEmailListHotkeys } from '../use-email-list-hotkeys';
 import { EmailDateGroupHeader } from './EmailDateGroupHeader';
 import { EmailEmptyState } from './EmailEmptyState';
@@ -87,14 +83,9 @@ export type EmailListProps = {
 };
 
 export function EmailList(props: EmailListProps) {
-  const { state, setOpenThreadId } = useEmailView();
+  const { state, source, listFocusTarget, clearListFocusTarget, openThread } =
+    useEmailView();
   const panel = useSplitPanelOrThrow();
-
-  const tagSets = useTagSets();
-  const tagSetsReady = useTagSetsReady();
-  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
-    useEmailDataSource(state, { tagSets, tagSetsReady })
-  );
 
   function openEntity(
     entity: EntityData,
@@ -105,8 +96,6 @@ export function EmailList(props: EmailListProps) {
       mergeHistory?: boolean;
     } = {}
   ) {
-    if (entity.type === 'email') setOpenThreadId(entity.id);
-
     const finishTouchHighlight = options.event
       ? persistSoupNavigationTouchHighlight(options.event)
       : undefined;
@@ -147,6 +136,18 @@ export function EmailList(props: EmailListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
+    if (
+      !newSplit &&
+      metadata?.event?.altKey !== true &&
+      !panel.handle.isControllerSplit()
+    ) {
+      openThread({
+        id: sourceRow.entity.id,
+        fallbackName: sourceRow.entity.name,
+      });
+      return;
+    }
+
     openEntity(sourceRow.entity, {
       event: metadata?.event,
       openInNewSplit: newSplit,
@@ -166,6 +167,18 @@ export function EmailList(props: EmailListProps) {
       onActivate,
     })
   );
+
+  createEffect(() => {
+    const target = listFocusTarget();
+    if (!target) return;
+    const row = source
+      .items()
+      .find((item) => item.kind === 'entity' && item.entity.id === target);
+    if (!row) return;
+    list.focus.set(row.id, { reason: 'programmatic', force: true });
+    list.selection.setAnchor(row.id);
+    clearListFocusTarget();
+  });
 
   withSplitPanelOwner(listOwnedSlotName('navigation-hotkeys'), () => {
     useSoupListNavigationHotkeys({
