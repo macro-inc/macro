@@ -19,7 +19,12 @@ use futures::channel::mpsc;
 use tokio::io::AsyncBufReadExt as _;
 use tokio::io::AsyncWriteExt as _;
 
-type Service = CursorSessionService<FakeCursor, AcpNotifier, FixedChooser>;
+type Service = CursorSessionService<
+    FakeCursor,
+    AcpNotifier,
+    FixedChooser,
+    crate::domain::ports::NoArtifactStore,
+>;
 
 /// The client's end of a served connection.
 struct TestClient {
@@ -115,6 +120,7 @@ fn serve_over_channel_with_default_model(
             notifier.clone(),
             FixedChooser(None, false),
             Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+            crate::domain::ports::NoArtifactStore,
         )
         .with_default_model(default_model.map(str::to_owned)),
     );
@@ -374,6 +380,7 @@ async fn serve_runs_a_whole_conversation_over_an_in_process_pipe() {
         notifier.clone(),
         FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        crate::domain::ports::NoArtifactStore,
     ));
     let serve_task = tokio::spawn(serve(service, notifier, agent_reader, agent_writer));
 

@@ -1,5 +1,6 @@
 //! In-memory port implementations and recorded fixtures, for tests.
 
+use crate::domain::artifact::{ArtifactListing, FetchedArtifact};
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::NativeRecord;
 use crate::domain::model::{
@@ -7,8 +8,8 @@ use crate::domain::model::{
     RunListing, RunOutcome,
 };
 use crate::domain::ports::{
-    ConnectedStream, CursorAgents, RepositoryChooser, RunStream, SessionIntent, SessionNotifier,
-    StreamConnectError,
+    ArtifactStore, ConnectedStream, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream,
+    SessionIntent, SessionNotifier, StreamConnectError,
 };
 use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
@@ -158,6 +159,10 @@ pub enum CursorCall {
     RunResult(CursorAgentId, CursorRunId),
     /// `conversation(agent)`.
     Conversation(CursorAgentId),
+    /// `list_artifacts(agent)`.
+    ListArtifacts(CursorAgentId),
+    /// `fetch_artifact(agent, path)`.
+    FetchArtifact(CursorAgentId, String),
 }
 
 /// A scripted Cursor: hands out ids, records calls, and streams whatever the
@@ -192,6 +197,17 @@ struct FakeCursorState {
     model_gate: Option<tokio::sync::oneshot::Receiver<()>>,
     reject_create: bool,
     reject_create_for_repository: bool,
+    /// Answers for `list_artifacts`, consumed in order; the last one sticks.
+    artifact_listings: Vec<Result<Vec<ArtifactListing>, String>>,
+    /// Bodies `fetch_artifact` answers with, by artifact path.
+    artifact_bodies: std::collections::HashMap<String, FetchedBody>,
+}
+
+/// One scripted artifact download.
+#[derive(Debug, Clone)]
+struct FetchedBody {
+    content_type: Option<String>,
+    bytes: Result<bytes::Bytes, String>,
 }
 
 impl FakeCursor {
@@ -326,6 +342,58 @@ impl FakeCursor {
             .lock()
             .expect("fake cursor poisoned")
             .run_listings = listings;
+    }
+
+    /// Queue the answer the next `list_artifacts` call gets.
+    ///
+    /// Calls past the last scripted answer get that answer again, which is
+    /// what a real agent-scoped listing does: it keeps returning everything
+    /// the agent has ever written.
+    pub fn script_artifact_listing(&self, listings: Vec<ArtifactListing>) {
+        self.inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .artifact_listings
+            .push(Ok(listings));
+    }
+
+    /// Queue a `list_artifacts` failure.
+    pub fn script_artifact_listing_error(&self, message: &str) {
+        self.inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .artifact_listings
+            .push(Err(message.to_owned()));
+    }
+
+    /// Give an artifact path a body, with the content type S3 would serve.
+    pub fn script_artifact_body(&self, path: &str, content_type: Option<&str>, bytes: &[u8]) {
+        self.inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .artifact_bodies
+            .insert(
+                path.to_owned(),
+                FetchedBody {
+                    content_type: content_type.map(str::to_owned),
+                    bytes: Ok(bytes::Bytes::copy_from_slice(bytes)),
+                },
+            );
+    }
+
+    /// Make one artifact path fail to download.
+    pub fn script_artifact_body_error(&self, path: &str, message: &str) {
+        self.inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .artifact_bodies
+            .insert(
+                path.to_owned(),
+                FetchedBody {
+                    content_type: None,
+                    bytes: Err(message.to_owned()),
+                },
+            );
     }
 
     /// Everything the service asked of the API, in order.
@@ -528,6 +596,123 @@ enum ScriptedStream {
     },
     /// A connect that never produces a stream.
     ConnectError(StreamConnectError),
+}
+
+impl CursorArtifacts for FakeCursor {
+    async fn list_artifacts(
+        &self,
+        agent: &CursorAgentId,
+    ) -> Result<Vec<ArtifactListing>, rootcause::Report> {
+        self.record(CursorCall::ListArtifacts(agent.clone()));
+        let mut state = self.inner.lock().expect("fake cursor poisoned");
+        let answer = if state.artifact_listings.len() > 1 {
+            state.artifact_listings.remove(0)
+        } else {
+            state
+                .artifact_listings
+                .first()
+                .cloned()
+                .unwrap_or(Ok(vec![]))
+        };
+        answer.map_err(|message| rootcause::report!("{message}"))
+    }
+
+    async fn fetch_artifact(
+        &self,
+        agent: &CursorAgentId,
+        path: &str,
+    ) -> Result<FetchedArtifact, rootcause::Report> {
+        self.record(CursorCall::FetchArtifact(agent.clone(), path.to_owned()));
+        let body = self
+            .inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .artifact_bodies
+            .get(path)
+            .cloned();
+        let body = body.ok_or_else(|| rootcause::report!("no scripted body for {path}"))?;
+        Ok(FetchedArtifact {
+            content_type: body.content_type,
+            bytes: body
+                .bytes
+                .map_err(|message| rootcause::report!("{message}"))?,
+        })
+    }
+}
+
+/// An artifact store that keeps every file in memory and hands back a URL
+/// derived from its name.
+#[derive(Debug, Clone, Default)]
+pub struct FakeArtifactStore {
+    stored: Arc<Mutex<Vec<StoredArtifact>>>,
+    failing: Arc<Mutex<Vec<String>>>,
+}
+
+/// One file a [`FakeArtifactStore`] was given.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StoredArtifact {
+    /// The name it was stored under.
+    pub name: String,
+    /// The media type it was stored with.
+    pub mime_type: String,
+    /// Its bytes.
+    pub bytes: Vec<u8>,
+}
+
+impl FakeArtifactStore {
+    /// An empty store that accepts everything.
+    #[must_use]
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Make every attempt to store `name` fail.
+    pub fn fail_for(&self, name: &str) {
+        self.failing
+            .lock()
+            .expect("fake store poisoned")
+            .push(name.to_owned());
+    }
+
+    /// Everything stored so far, in order.
+    #[must_use]
+    pub fn stored(&self) -> Vec<StoredArtifact> {
+        self.stored.lock().expect("fake store poisoned").clone()
+    }
+
+    /// The URL this store answers with for `name`.
+    #[must_use]
+    pub fn uri(name: &str) -> String {
+        format!("https://files.test/{name}")
+    }
+}
+
+impl ArtifactStore for FakeArtifactStore {
+    async fn store(
+        &self,
+        file_name: &str,
+        mime_type: &str,
+        bytes: bytes::Bytes,
+    ) -> Result<String, rootcause::Report> {
+        if self
+            .failing
+            .lock()
+            .expect("fake store poisoned")
+            .iter()
+            .any(|name| name == file_name)
+        {
+            return Err(rootcause::report!("scripted store failure for {file_name}"));
+        }
+        self.stored
+            .lock()
+            .expect("fake store poisoned")
+            .push(StoredArtifact {
+                name: file_name.to_owned(),
+                mime_type: mime_type.to_owned(),
+                bytes: bytes.to_vec(),
+            });
+        Ok(Self::uri(file_name))
+    }
 }
 
 impl RunStream for FakeCursor {

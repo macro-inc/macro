@@ -25,11 +25,14 @@ use agent_client_protocol::schema::v1::SessionId;
 use agent_session::domain::model::{AgentSession, AgentSessionId, ExternalSession, ReplicaId};
 use agent_session::domain::ports::{AgentSessionRepo, ExternalSessionRepo};
 use cursor_cloud_agents::api::{ApiKey, CursorClient, CursorConfig};
+use cursor_cloud_agents::domain::artifact::{ArtifactListing, FetchedArtifact};
 use cursor_cloud_agents::domain::model::RepoUrl as CursorRepoUrl;
 use cursor_cloud_agents::domain::model::{
     CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice,
 };
-use cursor_cloud_agents::domain::ports::{CursorAgents, RunStream};
+use cursor_cloud_agents::domain::ports::{
+    ArtifactStore, CursorAgents, CursorArtifacts, NoArtifactStore, RunStream,
+};
 use cursor_cloud_agents::domain::service::CursorSessionService;
 use cursor_cloud_agents::inbound::acp::{AcpNotifier, serve};
 use futures::Stream;
@@ -115,8 +118,11 @@ fn interval_from_now(every: std::time::Duration) -> tokio::time::Interval {
 /// [`HaikuRepositoryChooser`] built in [`Self::serve_session`] answers. The
 /// manager holds only what building one takes.
 #[derive(Clone)]
-pub struct CursorContainerManager<Sessions, Keys, Repositories> {
+pub struct CursorContainerManager<Sessions, Keys, Repositories, Store> {
     keys: Keys,
+    /// Where a session's walkthrough artifacts are re-hosted, handed to every
+    /// session this manager serves.
+    artifacts: Store,
     base_url: String,
     sessions: Sessions,
     repositories: Arc<Repositories>,
@@ -167,13 +173,17 @@ struct RestoredCursorSession {
     last_run: Option<CursorRunId>,
 }
 
-impl<Sessions, Keys, Repositories> CursorContainerManager<Sessions, Keys, Repositories>
+impl<Sessions, Keys, Repositories>
+    CursorContainerManager<Sessions, Keys, Repositories, NoArtifactStore>
 where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
     Keys: CursorApiKeys,
     Repositories: ReachableRepositories,
 {
     /// Build a manager with required durable journal storage and replica identity.
+    ///
+    /// Sessions it serves re-host no artifacts until one is given to
+    /// [`Self::with_artifact_store`].
     pub fn new(
         keys: Keys,
         base_url: String,
@@ -185,6 +195,7 @@ where
     ) -> Self {
         Self {
             keys,
+            artifacts: NoArtifactStore,
             base_url,
             sessions,
             repositories,
@@ -198,15 +209,49 @@ where
         }
     }
 
+    /// Re-host every session's walkthrough artifacts through `artifacts`.
+    ///
+    /// Changes the manager's store type rather than taking an option, so a
+    /// deployment without a static file service cannot accidentally be
+    /// handed one that fails per file.
+    #[must_use]
+    pub fn with_artifact_store<Store>(
+        self,
+        artifacts: Store,
+    ) -> CursorContainerManager<Sessions, Keys, Repositories, Store> {
+        CursorContainerManager {
+            keys: self.keys,
+            artifacts,
+            base_url: self.base_url,
+            sessions: self.sessions,
+            repositories: self.repositories,
+            usage: self.usage,
+            pull_requests: self.pull_requests,
+            journal_storage: self.journal_storage,
+            pending: self.pending,
+        }
+    }
+}
+
+impl<Sessions, Keys, Repositories, Store>
+    CursorContainerManager<Sessions, Keys, Repositories, Store>
+where
+    Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
+    Keys: CursorApiKeys,
+    Repositories: ReachableRepositories,
+    Store: ArtifactStore + Clone + 'static,
+{
     #[cfg(test)]
     fn with_memory_journal(
         keys: Keys,
         base_url: String,
         sessions: Sessions,
         repositories: Arc<Repositories>,
+        artifacts: Store,
     ) -> Self {
         Self {
             keys,
+            artifacts,
             base_url,
             sessions,
             repositories,
@@ -331,8 +376,14 @@ where
             session_id,
         );
         let service = Arc::new(
-            CursorSessionService::new(cursor, notifier.clone(), chooser, journal)
-                .with_default_model(default_model_id),
+            CursorSessionService::new(
+                cursor,
+                notifier.clone(),
+                chooser,
+                journal,
+                self.artifacts.clone(),
+            )
+            .with_default_model(default_model_id),
         );
         if let Some(restored) = restore {
             service.restore_session_with_watermark(
@@ -457,12 +508,13 @@ where
     }
 }
 
-impl<Sessions, Keys, Repositories> ContainerManager
-    for CursorContainerManager<Sessions, Keys, Repositories>
+impl<Sessions, Keys, Repositories, Store> ContainerManager
+    for CursorContainerManager<Sessions, Keys, Repositories, Store>
 where
     Sessions: AgentSessionRepo + ExternalSessionRepo + Clone,
     Keys: CursorApiKeys,
     Repositories: ReachableRepositories,
+    Store: ArtifactStore + Clone + 'static,
 {
     type Transport = PipeTransport;
 
@@ -701,6 +753,26 @@ where
         rootcause::Report,
     > {
         self.client.conversation(agent).await
+    }
+}
+
+impl<Sessions> CursorArtifacts for RecordingCursor<Sessions>
+where
+    Sessions: ExternalSessionRepo + Clone,
+{
+    async fn list_artifacts(
+        &self,
+        agent: &CursorAgentId,
+    ) -> std::result::Result<Vec<ArtifactListing>, rootcause::Report> {
+        CursorArtifacts::list_artifacts(&self.client, agent).await
+    }
+
+    async fn fetch_artifact(
+        &self,
+        agent: &CursorAgentId,
+        path: &str,
+    ) -> std::result::Result<FetchedArtifact, rootcause::Report> {
+        CursorArtifacts::fetch_artifact(&self.client, agent, path).await
     }
 }
 

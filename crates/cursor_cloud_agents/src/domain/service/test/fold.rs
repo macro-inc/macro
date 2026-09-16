@@ -36,6 +36,7 @@ pub(super) async fn replay_with_runs(
         notifier.clone(),
         FixedChooser(None, false),
         journal,
+        crate::domain::ports::NoArtifactStore,
     ));
     service.restore_session(id.clone(), Some(CursorAgentId::new("agent")), None, None);
     let (agent, mut client) = Channel::duplex();
@@ -190,6 +191,7 @@ async fn actual_live_backfill_keeps_older_answer_out_of_pending_or_cancelled_pro
             notifier.clone(),
             FixedChooser(None, false),
             journal.clone(),
+            crate::domain::ports::NoArtifactStore,
         ));
         let id = service.new_session(Path::new(""), vec![]);
         service.session(&id).unwrap().state.lock().unwrap().agent =
@@ -520,6 +522,7 @@ async fn load_waiting_for_an_active_backfill_replays_one_copy_through_fold() {
         notifier.clone(),
         FixedChooser(None, false),
         journal.clone(),
+        crate::domain::ports::NoArtifactStore,
     ));
     let id = service.new_session(Path::new(""), vec![]);
     service.session(&id).unwrap().state.lock().unwrap().agent = Some(CursorAgentId::new("agent"));

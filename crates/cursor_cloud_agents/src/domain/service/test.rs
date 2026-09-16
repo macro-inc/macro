@@ -6,12 +6,12 @@ use crate::domain::model::{
     ConversationLine, ConversationSpeaker, McpHeader, McpServer, McpTransport, RepoUrl, RunListing,
     RunOutcome, RunStatus,
 };
-use crate::domain::ports::StreamConnectError;
+use crate::domain::ports::{NoArtifactStore, StreamConnectError};
 use crate::testing::{CursorCall, FakeCursor, FixedChooser, RecordingNotifier};
 use agent_client_protocol::schema::v1::{SessionUpdate, StopReason, ToolCallStatus};
 use std::path::Path;
 
-type Service = CursorSessionService<FakeCursor, RecordingNotifier, FixedChooser>;
+type Service = CursorSessionService<FakeCursor, RecordingNotifier, FixedChooser, NoArtifactStore>;
 
 fn service(repo: Option<RepoUrl>) -> (Arc<Service>, FakeCursor, RecordingNotifier) {
     let cursor = FakeCursor::new();
@@ -21,6 +21,7 @@ fn service(repo: Option<RepoUrl>) -> (Arc<Service>, FakeCursor, RecordingNotifie
         notifier.clone(),
         FixedChooser(repo.clone(), repo.is_some()),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     ));
     (service, cursor, notifier)
 }
@@ -1287,6 +1288,7 @@ async fn restore_recovers_runs_after_the_durable_watermark_once() {
         notifier.clone(),
         FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     );
     let session = SessionId::new("cursor-acp-restored");
     service.restore_session_with_watermark(
@@ -1403,6 +1405,7 @@ async fn restore_without_a_watermark_hydrates_every_run_on_load() {
         notifier.clone(),
         FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     );
     let session = SessionId::new("cursor-acp-restored");
     service.restore_session_with_watermark(
@@ -1466,6 +1469,7 @@ async fn restore_waits_for_session_load_before_recovering_runs() {
         notifier.clone(),
         FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     );
     let session = SessionId::new("cursor-acp-restored");
     service.restore_session_with_watermark(
@@ -1794,6 +1798,7 @@ async fn durable_multiturn_load_replays_full_history_and_supports_continuation()
         live.clone(),
         FixedChooser(None, false),
         journal.clone(),
+        NoArtifactStore,
     );
     let id = service.new_session(Path::new(""), vec![]);
     for (prompt, fixture) in [
@@ -1820,6 +1825,7 @@ async fn durable_multiturn_load_replays_full_history_and_supports_continuation()
         replayed.clone(),
         FixedChooser(None, false),
         journal.clone(),
+        NoArtifactStore,
     ));
     restored.restore_session(id.clone(), Some(CursorAgentId::new("bc-fake")), None, None);
     restored.replay_session(&id).await.unwrap().complete();
@@ -1903,6 +1909,7 @@ async fn append_failure_publishes_nothing_and_never_advances_delivery_or_retries
         output.clone(),
         FixedChooser(None, false),
         journal.clone(),
+        NoArtifactStore,
     );
     let id = service.new_session(Path::new(""), vec![]);
     let tx = cursor.script_stream();
@@ -2455,6 +2462,7 @@ async fn model_resolution_precedes_intent_and_definite_rejection_aborts_it() {
             RecordingNotifier::new(),
             FixedChooser(None, false),
             journal.clone(),
+            NoArtifactStore,
         )
         .with_default_model(Some("model".into())),
     );
@@ -2484,6 +2492,7 @@ async fn model_resolution_precedes_intent_and_definite_rejection_aborts_it() {
     service.replay_session(&id).await.unwrap().complete();
 }
 
+mod artifacts;
 mod fold;
 
 #[tokio::test]
@@ -2709,6 +2718,7 @@ async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambigu
         RecordingNotifier::new(),
         UnavailableChooser,
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     );
     let id = service.new_session(Path::new(""), vec![]);
     for _ in 0..2 {
@@ -2782,6 +2792,7 @@ async fn repository_choice_receives_each_sessions_working_directory() {
         RecordingNotifier::new(),
         RecordingChooser::default(),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+        NoArtifactStore,
     );
     for cwd in ["/workspace/one", "/workspace/two"] {
         let id = service.new_session(Path::new(cwd), vec![]);
@@ -2895,6 +2906,7 @@ async fn giving_up_on_an_unfinished_run_is_still_journalled_as_interrupted() {
         RecordingNotifier::new(),
         FixedChooser(None, false),
         journal.clone(),
+        NoArtifactStore,
     ));
     let session = service.new_session(Path::new(""), Vec::new());
 

@@ -14,6 +14,7 @@ use agent_session::domain::model::{
 };
 use bot_id::BotId;
 use cursor_api_key::cipher::CursorApiKey;
+use cursor_cloud_agents::domain::ports::NoArtifactStore;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
@@ -413,7 +414,7 @@ impl ReachableRepositories for NoRepositories {
 fn manager(
     base_url: String,
     sessions: StubSessions,
-) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories> {
+) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories, NoArtifactStore> {
     manager_with_keys(base_url, sessions, StubKeys::connected())
 }
 
@@ -421,8 +422,14 @@ fn manager_with_keys(
     base_url: String,
     sessions: StubSessions,
     keys: StubKeys,
-) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories> {
-    CursorContainerManager::with_memory_journal(keys, base_url, sessions, Arc::new(NoRepositories))
+) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories, NoArtifactStore> {
+    CursorContainerManager::with_memory_journal(
+        keys,
+        base_url,
+        sessions,
+        Arc::new(NoRepositories),
+        NoArtifactStore,
+    )
 }
 
 async fn next_acp(

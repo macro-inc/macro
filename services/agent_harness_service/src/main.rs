@@ -470,6 +470,17 @@ async fn run() -> anyhow::Result<()> {
         },
         pending_commands.clone(),
     )
+    // Cursor's own artifact links expire in fifteen minutes, so a
+    // walkthrough's screenshots and recordings are re-hosted where every
+    // other user-visible blob in Macro lives.
+    .with_artifact_store(
+        cursor_cloud_agents::outbound::static_file_artifacts::StaticFileArtifactStore::new(
+            static_file_service_client::StaticFileServiceClient::new(
+                config.internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+            ),
+        ),
+    )
     .with_pull_requests(session_pull_requests.clone());
     let codex_connections: Option<Arc<dyn codex_connection::domain::ConnectionService>> = config
         .codex_oauth_kms_key_id()

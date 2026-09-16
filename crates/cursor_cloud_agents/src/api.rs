@@ -27,11 +27,14 @@ use crate::api::wire::{
     ListAgentsResponse, ListArtifactsResponse, ListModelsResponse, ListRunsResponse,
     McpServerSelection, MeResponse, ModelSelection, PromptBody, RepoSelection,
 };
+use crate::domain::artifact::{ArtifactListing, FetchedArtifact};
 use crate::domain::model::{
     ConversationLine, ConversationSpeaker, CursorAgentId, CursorModel, CursorRunId, McpServer,
     ModelChoice, ModelParam, ModelVariant, RepoUrl, RunListing,
 };
-use crate::domain::ports::{ConnectedStream, CursorAgents, RunStream, StreamConnectError};
+use crate::domain::ports::{
+    ConnectedStream, CursorAgents, CursorArtifacts, RunStream, StreamConnectError,
+};
 use futures::{Stream, StreamExt as _};
 use sse_core::SseEvent;
 use std::collections::VecDeque;
@@ -653,6 +656,51 @@ impl CursorAgents for CursorClient {
                 })
             })
             .collect())
+    }
+}
+
+impl CursorArtifacts for CursorClient {
+    #[tracing::instrument(skip(self), err)]
+    async fn list_artifacts(
+        &self,
+        agent: &CursorAgentId,
+    ) -> Result<Vec<ArtifactListing>, rootcause::Report> {
+        let reply = CursorClient::list_artifacts(self, agent).await?;
+        Ok(reply
+            .items
+            .into_iter()
+            .map(|listing| ArtifactListing {
+                path: listing.path,
+                size_bytes: listing.size_bytes,
+                updated_at: listing.updated_at,
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn fetch_artifact(
+        &self,
+        agent: &CursorAgentId,
+        path: &str,
+    ) -> Result<FetchedArtifact, rootcause::Report> {
+        // Minted and spent inside this method: the url carries credentials in
+        // its query string and stops working in fifteen minutes, so it is
+        // never returned, logged, or stored.
+        let download = self.artifact_download_url(agent, path).await?;
+        let response = CursorClient::fetch_artifact(self, &download.url).await?;
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        Ok(FetchedArtifact {
+            content_type,
+            bytes,
+        })
     }
 }
 

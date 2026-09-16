@@ -9,6 +9,7 @@
 //! contracts for capture before decoding; HTTP I/O, SSE framing, JSON-RPC, and
 //! subprocesses remain outside the service.
 
+use crate::domain::artifact::{ArtifactListing, FetchedArtifact};
 use crate::domain::model::{
     ConversationLine, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
     RunListing,
@@ -108,6 +109,85 @@ pub trait CursorAgents: Sync {
         &self,
         agent: &CursorAgentId,
     ) -> impl Future<Output = Result<Vec<ConversationLine>, rootcause::Report>> + Send;
+}
+
+/// Read the walkthrough files a Cursor agent saved.
+///
+/// A sibling of [`CursorAgents`] rather than more methods on it: the agent
+/// lifecycle is what every session needs, and artifacts are what one optional
+/// step at the end of a turn needs. Splitting them keeps a fake that scripts
+/// a listing from having to script an agent lifecycle too.
+pub trait CursorArtifacts: Sync {
+    /// Every artifact the agent has written, across all of its runs.
+    ///
+    /// Cursor offers no run filter, so a later turn still sees everything
+    /// earlier turns wrote; the caller diffs.
+    fn list_artifacts(
+        &self,
+        agent: &CursorAgentId,
+    ) -> impl Future<Output = Result<Vec<ArtifactListing>, rootcause::Report>> + Send;
+
+    /// Fetch one artifact's bytes by its listed path.
+    ///
+    /// One call rather than "mint a url" then "fetch it": the url is a
+    /// credential with a fifteen-minute life, and nothing above this port has
+    /// any business holding one.
+    fn fetch_artifact(
+        &self,
+        agent: &CursorAgentId,
+        path: &str,
+    ) -> impl Future<Output = Result<FetchedArtifact, rootcause::Report>> + Send;
+}
+
+/// Re-host an artifact's bytes somewhere that outlives the provider's link.
+///
+/// The domain's only opinion about storage is this trade: bytes in, a URL out
+/// that is still good when someone reopens the conversation next year. Which
+/// service that is, what it names the object, and how it authenticates are
+/// all outside.
+pub trait ArtifactStore: Send + Sync {
+    /// Whether this deployment can re-host anything at all.
+    ///
+    /// A service built without a store — the standalone binary, most tests —
+    /// skips artifact collection whole rather than listing files it would
+    /// only fail to store one at a time. `false` is a configuration fact, not
+    /// a failure, which is why it is a question and not an error.
+    fn is_available(&self) -> bool {
+        true
+    }
+
+    /// Store `bytes` under `file_name` and answer with their permanent URI.
+    fn store(
+        &self,
+        file_name: &str,
+        mime_type: &str,
+        bytes: bytes::Bytes,
+    ) -> impl Future<Output = Result<String, rootcause::Report>> + Send;
+}
+
+/// The store for a deployment that has nowhere to put artifacts.
+///
+/// Reports itself unavailable, so a session built with it never lists an
+/// agent's artifacts; the error exists only for a caller that ignores that
+/// and asks anyway.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoArtifactStore;
+
+impl ArtifactStore for NoArtifactStore {
+    fn is_available(&self) -> bool {
+        false
+    }
+
+    async fn store(
+        &self,
+        _file_name: &str,
+        _mime_type: &str,
+        _bytes: bytes::Bytes,
+    ) -> Result<String, rootcause::Report> {
+        Err(rootcause::report!(
+            "this session has no artifact store configured"
+        ))
+    }
 }
 
 /// One connected run stream, with what the provider said about resuming it.

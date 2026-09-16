@@ -1,5 +1,8 @@
 //! The domain: vocabulary, translation, ports, and the session service.
 
+/// Walkthrough artifacts and the markdown that presents them.
+pub mod artifact;
+
 /// Errors the domain can produce.
 pub mod error;
 
