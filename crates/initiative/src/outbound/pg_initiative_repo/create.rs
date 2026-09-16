@@ -5,7 +5,7 @@ use entity_access_db_utils::{
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::TeamShareCreation;
 use share_permission_db_utils::team_share;
-use sqlx::{PgPool, Postgres, QueryBuilder, Transaction};
+use sqlx::{PgPool, Postgres, Transaction};
 
 use super::{AdapterError, description_to_db, entity_of, map_sqlx, require_detail};
 use crate::domain::models::{
@@ -190,35 +190,34 @@ pub(super) async fn delete(pool: &PgPool, id: InitiativeId) -> Result<(), Initia
     Ok(())
 }
 
-#[expect(
-    clippy::disallowed_methods,
-    reason = "dynamic SET list; name/description presence is not static"
-)]
 async fn patch_initiative_row(
     tx: &mut Transaction<'_, Postgres>,
     args: &UpdateInitiativeRepoArgs,
 ) -> Result<(), InitiativeError> {
-    let mut builder = QueryBuilder::<Postgres>::new("UPDATE initiative SET ");
-    {
-        let mut separated = builder.separated(", ");
-        if let Some(name) = &args.name {
-            separated.push("name = ");
-            separated.push_bind_unseparated(name);
-        }
-        if let Some(description) = &args.description {
-            separated.push("description = ");
-            separated.push_bind_unseparated(description_to_db(description.as_deref()));
-        }
-        separated.push("updated_at = now()");
-    }
-    builder.push(" WHERE id = ");
-    builder.push_bind(args.id.as_uuid());
-    let result = builder
-        .build()
-        .execute(tx.as_mut())
-        .await
-        .map_err(AdapterError::Sqlx)
-        .map_err(map_sqlx)?;
+    let description_value = args
+        .description
+        .as_ref()
+        .map(|description| description_to_db(description.as_deref()))
+        .unwrap_or("");
+    let result = sqlx::query!(
+        r#"
+        UPDATE initiative
+        SET
+            name = CASE WHEN $2 THEN $3 ELSE name END,
+            description = CASE WHEN $4 THEN $5 ELSE description END,
+            updated_at = now()
+        WHERE id = $1
+        "#,
+        args.id.as_uuid(),
+        args.name.is_some(),
+        args.name.as_deref(),
+        args.description.is_some(),
+        description_value,
+    )
+    .execute(tx.as_mut())
+    .await
+    .map_err(AdapterError::Sqlx)
+    .map_err(map_sqlx)?;
     if result.rows_affected() == 0 {
         return Err(InitiativeError::NotFound);
     }
