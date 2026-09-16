@@ -1,19 +1,23 @@
-import { createBlockSignal } from '@core/block';
-import type { Accessor } from 'solid-js';
+import { type Accessor, runWithOwner } from 'solid-js';
+import { useCanvasDocument } from '../context/canvas-document-context';
 
 /**
- * Utility for creating some block-shared set of utilities that for
+ * Utility for creating a document-shared set of utilities that for
  * performance or data-safety reasons should be enforced as a singleton
- * across a block. This is useful for building grouped, derived methods and
- * state on top of block resources.
+ * within one canvas. The document context owns each initialized instance.
  */
 export function sharedInstance<T>(factory: () => T): Accessor<T> {
-  let instance = createBlockSignal<T>();
+  const key = Symbol();
   return () => {
-    const [i, setI] = instance;
-    if (i() === undefined) {
-      setI(() => factory());
+    const canvas = useCanvasDocument();
+    const instances = canvas.state.instances;
+    if (!instances.has(key)) {
+      if (!canvas.instanceOwner) {
+        throw new Error('Canvas document instance owner is not initialized');
+      }
+      const instance = runWithOwner(canvas.instanceOwner, factory);
+      instances.set(key, instance);
     }
-    return i()!;
+    return instances.get(key) as T;
   };
 }

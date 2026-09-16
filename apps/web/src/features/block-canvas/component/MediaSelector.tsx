@@ -1,7 +1,4 @@
-import {
-  canvasDraggingSignal,
-  useCanvasFileDrop,
-} from '@block-canvas/signal/fileDrop';
+import { useCanvasFileDrop } from '@block-canvas/signal/fileDrop';
 import { useRenderState } from '@block-canvas/store/RenderState';
 import { vec2 } from '@block-canvas/util/vector2';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -26,7 +23,7 @@ import { Dropdown } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { Tools } from '../constants';
-import { selectedImageSignal } from '../operation/image';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import { useSelect } from '../operation/select';
 import { useToolManager } from '../signal/toolManager';
 
@@ -42,7 +39,7 @@ type MediaItem = {
 };
 
 function ItemOption(props: { media: MediaItem }) {
-  const setSelectedImage = selectedImageSignal.set;
+  const [, setSelectedImage] = useCanvasDocument().state.signals.selectedImage;
   const toolManager = useToolManager();
   const select = useSelect();
 
@@ -79,7 +76,8 @@ export function MediaSelector() {
   //const copiedFileID = copiedFile();
   const select = useSelect();
   const { handleFileDrop } = useCanvasFileDrop();
-  const [isDragging, setIsDragging] = canvasDraggingSignal;
+  const [isDragging, setIsDragging] =
+    useCanvasDocument().state.signals.canvasDragging;
   const { viewBox } = useRenderState();
   const centerVec = createMemo(() => {
     return vec2(viewBox().x + viewBox().w / 2, viewBox().y + viewBox().h / 2);

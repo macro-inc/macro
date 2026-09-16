@@ -16,7 +16,7 @@ import {
 } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
 import { useIsAuthenticated } from '@core/auth';
-import { createBlockSignal, useBlockId } from '@core/block';
+import { useBlockId } from '@core/block';
 import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import {
@@ -44,11 +44,9 @@ import IconShared from '@phosphor/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { onMount } from 'solid-js';
 import { URL_PARAMS } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import { useToolManager } from '../signal/toolManager';
-import { currentSavedFile } from '../store/canvasData';
 import { useRenderState } from '../store/RenderState';
-
-export const connectorTypeMenuTriggerSignal = createBlockSignal(false);
 
 export function TopBar() {
   const analytics = useAnalytics();
@@ -57,7 +55,8 @@ export function TopBar() {
 
   const toolManager = useToolManager();
   const { getLocation } = useRenderState();
-  const getCurrentSavedFile = currentSavedFile.get;
+  const [getCurrentSavedFile] =
+    useCanvasDocument().state.signals.currentSavedFile;
   const documentId = useBlockId();
   const fileName = useBlockDocumentName('Unknown Filename');
   const downloadName = useBlockDocumentDownloadName('Unknown Filename');
