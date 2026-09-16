@@ -149,8 +149,7 @@ async fn drain_available_commands_update(client: &mut agent_client_protocol::Cha
     let value = serde_json::to_value(&frame).unwrap();
     assert_eq!(value["method"], "session/update", "{value}");
     assert_eq!(
-        value["params"]["update"]["sessionUpdate"],
-        "available_commands_update",
+        value["params"]["update"]["sessionUpdate"], "available_commands_update",
         "session/load is followed by the slash-command catalog, got {value}"
     );
 }
