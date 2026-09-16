@@ -6,7 +6,6 @@ use sqlx::{Pool, Postgres, Transaction};
 #[tracing::instrument(skip(db))]
 pub async fn delete_document(db: &Pool<Postgres>, document_id: &str) -> anyhow::Result<()> {
     let mut transaction = db.begin().await?;
-    // Delete pins
     sqlx::query!(
         r#"
         DELETE FROM "Pin" WHERE "pinnedItemId" = $1 AND "pinnedItemType" = $2
@@ -17,7 +16,6 @@ pub async fn delete_document(db: &Pool<Postgres>, document_id: &str) -> anyhow::
     .execute(&mut *transaction)
     .await?;
 
-    // Delete from history
     sqlx::query!(
         r#"
         DELETE FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = $2
@@ -28,7 +26,6 @@ pub async fn delete_document(db: &Pool<Postgres>, document_id: &str) -> anyhow::
     .execute(&mut *transaction)
     .await?;
 
-    // Get share permission if present
     let share_permission: Option<String> = sqlx::query!(
         r#"
             SELECT "sharePermissionId" as share_permission_id
@@ -41,7 +38,6 @@ pub async fn delete_document(db: &Pool<Postgres>, document_id: &str) -> anyhow::
     .await?;
 
     if let Some(share_permission) = share_permission {
-        // Delete share permission
         sqlx::query!(
             r#"
             DELETE FROM "SharePermission" WHERE id = $1"#,
@@ -51,7 +47,6 @@ pub async fn delete_document(db: &Pool<Postgres>, document_id: &str) -> anyhow::
         .await?;
     }
 
-    // Delete document
     sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id)
         .execute(&mut *transaction)
         .await?;

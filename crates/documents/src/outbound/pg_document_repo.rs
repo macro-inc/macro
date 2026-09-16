@@ -301,7 +301,6 @@ impl DocumentRepo for PgDocumentRepo {
     async fn soft_delete_document(&self, document_id: &str) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
 
-        // Delete pins
         sqlx::query!(
             r#"
             DELETE FROM "Pin" WHERE "pinnedItemId" = $1 AND "pinnedItemType" = $2
@@ -312,7 +311,6 @@ impl DocumentRepo for PgDocumentRepo {
         .execute(&mut *transaction)
         .await?;
 
-        // Delete from history
         sqlx::query!(
             r#"
             DELETE FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = $2
@@ -323,7 +321,6 @@ impl DocumentRepo for PgDocumentRepo {
         .execute(&mut *transaction)
         .await?;
 
-        // Soft delete the document
         sqlx::query!(
             r#"
             UPDATE "Document"
@@ -1125,10 +1122,8 @@ impl DocumentRepo for PgDocumentRepo {
             create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
         }
 
-        // Create share permission
         create::set_share_permission(&mut transaction, &document_id, &share_permission).await?;
 
-        // Insert user entity access (Owner level)
         entity_access_db_utils::insert_entity_access_row(
             &mut transaction,
             &document_id,
@@ -1150,7 +1145,6 @@ impl DocumentRepo for PgDocumentRepo {
         .await
         .map_err(registry_protocol_error)?;
 
-        // Insert user history
         let now = chrono::Utc::now();
         create::insert_history(&mut transaction, &document_id, &user_id, &now).await?;
 

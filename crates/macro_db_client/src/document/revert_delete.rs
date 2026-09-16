@@ -10,7 +10,6 @@ pub async fn revert_delete_document(
 ) -> anyhow::Result<()> {
     let mut transaction = db.begin().await.context("unable to begin transaction")?;
 
-    // Remove deletedAt for document
     let document_owner = sqlx::query!(
         r#"
         UPDATE "Document"
@@ -29,7 +28,6 @@ pub async fn revert_delete_document(
         entity_registry_db_utils::clear_deleted(&mut transaction, document_uuid).await?;
     }
 
-    // Add document back to history
     sqlx::query!(
         r#"
         INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")
