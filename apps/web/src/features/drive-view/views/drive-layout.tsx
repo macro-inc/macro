@@ -239,7 +239,11 @@ export function DriveLayout(props: {
             <ViewShell.TopBar class="touch:flex">
               <Show
                 when={props.state.location.kind === 'folder'}
-                fallback={title()}
+                fallback={
+                  <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
+                    {title()}
+                  </h1>
+                }
               >
                 <span
                   role="navigation"

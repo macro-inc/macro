@@ -95,3 +95,19 @@ it('leaves touch headers without a desktop close control', () => {
   expect(view.queryByRole('button', { name: 'Close' })).toBeNull();
   expect(view.queryByRole('button', { name: 'New chat' })).not.toBeNull();
 });
+
+it('can omit the desktop close control', () => {
+  const view = render(() => (
+    <SplitPanel.Root controller={controller(() => true)}>
+      <SidebarCreateHeader
+        title="Email"
+        label="New email"
+        onCreate={vi.fn()}
+        showCloseButton={false}
+      />
+    </SplitPanel.Root>
+  ));
+
+  expect(view.queryByRole('button', { name: 'Close' })).toBeNull();
+  expect(view.queryByText('Email')).not.toBeNull();
+});
