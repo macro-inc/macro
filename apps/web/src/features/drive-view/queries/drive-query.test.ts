@@ -14,7 +14,7 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import type { DriveSelection } from '../context/drive-source';
-import { driveQuery } from './drive-query';
+import { driveFilterTab, driveQuery } from './drive-query';
 
 const selection: DriveSelection = {
   location: { kind: 'tab', tab: 'owned' },
@@ -25,6 +25,7 @@ const selection: DriveSelection = {
 describe('Drive query scopes', () => {
   it('keeps owned/shared scopes and excludes tasks and disabled snippets', () => {
     const owned = driveQuery(selection, 'me');
+    expect(driveFilterTab(selection)).toBe('owned');
     expect(owned.filters.include?.documentOwnerId).toEqual(['me']);
     expect(owned.filters.exclude?.subType).toEqual(['task', 'snippet']);
     const shared = driveQuery(
@@ -35,6 +36,10 @@ describe('Drive query scopes', () => {
     expect(shared.clientFilters.and).toContain('shared-entity');
   });
   it('allows all files and attachments without retaining the owned restriction', () => {
+    expect(driveFilterTab({ ...selection, scope: 'all' })).toBe('all');
+    expect(driveFilterTab({ ...selection, scope: 'attachments' })).toBe(
+      'attachments'
+    );
     const all = driveQuery({ ...selection, scope: 'all' }, 'me');
     expect(all.filters.include?.documentOwnerId).toBeUndefined();
     const attachments = driveQuery(

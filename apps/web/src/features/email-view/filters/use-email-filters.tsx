@@ -28,7 +28,7 @@ export function useEmailFilters() {
   // Tags come last: the static groups are short, the tag list grows with use.
   const groups = createMemo((): EmailFilterGroup[] => [
     ...STATIC_FILTER_GROUPS,
-    tagGroup(),
+    ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
   ]);
   const groupFor = (groupId: EmailFilterGroupId) =>
     groups().find((group) => group.id === groupId);

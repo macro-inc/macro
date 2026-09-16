@@ -4,7 +4,9 @@
 
 `Go to Tasks` → `/app/component/tasks`. Tabs: `My tasks`, `Created by me`, and `Team tasks`.
 The desktop toolbar contains search (`Ctrl+F`), `Sort`, `Group`, and `Filter`;
-task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
+the filter uses the legacy compact option rows and searchable Assignee, Created by,
+and Tags submenus. Multi-select choices keep the menu open; Escape dismisses it.
+Task creation is available from the `New` button in the Tasks sidebar. Below the tabs the
 sidebar has a collapsible `Tags` section listing every personal and team tag, with a
 `New tag` button beside the heading. Clicking a tag narrows the current tab to tasks
 carrying it (the same selection as the `Tags` group of the `Filter` menu); clicking it again

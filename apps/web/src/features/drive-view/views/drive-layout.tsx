@@ -1,6 +1,5 @@
 import {
   CollapsibleSection,
-  ListFilterDropdown,
   ListSortDropdown,
   SearchBar,
   ViewShell,
@@ -23,7 +22,6 @@ import {
 import {
   DRIVE_TABS,
   type DriveFolder,
-  type DriveScope,
   type DriveSort,
   type DriveState,
   type DriveTab,
@@ -40,7 +38,7 @@ export function DriveLayout(props: {
   searchRef: (element: HTMLInputElement) => void;
   onTab: (tab: DriveTab) => void;
   onFolder: (id: string | null) => void;
-  onScope: (scope: DriveScope) => void;
+  filterMenu: () => JSX.Element;
   onSort: (sort: DriveSort) => void;
   onToggleFolder: (id: string) => void;
   onFavoritesOpen: (open: boolean) => void;
@@ -341,27 +339,7 @@ export function DriveLayout(props: {
                         ]}
                       />
                     </Show>
-                    <Show when={props.state.location.kind === 'tab'}>
-                      <ListFilterDropdown
-                        label="Filter files"
-                        groups={[
-                          {
-                            id: 'scope',
-                            label: 'Files',
-                            selectionMode: 'single',
-                            defaultOptionId: 'default',
-                            options: [
-                              { id: 'default', label: 'Default' },
-                              { id: 'all', label: 'All files' },
-                              { id: 'attachments', label: 'Email attachments' },
-                            ],
-                          },
-                        ]}
-                        isSelected={(_, id) => props.state.scope === id}
-                        onSelectionChange={(_, id) => props.onScope(id)}
-                        onClear={() => props.onScope('default')}
-                      />
-                    </Show>
+                    <props.filterMenu />
                   </div>
                 </div>
               </div>

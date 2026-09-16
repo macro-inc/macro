@@ -100,10 +100,9 @@ function Root(props: MobileFilterDrawerProps) {
                 <Button
                   variant="ghost"
                   size="sm"
-                  class="min-h-10 rounded-full bg-ink/6 px-4"
+                  class="min-h-10 px-4 text-failure-ink not-touch:not-disabled:hover:text-failure-ink"
                   onClick={() => props.onClear()}
                 >
-                  <XIcon class="size-3!" />
                   Clear all
                 </Button>
               </div>
