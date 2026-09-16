@@ -8,6 +8,10 @@
 //! a no-op, and the `sdk-v*` tag is written *after* a successful publish, which
 //! makes the tag a record of what shipped rather than the trigger.
 //!
+//! What counts as a releasable version lives in `packages/sdk/scripts/release.ts`
+//! so `just bump` and this workflow apply one policy, comparing with `semver`
+//! rather than shell.
+//!
 //! [`publish_sdk`](super::publish_sdk) keeps its tag trigger as the manual
 //! recovery path. A tag pushed from here uses `GITHUB_TOKEN`, which by design
 //! does not start another workflow run, so the two never double-publish.
@@ -56,8 +60,8 @@ fn release() -> Job {
         .add_step(steps::setup_bun().add_with(("bun-version", "1.3.5")))
         .add_step(setup_node())
         .add_step(setup_npm())
+        .add_step(install_dependencies())
         .add_step(resolve_release())
-        .add_step(guard(install_dependencies()))
         .add_step(guard(validate()))
         .add_step(guard(publish_package()))
         .add_step(guard(tag_release()))
@@ -80,59 +84,13 @@ fn setup_npm() -> Step<Run> {
     Step::new("Setup npm").run("npm install --global 'npm@^11.5.1'")
 }
 
-/// Decide whether this push is a release. The manifest version is compared
-/// against npm, not against the previous commit: a re-run, a revert, or an
-/// unrelated manifest edit then resolves to a no-op instead of a failed publish.
-/// A version *below* npm's latest fails loudly rather than silently skipping —
-/// it means someone downgraded the manifest by accident.
+/// Decide whether this push is a release. The policy and its semver
+/// comparisons live in `packages/sdk/scripts/release.ts`, shared with
+/// `just bump` and unit-tested, so this step stays a single call.
 fn resolve_release() -> Step<Run> {
     Step::new("Resolve release version")
-        .run(indoc::indoc! {r#"
-            set -euo pipefail
-
-            version="$(node -p "require('./packages/sdk/package.json').version")"
-            tag="sdk-v${version}"
-            echo "version=${version}" >> "$GITHUB_OUTPUT"
-            echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-
-            published="$(npm view "PACKAGE_NAME@${version}" version --registry=REGISTRY 2>/dev/null || true)"
-            if [ -n "$published" ]; then
-              echo "PACKAGE_NAME@${version} is already published; nothing to release."
-              echo "release=false" >> "$GITHUB_OUTPUT"
-              exit 0
-            fi
-
-            latest="$(npm view PACKAGE_NAME version --registry=REGISTRY 2>/dev/null || true)"
-            if [ -n "$latest" ] && ! node -e '
-              const [next, current] = process.argv.slice(1);
-              const core = (v) => v.split("-")[0].split(".").map(Number);
-              const [a, b] = [core(next), core(current)];
-              if (a.length !== 3 || a.some(Number.isNaN)) {
-                console.error(`unparseable version ${next}`);
-                process.exit(1);
-              }
-              // A prerelease of the current version (0.1.0-rc.1 over 0.1.0) is
-              // deliberate, so only a lower release core is rejected.
-              for (let i = 0; i < 3; i++) {
-                if (a[i] > b[i]) process.exit(0);
-                if (a[i] < b[i]) process.exit(1);
-              }
-              process.exit(0);
-            ' "$version" "$latest"; then
-              echo "packages/sdk version ${version} is below the published latest ${latest}"
-              exit 1
-            fi
-
-            if [ -n "$(git ls-remote --tags origin "refs/tags/${tag}")" ]; then
-              echo "tag ${tag} already exists but ${version} is unpublished; inspect it before releasing"
-              exit 1
-            fi
-
-            echo "releasing PACKAGE_NAME@${version}"
-            echo "release=true" >> "$GITHUB_OUTPUT"
-        "#}
-        .replace("PACKAGE_NAME", PACKAGE_NAME)
-        .replace("REGISTRY", REGISTRY))
+        .run("bun scripts/resolve-release.ts")
+        .working_directory(xtask_paths::repo_dir!("packages/sdk"))
         .id("resolve")
 }
 
@@ -150,7 +108,7 @@ fn validate() -> Step<Run> {
 
 fn publish_package() -> Step<Run> {
     Step::new("Publish package")
-        .run("npm publish --access public")
+        .run("npm publish --access public --tag \"${{ steps.resolve.outputs.dist_tag }}\"")
         .working_directory(xtask_paths::repo_dir!("packages/sdk"))
 }
 

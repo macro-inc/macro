@@ -32,54 +32,12 @@ jobs:
         registry-url: https://registry.npmjs.org
     - name: Setup npm
       run: npm install --global 'npm@^11.5.1'
+    - name: Install dependencies
+      run: bun install --frozen-lockfile
+      working-directory: packages/sdk
     - id: resolve
       name: Resolve release version
-      run: |
-        set -euo pipefail
-
-        version="$(node -p "require('./packages/sdk/package.json').version")"
-        tag="sdk-v${version}"
-        echo "version=${version}" >> "$GITHUB_OUTPUT"
-        echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-
-        published="$(npm view "@macro-inc/sdk@${version}" version --registry=https://registry.npmjs.org 2>/dev/null || true)"
-        if [ -n "$published" ]; then
-          echo "@macro-inc/sdk@${version} is already published; nothing to release."
-          echo "release=false" >> "$GITHUB_OUTPUT"
-          exit 0
-        fi
-
-        latest="$(npm view @macro-inc/sdk version --registry=https://registry.npmjs.org 2>/dev/null || true)"
-        if [ -n "$latest" ] && ! node -e '
-          const [next, current] = process.argv.slice(1);
-          const core = (v) => v.split("-")[0].split(".").map(Number);
-          const [a, b] = [core(next), core(current)];
-          if (a.length !== 3 || a.some(Number.isNaN)) {
-            console.error(`unparseable version ${next}`);
-            process.exit(1);
-          }
-          // A prerelease of the current version (0.1.0-rc.1 over 0.1.0) is
-          // deliberate, so only a lower release core is rejected.
-          for (let i = 0; i < 3; i++) {
-            if (a[i] > b[i]) process.exit(0);
-            if (a[i] < b[i]) process.exit(1);
-          }
-          process.exit(0);
-        ' "$version" "$latest"; then
-          echo "packages/sdk version ${version} is below the published latest ${latest}"
-          exit 1
-        fi
-
-        if [ -n "$(git ls-remote --tags origin "refs/tags/${tag}")" ]; then
-          echo "tag ${tag} already exists but ${version} is unpublished; inspect it before releasing"
-          exit 1
-        fi
-
-        echo "releasing @macro-inc/sdk@${version}"
-        echo "release=true" >> "$GITHUB_OUTPUT"
-    - name: Install dependencies
-      if: steps.resolve.outputs.release == 'true'
-      run: bun install --frozen-lockfile
+      run: bun scripts/resolve-release.ts
       working-directory: packages/sdk
     - name: Validate SDK
       if: steps.resolve.outputs.release == 'true'
@@ -87,7 +45,7 @@ jobs:
       working-directory: packages/sdk
     - name: Publish package
       if: steps.resolve.outputs.release == 'true'
-      run: npm publish --access public
+      run: npm publish --access public --tag "${{ steps.resolve.outputs.dist_tag }}"
       working-directory: packages/sdk
     - name: Tag the release
       if: steps.resolve.outputs.release == 'true'

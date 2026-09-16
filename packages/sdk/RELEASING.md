@@ -44,10 +44,16 @@ follow-up PR with the bump.
 
 `Release SDK` runs on any push to `main` touching `packages/sdk/package.json`:
 
-1. Reads the manifest version and asks npm about it. Already published → no-op.
-   Below npm's latest → fails, since that means an accidental downgrade.
+1. `bun scripts/resolve-release.ts` reads the manifest version and asks npm
+   about it. Already published → no-op. Below what npm serves → fails, since
+   that is an accidental downgrade. The policy lives in
+   [`scripts/release.ts`](scripts/release.ts), shared with `just bump` and
+   unit-tested in [`tests/release.test.ts`](tests/release.test.ts); `semver`
+   does the comparing.
 2. `bun install --frozen-lockfile`, then `check`, `test`, `coverage`, `build`.
-3. `npm publish --access public` over OIDC trusted publishing.
+3. `npm publish --access public` over OIDC trusted publishing. A prerelease
+   version publishes under the `next` dist-tag so it never becomes what a plain
+   `npm install` resolves to.
 4. Pushes the lightweight tag `sdk-vX.Y.Z` at the released commit.
 
 Verify:
