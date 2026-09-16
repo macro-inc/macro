@@ -63,6 +63,10 @@ pub async fn delete_document(db: &Pool<Postgres>, document_id: &str) -> anyhow::
     )
     .await?;
 
+    if let Ok(document_uuid) = macro_uuid::string_to_uuid(document_id) {
+        entity_registry_db_utils::delete_entity(&mut transaction, document_uuid).await?;
+    }
+
     if let Err(e) = transaction.commit().await {
         tracing::error!(error=?e, "unable to commit transaction");
         return Err(anyhow::Error::from(e));
@@ -211,6 +215,7 @@ pub async fn get_shas_for_deletion(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use macro_user_id::cowlike::CowLike;
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("docx_example")))]
@@ -224,5 +229,76 @@ mod tests {
             shas,
             vec!["sha-1", "sha-1", "sha-2", "sha-2", "sha-3", "sha-4"]
         );
+    }
+
+    async fn insert_uuid_document(pool: &Pool<Postgres>) -> uuid::Uuid {
+        let document_id = uuid::Uuid::new_v4();
+        sqlx::query(
+            r#"
+            INSERT INTO "Document" (id, name, "fileType", owner)
+            VALUES ($1, 'uuid-doc', 'md', 'macro|user@user.com')
+            "#,
+        )
+        .bind(document_id.to_string())
+        .execute(pool)
+        .await
+        .unwrap();
+        document_id
+    }
+
+    async fn insert_entity_row(pool: &Pool<Postgres>, document_id: uuid::Uuid) {
+        let mut transaction = pool.begin().await.unwrap();
+        entity_registry_db_utils::insert_entity(
+            &mut transaction,
+            entity_registry_db_utils::NewEntityRecord::new(
+                document_id,
+                entity_registry_db_utils::RegisteredEntityType::Document,
+                model_owner::Owner::User(
+                    macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user@user.com")
+                        .unwrap()
+                        .into_owned(),
+                ),
+            ),
+        )
+        .await
+        .unwrap();
+        transaction.commit().await.unwrap();
+    }
+
+    async fn count_entity_rows(pool: &Pool<Postgres>, document_id: uuid::Uuid) -> i64 {
+        sqlx::query_scalar("SELECT COUNT(*) FROM entity WHERE id = $1")
+            .bind(document_id)
+            .fetch_one(pool)
+            .await
+            .unwrap()
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_document")))]
+    async fn delete_document_removes_entity_row(pool: Pool<Postgres>) {
+        let document_id = insert_uuid_document(&pool).await;
+        insert_entity_row(&pool, document_id).await;
+
+        delete_document(&pool, &document_id.to_string())
+            .await
+            .unwrap();
+
+        assert_eq!(count_entity_rows(&pool, document_id).await, 0);
+    }
+
+    #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_document")))]
+    async fn delete_document_succeeds_without_entity_row(pool: Pool<Postgres>) {
+        let document_id = insert_uuid_document(&pool).await;
+
+        delete_document(&pool, &document_id.to_string())
+            .await
+            .unwrap();
+
+        assert_eq!(count_entity_rows(&pool, document_id).await, 0);
+        let remaining: i64 = sqlx::query_scalar(r#"SELECT COUNT(*) FROM "Document" WHERE id = $1"#)
+            .bind(document_id.to_string())
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+        assert_eq!(remaining, 0);
     }
 }
