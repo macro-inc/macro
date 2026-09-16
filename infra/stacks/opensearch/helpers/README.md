@@ -39,8 +39,41 @@ that can be swapped without a code deploy.
 | `add_alias.ts`               | Idempotent additive alias (no reindex).                                |
 | `reindex_with_alias_swap.ts` | Reindex + atomic swap (handles `remove_index` for bare physical case). |
 | `create_indices.ts`          | Creates every versioned index + alias, and converges existing mappings. |
+| `migrate_agent_sessions.ts` | Repairs agent-session indexing for future events, without copying or backfilling data. |
 
 All migration scripts default to `DRY_RUN=true`; pass `DRY_RUN=false` to apply.
+
+## Repair agent-session indexing without historical data
+
+Use `migrate_agent_sessions.ts` when `agent_sessions` was auto-created with
+incorrect mappings and only future session events need to be searchable. It
+uses the canonical schema in `create_indices.ts` to create `agent_sessions_v1`,
+then atomically replaces the bare `agent_sessions` index with a write alias.
+**Applying this deletes the bare index and its old search data.** Session data
+in Postgres is untouched. No reindex, backfill, or event replay is performed.
+
+From this directory, configure `OPENSEARCH_URL`, `OPENSEARCH_USERNAME`, and
+`OPENSEARCH_PASSWORD` for the intended cluster (use a VPC connection/tunnel for
+production), then run:
+
+```sh
+ENVIRONMENT=prod DRY_RUN=true bun scripts/migrate_agent_sessions.ts
+ENVIRONMENT=prod DRY_RUN=false bun scripts/migrate_agent_sessions.ts
+```
+
+The preview prints the exact alias actions without changing anything. Apply
+validates the destination mapping and primary-shard availability before the
+atomic cutover, then checks the alias and mapping again. A correct existing
+destination is reused; a completed migration is a no-op. Incompatible destination
+mappings or unexpected alias targets cause a nonzero exit without a cutover.
+The script touches only the agent-session index and alias.
+
+The cutover has no gap where a writer can recreate the bare index. Events being
+processed during the cutover may fail or leave an incomplete projection; this
+script does not repair them. Once it completes, create a new session, complete a
+turn, and verify its name and a unique phrase from each author's message appear
+in search. Check search-processing logs for indexing errors. Historical sessions
+may become searchable if a later lifecycle event reconciles them normally.
 
 ## Adding a field to an existing index
 
