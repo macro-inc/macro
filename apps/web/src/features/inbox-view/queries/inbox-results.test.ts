@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getHomePagination } from './home-pagination';
 import { buildInboxQuery } from './inbox-query';
 import {
+  groupHomeEntitiesByDate,
   groupInboxEntitiesByDate,
   inboxGroupTimestamp,
   mergeHomeEntities,
@@ -323,6 +324,58 @@ describe('Home activity and notifications', () => {
       'a',
       'b',
     ]);
+  });
+
+  it('sorts sections and rows independently of arrival order, including clock skew and invalid dates', () => {
+    const reference = new Date(2026, 8, 14, 10);
+    const row = (id: string, sortTs: Date | string | undefined) => ({
+      ...staleTaskFreshComment,
+      id,
+      sortTs,
+    });
+    const entities = [
+      row('morning', new Date(2026, 8, 14, 8)),
+      row('invalid', 'bad date'),
+      row('hour-b', new Date(2026, 8, 14, 9, 30)),
+      row('skew', new Date(2026, 8, 14, 10, 0, 1)),
+      row('hour-a', new Date(2026, 8, 14, 9, 30)),
+      row('recent', new Date(2026, 8, 14, 9, 59)),
+      row('yesterday', new Date(2026, 8, 13, 20)),
+      row('missing', undefined),
+    ];
+    const expected = [
+      ['last-few-minutes', ['skew', 'recent']],
+      ['last-hour', ['hour-a', 'hour-b']],
+      ['this-morning', ['morning']],
+      ['yesterday', ['yesterday']],
+      ['older', ['invalid', 'missing']],
+    ];
+    for (let offset = 0; offset < entities.length; offset++) {
+      const shuffled = [
+        ...entities.slice(offset),
+        ...entities.slice(0, offset),
+      ];
+      expect(
+        groupHomeEntitiesByDate(shuffled, reference).map((group) => [
+          group.id,
+          group.entities.map((entity) => entity.id),
+        ])
+      ).toEqual(expected);
+    }
+    expect(entities[0].id).toBe('morning');
+  });
+
+  it('does not let an invalid duplicate timestamp discard valid sort evidence', () => {
+    const valid = recent('task', '2026-09-02T18:00:00Z');
+    const invalid = { ...staleTaskFreshComment, notifiedAt: 'bad date' };
+    for (const notifications of [
+      [invalid, staleTaskFreshComment],
+      [staleTaskFreshComment, invalid],
+    ]) {
+      const [row] = mergeHomeEntities(notifications, [valid], signal);
+      expect(row.sortTs).toBe(valid.touchedAt);
+      expect(row.notifiedAt).toBe(staleTaskFreshComment.notifiedAt);
+    }
   });
 });
 

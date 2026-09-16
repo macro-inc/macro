@@ -39,6 +39,7 @@ import {
 import { scheduledRemindersFilter } from '../../next-soup/filters/predicates';
 import { INBOX_FACETS, type InboxFacetContext } from '../inbox-facets';
 import type { InboxTab, InboxViewState } from '../types';
+import { homeClock, homeTimestamp } from './home-date-buckets';
 import { getHomePagination } from './home-pagination';
 import { soupItemMatchesInboxTab } from './inbox-item-filter';
 import {
@@ -192,9 +193,9 @@ export function useInboxDataSource(
     transformEntities,
   } = useInboxEntitiesQuery(state);
 
-  const [now, setNow] = createSignal(new Date());
+  const [now, setNow] = createSignal(homeClock());
   onMount(() => {
-    const timer = setInterval(() => setNow(new Date()), 30_000);
+    const timer = setInterval(() => setNow(homeClock()), 30_000);
     onCleanup(() => clearInterval(timer));
   });
 
@@ -295,11 +296,13 @@ export function useInboxDataSource(
       const transformed = transformHomeEntities(
         rawEntities(),
         search.isSearching() ? rawEntities() : recentEntities()
-      ).filter(
-        (entity) =>
-          new Date(entity.sortTs ?? 0).getTime() >
-          (homePagination()?.cutoff ?? -Infinity)
-      );
+      ).filter((entity) => {
+        const cutoff = homePagination()?.cutoff ?? -Infinity;
+        return (
+          cutoff === -Infinity ||
+          (homeTimestamp(entity.sortTs) ?? -Infinity) > cutoff
+        );
+      });
       const activeReadFacets = context.facets.read ?? [];
       const readScope = `${context.tab}:${activeReadFacets.join(',')}`;
       const admittedIds =
@@ -340,8 +343,11 @@ export function useInboxDataSource(
   );
 
   const usesServiceSearch = search.usesServiceSearch;
+  const hasNoTypes = () =>
+    state.facets.type?.length === 1 && state.facets.type[0] === 'none';
 
   const hasMore = () => {
+    if (hasNoTypes()) return false;
     if (usesServiceSearch()) return search.hasNextPage();
     return (
       (query.hasNextPage && !query.error) ||
@@ -362,7 +368,7 @@ export function useInboxDataSource(
     if (state.groupBy === 'date' && !search.isSearching()) {
       result = buildGroupedSoupRows(
         state.tab === 'signal'
-          ? groupHomeEntitiesByDate(entities().items, now())
+          ? groupHomeEntitiesByDate(entities().items, new Date(now()))
           : groupInboxEntitiesByDate(entities().items, viewContext())
       );
     } else {
@@ -373,6 +379,7 @@ export function useInboxDataSource(
   });
 
   const isLoading = () => {
+    if (hasNoTypes()) return false;
     if (!search.isSearching()) {
       return (
         (query.isLoading ||
@@ -396,6 +403,7 @@ export function useInboxDataSource(
             (state.tab === 'signal' && recentQuery.isFetching);
     },
     error: () => {
+      if (hasNoTypes()) return undefined;
       if (!usesServiceSearch())
         return entities().items.length === 0 && !hasMore()
           ? (query.error ??
@@ -415,6 +423,7 @@ export function useInboxDataSource(
     hasMore,
     isLoadingMore,
     loadMore: async () => {
+      if (hasNoTypes()) return;
       if (usesServiceSearch()) {
         await search.fetchNextPage();
         return;

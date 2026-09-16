@@ -2,6 +2,7 @@ import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateBut
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type JSX, type ParentProps, Show } from 'solid-js';
+import { InboxFilterDropdown } from './InboxFilters';
 
 function MobileInboxHeader(props: ParentProps) {
   return (
@@ -31,6 +32,7 @@ export function InboxListLayout(
             title="Home"
             label="New chat"
             onCreate={props.onNewChat}
+            actions={<InboxFilterDropdown />}
           />
         }
       >

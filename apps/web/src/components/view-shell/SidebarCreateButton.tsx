@@ -2,13 +2,14 @@ import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PlusIcon from '@phosphor/plus.svg';
 import { pressHandlers } from '@ui';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { ViewSidebar } from './ViewSidebar';
 
 export function SidebarCreateHeader(props: {
   title: string;
   label: string;
   onCreate: () => void;
+  actions?: JSX.Element;
 }) {
   return (
     <header class="flex shrink-0 flex-col">
@@ -18,6 +19,7 @@ export function SidebarCreateHeader(props: {
             <SplitPanel.CloseButton class="shrink-0" />
             <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
           </div>
+          {props.actions}
         </ViewSidebar.Header>
       </Show>
       <div class="min-w-0 px-1.5 pt-4 touch:pt-[calc(var(--safe-top,0px)+1rem)]">

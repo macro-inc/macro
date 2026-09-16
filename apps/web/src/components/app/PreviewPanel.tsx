@@ -267,7 +267,7 @@ function PreviewPanelContent(
     >
       <div
         ref={headerCollapseController.setRow}
-        class="relative flex min-h-10 w-full shrink-0 items-center justify-between bg-surface px-2"
+        class="relative flex min-h-10 w-full shrink-0 items-center justify-between bg-surface px-2 not-touch:pl-[13px]"
       >
         <Show when={props.headerLeading}>
           <div class="flex shrink-0 items-center">{props.headerLeading}</div>

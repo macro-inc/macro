@@ -563,7 +563,7 @@ export function SplitHeader(props: {
           )}
         </Show>
         <div
-          class="absolute inset-0 flex justify-start items-center touch:px-(--mobile-chrome-gutter) touch:gap-2"
+          class="absolute inset-0 flex justify-start items-center not-touch:pl-[5px] touch:px-(--mobile-chrome-gutter) touch:gap-2"
           ref={props.collapseController.setRow}
         >
           <Show

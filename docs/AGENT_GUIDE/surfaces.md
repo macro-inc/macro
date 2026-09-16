@@ -54,18 +54,27 @@ it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove r
 
 ## Home — `/app/component/inbox`
 
-With the new app views enabled, Home defaults to an unfiltered Signal feed merging
+With the new app views enabled, Home defaults to a Signal feed merging
 notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
-action. On desktop, there are no Signal/Noise tabs or filter menu. A **Home** heading
+action. On desktop, the funnel button to the right of **Home** opens **Filter Home**.
+The first menu row is an **Unread only** toggle: on shows unread items; off shows
+all items. Entity type checkboxes start checked. Unchecking **Email** hides received
+and sent mail. **Channels** controls
+both channels and reply threads; **Chats** and **Agents** have separate toggles.
+Unchecking every type shows an empty feed. **Reset filters** shows every type and
+both read states again. A badge counts hidden types plus an active status filter.
+Older saved read-only selections restore as All. The mobile drawer uses the same toggle.
+There are no desktop Signal/Noise tabs. A **Home** heading
 labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, and
 **Agents** sidebar headings. The full-width **New chat** plus pill below the heading clears the preview and returns to the Home
 starting pane; it does not create a chat. Email and Tasks have matching top pills
 for **New email** and **New task**.
 
 The Inbox provider honors an explicit initial tab, search, grouping, and facet
-selection. Returning through split history still resets the view to the unfiltered
-Signal defaults.
+selection. Filters persist per user across reloads and fresh Home navigation;
+split history restores that entry's filter selection. An explicit facet selection
+overrides saved filters. Returning through split history resets navigation to Signal.
 
 Channel thread replies remain separate Home entries from their parent channel,
 using single-line rows and a reply arrow icon on desktop and touch devices, labeled
@@ -121,8 +130,13 @@ draft. Mobile composer styling and send behavior are unchanged.
 
 Sections are Last few minutes (under five minutes), Last hour, This evening
 (6pm onward), This afternoon (noon–6pm), This morning (6am–noon), Earlier today,
-Yesterday, and the existing older-date groups. These use local time and refresh
-every 30 seconds without a new action. Scrolling near the bottom automatically
+Yesterday, and the existing older-date groups. Sections always follow this order,
+with newest rows first and entity identity breaking equal-timestamp ties.
+The reference clock uses whole minutes, so refreshing within the same minute
+preserves grouping. Rolling five-minute/hour windows continue across midnight;
+future timestamps caused by clock skew stay in the newest section, and invalid
+dates go last. Calendar sections use local time. The clock is checked every 30
+seconds without a new action. Scrolling near the bottom automatically
 loads older items. Home buffers older rows until both notification and own-activity
 pages have loaded through their timestamp, then advances the shallower feed first.
 Fetched rows still advance this boundary when display filters hide them;
