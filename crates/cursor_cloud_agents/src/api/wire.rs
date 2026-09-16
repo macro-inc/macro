@@ -224,6 +224,28 @@ pub struct ListRunsResponse {
     pub next_cursor: Option<String>,
 }
 
+/// `GET /v0/agents/{id}/conversation` response.
+///
+/// Deliberately the older API version: v1 has no conversation endpoint, and
+/// this one answers for agents v1 created.
+#[derive(Debug, Deserialize)]
+pub struct ConversationResponse {
+    /// The agent's prompts and replies, oldest first.
+    pub messages: Vec<ConversationMessage>,
+}
+
+/// One message in a `GET /v0/agents/{id}/conversation` response.
+#[derive(Debug, Deserialize)]
+pub struct ConversationMessage {
+    /// `user_message` or `assistant_message`. Anything else is skipped rather
+    /// than guessed at, so a kind Cursor adds cannot be read as a prompt.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// The message text. Absent on a kind that carries none.
+    #[serde(default)]
+    pub text: Option<String>,
+}
+
 /// One run in a `GET /v1/agents/{id}/runs` page.
 #[derive(Debug, Deserialize)]
 pub struct RunListItem {

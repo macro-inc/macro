@@ -42,7 +42,8 @@ use crate::domain::error::SessionError;
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMachine};
 use crate::domain::model::{
-    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunStatus,
+    ConversationLine, ConversationSpeaker, CursorAgentId, CursorModel, CursorRunId, McpServer,
+    ModelChoice, RepoUrl, RunStatus,
 };
 use crate::domain::ports::{
     CursorAgents, RepositoryChooser, RunStream, SessionNotifier, StreamConnectError,
@@ -1943,6 +1944,88 @@ where
         Ok(())
     }
 
+    /// Fill in prompts the journal never captured, from Cursor's own record.
+    ///
+    /// A run driven from cursor.com and mirrored here after its stream aged
+    /// out has an answer and no question: the stream is the only thing that
+    /// carries the opening message, and the run record left behind does not.
+    /// The conversation endpoint outlives both, so it is asked once per load
+    /// that has a gap, and what it recovers is journaled - a prompt written
+    /// exactly as a live one is, so it projects into place rather than onto
+    /// the end of the transcript, and so the next load needs no lookup.
+    ///
+    /// Best effort throughout. Every failure here leaves the gap exactly as
+    /// it was, which the load already serves.
+    async fn recover_lost_prompts(
+        &self,
+        id: &SessionId,
+        session: &Session,
+        agent: Option<&CursorAgentId>,
+    ) {
+        let Some(agent) = agent else {
+            return;
+        };
+        let lost = {
+            let state = session.state.lock().expect("session state poisoned");
+            runs_without_prompts(&state.journal_entries, &state.machine)
+                .into_iter()
+                .filter_map(|run| {
+                    state
+                        .machine
+                        .answer(run)
+                        .filter(|answer| !answer.is_empty())
+                        .map(|answer| (run.clone(), answer.to_owned()))
+                })
+                .collect::<Vec<_>>()
+        };
+        if lost.is_empty() {
+            return;
+        }
+        let conversation = match self.cursor.conversation(agent).await {
+            Ok(conversation) => conversation,
+            Err(error) => {
+                tracing::warn!(%error, %agent, "could not read the Cursor conversation");
+                return;
+            }
+        };
+        for (run, answer) in lost {
+            let Some(prompt) = prompt_for_answer(&conversation, &answer) else {
+                tracing::warn!(%run, "no Cursor conversation line names this run's prompt");
+                continue;
+            };
+            let blocks = vec![ContentBlock::Text(TextContent::new(prompt))];
+            if let Err(error) = self
+                .capture(id, session, None, JournalInput::Prompt(blocks), false)
+                .await
+            {
+                tracing::warn!(%error, %run, "could not journal a recovered Cursor prompt");
+                return;
+            }
+            let sequence = session
+                .state
+                .lock()
+                .expect("session state poisoned")
+                .journal_entries
+                .last()
+                .expect("captured prompt")
+                .sequence;
+            if let Err(error) = self
+                .capture(
+                    id,
+                    session,
+                    Some(&run),
+                    JournalInput::PromptAccepted(sequence),
+                    false,
+                )
+                .await
+            {
+                tracing::warn!(%error, %run, "could not link a recovered Cursor prompt");
+                return;
+            }
+            tracing::info!(%run, "recovered a lost Cursor prompt from the conversation");
+        }
+    }
+
     /// Reconstruct the entire session before allowing a successful load reply.
     /// The returned guard serializes the reply itself with every live writer.
     ///
@@ -2011,6 +2094,11 @@ where
             self.capture(id, &session, None, JournalInput::HistoryComplete, false)
                 .await?;
         }
+        // Before projecting, not after: a prompt recovered here closes the gap
+        // rather than merely surviving it, and lands in the transcript this
+        // load is about to publish.
+        self.recover_lost_prompts(id, &session, agent.as_ref())
+            .await;
         let entries = session
             .state
             .lock()
@@ -2187,6 +2275,55 @@ type HistoryUpdates = Vec<(
     Vec<SessionUpdate>,
     Option<agent_runtime_protocol::domain::turn::TurnOutcome>,
 )>;
+
+/// Runs the journal holds frames for but no opening prompt.
+///
+/// The same condition [`history_projection`] reports a gap on, named once so
+/// recovery looks for exactly what the projection would complain about.
+fn runs_without_prompts<'a>(
+    entries: &'a [JournalEntry],
+    machine: &ReplayMachine,
+) -> Vec<&'a CursorRunId> {
+    let mut missing: Vec<&CursorRunId> = Vec::new();
+    for run in entries.iter().filter_map(|e| e.run.as_ref()) {
+        if missing.contains(&run) || machine.has_prompt(run) {
+            continue;
+        }
+        let accepted_only = entries
+            .iter()
+            .filter(|e| e.run.as_ref() == Some(run))
+            .all(|e| matches!(e.input, JournalInput::PromptAccepted(_)));
+        if !accepted_only {
+            missing.push(run);
+        }
+    }
+    missing
+}
+
+/// The prompt that produced `answer`, if the conversation says so plainly.
+///
+/// Anchored on the answer the journal already holds rather than on position:
+/// Cursor's conversation carries no run ids, and its turn numbering does not
+/// track the run list once runs are cancelled or fail. An answer that appears
+/// more than once names no single turn - an agent that replied the same thing
+/// twice is ordinary - so an ambiguous match yields nothing rather than a
+/// guess. Attaching the wrong question to an answer is worse than leaving the
+/// question blank, which is all a gap costs now.
+fn prompt_for_answer<'a>(conversation: &'a [ConversationLine], answer: &str) -> Option<&'a str> {
+    let mut spoken = conversation
+        .iter()
+        .enumerate()
+        .filter(|(_, line)| line.speaker == ConversationSpeaker::Agent && line.text == answer);
+    let (at, _) = spoken.next()?;
+    if spoken.next().is_some() {
+        return None;
+    }
+    conversation[..at]
+        .iter()
+        .rev()
+        .find(|line| line.speaker == ConversationSpeaker::User)
+        .map(|line| line.text.as_str())
+}
 
 /// What a gap in the recovered history costs the caller asking for it.
 ///

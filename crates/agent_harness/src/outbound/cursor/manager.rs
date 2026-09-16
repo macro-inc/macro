@@ -692,6 +692,16 @@ where
     {
         self.client.list_runs(agent, through).await
     }
+
+    async fn conversation(
+        &self,
+        agent: &CursorAgentId,
+    ) -> std::result::Result<
+        Vec<cursor_cloud_agents::domain::model::ConversationLine>,
+        rootcause::Report,
+    > {
+        self.client.conversation(agent).await
+    }
 }
 
 impl<Sessions> RunStream for RecordingCursor<Sessions>
