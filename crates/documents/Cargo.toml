@@ -67,6 +67,8 @@ outbound = [
   "dep:aws-sdk-s3",
   "dep:base64",
   "dep:entity_access_db_utils",
+  "dep:entity_registry_db_utils",
+  "dep:model_owner",
   "dep:hex",
   "dep:share_permission_db_utils",
   "dep:sqlx",
@@ -142,6 +144,8 @@ base64 = { workspace = true, optional = true }
 cloudfront_sign = { workspace = true }
 comms_db_client = { path = "../comms_db_client", optional = true }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
+model_owner = { path = "../model_owner", optional = true }
 futures = { workspace = true }
 share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 hex = { workspace = true, optional = true }

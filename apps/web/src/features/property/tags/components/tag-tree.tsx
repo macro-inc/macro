@@ -62,17 +62,14 @@ export function TagTree(props: {
                       : props.onToggle(node)
                   }
                 >
-                  <span
-                    aria-hidden="true"
-                    class="flex size-4 shrink-0 items-center justify-center"
-                  >
+                  <ViewSidebar.Icon>
                     <Show
                       when={node.children.length > 0}
                       fallback={<TagDot color={node.tag?.color} />}
                     >
                       <BranchTagIcon node={node} />
                     </Show>
-                  </span>
+                  </ViewSidebar.Icon>
                   <span class="truncate">{node.name}</span>
                 </ViewSidebar.Item>
               </div>

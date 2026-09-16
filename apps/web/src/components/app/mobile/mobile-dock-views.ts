@@ -2,19 +2,19 @@ import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableCrm } from '@core/constant/featureFlags';
 import CompanyIcon from '@icon/wide-company.svg';
-import BellIcon from '@phosphor/bell.svg';
 import CalendarIcon from '@phosphor/calendar-blank.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
 import EmailIcon from '@phosphor/envelope.svg';
 import FilesIcon from '@phosphor/folder-simple.svg';
+import HouseIcon from '@phosphor/house.svg';
 import TasksIcon from '@phosphor/list-checks.svg';
 import CallsIcon from '@phosphor/phone.svg';
 import AgentsIcon from '@phosphor/sparkle.svg';
-import BellFillIcon from '@phosphor-fill/bell-fill.svg';
 import CalendarFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
 import ChatsFillIcon from '@phosphor-fill/chats-circle-fill.svg';
 import EmailFillIcon from '@phosphor-fill/envelope-fill.svg';
 import FilesFillIcon from '@phosphor-fill/folder-simple-fill.svg';
+import HouseFillIcon from '@phosphor-fill/house-fill.svg';
 import { createMemo } from 'solid-js';
 import type { MobileDockIcon } from './MobileDockButton';
 import type { MobileNavViewId } from './mobile-nav-views';
@@ -37,10 +37,10 @@ export type MobileDockView = {
 const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
   {
     id: 'inbox',
-    label: 'Notifications',
-    icon: BellIcon,
-    iconActive: BellFillIcon,
-    pillIcon: BellIcon,
+    label: 'Home',
+    icon: HouseIcon,
+    iconActive: HouseFillIcon,
+    pillIcon: HouseIcon,
   },
   {
     id: 'calendar',

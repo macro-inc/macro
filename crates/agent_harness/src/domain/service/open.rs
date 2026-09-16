@@ -116,7 +116,7 @@ where
         request: agent_session::domain::ports::OpenManagedSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
         let managed_defaults = self.inner.defaults.managed();
-        let (bot_id, model, harness, instructions, mcp_servers) = match request.profile {
+        let (bot_id, model, harness, instructions, mut mcp_servers) = match request.profile {
             Some(SelectedManagedPersona {
                 bot_id,
                 profile: Some(profile),
@@ -150,7 +150,17 @@ where
                 AgentMcpServers::OwnerConnections,
             ),
         };
+        let kind = AgentKind::for_session(bot_id, &harness);
+        if kind == AgentKind::CodexCloud {
+            mcp_servers = AgentMcpServers::Selected {
+                servers: Vec::new(),
+            };
+        }
         let defaults = self.inner.defaults.for_bot(bot_id);
+        // A Codex cloud session clones nothing here: it works in its cloud
+        // environment's own checkout, so this deployment's repository URL is
+        // neither stored on the row nor validated at provisioning.
+        let repo_url = (kind != AgentKind::CodexCloud).then(|| defaults.repo_url.clone());
         let sandbox_size = self
             .inner
             .sessions
@@ -163,7 +173,12 @@ where
         let egress = self
             .inner
             .egress
-            .provision(session_id, &request.owner, &defaults.repo_url, &mcp_servers)
+            .provision(
+                session_id,
+                &request.owner,
+                repo_url.as_deref(),
+                &mcp_servers,
+            )
             .await
             .map_err(into_session_error)?;
         let session = self
@@ -177,7 +192,7 @@ where
                 originating_message_id: None,
                 model,
                 harness,
-                repo_url: Some(defaults.repo_url.clone()),
+                repo_url,
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
@@ -188,7 +203,11 @@ where
             .await?;
         self.inner.publish_opened(&session).await;
 
-        let mcp_servers = egress.sandbox.acp_servers();
+        let mcp_servers = if kind == AgentKind::CodexCloud {
+            Vec::new()
+        } else {
+            egress.sandbox.acp_servers()
+        };
         let container = match self
             .inner
             .containers
@@ -321,7 +340,9 @@ where
         } = command;
         tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
         let defaults = self.defaults.for_bot(bot_id);
-        let repo_url = defaults.repo_url.clone();
+        // See the request path: a Codex cloud session has no repository URL
+        // of this deployment's to clone, store, or validate.
+        let repo_url = (runtime.kind != AgentKind::CodexCloud).then(|| defaults.repo_url.clone());
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
 
         // Provisioned before the session exists, because the row is what makes
@@ -331,7 +352,12 @@ where
         // credentials, so there is nowhere else it could correctly come from.
         let egress = self
             .egress
-            .provision(session_id, &origin.sender, &repo_url, &runtime.mcp_servers)
+            .provision(
+                session_id,
+                &origin.sender,
+                repo_url.as_deref(),
+                &runtime.mcp_servers,
+            )
             .await?;
 
         let session = self
@@ -344,7 +370,7 @@ where
                 originating_message_id: Some(origin.message_id),
                 model: runtime.model.clone(),
                 harness: runtime.harness.clone(),
-                repo_url: Some(repo_url.clone()),
+                repo_url,
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
@@ -361,7 +387,11 @@ where
             .await?;
         self.publish_opened(&session).await;
 
-        let mcp_servers = egress.sandbox.acp_servers();
+        let mcp_servers = if runtime.kind == AgentKind::CodexCloud {
+            Vec::new()
+        } else {
+            egress.sandbox.acp_servers()
+        };
         let container = match self
             .containers
             .spawn(SpawnContainer {

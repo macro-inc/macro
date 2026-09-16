@@ -8,10 +8,10 @@ use predicate_index::{OptimisticProjectionMutation, RecordKey};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use soup_filter_cache_adapter::{
-    SoupFilterCompileOutcome, authoritative_projection_mutations, compile_filter_request,
-    dirty_projection_mutations, mail, notification_deletion_updates,
-    notification_projection_updates, optimistic_notification_updates,
-    optimistic_projection_mutations,
+    SoupFilterCompileOutcome, authoritative_projection_mutations,
+    compile_current_filter_request as compile_filter_request, dirty_projection_mutations, mail,
+    notification_deletion_updates, notification_projection_updates,
+    optimistic_notification_updates, optimistic_projection_mutations,
 };
 
 /// Same request shape as the browser host's `EntityFilterCacheArgs`.
@@ -96,7 +96,7 @@ pub(super) async fn filter(
     request: EntityFilterRequest,
 ) -> Result<EntityFilterResult, String> {
     if let Some(mail_request) = request.mail {
-        return mail::page(
+        return mail::page_current(
             engine,
             generation,
             request.filters,
@@ -224,7 +224,17 @@ pub(super) async fn write_projections(
         .await
         .map_err(|error| error.to_string())?,
     );
-    Ok(projections)
+    soup_filter_cache_adapter::properties::augment_authoritative(
+        engine.storage(),
+        query,
+        operation,
+        variables,
+        data,
+        reuse_stored_identity,
+        projections,
+    )
+    .await
+    .map_err(|error| error.to_string())
 }
 
 pub(super) async fn optimistic_projections(
@@ -249,7 +259,16 @@ pub(super) async fn optimistic_projections(
             .await
             .map_err(|error| error.to_string())?,
     ));
-    Ok(projections)
+    soup_filter_cache_adapter::properties::augment_optimistic(
+        engine.storage(),
+        query,
+        operation,
+        variables,
+        data,
+        projections,
+    )
+    .await
+    .map_err(|error| error.to_string())
 }
 
 pub(super) async fn invalidation_projections(
@@ -263,7 +282,14 @@ pub(super) async fn invalidation_projections(
             .await
             .map_err(|error| error.to_string())?,
     );
-    Ok(projections)
+    projections.extend(
+        soup_filter_cache_adapter::properties::deletion_updates(engine.storage(), keys)
+            .await
+            .map_err(|error| error.to_string())?,
+    );
+    Ok(soup_filter_cache_adapter::properties::current_mutations(
+        projections,
+    ))
 }
 
 pub(super) async fn deletion_projections(
@@ -278,5 +304,12 @@ pub(super) async fn deletion_projections(
             .filter_map(|key| RecordKey::new(key.clone()).ok())
             .map(ProjectionMutation::Delete),
     );
-    Ok(projections)
+    projections.extend(
+        soup_filter_cache_adapter::properties::deletion_updates(engine.storage(), keys)
+            .await
+            .map_err(|error| error.to_string())?,
+    );
+    Ok(soup_filter_cache_adapter::properties::current_mutations(
+        projections,
+    ))
 }

@@ -636,7 +636,7 @@ where
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
                 // from cursor.com too) instead of failing the prompt.
-                self.create_run_when_free(&agent, prompt, model.as_ref(), &cancel)
+                self.create_run_when_free(&session, &agent, prompt, model.as_ref(), &cancel)
                     .await
                     .map(|run| (agent, run))
             }
@@ -756,12 +756,20 @@ where
             state.active_run = None;
             state.cancelled
         };
-        if let Err(SessionError::Cursor(error)) = &outcome {
+        // Both variants are a turn that stopped without a terminal fact, and
+        // both have to leave that record: a `Rejected` here is the turn giving
+        // up on a run still going, not a prompt refused before it ran.
+        let interrupted = match &outcome {
+            Err(SessionError::Cursor(error)) => Some(error.to_string()),
+            Err(SessionError::Rejected(message)) => Some(message.clone()),
+            _ => None,
+        };
+        if let Some(interrupted) = interrupted {
             self.capture(
                 session_id,
                 &session,
                 Some(&run),
-                JournalInput::Interrupted(error.to_string()),
+                JournalInput::Interrupted(interrupted),
                 true,
             )
             .await?;
@@ -796,8 +804,14 @@ where
         }
         // A cancel that raced the stream's own ending still reports
         // Cancelled: ACP requires it once the client sent `session/cancel`.
+        // `Rejected` included, because giving up on a run still going takes
+        // that variant now — a stop landing near the end of the poll budget
+        // must still answer Cancelled, not "Cursor is still working". Journal
+        // failures stay unmasked by cancellation, as ever.
         match outcome {
-            Ok(_) | Err(SessionError::Cursor(_)) if cancelled => Ok(StopReason::Cancelled),
+            Ok(_) | Err(SessionError::Cursor(_) | SessionError::Rejected(_)) if cancelled => {
+                Ok(StopReason::Cancelled)
+            }
             Ok(stop_reason) => Ok(stop_reason),
             Err(error) => Err(error),
         }
@@ -1156,6 +1170,20 @@ where
                         break;
                     }
                     CursorEvent::Result { status, .. } => terminal = Some(status),
+                    // The stream's own account of the run's lifecycle, and a
+                    // terminal one is a terminal fact even with no `result`
+                    // frame behind it. Observed live: a run whose record
+                    // stayed `RUNNING` with a frozen `updatedAt` announced
+                    // `FINISHED` here and sent no `result` at all, so a turn
+                    // that accepted only `result` waited out its whole poll
+                    // budget against a record that was never going to move.
+                    //
+                    // Not a break: trailing content can still be in flight,
+                    // and `done`, the stream's end, or a quiet gap closes the
+                    // turn now that there is an outcome to close it with.
+                    CursorEvent::Status { status, .. } if status.is_terminal() => {
+                        terminal = Some(status);
+                    }
                     CursorEvent::Error { .. } => break,
                     CursorEvent::Done => break,
                     _ => {}
@@ -1205,8 +1233,22 @@ where
                 sleep_unless_cancelled(cancel, POLL_INTERVAL).await;
             }
         }
-        let status = terminal
-            .ok_or_else(|| rootcause::report!("Cursor run {run} did not reach a terminal state"))?;
+        let Some(status) = terminal else {
+            // Not a failure to describe in provider terms: the run is still
+            // going as far as Cursor is concerned, and this turn has simply
+            // run out of patience. The person who prompted gets told that in
+            // their own words; the diagnostics stay in the span.
+            tracing::warn!(
+                %run,
+                attempts = POLL_ATTEMPTS,
+                "gave up waiting; Cursor still reports a non-terminal status"
+            );
+            return Err(SessionError::Rejected(
+                "Cursor has not reported a result for this run, and has stopped saying \
+                 anything about it. Prompting again starts fresh and abandons this run."
+                    .into(),
+            ));
+        };
         if strict
             && !session
                 .state
@@ -1317,11 +1359,13 @@ where
     /// wait behind, not an error. A client cancel abandons the wait.
     async fn create_run_when_free(
         &self,
+        session: &Session,
         agent: &CursorAgentId,
         prompt: &str,
         model: Option<&ModelChoice>,
         cancel: &tokio_util::sync::CancellationToken,
     ) -> Result<CursorRunId, SessionError> {
+        let mut released = false;
         for _ in 0..BUSY_ATTEMPTS {
             if cancel.is_cancelled() {
                 return Err(SessionError::Cursor(
@@ -1334,6 +1378,18 @@ where
             match self.cursor.create_run(agent, prompt, model).await {
                 Ok(run) => return Ok(run),
                 Err(error) if error.to_string().contains("agent_busy") => {
+                    // A run this session already gave up on still holds the
+                    // agent's single run slot, and it is not going to release
+                    // it by itself — waiting out the full budget would only
+                    // fail the prompt slower. Cancelling is terminal on
+                    // Cursor's side, so it frees the agent and gives the
+                    // abandoned run the terminal fact it needs to reconcile.
+                    // Done once: a run that is merely slow, or one driven from
+                    // cursor.com, is still something to wait behind.
+                    if !std::mem::replace(&mut released, true) {
+                        self.release_abandoned_runs(session, agent).await;
+                        continue;
+                    }
                     tracing::info!(%agent, "agent busy (a run is active, possibly from cursor.com); waiting");
                     if sleep_unless_cancelled(cancel, POLL_INTERVAL).await {
                         return Err(SessionError::Cursor(
@@ -1355,6 +1411,56 @@ where
             )))
             .into_dynamic(),
         ))
+    }
+
+    /// The runs a turn in this session already stopped waiting for.
+    ///
+    /// A journal fact, not a guess: a run recorded as
+    /// [`JournalInput::Interrupted`] and never reconciled is one a turn gave
+    /// up on. That is the only class of run this service may cancel or
+    /// decline to recover — a run merely still going, including one driven
+    /// from cursor.com, is someone's live conversation.
+    fn abandoned_runs(session: &Session) -> Vec<CursorRunId> {
+        let state = session.state.lock().expect("session state poisoned");
+        let reconciled: std::collections::HashSet<_> = state
+            .journal_entries
+            .iter()
+            .filter(|e| e.input == JournalInput::Reconciled)
+            .filter_map(|e| e.run.clone())
+            .collect();
+        let mut abandoned = Vec::new();
+        for run in state
+            .journal_entries
+            .iter()
+            .filter(|e| matches!(e.input, JournalInput::Interrupted(_)))
+            .filter_map(|e| e.run.as_ref())
+        {
+            if !reconciled.contains(run) && !abandoned.contains(run) {
+                abandoned.push(run.clone());
+            }
+        }
+        abandoned
+    }
+
+    /// Cancel the runs this session abandoned, freeing the agent's run slot.
+    ///
+    /// Cancellation is terminal on Cursor's side, so this both returns the
+    /// agent's single run slot and gives the abandoned run the terminal fact
+    /// it needs before it can ever reconcile.
+    ///
+    /// Best effort. A cancel that fails leaves the caller exactly where it
+    /// was, waiting out the busy agent, so there is nothing here to fail on.
+    async fn release_abandoned_runs(&self, session: &Session, agent: &CursorAgentId) {
+        for run in Self::abandoned_runs(session) {
+            match self.cursor.cancel_run(agent, &run).await {
+                Ok(()) => {
+                    tracing::info!(%agent, %run, "cancelled an abandoned run holding the agent");
+                }
+                Err(error) => {
+                    tracing::warn!(%agent, %run, %error, "could not cancel an abandoned run");
+                }
+            }
+        }
     }
 
     /// Catch up foreign runs through the same journal path as local prompts.
@@ -1397,6 +1503,22 @@ where
             .take_while(|r| Some(&r.id) != last.as_ref())
             .map(|r| r.id.clone())
             .collect();
+        // A run a turn already gave up on, which Cursor still has not ended,
+        // is not recoverable history: there is no terminal fact to reconcile
+        // against, and re-reading it cannot manufacture one. Retrying it here
+        // would fail every later prompt for as long as the run stays
+        // unfinished — which, when the provider wedges a run at `RUNNING`, is
+        // forever. Left pending instead, to be mirrored in once it does end.
+        //
+        // Deliberately not every unfinished run: one still going that no turn
+        // has abandoned — a prompt sent from cursor.com — is exactly what this
+        // backfill exists to stream in, and must still be followed.
+        let abandoned = Self::abandoned_runs(session);
+        let unfinished: std::collections::HashSet<_> = listings
+            .iter()
+            .filter(|r| !r.status.is_terminal() && abandoned.contains(&r.id))
+            .map(|r| r.id.clone())
+            .collect();
         let mut runs = Vec::new();
         // A pending run omitted by the provider listing still has to recover.
         for run in &pending {
@@ -1411,6 +1533,7 @@ where
                 runs.push(listing.id);
             }
         }
+        runs.retain(|run| !unfinished.contains(run));
         let mirrored = !runs.is_empty();
         for run in &runs {
             if !reconciled.contains(run) {

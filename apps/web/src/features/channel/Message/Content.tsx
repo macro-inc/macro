@@ -29,7 +29,7 @@ export function Content(props: ContentProps) {
         data-message-content
         class={cn(
           'whitespace-pre-wrap wrap-break-word max-w-full',
-          bigEmoji() ? 'text-4xl' : 'text-sm',
+          bigEmoji() ? 'text-4xl' : 'text-base',
           props.class
         )}
       >

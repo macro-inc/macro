@@ -1,9 +1,13 @@
+import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import {
-  dateBucket,
+  deduplicateItems,
   groupSoupEntities,
-  type SoupGroup,
-} from '@app/features/soup/collection';
-import type { EntityData, WithNotification } from '@entity';
+} from '@app/features/soup/collection/transforms';
+import type { SoupGroup } from '@app/features/soup/collection/types';
+import type { EntityWithRawNotifications } from '@app/features/soup/entity-notifications';
+import { compareDateDesc, type DateValue } from '@core/util/date';
+import type { EntityData } from '@entity';
+import { homeDateBucket } from './home-date-buckets';
 import {
   type InboxViewContext,
   inboxTabOrdersByNotification,
@@ -27,15 +31,78 @@ export const inboxGroupTimestamp = (
   (inboxTabOrdersByNotification(context) ? entity.notifiedAt : undefined) ??
   inboxSortTimestamp(entity);
 
-export function groupInboxEntitiesByDate(
-  entities: WithNotification<EntityData>[],
+export function groupInboxEntitiesByDate<T extends EntityData>(
+  entities: T[],
   context: InboxOrderContext,
-  now = new Date()
-): SoupGroup<WithNotification<EntityData>>[] {
+  now = new Date(),
+  getTimestamp: (entity: EntityData) => DateValue | null | undefined = (
+    entity
+  ) => inboxGroupTimestamp(entity, context)
+): SoupGroup<T>[] {
   return groupSoupEntities(entities, {
-    getGroupId: (entity) =>
-      dateBucket(inboxGroupTimestamp(entity, context), now).key,
+    getGroupId: (entity) => dateBucket(getTimestamp(entity), now).key,
     getGroupLabel: (_groupId, firstEntity) =>
-      dateBucket(inboxGroupTimestamp(firstEntity, context), now).label,
+      dateBucket(getTimestamp(firstEntity), now).label,
+  });
+}
+
+const latestTimestamp = (
+  first: DateValue | null | undefined,
+  second: DateValue | null | undefined
+) => (compareDateDesc(first, second) <= 0 ? first : second);
+
+/** Content freshness and Home ordering are independent: keep the newest
+ * payload, both source stamps, and the notification source's metadata. */
+export function mergeHomeEntities(
+  notifications: EntityWithRawNotifications<EntityData>[],
+  recents: EntityWithRawNotifications<EntityData>[],
+  context: InboxOrderContext
+): EntityWithRawNotifications<EntityData>[] {
+  return deduplicateItems<EntityWithRawNotifications<EntityData>>(
+    [
+      ...notifications.map((entity) => ({
+        ...entity,
+        sortTs: inboxGroupTimestamp(entity, context),
+      })),
+      // Cache inserts from other users are not the viewer's own activity.
+      ...recents
+        .filter((entity) => entity.touchedAt)
+        .map((entity) => ({
+          ...entity,
+          sortTs: entity.touchedAt,
+        })),
+    ],
+    {
+      getKey: (entity) => `${entity.type}:${entity.id}`,
+      resolveConflict: (existing, incoming) => ({
+        ...(compareDateDesc(
+          incoming.updatedAt ?? incoming.createdAt,
+          existing.updatedAt ?? existing.createdAt
+        ) < 0
+          ? incoming
+          : existing),
+        notifications: existing.notifications ?? incoming.notifications,
+        notifiedAt: latestTimestamp(existing.notifiedAt, incoming.notifiedAt),
+        touchedAt: latestTimestamp(existing.touchedAt, incoming.touchedAt),
+        sortTs: latestTimestamp(existing.sortTs, incoming.sortTs),
+      }),
+    }
+  ).sort(
+    (a, b) =>
+      compareDateDesc(a.sortTs, b.sortTs) ||
+      a.type.localeCompare(b.type) ||
+      a.id.localeCompare(b.id)
+  );
+}
+
+/** Home uses its merged timestamp and finer intraday sections. */
+export function groupHomeEntitiesByDate<T extends EntityData>(
+  entities: T[],
+  now: Date
+): SoupGroup<T>[] {
+  return groupSoupEntities(entities, {
+    getGroupId: (entity) => homeDateBucket(entity.sortTs, now).key,
+    getGroupLabel: (_groupId, firstEntity) =>
+      homeDateBucket(firstEntity.sortTs, now).label,
   });
 }

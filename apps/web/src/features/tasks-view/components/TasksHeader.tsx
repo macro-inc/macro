@@ -27,7 +27,11 @@ export function TasksTopBar() {
   const title = () =>
     TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
 
-  return <ViewShell.TopBar>{title()}</ViewShell.TopBar>;
+  return (
+    <ViewShell.TopBar class="px-3">
+      <span class="px-1">{title()}</span>
+    </ViewShell.TopBar>
+  );
 }
 
 export function TasksHeader(props: TasksHeaderProps) {

@@ -49,6 +49,27 @@ fn rejects_rest_ast_shape() {
     assert!(matches!(error, MaterializeError::Shape(_)));
 }
 
+fn balanced_file_types(leaves: usize) -> Value {
+    if leaves == 1 {
+        return json!({"literal":{"fileType":"md"}});
+    }
+    json!({"or":{"left":balanced_file_types(leaves / 2), "right":balanced_file_types(leaves - leaves / 2)}})
+}
+
+#[test]
+fn finite_file_picker_unions_fit_but_unbounded_json_forests_do_not() {
+    // 512 leaves are 1,023 expression nodes, but 2,559 JSON values after wrappers.
+    let input = json!({"documentFilter":balanced_file_types(512)});
+    assert!(materialize_graphql_filter(input.clone()).is_ok());
+    let graphql: GraphqlEntityFilterAst = serde_json::from_value(input).unwrap();
+    assert!(graphql.into_ast().is_ok());
+    let oversized = json!({"documentFilter":balanced_file_types(1024)});
+    assert!(matches!(
+        materialize_graphql_filter(oversized),
+        Err(MaterializeError::Bounds(_))
+    ));
+}
+
 #[test]
 fn rejects_pathological_depth_before_materialization() {
     let mut expression = json!({

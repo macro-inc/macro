@@ -83,7 +83,7 @@ export function MobilePageCreateButton() {
               }
               onPointerDown={() => hapticImpact('light')}
               onClick={() => action().onSelect()}
-              class="relative flex h-(--mobile-chrome-button-size) shrink-0 items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-[15px] font-medium whitespace-nowrap"
+              class="relative flex h-(--mobile-chrome-button-size) shrink-0 items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium whitespace-nowrap"
             >
               <CreateIcon class="size-5.5 shrink-0" />
               <span>{action().label}</span>

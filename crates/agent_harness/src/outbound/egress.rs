@@ -126,13 +126,16 @@ where
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
-        repo_url: &str,
+        repo_url: Option<&str>,
         selection: &AgentMcpServers,
     ) -> Result<ProvisionedEgress> {
         // Validated even though nothing here uses it: it is the deployment's
         // repository URL, and a session whose git traffic could never resolve
         // should fail at provisioning rather than at the agent's first clone.
-        repo_slug(repo_url)?;
+        // A session that clones nothing has no URL to validate.
+        if let Some(repo_url) = repo_url {
+            repo_slug(repo_url)?;
+        }
 
         let token = SessionToken::mint();
 

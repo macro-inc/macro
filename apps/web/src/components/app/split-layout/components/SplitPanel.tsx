@@ -306,7 +306,7 @@ export function SplitPanel(props: SplitPanelProps) {
           >
             <Panel
               class={cn(
-                'rounded-none touch:rounded-none touch:after:hidden touch:border-0! bg-panel',
+                'rounded-none touch:rounded-none touch:after:hidden touch:border-0! bg-panel transition-none',
                 splitUnfocusedStyling() && 'split-panel-inactive',
                 {
                   'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),

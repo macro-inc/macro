@@ -109,6 +109,12 @@ async fn update_document_modified(pool: &PgPool, document_id: &str) -> Result<()
     Ok(())
 }
 
+fn registry_protocol_error(
+    error: rootcause::Report<entity_registry_db_utils::EntityRegistryError>,
+) -> sqlx::Error {
+    sqlx::Error::Protocol(error.to_string())
+}
+
 impl DocumentRepo for PgDocumentRepo {
     type Err = sqlx::Error;
 
@@ -295,7 +301,6 @@ impl DocumentRepo for PgDocumentRepo {
     async fn soft_delete_document(&self, document_id: &str) -> Result<(), Self::Err> {
         let mut transaction = self.pool.begin().await?;
 
-        // Delete pins
         sqlx::query!(
             r#"
             DELETE FROM "Pin" WHERE "pinnedItemId" = $1 AND "pinnedItemType" = $2
@@ -306,7 +311,6 @@ impl DocumentRepo for PgDocumentRepo {
         .execute(&mut *transaction)
         .await?;
 
-        // Delete from history
         sqlx::query!(
             r#"
             DELETE FROM "UserHistory" WHERE "itemId" = $1 AND "itemType" = $2
@@ -317,7 +321,6 @@ impl DocumentRepo for PgDocumentRepo {
         .execute(&mut *transaction)
         .await?;
 
-        // Soft delete the document
         sqlx::query!(
             r#"
             UPDATE "Document"
@@ -328,6 +331,12 @@ impl DocumentRepo for PgDocumentRepo {
         )
         .execute(&mut *transaction)
         .await?;
+
+        if let Ok(id) = macro_uuid::string_to_uuid(document_id) {
+            entity_registry_db_utils::mark_deleted(&mut transaction, id, chrono::Utc::now())
+                .await
+                .map_err(registry_protocol_error)?;
+        }
 
         transaction.commit().await?;
         Ok(())
@@ -654,10 +663,16 @@ impl DocumentRepo for PgDocumentRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn delete_document_by_id(&self, document_id: &str) -> Result<(), Self::Err> {
-        sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id,)
-            .execute(&self.pool)
+        let mut transaction = self.pool.begin().await?;
+        sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id)
+            .execute(&mut *transaction)
             .await?;
-
+        if let Ok(id) = macro_uuid::string_to_uuid(document_id) {
+            entity_registry_db_utils::delete_entity(&mut transaction, id)
+                .await
+                .map_err(registry_protocol_error)?;
+        }
+        transaction.commit().await?;
         Ok(())
     }
 
@@ -1107,10 +1122,8 @@ impl DocumentRepo for PgDocumentRepo {
             create::allocate_team_task_number(&mut transaction, team_id, &document_id).await?;
         }
 
-        // Create share permission
         create::set_share_permission(&mut transaction, &document_id, &share_permission).await?;
 
-        // Insert user entity access (Owner level)
         entity_access_db_utils::insert_entity_access_row(
             &mut transaction,
             &document_id,
@@ -1121,7 +1134,17 @@ impl DocumentRepo for PgDocumentRepo {
         )
         .await?;
 
-        // Insert user history
+        entity_registry_db_utils::insert_entity(
+            &mut transaction,
+            entity_registry_db_utils::NewEntityRecord::new(
+                document_id,
+                entity_registry_db_utils::RegisteredEntityType::Document,
+                model_owner::Owner::User(user_id.clone()),
+            ),
+        )
+        .await
+        .map_err(registry_protocol_error)?;
+
         let now = chrono::Utc::now();
         create::insert_history(&mut transaction, &document_id, &user_id, &now).await?;
 

@@ -469,6 +469,59 @@ async fn run() -> anyhow::Result<()> {
         },
         pending_commands.clone(),
     )
+    .with_pull_requests(session_pull_requests.clone());
+    let codex_connections: Option<Arc<dyn codex_connection::domain::ConnectionService>> = config
+        .codex_oauth_kms_key_id()
+        .map(|key| {
+            let cipher = codex_connection::outbound::cipher::EnvelopeCipher::new(
+                aws_sdk_kms::Client::new(&aws_config),
+                key,
+            )?;
+            let repository = codex_connection::outbound::postgres::PostgresRepository::new(
+                pool.clone(),
+                Arc::new(cipher),
+            );
+            let provider = codex_cloud_agents::outbound::openai::OpenAi::new()
+                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            Ok::<Arc<dyn codex_connection::domain::ConnectionService>, anyhow::Error>(Arc::new(
+                codex_connection::domain::ConnectionServiceImpl::new(
+                    Arc::new(repository),
+                    provider,
+                ),
+            ))
+        })
+        .transpose()?;
+    let codex_provider = codex_cloud_agents::outbound::openai::OpenAi::new()
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let codex_journal_pool = pool.clone();
+    let codex_manager = agent_harness::outbound::codex::CodexContainerManager::new(
+        Arc::new(codex_provider),
+        codex_connections,
+        session_repo.clone(),
+        Arc::new(move |id| {
+            let journal = Arc::new(
+                codex_cloud_agents::outbound::postgres_journal::PgCodexJournal::new(
+                    codex_journal_pool.clone(),
+                    id,
+                    replica,
+                ),
+            );
+            let activated = journal.clone();
+            (
+                journal,
+                Box::new(move |claim| {
+                    activated
+                        .activate(claim.session, claim.replica, claim.fence)
+                        .map_err(|e| {
+                            agent_runtime_protocol::domain::ports::TransportError::Client(
+                                e.to_string(),
+                            )
+                            .into()
+                        })
+                }),
+            )
+        }),
+    )
     .with_pull_requests(session_pull_requests);
     // Fixed system agents retain their deployment defaults. User/team agents
     // are resolved from agent_configs for every trigger so newly-created or
@@ -503,6 +556,18 @@ async fn run() -> anyhow::Result<()> {
             mcp_servers: AgentMcpServers::OwnerConnections,
         },
     ));
+    fixed_runtimes.push((
+        bot_id::CODEX_BOT_ID,
+        AgentRuntimeConfig {
+            kind: AgentKind::CodexCloud,
+            model: String::new(),
+            harness: "codex-cloud".into(),
+            instructions: String::new(),
+            mcp_servers: AgentMcpServers::Selected {
+                servers: Vec::new(),
+            },
+        },
+    ));
     let runtime_directory =
         PgAgentRuntimeDirectory::new(PgBotsRepo::new(pool.clone()), fixed_runtimes.clone());
     // Logged because the failure mode this replaced was silent: a harness that
@@ -515,8 +580,12 @@ async fn run() -> anyhow::Result<()> {
         environment = %config.environment,
         "agent harness serving bots"
     );
-    let containers =
-        RoutedContainerManager::new(sandbox_and_inmem, cursor_manager, session_repo.clone());
+    let containers = RoutedContainerManager::new(
+        sandbox_and_inmem,
+        cursor_manager,
+        codex_manager,
+        session_repo.clone(),
+    );
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
@@ -574,6 +643,15 @@ async fn run() -> anyhow::Result<()> {
             // Stamped but unused: the in-process agent has no
             // workspace to clone anything into.
             repo_url: config.harness_repo_url.clone(),
+        },
+    )
+    .with_bot(
+        bot_id::CODEX_BOT_ID,
+        SessionDefaults {
+            bot_id: bot_id::CODEX_BOT_ID,
+            model: String::new(),
+            harness: "codex-cloud".into(),
+            repo_url: String::new(),
         },
     )
     // Sessions nothing names a bot for (the create menu's) run in-process;

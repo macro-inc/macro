@@ -3,11 +3,12 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createSignal, onMount, Suspense } from 'solid-js';
+import { createSignal, Match, onMount, Suspense, Switch } from 'solid-js';
+import { TaskDetail } from './components/TaskDetail';
 import { TasksHeader, TasksTopBar } from './components/TasksHeader';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
-import { TasksViewProvider } from './tasks-view-context';
+import { TasksViewProvider, useTasksView } from './tasks-view-context';
 import type { TasksViewStateOptions } from './types';
 
 export type TasksViewProps = {
@@ -25,6 +26,7 @@ function TasksListFallback() {
 
 function TasksViewRoot() {
   const panel = useSplitPanelOrThrow();
+  const { selectedTask } = useTasksView();
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
 
   onMount(() => panel.handle.setDisplayName('Tasks'));
@@ -42,15 +44,24 @@ function TasksViewRoot() {
               <TasksSidebar />
             </ViewShell.Aside>
             <ViewShell.Main>
-              <TasksTopBar />
-              <ViewShell.Header>
-                <TasksHeader onSearchEscape={() => listElement()?.focus()} />
-              </ViewShell.Header>
-              <ViewShell.Content>
-                <Suspense fallback={<TasksListFallback />}>
-                  <TaskList ref={setListElement} />
-                </Suspense>
-              </ViewShell.Content>
+              <Switch>
+                <Match when={selectedTask()}>
+                  {(task) => <TaskDetail task={task()} />}
+                </Match>
+                <Match when={!selectedTask()}>
+                  <TasksTopBar />
+                  <ViewShell.Header>
+                    <TasksHeader
+                      onSearchEscape={() => listElement()?.focus()}
+                    />
+                  </ViewShell.Header>
+                  <ViewShell.Content>
+                    <Suspense fallback={<TasksListFallback />}>
+                      <TaskList ref={setListElement} />
+                    </Suspense>
+                  </ViewShell.Content>
+                </Match>
+              </Switch>
             </ViewShell.Main>
           </ViewShell.Root>
         </SplitPanel.Body>

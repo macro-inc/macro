@@ -116,8 +116,11 @@ access to the title and property controls.
 
 ## Comments (Discussion)
 
-On desktop, below the editor: `Discussion` section with a `Leave a comment...` contenteditable, buttons
-`Attach images`, `Format`, and `Send comment` (disabled until text exists). Click the
+Below the editor: `Discussion` section with a `Leave a comment...` contenteditable.
+Desktop uses the same compact 15px composer as channels and AI chat, with an
+an `Attach images` paperclip that opens the image picker directly. Shift+Enter
+expands the editor above the controls. Touch keeps separate `Attach images` and
+`Format` buttons. `Send comment` is disabled until text exists. Click the
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned
 user. On mobile, the new-comment composer is docked above the navigation bar,
@@ -139,8 +142,12 @@ becomes empty again, the section disappears. Desktop keeps the empty section
 and inline input.
 
 Comments anchored to selected text open in a floating margin card on desktop and
-a `Comments` drawer on touch devices. New comments, replies, and edits use the
-composer surface on desktop; touch inputs use the drawer's background directly.
+a `Comments` drawer on touch devices. Hovering a desktop card reveals its actions
+without changing the card size or header text wrapping. New comments, replies,
+and edits use plain inputs on the card or drawer's background. The pinned reply
+keeps at least 16px of
+bottom clearance above the drawer's curve, including while the keyboard is open,
+and accounts for the home-indicator safe area when the keyboard is closed.
 
 ## Side panel
 
@@ -157,9 +164,9 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   oldest fetched entry (usually `created this`) pinned last; the toggle flips to `Show less`
   once expanded.
 - Header: `Share`, `Copy Share Link`, overflow menu — use `Share` to inspect or change the
-  doc's visibility/permissions. Documents also have a `Team access` dropdown (None / View /
-  Comment / Edit) for sharing directly with the owner's team. That is independent of the
-  team-scoped link control.
+  doc's visibility/permissions. Documents and AI chats also have a `Team access` dropdown
+  (None / View / Comment / Edit) for sharing directly with the owner's team. That is
+  independent of the team-scoped link control.
 
 ## Known failure: "expected instance of LoroDoc"
 

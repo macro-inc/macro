@@ -99,7 +99,7 @@ export function InboxFilterDropdown() {
         isSelected={filters.isSelected}
         onSelectionChange={filters.setSelected}
         onClear={filters.clear}
-        label="Filter Inbox"
+        label="Filter Home"
       />
 
       <FilterCountBadge count={filters.activeCount()} />

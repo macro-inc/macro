@@ -26,11 +26,24 @@ session-specific.
 
 ## Message composer
 
-Desktop composer and conversation body text use 15px type. Mobile keeps its
-existing text sizing.
+Composer and conversation body text use `text-base` (15px at the default root
+size) on desktop and mobile. The shared scale uses 14px for `text-sm` and 12px
+for `text-xs`, with accessibility text scaling preserved.
 
 Desktop message text uses a 16px horizontal inset and a compact gap above the
 toolbar, consistent at narrow and wide composer widths.
+
+The new-message compose screen and channel message/reply inputs use the same
+attachment and send controls on mobile and desktop, with no format toggle.
+iOS uses the native media attachment picker.
+Short drafts place attachment, message text, and send on one row on both mobile
+and desktop. Multiline drafts and attachments expand the composer with its
+actions below the editor.
+When checking this transition, add and remove a line break or attachment and
+confirm the draft and caret position survive. The attachment and send controls
+should remain usable in both layouts, including when editing an existing message.
+The iOS share sheet keeps its editor above the attachment and formatting controls.
+Check this arrangement at both phone and tablet widths.
 
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or
@@ -46,7 +59,7 @@ to update titles and access.
 
 Placeholder `Type @ to share with #<name>`. Click it, `type_text`, press Enter to send.
 The message renders immediately with avatar, email, timestamp. Composer extras: `Attach
-files`, `Format`, a `Task` switch (turns the message into a task), `Send message` button.
+files` and the `Send message` button. Replies also include a close-reply control.
 
 Hover a message for its action menu. `Reply` on a top-level message opens that thread. On
 an existing thread reply, it inserts a one-line reply-target reference into the composer;
@@ -72,7 +85,7 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` open
+bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 The reply renders a Magic Chip: a rounded card of constant height that is present
@@ -86,6 +99,16 @@ whole turn, and a finished turn with nothing said leaves the area empty. The are
 cropped at the chip's height with a fade at its foot; clicking it expands it in place, and
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
+
+`@codex` requires both `enable-chat-v3-agents` and `enable-codex-agents`.
+It appears when the mentioning user has connected ChatGPT and saved a
+cloud environment in Settings → Harness. New sessions use that environment on
+`main`; there is no automatic repository selection. Follow-up mentions continue the same agent session. When
+the provider URL arrives, the session header offers **Open in Codex**. Codex
+assistant text appears as complete messages while tool activity and thinking
+can continue updating during the turn. Mention
+eligibility is covered by component/query tests; the channel interaction requires
+a configured backend for end-to-end verification.
 
 Cursor sessions choose a repository from the mentioning user's linked GitHub App
 installations on their first prompt. A session without a repository can still use
@@ -103,8 +126,9 @@ service at `/mcp/internal` on its egress listener, separately from workspace MCP
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
 model supplies only the URL. The tool records the link, not the GitHub PR itself.
 The shared Macro system instructions ask agents to register PRs when
-`macro_internal.set_pull_request` is available. The instruction is not prepended
-to individual user messages. Cursor
+`macro_internal.set_pull_request` is available. Macro Internal MCP also advertises
+this guidance in its server instructions. It is not prepended to individual user
+messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
 automatic creation can finish after the agent stops. Repeated registration is
@@ -114,11 +138,19 @@ chips reload the current link; reconnecting also refreshes it. Multiple chips
 for the same session share its metadata, and loading it leaves the surrounding
 editor visible.
 
-When Cursor opens a pull request, the chip header shows its GitHub link as soon
-as the run reports it, including after restoring a session. The link remains
+When Cursor or Codex reports a pull request, the chip header shows its GitHub
+link. Codex links can arrive after the assistant finishes; a session-update event
+refreshes mounted chips without a new conversation message. Codex checks provider
+PR metadata every 20 seconds while attached. Viewing a disconnected Codex session
+reads saved history; sending a message reattaches the runtime. Refresh requires its original
+ChatGPT connection to remain connected. The link remains
 usable while the webhook mapping is loading or absent, then becomes a Macro PR
 entity link once synced. On narrow chips, long PR names truncate with an
-ellipsis; hover the link to inspect the full title.
+ellipsis; hover the link to inspect the full title. Codex delayed-link discovery,
+duplicate and changed metadata updates, and opening the exact PR URL were verified
+in Chromium with mocked session snapshots and realtime invalidation. This UI check
+does not prove live provider discovery; backend tests separately cover delayed
+provider metadata.
 
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's

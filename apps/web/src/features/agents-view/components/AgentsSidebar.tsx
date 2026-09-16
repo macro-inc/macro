@@ -81,13 +81,12 @@ function FavoriteRow(props: {
   return (
     <FavoriteContextMenu favorite={props.favorite} triggerClass="block">
       <ViewSidebar.Item
-        class="font-normal"
         title={name()}
         onClick={(event) => props.onOpen(props.favorite, event)}
       >
-        <span class="flex size-4 shrink-0 items-center justify-center">
+        <ViewSidebar.Icon>
           <FavoriteIcon favorite={props.favorite} class="size-4" />
-        </span>
+        </ViewSidebar.Icon>
         <span class="truncate">{name()}</span>
       </ViewSidebar.Item>
     </FavoriteContextMenu>
@@ -157,13 +156,13 @@ function ConversationRow(props: {
   return (
     <ViewSidebar.Item
       active={props.active}
-      class="group/recent-chat relative font-normal"
+      class="group/recent-chat relative"
       title={props.conversation.name || 'Untitled chat'}
       onClick={props.onOpen}
     >
-      <span class="flex size-4 shrink-0 items-center justify-center">
+      <ViewSidebar.Icon>
         <EntityRowIcon entity={props.conversation} class="size-4" />
-      </span>
+      </ViewSidebar.Icon>
       <span class="min-w-0 flex-1 truncate text-left group-hover/recent-chat:pr-12">
         {props.conversation.name || 'Untitled chat'}
       </span>
@@ -334,14 +333,11 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             {(item) => (
               <ViewSidebar.Item
                 active={props.page === item.id && !props.activeConversationId}
-                class="font-normal"
                 onClick={() => props.onNavigate(item.id)}
               >
-                <Dynamic
-                  component={item.icon}
-                  aria-hidden="true"
-                  class="size-4 shrink-0"
-                />
+                <ViewSidebar.Icon>
+                  <Dynamic component={item.icon} class="size-4" />
+                </ViewSidebar.Icon>
                 <span class="truncate">{item.label}</span>
               </ViewSidebar.Item>
             )}

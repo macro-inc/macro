@@ -11,7 +11,7 @@ export function ParticipantsListItem(props: {
   currentUserId?: string;
   editable: boolean;
   isLast?: boolean;
-  onClick: () => void | Promise<void>;
+  onClick: (event: MouseEvent) => void | Promise<void>;
   onRemove: () => void;
 }) {
   const canRemove =
@@ -23,7 +23,7 @@ export function ParticipantsListItem(props: {
     async (event) => {
       event.preventDefault();
       event.stopPropagation();
-      await props.onClick();
+      await props.onClick(event);
     }
   );
 

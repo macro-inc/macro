@@ -675,6 +675,13 @@ export const enableCursorAgents = defineFlag({
   default: onInDev,
 });
 
+// Codex cloud agent mentions, composer choices, and harness settings also
+// require enableChatV3Agents. Override with VITE_ENABLE_CODEX_AGENTS.
+export const enableCodexAgents = defineFlag({
+  key: 'enable-codex-agents',
+  env: 'ENABLE_CODEX_AGENTS',
+});
+
 // The Recent view: the touched-by-me feed (everything the viewer mutated,
 // newest own-touch first). Gates the view (the route redirects to the inbox
 // when off) and its sidebar entry. PostHog-gated with a dev-mode default;

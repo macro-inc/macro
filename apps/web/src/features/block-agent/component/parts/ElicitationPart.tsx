@@ -223,6 +223,7 @@ function ResolvedQuestion(props: { part: ElicitationPartData }) {
       status={props.part.outcome.kind === 'errored' ? 'failed' : 'completed'}
       muted={props.part.outcome.kind === 'errored'}
       trailing={<span class="text-ink">{outcomeLabel(props.part)}</span>}
+      hasContent={shown().length > 0 || Boolean(refusal())}
     >
       <Show when={shown().length > 0 || refusal()}>
         <div class="flex flex-col gap-2 py-1">

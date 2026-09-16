@@ -58,6 +58,8 @@ export const buttonVariants = createVariants(
         "size-8 aspect-square p-1.5 [&>svg:not([class*='size-'])]:size-4",
       'icon-sm':
         "size-6 aspect-square p-1 [&>svg:not([class*='size-'])]:size-3.5",
+      'icon-composer':
+        'size-6 aspect-square not-touch:rounded-full p-1 touch:[&_svg]:size-3.5 not-touch:size-[33.75px] not-touch:p-[3.75px] not-touch:[&_svg]:size-[20.625px]',
     },
   },
   {

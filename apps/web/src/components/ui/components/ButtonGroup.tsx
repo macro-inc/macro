@@ -73,6 +73,8 @@ export const buttonGroupVariants = createVariants(
         'rounded-md data-[orientation=horizontal]:h-5 data-[orientation=vertical]:w-5',
       'icon-sm':
         'rounded-md data-[orientation=horizontal]:h-6 data-[orientation=vertical]:w-6',
+      'icon-composer':
+        'rounded-md not-touch:rounded-full data-[orientation=horizontal]:h-6 data-[orientation=vertical]:w-6 not-touch:data-[orientation=horizontal]:h-[33.75px] not-touch:data-[orientation=vertical]:w-[33.75px]',
       'icon-md':
         'rounded-md data-[orientation=horizontal]:h-8 data-[orientation=vertical]:w-8',
       'icon-lg':

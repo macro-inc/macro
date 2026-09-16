@@ -1,11 +1,12 @@
 //! Postgres-backed [`ChatRepo`] implementation.
 
 mod queries;
+mod team_share;
 #[cfg(test)]
 mod test;
 
 use crate::domain::models::{
-    ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatArgs, PatchChatMessageArgs,
+    ChatErr, ChatResponse, CopyChatArgs, CreateChatArgs, PatchChatMessageArgs, PatchChatRepoArgs,
     Result, WebCitation,
 };
 use crate::domain::ports::{ChatRepo, MessageRepo};
@@ -16,6 +17,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model::chat::ChatMessageWithAttachments;
 use model::chat::NewChatMessage;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use sqlx::PgPool;
 
@@ -286,6 +288,11 @@ impl ChatRepo for PgChatRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
+    async fn get_team_share_facts(&self, chat_id: &str) -> Result<TeamShareFacts> {
+        team_share::get_team_share_facts(&self.pool, chat_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
     async fn delete(&self, chat_id: &str) -> Result<()> {
         let mut tx = self
             .pool
@@ -313,18 +320,28 @@ impl ChatRepo for PgChatRepo {
         Ok(())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(err, skip(self, args))]
     async fn patch(
         &self,
         user_id: MacroUserIdStr<'static>,
         chat_id: &str,
-        args: PatchChatArgs,
+        args: PatchChatRepoArgs,
     ) -> Result<()> {
         let mut tx = self
             .pool
             .begin()
             .await
             .map_err(|e| ChatErr::Unknown(e.into()))?;
+
+        // Canonical team sharing first: it takes the shared guard before any
+        // `SharePermission` row lock and refuses an unauthorized team level.
+        team_share::apply_team_share(
+            &mut tx,
+            chat_id,
+            args.share_permission.as_ref(),
+            args.team_share.as_ref(),
+        )
+        .await?;
 
         queries::patch_chat::patch_chat(
             &mut tx,

@@ -30,6 +30,7 @@ mod test;
 
 mod channels;
 pub mod mail;
+pub mod properties;
 
 /// Stable direct-field profile name retained for existing browser projections.
 pub const SOUP_FLAT_V1: &str = "soup-flat-v1";
@@ -39,6 +40,8 @@ pub const SOUP_FLAT_V2: &str = "soup-flat-v2";
 pub const SOUP_FLAT_V3: &str = "soup-flat-v3";
 /// Browser-composed profile with complete active-notification membership.
 pub const SOUP_FLAT_V4: &str = "soup-flat-v4";
+/// Host-composed profile with complete selectable property snapshots.
+pub const SOUP_FLAT_V5: &str = "soup-flat-v5";
 
 // Keep this lightweight crate wasm-compatible instead of depending on the
 // native `system_properties` crate. A native test locks this stable UUID to
@@ -73,6 +76,11 @@ pub mod vocabulary {
     /// Browser-composed active-notification profile.
     pub fn profile_v4() -> Profile {
         Profile::new(token(super::SOUP_FLAT_V4))
+    }
+
+    /// Host-composed property-aware Soup profile.
+    pub fn profile_v5() -> Profile {
+        Profile::new(token(super::SOUP_FLAT_V5))
     }
 
     /// IDs of unseen notifications for the viewer and primary entity.

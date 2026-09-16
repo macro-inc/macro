@@ -5,7 +5,7 @@ publish = false
 version = "0.1.0"
 
 [features]
-default = ["ports"]
+default = ["ports", "postgres"]
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
@@ -16,18 +16,31 @@ inbound = [
 ]
 outbound = ["ports"]
 ports = ["dep:entity_access", "dep:tracing"]
-postgres = ["dep:sqlx", "outbound"]
+postgres = [
+  "dep:sqlx",
+  "dep:entity_access_db_utils",
+  "dep:share_permission_db_utils",
+  "dep:model-entity",
+  "dep:macro_uuid",
+  "dep:serde_json",
+  "outbound",
+]
 
 [dependencies]
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid", optional = true }
+model-entity = { path = "../model-entity", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 models_permissions = { path = "../models_permissions" }
 rootcause = { workspace = true }
 serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
+share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tracing = { workspace = true, optional = true }
@@ -38,5 +51,10 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 mockall = { workspace = true }
 
 [dev-dependencies]
+anyhow = { workspace = true }
+http-body-util = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
+model_user = { path = "../model_user" }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+tower = { workspace = true }

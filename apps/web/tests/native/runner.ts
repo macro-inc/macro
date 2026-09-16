@@ -20,10 +20,25 @@ assert.equal(
   'Use run.sh: native tests must have network isolation'
 );
 assert(
-  process.argv.slice(2).every((arg) => arg === '--smoke'),
-  'Usage: native:e2e [--smoke]'
+  process.argv
+    .slice(2)
+    .every(
+      (arg) =>
+        arg === '--smoke' ||
+        arg === '--matrix' ||
+        /^--matrix-view=(email|tasks|files|channels|files-shared-creators)$/.test(
+          arg
+        )
+    ),
+  'Usage: native:e2e [--smoke | --matrix [--matrix-view=email|tasks|files|channels|files-shared-creators]]'
 );
 const smokeOnly = process.argv.includes('--smoke');
+const matrixMode = process.argv.includes('--matrix');
+const matrixView = process.argv
+  .find((arg) => arg.startsWith('--matrix-view='))
+  ?.split('=')[1];
+assert(!matrixView || matrixMode, '--matrix-view requires --matrix');
+assert(!(smokeOnly && matrixMode), 'Choose smoke or matrix mode');
 const web = resolve(import.meta.dirname, '../..');
 const binaries = resolve(web, 'tauri/target/e2e');
 const artifacts = resolve(
@@ -48,7 +63,8 @@ const env = {
 };
 const children: ReturnType<typeof Bun.spawn>[] = [];
 let browser: Browser | undefined;
-const fixture = startFixtureServer(18090);
+const fixture = startFixtureServer(18090, matrixMode);
+const timeoutMs = matrixMode ? 90 * 60_000 : 240_000;
 // Bound even a wedged WebDriver request or shutdown. The shell owns namespace
 // and profile cleanup, so forced exit cannot leave an app or fixture listening.
 const watchdog = setTimeout(() => {
@@ -56,9 +72,9 @@ const watchdog = setTimeout(() => {
     resolve(artifacts, 'requests.json'),
     JSON.stringify(fixture.requests, null, 2)
   );
-  console.error(`E2E timed out after four minutes. Artifacts: ${artifacts}`);
+  console.error(`E2E timed out after ${timeoutMs}ms. Artifacts: ${artifacts}`);
   process.exit(1);
-}, 240_000);
+}, timeoutMs);
 
 function spawn(name: string, cmd: string[], extraEnv = {}) {
   const child = Bun.spawn(cmd, {
@@ -128,6 +144,7 @@ try {
       VITE_ENABLE_GRAPHQL_SOUP: 'true',
       VITE_ENABLE_GRAPHQL_BACKFILL: 'true',
       VITE_ENABLE_NEW_APP_VIEWS: 'true',
+      VITE_ENABLE_SNIPPETS: 'true',
       VITE_ENABLE_AUTO_UPDATE_UI: 'false',
     }
   );
@@ -157,9 +174,19 @@ try {
   const emailNavigation = browser.$('button[aria-label="Go to Email"]');
   await emailNavigation.waitForDisplayed({ timeout: 120_000 });
   await emailNavigation.click();
-  console.log('Waiting for three metadata backfill pages');
-  await waitForBackfill(browser);
-  assert.equal(fixture.metadataPagesServed, 3);
+  console.log(
+    `Waiting for ${fixture.expectedMetadataPages} metadata backfill pages`
+  );
+  await waitForBackfill(browser, fixture.expectedMetadataPages);
+  if (matrixMode)
+    await browser.waitUntil(
+      async () => {
+        const lanes = await checkpoints(browser!);
+        return lanes.length === 5 && lanes.every((lane) => lane.completed);
+      },
+      { timeout: 60_000 }
+    );
+  assert.equal(fixture.metadataPagesServed, fixture.expectedMetadataPages);
   assert.deepEqual(
     fixture.requests.filter((request) => request.error),
     []
@@ -173,7 +200,7 @@ try {
     (await stat(cacheFile)).size > 0,
     'Expected the isolated native Turso database'
   );
-  await expectRows(browser, [6, 12]);
+  await expectRows(browser, matrixMode ? [6, 12, 60] : [6, 12]);
   const onlineSoupRequests = fixture.requests.filter(
     (request) =>
       request.operation === 'Soup' &&
@@ -184,7 +211,7 @@ try {
     'Initial Signal baseline must come from the API'
   );
   console.log(
-    'PASS: real UI, three backfill pages, and all six records in the native cache'
+    `PASS: real UI, ${fixture.expectedMetadataPages} metadata pages, and native control records`
   );
 
   assert.equal(await nativeHttpReachable(browser, fixture.origin), true);
@@ -200,7 +227,72 @@ try {
   );
   // Native storage still works with the API listener gone.
   await assertNativeRecords(browser);
-  if (!smokeOnly) {
+  if (matrixMode) {
+    await browser.setTimeout({ script: 120_000 });
+    const preview = await browser.executeAsync(
+      (view: string | undefined, done: (value: unknown) => void) => {
+        void (async () => {
+          const path = '/tests/native/filter-matrix.ts';
+          const matrix = await import(path);
+          done(matrix.describeCases(1, view));
+        })();
+      },
+      matrixView
+    );
+    await Bun.write(
+      resolve(artifacts, 'matrix-first-case.json'),
+      JSON.stringify(preview, null, 2)
+    );
+    let progress: {
+      done: boolean;
+      evaluated: number;
+      nativeRequests: number;
+      nativeElapsedMs: number;
+      byView: Record<string, number>;
+      failures: { name: string; error: string }[];
+    };
+    do {
+      const response = await browser.executeAsync(
+        (
+          view: string | undefined,
+          done: (value: { progress?: typeof progress; error?: string }) => void
+        ) => {
+          void (async () => {
+            try {
+              const path = '/tests/native/filter-matrix.ts';
+              const matrix = await import(path);
+              done({ progress: await matrix.runBatch(256, view) });
+            } catch (error) {
+              done({ error: String(error) });
+            }
+          })();
+        },
+        matrixView
+      );
+      assert(
+        response.progress,
+        response.error ?? 'Matrix returned no progress'
+      );
+      progress = response.progress;
+      console.log(
+        `Matrix: ${progress.evaluated} selections, ${progress.nativeRequests} native evaluations (${Math.round(progress.nativeElapsedMs)}ms)`
+      );
+      await Bun.write(
+        resolve(artifacts, 'filter-matrix.json'),
+        JSON.stringify(progress, null, 2)
+      );
+      if (progress.failures.length > 0) break;
+    } while (!progress.done);
+    assert.deepEqual(
+      progress.failures,
+      [],
+      'Offline filter matrix failed; see filter-matrix.json'
+    );
+    assert(progress.done);
+    console.log(
+      `PASS: offline filter selection matrix (${matrixView ?? 'all'}) ${JSON.stringify(progress.byView)}`
+    );
+  } else if (!smokeOnly) {
     const requestsAtDisconnect = fixture.requests.length;
     // None of these views were fetched online: their rows must be selected
     // from backfilled normalized records, not replayed query-response caches.

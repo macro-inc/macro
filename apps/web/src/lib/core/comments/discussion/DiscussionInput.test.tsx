@@ -23,6 +23,9 @@ vi.mock('@core/mobile/nativePhotoLibrary', () => ({
 vi.mock('@core/util/platform', () => ({
   isPlatform: (platform: string) => platform === 'ios' && editor.isIOS,
 }));
+vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
+  createHasLineBreaks: () => () => false,
+}));
 vi.mock('@channel/Input/ActionButton', () => ({}));
 vi.mock('@channel/Input/context', () => ({}));
 vi.mock('@channel/Input/FormatButtons', () => ({ FormatButtons: () => null }));
@@ -44,10 +47,13 @@ vi.mock('@channel/Input/Input', () => {
   return {
     Input: {
       Root: Slot,
-      Layout: Slot,
-      EditorShell: Slot,
+      Layout: Object.assign(Slot, {
+        Body: Slot,
+        Editor: Slot,
+        ActionsLeft: Slot,
+        ActionsRight: Slot,
+      }),
       Editor: Slot,
-      Footer: Slot,
       FormatRibbon: () => null,
     },
   };

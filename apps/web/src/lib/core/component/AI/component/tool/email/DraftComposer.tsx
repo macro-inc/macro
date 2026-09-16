@@ -29,13 +29,21 @@ import {
   enableEmailSignatures,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { useEmailLinksQuery, useEmailSignature } from '@queries/email/link';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn } from '@ui';
+import { ComposerSurface, cn } from '@ui';
 import type { LexicalEditor } from 'lexical';
-import { createMemo, createSignal, type JSX, onCleanup, Show } from 'solid-js';
+import {
+  type ComponentProps,
+  createMemo,
+  createSignal,
+  type JSX,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import type { UserToolReviewSink } from '../user-tool-review';
 
 export type EmailDraftComposerProps = {
@@ -70,6 +78,10 @@ function fromEmailRecipients(
       'name' in recipient.data ? (recipient.data.name ?? null) : null;
     return { email, name };
   });
+}
+
+function DraftComposerSurface(props: ComponentProps<typeof ComposerSurface>) {
+  return <ComposerSurface {...props} as="div" />;
 }
 
 export function EmailDraftComposer(props: EmailDraftComposerProps) {
@@ -277,9 +289,11 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
     <ComposeProvider value={ctx}>
       <div class="relative">
         <ComposeLayout
+          as={DraftComposerSurface}
           bodyDebugName={`chat-compose:${props.debugName}`}
           class={cn(
-            'flex flex-col w-full text-xs rounded-lg p-4 bg-surface',
+            'relative flex flex-col w-full text-xs p-4',
+            isTouchDevice() && 'rounded-lg bg-surface',
             uiDisabled() &&
               '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
           )}

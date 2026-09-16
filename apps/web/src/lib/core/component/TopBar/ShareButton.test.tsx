@@ -1,6 +1,6 @@
 import { ForwardToChannel } from '@core/component/ForwardToChannel';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal, type JSX } from 'solid-js';
+import { createSignal, For, type JSX } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Permissions } from '../SharePermissions';
 import { ShareDialogContext, ShareModal, ShareTrigger } from './ShareButton';
@@ -9,11 +9,14 @@ const mocks = vi.hoisted(() => ({
   sendToChannel: vi.fn(),
   sendToUsers: vi.fn(),
   mobile: false,
+  hasTeam: false,
   getDocumentPermissions: vi.fn(),
   getChatPermissions: vi.fn(),
+  updateChatPermissions: vi.fn(),
   getProjectPermissions: vi.fn(),
   copyLink: vi.fn(),
   blockPermissionsRead: vi.fn(),
+  inBlock: true,
 }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
@@ -25,7 +28,7 @@ vi.mock('@channel/Input', () => ({
 }));
 vi.mock('@core/auth', () => ({ useIsAuthenticated: () => () => true }));
 vi.mock('@core/block', () => ({
-  isInBlock: () => true,
+  isInBlock: () => mocks.inBlock,
   useBlockAliasedName: () => 'agent',
   useBlockId: () => 'launcher-placeholder',
   createBlockEffect: vi.fn(),
@@ -37,6 +40,7 @@ vi.mock('@core/block', () => ({
     },
     { refetch: vi.fn() },
   ],
+  useBlockName: () => 'md',
   useMaybeBlockName: () => 'md',
   useMaybeBlockAliasedName: () => 'md',
   useMaybeBlockId: () => 'launcher-placeholder',
@@ -117,10 +121,16 @@ vi.mock('@core/util/url', () => ({
     `https://macro.com/app/${type}/${id}`,
 }));
 vi.mock('@service-cognition/client', () => ({
-  cognitionApiServiceClient: { getChatPermissions: mocks.getChatPermissions },
+  cognitionApiServiceClient: {
+    getChatPermissions: mocks.getChatPermissions,
+    updateChatPermissions: mocks.updateChatPermissions,
+  },
 }));
 vi.mock('@queries/team/teams', () => ({
-  useCurrentTeamQuery: () => ({ isSuccess: false, data: undefined }),
+  useCurrentTeamQuery: () => ({
+    isSuccess: mocks.hasTeam,
+    data: mocks.hasTeam ? { id: 'team-1' } : undefined,
+  }),
 }));
 vi.mock('@solidjs/router', () => ({ useNavigate: () => vi.fn() }));
 vi.mock('./LoginButton', () => ({ openLoginModal: vi.fn() }));
@@ -168,15 +178,45 @@ vi.mock('@ui', () => {
       Trigger: Container,
       Content: Container,
       Item: Container,
+      // Each radio group exposes one button per option, labelled by the group's
+      // accessible name, so tests can pick a value on a specific group.
+      RadioGroup: (props: {
+        children?: JSX.Element;
+        value?: string;
+        'aria-label'?: string;
+        onChange?: (value: string) => void;
+      }) => {
+        const label = props['aria-label'] ?? 'option';
+        return (
+          <div role="group" aria-label={label} data-value={props.value}>
+            {props.children}
+            <For each={['NONE', 'view', 'comment', 'edit']}>
+              {(value) => (
+                <button
+                  aria-label={`Set ${label} ${value}`}
+                  onClick={() => props.onChange?.(value)}
+                />
+              )}
+            </For>
+          </div>
+        );
+      },
+      RadioItem: Container,
+      ItemIndicator: Container,
+      Group: Container,
     }),
     ButtonGroup: Object.assign(Container, { Divider: () => null }),
+    SegmentedControl: () => null,
     cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
     Hotkey: () => null,
   };
 });
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.inBlock = true;
   mocks.mobile = false;
+  mocks.hasTeam = false;
+  mocks.updateChatPermissions.mockResolvedValue({ isErr: () => false });
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText: mocks.copyLink },
@@ -207,6 +247,21 @@ const share = () =>
   fireEvent.click(screen.getByRole('button', { name: 'Share' }));
 
 describe('agent session sharing', () => {
+  it('uses explicit identity outside a block', () => {
+    mocks.inBlock = false;
+    render(() => (
+      <ShareDialogContext.Provider
+        value={{ isOpen: () => false, open: vi.fn(), close: vi.fn() }}
+      >
+        <ShareTrigger id="task-1" blockType="task" />
+      </ShareDialogContext.Provider>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Copy Share Link' }));
+    expect(mocks.copyLink).toHaveBeenCalledWith(
+      'https://macro.com/app/task/task-1'
+    );
+  });
+
   it('copies the saved session link from the shared header trigger', () => {
     const [id, setId] = createSignal('saved-session');
     render(() => (
@@ -310,5 +365,87 @@ describe('agent session sharing', () => {
         ],
       })
     );
+  });
+});
+
+function mountChatShare() {
+  mocks.blockPermissionsRead.mockReturnValue({
+    isErr: () => false,
+    value: {
+      id: 'perm-1',
+      owner: 'owner',
+      linkShare: null,
+      linkShareAccessLevel: null,
+      teamShareAccessLevel: 'view',
+      channelSharePermissions: [],
+    },
+  });
+  render(() => (
+    <ShareModal
+      id="chat-1"
+      name="Planning chat"
+      owner="owner"
+      itemType="chat"
+      blockAlias="chat"
+      userPermissions={Permissions.OWNER}
+      isSharePermOpen
+      setIsSharePermOpen={vi.fn()}
+    />
+  ));
+}
+
+describe('chat team sharing', () => {
+  it('lets the owner share the chat with their team through the chat permissions endpoint', async () => {
+    mocks.hasTeam = true;
+    mountChatShare();
+
+    expect(screen.getByText('Team access')).toBeTruthy();
+    expect(
+      screen.getByText("Share this chat directly with the owner's team.")
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('group', { name: 'Team access level' })
+        .getAttribute('data-value')
+    ).toBe('view');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Set Team access level edit' })
+    );
+
+    await vi.waitFor(() =>
+      expect(mocks.updateChatPermissions).toHaveBeenCalledWith({
+        chat_id: 'chat-1',
+        sharePermission: { teamShareAccessLevel: 'edit' },
+      })
+    );
+    expect(mocks.getDocumentPermissions).not.toHaveBeenCalled();
+  });
+
+  it('clears team access with an explicit null', async () => {
+    mocks.hasTeam = true;
+    mountChatShare();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Set Team access level NONE' })
+    );
+
+    await vi.waitFor(() =>
+      expect(mocks.updateChatPermissions).toHaveBeenCalledWith({
+        chat_id: 'chat-1',
+        sharePermission: { teamShareAccessLevel: null },
+      })
+    );
+  });
+
+  it('hides team access when the owner has no team', () => {
+    mocks.hasTeam = false;
+    mountChatShare();
+
+    expect(screen.queryByText('Team access')).toBeNull();
+    expect(
+      screen.queryByRole('group', { name: 'Team access level' })
+    ).toBeNull();
+    expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
   });
 });

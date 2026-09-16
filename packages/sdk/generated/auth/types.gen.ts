@@ -29,6 +29,115 @@ export type CheckoutSessionMetadata = {
     gaClientId?: string | null;
 };
 
+/**
+ * Explicit remote environment for future Codex sessions.
+ */
+export type CodexConfigRequest = {
+    /**
+     * An environment currently visible to this account.
+     */
+    environmentId: string;
+};
+
+/**
+ * Safe connection metadata; no secret or masked token is returned.
+ */
+export type CodexConnectionStatus = {
+    /**
+     * Connected provider account identifier.
+     */
+    accountId?: string | null;
+    /**
+     * Whether the user has completed provider authorization.
+     */
+    connected: boolean;
+    /**
+     * Reserved until provider-verified email metadata is available.
+     */
+    email?: string | null;
+    /**
+     * Explicitly selected remote environment.
+     */
+    environmentId?: string | null;
+};
+
+/**
+ * A cloud environment visible to the connected provider account.
+ */
+export type CodexEnvironment = {
+    /**
+     * Provider environment identity.
+     */
+    id: string;
+    /**
+     * Human-readable provider label.
+     */
+    label?: string | null;
+    /**
+     * Ordered safe repository identities from Codex.
+     */
+    repositories: Array<CodexEnvironmentRepository>;
+};
+
+/**
+ * Safe repository metadata available to the connected Codex account.
+ */
+export type CodexEnvironmentRepository = {
+    /**
+     * Credential-free HTTPS clone URL.
+     */
+    cloneUrl: string;
+    /**
+     * Provider default branch.
+     */
+    defaultBranch: string;
+    /**
+     * Owner/repository identity.
+     */
+    fullName: string;
+};
+
+/**
+ * Outcome of polling one attempt.
+ */
+export type CodexLoginPoll = {
+    /**
+     * Current attempt state.
+     */
+    status: CodexLoginState;
+};
+
+/**
+ * Expiring browser authorization instructions.
+ */
+export type CodexLoginStart = {
+    /**
+     * Owner-bound attempt UUID.
+     */
+    attemptId: string;
+    /**
+     * UTC attempt deadline.
+     */
+    expiresAt: string;
+    /**
+     * Minimum browser polling interval.
+     */
+    pollIntervalSeconds: number;
+    /**
+     * Short expiring user code, not an API credential.
+     */
+    userCode: string;
+    /**
+     * Official provider verification URL.
+     */
+    verificationUrl: string;
+};
+
+/**
+ * Device authorization state visible to its initiating user.
+ */
+export type CodexLoginState = 'pending' | 'connected' | 'expired' | 'failed';
+
 export type CreateAccountMergeRequest = {
     /**
      * The email address to generate the merge link for.
@@ -1028,6 +1137,101 @@ export type UserTokensResponse = {
      */
     refresh_token: string;
 };
+
+export type DisconnectCodexData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/codex';
+};
+
+export type DisconnectCodexResponses = {
+    204: void;
+};
+
+export type DisconnectCodexResponse = DisconnectCodexResponses[keyof DisconnectCodexResponses];
+
+export type GetCodexConnectionData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/codex';
+};
+
+export type GetCodexConnectionResponses = {
+    200: CodexConnectionStatus;
+};
+
+export type GetCodexConnectionResponse = GetCodexConnectionResponses[keyof GetCodexConnectionResponses];
+
+export type ConfigureCodexData = {
+    body: CodexConfigRequest;
+    path?: never;
+    query?: never;
+    url: '/codex/config';
+};
+
+export type ConfigureCodexResponses = {
+    200: CodexConnectionStatus;
+};
+
+export type ConfigureCodexResponse = ConfigureCodexResponses[keyof ConfigureCodexResponses];
+
+export type ListCodexEnvironmentsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/codex/environments';
+};
+
+export type ListCodexEnvironmentsResponses = {
+    200: Array<CodexEnvironment>;
+};
+
+export type ListCodexEnvironmentsResponse = ListCodexEnvironmentsResponses[keyof ListCodexEnvironmentsResponses];
+
+export type StartCodexLoginData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/codex/login';
+};
+
+export type StartCodexLoginResponses = {
+    200: CodexLoginStart;
+};
+
+export type StartCodexLoginResponse = StartCodexLoginResponses[keyof StartCodexLoginResponses];
+
+export type CancelCodexLoginData = {
+    body?: never;
+    path: {
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/codex/login/{attempt_id}';
+};
+
+export type CancelCodexLoginResponses = {
+    204: void;
+};
+
+export type CancelCodexLoginResponse = CancelCodexLoginResponses[keyof CancelCodexLoginResponses];
+
+export type PollCodexLoginData = {
+    body?: never;
+    path: {
+        attempt_id: string;
+    };
+    query?: never;
+    url: '/codex/login/{attempt_id}';
+};
+
+export type PollCodexLoginResponses = {
+    200: CodexLoginPoll;
+};
+
+export type PollCodexLoginResponse = PollCodexLoginResponses[keyof PollCodexLoginResponses];
 
 export type DeleteCursorApiKeyData = {
     body?: never;

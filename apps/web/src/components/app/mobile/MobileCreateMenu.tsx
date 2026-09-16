@@ -78,7 +78,7 @@ export function MobileCreateMenu(props: {
           ref={triggerRef}
           aria-label="New"
           onPointerDown={() => hapticImpact('light')}
-          class="relative flex h-(--mobile-chrome-button-size) items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-[15px] font-medium whitespace-nowrap"
+          class="relative flex h-(--mobile-chrome-button-size) items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium whitespace-nowrap"
         >
           <PlusIcon class="size-5.5 shrink-0" />
           <span>New</span>
@@ -139,7 +139,7 @@ export function MobileCreateMenu(props: {
                 aria-label="Close create menu"
                 style={{ width: `${position().width}px` }}
                 onPointerDown={() => hapticImpact('light')}
-                class="flex h-(--mobile-chrome-button-size) items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-[15px] font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                class="flex h-(--mobile-chrome-button-size) items-center justify-center gap-1.5 rounded-full pl-3 pr-4 text-base font-medium outline-none focus-visible:ring-2 focus-visible:ring-accent"
               >
                 <PlusIcon class="mobile-create-menu-plus size-5.5 shrink-0" />
                 <span>New</span>

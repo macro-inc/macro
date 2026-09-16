@@ -39,7 +39,7 @@ type SetText = {
 };
 
 export const baseCommentTheme = createTheme({
-  root: 'text-sm',
+  root: 'text-base',
   text: {
     base: 'select-text',
   },

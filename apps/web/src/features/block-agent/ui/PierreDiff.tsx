@@ -10,11 +10,8 @@
  * - Entry point: `FileDiff.render({ oldFile, newFile })` — takes raw
  *   before/after contents directly (`oldFile: null` marks a new file),
  *   matching our wire shape. No patch parsing on our side.
- * - No worker pool: pierre renders fine on the main thread via its shared
- *   shiki highlighter (JS regex engine, no wasm fetch). Tradeoff: shiki
- *   tokenization of big files runs on the main thread; the
- *   MAX_RENDER_LINES fallback bounds that cost. Wire a WorkerPoolManager
- *   (see opencode's pierre/worker.ts) only if profiling demands it.
+ * - Highlighting runs in a shared, lazy worker pool. The line limit also
+ *   bounds diff calculation and DOM work, which still run on the main thread.
  * - Theme: pierre's built-in `pierre-light`/`pierre-dark` pair (its
  *   default). Macro flags dark mode via `html[data-theme-light="false"]`
  *   (see features/theme/signals/themeReactive.ts), so we watch that
@@ -27,6 +24,7 @@ import {
   FileDiff as PierreFileDiffInstance,
   type ThemeTypes,
 } from '@pierre/diffs';
+import type { WorkerPoolManager } from '@pierre/diffs/worker';
 import {
   createEffect,
   createMemo,
@@ -37,12 +35,12 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { useDiffWorkers } from './diff-workers';
 import type { FileDiff } from './types';
 
 /**
  * Files whose before or after side exceeds this many lines get a plain
- * placeholder instead of a rendered diff, keeping main-thread highlighting
- * cost bounded.
+ * placeholder instead of a rendered diff, bounding diff calculation and DOM size.
  */
 const MAX_RENDER_LINES = 2000;
 
@@ -110,6 +108,7 @@ function DiffNote(props: { children: JSX.Element }) {
 function PierreFileView(props: {
   diff: FileDiff;
   themeType: () => 'light' | 'dark';
+  workers: WorkerPoolManager;
 }) {
   let container!: HTMLDivElement;
   let instance: PierreFileDiffInstance | undefined;
@@ -127,15 +126,24 @@ function PierreFileView(props: {
     const oldText = props.diff.oldText;
     const newText = props.diff.newText;
     try {
-      instance ??= new PierreFileDiffInstance({
-        ...DIFF_OPTIONS,
-        themeType: untrack(props.themeType) satisfies ThemeTypes,
-      });
+      instance ??= new PierreFileDiffInstance(
+        {
+          ...DIFF_OPTIONS,
+          themeType: untrack(props.themeType) satisfies ThemeTypes,
+        },
+        props.workers
+      );
+      // Paths repeat across edits and sessions. Each content revision needs its
+      // own worker-cache identity, including when an open call streams an update.
+      const revision = crypto.randomUUID();
       instance.render({
         // `== null` deliberately: the wire declares `oldText: string | null`,
         // but crossing the WASM boundary serde turns `None` into `undefined`.
-        oldFile: oldText == null ? null : { name, contents: oldText },
-        newFile: { name, contents: newText },
+        oldFile:
+          oldText == null
+            ? null
+            : { name, contents: oldText, cacheKey: `${revision}:old` },
+        newFile: { name, contents: newText, cacheKey: `${revision}:new` },
         containerWrapper: container,
       });
     } catch (error) {
@@ -176,6 +184,7 @@ function PierreFileView(props: {
 function FileDiffBlock(props: {
   diff: FileDiff;
   themeType: () => 'light' | 'dark';
+  workers: WorkerPoolManager;
 }) {
   const longestSide = createMemo(() =>
     Math.max(lineCount(props.diff.oldText ?? ''), lineCount(props.diff.newText))
@@ -194,7 +203,11 @@ function FileDiffBlock(props: {
           </DiffNote>
         }
       >
-        <PierreFileView diff={props.diff} themeType={props.themeType} />
+        <PierreFileView
+          diff={props.diff}
+          themeType={props.themeType}
+          workers={props.workers}
+        />
       </Show>
     </div>
   );
@@ -206,12 +219,36 @@ function FileDiffBlock(props: {
  */
 export function PierreDiff(props: { diffs: FileDiff[] }): JSX.Element {
   const themeType = createThemeType();
+  const workers = useDiffWorkers();
+  const readyPool = () => {
+    const state = workers();
+    return state.kind === 'ready' ? state.pool : undefined;
+  };
 
   return (
     <div class="flex flex-col gap-2">
-      <For each={props.diffs}>
-        {(diff) => <FileDiffBlock diff={diff} themeType={themeType} />}
-      </For>
+      <Show
+        when={readyPool()}
+        fallback={
+          <DiffNote>
+            {workers().kind === 'failed'
+              ? 'diff could not be rendered'
+              : 'Loading diff…'}
+          </DiffNote>
+        }
+      >
+        {(pool) => (
+          <For each={props.diffs}>
+            {(diff) => (
+              <FileDiffBlock
+                diff={diff}
+                themeType={themeType}
+                workers={pool()}
+              />
+            )}
+          </For>
+        )}
+      </Show>
     </div>
   );
 }

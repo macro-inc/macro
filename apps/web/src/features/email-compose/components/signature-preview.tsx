@@ -97,7 +97,7 @@ export function SignaturePreview(props: {
       </div>
       <div
         ref={mountEl}
-        class="rounded-b-lg bg-[white] px-3 py-2 text-sm"
+        class="rounded-b-lg bg-[white] px-3 py-2 text-base"
         classList={{ hidden: !expanded() }}
       />
     </div>

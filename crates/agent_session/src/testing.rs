@@ -855,7 +855,18 @@ impl crate::domain::pull_request::SessionPullRequestRepo for InMemoryAgentSessio
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
         url: &str,
+        claim: Option<SessionClaim>,
     ) -> Result<bool> {
+        // Keep the claim lock through the mutation, matching the PostgreSQL row lock.
+        let leases = self.leases.lock().unwrap();
+        if let Some(claim) = claim
+            && (claim.session != session
+                || !leases.get(&session).is_some_and(|(replica, fence)| {
+                    *replica == Some(claim.replica) && *fence == claim.fence.0
+                }))
+        {
+            return Err(AgentSessionError::FencedOut(session));
+        }
         let mut sessions = self.sessions.lock().unwrap();
         let stored = sessions
             .get_mut(&session)

@@ -361,7 +361,7 @@ function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex h-12 min-w-0 shrink-0 items-center border-b border-edge px-4 py-3 touch:hidden',
+        'flex h-12 min-w-0 shrink-0 items-center border-b border-edge-muted px-4 py-3 touch:hidden',
         local.class
       )}
       data-view-shell-top-bar=""
@@ -446,7 +446,7 @@ function Detail(props: JSX.HTMLAttributes<HTMLDivElement>) {
         <div
           {...rest}
           class={cn(
-            'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge bg-panel shadow-menu',
+            'absolute inset-y-0 right-0 z-10 min-h-0 border-l border-edge-muted bg-panel shadow-menu',
             local.class
           )}
           style={{ width: `${layout().width}px`, 'max-width': '100%' }}

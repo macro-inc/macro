@@ -26,6 +26,7 @@ use std::collections::HashSet;
 mod channels;
 pub mod mail;
 mod notifications;
+pub mod properties;
 pub use notifications::{
     notification_deletion_updates, notification_projection_updates, optimistic_notification_updates,
 };
@@ -51,6 +52,26 @@ pub fn compile_filter_request(
     sort_direction: &str,
     limit: u16,
 ) -> Result<SoupFilterCompileOutcome, SoupFilterCacheAdapterError> {
+    compile_request(filters, sort_method, sort_direction, limit, false)
+}
+
+/// Compile the property-aware profile used by current browser and native hosts.
+pub fn compile_current_filter_request(
+    filters: serde_json::Value,
+    sort_method: &str,
+    sort_direction: &str,
+    limit: u16,
+) -> Result<SoupFilterCompileOutcome, SoupFilterCacheAdapterError> {
+    compile_request(filters, sort_method, sort_direction, limit, true)
+}
+
+fn compile_request(
+    filters: serde_json::Value,
+    sort_method: &str,
+    sort_direction: &str,
+    limit: u16,
+    current: bool,
+) -> Result<SoupFilterCompileOutcome, SoupFilterCacheAdapterError> {
     let ast = materialize_graphql_filter(filters)
         .map_err(|error| SoupFilterCacheAdapterError(error.to_string()))?;
     let sort = match sort_method {
@@ -67,7 +88,12 @@ pub fn compile_filter_request(
             ));
         }
     };
-    compile_soup_flat_v4(
+    let compile = if current {
+        item_filter_index::properties::compile_soup
+    } else {
+        compile_soup_flat_v4
+    };
+    compile(
         &ast,
         SoupFlatRequest {
             sort,

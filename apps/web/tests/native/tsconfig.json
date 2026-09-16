@@ -12,5 +12,6 @@
     "types": ["bun", "node"],
     "lib": ["ESNext", "DOM", "DOM.Iterable"]
   },
-  "include": ["./**/*.ts"]
+  "include": ["./**/*.ts"],
+  "exclude": ["./filter-matrix.ts"]
 }

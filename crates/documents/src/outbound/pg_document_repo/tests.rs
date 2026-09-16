@@ -397,6 +397,7 @@ async fn task_creation_failure_rolls_back_all_initialization(pool: Pool<Postgres
         .unwrap(),
         Some(0)
     );
+    assert_eq!(count_entity_rows_for_id(&pool, &id.to_string()).await, 0);
     assert!(team_task_numbers(&pool, TEST_TEAM_ID).await.is_empty());
 
     sqlx::raw_sql(
@@ -456,6 +457,7 @@ async fn task_creation_failure_rolls_back_all_initialization(pool: Pool<Postgres
         .unwrap(),
         Some(0)
     );
+    assert_eq!(count_entity_rows_for_id(&pool, &id.to_string()).await, 0);
     assert!(team_task_numbers(&pool, TEST_TEAM_ID).await.is_empty());
 }
 
@@ -490,6 +492,45 @@ fn create_document_args(
         skip_history: false,
         attribution: None,
     }
+}
+
+struct EntityRow {
+    owner_type: String,
+    owner_id: String,
+    entity_type: String,
+    deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+}
+
+async fn fetch_entity_row(pool: &Pool<Postgres>, document_id: &str) -> EntityRow {
+    let row = sqlx::query(
+        r#"
+        SELECT
+            owner_type::text AS owner_type,
+            owner_id,
+            entity_type,
+            deleted_at
+        FROM entity
+        WHERE id = $1
+        "#,
+    )
+    .bind(uuid::Uuid::parse_str(document_id).unwrap())
+    .fetch_one(pool)
+    .await
+    .unwrap();
+    EntityRow {
+        owner_type: row.get("owner_type"),
+        owner_id: row.get("owner_id"),
+        entity_type: row.get("entity_type"),
+        deleted_at: row.get("deleted_at"),
+    }
+}
+
+async fn count_entity_rows_for_id(pool: &Pool<Postgres>, document_id: &str) -> i64 {
+    sqlx::query_scalar("SELECT COUNT(*) FROM entity WHERE id::text = $1")
+        .bind(document_id)
+        .fetch_one(pool)
+        .await
+        .unwrap()
 }
 
 /// The no-team default permission for an md document — the repo persists whatever
@@ -2693,4 +2734,262 @@ async fn test_import_email_attachment_only_reuses_latest_instance_sha(pool: Pool
     assert_eq!(document_id, reused_latest.metadata().document_id);
     assert!(matches!(superseded, EmailImportRepoOutcome::Created(_)));
     assert_ne!(document_id, superseded.metadata().document_id);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn create_document_registers_entity_row(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    let entity = fetch_entity_row(&pool, &document.document_id).await;
+    assert_eq!(entity.entity_type, "document");
+    assert_eq!(entity.owner_type, "user");
+    assert_eq!(entity.owner_id, TEST_DOCUMENT_OWNER_ID);
+    assert_eq!(entity.deleted_at, None);
+    assert_eq!(
+        count_entity_rows_for_id(&pool, &document.document_id).await,
+        1
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn copy_document_registers_distinct_entity_row(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let original = create_task_for_team(&repo, TEST_DOCUMENT_OWNER_ID, TEST_TEAM_ID).await;
+
+    let copied = repo
+        .copy_document(
+            CopyDocumentRepoArgs {
+                original_document: original.clone(),
+                user_id: user_id(TEST_DOCUMENT_OWNER_ID),
+                document_name: "copied task".to_string(),
+                file_type: Some(model::document::FileType::Md),
+                team_id: Some(TEST_TEAM_ID),
+            },
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert_ne!(original.document_id, copied.document_id);
+
+    let source = fetch_entity_row(&pool, &original.document_id).await;
+    let copy = fetch_entity_row(&pool, &copied.document_id).await;
+    assert_eq!(source.entity_type, "document");
+    assert_eq!(copy.entity_type, "document");
+    assert_eq!(source.owner_type, "user");
+    assert_eq!(copy.owner_type, "user");
+    assert_eq!(source.owner_id, TEST_DOCUMENT_OWNER_ID);
+    assert_eq!(copy.owner_id, TEST_DOCUMENT_OWNER_ID);
+    assert_eq!(source.deleted_at, None);
+    assert_eq!(copy.deleted_at, None);
+    assert_eq!(
+        count_entity_rows_for_id(&pool, &original.document_id).await,
+        1
+    );
+    assert_eq!(
+        count_entity_rows_for_id(&pool, &copied.document_id).await,
+        1
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn import_email_created_registers_one_entity_row(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let attachments = insert_email_attachments(&pool, 1).await;
+    let sha = "eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee";
+
+    let created = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(created, EmailImportRepoOutcome::Created(_)));
+    let document_id = &created.metadata().document_id;
+    let entity = fetch_entity_row(&pool, document_id).await;
+    assert_eq!(entity.entity_type, "document");
+    assert_eq!(entity.owner_type, "user");
+    assert_eq!(entity.owner_id, TEST_DOCUMENT_OWNER_ID);
+    assert_eq!(entity.deleted_at, None);
+    assert_eq!(count_entity_rows_for_id(&pool, document_id).await, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn import_email_reuse_keeps_one_entity_row_on_original(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let attachments = insert_email_attachments(&pool, 2).await;
+    let sha = "ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff";
+
+    let first = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+    let sha_reuse = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[1]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+    let same_attachment = repo
+        .import_email_attachment_document(
+            import_email_document_args(TEST_DOCUMENT_OWNER_ID, sha, attachments[0]),
+            pdf_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    assert!(matches!(first, EmailImportRepoOutcome::Created(_)));
+    assert!(matches!(sha_reuse, EmailImportRepoOutcome::Reused(_)));
+    assert!(matches!(same_attachment, EmailImportRepoOutcome::Reused(_)));
+    let original_id = first.metadata().document_id.clone();
+    assert_eq!(original_id, sha_reuse.metadata().document_id);
+    assert_eq!(original_id, same_attachment.metadata().document_id);
+    assert_eq!(count_entity_rows_for_id(&pool, &original_id).await, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn soft_delete_document_sets_entity_deleted_at(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    repo.soft_delete_document(&document.document_id)
+        .await
+        .unwrap();
+
+    let entity = fetch_entity_row(&pool, &document.document_id).await;
+    assert!(entity.deleted_at.is_some());
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn delete_document_by_id_removes_entity_row(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+
+    repo.delete_document_by_id(&document.document_id)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        count_entity_rows_for_id(&pool, &document.document_id).await,
+        0
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn soft_delete_and_hard_delete_tolerate_missing_entity_row(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+
+    repo.soft_delete_document(TEST_DOCUMENT_ID).await.unwrap();
+    assert_eq!(count_entity_rows_for_id(&pool, TEST_DOCUMENT_ID).await, 0);
+
+    let document = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+    sqlx::query("DELETE FROM entity WHERE id::text = $1")
+        .bind(&document.document_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+
+    repo.soft_delete_document(&document.document_id)
+        .await
+        .unwrap();
+    repo.delete_document_by_id(&document.document_id)
+        .await
+        .unwrap();
+    assert_eq!(
+        count_entity_rows_for_id(&pool, &document.document_id).await,
+        0
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn task_snippet_and_skill_register_one_document_entity_row(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let task = create_task_for_team(&repo, TEST_DOCUMENT_OWNER_ID, TEST_TEAM_ID).await;
+    assert_eq!(count_entity_rows_for_id(&pool, &task.document_id).await, 1);
+    assert_eq!(
+        fetch_entity_row(&pool, &task.document_id).await.entity_type,
+        "document"
+    );
+    assert_eq!(
+        task.sub_type,
+        Some(document_sub_type::DocumentSubType::Task)
+    );
+
+    for sub_type in [
+        document_sub_type::DocumentSubType::Snippet,
+        document_sub_type::DocumentSubType::Skill,
+    ] {
+        let mut args = create_document_args(TEST_DOCUMENT_OWNER_ID, false, None);
+        args.sub_type = Some(sub_type);
+        let document = repo
+            .create_document(args, md_share_permission())
+            .await
+            .unwrap();
+        assert_eq!(document.sub_type, Some(sub_type));
+        assert_eq!(
+            count_entity_rows_for_id(&pool, &document.document_id).await,
+            1
+        );
+        assert_eq!(
+            fetch_entity_row(&pool, &document.document_id)
+                .await
+                .entity_type,
+            "document"
+        );
+    }
 }

@@ -49,9 +49,7 @@ export function ProviderIcon(props: {
       data-ai-provider={provider()}
     >
       <Show when={provider()}>
-        {(name) => (
-          <Dynamic component={icons[name()]} class="size-full text-ink" />
-        )}
+        {(name) => <Dynamic component={icons[name()]} class="size-full" />}
       </Show>
     </span>
   );

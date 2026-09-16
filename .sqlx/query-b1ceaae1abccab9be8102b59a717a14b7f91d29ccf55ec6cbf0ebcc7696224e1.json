@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT task_id, initiative_id\n        FROM task_initiative\n        WHERE task_id = ANY($1)\n        FOR UPDATE\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "initiative_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "b1ceaae1abccab9be8102b59a717a14b7f91d29ccf55ec6cbf0ebcc7696224e1"
+}

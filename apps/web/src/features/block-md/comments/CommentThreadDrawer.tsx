@@ -16,7 +16,7 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import { Button } from '@ui';
+import { Button, cn } from '@ui';
 import { $setSelection } from 'lexical';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -29,7 +29,7 @@ import { useMarkdownDocument } from '../context/markdown-document-context';
  * spans would win over the parent's select-none, so the theme must not
  * stamp it. Typing areas opt back in via the drawer's contenteditable rule.
  */
-const drawerCommentTheme = createTheme({ root: 'text-sm' });
+const drawerCommentTheme = createTheme({ root: 'text-base' });
 
 /**
  * Focus target for the drawer's opening focus pass: the draft composer's
@@ -61,8 +61,12 @@ function PinnedReplyComposer(props: {
     <ThreadContext.Provider value={{ mentionsSignal }}>
       <StaticMarkdownContext theme={drawerCommentTheme}>
         <div
-          class="shrink-0 px-3"
-          classList={{ 'pb-(--safe-bottom)': !virtualKeyboardVisible() }}
+          class={cn(
+            'shrink-0 px-3',
+            virtualKeyboardVisible()
+              ? 'pb-4'
+              : 'pb-[max(16px,var(--mobile-sheet-safe-padding))]'
+          )}
         >
           <NewReplyInput
             textValue={text()}
