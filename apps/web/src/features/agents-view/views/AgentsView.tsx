@@ -4,7 +4,7 @@ import { AgentInput } from '@app/features/block-agent/ui';
 import { HomeChatInput } from '@app/features/home/home';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { Agents } from '@app/features/settings/Agents';
-import { ConnectedAccounts } from '@app/features/settings/ConnectedAccounts';
+import { McpConnections } from '@app/features/settings/McpConnections';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
@@ -215,7 +215,7 @@ function AgentsWorkspace() {
                           <Agents />
                         </Match>
                         <Match when={page() === 'connections'}>
-                          <ConnectedAccounts />
+                          <McpConnections />
                         </Match>
                         <Match when={page() === 'skills'}>
                           <AgentResourceList page="skills" />

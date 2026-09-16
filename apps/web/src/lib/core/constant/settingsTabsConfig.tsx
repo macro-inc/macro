@@ -70,7 +70,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
       { tab: 'CRM', label: 'CRM', icon: BuildingsIcon },
       {
         tab: 'Connected',
-        label: 'Connections',
+        label: 'Integrations',
         icon: CpuIcon,
       },
       { tab: 'Agent', label: 'MCP server', icon: PlugIcon },

@@ -10,7 +10,7 @@ import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 /**
  * The chip an agent's reply renders when a tool call failed because the
- * reader has not connected an app. Clicking it opens Settings → Connections
+ * reader has not connected an app. Clicking it opens Settings → Integrations
  * with that app queued to connect. Once the reader has connected it, the same
  * chip reads as connected rather than nagging.
  */
@@ -30,7 +30,7 @@ export function ConnectApp(props: ConnectAppDecoratorProps) {
 
   const handleClick = () => {
     if (connected()) return;
-    // The Connections page picks this up and starts the Connect flow.
+    // The Integrations tab picks this up and starts the Connect flow.
     requestConnectApp(props.appSlug);
     openSettings('Connected');
   };

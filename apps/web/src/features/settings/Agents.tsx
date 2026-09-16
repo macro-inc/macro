@@ -1008,7 +1008,7 @@ function AgentDialog(props: {
                 <Show when={share() === 'Team'}>
                   <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
                     Connections are personal. Teammates who use this agent
-                    connect these apps under Settings → Connections; the
+                    connect these apps under Settings → Integrations; the
                     indicators here show only your own.
                   </p>
                 </Show>
