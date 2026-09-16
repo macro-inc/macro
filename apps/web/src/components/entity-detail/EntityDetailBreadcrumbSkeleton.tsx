@@ -1,4 +1,3 @@
-import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 const BREADCRUMB_SKELETON_DELAY_MS = 150;
@@ -16,7 +15,6 @@ export function EntityDetailBreadcrumbSkeleton() {
 
   return (
     <Show when={visible()}>
-      <ViewBreadcrumbs.Separator />
       <div
         aria-hidden="true"
         class="flex h-7 min-w-0 items-center gap-1.5 px-1"

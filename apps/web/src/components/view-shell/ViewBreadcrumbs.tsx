@@ -196,12 +196,23 @@ export type ViewBreadcrumbsOutletProps = Omit<
 > & {
   children?: JSX.Element;
   fallback?: JSX.Element;
+  separator?: (state: ViewBreadcrumbsSeparatorState) => JSX.Element;
+};
+
+export type ViewBreadcrumbsSeparatorState = {
+  previous: ViewBreadcrumbsEntry<unknown>;
+  next?: ViewBreadcrumbsEntry<unknown>;
 };
 
 /** Renders mounted breadcrumb items in order. */
 function Outlet(props: ViewBreadcrumbsOutletProps) {
   const context = useViewBreadcrumbsContext();
-  const [local, rest] = splitProps(props, ['children', 'class', 'fallback']);
+  const [local, rest] = splitProps(props, [
+    'children',
+    'class',
+    'fallback',
+    'separator',
+  ]);
   const entries = createMemo(() =>
     [...context.entries].sort(
       (left, right) =>
@@ -212,6 +223,10 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
   );
   const hasActiveItem = () =>
     entries().some((entry) => entry.value() === context.value());
+  const renderSeparator = (
+    previous: ViewBreadcrumbsEntry<unknown>,
+    next?: ViewBreadcrumbsEntry<unknown>
+  ) => local.separator?.({ previous, next }) ?? <Separator />;
 
   return (
     <nav
@@ -223,13 +238,18 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
         {(entry, index) => (
           <>
             <Show when={index() > 0}>
-              <Separator />
+              {renderSeparator(entries()[index() - 1]!, entry)}
             </Show>
             {entry.render()}
           </>
         )}
       </For>
-      <Show when={!hasActiveItem()}>{local.fallback}</Show>
+      <Show when={!hasActiveItem() && local.fallback != null}>
+        <Show when={entries().at(-1)}>
+          {(entry) => renderSeparator(entry())}
+        </Show>
+        {local.fallback}
+      </Show>
       {local.children}
     </nav>
   );
