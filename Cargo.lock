@@ -3641,6 +3641,7 @@ dependencies = [
  "tokio",
  "utoipa",
  "uuid",
+ "workspace-hack",
  "zeroize",
 ]
 

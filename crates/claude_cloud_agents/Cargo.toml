@@ -13,20 +13,21 @@ base64 = { workspace = true }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 rand = { workspace = true }
 sha2 = { workspace = true }
-subtle = "2"
+subtle = { workspace = true }
 utoipa = { workspace = true }
 agent-runtime-protocol = { package = "agent_runtime_protocol", path = "../agent_runtime_protocol", default-features = false, features = ["transport"] }
 futures = { workspace = true }
 reqwest = { workspace = true, features = ["stream", "query"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
-sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
+sse-core = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["fs", "io-util", "sync", "time", "macros"] }
 uuid = { workspace = true }
 zeroize = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
-tempfile = "3"
+tempfile = { workspace = true }
 clap = { workspace = true, features = ["derive"] }

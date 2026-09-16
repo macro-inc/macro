@@ -32,7 +32,7 @@ rootcause = { workspace = true }
 # Strictly spec-compliant SSE decoding. `default-features = false` drops the
 # retry/jitter and async-stream halves: this crate drives the decoder itself,
 # synchronously, so all it needs is the state machine.
-sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
+sse-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

@@ -24,6 +24,11 @@ import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
 export const agentHarnessExcluded = [
+  // Claude Cloud sign-in is an app-internal auth flow, not SDK surface.
+  'complete',
+  'disconnect',
+  'start',
+  'status',
   'loadAgentModelsHandler',
   'previewAgentSessions',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
