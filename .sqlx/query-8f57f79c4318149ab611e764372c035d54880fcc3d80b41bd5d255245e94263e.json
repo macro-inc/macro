@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT c.id, c.channel_id, c.room_name, c.created_by, c.created_at, c.egress_id, c.recording_key, c.preview_url, c.recording_started_at,\n                   sp.team_share_access_level AS \"team_share_access_level?: AccessLevel\"\n            FROM calls c\n            JOIN \"SharePermission\" sp ON sp.id = c.share_permission_id\n            WHERE c.id = $1\n            ",
+  "query": "\n            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team\n            FROM calls\n            WHERE id = $1\n            FOR UPDATE\n            ",
   "describe": {
     "columns": [
       {
@@ -50,20 +50,13 @@
       },
       {
         "ordinal": 9,
-        "name": "team_share_access_level?: AccessLevel",
-        "type_info": {
-          "Custom": {
-            "name": "\"AccessLevel\"",
-            "kind": {
-              "Enum": [
-                "view",
-                "comment",
-                "edit",
-                "owner"
-              ]
-            }
-          }
-        }
+        "name": "share_permission_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "share_with_team",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -81,8 +74,9 @@
       true,
       true,
       true,
-      true
+      false,
+      false
     ]
   },
-  "hash": "d19a92c49bb783820270afa219ef18f168702a2bcae28fce9291dad676a2bd3c"
+  "hash": "8f57f79c4318149ab611e764372c035d54880fcc3d80b41bd5d255245e94263e"
 }

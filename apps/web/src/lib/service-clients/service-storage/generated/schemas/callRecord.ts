@@ -56,8 +56,9 @@ this value when present, falling back to `started_at` otherwise. */
   recordingUrl?: CallRecordRecordingUrl;
   /** The RTC room name. */
   roomName: string;
-  /** Deprecated: derived from `team_share_access_level`, kept for clients
-that still read the boolean. */
+  /** Whether the call is shared with the creator's team. While the call is
+live this is the pending toggle applied at archive; afterwards it
+mirrors `team_share_access_level`. */
   shareWithTeam: boolean;
   /** When the call started (created_at for active, started_at for archived). */
   startedAt: string;

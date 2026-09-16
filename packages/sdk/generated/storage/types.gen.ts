@@ -1908,8 +1908,9 @@ export type CallRecord = {
      */
     roomName: string;
     /**
-     * Deprecated: derived from `team_share_access_level`, kept for clients
-     * that still read the boolean.
+     * Whether the call is shared with the creator's team. While the call is
+     * live this is the pending toggle applied at archive; afterwards it
+     * mirrors `team_share_access_level`.
      */
     shareWithTeam: boolean;
     /**
@@ -10328,12 +10329,12 @@ export type EditCallRecordErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     /**
-     * Team sharing may only be changed by the call's creator
+     * Team sharing of an archived call may only be changed by its creator
      */
     403: ErrorResponse;
     404: ErrorResponse;
     /**
-     * Team-sharing facts changed; reload and retry
+     * Team-sharing facts changed, or the call was archived mid-request; reload and retry
      */
     409: ErrorResponse;
     500: ErrorResponse;
@@ -10349,6 +10350,39 @@ export type EditCallRecordResponses = {
 };
 
 export type EditCallRecordResponse = EditCallRecordResponses[keyof EditCallRecordResponses];
+
+export type ToggleShareWithTeamData = {
+    body?: never;
+    path: {
+        /**
+         * Call ID
+         */
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/share-with-team/toggle';
+};
+
+export type ToggleShareWithTeamErrors = {
+    401: ErrorResponse;
+    404: ErrorResponse;
+    /**
+     * The call is no longer active
+     */
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ToggleShareWithTeamError = ToggleShareWithTeamErrors[keyof ToggleShareWithTeamErrors];
+
+export type ToggleShareWithTeamResponses = {
+    /**
+     * New value of the share-with-team toggle
+     */
+    200: boolean;
+};
+
+export type ToggleShareWithTeamResponse = ToggleShareWithTeamResponses[keyof ToggleShareWithTeamResponses];
 
 export type EditCallTranscriptData = {
     body: EditCallTranscriptRequest;
