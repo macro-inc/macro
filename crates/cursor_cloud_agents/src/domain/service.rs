@@ -1796,7 +1796,17 @@ where
         let entries = self.journal.read(id).await?;
         let mut machine = ReplayMachine::default();
         for entry in &entries {
-            project_entry(&mut machine, entry, &entries)?;
+            // An entry that will not project is skipped rather than failed.
+            // It is already durable, so failing here fails identically every
+            // time this session is read, and a session whose journal cannot
+            // be read cannot be loaded or prompted ever again.
+            if let Err(error) = project_entry(&mut machine, entry, &entries) {
+                tracing::warn!(
+                    %error,
+                    sequence = entry.sequence,
+                    "skipping a Cursor journal entry that will not project"
+                );
+            }
         }
         let fresh = {
             let mut state = session.state.lock().expect("session state poisoned");
