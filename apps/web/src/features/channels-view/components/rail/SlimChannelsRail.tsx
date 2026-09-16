@@ -382,8 +382,12 @@ function SlimHeader() {
 
   return (
     <div class="flex shrink-0 flex-col items-center gap-3 pt-2">
-      <div class="flex h-8 w-full items-center justify-center px-1">
-        <SplitPanel.CloseButton size="icon-sm" />
+      <div class="flex w-full items-center justify-center px-2">
+        <SplitPanel.ControlGroup>
+          <SplitPanel.CloseButton size="icon-sm" />
+        </SplitPanel.ControlGroup>
+      </div>
+      <div class="flex h-8 w-full items-center justify-center px-2">
         <RailModeButton
           expanded={false}
           onToggle={() => rail.setMode('full')}

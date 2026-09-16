@@ -14,6 +14,7 @@ const getGraphqlSoupClientMock = vi.hoisted(() => vi.fn());
 const getGraphqlSoupCacheHostMock = vi.hoisted(() => vi.fn());
 const entityFilterMock = vi.hoisted(() => vi.fn());
 const readRecordsByKeysMock = vi.hoisted(() => vi.fn());
+const useInstructionsMdIdQueryMock = vi.hoisted(() => vi.fn());
 const REVISION_0 = '0';
 const REVISION_1 = '1';
 const REVISION_2 = '2';
@@ -40,7 +41,7 @@ vi.mock('@macro-inc/observability', () => ({
 }));
 
 vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: vi.fn(() => ({})),
+  useInstructionsMdIdQuery: useInstructionsMdIdQueryMock,
 }));
 
 vi.mock('@app/lib/graphql-cache', () => ({
@@ -147,6 +148,7 @@ function makeFakeClient(): {
 describe('createGraphqlSoupAstItemsQuery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useInstructionsMdIdQueryMock.mockReturnValue({ isSuccess: false });
     mapSoupPageToEntityListMock.mockImplementation((page) => page.items);
     getGraphqlSoupCacheHostMock.mockReturnValue(undefined);
     makeGraphqlSoupInputMock.mockReturnValue({
@@ -210,6 +212,231 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       }
     }
   );
+
+  it('retains the page projection when only query activity changes', () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const [enabled, setEnabled] = createSignal(true);
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }),
+        () => ({ enabled: enabled() })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [{ id: 'retained' }], next_cursor: null })
+      );
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+      const entities = query.data()?.entities;
+
+      setEnabled(false);
+      expect(query.isEnabled()).toBe(false);
+      setEnabled(true);
+      expect(query.isEnabled()).toBe(true);
+      query.resetToInitialPage();
+
+      expect(query.data()?.entities).toBe(entities);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+      expect(mapSoupPageToEntityListMock).toHaveBeenCalledTimes(1);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('reprojects cached pages when the instructions document resolves without reading pending data', () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const [instructions, setInstructions] = createSignal<
+      { isSuccess: false } | { isSuccess: true; data: string | null }
+    >({ isSuccess: false });
+    const [enabled, setEnabled] = createSignal(true);
+    const readInstructionsData = vi.fn(() => {
+      const result = instructions();
+      if (!result.isSuccess) throw new Error('Pending data read');
+      return result.data;
+    });
+    const instructionsQuery = {
+      get isSuccess() {
+        return instructions().isSuccess;
+      },
+      get data() {
+        return readInstructionsData();
+      },
+    };
+    useInstructionsMdIdQueryMock.mockReturnValue(instructionsQuery);
+    mapSoupPageToEntityListMock.mockImplementation((page) =>
+      page.items.filter(
+        (item: { id: string }) =>
+          !instructionsQuery.isSuccess || item.id !== instructionsQuery.data
+      )
+    );
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }),
+        () => ({ enabled: enabled() })
+      ),
+    }));
+    const ids = () => query.data()?.entities.map((entity) => entity.id);
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [
+            { id: 'visible', updatedAt: '2026-09-10T00:00:00Z' },
+            { id: 'instructions', updatedAt: '2026-09-08T00:00:00Z' },
+          ],
+          next_cursor: 'next-page',
+        })
+      );
+      expect(ids()).toEqual(['visible', 'instructions']);
+      expect(readInstructionsData).not.toHaveBeenCalled();
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+
+      setInstructions({ isSuccess: true, data: 'instructions' });
+      expect(ids()).toEqual(['visible']);
+      expect(query.data()?.oldestFetchedTimestamp).toBe(
+        Date.parse('2026-09-08T00:00:00Z')
+      );
+      expect(query.hasNextPage()).toBe(true);
+      expect(fake.executions).toHaveLength(1);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(2);
+
+      // An identical id and activity-only changes must keep the cached selector.
+      setInstructions({ isSuccess: true, data: 'instructions' });
+      setEnabled(false);
+      setEnabled(true);
+      query.resetToInitialPage();
+      expect(ids()).toEqual(['visible']);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(2);
+
+      setInstructions({ isSuccess: true, data: 'visible' });
+      expect(ids()).toEqual(['instructions']);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(3);
+
+      setInstructions({ isSuccess: true, data: null });
+      expect(ids()).toEqual(['visible', 'instructions']);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(4);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('keeps raw wire payloads outside deep store reconciliation', () => {
+    mapSoupPageToEntityListMock.mockImplementation((page) =>
+      page.items.map((item: { id: string }) => ({ id: item.id }))
+    );
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    const metadata = { content: { message: 'large immutable payload' } };
+    const descriptors = vi.spyOn(Object, 'getOwnPropertyDescriptors');
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ id: 'document', metadata }],
+          next_cursor: null,
+        })
+      );
+
+      expect(query.data()?.entities[0]?.id).toBe('document');
+      expect(descriptors).not.toHaveBeenCalledWith(metadata);
+      expect(descriptors).not.toHaveBeenCalledWith(metadata.content);
+    } finally {
+      descriptors.mockRestore();
+      dispose();
+    }
+  });
+
+  it('updates mapped entities reactively without mutating raw wire records', () => {
+    mapSoupPageToEntityListMock.mockImplementation((page) =>
+      page.items.map((item: object) => ({ ...item }))
+    );
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const names: Array<string | undefined> = [];
+    const { query, dispose } = createRoot((dispose) => {
+      const query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }),
+        () => ({ enabled: true })
+      );
+      createComputed(() => names.push(query.data()?.entities[0]?.name));
+      return { query, dispose };
+    });
+    try {
+      const firstPage = graphqlSoupPage({
+        items: [{ id: 'document', name: 'before' }],
+        next_cursor: null,
+      });
+      fake.executions[0].next(firstPage);
+      const previousEntity = query.data()?.entities[0];
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ id: 'document', name: 'after' }],
+          next_cursor: null,
+        })
+      );
+
+      expect(query.data()?.entities[0]?.name).toBe('after');
+      expect(names).toContain('before');
+      expect(names.at(-1)).toBe('after');
+      expect(query.data()?.entities[0]).toBe(previousEntity);
+      expect(firstPage.user.soup.items[0]).toMatchObject({ name: 'before' });
+      expect(fake.executions).toHaveLength(1);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('reprojects retained pages when projection inputs change', () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const [sort, setSort] = createSignal<'notified_at' | 'updated_at'>(
+      'updated_at'
+    );
+    const [showForeign, setShowForeign] = createSignal(false);
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: sort() }, body: {} }),
+        () => ({ enabled: true, showSupportedForeignEntities: showForeign() })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ id: 'retained', notifiedAt: '2025-01-01T00:00:00Z' }],
+          next_cursor: null,
+        })
+      );
+      expect(query.data()?.oldestFetchedTimestamp).toBe(
+        Date.parse('2026-01-01T00:00:00Z')
+      );
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+
+      setSort('notified_at');
+      expect(query.data()?.oldestFetchedTimestamp).toBe(
+        Date.parse('2025-01-01T00:00:00Z')
+      );
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(2);
+
+      setShowForeign(true);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(3);
+      expect(mapSoupPageToEntityListMock).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ showSupportedForeignEntities: true })
+      );
+    } finally {
+      dispose();
+    }
+  });
 
   it('retains fetched coverage when display filtering hides every row', () => {
     const fake = makeFakeClient();

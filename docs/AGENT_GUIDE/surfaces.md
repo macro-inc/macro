@@ -65,13 +65,16 @@ With the new app views enabled, Home defaults to a Signal feed merging
 notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
 action. On desktop, the funnel button to the right of **Home** opens **Filter Home**.
-The first menu row is an **Unread only** toggle: on shows unread items; off shows
-all items. Entity type checkboxes start checked. Unchecking **Email** hides received
+The menu shares the legacy compact submenus: **Status** offers **Unread**, **Read**,
+and **All**, and **Type** contains the entity checkboxes. Status closes the menu
+after selection; type selections leave it open. Press **f** to open the menu.
+Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
 both channels and reply threads; **Chats** and **Agents** have separate toggles.
 Unchecking every type shows an empty feed. **Reset filters** shows every type and
 both read states again. A badge counts hidden types plus an active status filter.
-Older saved read-only selections restore as All. The mobile drawer uses the same toggle.
+Read status and type selections persist. The mobile drawer offers the same
+Status choices and type checkboxes.
 There are no desktop Signal/Noise tabs. A **Home** heading
 labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, and
 **Agents** sidebar headings. The full-width **New chat** plus pill below the heading clears the preview and returns to the Home
@@ -205,6 +208,15 @@ Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `
 `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
+
+The new views reuse the legacy filter option rows and searchable submenus.
+Their triggers are icon-only buttons matching the surrounding view controls;
+Clear/Reset filters and the mobile Clear all action use destructive text styling.
+Both layouts show a small accent dot beside categories with active refinements;
+default All selections are not marked.
+Email Status and Done are single choices that close the menu; attachment filters
+stay open for multiple selections. Tags supports search, pins selected tags first
+on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
 ### Cached Mail filtering
 
@@ -370,8 +382,11 @@ and navigate to ancestors. Empty folders show `This folder is empty` and a
 `Back to Drive` action that returns to the folder overview. Folder
 search retains matching descendants' ancestors and reveals their branches.
 
-`Search Drive` searches the current tab or folder. `Filter files` includes all-files
-and email-attachment scopes; `Sort files` offers modified, created, and viewed dates.
+`Search Drive` searches the current tab or folder. The **Filter** menu reuses the
+legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**
+for Default, All files, and Email attachments. Created by is hidden while My Files
+is restricted to your own files. Recent offers only file-scope filtering.
+`Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,

@@ -48,31 +48,24 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
-  const { state, showTags, isSidebarSectionOpen, setSidebarSectionOpen } =
-    useEmailView();
-
   return (
-    <div class="flex flex-col gap-6">
-      <ViewSidebar.Nav aria-label="Email tabs">
-        <For each={EMAIL_TABS}>
-          {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
-        </For>
-      </ViewSidebar.Nav>
-
-      <SidebarTagsSection
-        activeIds={state.facets.tags ?? []}
-        onActiveIdsChange={showTags}
-        open={isSidebarSectionOpen('tags')}
-        onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
-        onNavigate={props.onNavigate}
-      />
-    </div>
+    <ViewSidebar.Nav aria-label="Email tabs">
+      <For each={EMAIL_TABS}>
+        {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
+      </For>
+    </ViewSidebar.Nav>
   );
 }
 
 export function EmailSidebar() {
   const panel = useSplitPanelOrThrow();
-  const { state, setTab } = useEmailView();
+  const {
+    state,
+    setTab,
+    showTags,
+    isSidebarSectionOpen,
+    setSidebarSectionOpen,
+  } = useEmailView();
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -94,6 +87,13 @@ export function EmailSidebar() {
         <EmailInboxList />
 
         <EmailNavigation />
+
+        <SidebarTagsSection
+          activeIds={state.facets.tags ?? []}
+          onActiveIdsChange={showTags}
+          open={isSidebarSectionOpen('tags')}
+          onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
+        />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

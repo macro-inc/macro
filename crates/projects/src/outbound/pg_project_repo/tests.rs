@@ -797,6 +797,10 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
         assert_eq!(entity.owner_id, "macro|owner@test.com");
         assert_eq!(entity.entity_type, "project");
     }
+    let document_entity = fetch_entity_row(&pool, &result.documents[0].document_id).await;
+    assert_eq!(document_entity.owner_type, "user");
+    assert_eq!(document_entity.owner_id, "macro|owner@test.com");
+    assert_eq!(document_entity.entity_type, "document");
 
     repo.delete_uploaded_tree(&result.project_ids, &document_ids)
         .await?;
@@ -818,6 +822,7 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
         count_entity_rows_for_ids(&pool, &result.project_ids).await,
         0
     );
+    assert_eq!(count_entity_rows_for_ids(&pool, &document_ids).await, 0);
     Ok(())
 }
 

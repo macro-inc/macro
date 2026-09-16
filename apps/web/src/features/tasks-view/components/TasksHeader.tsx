@@ -24,12 +24,16 @@ export type TasksHeaderProps = {
 
 export function TasksTopBar() {
   const { state } = useTasksView();
-  const title = () =>
+  const tabTitle = () =>
     TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
 
   return (
     <ViewShell.TopBar class="px-3">
-      <span class="px-1">{title()}</span>
+      <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
+      <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
+        <span class="@max-[720px]/view-shell:hidden">{tabTitle()}</span>
+        <span class="hidden @max-[720px]/view-shell:inline">Tasks</span>
+      </h1>
     </ViewShell.TopBar>
   );
 }
@@ -67,12 +71,6 @@ export function TasksHeader(props: TasksHeaderProps) {
         when={isTouchDevice()}
         fallback={
           <>
-            <div class="hidden items-center @max-[720px]/view-shell:flex">
-              <SplitPanel.ControlGroup>
-                <SplitPanel.CloseButton />
-              </SplitPanel.ControlGroup>
-            </div>
-
             <div class="hidden h-8 min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
               <Dropdown
                 open={navigationOpen()}

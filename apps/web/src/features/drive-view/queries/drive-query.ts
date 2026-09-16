@@ -5,6 +5,14 @@ import {
 import { getViewPreset } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import type { DriveSelection } from '../context/drive-source';
 
+/** Match the legacy filter controller's base tab to the current Drive scope. */
+export function driveFilterTab(state: DriveSelection) {
+  const location = state.location;
+  if (location.kind === 'folder') return location.id ? 'all' : 'folders';
+  if (location.tab === 'owned' && state.scope !== 'default') return state.scope;
+  return location.tab;
+}
+
 export function driveQuery(state: DriveSelection, userId: string | undefined) {
   const context = { userId, isTeamAdmin: false };
   const location = state.location;
@@ -42,10 +50,7 @@ export function driveQuery(state: DriveSelection, userId: string | undefined) {
       clientFilters: { and: ['document-or-file'] },
     };
   }
-  const tab =
-    location.tab === 'owned' && state.scope !== 'default'
-      ? state.scope
-      : location.tab;
+  const tab = driveFilterTab(state);
   const preset =
     getViewPreset('documents', tab, context) ??
     getViewPreset('documents', 'all', context)!;

@@ -366,6 +366,43 @@ const FIXTURE_MESSAGE: FoldedMessage = {
   ],
 };
 
+/** A live Cursor-shaped turn: earlier reasoning has settled, the tail has not. */
+const FIXTURE_IN_FLIGHT: FoldedMessage = {
+  agentSessionId: 'demo',
+  requestId: null,
+  turn: 1,
+  author: { kind: 'agent' },
+  stop: null,
+  parts: [
+    {
+      kind: 'thought',
+      text: 'The batch fold re-derives every message per frame; switch to the incremental machine.',
+    },
+    {
+      kind: 'tool_use',
+      id: 'live-read',
+      name: { kind: 'native', name: 'Read' },
+      status: 'completed',
+      detail: { kind: 'read', paths: ['crates/agent_fold/src/domain/fold.rs'] },
+    },
+    {
+      kind: 'tool_use',
+      id: 'live-search',
+      name: { kind: 'native', name: 'Search' },
+      status: 'completed',
+      detail: {
+        kind: 'search',
+        paths: ['crates/agent_fold/src'],
+        output: 'fold.rs:12: fn fold(log: &[Frame]) -> Vec<Message>',
+      },
+    },
+    {
+      kind: 'thought',
+      text: 'The incremental machine already handles this. Next I will edit fold.rs.',
+    },
+  ],
+};
+
 /**
  * The Claude Code colour question after the fold collapsed its custom pair,
  * plus one of every other field type, so the form's controls can be eyeballed.
@@ -773,6 +810,14 @@ export default function AgentUiGallery() {
 
           <Item label="AgentMessage (end-to-end)">
             <Message message={FIXTURE_MESSAGE} />
+          </Item>
+
+          <Item label="AgentMessage (Cursor turn in flight)">
+            <p class="text-xs text-ink-muted">
+              Earlier reasoning has settled. Only the trailing thought still
+              says Thinking.
+            </p>
+            <Message message={FIXTURE_IN_FLIGHT} />
           </Item>
         </div>
       </div>

@@ -63,6 +63,13 @@ pub async fn delete_user_documents(
     .execute(transaction.as_mut())
     .await?;
 
+    for document_id in &user_documents {
+        let Ok(document_uuid) = macro_uuid::string_to_uuid(document_id) else {
+            continue;
+        };
+        entity_registry_db_utils::delete_entity(transaction, document_uuid).await?;
+    }
+
     Ok(user_documents)
 }
 

@@ -1,4 +1,5 @@
 import {
+  ListFilterDropdown,
   useViewControlHotkeys,
   useViewTabHotkeys,
   ViewSidebar,
@@ -14,6 +15,8 @@ import { queryStateFrom } from '@app/features/next-soup/filters/filter-store';
 import type { SetPredicatesInput } from '@app/features/next-soup/filters/filter-store/predicates-store';
 import { mergeQuery } from '@app/features/next-soup/filters/filter-store/query-store';
 import { soupItemMatchesProjectMembership } from '@app/features/next-soup/filters/query-filters';
+import { FilterSubmenu } from '@app/features/next-soup/soup-view/filters-bar/filter-menu';
+import { UnifiedFilterDropdown } from '@app/features/next-soup/soup-view/filters-bar/unified-filter-dropdown';
 import { SoupViewList } from '@app/features/next-soup/soup-view/soup-view';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import {
@@ -34,6 +37,7 @@ import EmptyStateFolderGraphic from '@design/empty-state-folder.svg';
 import ArrowLeftIcon from '@phosphor/arrow-left.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import FolderIcon from '@phosphor/folder.svg';
+import FilterIcon from '@phosphor/funnel-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
@@ -43,9 +47,14 @@ import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Dropdown, EmptyStatePanel } from '@ui';
 import { createMemo, For, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { DRIVE_TABS, type DriveState, type DriveTab } from './core/types';
+import {
+  DRIVE_TABS,
+  type DriveScope,
+  type DriveState,
+  type DriveTab,
+} from './core/types';
 import { createDriveNavigation } from './primitives/drive-navigation';
-import { driveQuery } from './queries/drive-query';
+import { driveFilterTab, driveQuery } from './queries/drive-query';
 import { createDriveResults } from './queries/drive-results';
 import { DriveLayout } from './views/drive-layout';
 
@@ -150,6 +159,7 @@ export function DriveView(props: DriveViewProps) {
       return !id || soupItemMatchesProjectMembership(item, id);
     },
   });
+  view.setActiveTab(driveFilterTab(state()));
   view.soup.grouping.setActiveGroupId(undefined);
   view.soup.sort.setAll([state().sort]);
   panel.handle.setDisplayName('Drive');
@@ -176,6 +186,61 @@ export function DriveView(props: DriveViewProps) {
     },
     setActiveId: selectTab,
   });
+
+  const scopeOptions: { id: DriveScope; label: string }[] = [
+    { id: 'default', label: 'Default' },
+    { id: 'all', label: 'All files' },
+    { id: 'attachments', label: 'Email attachments' },
+  ];
+  const FilterMenu = () => (
+    <Show when={state().location.kind === 'tab'}>
+      <Show
+        when={!isRecent()}
+        fallback={
+          <ListFilterDropdown
+            label="Filter files"
+            groups={[
+              {
+                id: 'scope',
+                label: 'Files',
+                selectionMode: 'single',
+                defaultOptionId: 'default',
+                options: scopeOptions,
+              },
+            ]}
+            isSelected={(_, id) => state().scope === id}
+            onSelectionChange={(_, id) => setScope(id)}
+          />
+        }
+      >
+        <Suspense>
+          <UnifiedFilterDropdown
+            customTrigger={
+              <Dropdown.Trigger
+                variant="outline"
+                size="md"
+                square
+                depth={2}
+                class="rounded-lg bg-surface"
+                label="Filter files"
+              >
+                <FilterIcon />
+              </Dropdown.Trigger>
+            }
+          >
+            <FilterSubmenu
+              label="Files"
+              active={state().scope !== 'default'}
+              options={scopeOptions}
+              isSelected={(id) => state().scope === id}
+              onSelect={setScope}
+              closeOnSelect
+            />
+          </UnifiedFilterDropdown>
+        </Suspense>
+      </Show>
+    </Show>
+  );
 
   const CreateMenu = () => (
     <Dropdown placement="bottom-start">
@@ -278,7 +343,7 @@ export function DriveView(props: DriveViewProps) {
       }}
       onTab={selectTab}
       onFolder={selectFolder}
-      onScope={setScope}
+      filterMenu={FilterMenu}
       onSort={(sort) => {
         setState((current) => ({ ...current, sort }));
         view.soup.sort.setAll([sort]);

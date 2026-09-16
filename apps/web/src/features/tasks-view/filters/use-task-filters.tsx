@@ -24,8 +24,10 @@ export function useTaskFilters() {
   const tagGroup = useTagFilterGroup();
 
   const peopleOptions = createMemo(() => {
-    const people = [...contacts()];
     const me = currentUserId();
+    const people = [...contacts()].sort(
+      (a, b) => Number(b.id === me) - Number(a.id === me)
+    );
     if (me && !people.some((person) => person.id === me)) {
       people.unshift({ id: me, email: '', name: idToDisplayName(me) });
     }
@@ -80,15 +82,17 @@ export function useTaskFilters() {
       },
       {
         id: 'assignees',
-        label: 'Assignees',
+        label: 'Assignee',
+        searchPlaceholder: 'Search assignees...',
         options: peopleOptions(),
       },
       {
         id: 'created-by',
         label: 'Created by',
+        searchPlaceholder: 'Search creators...',
         options: peopleOptions(),
       },
-      tagGroup(),
+      ...(tagGroup().options.length > 0 ? [tagGroup()] : []),
     ]
   );
 

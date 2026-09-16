@@ -85,6 +85,14 @@ uses an open envelope, calendar invitations use a calendar, and pull requests
 retain their open/merged/closed glyphs and status colors. Direct messages may
 show the other participant's avatar instead of a glyph.
 
+## List-row dragging
+
+GraphQL-backed Soup rows initialize dragging on the first primary-button press;
+a preparatory hover is not required. REST-backed rows retain eager registration.
+Verify first-press dragging after navigation as well as ordinary row clicks and
+right-click menus. A completed drop can move or copy real data; use a disposable
+test item when verifying drop actions.
+
 ## Favorites
 
 Use an entity's command/context menu to add or remove it from Favorites; drag rows

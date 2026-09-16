@@ -170,7 +170,7 @@ describe('InboxViewProvider initialization', () => {
     expect(mountProvider().context.state.facets).toEqual({});
   });
 
-  it('migrates saved read-only filters to All while preserving entity types', () => {
+  it('restores read-only filters with their entity types', () => {
     localStorage.setItem(
       'macro:home:filters:v1:alice',
       JSON.stringify({
@@ -186,7 +186,18 @@ describe('InboxViewProvider initialization', () => {
     };
     expect(mountProvider().context.state.facets).toEqual({
       type: ['channels'],
+      read: ['read'],
     });
+  });
+
+  it('keeps Read and Unread mutually exclusive and normalizes both to All', () => {
+    const { context } = mountProvider();
+    context.setFacets({ read: ['read'] });
+    expect(context.state.facets).toEqual({ read: ['read'] });
+    context.setFacets({ read: ['unread'] });
+    expect(context.state.facets).toEqual({ read: ['unread'] });
+    context.setFacets({ read: ['unread', 'read'] });
+    expect(context.state.facets).toEqual({});
   });
 
   it('persists resetting all filters and tolerates corrupt stored preferences', () => {

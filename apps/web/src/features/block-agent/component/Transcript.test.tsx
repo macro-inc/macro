@@ -26,7 +26,10 @@ vi.mock('@components/app/mobile/float-regions/float-region-state', () => ({
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => session.touch,
 }));
-vi.mock('@ui', () => ({ cn: (...classes: string[]) => classes.join(' ') }));
+vi.mock('@ui', async () => ({
+  cn: (...classes: string[]) => classes.join(' '),
+  ...(await import('@ui/components/Layer')),
+}));
 vi.mock('./AgentMessage', () => ({
   Message: (props: { message: FoldedMessage }) => (
     <span data-message={`${props.message.turn}:${props.message.author.kind}`}>

@@ -83,6 +83,35 @@ beforeEach(() => {
   mocks.onClose.mockReset();
 });
 
+describe('UserTooltip direct message action', () => {
+  it('offers a DM for another person', () => {
+    render(() => (
+      <UserTooltip
+        displayName="Jane Doe"
+        email="jane.doe@example.com"
+        id="macro|jane.doe@example.com"
+      />
+    ));
+
+    expect(screen.getByRole('button', { name: 'DM' })).toBeTruthy();
+  });
+
+  it('offers no DM for an agent, which is mentioned rather than messaged', () => {
+    render(() => (
+      <UserTooltip
+        displayName="Cursor"
+        email="Cursor"
+        id="bot|00000000-0000-0000-0000-00000000c5c5"
+      />
+    ));
+
+    expect(screen.queryByRole('button', { name: 'DM' })).toBeNull();
+    // The rest of the card is untouched: an agent still hovers like a person.
+    expect(screen.getByText('Cursor')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Assign task' })).toBeTruthy();
+  });
+});
+
 describe('UserTooltip CRM contact action', () => {
   it('opens the CRM contact resolved for the hovered email', async () => {
     const user = userEvent.setup({ skipHover: true });
