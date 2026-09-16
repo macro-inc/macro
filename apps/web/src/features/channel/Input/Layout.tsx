@@ -1,5 +1,6 @@
 import { cn } from '@ui/utils/classname';
 import { type JSX, splitProps } from 'solid-js';
+import styles from './Layout.module.css';
 
 function LayoutRoot(
   props: JSX.HTMLAttributes<HTMLDivElement> & { oneLineInput?: boolean }
@@ -14,19 +15,8 @@ function LayoutRoot(
     <div
       data-input-layout
       data-one-line-input={local.oneLineInput ? '' : undefined}
-      class={cn(
-        'grid grid-cols-[auto_minmax(0,1fr)_auto] w-full',
-        local.oneLineInput
-          ? "[grid-template-areas:'left_body_right'] items-end gap-[3.75px] min-h-[48.75px] p-[7.5px] [--input-editor-padding:4.6875px_3.75px]"
-          : [
-              "[grid-template-areas:'body_body_body'_'left_._right'] items-center",
-              'not-touch:gap-y-[3.75px] not-touch:p-[7.5px] not-touch:[--input-editor-padding:4.6875px_9.375px]',
-              'touch:pb-2 touch:[--input-editor-padding:0.5rem_0.75rem] touch:@[40rem]:[--input-editor-padding:0.5rem_0.75rem_1rem]',
-              'touch:[&>[data-input-actions-left]]:h-8 touch:[&>[data-input-actions-left]]:pl-2',
-              'touch:[&>[data-input-actions-right]]:h-8 touch:[&>[data-input-actions-right]]:pr-2',
-            ],
-        local.class
-      )}
+      data-composer-compact={local.oneLineInput ? 'true' : 'false'}
+      class={cn(styles.layout, local.class)}
       {...rest}
     >
       {local.children}
@@ -41,7 +31,7 @@ function Body(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       data-input-body
-      class={cn('[grid-area:body] flex flex-col min-w-0', local.class)}
+      class={cn(styles.body, 'flex flex-col min-w-0', local.class)}
     />
   );
 }
@@ -70,7 +60,8 @@ function ActionsLeft(props: JSX.HTMLAttributes<HTMLDivElement>) {
       {...rest}
       data-input-actions-left
       class={cn(
-        '[grid-area:left] flex items-center not-touch:gap-[3.75px] touch:gap-2',
+        styles.actionsLeft,
+        'flex items-center not-touch:gap-[3.75px] touch:gap-2',
         local.class
       )}
     />
@@ -85,7 +76,8 @@ function ActionsRight(props: JSX.HTMLAttributes<HTMLDivElement>) {
       {...rest}
       data-input-actions-right
       class={cn(
-        '[grid-area:right] flex items-center not-touch:gap-[3.75px] touch:gap-2',
+        styles.actionsRight,
+        'flex items-center not-touch:gap-[3.75px] touch:gap-2',
         local.class
       )}
     />

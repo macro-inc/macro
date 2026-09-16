@@ -15,6 +15,7 @@ function Field(props: { label: string; children: JSX.Element }) {
 
 export function ContactMetadataSection(props: {
   contact?: CrmContactResponse;
+  onOpenCompany?: (companyId: string) => boolean;
 }) {
   const { openWithSplit } = useSplitLayout();
   // NIL while the contact is loading — useCompanyQuery's `enabled` gate
@@ -24,6 +25,7 @@ export function ContactMetadataSection(props: {
   );
 
   const openCompany = (companyId: string, event: MouseEvent) => {
+    if (!event.shiftKey && props.onOpenCompany?.(companyId)) return;
     openWithSplit(
       { type: 'company', id: companyId },
       { activate: true, preferNewSplit: event.shiftKey }

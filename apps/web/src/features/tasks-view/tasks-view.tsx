@@ -33,41 +33,37 @@ function TasksViewRoot() {
   onMount(() => panel.handle.setDisplayName('Tasks'));
 
   return (
-    <ListEntityMetadataQueryProvider>
-      <SplitPanel.Root>
-        <SplitPanel.Body>
-          <ViewShell.Root
-            resizable
-            aside={{ preserveDuringResize: false }}
-            main={{ preferredWidth: 640 }}
-          >
-            <ViewShell.Aside>
-              <TasksSidebar />
-            </ViewShell.Aside>
-            <ViewShell.Main>
-              <Switch>
-                <Match when={selectedTask()}>
-                  {(task) => <TasksDetailView task={task()} />}
-                </Match>
-                <Match when={!selectedTask()}>
-                  <TasksTopBar />
-                  <ViewShell.Header>
-                    <TasksHeader
-                      onSearchEscape={() => listElement()?.focus()}
-                    />
-                  </ViewShell.Header>
-                  <ViewShell.Content>
-                    <Suspense fallback={<TasksListFallback />}>
-                      <TaskList ref={setListElement} />
-                    </Suspense>
-                  </ViewShell.Content>
-                </Match>
-              </Switch>
-            </ViewShell.Main>
-          </ViewShell.Root>
-        </SplitPanel.Body>
-      </SplitPanel.Root>
-    </ListEntityMetadataQueryProvider>
+    <SplitPanel.Root>
+      <SplitPanel.Body>
+        <ViewShell.Root
+          resizable
+          aside={{ preserveDuringResize: false }}
+          main={{ preferredWidth: 640 }}
+        >
+          <ViewShell.Aside>
+            <TasksSidebar />
+          </ViewShell.Aside>
+          <ViewShell.Main>
+            <Switch>
+              <Match when={selectedTask()}>
+                {(task) => <TasksDetailView task={task()} />}
+              </Match>
+              <Match when={!selectedTask()}>
+                <TasksTopBar />
+                <ViewShell.Header>
+                  <TasksHeader onSearchEscape={() => listElement()?.focus()} />
+                </ViewShell.Header>
+                <ViewShell.Content>
+                  <Suspense fallback={<TasksListFallback />}>
+                    <TaskList ref={setListElement} />
+                  </Suspense>
+                </ViewShell.Content>
+              </Match>
+            </Switch>
+          </ViewShell.Main>
+        </ViewShell.Root>
+      </SplitPanel.Body>
+    </SplitPanel.Root>
   );
 }
 
@@ -77,9 +73,11 @@ export function TasksView(props: TasksViewProps) {
     <EntityDetailNavigationStack.Root
       shouldNavigate={(_, options) => options?.event?.shiftKey !== true}
     >
-      <TasksViewProvider initialState={props.initialState}>
-        <TasksViewRoot />
-      </TasksViewProvider>
+      <ListEntityMetadataQueryProvider>
+        <TasksViewProvider initialState={props.initialState}>
+          <TasksViewRoot />
+        </TasksViewProvider>
+      </ListEntityMetadataQueryProvider>
     </EntityDetailNavigationStack.Root>
   );
 }

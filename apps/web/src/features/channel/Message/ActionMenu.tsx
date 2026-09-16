@@ -1,12 +1,12 @@
 import { recordEmojiUsage } from '@core/component/Emoji/emojiUsage';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import StarIcon from '@icon/wide-star.svg';
-import TaskIcon from '@icon/wide-task.svg';
 import ReplyIcon from '@phosphor/arrow-bend-up-left.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import LinkIcon from '@phosphor/link.svg';
+import TaskIcon from '@phosphor/list-checks.svg';
 import EditIcon from '@phosphor/pencil-simple.svg';
 import AddEmojiIcon from '@phosphor/smiley.svg';
+import StarIcon from '@phosphor/sparkle.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { cn, Toolbar } from '@ui';
 import {

@@ -19,9 +19,12 @@ New accounts are seeded with three sample tasks (`Intro to tasks`, `Advanced tas
 `How we use tasks at Macro`).
 
 Click a task row or favorite to replace the list with the editable task document. Its top
-bar shows the originating task tab as a breadcrumb, the task name and actions, Share, and
-the Details/Properties side-panel toggle. Choose the originating tab breadcrumb, a task tab,
-or a tag to return to the list. Shift-click a row or favorite to open it in a new split
+bar shows the originating task tab as a text-only return breadcrumb,
+followed by the task name and actions, Share, and the Details/Properties side-panel
+toggle. The return label matches the task title's font weight in both wide and narrow
+layouts. Narrow splits also show a close button when multiple splits are open. Choose
+the originating tab breadcrumb, a task tab, or a tag to return to the list.
+Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
 ## Create a task

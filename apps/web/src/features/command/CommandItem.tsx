@@ -2,8 +2,8 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { Entity, type EntityData } from '@entity';
-import SearchIcon from '@icon/macro-magnifying-glass.svg';
-import WideStar from '@icon/wide-star.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
+import WideStar from '@phosphor/sparkle.svg';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,

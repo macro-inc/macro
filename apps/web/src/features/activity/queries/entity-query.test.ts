@@ -8,6 +8,11 @@ describe('selectEntityActivity', () => {
     expect(selectEntityActivity(soupPage([]), 'doc-1')).toEqual({
       kind: 'entity-missing',
     });
+    expect(
+      selectEntityActivity({ user: { id: 'user-1' } } as never, 'doc-1')
+    ).toEqual({
+      kind: 'entity-missing',
+    });
   });
 
   it('returns found when the entity is present, even with no events', () => {

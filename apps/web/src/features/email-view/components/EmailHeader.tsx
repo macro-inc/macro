@@ -1,6 +1,7 @@
 import {
   SearchBar,
   useViewControlHotkeys,
+  ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -21,18 +22,34 @@ export type EmailHeaderProps = {
   onSearchEscape?: () => void;
 };
 
-export function EmailTopBar() {
+export function EmailViewBreadcrumbItem() {
   const { state } = useEmailView();
   const tabTitle = () =>
     EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
 
   return (
+    <ViewBreadcrumbs.Item
+      value="email-view"
+      metadata={{ type: 'email-view' }}
+      order={0}
+    >
+      {(item) => (
+        <ViewBreadcrumbs.Button
+          isActive={item.isActive()}
+          onClick={item.onSelect}
+        >
+          <span class="truncate">{tabTitle()}</span>
+        </ViewBreadcrumbs.Button>
+      )}
+    </ViewBreadcrumbs.Item>
+  );
+}
+
+export function EmailTopBar() {
+  return (
     <ViewShell.TopBar class="px-3">
       <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
-      <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-        <span class="@max-[720px]/view-shell:hidden">{tabTitle()}</span>
-        <span class="hidden @max-[720px]/view-shell:inline">Email</span>
-      </h1>
+      <ViewBreadcrumbs.Outlet class="flex-1" aria-label="Email location" />
     </ViewShell.TopBar>
   );
 }

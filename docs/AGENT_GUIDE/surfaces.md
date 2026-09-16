@@ -191,8 +191,9 @@ selecting it again clears that tag filter. Favorite rows open their tasks.
 Normal row and favorite activation replaces the list with the editable task
 document; its originating-tab breadcrumb returns to the list and its
 header exposes Share and the task Details/Properties panel. Shift-click opens
-the task in a new split instead. Keyboard navigation moves list focus without
-opening a task until activation.
+the task in a new split instead. While the list is visible, `J` and `K` move
+focus without opening a task until activation. In an open task detail, they
+replace it with the next or previous task in the same filtered order.
 
 The desktop `Create` → `Task` modal uses the standard dialog panel, circular
 icon controls, and a pill-shaped `Create Task` button with 16px outer padding.
@@ -278,9 +279,13 @@ The first scenario covers Signal → Noise → All after disconnecting both nati
 HTTP and WebSockets. iOS shares the native cache code but is not yet covered by
 that driver.
 
-Threads open at `/app/email/<thread-id>`. Click a message header to expand or
-collapse it; `Show N hidden messages` reveals the collapsed middle of a longer
-conversation. A link with `?email_message_id=<message-id>` reveals that message.
+In the new Email view, ordinary row activation opens the thread inside
+`/app/component/mail`; the Email breadcrumb returns to the filtered list.
+Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
+the destination for direct links and legacy surfaces. Click a message header to
+expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
+a longer conversation. A standalone link with
+`?email_message_id=<message-id>` reveals that message.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
@@ -372,15 +377,27 @@ just client-side row filtering. Cached inserts enforce the same rule before a
 refetch, including expanded groups and inactive cached Shared queries. Until
 viewer identity is available, document inserts into Shared are rejected.
 
-With `enable-new-app-views` enabled, Files opens **Drive** using the same
-shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+On touch devices (phones and tablets), Files keeps the original tabbed view and
+mobile navigation even when `enable-new-app-views` is enabled.
+
+On desktop, with `enable-new-app-views` enabled, Files opens **Drive** using the
+same shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
 `Shared with me`, collapsible Favorites, and a searchable folder hierarchy.
+Drive omits split-history back/forward buttons in both wide and narrow layouts;
+the split close button remains available when multiple splits are open.
+Files opened in place from Drive show a return link labeled with their originating
+subview (such as `My Files`, `Recent`, or `Shared with me`) or folder name. The text-only
+label's font weight matches the file title. The link
+restores the originating Drive view.
 The `Drive` folder row opens the folder overview. Click a folder name to browse
 its contents in the main pane; its separate expand/collapse button reveals child
-folders without navigating. Folder breadcrumbs in the top bar use `/` separators
-and navigate to ancestors. Empty folders show `This folder is empty` and a
-`Back to Drive` action that returns to the folder overview. Folder
-search retains matching descendants' ancestors and reveals their branches.
+folders without navigating. The top bar keeps the full folder and file detail
+path in one breadcrumb trail. Folder containment uses `/` separators, while the
+transition to a file detail and nested detail navigation use the default `>`
+separator. Choosing a folder breadcrumb returns to that folder and clears newer
+file details. Empty folders show `This folder is empty` and a `Back to Drive`
+action that returns to the folder overview. Folder search retains matching
+descendants' ancestors and reveals their branches.
 
 `Search Drive` searches the current tab or folder. The **Filter** menu reuses the
 legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**
@@ -390,9 +407,15 @@ is restricted to your own files. Recent offers only file-scope filtering.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,
-while modified clicks retain existing split navigation. On narrow layouts, use
-`Select Drive view` for tabs, favorites, and folders. Navigation state and expanded
-folders are restored when returning from an opened file.
+while Markdown, code/CSV, image, video, and unrecognized file clicks and Enter
+replace the list with a breadcrumbed detail. Choose the current location
+breadcrumb to return to the list; choosing an ancestor file drops newer detail
+entries. Opening a list row or sidebar favorite starts a new detail path; only
+navigation originating inside a detail appends to that path. Modified clicks and
+file types without a dedicated detail, including PDF and canvas, retain existing
+split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
+and folders. Navigation state and expanded folders are restored when returning
+from an opened file.
 
 ## Calendar — `/app/calendar/view`
 
@@ -470,8 +493,73 @@ On phones, recorded call headers omit the **Call Again** action.
 
 ## Customers (CRM) — `/app/component/companies`
 
-Board/List views, `Company` create button. Requires a team ("Join a team to enable CRM" →
-`Open team settings`).
+The 216px local sidebar uses the same navigation primitives as Email and Tasks.
+Board and List share a horizontal segmented toggle at the top of the sidebar; the
+main header has no layout toggle. People is not available. Views include All companies, My companies
+(Owner = current user), Needs follow-up (has a stage other than Churned and last
+interaction at least 14 days ago),
+Recently active (team email activity within 7 days), and Unassigned (no Owner). Existing personal/team
+saved views also appear under Views. Stages remain board columns or list properties.
+Board/List switches the representation without changing the selected set.
+Recently active uses the CRM last-interaction timestamp, advanced by sent and received
+email. It does not count company @mentions or chat discussions. Manually created
+companies initialize that timestamp to creation time, so newly added companies may
+also appear before any email; the sidebar hover tooltip discloses this limitation.
+View descriptions appear in sidebar tooltips, not above the main board or list.
+The `Search companies` field uses the shared Email/Tasks search bar. Command-F
+focuses it, `Clear search` resets it, and Escape leaves the field.
+
+Clicking a company in Board or List (or pressing Enter on a focused list row)
+opens its details inside the CRM workspace, keeping the left navigation visible.
+The top breadcrumb reads `<current view or list> > <company>`; click the first
+segment to return with the same filters, layout, and list scroll position. Selecting
+another sidebar view or switching Board/List closes the company details.
+Shift-click still opens the company in a separate split. Direct company links use
+the standalone company page.
+Clicking a contact in an embedded company's Contacts section appends a third
+breadcrumb: `<current view or list> > <company> > <contact>`. The CRM sidebar stays
+visible. Click the company breadcrumb or the contact's Company link to return to
+the company; click the first breadcrumb to return directly to the originating
+view. Shift-click still opens a contact in a separate split. Direct contact links
+use the standalone contact page.
+Company and contact headers have `Copy link` beside the side-panel toggle.
+It copies the record's direct URL and shows a confirmation toast; this is also
+available in the embedded company and contact breadcrumb header.
+
+`Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
+At narrow widths, `Show CRM navigation` opens the same navigation in a menu.
+The sidebar's Views and Lists sections can also collapse independently.
+
+CRM lists are currently disabled by `enableCrmLists` (default `false`). The sidebar
+Lists section, list editor, and company membership controls only mount when enabled.
+Existing list data is preserved; a restored list view returns to All companies while
+disabled. Board/List layout and saved filter views remain available.
+
+When enabled, lists are personal, team-scoped collections of explicit company IDs, persisted through
+saved-view storage separately from saved filter views. `New list` opens a name and
+company picker; `Edit list` changes membership or deletes the collection. An empty list
+must not show every company. The picker browses up to 500 recent companies. Canceling
+never saves the draft. Saving only closes the dialog after the server succeeds.
+
+Company detail pages show a **Lists** section in the right panel, with current
+personal list memberships as chips. **Manage lists** expands a searchable checkbox
+picker. Checking or unchecking saves immediately and refreshes the CRM sidebar's
+membership counts. Changes are disabled while saving; failures show an inline retry
+message and keep the last saved membership. With no lists, create one in the CRM sidebar.
+
+`New company` uses the existing creation dialog. `Import` previews a CSV with `name`
+and `domain` columns (1–100 rows, at most 1 MB). The explicit Import button writes the
+previewed companies. Partial failures retain only failed rows for retry. Use preview
+and cancel for browser checks against hosted dev data. `CRM settings` opens the existing
+settings panel. Requires a team with CRM enabled.
+
+`Export` opens options for companies. Choose Current view
+(respects filters/search) or All records across views (each visible record once), then
+select CSV columns. Company exports include Stage, Owner, Revenue and optional custom
+properties. `Prepare export` fetches every page and shows a count and three-row preview;
+it does not download. `Download CSV` saves the prepared snapshot using the selected
+columns. Changing scope requires preparing again. Cancel stops preparation. CSV uses UTF-8,
+quoted fields, original date timestamps and spreadsheet formula escaping.
 
 ## Activity — `/app/component/activity`
 
@@ -607,13 +695,15 @@ without comment permission have no comment composer, so Ask AI remains visible.
 On touch devices, an email thread's floating action bar has Previous email and
 Next email arrows beside the larger Mark done checkmark. The arrows follow the
 source list's filtered order, skip non-email items, and disable at its ends.
-They do not wrap; a thread opened without a source list has disabled arrows.
+`J` and `K` use that same order in the Email view. They do not wrap; a thread
+opened without a source list has disabled arrows.
 Mark done archives the current thread and opens the next email in that same
 filtered list, loading pages until another email is found or the list ends.
 On native mobile, stepping replaces the current email while preserving the
-filtered list behind it for swipe-back. This works with both the legacy mobile
-list and the newer app views. To verify, open the first email from Signal or
-Noise, tap Next and then Previous, and swipe back to the same filtered list.
+filtered list behind it for swipe-back. In the newer Email view it retargets the
+view-owned detail stack instead of opening another block. To verify, open the
+first email from Signal or Noise, tap Next and then Previous, and return to the
+same filtered list.
 Leaving the email cancels pending
 navigation and archiving while a page loads. At the end it opens the previous
 email; with no neighboring email it stays on the archived thread. Mark as not done

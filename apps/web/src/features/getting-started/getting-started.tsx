@@ -17,11 +17,11 @@ import { useUserId, useUserInfo } from '@core/context/user';
 import { isMobile } from '@core/mobile/isMobile';
 import { setActiveTabId } from '@core/signal/settingsTab';
 import { createChat } from '@core/util/create';
-import { AnimatedProfileIcon } from '@icon/wide-profile';
 import BookOpenIcon from '@phosphor/book-open.svg';
 import PaletteIcon from '@phosphor/palette.svg';
 import PlayCircleIcon from '@phosphor/play-circle.svg';
 import PlugsIcon from '@phosphor/plugs.svg';
+import ProfileIcon from '@phosphor/user-circle.svg';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { useEmailLinksQuery } from '@queries/email/link';
@@ -202,7 +202,7 @@ function GettingStartedContent() {
         },
         {
           id: 'set-name',
-          icon: AnimatedProfileIcon,
+          icon: ProfileIcon,
           title: 'Set your name & profile picture',
           description: 'Introduce yourself in Account settings',
           onActivate: () => openSettingsTab('Account'),

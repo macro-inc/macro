@@ -1,4 +1,7 @@
+import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { isListViewID, LIST_VIEW_ID } from '@app/constants/list-views';
+import { driveLocationLabel } from '@app/features/drive-view/core/location-label';
+import type { DriveState } from '@app/features/drive-view/core/types';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
@@ -17,8 +20,6 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
-import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
-import SplitIcon from '@icon/wide-newSplit.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
@@ -27,16 +28,16 @@ import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
 import CaretUp from '@phosphor/caret-up.svg';
+import SplitIcon from '@phosphor/columns.svg';
 import CopyIcon from '@phosphor/copy.svg';
+import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button, cn } from '@ui';
 import {
   createMemo,
-  createSignal,
   type ParentProps,
   type Setter,
   Show,
@@ -134,29 +135,10 @@ function SplitBackButton() {
   );
 }
 
-function SplitForwardButton() {
-  const context = useContext(SplitPanelContext);
-  if (!context) return '';
-  return (
-    <Button
-      square
-      size="sm"
-      class="p-1 rounded-lg touch:active:bg-transparent"
-      label="Go Forward"
-      hotkey={TOKENS.split.go.forward}
-      disabled={!context.handle.canGoForward()}
-      onClick={context.handle.goForward}
-    >
-      <CaretRight />
-    </Button>
-  );
-}
-
 function SidebarExpandButton() {
   const panel = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
   const sidebar = useSidebarCollapse();
-  const [hovering, setHovering] = createSignal(false);
 
   const isLeftmostSplit = () =>
     layout?.manager.splits()[0]?.id === panel?.handle.id;
@@ -181,13 +163,8 @@ function SidebarExpandButton() {
         disabled={!visible()}
         tabindex={visible() ? undefined : -1}
         onClick={() => sidebar.expand()}
-        onMouseEnter={() => setHovering(true)}
-        onMouseLeave={() => setHovering(false)}
       >
-        <AnimatedSquareSidebarIcon
-          class="size-4"
-          triggerAnimation={hovering()}
-        />
+        <SidebarIcon class="size-4" />
       </Button>
     </div>
   );
@@ -240,6 +217,50 @@ function SplitCloseButton() {
       >
         <CloseIcon />
       </Button>
+    </Show>
+  );
+}
+
+function SplitDriveReturnButton() {
+  const panel = useContext(SplitPanelContext);
+  const layout = useContext(SplitLayoutContext);
+  if (!panel || !layout) return null;
+
+  const sourceList = createMemo(() =>
+    panel.handle
+      .history()
+      .slice(0, -1)
+      .reverse()
+      .find(
+        (content) => content.type === 'component' && isListViewID(content.id)
+      )
+  );
+  const isDrive = (content: SplitContent) =>
+    content.type === 'component' && content.id === LIST_VIEW_ID.documents;
+  const sourceLabel = () => {
+    const state = sourceList()?.state;
+    const label = state?.['drive.returnLabel'];
+    if (typeof label === 'string') return label;
+    const driveState = state?.['drive.view'] as DriveState | undefined;
+    return driveState ? driveLocationLabel(driveState.location) : 'My Files';
+  };
+  const returnToDrive = () => {
+    if (panel.handle.goBackTo(isDrive)) return;
+    const driveSplit = layout.manager
+      .splits()
+      .find((split) => isDrive(split.content));
+    if (driveSplit) layout.manager.getSplit(driveSplit.id)?.activate();
+  };
+
+  return (
+    <Show when={sourceList()?.id === LIST_VIEW_ID.documents}>
+      <ViewBreadcrumbs.ReturnButton
+        onClick={returnToDrive}
+        tooltip={sourceLabel()}
+      >
+        {sourceLabel()}
+      </ViewBreadcrumbs.ReturnButton>
+      <ViewBreadcrumbs.Separator class="ml-1" />
     </Show>
   );
 }
@@ -572,14 +593,11 @@ export function SplitHeader(props: {
               <div class="relative flex items-center pl-2 h-full">
                 <SidebarExpandButton />
                 <SplitCloseButton />
-                <div class="flex items-center @max-[380px]/split-header:hidden">
-                  <SplitBackButton />
-                  <SplitForwardButton />
-                </div>
+                <SplitDriveReturnButton />
               </div>
             }
           >
-            {/* Back/forward island. List views never render the back button
+            {/* Mobile back island. List views never render the back button
                 (their header hosts the filter pills instead), so the island
                 hides for them even when history allows going back. */}
             <HeaderIsland

@@ -1,4 +1,5 @@
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
+import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import {
   AgentSessionProvider,
@@ -17,10 +18,13 @@ function AgentSessionContent() {
 
   return (
     <>
-      <header class="flex h-12 shrink-0 items-center border-b border-edge px-4">
-        <h2 class="truncate text-sm font-semibold text-ink">
+      <header class="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-edge px-4">
+        <h2 class="min-w-0 truncate text-sm font-semibold text-ink">
           {metadata()?.title ?? session()?.name ?? 'New Chat'}
         </h2>
+        <Show when={session()?.pullRequestUrl}>
+          {(url) => <AgentPullRequestChip url={url()} />}
+        </Show>
       </header>
       <Show
         when={!loadFailed()}

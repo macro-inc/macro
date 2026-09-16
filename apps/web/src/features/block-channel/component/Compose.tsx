@@ -20,7 +20,7 @@ import {
 } from '@components/app/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
-import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -44,6 +44,7 @@ import { ComposerSurface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
 export function ChannelCompose() {
+  const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [channelName, setChannelName] = createSignal<string>('');
 
   const { users: destinationOptions } = useCombinedRecipients();
@@ -197,8 +198,16 @@ export function ChannelCompose() {
     },
   });
   clearComposer = () => markdownEditor.controls.clear();
-  const hasLineBreaks = createHasLineBreaks(
-    markdownEditor.buildHandle().lexical
+  const { isCompact: oneLineInput } = createComposerLayout(
+    markdownEditor.buildHandle().lexical,
+    {
+      container: layout,
+      mode: () =>
+        inputState.view().showFormatRibbon ||
+        inputState.view().attachments?.length
+          ? 'expanded'
+          : 'auto',
+    }
   );
 
   const placeholder = createMemo(() => {
@@ -280,13 +289,7 @@ export function ChannelCompose() {
                     onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
                     onDragEnd={() => inputState.setIsDraggedOver(false)}
                   >
-                    <Input.Layout
-                      oneLineInput={
-                        !inputState.view().showFormatRibbon &&
-                        !inputState.view().attachments?.length &&
-                        !hasLineBreaks()
-                      }
-                    >
+                    <Input.Layout ref={setLayout} oneLineInput={oneLineInput()}>
                       <Input.DropOverlay />
                       <Input.Layout.Body>
                         <Input.FormatRibbon>

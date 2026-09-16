@@ -8,14 +8,17 @@ import { PipedreamIntegrationsSection } from './PipedreamIntegrations';
 import { SettingsPage, SettingsSection } from './primitives';
 
 /**
- * Consolidated "Connections" page: one card per external account the user can
- * link (Gmail, GitHub), followed by the agent's MCP integrations.
+ * The "Integrations" settings tab: one card per external account the user can
+ * link (Gmail, GitHub), followed by the agent's MCP integrations. The agents
+ * sidebar has its own MCP-only Connections page (see `McpConnections.tsx`);
+ * the MCP section stays here too because deep links (the agent reply's
+ * "Connect X" chip, the home hub's setup rows) open this tab to connect an app.
  */
 export function ConnectedAccounts() {
   const pipedreamMcp = usePipedreamMcpFlag();
   return (
     <SettingsPage
-      title="Connections"
+      title="Integrations"
       description="Connect your accounts so Macro can work across the tools you already use."
     >
       <SettingsSection title="Accounts">

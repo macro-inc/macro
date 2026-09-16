@@ -319,7 +319,7 @@ export function SplitPanel(props: SplitPanelProps) {
               <Show when={!usesComposableLayout()}>
                 <Panel.Header
                   class={cn(
-                    'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
+                    'relative block min-h-12 p-0 overflow-visible border-b-0!',
                     'z-split-panel-chrome',
                     // On mobile/tablet the header collapses to a zero-height grid row;
                     // SplitHeader overlays the body as floating islands.

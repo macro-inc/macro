@@ -1,5 +1,5 @@
 import CheckIcon from '@phosphor/check.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import AgentIcon from '@phosphor/sparkle.svg';
 import { Avatar, cn } from '@ui';
 import { createMemo, For, Show } from 'solid-js';
 import type { PersonaOption } from './compose-agent-session-options';
@@ -124,7 +124,7 @@ export function AgentPicker(props: {
                     when={persona.avatarUrl}
                     fallback={
                       <Avatar.Fallback>
-                        <RobotIcon class="size-4" />
+                        <AgentIcon class="size-4" />
                       </Avatar.Fallback>
                     }
                   >

@@ -39,6 +39,7 @@ mod path_validation;
 mod publish_sdk;
 mod pulumi_preview_pr;
 mod push_local_stack_binaries;
+mod release_sdk;
 mod reusable_deploy_service;
 mod reusable_preview_service;
 mod runners;
@@ -256,6 +257,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "publish_sdk",
         file_name: "publish-sdk.yml",
         render_yaml: || render_gh_workflow(publish_sdk::publish_sdk)(),
+    },
+    WorkflowFile {
+        slug: "release_sdk",
+        file_name: "release-sdk.yml",
+        render_yaml: || render_gh_workflow(release_sdk::release_sdk)(),
     },
     WorkflowFile {
         slug: "pulumi_preview_pr",

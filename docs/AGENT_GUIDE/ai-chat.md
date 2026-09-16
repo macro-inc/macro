@@ -22,8 +22,12 @@ More opens the full create menu in a glass bottom sheet. Other views show
 to the left of the navigation pill's right edge below. Agents has no separate
 create button; its AI input fills the row.
 The composer's compact height is 46px, matching the mobile chrome buttons,
-with a plus attachment control and centered text and actions. It expands for
-longer prompts while focused. Leaving the AI composer collapses a long draft to
+with a paperclip attachment control and centered text and actions. It expands for
+longer prompts while focused, including text that wraps without an explicit
+line break. Lists, blockquotes, headings, and other non-paragraph blocks also
+expand while editing, even when their text is short. Shortening a paragraph
+draft or widening the pane restores the compact layout when the text fits
+beside its controls. Leaving the AI composer collapses a long draft to
 a single-line preview in the accessory row; tapping it expands the same editor
 with the full draft intact. Screens with an available composer or reply controls show those
 instead; opening mobile search shows scope pills in their place. When neither
@@ -265,6 +269,12 @@ sits above the box. Tap the session title
 to open the title menu (caret), then **Rename** — that opens the generic entity
 rename dialog. Do not expect a tap on the name itself to start
 an inline edit.
+
+When the session has opened a pull request, a compact `#N` status chip
+appears in the header (top right) and in the side-panel Details. Click it
+to open the PR entity in a split; until GitHub has synced the entity the
+chip is a GitHub link instead. The icon and status word follow open /
+merged / closed.
 
 Tool groups and individual tool cards start collapsed. Expand a group to see
 its calls, then expand an edit card to view its file diffs. Diff bodies load

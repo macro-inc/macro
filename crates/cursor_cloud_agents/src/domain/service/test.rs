@@ -3,7 +3,8 @@ use crate::domain::error::SessionError;
 use crate::domain::event::{CursorEvent, InteractionUpdate, ToolCallEvent, Truncation};
 use crate::domain::journal::NativeRecord;
 use crate::domain::model::{
-    McpHeader, McpServer, McpTransport, RepoUrl, RunListing, RunOutcome, RunStatus,
+    ConversationLine, ConversationSpeaker, McpHeader, McpServer, McpTransport, RepoUrl, RunListing,
+    RunOutcome, RunStatus,
 };
 use crate::domain::ports::StreamConnectError;
 use crate::testing::{CursorCall, FakeCursor, FixedChooser, RecordingNotifier};
@@ -88,6 +89,13 @@ async fn load(
         "a successful load re-enables sync"
     );
     notifier.updates()[before..].to_vec()
+}
+
+fn line(speaker: ConversationSpeaker, text: &str) -> ConversationLine {
+    ConversationLine {
+        speaker,
+        text: text.to_owned(),
+    }
 }
 
 fn finished(run: &str) -> CursorEvent {
@@ -1489,10 +1497,15 @@ async fn restore_waits_for_session_load_before_recovering_runs() {
 }
 
 /// A foreign run whose stream is gone (retention expired) is captured from
-/// its run record, so the recorded answer is durable. But the record carries
-/// no original prompt: recovery must not ask the client to reload a history
-/// it cannot project, and an explicit load must fail rather than invent one —
-/// the client's prior view stays in place until a load succeeds.
+/// its run record, so the recorded answer is durable. The record carries no
+/// original prompt, so recovery must not ask the client to reload a history
+/// it cannot project.
+///
+/// An explicit load still succeeds. It is the only way back to a session
+/// whose runtime has gone: the harness reattaches by loading, so a load that
+/// refuses is every later prompt refused as disconnected, with nothing the
+/// user can do about it. The answer is served without the line that asked
+/// for it, and the gap is reported.
 #[tokio::test(start_paused = true)]
 async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
     let (service, cursor, notifier) = service(None);
@@ -1548,29 +1561,143 @@ async fn an_expired_foreign_stream_falls_back_to_the_run_record() {
             .any(|e| e.run.as_ref() == Some(&foreign) && e.input == JournalInput::Reconciled)
     );
 
-    let error = service
+    service
         .replay_session(&session)
         .await
-        .err()
-        .expect("a run without its original prompt cannot replace history");
+        .expect("a run without its original prompt still loads")
+        .complete();
     assert!(
-        error.to_string().contains("original prompt unavailable"),
-        "{error}"
-    );
-    assert_eq!(
-        notifier.updates().len(),
-        before,
-        "a failed load publishes nothing: the prior view is retained"
+        notifier.updates().len() > before,
+        "the load serves the history it does have"
     );
     assert!(
-        !ready_for_sync(&service, &session),
-        "nothing syncs or prompts until a load succeeds"
+        ready_for_sync(&service, &session),
+        "a loaded session is promptable again"
     );
     assert_eq!(
         service.journal.read(&session).await.expect("journal"),
         entries,
-        "the failed load discards nothing captured"
+        "the load discards nothing captured"
     );
+    service
+        .prompt(&session, "still reachable after the gap")
+        .await
+        .expect_err("no stream is scripted, but the prompt is not refused as unloaded");
+}
+
+/// The gap the load survives is closed when Cursor's conversation names the
+/// prompt. The mirrored run's answer is matched against the conversation and
+/// the line before it is journaled as that run's prompt, so it projects into
+/// place and the next load needs no lookup.
+#[tokio::test(start_paused = true)]
+async fn a_lost_prompt_is_recovered_from_the_cursor_conversation() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("the old answer".to_owned()),
+    });
+    service.sync_foreign_runs().await;
+
+    cursor.script_conversation(vec![
+        line(ConversationSpeaker::User, "what was asked on cursor.com"),
+        line(ConversationSpeaker::Agent, "the old answer"),
+    ]);
+    service
+        .replay_session(&session)
+        .await
+        .expect("load")
+        .complete();
+
+    let entries = service.journal.read(&session).await.expect("journal");
+    let foreign = CursorRunId::new("run-foreign-1");
+    let recovered = entries
+        .iter()
+        .find_map(|e| match &e.input {
+            JournalInput::Prompt(blocks) if e.run.is_none() => blocks.iter().find_map(|b| {
+                matches!(b, ContentBlock::Text(t) if t.text == "what was asked on cursor.com")
+                    .then_some(e.sequence)
+            }),
+            _ => None,
+        })
+        .expect("the recovered prompt is journaled");
+    assert!(
+        entries.iter().any(|e| e.run.as_ref() == Some(&foreign)
+            && e.input == JournalInput::PromptAccepted(recovered)),
+        "and is linked to the run it opened"
+    );
+    assert!(
+        notifier.updates().iter().any(|(_, update)| matches!(
+            update,
+            SessionUpdate::UserMessageChunk(c)
+                if matches!(&c.content, ContentBlock::Text(t) if t.text == "what was asked on cursor.com")
+        )),
+        "the load publishes it as part of the transcript"
+    );
+    assert!(ready_for_sync(&service, &session));
+}
+
+/// An answer the agent gave more than once names no single turn, so nothing
+/// is attached. A wrong question against a real answer is worse than none.
+#[tokio::test(start_paused = true)]
+async fn an_ambiguous_conversation_match_recovers_nothing() {
+    let (service, cursor, _notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events.send(finished("run-fake-1")).expect("stream open");
+    events.send(CursorEvent::Done).expect("stream open");
+    service.prompt(&session, "first").await.expect("first turn");
+
+    cursor.script_run_listings(vec![
+        RunListing {
+            id: CursorRunId::new("run-foreign-1"),
+            status: RunStatus::Finished,
+        },
+        RunListing {
+            id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+        },
+    ]);
+    cursor.script_run_result(RunOutcome {
+        status: RunStatus::Finished,
+        text: Some("done".to_owned()),
+    });
+    service.sync_foreign_runs().await;
+
+    cursor.script_conversation(vec![
+        line(ConversationSpeaker::User, "first way of asking"),
+        line(ConversationSpeaker::Agent, "done"),
+        line(ConversationSpeaker::User, "second way of asking"),
+        line(ConversationSpeaker::Agent, "done"),
+    ]);
+    service
+        .replay_session(&session)
+        .await
+        .expect("the load still succeeds without the prompt")
+        .complete();
+
+    let entries = service.journal.read(&session).await.expect("journal");
+    assert!(
+        !entries.iter().any(|e| matches!(&e.input, JournalInput::Prompt(blocks)
+            if blocks.iter().any(|b| matches!(b, ContentBlock::Text(t) if t.text.contains("way of asking"))))),
+        "neither candidate is guessed at"
+    );
+    assert!(ready_for_sync(&service, &session));
 }
 
 /// A run that is still executing cannot become the watermark when its stream

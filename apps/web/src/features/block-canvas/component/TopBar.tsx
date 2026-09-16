@@ -37,10 +37,10 @@ import {
 } from '@core/util/currentBlockDocumentName';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/wide-share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
 import Info from '@phosphor/info.svg';
 import Quotes from '@phosphor/quotes.svg';
+import IconShared from '@phosphor/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { onMount } from 'solid-js';
 import { URL_PARAMS } from '../constants';

@@ -25,7 +25,8 @@
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 
 Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
-(`/app/<left>/<right>`). Each pane has its own Close / Go Back / Go Forward buttons.
+(`/app/<left>/<right>`). Desktop panes expose Close when available and omit
+split-history back/forward buttons. Mobile content panes retain their back button.
 
 Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
@@ -47,6 +48,12 @@ shows `Content already open.` and keeps the preview in place. Select another
 preview item or leave that view before opening the block in a split. Duplicate
 mounts reached through direct layout paths show the same message instead of a
 second block instance.
+
+Desktop inline content previews use a 48px header with a muted bottom divider,
+aligned with the adjacent sidebar title bar (such as Home). Standalone block
+headers use the same height without a bottom divider. Preview headers and toolbars
+are transparent so they blend with the pane's inactive background. Header controls
+stay centered and the preview body fills the remaining height below the divider.
 
 ## Sidebar (a11y names are load-bearing)
 
@@ -87,6 +94,12 @@ sidebar layout default to 256px; manually resized Chat widths remain saved.
 Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
 with regular-weight labels and consistent icon spacing.
+
+Entity rows and navigation use Phosphor icons. Entity icons share one mapping
+across lists, previews, and drag images, with regular and bold weights. Read email
+uses an open envelope, calendar invitations use a calendar, and pull requests
+retain their open/merged/closed glyphs and status colors. Direct messages may
+show the other participant's avatar instead of a glyph.
 
 ## List-row dragging
 

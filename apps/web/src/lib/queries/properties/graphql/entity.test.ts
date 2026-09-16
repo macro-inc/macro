@@ -170,6 +170,12 @@ describe('mapGraphqlEntityProperties', () => {
 
   it('retains the not-yet-loaded distinction', () => {
     expect(mapGraphqlEntityProperties(undefined, 'entity-1')).toBeUndefined();
+    expect(
+      mapGraphqlEntityProperties(
+        { user: { id: 'user-1' } } as never,
+        'entity-1'
+      )
+    ).toBeUndefined();
     expect(mapGraphqlPropertiesMock).not.toHaveBeenCalled();
   });
 });

@@ -3,12 +3,16 @@ import {
   waitForDocumentSyncServiceReady,
 } from '@queries/storage/document-location';
 import { fetchDocumentLoadBundle } from '@queries/storage/documentLoad/documentLoadBundle';
+import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { createSyncServiceSource } from '@service-sync/source';
 import { match } from 'ts-pattern';
 
-export type TaskDocumentData = ReturnType<typeof createSyncServiceSource> & {
+export type MarkdownDocumentData = ReturnType<
+  typeof createSyncServiceSource
+> & {
   metadata: DocumentMetadata;
+  userAccessLevel: AccessLevel;
   permissions: {
     canComment: boolean;
     canEdit: boolean;
@@ -16,19 +20,19 @@ export type TaskDocumentData = ReturnType<typeof createSyncServiceSource> & {
   };
 };
 
-export async function loadTaskDocument(
+export async function loadMarkdownDocument(
   documentId: string
-): Promise<TaskDocumentData> {
+): Promise<MarkdownDocumentData> {
   const [bundleResult, locationResult] = await Promise.all([
     fetchDocumentLoadBundle(documentId),
     fetchDocumentLocation({ documentId }),
   ]);
 
   if (bundleResult.isErr()) {
-    throw new Error('Unable to load task metadata');
+    throw new Error('Unable to load document metadata');
   }
   if (locationResult.isErr()) {
-    throw new Error('Unable to load task content');
+    throw new Error('Unable to load document content');
   }
 
   let location = locationResult.value;
@@ -39,7 +43,7 @@ export async function loadTaskDocument(
     location = await waitForDocumentSyncServiceReady({ documentId });
   }
   if (location.type !== 'syncServiceContent') {
-    throw new Error('Task content is not available in sync-service');
+    throw new Error('Document content is not available in sync-service');
   }
 
   const { documentMetadata, token, userAccessLevel } = bundleResult.value;
@@ -69,6 +73,7 @@ export async function loadTaskDocument(
   return {
     ...createSyncServiceSource(documentId, token),
     metadata: documentMetadata,
+    userAccessLevel,
     permissions,
   };
 }

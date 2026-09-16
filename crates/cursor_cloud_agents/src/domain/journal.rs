@@ -132,6 +132,14 @@ impl ReplayMachine {
             .get(run)
             .is_some_and(|s| s.prompt && s.terminal.is_some())
     }
+    /// The run's answer as this journal captured it, empty string and all.
+    ///
+    /// Only the final step's text: a new step clears what came before, the
+    /// same way Cursor's own final text keeps only the last step. That is
+    /// what makes it comparable with a line of the agent's conversation.
+    pub fn answer(&self, run: &CursorRunId) -> Option<&str> {
+        self.runs.get(run).map(|state| state.text.as_str())
+    }
     /// Durable provider terminal status, independent of the reconciliation marker.
     pub fn terminal_status(&self, run: &CursorRunId) -> Option<RunStatus> {
         self.runs.get(run).and_then(|s| s.terminal.clone())
