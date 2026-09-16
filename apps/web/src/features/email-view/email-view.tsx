@@ -1,5 +1,8 @@
-import { EntityDetailNavigationStack } from '@app/components/entity-detail/EntityDetailNavigationStack';
-import { ViewShell } from '@app/components/view-shell';
+import {
+  EntityDetailNavigationStack,
+  useEntityDetailNavigationStack,
+} from '@app/components/entity-detail/EntityDetailNavigationStack';
+import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -19,7 +22,11 @@ import {
 } from 'solid-js';
 import { EmailDetailView } from './components/EmailDetailView';
 import { EmailFilterDrawer } from './components/EmailFilterDrawer';
-import { EmailHeader, EmailTopBar } from './components/EmailHeader';
+import {
+  EmailHeader,
+  EmailTopBar,
+  EmailViewBreadcrumbItem,
+} from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailSidebar } from './components/EmailSidebar';
 import { EMAIL_TABS } from './constants';
@@ -30,6 +37,27 @@ export type EmailViewProps = {
   /** Explicit navigation state. When present, it wins over entry restoration. */
   initialState?: EmailViewStateOptions;
 };
+
+function EmailViewBreadcrumbs(props: ParentProps) {
+  const { closeThread } = useEmailView();
+  const navigationStack = useEntityDetailNavigationStack();
+
+  return (
+    <ViewBreadcrumbs.Root
+      value={navigationStack.active()?.value ?? 'email-view'}
+      onChange={(value) => {
+        if (value === 'email-view') {
+          closeThread();
+          return;
+        }
+        navigationStack.popTo(value);
+      }}
+    >
+      <EmailViewBreadcrumbItem />
+      {props.children}
+    </ViewBreadcrumbs.Root>
+  );
+}
 
 function EmailListFallback() {
   return (
@@ -155,7 +183,9 @@ export function EmailView(props: EmailViewProps) {
     >
       <ListEntityMetadataQueryProvider>
         <EmailViewProvider initialState={props.initialState}>
-          <EmailViewRoot />
+          <EmailViewBreadcrumbs>
+            <EmailViewRoot />
+          </EmailViewBreadcrumbs>
         </EmailViewProvider>
       </ListEntityMetadataQueryProvider>
     </EntityDetailNavigationStack.Root>

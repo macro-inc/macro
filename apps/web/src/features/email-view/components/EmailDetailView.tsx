@@ -12,6 +12,7 @@ import {
   useCanAutofocusSplitContent,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { SplitPanel } from '@components/app/split-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import {
@@ -26,33 +27,9 @@ import { buildEntityData } from '@entity';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
-import { EMAIL_TABS } from '../constants';
 import { useEmailView } from '../email-view-context';
 import type { EmailThreadTarget } from '../types';
 import { useEmailDetailListNavigation } from '../use-email-detail-list-navigation';
-
-function EmailViewBreadcrumb() {
-  const { state } = useEmailView();
-  const label = () =>
-    EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
-
-  return (
-    <ViewBreadcrumbs.Item
-      value="email-view"
-      metadata={{ type: 'email-view' }}
-      order={0}
-    >
-      {(item) => (
-        <ViewBreadcrumbs.Button
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-        >
-          <span class="truncate">{label()}</span>
-        </ViewBreadcrumbs.Button>
-      )}
-    </ViewBreadcrumbs.Item>
-  );
-}
 
 function EmailThreadBreadcrumb(props: {
   value: string;
@@ -183,64 +160,56 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
         close: () => setShareOpen(false),
       }}
     >
-      <ViewBreadcrumbs.Root
-        value={navigationStack.active()?.value ?? breadcrumbValue()}
-        onChange={(value) => {
-          if (value === 'email-view') {
-            closeThread();
-            return;
-          }
-          navigationStack.popTo(value);
-        }}
-      >
-        <EmailViewBreadcrumb />
-        <EmailThreadBreadcrumb
-          value={breadcrumbValue()}
-          title={title()}
-          threadId={props.thread.id}
-          focusThread={focusContainer}
-        />
-        <SidePanel.Root defaultOpen={false}>
-          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <div class="flex h-12 min-w-0 shrink-0 items-center gap-1 border-edge border-b px-3">
-              <ViewBreadcrumbs.Outlet aria-label="Email location" />
-              <div class="ml-auto flex shrink-0 items-center gap-2">
-                <Show when={ENABLE_EMAIL_SHARING}>
-                  <ShareTrigger
-                    id={props.thread.id}
-                    blockType="email"
-                    hotkeyScope={panel.splitHotkeyScope}
-                  />
-                </Show>
-                <SidePanel.Toggle />
-              </div>
-            </div>
-            <div
-              ref={container}
-              class="relative min-h-0 min-w-0 flex-1"
-              tabIndex={-1}
-            >
-              <EmailThreadLoadGate
-                result={loadResult}
-                notificationSource={notificationSource}
-                threadId={props.thread.id}
-                linkId={threadData()?.thread?.link_id}
-                debounceTime={100}
-                onRetry={() => void threadQuery.refetch()}
-              >
-                <EmailThreadHostView
-                  title={title()}
-                  threadId={threadId}
-                  host={host}
-                  sidePanelHeaderToggle={false}
-                  shareOpen={shareOpen()}
-                  onShareOpenChange={setShareOpen}
+      <EmailThreadBreadcrumb
+        value={breadcrumbValue()}
+        title={title()}
+        threadId={props.thread.id}
+        focusThread={focusContainer}
+      />
+      <SidePanel.Root defaultOpen={false}>
+        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+          <div class="flex h-12 min-w-0 shrink-0 items-center gap-1 border-edge border-b px-3">
+            <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
+            <ViewBreadcrumbs.Outlet
+              class="flex-1"
+              aria-label="Email location"
+            />
+            <div class="ml-auto flex shrink-0 items-center gap-2">
+              <Show when={ENABLE_EMAIL_SHARING}>
+                <ShareTrigger
+                  id={props.thread.id}
+                  blockType="email"
+                  hotkeyScope={panel.splitHotkeyScope}
                 />
-              </EmailThreadLoadGate>
+              </Show>
+              <SidePanel.Toggle />
             </div>
           </div>
-        </SidePanel.Root>
-      </ViewBreadcrumbs.Root>
+          <div
+            ref={container}
+            class="relative min-h-0 min-w-0 flex-1"
+            tabIndex={-1}
+          >
+            <EmailThreadLoadGate
+              result={loadResult}
+              notificationSource={notificationSource}
+              threadId={props.thread.id}
+              linkId={threadData()?.thread?.link_id}
+              debounceTime={100}
+              onRetry={() => void threadQuery.refetch()}
+            >
+              <EmailThreadHostView
+                title={title()}
+                threadId={threadId}
+                host={host}
+                sidePanelHeaderToggle={false}
+                shareOpen={shareOpen()}
+                onShareOpenChange={setShareOpen}
+              />
+            </EmailThreadLoadGate>
+          </div>
+        </div>
+      </SidePanel.Root>
     </ShareDialogContext.Provider>
   );
 }
