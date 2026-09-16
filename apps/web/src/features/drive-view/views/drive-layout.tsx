@@ -224,10 +224,6 @@ export function DriveLayout(props: {
                   <SplitPanel.CloseButton />
                   <ViewSidebar.Title>Drive</ViewSidebar.Title>
                 </div>
-                <SplitPanel.ControlGroup>
-                  <SplitPanel.BackButton />
-                  <SplitPanel.ForwardButton />
-                </SplitPanel.ControlGroup>
               </ViewSidebar.Header>
               <ViewSidebar.Content class="flex flex-col gap-6">
                 <props.createMenu />
@@ -283,8 +279,6 @@ export function DriveLayout(props: {
                 <div class="hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
                   <SplitPanel.ControlGroup>
                     <SplitPanel.CloseButton />
-                    <SplitPanel.BackButton />
-                    <SplitPanel.ForwardButton />
                   </SplitPanel.ControlGroup>
                   <Dropdown
                     open={navigationOpen()}

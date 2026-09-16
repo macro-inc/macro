@@ -27,7 +27,6 @@ import CollapseIcon from '@phosphor/arrows-in.svg';
 import ExpandIcon from '@phosphor/arrows-out.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretLeft from '@phosphor/caret-left.svg';
-import CaretRight from '@phosphor/caret-right.svg';
 import CaretUp from '@phosphor/caret-up.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import CloseIcon from '@phosphor/x.svg';
@@ -130,24 +129,6 @@ function SplitBackButton() {
       }}
     >
       <CaretLeft />
-    </Button>
-  );
-}
-
-function SplitForwardButton() {
-  const context = useContext(SplitPanelContext);
-  if (!context) return '';
-  return (
-    <Button
-      square
-      size="sm"
-      class="p-1 rounded-lg touch:active:bg-transparent"
-      label="Go Forward"
-      hotkey={TOKENS.split.go.forward}
-      disabled={!context.handle.canGoForward()}
-      onClick={context.handle.goForward}
-    >
-      <CaretRight />
     </Button>
   );
 }
@@ -572,14 +553,10 @@ export function SplitHeader(props: {
               <div class="relative flex items-center pl-2 h-full">
                 <SidebarExpandButton />
                 <SplitCloseButton />
-                <div class="flex items-center @max-[380px]/split-header:hidden">
-                  <SplitBackButton />
-                  <SplitForwardButton />
-                </div>
               </div>
             }
           >
-            {/* Back/forward island. List views never render the back button
+            {/* Mobile back island. List views never render the back button
                 (their header hosts the filter pills instead), so the island
                 hides for them even when history allows going back. */}
             <HeaderIsland
