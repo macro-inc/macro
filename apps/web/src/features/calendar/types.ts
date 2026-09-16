@@ -6,6 +6,7 @@ import type { EventReminders } from '@service-storage/generated/schemas/eventRem
 import type { EventType } from '@service-storage/generated/schemas/eventType';
 import { multiDayTimedDisplayRange } from './utils/calendar-date';
 import { canEditCalendarEventTime } from './utils/event-interaction';
+import { outOfOfficeAllDayRange } from './utils/out-of-office-display';
 
 /** Supported FullCalendar period views. */
 export type CalendarPeriodView =
@@ -267,9 +268,12 @@ export function mapCalendarEventToFullCalendar(
   event: CalendarEvent
 ): EventInput {
   const timeEditable = canEditCalendarEventTime(event);
+  // An all-day out-of-office event is stored as a full-day timed span; render it
+  // in the all-day row rather than as a 24-hour block in the time grid.
   const allDayRange = event.allDay
     ? undefined
-    : multiDayTimedDisplayRange(new Date(event.start), new Date(event.end));
+    : (outOfOfficeAllDayRange(event) ??
+      multiDayTimedDisplayRange(new Date(event.start), new Date(event.end)));
   const isRenderedAllDay = event.allDay || allDayRange !== undefined;
   // FullCalendar reports interactions from the all-day row as true all-day
   // ranges. Keep projected timed events fixed so their timestamps are not

@@ -2,7 +2,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
-use chrono::{DateTime, FixedOffset, NaiveDate, NaiveTime, Utc};
+use chrono::{DateTime, NaiveDate, Utc};
 use reqwest::{Client, RequestBuilder, StatusCode};
 use rootcause::Report;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
@@ -2125,20 +2125,15 @@ fn google_time(event: &GoogleEvent) -> Result<EventTime, Report> {
         end.date.as_deref(),
     ) {
         (Some(start_value), Some(end_value), _, _) => {
-            let starts_fixed = DateTime::parse_from_rfc3339(start_value).map_err(report)?;
-            let ends_fixed = DateTime::parse_from_rfc3339(end_value).map_err(report)?;
-            // Google rejects a date-based out-of-office event, so an all-day one
-            // is stored as a full-day timed span (local midnight to a later
-            // local midnight). Present it as all-day again so it renders and
-            // edits like any all-day event rather than a 24-hour block.
-            if event.event_type.as_deref() == Some("outOfOffice")
-                && let Some(all_day) = whole_day_span(starts_fixed, ends_fixed)
-            {
-                return Ok(all_day);
-            }
+            let starts_at = DateTime::parse_from_rfc3339(start_value)
+                .map_err(report)?
+                .with_timezone(&Utc);
+            let ends_at = DateTime::parse_from_rfc3339(end_value)
+                .map_err(report)?
+                .with_timezone(&Utc);
             Ok(EventTime::Timed {
-                starts_at: starts_fixed.with_timezone(&Utc),
-                ends_at: ends_fixed.with_timezone(&Utc),
+                starts_at,
+                ends_at,
                 time_zone: start.time_zone.clone(),
             })
         }
@@ -2151,20 +2146,6 @@ fn google_time(event: &GoogleEvent) -> Result<EventTime, Report> {
             event.id
         )),
     }
-}
-
-/// The all-day span a timed range represents when it runs from one local
-/// midnight to a later local midnight, or `None` when it does not. Each bound
-/// carries its own UTC offset, so a span crossing a daylight-saving change is
-/// still recognized as whole days.
-fn whole_day_span(start: DateTime<FixedOffset>, end: DateTime<FixedOffset>) -> Option<EventTime> {
-    (start.time() == NaiveTime::MIN
-        && end.time() == NaiveTime::MIN
-        && end.date_naive() > start.date_naive())
-    .then(|| EventTime::AllDay {
-        start_date: start.date_naive(),
-        end_date: end.date_naive(),
-    })
 }
 
 fn google_start(value: &GoogleEventDateTime) -> Option<EventStart> {
