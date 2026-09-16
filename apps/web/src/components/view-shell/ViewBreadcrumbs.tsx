@@ -1,5 +1,5 @@
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import { cn } from '@ui';
+import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
   children,
@@ -105,6 +105,7 @@ export type ViewBreadcrumbsButtonProps = Omit<
   'aria-current'
 > & {
   isActive?: boolean;
+  tooltip?: string;
 };
 
 function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
@@ -112,10 +113,11 @@ function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
     'children',
     'class',
     'isActive',
+    'tooltip',
     'type',
   ]);
 
-  return (
+  const button = () => (
     <button
       {...rest}
       type={local.type ?? 'button'}
@@ -130,6 +132,16 @@ function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
     >
       {local.children}
     </button>
+  );
+
+  return (
+    <Show when={local.tooltip} fallback={button()}>
+      {(tooltip) => (
+        <Tooltip class="min-w-0" label={tooltip()}>
+          {button()}
+        </Tooltip>
+      )}
+    </Show>
   );
 }
 

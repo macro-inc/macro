@@ -56,6 +56,7 @@ export function EntityDetailBreadcrumbItem(props: {
           class="gap-1.5"
           isActive={item.isActive()}
           onClick={item.onSelect}
+          tooltip={breadcrumbName(props.entry.data)}
         >
           <EntityIcon
             targetType={breadcrumbIcon(props.entry.data)}

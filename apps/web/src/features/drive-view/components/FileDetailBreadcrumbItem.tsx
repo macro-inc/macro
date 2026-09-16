@@ -59,6 +59,7 @@ export function FileDetailBreadcrumbItem(props: {
             class="gap-1.5"
             isActive={item.isActive()}
             onClick={item.onSelect}
+            tooltip={documentName()}
           >
             <EntityIcon
               targetType={props.blockType}

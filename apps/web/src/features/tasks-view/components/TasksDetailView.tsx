@@ -45,7 +45,7 @@ function TaskViewBreadcrumbItem() {
         <ViewBreadcrumbs.ReturnButton
           isActive={item.isActive()}
           onClick={item.onSelect}
-          title={`Back to ${tabName()}`}
+          tooltip={tabName()}
         >
           <span class="truncate">{tabName()}</span>
         </ViewBreadcrumbs.ReturnButton>

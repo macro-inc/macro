@@ -263,7 +263,7 @@ function SplitDriveReturnButton() {
     <Show when={sourceList()?.id === LIST_VIEW_ID.documents}>
       <ViewBreadcrumbs.ReturnButton
         onClick={returnToDrive}
-        title={`Back to ${sourceLabel()}`}
+        tooltip={sourceLabel()}
       >
         {sourceLabel()}
       </ViewBreadcrumbs.ReturnButton>

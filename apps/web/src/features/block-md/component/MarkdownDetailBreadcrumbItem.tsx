@@ -76,6 +76,7 @@ export function MarkdownDetailBreadcrumbItem(props: {
               item.onSelect();
               focusDocument();
             }}
+            tooltip={documentName()}
           >
             <EntityIcon targetType={blockName()} size="xs" class="shrink-0" />
             <span class="truncate">{documentName()}</span>

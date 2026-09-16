@@ -22,7 +22,7 @@ export function DriveLocationBreadcrumbItems(props: {
               class="max-w-48"
               isActive={item.isActive()}
               onClick={item.onSelect}
-              title={entry.label}
+              tooltip={entry.label}
             >
               <span class="truncate">{entry.label}</span>
             </ViewBreadcrumbs.Button>
