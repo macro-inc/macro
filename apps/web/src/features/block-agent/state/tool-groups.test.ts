@@ -75,7 +75,24 @@ describe('segmentParts', () => {
   it('groups consecutive thinking blocks with tool calls', () => {
     expect(
       segmentParts([thought(), tool(), thought(), tool(), thought()])
-    ).toEqual([{ kind: 'tools', start: 0, end: 5 }]);
+    ).toEqual([
+      { kind: 'tools', start: 0, end: 4 },
+      { kind: 'part', start: 4, end: 5 },
+    ]);
+  });
+
+  it('leaves a trailing thought out of a tool run', () => {
+    expect(segmentParts([thought(), tool(), thought()])).toEqual([
+      { kind: 'tools', start: 0, end: 2 },
+      { kind: 'part', start: 2, end: 3 },
+    ]);
+  });
+
+  it('leaves a thought after a single tool as its own part', () => {
+    expect(segmentParts([tool(), thought()])).toEqual([
+      { kind: 'part', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+    ]);
   });
 
   it('keeps a lone thinking block as its own part', () => {

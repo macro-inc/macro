@@ -45,8 +45,10 @@ vi.mock('./parts/ElicitationPart', () => ({ ElicitationPart: () => null }));
 vi.mock('../ui', () => ({
   isToolActive: (status: string) =>
     status === 'pending' || status === 'running',
-  Thought: (props: { text: string }) => (
-    <div data-testid="thought">{props.text}</div>
+  Thought: (props: { text: string; active?: boolean }) => (
+    <div data-active={String(props.active ?? false)} data-testid="thought">
+      {props.text}
+    </div>
   ),
   WorkingLine: () => <div data-testid="working" />,
   ActionLine: (props: { label: string }) => <div>{props.label}</div>,
@@ -209,5 +211,69 @@ describe('Message tool grouping', () => {
     );
     expect(view.getByTestId('group').dataset.count).toBe('2');
     expect(view.getByTestId('text')).toBe(prose);
+  });
+});
+
+describe('Message thought shimmer', () => {
+  const thought = (value: string): MessagePart => ({
+    kind: 'thought',
+    text: value,
+  });
+
+  it('keeps grouped thoughts at their real indices when the group opens', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [thought('why this file'), tool('read'), tool('edit')],
+          null
+        )}
+      />
+    ));
+    expect(view.getByTestId('thought').dataset.active).toBe('false');
+    expect(view.getByTestId('thought').textContent).toBe('why this file');
+    expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
+      '1',
+      '2',
+    ]);
+  });
+
+  it('shimmers only the trailing thought of an open turn', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            thought('already decided'),
+            tool('read'),
+            thought('still weighing this'),
+          ],
+          null
+        )}
+      />
+    ));
+    const rows = view.getAllByTestId('thought');
+    expect(rows.map((el) => el.textContent)).toEqual([
+      'already decided',
+      'still weighing this',
+    ]);
+    expect(rows.map((el) => el.dataset.active)).toEqual(['false', 'true']);
+  });
+
+  it('settles a thought once prose follows it', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [thought('weighing'), text('Here is the answer.')],
+          null
+        )}
+      />
+    ));
+    expect(view.getByTestId('thought').dataset.active).toBe('false');
+  });
+
+  it('settles every thought once the turn has a stop reason', () => {
+    const view = render(() => (
+      <Message message={message([thought('done thinking')])} />
+    ));
+    expect(view.getByTestId('thought').dataset.active).toBe('false');
   });
 });

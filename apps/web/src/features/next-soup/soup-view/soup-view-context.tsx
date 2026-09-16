@@ -115,6 +115,8 @@ type DataSource<T> = {
   data: Accessor<T[]>;
   /** Results are limited to synchronized email metadata. */
   cachedMail?: Accessor<boolean>;
+  /** Only the active GraphQL source opts rows into deferred interaction setup. */
+  deferRowInteractions?: Accessor<boolean>;
   error: Accessor<Error | null>;
   /** True when the active request has local or network data, including an
    * intentionally empty result. */
@@ -1538,6 +1540,8 @@ export const SoupViewContextProvider: FlowComponent<
     initialize,
     source: {
       data: entities,
+      deferRowInteractions: () =>
+        !search.isSearching() && itemsQuery.transport === 'graphql',
       cachedMail: () =>
         !search.isSearching() && itemsQueryData()?.cachedMail === true,
       error: () =>

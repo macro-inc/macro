@@ -1,11 +1,16 @@
-import { MobileFilterDrawer } from '@app/components/view-shell';
-import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import {
+  ListFilterDropdown,
+  type ListFilterGroup,
+  MobileFilterDrawer,
+  useViewControlHotkeys,
+} from '@app/components/view-shell';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Accordion } from '@kobalte/core/accordion';
 import BellSimpleIcon from '@phosphor/bell-simple.svg';
 import FilterIcon from '@phosphor/funnel-simple.svg';
-import { Dropdown, ToggleSwitch } from '@ui';
-import { createMemo, For, type JSX, Show } from 'solid-js';
+import { Dropdown } from '@ui';
+import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { selectedHomeTypes, setHomeTypeSelected } from '../core/type-selection';
 import { INBOX_FILTER_GROUPS } from '../inbox-facets';
 import { useInboxView } from '../inbox-view-context';
@@ -129,6 +134,8 @@ function useInboxFilters() {
 
   const isSelected = (groupId: string, optionId: string) => {
     const selectedIds = state.facets[groupId] ?? [];
+    if (groupId === 'read' && optionId === 'all')
+      return selectedIds.length === 0;
     return groupId === 'type'
       ? selectedHomeTypes(selectedIds, TYPE_IDS).includes(optionId)
       : selectedIds.includes(optionId);
@@ -139,6 +146,13 @@ function useInboxFilters() {
     optionId: string,
     selected: boolean
   ) => {
+    if (groupId === 'read') {
+      setFacets({
+        ...state.facets,
+        read: optionId === 'all' ? [] : [optionId],
+      });
+      return;
+    }
     setFacets({
       ...state.facets,
       [groupId]: setHomeTypeSelected(
@@ -150,20 +164,19 @@ function useInboxFilters() {
     });
   };
 
-  const unreadOnly = () => state.facets.read?.includes('unread') ?? false;
-  const setUnreadOnly = (checked: boolean) =>
-    setFacets({ ...state.facets, read: checked ? ['unread'] : [] });
-
   const activeCount = () =>
     TYPE_IDS.length -
     selectedHomeTypes(state.facets.type, TYPE_IDS).length +
-    (unreadOnly() ? 1 : 0);
+    (state.facets.read?.length ? 1 : 0);
 
   return {
-    unreadOnly,
-    setUnreadOnly,
     activeCount,
     clear: () => setFacets({}),
+    isGroupActive: (groupId: string) =>
+      groupId === 'type'
+        ? selectedHomeTypes(state.facets.type, TYPE_IDS).length <
+          TYPE_IDS.length
+        : (state.facets[groupId]?.length ?? 0) > 0,
     isSelected,
     setSelected,
   };
@@ -179,58 +192,59 @@ function FilterCountBadge(props: { count: number }) {
   );
 }
 
+const HOME_FILTER_GROUPS: ListFilterGroup<string, string>[] = [
+  {
+    id: 'read',
+    label: 'Status',
+    selectionMode: 'single',
+    defaultOptionId: 'all',
+    options: [
+      { id: 'unread', label: 'Unread' },
+      { id: 'read', label: 'Read' },
+      { id: 'all', label: 'All' },
+    ],
+  },
+  ...FILTER_GROUPS.map((group) => ({ ...group, label: 'Type' })),
+];
+
 export function InboxFilterDropdown() {
   const filters = useInboxFilters();
+  const panel = useSplitPanelOrThrow();
+  const [open, setOpen] = createSignal(false);
+  useViewControlHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: panel.isPanelActive,
+    filter: {
+      description: 'Filter Home',
+      run: () => {
+        setOpen(true);
+      },
+    },
+  });
 
   return (
     <div class="relative ml-auto shrink-0">
-      <Dropdown placement="bottom-end">
-        <Dropdown.Trigger variant="ghost" size="sm" square label="Filter Home">
-          <FilterIcon />
-        </Dropdown.Trigger>
-        <Dropdown.Content class="max-h-[min(36rem,calc(100dvh-5rem))] w-56 overflow-y-auto">
-          <Dropdown.Group>
-            <Dropdown.Item
-              role="menuitemcheckbox"
-              aria-checked={filters.unreadOnly()}
-              closeOnSelect={false}
-              onSelect={() => filters.setUnreadOnly(!filters.unreadOnly())}
-            >
-              <span class="flex-1">Unread only</span>
-              <span aria-hidden="true" inert class="pointer-events-none flex">
-                <ToggleSwitch checked={filters.unreadOnly()} size="xs" />
-              </span>
-            </Dropdown.Item>
-          </Dropdown.Group>
-          <For each={FILTER_GROUPS}>
-            {(group) => (
-              <Dropdown.Group>
-                <Dropdown.GroupLabel>{group.label}</Dropdown.GroupLabel>
-                <For each={group.options}>
-                  {(option) => (
-                    <Dropdown.CheckboxItem
-                      checked={filters.isSelected(group.id, option.id)}
-                      closeOnSelect={false}
-                      onChange={(selected) =>
-                        filters.setSelected(group.id, option.id, selected)
-                      }
-                    >
-                      {option.icon?.()}
-                      <span>{option.label}</span>
-                    </Dropdown.CheckboxItem>
-                  )}
-                </For>
-              </Dropdown.Group>
-            )}
-          </For>
-          <Dropdown.Group>
-            <Dropdown.Item onSelect={filters.clear}>
-              Reset filters
-            </Dropdown.Item>
-          </Dropdown.Group>
-        </Dropdown.Content>
-      </Dropdown>
-
+      <ListFilterDropdown
+        label="Filter Home"
+        customTrigger={
+          <Dropdown.Trigger
+            variant="ghost"
+            size="sm"
+            square
+            label="Filter Home"
+          >
+            <FilterIcon />
+          </Dropdown.Trigger>
+        }
+        groups={HOME_FILTER_GROUPS}
+        open={open()}
+        onOpenChange={setOpen}
+        isSelected={filters.isSelected}
+        isGroupActive={filters.isGroupActive}
+        onSelectionChange={filters.setSelected}
+        onClear={filters.clear}
+        clearLabel="Reset filters"
+      />
       <FilterCountBadge count={filters.activeCount()} />
     </div>
   );
@@ -246,29 +260,17 @@ export function InboxFilterDrawer() {
       activeCount={filters.activeCount()}
       onClear={filters.clear}
     >
-      <MobileDrawer.Item
-        role="switch"
-        aria-checked={filters.unreadOnly()}
-        onClick={() => filters.setUnreadOnly(!filters.unreadOnly())}
-      >
-        <span class="flex-1">Unread only</span>
-        <span aria-hidden="true" inert class="pointer-events-none flex">
-          <ToggleSwitch checked={filters.unreadOnly()} />
-        </span>
-      </MobileDrawer.Item>
-
-      <Accordion
-        multiple
-        collapsible
-        defaultValue={[FILTER_GROUPS[0]?.id ?? 'type']}
-      >
+      <Accordion multiple collapsible defaultValue={['read', 'type']}>
         <div class="flex flex-col">
-          <For each={FILTER_GROUPS}>
+          <For each={HOME_FILTER_GROUPS}>
             {(group) => {
               const activeCount = createMemo(
                 () =>
-                  group.options.filter(
-                    (option) => !filters.isSelected(group.id, option.id)
+                  group.options.filter((option) =>
+                    group.id === 'type'
+                      ? !filters.isSelected(group.id, option.id)
+                      : option.id !== 'all' &&
+                        filters.isSelected(group.id, option.id)
                   ).length
               );
 
@@ -279,10 +281,16 @@ export function InboxFilterDrawer() {
                   activeCount={activeCount()}
                   class="mb-3"
                 >
-                  <div role="group" aria-label={group.label}>
+                  <div
+                    role={
+                      group.selectionMode === 'single' ? 'radiogroup' : 'group'
+                    }
+                    aria-label={group.label}
+                  >
                     <For each={group.options}>
                       {(option) => (
                         <MobileFilterDrawer.Option
+                          selectionMode={group.selectionMode}
                           checked={filters.isSelected(group.id, option.id)}
                           onChange={(checked) =>
                             filters.setSelected(group.id, option.id, checked)

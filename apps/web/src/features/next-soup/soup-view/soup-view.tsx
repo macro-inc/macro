@@ -1615,6 +1615,9 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                   >
                                     <Dynamic
                                       component={rowEntry().component}
+                                      deferInteractions={
+                                        source.deferRowInteractions?.() === true
+                                      }
                                       entity={row.original}
                                       timestamp={timestamp()}
                                       highlighted={row.isFocused()}

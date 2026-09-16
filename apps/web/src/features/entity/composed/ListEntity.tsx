@@ -117,7 +117,11 @@ export function ListEntity(props: ListEntityProps) {
   const [snippetContainerRef, setSnippetContainerRef] = createSignal<
     HTMLElement | undefined
   >();
-  const chars = useCharacterCount(snippetContainerRef);
+  const chars = useCharacterCount(() =>
+    props.deferInteractions && !hasSearchContentHits(props.entity)
+      ? undefined
+      : snippetContainerRef()
+  );
 
   // For singleton hits on a SnippetEntity, expanding "show more" only adds
   // value when windowSearchMatch trimmed text — otherwise the inline
@@ -156,6 +160,7 @@ export function ListEntity(props: ListEntityProps) {
   const draggable = createEntityDraggable({
     entity: props.entity,
     splitId: useSplitPanel()?.handle?.id,
+    deferUntilInteraction: () => props.deferInteractions === true,
   });
 
   const listLayout = useListLayout();

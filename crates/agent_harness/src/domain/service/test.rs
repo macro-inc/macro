@@ -6,8 +6,9 @@ use std::sync::{Arc, Mutex};
 
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, ClientRequest, ContentBlock, InitializeResponse, NewSessionResponse,
-    ResumeSessionResponse, SessionCapabilities, SessionId, SessionResumeCapabilities,
+    AgentCapabilities, ClientNotification, ClientRequest, ContentBlock, InitializeResponse,
+    NewSessionResponse, ResumeSessionResponse, SessionCapabilities, SessionId,
+    SessionResumeCapabilities,
 };
 use agent_fold::domain::model::TurnSignal;
 use agent_fold::domain::model::{AuthorKind, MessageId};
@@ -767,34 +768,20 @@ async fn open_announces_while_the_container_is_still_booting() {
 #[tokio::test]
 async fn forward_to_a_live_session_reuses_the_transport() {
     let composer = PromptComposerMock::default();
-    let (service, _repo, containers, announcer, _runtimes) =
-        harness_with_edges(PromptContextMock::default(), composer.clone());
-    let command = open_command();
+    let ((service, _repo, containers, announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), composer.clone());
     let id = AgentSessionId::new();
-    let open = service.execute(id, HarnessCommand::Open(command));
-    let drive = async {
-        loop {
-            if containers.spawned() == 1 {
-                break;
-            }
-            tokio::task::yield_now().await;
-        }
-        let container = containers
-            .container(session_of(&containers))
-            .expect("the spawned container is findable");
-        complete_handshake(&container).await;
-        container
-    };
-    let (opened, container) = tokio::join!(open, drive);
-    opened.expect("open should succeed");
+    let container = live_session(&service, &containers, id).await;
+    turns.settled(id).await;
 
-    let forward = service.execute(
-        id,
-        HarnessCommand::Deliver(forward_message("and add a regression test")),
-    );
-    let agent = container.agent();
-    let (result, ()) = tokio::join!(forward, agent.completes_prompt());
-    result.expect("forward to a live session should succeed");
+    service
+        .execute(
+            id,
+            HarnessCommand::Deliver(forward_message("and add a regression test")),
+        )
+        .await
+        .expect("forward to a live session should succeed");
+    container.agent().wait_for_requests(4).await;
 
     assert_eq!(containers.spawned(), 1, "no second container");
     assert_eq!(containers.resumed(), 0, "no resume for a live session");
@@ -1020,19 +1007,16 @@ async fn concurrent_forwards_share_one_session_recovery() {
             vec![ContentBlock::from(context_prompt("second"))],
         ]
     );
-    assert_eq!(
-        announcer
-            .announced()
-            .into_iter()
-            .map(|announcement| announcement.prompted_message_id)
-            .collect::<Vec<_>>(),
-        [
-            MessageId::first(AuthorKind::User),
-            MessageId {
-                turn: agent_session::domain::model::TurnId(1),
-                author: AuthorKind::User,
-            },
-        ]
+    let announced_turns: Vec<_> = announcer
+        .announced()
+        .into_iter()
+        .map(|announcement| announcement.prompted_message_id)
+        .collect();
+    assert_eq!(announced_turns[0], MessageId::first(AuthorKind::User));
+    assert!(
+        announced_turns[1].turn == agent_session::domain::model::TurnId(1)
+            || announced_turns[1].turn == agent_session::domain::model::TurnId(2),
+        "the second chip is the next prompt, or the one after a steer-stop: {announced_turns:?}"
     );
 }
 
@@ -1474,6 +1458,142 @@ async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
     assert_eq!(
         prompts(&agent)[1],
         vec![ContentBlock::from("still wanted after the stop")]
+    );
+}
+
+fn cancel_count(agent: &FakeAgent) -> usize {
+    agent
+        .received_notifications()
+        .iter()
+        .filter(|notification| matches!(notification, ClientNotification::CancelNotification(_)))
+        .count()
+}
+
+#[tokio::test]
+async fn a_channel_follow_up_stops_the_running_turn_announces_and_flushes() {
+    let ((service, _repo, containers, announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = session_with_a_running_turn(&service, &containers, id).await;
+    let agent = container.agent();
+    let announcements_before = announcer.announced().len();
+    let prompts_before = prompts(&agent).len();
+
+    // Work already waiting from the session page: the follow-up jumps it.
+    let waiting = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("queued earlier from the session page"),
+                actor: Some(staff_sender()),
+            },
+        )
+        .await
+        .expect("a mid-turn session-page prompt queues");
+    assert_eq!(
+        waiting.disposition,
+        agent_session::domain::ports::ControlDisposition::Queued
+    );
+
+    let follow_up = forward_message("steer from the channel");
+    let follow_up_id = follow_up.id;
+    let outcome = service
+        .execute(id, HarnessCommand::Deliver(follow_up))
+        .await
+        .expect("a channel follow-up is accepted");
+    assert_eq!(outcome, CommandOutcome::Queued);
+    assert_eq!(
+        cancel_count(&agent),
+        1,
+        "the running turn is cancelled so the follow-up can flush: {:#?}",
+        agent.received_notifications()
+    );
+    assert_eq!(
+        prompts(&agent).len(),
+        prompts_before,
+        "the follow-up waits for the cancelled turn to end"
+    );
+    let queued = service.queued_controls(id).await.expect("queue lists");
+    assert_eq!(
+        queued
+            .iter()
+            .map(|entry| entry.action_id)
+            .collect::<Vec<_>>(),
+        [follow_up_id, waiting.action_id],
+        "the follow-up is at the front, ahead of the earlier prompt"
+    );
+
+    let announced = announcer.announced();
+    assert_eq!(
+        announced.len(),
+        announcements_before + 1,
+        "the chip is posted on the follow-up before the cancelled turn ends"
+    );
+    let chip = announced.last().expect("the follow-up announced a chip");
+    assert_eq!(chip.prompted_content, "steer from the channel");
+    assert_eq!(chip.origin_message_id, Uuid::from_u128(0xf2));
+    assert_eq!(
+        chip.prompted_message_id,
+        MessageId {
+            // Stop is its own fold turn, so the follow-up opens the next one.
+            turn: agent_session::domain::model::TurnId(2),
+            author: AuthorKind::User,
+        }
+    );
+
+    agent.completes_prompt().await;
+    agent.wait_for_requests(4).await;
+
+    assert_eq!(
+        prompts(&agent)[1],
+        vec![ContentBlock::from(context_prompt("steer from the channel"))],
+        "the follow-up flushes first"
+    );
+    assert_eq!(
+        announcer.announced().len(),
+        announcements_before + 1,
+        "dispatch does not post a second chip for the same follow-up"
+    );
+
+    agent.completes_prompt().await;
+    agent.wait_for_requests(5).await;
+    turns.settled(id).await;
+    // No channel origin, so no composed context: the raw text goes out.
+    assert_eq!(
+        prompts(&agent)[2],
+        vec![ContentBlock::from("queued earlier from the session page")],
+        "the displaced prompt runs after the follow-up"
+    );
+}
+
+#[tokio::test]
+async fn an_idle_channel_follow_up_does_not_stop() {
+    let ((service, _repo, containers, announcer, _runtimes), mut turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let container = live_session(&service, &containers, id).await;
+    turns.settled(id).await;
+    let agent = container.agent();
+    let cancels_before = cancel_count(&agent);
+
+    service
+        .execute(
+            id,
+            HarnessCommand::Deliver(forward_message("next, while idle")),
+        )
+        .await
+        .expect("an idle follow-up dispatches");
+    agent.wait_for_requests(4).await;
+
+    assert_eq!(
+        cancel_count(&agent),
+        cancels_before,
+        "nothing is running, so there is no turn to cancel"
+    );
+    assert_eq!(announcer.announced().len(), 2);
+    assert_eq!(
+        prompts(&agent)[1],
+        vec![ContentBlock::from(context_prompt("next, while idle"))]
     );
 }
 
@@ -2652,16 +2772,25 @@ mod lifecycle_events {
         let ((service, _, _, _, _), turns, id, container) = settled_session().await;
         let agent = container.agent();
 
-        // The first forward dispatches at once; the second waits behind it.
+        // Session-page prompts queue without steering; a channel follow-up
+        // would stop the running turn instead. See
+        // `a_channel_follow_up_stops_the_running_turn_announces_and_flushes`.
+        let prompt = |text: &str| ControlEvent {
+            action: AgentAction::prompt(text),
+            actor: Some(staff_sender()),
+        };
         service
-            .execute(id, HarnessCommand::Deliver(forward_message("first")))
+            .control_event(id, prompt("first"))
             .await
-            .expect("first forward dispatches");
+            .expect("first prompt dispatches");
         let queued = service
-            .execute(id, HarnessCommand::Deliver(forward_message("second")))
+            .control_event(id, prompt("second"))
             .await
-            .expect("second forward is accepted");
-        assert_eq!(queued, CommandOutcome::Queued);
+            .expect("second prompt is accepted");
+        assert_eq!(
+            queued.disposition,
+            agent_session::domain::ports::ControlDisposition::Queued
+        );
         turns.lifecycle_published(5).await;
 
         agent.completes_prompt().await;
