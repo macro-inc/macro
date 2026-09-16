@@ -26,9 +26,11 @@ assert(
       (arg) =>
         arg === '--smoke' ||
         arg === '--matrix' ||
-        /^--matrix-view=(email|tasks|files|channels)$/.test(arg)
+        /^--matrix-view=(email|tasks|files|channels|files-shared-creators)$/.test(
+          arg
+        )
     ),
-  'Usage: native:e2e [--smoke | --matrix [--matrix-view=email|tasks|files|channels]]'
+  'Usage: native:e2e [--smoke | --matrix [--matrix-view=email|tasks|files|channels|files-shared-creators]]'
 );
 const smokeOnly = process.argv.includes('--smoke');
 const matrixMode = process.argv.includes('--matrix');
@@ -288,7 +290,7 @@ try {
     );
     assert(progress.done);
     console.log(
-      `PASS: offline filter selection matrix ${JSON.stringify(progress.byView)}`
+      `PASS: offline filter selection matrix (${matrixView ?? 'all'}) ${JSON.stringify(progress.byView)}`
     );
   } else if (!smokeOnly) {
     const requestsAtDisconnect = fixture.requests.length;

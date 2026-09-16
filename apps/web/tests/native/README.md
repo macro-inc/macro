@@ -108,6 +108,24 @@ fixture document IDs or server-only facts, regenerate inside Nix:
 bun run native:e2e:generate-fixtures
 ```
 
+### Shared Files creator regression
+
+```sh
+bun run native:e2e:matrix --matrix-view=files-shared-creators
+```
+
+This focused 96-selection run reuses the full matrix's Files request builder,
+including `applyDocumentTabScope`, the same request-time scope used online.
+It checks every fixture creator/tag subset with no type filter, PDF, and PDF +
+Code, on Shared and on All as a positive control for owned records. Shared + Me
+must be empty; Me + another creator must return only non-owned matches; no
+creator selection must return all matching Shared files. No Files query is
+prefetched online, and no server membership baseline is supplied to native IPC.
+
+The companion `document-tab-scope.test.ts` tests actual query-store edits,
+clearing/restoring creator filters, and REST/flat/grouped GraphQL request parity.
+The focused native run does not claim full Files matrix or grouped-offline coverage.
+
 ## Offline model and isolation
 
 `run.sh` creates unprivileged user/network/PID/mount namespaces with **only

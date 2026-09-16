@@ -114,6 +114,7 @@ const staticChoices = (group: 'read' | 'done') => [
 ];
 
 type View = 'email' | 'tasks' | 'files' | 'channels';
+type Scope = View | 'files-shared-creators';
 type Case = {
   view: View;
   name: string;
@@ -191,7 +192,9 @@ function emailMatch(
   return selection.calendar.length === 0 || row.calendar === true;
 }
 
-function* cases(view?: View): Generator<Case> {
+function* cases(scope?: Scope): Generator<Case> {
+  const sharedCreators = scope === 'files-shared-creators';
+  const view = sharedCreators ? 'files' : scope;
   // Coverage is exhaustive over the finite fixture domains, not pairwise.
   assert(
     TASK_STATUS_OPTIONS.map((o) => o.id).join() === STATUS.join(),
@@ -305,7 +308,9 @@ function* cases(view?: View): Generator<Case> {
     }
   }
   for (const tab of !view || view === 'files'
-    ? ['owned', 'shared', 'attachments', 'folders', 'all']
+    ? sharedCreators
+      ? ['shared', 'all']
+      : ['owned', 'shared', 'attachments', 'folders', 'all']
     : []) {
     const preset = getViewPreset('documents', tab, {
       userId: USER_ID,
@@ -313,7 +318,9 @@ function* cases(view?: View): Generator<Case> {
     });
     assert(preset, `Missing Files preset ${tab}`);
     for (const selection of combinations({
-      type: subsets(FILE_TYPES),
+      type: sharedCreators
+        ? [[], ['file-pdf'], ['file-pdf', 'file-code']]
+        : subsets(FILE_TYPES),
       'created-by': tab === 'owned' ? [[]] : subsets(PEOPLE),
       tags: subsets(TAGS),
     })) {
@@ -400,6 +407,7 @@ const expectedSelectionCounts = {
   channels: 3,
 };
 const progress = {
+  scope: 'all' as Scope | 'all',
   evaluated: 0,
   nativeElapsedMs: 0,
   nativeRequests: 0,
@@ -413,7 +421,7 @@ const progress = {
   done: false,
 };
 
-export function describeCases(size: number, view?: View) {
+export function describeCases(size: number, view?: Scope) {
   const result = [];
   for (const test of cases(view)) {
     result.push({
@@ -426,7 +434,13 @@ export function describeCases(size: number, view?: View) {
   return result;
 }
 
-export async function runBatch(size = 128, view?: View) {
+export async function runBatch(size = 128, view?: Scope) {
+  if (iterator)
+    assert(
+      progress.scope === (view ?? 'all'),
+      'Cannot change matrix scope mid-run'
+    );
+  progress.scope = view ?? 'all';
   iterator ??= cases(view);
   if (!revision) {
     revision = await host.currentRevision();
@@ -574,8 +588,12 @@ export async function runBatch(size = 128, view?: View) {
       });
   }
   if (progress.done) {
-    for (const [surface, count] of Object.entries(expectedSelectionCounts)) {
-      if (!view || view === surface)
+    const counts =
+      view === 'files-shared-creators'
+        ? { files: 96 }
+        : expectedSelectionCounts;
+    for (const [surface, count] of Object.entries(counts)) {
+      if (!view || view === 'files-shared-creators' || view === surface)
         assert(
           progress.byView[surface] === count,
           `Selection coverage changed for ${surface}: ${progress.byView[surface]} != ${count}`
