@@ -100,14 +100,15 @@ export function DocumentConversation(props: {
   );
   // Keyed by root so a refreshed list keeps each source thread's drafts and
   // focus; a failed refetch keeps the last authorized list rather than
-  // unmounting the threads.
+  // unmounting the threads. Unchecking empties it even though the disabled
+  // query retains its last result.
   const sourcesById = createMemo(
     () =>
       new Map(
-        (references.isPending ? [] : (references.data ?? [])).map((item) => [
-          item.root_id,
-          item,
-        ])
+        (includeReferences() && !references.isPending
+          ? (references.data ?? [])
+          : []
+        ).map((item) => [item.root_id, item])
       )
   );
   return (

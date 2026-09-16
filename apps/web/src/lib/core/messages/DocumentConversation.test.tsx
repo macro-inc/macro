@@ -345,6 +345,14 @@ describe('DocumentConversation placement', () => {
       'source source-a',
       'source source-b',
     ]);
+
+    // The disabled query still holds its last result; unchecking must not keep
+    // an empty Discussion mounted on touch.
+    fireEvent.click(
+      view.getByRole('checkbox', { name: 'Include channel mentions' })
+    );
+    expect(view.queryByRole('button', { name: /Discussion/ })).toBeNull();
+    expect(view.queryAllByRole('article')).toEqual([]);
   });
 
   it('keeps the last authorized source threads on a failed refresh and offers a retry', () => {
