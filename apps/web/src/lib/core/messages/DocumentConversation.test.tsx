@@ -139,6 +139,7 @@ function discussion(
   } = {}
 ) {
   const [pages, setPages] = createSignal(initialPages);
+  const [referencesFailed, setReferencesFailed] = createSignal(false);
   mocks.timeline.mockReturnValue({
     isSuccess: true,
     get data() {
@@ -147,8 +148,14 @@ function discussion(
   });
   mocks.references.mockImplementation(
     (_parent: unknown, enabled: Accessor<boolean>) => ({
+      get isPending() {
+        return !enabled();
+      },
       get isSuccess() {
-        return enabled();
+        return enabled() && !referencesFailed();
+      },
+      get isError() {
+        return enabled() && referencesFailed();
       },
       get data() {
         return enabled() ? sources : undefined;
@@ -157,6 +164,7 @@ function discussion(
   );
   return {
     setPages,
+    setReferencesFailed,
     ...render(() => (
       <DocumentConversation
         parent={{ type: 'document', id: 'document' }}
@@ -337,5 +345,26 @@ describe('DocumentConversation placement', () => {
       'source source-a',
       'source source-b',
     ]);
+  });
+
+  it('keeps the last authorized source threads on a failed refresh and offers a retry', () => {
+    const view = discussion([[thread('discussion', null)]]);
+    fireEvent.click(
+      view.getByRole('checkbox', { name: 'Include channel mentions' })
+    );
+    view.setReferencesFailed(true);
+    expect(view.getAllByRole('article').map((el) => el.textContent)).toEqual([
+      'discussion',
+      'source source-a',
+      'source source-b',
+    ]);
+    expect(
+      view.getByRole('button', {
+        name: 'Could not load channel mentions. Retry',
+      })
+    ).toBeTruthy();
+    expect(
+      view.queryByText('No channel threads mention this document.')
+    ).toBeNull();
   });
 });
