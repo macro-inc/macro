@@ -185,7 +185,7 @@ function CreateEntityDemo(props: LessonContentProps) {
 
       <Dialog open={launcherOpen()} onOpenChange={setLauncherOpen} modal={true}>
         <Dialog.Portal>
-          <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+          <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass" />
           <Dialog.Content
             class="[--color-surface:var(--color-dialog)]"
             onCloseAutoFocus={(e) => {

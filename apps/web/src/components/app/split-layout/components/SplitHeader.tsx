@@ -549,10 +549,10 @@ export function SplitHeader(props: {
             <Portal mount={panelRef()}>
               <Show when={isEntityDraggingOver()}>
                 <div
-                  class="pointer-events-none absolute inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted flex items-center justify-center"
+                  class="pointer-events-none absolute inset-0 z-modal-overlay bg-modal-overlay flex items-center justify-center"
                   data-split-header-drop-overlay
                 >
-                  <div class="max-w-[min(28rem,calc(100%-3rem))] min-w-0 bg-surface border border-edge rounded-lg shadow-lg shadow-drop-shadow px-4 py-3 flex items-center gap-2 text-sm text-ink">
+                  <div class="max-w-[min(28rem,calc(100%-3rem))] min-w-0 bg-surface border border-edge rounded-full shadow-lg shadow-drop-shadow px-4 py-2 flex items-center gap-2 font-sans text-xs text-ink">
                     <span class="shrink-0 text-ink-muted">
                       Open in this split
                     </span>

@@ -1205,9 +1205,7 @@ export function CanvasController(props: ParentProps) {
       </ContextMenu>
       <Show when={isDragging() || droppable.isActiveDroppable}>
         <FileDropOverlay valid={true}>
-          <div class="font-mono">
-            Drop any file here to add it to your canvas
-          </div>
+          Drop any file here to add it to your canvas
         </FileDropOverlay>
       </Show>
       {props.children}

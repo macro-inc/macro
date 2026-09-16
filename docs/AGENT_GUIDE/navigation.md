@@ -27,6 +27,15 @@
 Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
 (`/app/<left>/<right>`). Each pane has its own Close / Go Back / Go Forward buttons.
 
+Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
+panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
+again to restore the split layout.
+
+Image lightboxes, channel media viewers, sharing, and onboarding dialogs use
+the standard glass scrim. Scroll-edge indicators fade smoothly toward content
+and disappear at the corresponding scroll boundary. Image and video error
+placeholders retain diagonal stripes.
+
 Shift-click on content links requests a new split wherever splits are supported,
 including mentions, references, folder links, and list rows with a linked preview.
 Unmodified clicks keep each surface’s default (same split, preview, or new split).
@@ -86,6 +95,11 @@ a preparatory hover is not required. REST-backed rows retain eager registration.
 Verify first-press dragging after navigation as well as ordinary row clicks and
 right-click menus. A completed drop can move or copy real data; use a disposable
 test item when verifying drop actions.
+
+Split-header, file-upload, and conversation drop targets use plain color
+overlays with small sans-serif hints in fully rounded pills. Invalid file drops
+use the failure background color. Cancel the drag to inspect these hints without
+uploading or moving anything.
 
 ## Favorites
 

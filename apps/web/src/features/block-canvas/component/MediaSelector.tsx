@@ -155,9 +155,7 @@ export function MediaSelector() {
           >
             <Show when={isDragging()}>
               <FileDropOverlay valid={true}>
-                <div class="font-mono">
-                  Drop any file here to add it to your canvas
-                </div>
+                Drop any file here to add it to your canvas
               </FileDropOverlay>
             </Show>
             <Dropdown.Item closeOnSelect={false}>

@@ -234,7 +234,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
         </For>
       </div>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
+        <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass" />
         <Lightbox
           src={currentImageUrl}
           imageId={() => props.images[currentIndex()]?.id ?? ''}

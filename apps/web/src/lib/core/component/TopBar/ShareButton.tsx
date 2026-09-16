@@ -1156,7 +1156,7 @@ export function ShareModal(props: ShareModalProps) {
         open={props.isSharePermOpen}
       >
         <Dialog.Portal>
-          <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
+          <Dialog.Overlay class="z-modal fixed inset-0 scrim-glass" />
           <div class="z-modal fixed inset-0">
             <Dialog.Content
               class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope isolate flex flex-col gap-2 *:max-h-[75vh]"

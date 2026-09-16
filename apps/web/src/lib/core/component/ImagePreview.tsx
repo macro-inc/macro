@@ -223,7 +223,7 @@ export function ImagePreview(props: ImagePreviewProps) {
         </Dialog.Trigger>
       </div>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
+        <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass" />
         <Lightbox
           src={imageSrc}
           imageId={() => props.image.id}
