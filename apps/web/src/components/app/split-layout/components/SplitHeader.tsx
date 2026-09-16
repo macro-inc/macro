@@ -7,7 +7,7 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSidebarCollapse } from '@components/app/sidebarVisibility';
-import type { BlockName } from '@core/block';
+import { type BlockName, NonDocumentBlockTypes } from '@core/block';
 import {
   ContextMenuContent,
   MenuItem,
@@ -237,6 +237,14 @@ function SplitDriveReturnButton() {
   );
   const isDrive = (content: SplitContent) =>
     content.type === 'component' && content.id === LIST_VIEW_ID.documents;
+  const currentIsDriveItem = () => {
+    const content = panel.handle.content();
+    return (
+      content.type !== 'component' &&
+      (content.type === 'project' ||
+        !NonDocumentBlockTypes.includes(content.type))
+    );
+  };
   const sourceLabel = () => {
     const state = sourceList()?.state;
     const label = state?.['drive.returnLabel'];
@@ -253,7 +261,9 @@ function SplitDriveReturnButton() {
   };
 
   return (
-    <Show when={sourceList()?.id === LIST_VIEW_ID.documents}>
+    <Show
+      when={sourceList()?.id === LIST_VIEW_ID.documents && currentIsDriveItem()}
+    >
       <ViewBreadcrumbs.ReturnButton
         onClick={returnToDrive}
         tooltip={sourceLabel()}
