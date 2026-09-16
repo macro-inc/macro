@@ -8718,17 +8718,23 @@ dependencies = [
 name = "initiative"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "chrono",
  "entity_access",
+ "entity_access_db_utils",
  "macro_authorization",
+ "macro_db_migrator",
  "macro_user_id",
+ "macro_uuid",
  "mockall",
+ "model-entity",
  "model-error-response",
  "models_permissions",
  "rootcause",
  "serde",
  "serde_json",
+ "share_permission_db_utils",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",

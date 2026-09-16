@@ -5055,6 +5055,7 @@
       "crates/database_env_vars",
       "crates/document_sub_type",
       "crates/entity_access",
+      "crates/entity_access_db_utils",
       "crates/genai_telemetry",
       "crates/harness_id",
       "crates/harness_token",
@@ -5070,6 +5071,7 @@
       "crates/model-entity",
       "crates/model-error-response",
       "crates/model_file_type",
+      "crates/model_owner",
       "crates/model_user",
       "crates/models_bulk_upload",
       "crates/models_entity_access_management",
@@ -5078,6 +5080,7 @@
       "crates/non_empty",
       "crates/prompt",
       "crates/remote_env_var",
+      "crates/share_permission_db_utils",
       "crates/workspace-hack"
     ],
     "invite_email": [
