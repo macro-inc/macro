@@ -170,8 +170,9 @@ describe('out of office', () => {
     controller.setEventKind('out_of_office');
 
     expect(controller.isOutOfOffice()).toBe(true);
-    // Google has no date-based out-of-office event, so an all-day one saves as
-    // a full-day timed span rather than losing the all-day choice on switch.
+    // The switch keeps all-day; an all-day out-of-office save is encoded as a
+    // full-day timed span (Google has no date-based out-of-office event) that
+    // the backend normalizes back to all-day on read.
     expect(controller.state().allDay).toBe(true);
     expect(controller.submitValues()?.time.kind).toBe('timed');
     expect(controller.state().outOfOffice).toEqual({

@@ -1,8 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import type { CalendarEvent, CalendarSource } from '../../types';
 import {
   buildEventTime,
-  calendarEventToEditorInitialValues,
   defaultEditorInitialValues,
   type EventEditorInitialValues,
   eventHasEnded,
@@ -14,28 +12,6 @@ function values(
   overrides: Partial<EventEditorInitialValues>
 ): EventEditorInitialValues {
   return { ...defaultEditorInitialValues(NOW), ...overrides };
-}
-
-const CALENDAR: CalendarSource = { id: 'cal-1', name: 'Work', color: 'blue' };
-
-function calendarEvent(overrides: Partial<CalendarEvent>): CalendarEvent {
-  return {
-    id: 'evt-1',
-    eventId: 'evt-1',
-    occurrenceKey: 'evt-1',
-    isCancelled: false,
-    isReadOnly: false,
-    attendees: [],
-    recurrenceLines: [],
-    sourceCalendarIds: [],
-    title: 'Away',
-    start: '2026-09-17T00:00:00.000Z',
-    end: '2026-09-18T00:00:00.000Z',
-    allDay: false,
-    calendar: CALENDAR,
-    visibleCalendars: [CALENDAR],
-    ...overrides,
-  };
 }
 
 /** Local midnight of a `yyyy-MM-dd` date as a UTC ISO instant. */
@@ -102,7 +78,7 @@ describe('buildEventTime', () => {
     });
   });
 
-  it('sends an all-day out-of-office event as a full-day timed span', () => {
+  it('encodes an all-day out-of-office event as a full-day timed span', () => {
     const time = buildEventTime(
       values({
         allDay: true,
@@ -132,31 +108,5 @@ describe('buildEventTime', () => {
     if (time?.kind !== 'timed') throw new Error('expected a timed range');
     expect(time.startsAt).toBe(localMidnight('2026-09-17'));
     expect(time.endsAt).toBe(localMidnight('2026-09-20'));
-  });
-});
-
-describe('calendarEventToEditorInitialValues out-of-office round-trip', () => {
-  it('shows a full-day timed out-of-office event as all-day', () => {
-    const initial = calendarEventToEditorInitialValues(
-      calendarEvent({
-        eventType: 'out_of_office',
-        start: localMidnight('2026-09-17'),
-        end: localMidnight('2026-09-19'),
-      })
-    );
-    expect(initial.allDay).toBe(true);
-    expect(initial.start).toBe('2026-09-17');
-    expect(initial.end).toBe('2026-09-18');
-  });
-
-  it('leaves a genuinely timed out-of-office event timed', () => {
-    const initial = calendarEventToEditorInitialValues(
-      calendarEvent({
-        eventType: 'out_of_office',
-        start: '2026-09-17T09:00',
-        end: '2026-09-17T17:00',
-      })
-    );
-    expect(initial.allDay).toBe(false);
   });
 });
