@@ -10,6 +10,9 @@ use item_filters::{
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Query, SimpleSortMethod};
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamSharePolicyError,
+};
 use uuid::Uuid;
 
 /// Represents an active call in a channel.
@@ -309,16 +312,19 @@ pub struct CallTranscriptCustomSpeakerResult {
     pub custom_speaker: String,
 }
 
-/// Edit call request
+/// Edit call request, as supplied by inbound callers.
 #[derive(Debug, Clone, serde::Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct EditCallRecordRequest {
-    /// Updated share permissions.
+    /// Updated share permissions. `teamShareAccessLevel` shares the call with
+    /// the creator's team: only `view` or `null` (revoke) are accepted, and
+    /// only the call's creator may change it.
     pub share_permission:
         Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
-    /// If `Some(true)`, grant the creator's team View access on the call.
-    /// If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
+    /// Deprecated alias for `sharePermission.teamShareAccessLevel`:
+    /// `Some(true)` behaves like `"view"`, `Some(false)` like `null`, and
+    /// `None` is a no-op. Supplying both with disagreeing values is rejected.
     /// The team is resolved from the call's `created_by`, not the acting user.
     pub share_with_team: Option<bool>,
     /// Updated user-supplied display name for the call. `None` is a no-op;
@@ -327,6 +333,22 @@ pub struct EditCallRecordRequest {
     /// this column — patching while the call is still active is a no-op for
     /// this field.
     pub custom_name: Option<String>,
+}
+
+/// Arguments the domain service hands to the repository when editing a call.
+///
+/// Only the service can produce the authorized team-share command, so inbound
+/// callers cannot request a team grant the owner policy has not approved.
+#[derive(Debug)]
+pub struct EditCallRecordRepoArgs {
+    /// Share permission updates, if changing (link and channel sharing).
+    pub share_permission:
+        Option<models_permissions::share_permission::UpdateSharePermissionRequestV2>,
+    /// Display name update; see [`EditCallRecordRequest::custom_name`].
+    pub custom_name: Option<String>,
+    /// Creator-authorized team-share write, present only when the request
+    /// carried an explicit `teamShareAccessLevel` or the legacy `shareWithTeam`.
+    pub team_share: Option<AuthorizedTeamShareCommand>,
 }
 
 /// One per-diarized-speaker override, used in [`EditCallTranscriptRequest`].
@@ -444,7 +466,11 @@ pub struct CallRecord {
     /// AI-generated summary of the call. Only set on archived `call_records`
     /// once summarization has run; active calls always return `None`.
     pub summary: Option<String>,
-    /// Whether the call is shared with the creator's team.
+    /// The explicit access level granted to the creator's team, or `None`
+    /// when the call is not shared with the team. Calls only ever grant `View`.
+    pub team_share_access_level: Option<AccessLevel>,
+    /// Deprecated: derived from `team_share_access_level`, kept for clients
+    /// that still read the boolean.
     pub share_with_team: bool,
     /// Whether the call is currently active (from `calls` table).
     pub is_active: bool,
@@ -590,7 +616,29 @@ pub enum CallError {
     /// The request body violates an API contract (e.g. exceeds a size cap).
     #[error("{0}")]
     InvalidRequest(String),
+    /// The caller is authenticated but not allowed to perform this change
+    /// (for example, only the call's creator may change team sharing).
+    #[error("forbidden: {0}")]
+    Forbidden(String),
+    /// The requested change conflicts with the persisted state (for example a
+    /// stale team-share revision); the caller should reload and retry.
+    #[error("conflict: {0}")]
+    Conflict(String),
     /// An internal error occurred.
     #[error(transparent)]
     Internal(#[from] anyhow::Error),
+}
+
+impl From<TeamSharePolicyError> for CallError {
+    fn from(error: TeamSharePolicyError) -> Self {
+        match error {
+            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                Self::Forbidden(error.to_string())
+            }
+            TeamSharePolicyError::InvalidRevision => Self::Conflict(error.to_string()),
+            TeamSharePolicyError::MissingTeam
+            | TeamSharePolicyError::InvalidLevel
+            | TeamSharePolicyError::ContradictoryInputs => Self::InvalidRequest(error.to_string()),
+        }
+    }
 }

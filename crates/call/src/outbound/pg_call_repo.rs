@@ -1,6 +1,7 @@
 //! Postgres-backed repository for call state.
 
 mod edit;
+mod team_share;
 
 #[cfg(test)]
 mod test;
@@ -16,16 +17,15 @@ use item_filters::{
     ast::{LiteralTree, call::CallLiteral, properties::PropertyMatchValue},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use models_permissions::share_permission::SharePermissionV2;
-use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
+use models_permissions::share_permission::team_share::TeamShareFacts;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallParticipant, CallRecord,
-    CallRecordParticipant, CallRecordPreview, CallRecordPreviewData, CallRecordTranscriptSegment,
-    CustomSpeakerAssignment, DeletedCallRecordStorageKeys, EditCallRecordRequest,
-    EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
+    ActiveCallSummary, AddParticipantError, ArchivedCall, Call, CallError, CallParticipant,
+    CallRecord, CallRecordParticipant, CallRecordPreview, CallRecordPreviewData,
+    CallRecordTranscriptSegment, CustomSpeakerAssignment, DeletedCallRecordStorageKeys,
+    EditCallRecordRepoArgs, EnrichedCallTranscript, TranscriptSegmentRequest, WithCallId,
 };
 use crate::domain::ports::CallRepository;
 
@@ -306,28 +306,16 @@ impl CallRepository for PgCallRepo {
         channel_id: &Uuid,
         room_name: &str,
         created_by: MacroUserIdStr<'_>,
-    ) -> Result<Option<Call>, Self::Err> {
-        // Create share permission. Call access is channel-based by design, so
-        // the team default link-share preference intentionally does not apply:
-        // link sharing is off and the channel gets an explicit edit grant.
-        let share_permission_id = uuid::Uuid::now_v7();
-        let share_permission = SharePermissionV2 {
-            id: share_permission_id.to_string(),
-            link_share: None,
-            link_share_access_level: None,
-            team_share_access_level: None,
-            owner: created_by.to_string(),
-            channel_share_permissions: Some(vec![ChannelSharePermission {
-                channel_id: channel_id.to_string(),
-                access_level: AccessLevel::Edit,
-            }]),
-        };
-        let link_share = share_permission.link_share.map(|value| value.to_string());
-        let link_share_access_level = share_permission.link_share_access_level;
-
+    ) -> Result<Option<Call>, CallError> {
         let mut tx = self.pool.begin().await?;
+        // Canonical team sharing is initialized at the end of this transaction,
+        // so take the shared team-share guard before any permission rows exist.
+        share_permission_db_utils::team_share::acquire_guard(&mut tx).await?;
 
-        // insert share permission
+        // Create the share permission. Call access is channel-based by design,
+        // so the team default link-share preference intentionally does not
+        // apply: link sharing is off and the channel gets an explicit edit grant.
+        let share_permission_id = uuid::Uuid::now_v7().to_string();
         sqlx::query!(
             r#"
             INSERT INTO "SharePermission" (
@@ -337,11 +325,9 @@ impl CallRepository for PgCallRepo {
                 "createdAt",
                 "updatedAt"
             )
-            VALUES ($1, $2, $3, NOW(), NOW())
+            VALUES ($1, NULL, NULL, NOW(), NOW())
             "#,
-            share_permission.id,
-            link_share,
-            link_share_access_level as _,
+            share_permission_id,
         )
         .execute(tx.as_mut())
         .await?;
@@ -352,7 +338,7 @@ impl CallRepository for PgCallRepo {
             INSERT INTO "ChannelSharePermission" ("share_permission_id", "channel_id", "access_level")
             VALUES ($1, $2, $3)
             "#,
-            &share_permission.id,
+            share_permission_id,
             &channel_id.to_string(),
             AccessLevel::Edit as _,
         )
@@ -380,10 +366,14 @@ impl CallRepository for PgCallRepo {
         )
         .await?;
 
+        // The legacy `share_with_team` column is no longer read. It is written
+        // FALSE so an older `archive_call`, which re-inserted the team grant
+        // from that flag, cannot collide with the canonical grant created
+        // below during a rollout; a follow-up migration drops the column.
         let row = sqlx::query!(
             r#"
-            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id)
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO calls (id, channel_id, room_name, created_by, share_permission_id, share_with_team)
+            VALUES ($1, $2, $3, $4, $5, FALSE)
             ON CONFLICT (channel_id) DO NOTHING
             RETURNING id, channel_id, room_name, created_by, created_at, egress_id
             "#,
@@ -391,26 +381,31 @@ impl CallRepository for PgCallRepo {
             channel_id,
             room_name,
             created_by.as_ref(),
-            &share_permission_id.to_string(),
+            share_permission_id,
         )
         .fetch_optional(tx.as_mut())
         .await?;
 
-        // only commit if there is a channel to create
-        if let Some(r) = row {
-            tx.commit().await?;
+        // Another request won the race: drop everything, including the
+        // provisional permission rows, by never committing.
+        let Some(r) = row else {
+            return Ok(None);
+        };
 
-            Ok(Some(Call {
-                id: r.id,
-                channel_id: r.channel_id,
-                room_name: r.room_name,
-                created_by: r.created_by,
-                created_at: r.created_at,
-                egress_id: r.egress_id,
-            }))
-        } else {
-            Ok(None)
-        }
+        // Canonical team sharing: View for the creator's current team, or
+        // nothing when they have no team.
+        team_share::initialize_team_share(&mut tx, call_id).await?;
+
+        tx.commit().await?;
+
+        Ok(Some(Call {
+            id: r.id,
+            channel_id: r.channel_id,
+            room_name: r.room_name,
+            created_by: r.created_by,
+            created_at: r.created_at,
+            egress_id: r.egress_id,
+        }))
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -736,19 +731,8 @@ impl CallRepository for PgCallRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn toggle_share_with_team(&self, call_id: &Uuid) -> Result<(bool, Uuid), Self::Err> {
-        let row = sqlx::query!(
-            r#"
-            UPDATE calls
-               SET share_with_team = NOT share_with_team
-             WHERE id = $1
-            RETURNING share_with_team, channel_id
-            "#,
-            call_id,
-        )
-        .fetch_one(&self.pool)
-        .await?;
-        Ok((row.share_with_team, row.channel_id))
+    async fn get_team_share_facts(&self, call_id: &Uuid) -> Result<TeamShareFacts, CallError> {
+        team_share::get_team_share_facts(&self.pool, call_id).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -758,7 +742,7 @@ impl CallRepository for PgCallRepo {
         // Fetch and lock the active call so concurrent archive_call callers serialize.
         let call = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team
+            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_permission_id
             FROM calls
             WHERE id = $1
             FOR UPDATE
@@ -769,34 +753,9 @@ impl CallRepository for PgCallRepo {
         .await?
         .ok_or(sqlx::Error::RowNotFound)?;
 
-        // If the call opted in to team sharing, grant the creator's team View
-        // access on the archived call. Silently skip if the creator has no team.
-        if call.share_with_team {
-            let team_id: Option<Uuid> = sqlx::query_scalar!(
-                r#"
-                SELECT team_id
-                FROM team_user
-                WHERE user_id = $1
-                LIMIT 1
-                "#,
-                &call.created_by,
-            )
-            .fetch_optional(tx.as_mut())
-            .await?;
-
-            if let Some(team_id) = team_id {
-                entity_access_db_utils::insert_entity_access_row(
-                    &mut tx,
-                    call_id,
-                    entity_access_db_utils::EntityType::Call,
-                    &team_id.to_string(),
-                    entity_access_db_utils::EntityAccessSourceType::Team,
-                    entity_access_db_utils::AccessLevel::View,
-                )
-                .await?;
-            }
-        }
-
+        // Sharing needs no work here: team sharing lives on the shared
+        // `SharePermission` row and its `entity_access` grant, both keyed by
+        // ids the archived record keeps.
         let ended_at = Utc::now().trunc_subsecs(6);
         let duration_ms = ended_at
             .signed_duration_since(call.created_at)
@@ -807,8 +766,8 @@ impl CallRepository for PgCallRepo {
         // The record keeps the same id as the original call.
         sqlx::query!(
             r#"
-            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, preview_url, recording_started_at, share_permission_id, share_with_team)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            INSERT INTO call_records (id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, preview_url, recording_started_at, share_permission_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
             "#,
             call_id,
             call.channel_id,
@@ -822,7 +781,6 @@ impl CallRepository for PgCallRepo {
             call.preview_url,
             call.recording_started_at,
             &call.share_permission_id,
-            call.share_with_team,
         )
         .execute(tx.as_mut())
         .await?;
@@ -1172,9 +1130,11 @@ impl CallRepository for PgCallRepo {
         // Try active `calls` first.
         if let Some(active) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, created_at, egress_id, recording_key, preview_url, recording_started_at, share_with_team
-            FROM calls
-            WHERE id = $1
+            SELECT c.id, c.channel_id, c.room_name, c.created_by, c.created_at, c.egress_id, c.recording_key, c.preview_url, c.recording_started_at,
+                   sp.team_share_access_level AS "team_share_access_level?: AccessLevel"
+            FROM calls c
+            JOIN "SharePermission" sp ON sp.id = c.share_permission_id
+            WHERE c.id = $1
             "#,
             call_id,
         )
@@ -1243,7 +1203,8 @@ impl CallRepository for PgCallRepo {
                 channel_name: None,
                 custom_name: None,
                 summary: None,
-                share_with_team: active.share_with_team,
+                share_with_team: active.team_share_access_level.is_some(),
+                team_share_access_level: active.team_share_access_level,
                 is_active: true,
                 status: None,
                 participants,
@@ -1254,9 +1215,11 @@ impl CallRepository for PgCallRepo {
         // Fall back to archived `call_records`.
         let Some(archived) = sqlx::query!(
             r#"
-            SELECT id, channel_id, room_name, created_by, started_at, ended_at, duration_ms, egress_id, recording_key, preview_url, recording_started_at, custom_name, summary, share_with_team
-            FROM call_records
-            WHERE id = $1
+            SELECT cr.id, cr.channel_id, cr.room_name, cr.created_by, cr.started_at, cr.ended_at, cr.duration_ms, cr.egress_id, cr.recording_key, cr.preview_url, cr.recording_started_at, cr.custom_name, cr.summary,
+                   sp.team_share_access_level AS "team_share_access_level?: AccessLevel"
+            FROM call_records cr
+            JOIN "SharePermission" sp ON sp.id = cr.share_permission_id
+            WHERE cr.id = $1
             "#,
             call_id,
         )
@@ -1329,7 +1292,8 @@ impl CallRepository for PgCallRepo {
             channel_name: None,
             custom_name: archived.custom_name,
             summary: archived.summary,
-            share_with_team: archived.share_with_team,
+            share_with_team: archived.team_share_access_level.is_some(),
+            team_share_access_level: archived.team_share_access_level,
             is_active: false,
             status: None,
             participants,
@@ -1492,7 +1456,7 @@ impl CallRepository for PgCallRepo {
                     c.recording_started_at,
                     NULL::text AS custom_name,
                     NULL::text AS summary,
-                    c.share_with_team,
+                    sp.team_share_access_level,
                     true AS is_active,
                     CASE
                         WHEN EXISTS (
@@ -1508,6 +1472,7 @@ impl CallRepository for PgCallRepo {
                         ELSE 'UNATTENDED'::text
                     END AS status
                 FROM calls c
+                JOIN "SharePermission" sp ON sp.id = c.share_permission_id
                 WHERE EXISTS (
                     SELECT 1 FROM entity_access ea
                     JOIN user_source_ids u ON u.source_id = ea.source_id
@@ -1550,7 +1515,7 @@ impl CallRepository for PgCallRepo {
                     cr.recording_started_at,
                     cr.custom_name,
                     cr.summary,
-                    cr.share_with_team,
+                    sp.team_share_access_level,
                     false AS is_active,
                     CASE
                         WHEN EXISTS (
@@ -1566,6 +1531,7 @@ impl CallRepository for PgCallRepo {
                         ELSE 'UNATTENDED'::text
                     END AS status
                 FROM call_records cr
+                JOIN "SharePermission" sp ON sp.id = cr.share_permission_id
                 WHERE EXISTS (
                     SELECT 1 FROM entity_access ea
                     JOIN user_source_ids u ON u.source_id = ea.source_id
@@ -1608,7 +1574,7 @@ impl CallRepository for PgCallRepo {
                 recording_started_at,
                 custom_name,
                 summary,
-                share_with_team as "share_with_team!",
+                team_share_access_level as "team_share_access_level?: AccessLevel",
                 is_active as "is_active!",
                 status as "status!"
             FROM visible_calls
@@ -1700,7 +1666,8 @@ impl CallRepository for PgCallRepo {
                 channel_name: None,
                 custom_name: row.custom_name,
                 summary: row.summary,
-                share_with_team: row.share_with_team,
+                share_with_team: row.team_share_access_level.is_some(),
+                team_share_access_level: row.team_share_access_level,
                 is_active: row.is_active,
                 status: Some(call_status_from_sql(&row.status)),
                 participants,
@@ -1815,23 +1782,29 @@ impl CallRepository for PgCallRepo {
         }))
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, args), err)]
     async fn patch_call_record(
         &self,
         call_record_id: &Uuid,
-        request: &EditCallRecordRequest,
-    ) -> Result<(), Self::Err> {
+        args: &EditCallRecordRepoArgs,
+    ) -> Result<(), CallError> {
         let mut tx = self.pool.begin().await?;
 
-        if let Some(share_permission) = request.share_permission.as_ref() {
+        // Canonical team sharing first: it takes the shared guard before any
+        // `SharePermission` row lock and refuses an unauthorized team level.
+        team_share::apply_team_share(
+            &mut tx,
+            call_record_id,
+            args.share_permission.as_ref(),
+            args.team_share.as_ref(),
+        )
+        .await?;
+
+        if let Some(share_permission) = args.share_permission.as_ref() {
             edit::update_share_permission(&mut tx, call_record_id, share_permission).await?;
         }
 
-        if let Some(share_with_team) = request.share_with_team {
-            edit::set_share_with_team(&mut tx, call_record_id, share_with_team).await?;
-        }
-
-        if let Some(custom_name) = request.custom_name.as_deref() {
+        if let Some(custom_name) = args.custom_name.as_deref() {
             let custom_name = if custom_name.is_empty() {
                 None
             } else {

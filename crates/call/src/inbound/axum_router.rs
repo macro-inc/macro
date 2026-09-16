@@ -7,6 +7,9 @@
 //! - [`webhook_router`] — RTC provider webhook ingestion.
 //!   Does **not** require auth middleware (LiveKit signs requests itself).
 
+#[cfg(test)]
+mod test;
+
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -97,10 +100,9 @@ impl<S, Svc, Auth> FromRef<CallRouterState<S, Svc, Auth>> for MacroAuthorization
 /// - `GET /active` — list all active calls in channels the caller is a member of
 /// - `DELETE /{channel_id}` — leave or end a call
 /// - `GET /record/{call_id}` — get a full call record (transcript + participants)
-/// - `PATCH /record/{call_id}` — edit a call record (e.g. share permissions)
+/// - `PATCH /record/{call_id}` — edit a call record (share permissions, team sharing, name)
 /// - `PATCH /record/{call_id}/transcript` — set per-diarized-speaker custom_speaker overrides
 /// - `DELETE /record/{call_id}` — delete a call record
-/// - `POST /record/{call_id}/share-with-team/toggle` — flip the call's share_with_team flag
 /// - `POST /record/preview` — batch-fetch lightweight previews for many call ids
 pub fn call_router<S, Svc, Auth, T>(state: CallRouterState<S, Svc, Auth>) -> Router<T>
 where
@@ -133,10 +135,6 @@ where
         .route(
             "/record/{call_id}/transcript",
             patch(edit_call_transcript_handler::<S, Svc, Auth>),
-        )
-        .route(
-            "/record/{call_id}/share-with-team/toggle",
-            post(toggle_share_with_team_handler::<S, Svc, Auth>),
         )
         .with_state(state)
 }
@@ -443,8 +441,10 @@ pub async fn delete_call_record_handler<
 
 /// Handler for `PATCH /call/record/{call_id}`.
 ///
-/// Edits a call record — currently supports updating the record's share
-/// permissions. Access is validated via channel membership
+/// Edits a call record: link/channel share permissions, display name, and
+/// team sharing. Edit access (channel membership) is required for the request;
+/// `sharePermission.teamShareAccessLevel` is additionally authorized against
+/// the call's creator and only accepts `view` or `null`.
 #[utoipa::path(
     patch,
     operation_id = "edit_call_record",
@@ -455,8 +455,11 @@ pub async fn delete_call_record_handler<
     request_body = EditCallRecordRequest,
     responses(
         (status = 204, description = "Call record updated"),
+        (status = 400, description = "Invalid team-share level, contradictory inputs, or the creator has no team", body = ErrorResponse),
         (status = 401, body = ErrorResponse),
+        (status = 403, description = "Team sharing may only be changed by the call's creator", body = ErrorResponse),
         (status = 404, body = ErrorResponse),
+        (status = 409, description = "Team-sharing facts changed; reload and retry", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -513,40 +516,6 @@ pub async fn edit_call_transcript_handler<
         .edit_call_transcript(access.entity_access_receipt, request)
         .await?;
     Ok(StatusCode::NO_CONTENT)
-}
-
-/// Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
-///
-/// Toggles the `share_with_team` flag on the active call. Returns the new
-/// value as the JSON body.
-#[utoipa::path(
-    post,
-    operation_id = "toggle_share_with_team",
-    path = "/call/record/{call_id}/share-with-team/toggle",
-    params(
-        ("call_id" = Uuid, Path, description = "Call ID"),
-    ),
-    responses(
-        (status = 200, body = bool, content_type = "application/json", description = "New value of share_with_team after toggle"),
-        (status = 401, body = ErrorResponse),
-        (status = 404, body = ErrorResponse),
-        (status = 500, body = ErrorResponse),
-    )
-)]
-#[tracing::instrument(err, skip_all)]
-pub async fn toggle_share_with_team_handler<
-    S: CallService,
-    Svc: EntityAccessService,
-    Auth: MacroAuthorizationService,
->(
-    State(state): State<CallRouterState<S, Svc, Auth>>,
-    access: CallAccessLevelExtractor<EditAccessLevel, Svc, Auth>,
-) -> Result<Json<bool>, CallError> {
-    let new_value = state
-        .service
-        .toggle_share_with_team(access.entity_access_receipt)
-        .await?;
-    Ok(Json(new_value))
 }
 
 /// Handler for `POST /call/record/preview`.
@@ -745,6 +714,8 @@ impl IntoResponse for CallError {
             CallError::AlreadyInCall(_) => StatusCode::CONFLICT,
             CallError::Auth => StatusCode::UNAUTHORIZED,
             CallError::InvalidRequest(_) => StatusCode::BAD_REQUEST,
+            CallError::Forbidden(_) => StatusCode::FORBIDDEN,
+            CallError::Conflict(_) => StatusCode::CONFLICT,
             CallError::Internal(_) => {
                 tracing::error!(error=?self, "internal server error");
                 StatusCode::INTERNAL_SERVER_ERROR

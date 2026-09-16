@@ -287,7 +287,6 @@ use utoipa::OpenApi;
         call::inbound::axum_router::edit_call_record_handler,
         call::inbound::axum_router::edit_call_transcript_handler,
         call::inbound::axum_router::delete_call_record_handler,
-        call::inbound::axum_router::toggle_share_with_team_handler,
         call::inbound::axum_router::get_batch_call_record_preview_handler,
         call::inbound::axum_router::webhook_handler,
         webhook::inbound::axum_router::create_webhook,

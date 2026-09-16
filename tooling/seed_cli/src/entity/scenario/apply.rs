@@ -869,13 +869,6 @@ async fn seed_calls(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
             ));
         let started_at = ended_at - duration;
 
-        let creator_team = if call.share_with_team {
-            spec.team_of(&call.created_by)
-                .map(|team| spec.team_id(team))
-        } else {
-            None
-        };
-
         let participants: Vec<(String, DateTime<Utc>, DateTime<Utc>)> = spec
             .call_participants(key)
             .iter()
@@ -910,7 +903,6 @@ async fn seed_calls(ctx: &SeedCliContext, spec: &ScenarioSpec) -> anyhow::Result
                 share_permission_id: share_permission_id.to_string(),
                 share_with_team: call.share_with_team,
                 custom_name: call.name.clone(),
-                team_id: creator_team,
                 participants,
                 transcripts,
             })

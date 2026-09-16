@@ -265,6 +265,7 @@ export * from './callRecordRecordingStartedAt';
 export * from './callRecordRecordingUrl';
 export * from './callRecordStatus';
 export * from './callRecordSummary';
+export * from './callRecordTeamShareAccessLevel';
 export * from './callRecordTranscriptSegment';
 export * from './callRecordTranscriptSegmentDiarizedSpeakerId';
 export * from './callRecordTranscriptSegmentEndedAt';

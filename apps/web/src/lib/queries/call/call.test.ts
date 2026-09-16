@@ -16,7 +16,14 @@ vi.mock('@core/component/Toast/Toast', () => ({
 vi.mock('@core/constant/featureFlags', () => ({ ENABLE_CALLS: true }));
 
 import { queryClient } from '@queries/client';
-import { setActiveCallEndedCache, setActiveCallStartedCache } from './call';
+import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import {
+  buildCallTeamSharePayload,
+  isCallSharedWithTeam,
+  setActiveCallEndedCache,
+  setActiveCallStartedCache,
+  setCallRecordTeamShareCache,
+} from './call';
 import { callKeys } from './keys';
 
 const summary = (over: Partial<ActiveCallSummary>): ActiveCallSummary => ({
@@ -83,5 +90,72 @@ describe('active call cache writers', () => {
     expect(
       queryClient.getQueryData(callKeys.active('channel-1').queryKey)
     ).toBeNull();
+  });
+});
+
+const record = (over: Partial<CallRecord>): CallRecord => ({
+  callId: 'call-1',
+  channelId: 'channel-1',
+  createdBy: 'macro|a@test.com',
+  isActive: false,
+  participants: [],
+  roomName: 'room',
+  startedAt: '2026-08-21T09:00:00.000Z',
+  transcript: [],
+  teamShareAccessLevel: null,
+  shareWithTeam: false,
+  ...over,
+});
+
+describe('call team sharing helpers', () => {
+  beforeEach(() => {
+    queryClient.clear();
+  });
+
+  it('buildCallTeamSharePayload maps the checkbox to view or an explicit clear', () => {
+    // Calls only ever share at `view`; `null` (not an omitted field) revokes.
+    expect(buildCallTeamSharePayload(true)).toEqual({
+      teamShareAccessLevel: 'view',
+    });
+    expect(buildCallTeamSharePayload(false)).toEqual({
+      teamShareAccessLevel: null,
+    });
+  });
+
+  it('isCallSharedWithTeam reads the canonical level, not the deprecated flag', () => {
+    expect(
+      isCallSharedWithTeam(
+        record({ teamShareAccessLevel: 'view', shareWithTeam: false })
+      )
+    ).toBe(true);
+    expect(
+      isCallSharedWithTeam(
+        record({ teamShareAccessLevel: null, shareWithTeam: true })
+      )
+    ).toBe(false);
+  });
+
+  it('setCallRecordTeamShareCache updates the level and the deprecated flag together', () => {
+    const key = callKeys.record('call-1').queryKey;
+    queryClient.setQueryData(key, record({}));
+
+    setCallRecordTeamShareCache('call-1', true);
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      teamShareAccessLevel: 'view',
+      shareWithTeam: true,
+    });
+
+    setCallRecordTeamShareCache('call-1', false);
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      teamShareAccessLevel: null,
+      shareWithTeam: false,
+    });
+  });
+
+  it('setCallRecordTeamShareCache leaves an unloaded record alone', () => {
+    setCallRecordTeamShareCache('missing', true);
+    expect(
+      queryClient.getQueryData(callKeys.record('missing').queryKey)
+    ).toBeUndefined();
   });
 });

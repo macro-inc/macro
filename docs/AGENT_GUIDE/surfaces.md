@@ -435,6 +435,17 @@ and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
 
+### Sharing a call
+
+A call's side panel has a `Sharing` section with one `Share with team` checkbox. It is
+canonical team sharing (the same `Team access` model documents and AI chats use), fixed at
+**view**: when on, everyone on the creator's team can open the call, read the transcript and AI
+summary, and find it under Calls and in search; off revokes that. Only the call's **creator**
+can change it — everyone else sees the checkbox read-only with a note saying so — and it
+applies while the call is still in progress too (the in-call controls carry the same checkbox,
+also creator-only; participants see the state update live). Team sharing is independent of
+channel access and of link sharing.
+
 ## Customers (CRM) — `/app/component/companies`
 
 Board/List views, `Company` create button. Requires a team ("Join a team to enable CRM" →

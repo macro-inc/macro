@@ -360,7 +360,6 @@ export const storageBacklog = [
   'presaveDocumentHandler',
   'saveDocumentHandler',
   'simpleSave',
-  'toggleShareWithTeam',
   'updateAgent',
   'updateReminder',
   'validateDocumentPermissionsToken',

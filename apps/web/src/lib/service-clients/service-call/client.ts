@@ -5,7 +5,9 @@ import type { ActiveCallsResponse } from '@service-storage/generated/schemas/act
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
 import type { CallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
+import type { EditCallRecordRequest } from '@service-storage/generated/schemas/editCallRecordRequest';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
+import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 
 export type { CallRecord, CallTokenResponse };
 
@@ -65,26 +67,20 @@ export const callServiceClient = {
     ).map(() => undefined);
   },
 
-  async toggleShareWithTeam(callId: string) {
-    // fetchWithToken requires T extends ObjectLike, but this endpoint returns a
-    // primitive JSON boolean. response.json() parses it correctly at runtime;
-    // we only need to satisfy the generic constraint.
-    const result = await fetchWithToken<Record<string, never>>(
-      `${host}/call/record/${callId}/share-with-team/toggle`,
-      { method: 'POST' }
-    );
-    return result.map((r) => r as unknown as boolean);
-  },
-
+  /**
+   * `PATCH /call/record/{id}`. Team sharing goes through
+   * `sharePermission.teamShareAccessLevel`, which the backend authorizes
+   * against the call's creator and caps at `'view'` (`null` revokes).
+   */
   async editCallRecord(params: {
     callId: string;
     customName?: string;
-    shareWithTeam?: boolean;
+    sharePermission?: UpdateSharePermissionRequestV2;
   }) {
-    const body: { customName?: string; shareWithTeam?: boolean } = {};
+    const body: EditCallRecordRequest = {};
     if (params.customName !== undefined) body.customName = params.customName;
-    if (params.shareWithTeam !== undefined)
-      body.shareWithTeam = params.shareWithTeam;
+    if (params.sharePermission !== undefined)
+      body.sharePermission = params.sharePermission;
 
     return (
       await fetchWithToken<Record<string, never>>(

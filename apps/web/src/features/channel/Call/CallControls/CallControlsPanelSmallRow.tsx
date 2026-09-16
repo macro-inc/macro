@@ -10,7 +10,7 @@ import { Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { useCallContext } from '../CallContext';
 import { CallDeviceList } from '../CallDeviceList';
-import { useToggleShareWithTeam } from '../use-toggle-share-with-team';
+import { useActiveCallTeamShare } from '../use-toggle-share-with-team';
 import { MenuDivider, MenuLabel } from './CallMenuPrimitives';
 
 const ITEM_ICON_CLASS = 'size-3.5 shrink-0 text-ink-muted';
@@ -18,7 +18,7 @@ const ITEM_ICON_CLASS = 'size-3.5 shrink-0 text-ink-muted';
 export function CallControlsPanelSmallRow() {
   const callCtx = useCallContext();
   const isConnecting = () => callCtx.isConnecting();
-  const handleToggleShareWithTeam = useToggleShareWithTeam();
+  const teamShare = useActiveCallTeamShare();
   const noiseSuppressionModeLabel = () =>
     match(callCtx.noiseSuppressionMode())
       .with('krisp', () => 'Krisp')
@@ -142,9 +142,11 @@ export function CallControlsPanelSmallRow() {
               </span>
             </Dropdown.Item>
 
+            {/* Only the call's creator can change team sharing; others see the state. */}
             <Dropdown.Item
               closeOnSelect={false}
-              onSelect={() => void handleToggleShareWithTeam()}
+              disabled={!teamShare.canToggle() || teamShare.isPending()}
+              onSelect={() => void teamShare.toggle()}
             >
               <InlineCheckbox checked={callCtx.isSharedWithTeam()} />
               <span class="flex-1 truncate">Share with team</span>

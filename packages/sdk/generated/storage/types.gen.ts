@@ -1908,7 +1908,8 @@ export type CallRecord = {
      */
     roomName: string;
     /**
-     * Whether the call is shared with the creator's team.
+     * Deprecated: derived from `team_share_access_level`, kept for clients
+     * that still read the boolean.
      */
     shareWithTeam: boolean;
     /**
@@ -1921,6 +1922,7 @@ export type CallRecord = {
      * once summarization has run; active calls always return `None`.
      */
     summary?: string | null;
+    teamShareAccessLevel?: null | AccessLevel;
     /**
      * Transcript segments ordered by `sequence_num`.
      */
@@ -4839,7 +4841,7 @@ export type EditAnchorResponse = Anchor & {
 };
 
 /**
- * Edit call request
+ * Edit call request, as supplied by inbound callers.
  */
 export type EditCallRecordRequest = {
     /**
@@ -4852,8 +4854,9 @@ export type EditCallRecordRequest = {
     customName?: string | null;
     sharePermission?: null | UpdateSharePermissionRequestV2;
     /**
-     * If `Some(true)`, grant the creator's team View access on the call.
-     * If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
+     * Deprecated alias for `sharePermission.teamShareAccessLevel`:
+     * `Some(true)` behaves like `"view"`, `Some(false)` like `null`, and
+     * `None` is a no-op. Supplying both with disagreeing values is rejected.
      * The team is resolved from the call's `created_by`, not the acting user.
      */
     shareWithTeam?: boolean | null;
@@ -10319,8 +10322,20 @@ export type EditCallRecordData = {
 };
 
 export type EditCallRecordErrors = {
+    /**
+     * Invalid team-share level, contradictory inputs, or the creator has no team
+     */
+    400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * Team sharing may only be changed by the call's creator
+     */
+    403: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * Team-sharing facts changed; reload and retry
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -10334,35 +10349,6 @@ export type EditCallRecordResponses = {
 };
 
 export type EditCallRecordResponse = EditCallRecordResponses[keyof EditCallRecordResponses];
-
-export type ToggleShareWithTeamData = {
-    body?: never;
-    path: {
-        /**
-         * Call ID
-         */
-        call_id: string;
-    };
-    query?: never;
-    url: '/call/record/{call_id}/share-with-team/toggle';
-};
-
-export type ToggleShareWithTeamErrors = {
-    401: ErrorResponse;
-    404: ErrorResponse;
-    500: ErrorResponse;
-};
-
-export type ToggleShareWithTeamError = ToggleShareWithTeamErrors[keyof ToggleShareWithTeamErrors];
-
-export type ToggleShareWithTeamResponses = {
-    /**
-     * New value of share_with_team after toggle
-     */
-    200: boolean;
-};
-
-export type ToggleShareWithTeamResponse = ToggleShareWithTeamResponses[keyof ToggleShareWithTeamResponses];
 
 export type EditCallTranscriptData = {
     body: EditCallTranscriptRequest;

@@ -32,7 +32,6 @@ type LivekitJsCallControllerOptions = {
   setDuplicateConnectCallId: (callId: string) => void;
   setInitialMediaState: () => void;
   setRemoteParticipants: (participants: Map<string, RemoteParticipant>) => void;
-  setSharedWithTeam: (value: boolean) => void;
   clearOptimisticJoin: () => void;
   bumpTrackVersion: () => void;
   bumpSpeakerVersion: () => void;
@@ -152,7 +151,6 @@ export function createLivekitJsCallController(
     attachRoomListeners(targetRoom);
     options.setRoom(targetRoom);
     options.setActiveCall(tokenResponse.channelId, tokenResponse.callId);
-    options.setSharedWithTeam(true);
 
     try {
       await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
