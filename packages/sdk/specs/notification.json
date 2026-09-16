@@ -306,6 +306,15 @@
         "operationId": "list_typed_notifications",
         "parameters": [
           {
+            "name": "states",
+            "in": "query",
+            "description": "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
             "name": "limit",
             "in": "query",
             "description": "Size limit per page.",
@@ -377,6 +386,15 @@
         "description": "Rows that fail to deserialize are dropped with a warning log.",
         "operationId": "bulk_get_typed_notifications_by_event_item_ids",
         "parameters": [
+          {
+            "name": "states",
+            "in": "query",
+            "description": "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "limit",
             "in": "query",
@@ -458,6 +476,15 @@
         "summary": "Typed wrapper for getting notifications by a single event item ID.",
         "operationId": "get_typed_notifications_by_event_item_id",
         "parameters": [
+          {
+            "name": "states",
+            "in": "query",
+            "description": "Comma-separated exact states: unseen,seen,done. Omitted defaults to unseen,seen; empty includes all states.",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          },
           {
             "name": "event_item_id",
             "in": "path",
@@ -1004,6 +1031,124 @@
   },
   "components": {
     "schemas": {
+      "AgentSessionMentionedMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AgentSessionNotificationRef"
+          },
+          {
+            "type": "object",
+            "required": ["actionId"],
+            "properties": {
+              "actionId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The action carrying the prompt."
+              },
+              "mentionedBy": {
+                "type": ["string", "null"],
+                "description": "Who wrote the prompt, absent when a bot acted on nobody's behalf."
+              }
+            }
+          }
+        ],
+        "description": "Someone named the recipient in a prompt to an agent session."
+      },
+      "AgentSessionNotificationRef": {
+        "type": "object",
+        "description": "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.",
+        "required": ["sessionId", "sessionName", "botId", "botName"],
+        "properties": {
+          "announcementMessageId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The magic-chip message for the turn in question, when one was posted."
+          },
+          "botId": {
+            "type": "string",
+            "description": "The bot the session runs for. A string on the wire: system bots have\nfixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not\nRFC 4122 uuids and fail a `format: uuid` check on the client."
+          },
+          "botName": {
+            "type": "string",
+            "description": "The bot's display name; agent notifications have no user sender, so\nthis is who they read as being from."
+          },
+          "channelId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The channel the session was opened from, when it was."
+          },
+          "sessionId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The session; what a click opens."
+          },
+          "sessionName": {
+            "type": "string",
+            "description": "The session's name at the time of the event."
+          },
+          "threadId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The thread the session was opened from, when it was."
+          }
+        }
+      },
+      "AgentSessionSettledMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AgentSessionNotificationRef"
+          },
+          {
+            "type": "object",
+            "required": ["turn", "stopReason"],
+            "properties": {
+              "actor": {
+                "type": ["string", "null"],
+                "description": "Who prompted the turn, absent when a bot acted on nobody's behalf."
+              },
+              "excerpt": {
+                "type": ["string", "null"],
+                "description": "The agent's last prose in the turn, whole; `None` when it wrote none."
+              },
+              "stopReason": {
+                "type": "string",
+                "description": "The ACP stop reason, or `error`."
+              },
+              "turn": {
+                "type": "integer",
+                "format": "int32",
+                "description": "The turn that ended.",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "An agent finished a turn with nothing queued behind it."
+      },
+      "AgentSessionWaitingForInputMetadata": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/AgentSessionNotificationRef"
+          },
+          {
+            "type": "object",
+            "required": ["turn", "question"],
+            "properties": {
+              "question": {
+                "type": "string",
+                "description": "The question, as the agent phrased it."
+              },
+              "turn": {
+                "type": "integer",
+                "format": "int32",
+                "description": "The turn asking.",
+                "minimum": 0
+              }
+            }
+          }
+        ],
+        "description": "An agent is blocked on a question only the session's owner can answer."
+      },
       "AiResponseMetadata": {
         "type": "object",
         "required": ["summary", "messageId"],
@@ -1029,7 +1174,7 @@
               "id",
               "notification_event_type",
               "sent",
-              "done",
+              "state",
               "created_at",
               "updated_at",
               "notification_metadata"
@@ -1044,10 +1189,6 @@
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was deleted."
-              },
-              "done": {
-                "type": "boolean",
-                "description": "Whether the notification is marked as done."
               },
               "id": {
                 "type": "string",
@@ -1073,6 +1214,10 @@
               "sent": {
                 "type": "boolean",
                 "description": "Whether the notification has been sent."
+              },
+              "state": {
+                "$ref": "#/components/schemas/NotificationState",
+                "description": "The authoritative notification lifecycle state."
               },
               "updated_at": {
                 "type": "string",
@@ -1476,7 +1621,9 @@
           "crm_contact",
           "reminder",
           "skill",
-          "agent_session"
+          "agent_session",
+          "scheduled_action",
+          "initiative"
         ]
       },
       "ErrorResponse": {
@@ -2327,6 +2474,51 @@
                 "enum": ["github_pr_review"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "An agent finished a turn with nothing queued behind it.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/AgentSessionSettledMetadata",
+                "description": "An agent finished a turn with nothing queued behind it."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agent_session_settled"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An agent is blocked on a question for the session's owner.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/AgentSessionWaitingForInputMetadata",
+                "description": "An agent is blocked on a question for the session's owner."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agent_session_waiting_for_input"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user was named in a prompt to an agent session.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/AgentSessionMentionedMetadata",
+                "description": "The user was named in a prompt to an agent session."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["agent_session_mentioned"]
+              }
+            }
           }
         ],
         "description": "Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait."
@@ -2385,6 +2577,11 @@
         "type": "string",
         "enum": ["v1"]
       },
+      "NotificationState": {
+        "type": "string",
+        "description": "The mutually exclusive lifecycle states of a user's notification.",
+        "enum": ["unseen", "seen", "done"]
+      },
       "NotificationTypeName": {
         "type": "string",
         "description": "newtype wrapper for the the typename of a Notification"
@@ -2416,7 +2613,7 @@
               "notification_id",
               "notification_event_type",
               "sent",
-              "done",
+              "state",
               "created_at",
               "updated_at",
               "notification_metadata"
@@ -2431,10 +2628,6 @@
                 "type": ["string", "null"],
                 "format": "date-time",
                 "description": "When the notification was deleted."
-              },
-              "done": {
-                "type": "boolean",
-                "description": "Whether the notification is marked as done."
               },
               "notification_event_type": {
                 "type": "string",
@@ -2470,6 +2663,10 @@
               "sent": {
                 "type": "boolean",
                 "description": "Whether the notification has been sent."
+              },
+              "state": {
+                "$ref": "#/components/schemas/NotificationState",
+                "description": "The authoritative lifecycle state, independent of viewing timestamps."
               },
               "updated_at": {
                 "type": "string",

@@ -13,14 +13,39 @@ visible; local results do not trigger the tab-loading bar. A fresh server respon
 still replaces that result, and initial loads without usable data retain normal loading
 indicators.
 
-This is a best-effort display, not proof that every matching entity is cached. Loading
-more still follows the original server cursors and preserves already loaded pages.
+This is a best-effort display, not proof that every matching entity is cached. Outside
+the supported cached-Mail slice below, loading more follows the original server cursors
+and preserves already loaded pages.
 Newly loaded server rows join the retained display immediately, without duplicates or
 waiting for local recomputation to succeed. Removing pages from the server baseline
 invalidates overlays built from those pages.
 Changing filters or resetting the cache discards prior reconciliation evidence. Grouped
 lists, unsupported filters/sorts, and native/non-cache transports keep their existing
 network behavior.
+
+For Documents (including Tasks), Projects, Chats, and participating Channels,
+exact `UNSEEN`/`SEEN` notification filters also reconcile locally with
+created/updated timestamp sorts.
+Marking a notification done removes only that notification's contribution immediately;
+other active notifications can keep the entity in the list. Seen/reopen operations
+update filter membership on the authoritative reply, not from a guessed optimistic
+state. Rollback restores only the failed operation's contribution. `DONE` predicates,
+other entity partitions, and notified-at sorting still use the network path.
+
+Channels use the same general Soup reconciliation path, not a separate local page
+chain. Channel ID, type, team, organization, importance, and participant-scoped
+filters operate over synchronized channel metadata. The default channel scope
+requires active participation. Filters that widen to unjoined team channels,
+message sender/mentions, and channel threads remain network-only. Missing channel
+metadata or notification snapshots are unknown, not empty. The existing core
+backfill checkpoint is refreshed to index channel rows; queued work is preserved.
+
+Notification facts use the existing active-only GraphQL edge and primary entity
+association. Missing/partial or over-budget snapshots remain incomplete, never an
+empty notification set; display metadata decoding omissions remain a best-effort
+limitation. The v4 projection tracks individual notification IDs, bounded by the
+shared 256-fact per-entity budget. This cache-format upgrade resets old cached data
+and pending cache mutations, and the bumped backfill checkpoint rebuilds projections.
 
 Realtime Soup batches coalesce repeated entity IDs (including entity type), keeping
 that entity's last operation in the batch. Emitted `SoupUpdated` items are non-null.
@@ -36,6 +61,35 @@ the notification sidebar. With the `enable-inbox-notified-sort` flag on, both ta
 rows and date headers by when you were last notified about the item, so a fresh comment
 on an old task sits under "Today"; with it off they order by content recency. Keyboard:
 `j`/`k` move between rows and update the preview; alternate activation opens a new split.
+On mobile, the filters float above the full-height scrolling list. On iOS, rows
+fade underneath the filters and status bar using the shared top edge gradient.
+
+Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
+unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`
+or `⌘Z`) returns it to seen, not unseen. The row returns to the active inbox without
+an unread badge. Applying the active Inbox preset preserves read/unread selections:
+read (`seen` or `done`) narrows to `seen`, not to all active states. Email read/unread
+is separate from notification lifecycle state.
+
+Agent sessions notify through the same inbox. `<bot> finished <session>` goes to the
+owner and everyone who has prompted or answered in that session when a turn ends with
+nothing queued; `<bot> needs your answer in <session>` goes to the same people when the
+agent stops to ask (anyone with edit access may answer); `<user> mentioned you in <session>`
+goes to users @-mentioned in a prompt - when the author can edit the session, the mention
+grants them edit access first, so the link leads somewhere they can act. All three are
+filed under the session itself: the inbox shows an agent-session row (agent icon, session
+name, the bot or mentioner as sender, the excerpt or question as the body) and clicking it
+opens the session. They are
+not retracted automatically yet: answering the question or starting the next turn leaves
+the earlier notification until you mark it done. The chip announcement post itself no
+longer notifies the thread. Settings → notifications lists them under `AI`.
+
+## Tasks — `/app/component/tasks`
+
+Task navigation uses `My Tasks`, `All Tasks`, and `Created by me`. The desktop
+sidebar has a full-width `New task` action, a collapsible list of task favorites,
+and a collapsible list of tags. Selecting a tag filters the current task view;
+selecting it again clears that tag filter. Favorite rows open their tasks.
 
 ## Email — `/app/component/mail`
 
@@ -44,11 +98,72 @@ Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
 
+### Cached Mail filtering
+
+With GraphQL caching enabled (browser or native Tauri) and the email metadata backfill synchronized,
+All, Signal, Noise, Drafts, Sent, Calendar, and Shared support tab changes and new
+filter combinations while offline: account selection
+(including delegated inboxes), read/unread, and archive-based Done/Not Done. Mail Done
+means `inboxVisible = false`; it is **not** notification lifecycle state. Signal/Noise
+retain their Inbox scope, so archived mail is found using All + Done.
+
+A `Showing cached mail` notice identifies results over synchronized metadata, not a
+claim of complete mailbox coverage. These lists paginate locally beyond the first
+page without a server cursor. Filter, revision, or engine-generation changes restart
+the local page chain; online server results take over again when available. After
+reconnecting, `Load more` follows the same server page chain as the displayed rows,
+not a leftover local cursor. Account choices are cached in the viewer-scoped GraphQL catalog. Timestamp ordering and date
+headers use the selected Mail view's indexed timestamps, not a preview cached from
+another view. Drafts and Sent display their latest eligible message snapshot, even
+when a newer normal message is the ALL preview; no message bodies are needed.
+Sent also requires a canonical outbound timestamp. Trashed messages cannot supply
+any preview. Calendar uses the authoritative thread calendar-attachment flag.
+
+Shared requires a last-known thread grant through the viewer, a team, or an active
+channel, plus the existing Mail UI rule excluding viewer-owned threads. Merely
+having a different owner or a delegated inbox does not qualify. Shared metadata has
+its own full-scan backfill before body hydration. A successful complete scan marks
+old entries it did not return incomplete (not deleted); a failed or cancelled scan
+preserves last-known evidence. If concurrent cache changes invalidate the prior
+membership snapshot, hydration continues but that scan cannot revoke old evidence.
+Interrupted Shared scans restart at the beginning so
+scope reconciliation never mistakes a suffix for a full scan. Offline access is
+necessarily evaluated from the last synchronized grants.
+
+The lightweight metadata backfill runs before body hydration. Its refreshes scan all
+metadata: message-time watermarks alone miss archive/read changes on old threads.
+Filter availability therefore does not guarantee that opening every message body works offline. Missing
+projection proof is unknown, never false. Sender/recipient, attachment chips,
+property/tag refinements and non-created/updated sorts remain network-only or
+existing client refinements; durable offline sending/archiving is not added by this slice. No cache-format wipe is required: Mail uses a separate versioned profile
+and a new backfill checkpoint, preserving existing queued work. Deploy the backend
+schema additions before the client: it selects canonical message eligibility/recency
+fields, body-free canonical preview references, and viewer-relative share facts.
+The `soup-mail-v2` profile and new backfill checkpoint rebuild Mail proof without
+changing the persisted mutation queue format. Native Tauri maintains the same
+predicate projections and revision-bound local page contract as the browser.
+Checkpoint v13 restarts older scans to populate native indexes without wiping
+queued work. A background network failure does not hide a usable current-query
+cached Mail page; server-reported GraphQL errors still surface.
+
+Native filter evaluation requires a full native app update, not just an OTA
+frontend update. Older binaries retain their previous unsupported-filter fallback
+while Shared Mail network backfill continues. The temporary compatibility guard
+can be removed once a full native release includes the filter command and OTA
+delivery excludes older binaries.
+
+For Linux desktop automation, see the [native E2E guide](../../apps/web/tests/native/README.md).
+The first scenario covers Signal → Noise → All after disconnecting both native
+HTTP and WebSockets. iOS shares the native cache code but is not yet covered by
+that driver.
+
 Threads open at `/app/email/<thread-id>`. Click a message header to expand or
 collapse it; `Show N hidden messages` reveals the collapsed middle of a longer
 conversation. A link with `?email_message_id=<message-id>` reveals that message.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
-body and its attachments.
+body and its attachments. On phones, messages form flat rows with horizontal
+separators and 16px side gutters; collapsed previews show one line. Desktop
+keeps the framed cards.
 Replies appear inline on desktop and in a composer drawer on touch devices.
 `R` and `Alt+R` (`Option+R` on macOS) open reply-all for the selected message,
 or the latest message when none is selected. `F` opens a forward and focuses To.
@@ -87,10 +202,20 @@ With the new app views enabled, mobile and tablet Email use a floating, horizont
 scrolling row of those tabs, with `Open email filters` at the left. The rest of the
 view is the email list, which scrolls beneath the header and supports pull to refresh
 and swiping left to mark emails done in Signal and Noise. The filter button opens a
-bottom drawer for status, done, attachment and calendar filters, plus the inbox
-selector when available. `Clear all`
-resets those filters and the inbox selection. Desktop keeps its sidebar, search field,
-filter menu and preview control.
+glass bottom sheet for status, done, attachment, calendar and tag filters, plus an `Inbox`
+section when the user can pick one: `All inboxes` or a single address, never several.
+`Clear all` resets those filters and the inbox selection. Desktop keeps its sidebar,
+search field, filter menu and preview control. The sidebar lists the inboxes above the
+tabs as plain rows; clicking one shows only that inbox, and the `+` beside
+`All inboxes` (`Connect another account`) starts the add-inbox flow. Sidebar rows,
+`New`, and the panel's back, forward and close controls act on primary-button
+mousedown, so the selection changes before the click completes; a normal click
+still works. The sidebar ends with a collapsible `Tags` section (every personal and
+team tag, plus a `New tag` button): clicking a tag opens the `All` tab filtered to
+threads carrying it, clicking it again clears it, and choosing any tab clears it like
+the other filters.
+Rows have trailing selection checkmarks; Close filters dismisses the sheet
+without resetting its selections.
 
 ## Search
 
@@ -98,12 +223,31 @@ Sidebar `Search` button → `/app/.../component/search` with a focused query box
 (including a `Featured Results` group) filter live as you type; no Enter needed. `Ctrl+K` is
 usually faster for jump-to-entity; `/` opens workspace search when no editor is focused.
 
+Agent-session results use the robot icon and show a highlighted transcript snippet.
+`Show more [N]` expands additional matches, labeled **User / Agent · Turn N**.
+Click a snippet to open `/app/agent/<uuid>` at that folded message; a plain row click
+opens the first content match, or opens the session normally for a title-only hit. These are
+ACP-backed sessions, distinct from legacy chat results. Legacy chat rename, delete,
+copy, and move-to-folder actions are not offered on agent-session search rows.
+
 ## Files — `/app/component/documents`
 
 Tabs `Owned` / `Shared` / `Attachments` / `Folders` / `All`; `New` menu; rows show title,
 tags, updated time. Clicking a row opens the doc.
 
 ## Calendar — `/app/calendar/view`
+
+Calendars default to Day on phones and Week on desktop. The selected view is
+remembered locally on each device.
+
+Calendar event creation and editing open in a bottom sheet on touch devices,
+with scrollable content above the keyboard. Desktop retains the centered dialog.
+Dismissing a changed event still asks before discarding the draft.
+
+On phones, event details use inset round action buttons and a transparent RSVP
+footer. Answering a recurring invitation opens a rounded glass sheet: choose
+`This event` or `All events`, then `Save response`. Cancel or Close returns to
+the event details without sending a response.
 
 Week view with `New event`, `Choose calendar view` menu, prev/next week, `Search events`,
 `Calendar settings`, and a mini month picker in the side panel. Events require connecting a
@@ -116,7 +260,9 @@ The side panel's `Calendars` section folds each connected account into a collaps
 group: a caret plus the account address header with a checkbox that shows or hides all of
 that account's calendars at once, and the account's calendars listed beneath it (color dot,
 name, per-calendar checkbox). Subscribed system calendars (Google holidays, birthdays)
-carry a small RSS icon.
+carry a small RSS icon. A calendar whose sync has been failing persistently carries a small
+warning icon whose tooltip shows the provider error; the account keeps syncing its other
+calendars and the badge clears on its own once that calendar syncs again.
 
 The `New event` composer (also opened by dragging a range on the grid) has an `Event kind`
 pill choosing between `Event` and `Out of office`. Picking `Out of office` hides the guests,
@@ -127,13 +273,14 @@ pill to primary calendars, and shows a `Decline meetings` pill (`Don't decline m
 `Decline message` pill; a warning note discloses the away/auto-decline effect before saving.
 When editing an existing event the kind is read-only (Google treats it as immutable), and an
 out-of-office event's decline settings can still be changed — they read as unset because the
-provider does not report the stored ones. Out-of-office events render on the grid as solid
-chips filled with their calendar color (like Google), unlike regular events' outlined chips,
-and their details card shows an `Out of office` line under the schedule.
+provider does not report the stored ones. Timed and all-day events use solid calendar-color
+blocks with dark text on desktop and mobile. Unanswered and tentative invitations have
+lighter fills; declined events are desaturated and struck through. Month-view timed events
+keep their compact dot treatment. Out-of-office details show an `Out of office` line under
+the schedule.
 An event that Google carries on several of an account's calendars (a shared calendar's
 re-import of a member's own event, for example) renders as one chip, not one per calendar:
-the chip carries one thin color bar on its left edge per shown calendar the event is on
-(the details popover's color square splits the same way), and shows the title, color, and
+the details popover's color square shows its calendars. The chip shows the title, color, and
 editability of the first shown copy in primary-first order — hiding the primary calendar
 switches the chip to the shared copy, hiding every one of its calendars hides the chip.
 Reminders, guests, and conferencing always show and follow the primary copy, since that is
@@ -141,6 +288,11 @@ the copy Macro's alerts fire from and whose guest list and join link Macro recor
 editor only lets them be changed there. Answering an invitation likewise addresses the
 primary copy. The details popover and the editor act on the displayed copy, so editing or
 deleting it targets that calendar's event at Google.
+As in Google Calendar, the guests row of the details popover (a bottom sheet on phones)
+carries `Copy guest emails` and `Email guests` icon buttons. Copying puts every guest's
+address on the clipboard, comma-separated. Emailing opens a new email addressed to every
+guest but you — in a split beside the calendar on desktop, as the full-screen composer on
+touch devices — and is hidden when you are the only guest.
 
 With the `enable-calendar-team-ooo` flag on, teammates' Google Calendar out-of-office events
 overlay the grid as read-only chips titled `<name>: <event title>`. The side panel's
@@ -154,6 +306,8 @@ Google's out-of-office event type.
 
 Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, transcriptions
 and summaries appear here; empty state notes "Calls are available to agents."
+
+On phones, recorded call headers omit the **Call Again** action.
 
 ## Customers (CRM) — `/app/component/companies`
 
@@ -195,7 +349,24 @@ below the floating page title and above the bottom toolbar.
 Greeting, getting-started checklist, example prompt buttons (`Draft a document`,
 `Draft an email`, `Search & research`), and the ubiquitous `Ask AI` composer.
 
+On phones, shared confirmations (including Remove Member and Cancel Invitation)
+use a glass sheet with a title, description, Close confirmation button, and
+side-by-side cancel and confirm actions. Pending actions disable both buttons
+and prevent dismissal; canceling leaves the underlying data unchanged.
+
 ## Settings — `/app/settings/<section>`
+
+On phones, **More views → Settings** opens an inset glass sheet over the current
+page. The main page has a profile shortcut and grouped Account, Preferences,
+Workspace, and enabled agent/admin sections. Tap a row to open that settings
+page inside the sheet; **Back to settings** returns to the grouped list at its
+previous scroll position. **Close settings** at the top right, Escape, an
+outside tap, or a downward swipe dismisses the sheet. Opening Settings again
+starts at the main page; explicit links (for example Connections) open their
+section directly. Existing settings URLs open the requested section in the sheet
+and restore the underlying app route. The header stays visible while forms
+scroll, including with the keyboard open. Desktop settings retain their panel
+and split navigation.
 
 Left nav: General → `Account` (profile, delete account), `API Keys` (create /
 list / delete personal keys; the secret is shown only once and is sent as
@@ -239,3 +410,37 @@ Staff Noise emails still create in-app notification rows, but do not send a new-
 event over GraphQL or the legacy WebSocket gateway, so they do not trigger browser popups.
 Those rows are available on the next fetch/refetch. Signal delivery and the existing
 staff/customer eligibility rules are unchanged; no browser eligibility request is needed.
+
+Discussion composers on companies, contacts, documents, tasks, and PRs use the
+shared channel/AI glass surface, 22px desktop corners, 15px desktop text, and
+a circular neutral Send button. Document comment replies/edits and Edit with AI
+use the same composer treatment. Attachment and formatting actions stay available.
+On mobile, open documents and tasks put their new-comment composer in the
+accessory dock above navigation, using the channel input's compact pill and
+expanded surface. Ask AI and New are hidden in these open views only when the
+comment composer is available; their list screens keep those controls. Users
+without comment permission have no comment composer, so Ask AI remains visible.
+
+On touch devices, an email thread's floating action bar has Previous email and
+Next email arrows beside the larger Mark done checkmark. The arrows follow the
+source list's filtered order, skip non-email items, and disable at its ends.
+They do not wrap; a thread opened without a source list has disabled arrows.
+Mark done archives the current thread and opens the next email in that same
+filtered list, loading pages until another email is found or the list ends.
+On native mobile, stepping replaces the current email while preserving the
+filtered list behind it for swipe-back. This works with both the legacy mobile
+list and the newer app views. To verify, open the first email from Signal or
+Noise, tap Next and then Previous, and swipe back to the same filtered list.
+Leaving the email cancels pending
+navigation and archiving while a page loads. At the end it opens the previous
+email; with no neighboring email it stays on the archived thread. Mark as not done
+does not advance. Undo restores the archived email and returns to it.
+
+The mobile reply/forward drawer uses matching circular glass buttons for
+discard, attachments, and send, with the dock's button/icon sizing and regular
+Phosphor icons. Send remains disabled until the draft is valid and shows a
+spinner while sending.
+
+The mobile new-email composer nests the channel-style Send button inside its
+top-right glass toolbar, with an even 5px inset on the top, bottom, and right.
+The toolbar is 46px tall; attachment and schedule controls align with Send.

@@ -11,11 +11,11 @@ import { storeChatStateImmediate } from '@core/component/AI/util/storage';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { createChat } from '@core/util/create';
-import SparkleIcon from '@phosphor/sparkle.svg';
+import AgentIcon from '@phosphor/sparkle.svg';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { Button } from '@ui';
 
-export { SparkleIcon as ChatWithAgentIcon };
+export { AgentIcon as ChatWithAgentIcon };
 
 type ChatWithAgentEntity =
   | { type: 'email'; id: string; name: string }
@@ -127,7 +127,11 @@ export async function openChatWithMessageReplacingSplit(
   await createAndOpenChat({ message, replaceSplit: splitHandle });
 }
 
-export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
+export function ChatWithAgentButton(props: {
+  entity: ChatWithAgentEntity;
+  /** Button text; defaults to "Chat". */
+  label?: string;
+}) {
   return (
     <Button
       tooltip="Chat with Agent"
@@ -137,8 +141,8 @@ export function ChatWithAgentButton(props: { entity: ChatWithAgentEntity }) {
       depth={2}
       class="bg-surface"
     >
-      <SparkleIcon />
-      <span class="text-xs">Chat</span>
+      <AgentIcon />
+      <span class="text-xs">{props.label ?? 'Chat'}</span>
     </Button>
   );
 }
@@ -152,7 +156,7 @@ export function AskMacroButton(props: { entity: ChatWithAgentEntity }) {
       depth={2}
       class="gap-1.5 rounded-full border border-edge-muted px-2"
     >
-      <SparkleIcon />
+      <AgentIcon />
       <span class="text-xs font-medium">Ask Macro</span>
     </Button>
   );

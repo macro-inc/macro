@@ -219,16 +219,21 @@
 	margin-left: 0.375rem;
 }
 
+/* Rich, opaque blocks keep busy schedules readable. Bound lightness for
+   dark-text contrast and boost chroma without turning neutral calendars colorful. */
 .calendar-view .fc .fc-event {
-	--fc-event-bg-color: var(--color-panel);
-	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
-	--fc-event-text-color: var(--color-ink-muted);
-	border-color: var(--fc-event-border-color);
+	--calendar-event-fill: oklch(from var(--event-calendar-color, var(--color-calendar)) clamp(0.67, l, 0.72) min(calc(c * 1.65), 0.2) h);
+	--calendar-event-ink: oklch(0.2 0 0);
+	--fc-event-bg-color: var(--calendar-event-fill);
+	--fc-event-border-color: var(--color-panel);
+	--fc-event-text-color: var(--calendar-event-ink);
+	--calendar-event-ring: 0 0 0 0 transparent;
+	border: 1px solid var(--fc-event-border-color);
+	border-radius: 0.375rem;
 	background-color: var(--fc-event-bg-color);
 	color: var(--fc-event-text-color);
-	transition:
-		box-shadow 120ms ease-out,
-		opacity 120ms ease-out;
+	box-shadow: var(--calendar-event-ring);
+	transition: filter 120ms ease-out, opacity 120ms ease-out;
 }
 
 .calendar-view .fc .fc-event.fc-event-draggable {
@@ -394,14 +399,14 @@
 }
 
 .calendar-view .fc .calendar-event-content-layout {
-	padding: 1px 3px;
+	padding: 2px 6px;
 }
 
 .calendar-view .fc .calendar-event-content-layout-single-line {
 	flex-direction: row;
 	align-items: center;
 	gap: 0.25rem;
-	padding: 1px 3px;
+	padding: 2px 6px;
 }
 
 .calendar-view
@@ -416,31 +421,6 @@
 	.calendar-event-content-layout-single-line
 	.calendar-event-location {
 	display: none;
-}
-
-.calendar-view .fc .calendar-event-color-bars {
-	position: absolute;
-	top: 2px;
-	left: 2px;
-	z-index: 1;
-	display: flex;
-	height: min(2rem, 70%);
-	gap: 1px;
-}
-
-.calendar-view .fc .calendar-event-color-bar {
-	width: 4px;
-	border-radius: 9999px;
-	background: var(--event-calendar-color, var(--color-calendar));
-}
-
-.calendar-view
-	.fc
-	.calendar-event-content-with-color-bar
-	.calendar-event-content-layout {
-	padding-left: calc(
-		5px + var(--calendar-event-color-bar-count, 1) * 5px
-	);
 }
 
 /* Single-day timed events use a compact dot treatment in the month grid. */
@@ -483,39 +463,15 @@
 	background: transparent;
 }
 
-.calendar-view
-	.fc
-	.fc-event:not(.fc-daygrid-dot-event):not(
-		:has(.calendar-event-content-selected)
-	):has([data-response-status="accepted"]) {
-	--fc-event-bg-color: var(--color-panel);
-	--fc-event-border-color: var(--event-calendar-color, var(--color-calendar));
-	background-image: linear-gradient(
-		color-mix(
-			in oklch,
-			var(--event-calendar-color, var(--color-calendar)) 25%,
-			transparent
-		),
-		color-mix(
-			in oklch,
-			var(--event-calendar-color, var(--color-calendar)) 25%,
-			transparent
-		)
-	);
-	--fc-event-text-color: var(--color-ink-muted);
+/* Unanswered and tentative invitations stay filled, with a softer tint. */
+.calendar-view .fc .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content:is([data-response-status="tentative"], [data-response-status="needs_action"])) {
+	--fc-event-bg-color: color-mix(in oklch, var(--calendar-event-fill) 85%, white);
 }
 
 .calendar-view
 	.fc
-	.fc-event:has(.calendar-event-content[data-response-status="tentative"]) {
-	--fc-event-bg-color: var(--color-panel);
-	border-style: dashed;
-}
-
-.calendar-view
-	.fc
-	.fc-event:has(.calendar-event-content[data-response-status="declined"]) {
-	opacity: 0.5;
+	.fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content[data-response-status="declined"]) {
+	--fc-event-bg-color: oklch(from var(--calendar-event-fill) l calc(c * 0.25) h);
 }
 
 .calendar-view
@@ -523,20 +479,6 @@
 	.calendar-event-content[data-response-status="declined"]
 	.calendar-event-title {
 	text-decoration: line-through;
-}
-
-.calendar-view
-	.fc
-	.fc-event:has(.calendar-event-content[data-response-status="needs_action"]) {
-	--fc-event-bg-color: var(--color-panel);
-	--fc-event-text-color: var(--color-ink-muted);
-}
-
-/* Out-of-office chips fill solid with their calendar color, matching how
-   Google Calendar renders the type. */
-.calendar-view .fc .fc-event.calendar-event-out-of-office {
-	--fc-event-bg-color: var(--event-calendar-color, var(--color-calendar));
-	--fc-event-text-color: var(--color-surface);
 }
 
 /* The month grid's dot treatment sets its colors directly rather than
@@ -552,19 +494,8 @@
 	color: var(--fc-event-text-color);
 }
 
-/* A color bar and response dot carry no signal on a chip already filled
-   with the calendar color. */
-.calendar-view .fc .calendar-event-out-of-office .calendar-event-color-bars,
 .calendar-view .fc .calendar-event-out-of-office .calendar-event-response-dot {
 	display: none;
-}
-
-.calendar-view
-	.fc
-	.calendar-event-out-of-office
-	.calendar-event-content-with-color-bar
-	.calendar-event-content-layout {
-	padding-left: 3px;
 }
 
 .calendar-view .fc .fc-event:hover {
@@ -574,103 +505,16 @@
 .calendar-view .fc .fc-event:focus-visible {
 	z-index: 4;
 	outline: none;
-	box-shadow: 0 0 0 1px var(--color-ink-muted);
-}
-
-.calendar-view .fc .fc-event:focus-visible::after {
-	background: transparent;
-}
-
-.calendar-view .fc .fc-event:focus-visible .calendar-event-content {
-	background-color: var(--color-active);
+	--calendar-event-ring: 0 0 0 1px var(--color-ink-muted);
 }
 
 @media (hover: hover) {
-	.calendar-view
-		.fc
-		.fc-event:hover:not(.fc-event-mirror):not(
-			.calendar-multi-day-selection-preview-event
-		):not(.calendar-event-out-of-office):not(
-			:has(.calendar-event-content-selected)
-		) {
-		--fc-event-bg-color: color-mix(
-			in oklch,
-			var(--event-calendar-color, var(--color-calendar)) 18%,
-			var(--color-panel)
-		);
-		--fc-event-text-color: var(--color-ink);
-		box-shadow:
-			0 0 0 1px
-			color-mix(
-				in oklch,
-				var(--event-calendar-color, var(--color-calendar)) 55%,
-				transparent
-			);
+	.calendar-view .fc .fc-event:hover:not(.fc-event-mirror):not(.calendar-multi-day-selection-preview-event):not(:has(.calendar-event-content-selected)) {
+		filter: brightness(0.94);
 	}
 
-	/* A solid out-of-office chip keeps its fill on hover; the ring alone
-	   signals the affordance. */
-	.calendar-view
-		.fc
-		.fc-event.calendar-event-out-of-office:hover:not(
-			:has(.calendar-event-content-selected)
-		) {
-		box-shadow:
-			0 0 0 1px
-			color-mix(
-				in oklch,
-				var(--event-calendar-color, var(--color-calendar)) 55%,
-				transparent
-			);
-	}
-
-	.calendar-view
-		.fc
-		.fc-event:hover:not(.fc-event-mirror):not(
-			.calendar-multi-day-selection-preview-event
-		):not(:has(.calendar-event-content-selected))
-		.calendar-event-content {
-		background-color: color-mix(
-			in oklch,
-			var(--event-calendar-color, var(--color-calendar)) 20%,
-			transparent
-		);
-	}
-
-	.calendar-view
-		.fc
-		.fc-event:hover:not(.fc-event-mirror):not(
-			.calendar-multi-day-selection-preview-event
-		):not(:has(.calendar-event-content-selected)):has(
-			[data-response-status="accepted"]
-		) {
-		background-image: linear-gradient(
-			color-mix(
-				in oklch,
-				var(--event-calendar-color, var(--color-calendar)) 42%,
-				transparent
-			),
-			color-mix(
-				in oklch,
-				var(--event-calendar-color, var(--color-calendar)) 42%,
-				transparent
-			)
-		);
-	}
-
-	.calendar-view
-		.fc
-		.fc-dayGridMonth-view
-		.fc-daygrid-dot-event:hover:not(.calendar-event-out-of-office):not(
-			:has(.calendar-event-content-selected)
-		) {
-		--fc-event-bg-color: color-mix(
-			in oklch,
-			var(--event-calendar-color, var(--color-calendar)) 16%,
-			var(--color-panel)
-		);
-		background-color: var(--fc-event-bg-color);
-		background-image: none;
+	.calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-dot-event:hover:not(.calendar-event-out-of-office):not(:has(.calendar-event-content-selected)) {
+		background-color: var(--color-hover);
 	}
 }
 

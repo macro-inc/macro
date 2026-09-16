@@ -7,6 +7,7 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import { throwOnErr } from '@core/util/result';
 import { scheduledActionKeys } from '@queries/agent-schedule/keys';
+import { deleteAgentSession } from '@queries/agent-session/entity-mutations';
 import { callKeys } from '@queries/call/keys';
 import { queryClient } from '@queries/client';
 import { notificationKeys } from '@queries/notification/keys';
@@ -32,6 +33,7 @@ export function createBulkDeleteDssItemsMutation() {
   const isDeletable = (entity: EntityData) => {
     const type = entity.type;
     return (
+      type === 'agent_session' ||
       type === 'chat' ||
       type === 'document' ||
       type === 'project' ||
@@ -44,7 +46,11 @@ export function createBulkDeleteDssItemsMutation() {
     mutationFn: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);
       const results = await Promise.all(
-        deletable.map((e) => {
+        deletable.map(async (e) => {
+          if (e.type === 'agent_session') {
+            await deleteAgentSession(e.id);
+            return true;
+          }
           if (e.type === 'call') {
             return throwOnErr(() =>
               callServiceClient.deleteCallRecord(e.id)

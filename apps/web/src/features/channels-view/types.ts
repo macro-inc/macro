@@ -2,6 +2,8 @@ export type ChannelsTab = 'browse' | 'recents';
 
 export type ChannelsGroup = 'channels' | 'direct_messages';
 
+export type ChannelsRailSection = 'favorites' | ChannelsGroup;
+
 export type ChannelsQueryScope = ChannelsGroup | 'recents';
 
 export type ChannelsRailMode = 'auto' | 'full' | 'slim';
@@ -10,7 +12,7 @@ export type ChannelsViewState = {
   tab: ChannelsTab;
   mobileTab: ChannelsQueryScope;
   selectedChannelId?: string;
-  expandedGroups: Record<ChannelsGroup, boolean>;
+  expandedGroups: Record<ChannelsRailSection, boolean>;
   asideWidth: number;
   railMode: ChannelsRailMode;
 };

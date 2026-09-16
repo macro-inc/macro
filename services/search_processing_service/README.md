@@ -3,8 +3,9 @@
 This service owns the search-event pipeline:
 
 - **Live calls**: the `search-processing-service` Kafka consumer reads call lifecycle events from `macro.calls` and indexes them into OpenSearch.
-- **Other live entities**: SQS workers drain `SEARCH_EVENT_QUEUE` for all other search entities.
-- **Backfills**: internal HTTP endpoints enqueue every indexable record of a given entity type onto SQS. Call backfills remain on SQS alongside all other entity backfills.
+- **Agent sessions**: the same consumer subscribes to `macro.agent_session_lifecycle`, rereads the primary database, and indexes messages produced by `agent_fold`. Both user prompts and agent replies are searchable; raw ACP envelopes are not indexed. Agent-session backfills use this same direct indexing path, not SQS.
+- **Other live entities**: Kafka handlers and legacy SQS workers drain events for the remaining search entities.
+- **Backfills**: internal HTTP endpoints start tracked jobs. Most enqueue records onto SQS; agent sessions and properties index directly.
 
 ## Architecture
 
@@ -23,7 +24,64 @@ The orchestrator is the single inbound contract for HTTP handlers. Swapping an a
 
 ## Ingestion Ownership and Event Mapping
 
-Kafka is used only for live call indexing. SQS remains responsible for live events from other search entities and for every backfill, including call backfills. The SQS call message contract and handler remain available so `POST /internal/backfill/calls` can enqueue call records with the existing backfill path.
+Kafka subscriptions are declared in `src/inbound/kafka_consumer.rs`, including agent-session lifecycle events. SQS remains available for legacy producers and backfills other than agent sessions and direct property indexing. The SQS call message contract and handler remain available so `POST /internal/backfill/calls` can enqueue call records with the existing backfill path.
+
+### Agent-session indexing and rollout
+
+There is no agent-session indexing feature flag. The deployed search-processing
+binary subscribes to the existing `macro.agent_session_lifecycle` topic. Events
+are invalidation hints: every event rereads current metadata and the effective
+ACP log through the owning agent-session/fold services. It never indexes the
+event's excerpt as a substitute for the transcript. Completed turns, questions,
+renames, and deletions therefore converge on current persisted state.
+
+Live events and backfills hold the same per-session PostgreSQL advisory lease
+through the OpenSearch write. Lease connections have their own pool so waiting
+workers cannot exhaust the pool used to load snapshots. Each reconcile writes
+the parent and both authors' folded messages, refreshes them, then removes
+documents from older projection generations. Missing sessions delete their
+entire projection, even when triggered by an older event.
+
+For rollout:
+
+1. Verify the `agent_sessions` alias exists with the join mapping defined in
+   `infra/stacks/opensearch/helpers/scripts/create_indices.ts`. Do not reset
+   unrelated indices or recreate an existing index just to deploy this consumer.
+2. Deploy search-processing and confirm its consumer group is subscribed to
+   `macro.agent_session_lifecycle`. The topic and shared MSK permissions already
+   exist; the publisher does not need a deployment for this change.
+3. Call the internally authenticated `POST /internal/backfill/agent-sessions`
+   with `{}` to repair all existing sessions. It returns `202` and `{"job_id":
+   "..."}`; poll `GET /internal/backfill/{job_id}` until completed. Its `enqueued`
+   progress field counts sessions reconciled directly, not SQS messages.
+   Retained Kafka history alone is not a complete historical backfill.
+4. Verify a unique phrase from a new user prompt and a completed agent reply
+   both return the session. Also verify a rename and deletion.
+
+Use `{"agent_session_ids": ["<uuid>"]}` to repair selected sessions, including
+removing a known deleted session's documents. `index_override` can target a
+scratch/replacement index with the same mapping. A full scan walks existing rows
+in bounded UUID pages and does not use `modified_at`: ACP log changes do not
+necessarily update that timestamp. It cannot discover already-deleted IDs.
+
+The shared consumer commits on in-memory handoff and drops events after exhausted
+retries. Monitor dropped-event logs and use this backfill for recovery. Backfills
+are not automatically scheduled or started by deployment.
+
+Regression checks, from the repository root inside Nix, with `SQLX_OFFLINE` unset:
+
+```bash
+cargo test -p agent_fold
+cargo test -p agent_session search
+cargo test -p search_processing_service --no-default-features --features processing,service
+cargo test -p opensearch_client
+# With local OpenSearch running on localhost:9200; creates/deletes only a scratch index:
+cargo test -p opensearch_client empty_index_accepts_both_authors -- --ignored
+```
+
+The empty-index check covers parent/child joins across both authors, idempotent
+replays, transcript replacement, stale-child removal, and deletion. Do not rely
+on a previously populated local index to validate ingestion wiring.
 
 The `macro.calls` lifecycle events map to search actions as follows:
 
@@ -40,12 +98,11 @@ Upserts read the current call state from Postgres and overwrite the indexed repr
 
 ### Kafka Delivery Contract
 
-- The durable consumer group is `search-processing-service`. It subscribes only to `macro.calls`.
-- The poll loop hands decoded events to a bounded 128-message channel. Sending waits when the channel is full, which stops polling and committing until the worker catches up.
-- Exactly one worker drains the channel sequentially. This preserves partition/key ordering so an upsert cannot be processed after a later delete for the same call. Do not add naive concurrent workers; any future parallelism must consistently shard by `call_id`.
-- An offset is committed asynchronously immediately after a successful in-memory handoff, not after OpenSearch processing. This commit-after-handoff design creates a loss window: a process or host crash can lose already committed events still in the 128-message buffer. If the worker channel closes before handoff, the offset is left uncommitted for redelivery.
+- The durable consumer group is `search-processing-service`. Its subscriptions are declared in `src/inbound/kafka_consumer.rs`.
+- The poll loop shards decoded events by entity ordering key across ten sequential workers, each with a bounded 16-message channel. Sending waits when the selected channel is full, stopping polling and committing until that worker catches up. Events for the same entity stay ordered.
+- An offset is committed asynchronously immediately after a successful in-memory handoff, not after OpenSearch processing. This commit-after-handoff design creates a loss window: a process or host crash can lose committed events still in those buffers. If the worker channel closes before handoff, the offset is left uncommitted for redelivery.
 - Malformed, keyless, and unsupported-schema records are logged and committed without handoff so a poison record cannot wedge a partition. Commit failures are logged and may cause duplicate delivery, which is safe because full upserts and per-call deletes are idempotent.
-- Processing gets five total attempts. Failures are retried after 1, 2, 4, and 8 seconds; after the fifth failure, the event is logged with its call ID, event type, partition, offset, and final error, then dropped so later events can continue.
+- Processing gets three total attempts, with retries after 1 and 2 seconds. Exhausted events are logged and dropped so later events can continue.
 
 ## Running Locally
 
@@ -119,10 +176,11 @@ Use `POST /internal/backfill/calls` after a rollback, a dropped upsert, or a sus
 
 ## Backfill HTTP Routes
 
-Every search-indexed entity has a POST endpoint on sps's internal surface. They all share the same response shape (`{"enqueued": <usize>}`), share internal-auth via the `x-internal-auth-key` header, and accept a per-entity JSON filter in the request body.
+Every search-indexed entity has a POST endpoint on sps's internal surface. They return `202 Accepted` with `{"job_id": "..."}`, share internal-auth via the `x-internal-auth-key` header, and accept a per-entity JSON filter in the request body. Poll `GET /internal/backfill/{job_id}` for status and the `enqueued` progress count.
 
 | Entity | Route | Body (all fields optional) |
 |---|---|---|
+| Agent sessions | `POST /internal/backfill/agent-sessions` | `{"agent_session_ids": ["<uuid>"], "index_override": "agent_sessions_v2"}` — `{}` = all existing sessions, indexed directly |
 | Calls | `POST /internal/backfill/calls` | `{"call_ids": ["<uuid>"]}` — empty = all archived calls |
 | Chats | `POST /internal/backfill/chats` | `{"chat_ids": [...], "user_ids": [...]}` |
 | Channels | `POST /internal/backfill/channels` | `{}` |

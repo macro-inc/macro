@@ -36,6 +36,7 @@ This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
 | Running the frontend or backend on a local machine | [Running locally](docs/RUNNING_LOCALLY.md) |
 | Working inside Cursor Cloud | [Cursor Cloud](docs/CURSOR_CLOUD.md) |
 | Driving the app through a browser | [App agent guide](docs/AGENT_GUIDE/README.md) |
+| SDK version bumps and npm publishing | [SDK release guide](packages/sdk/RELEASING.md), [release-sdk skill](.agents/skills/release-sdk/SKILL.md) |
 | Deployment | [Infrastructure guide](infra/README.md) |
 
 ## Essential guardrails
@@ -53,6 +54,9 @@ This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
 - Load Rust configuration through `macro_env_var` / `macro_config`, never
   `std::env::var` or hand-rolled wrappers. Register new env vars in Doppler; never
   paste secrets into chat or commit them.
+- Across domain crates, depend on the owning domain service or port; only a
+  composition root may construct that crate's outbound adapters. Never import
+  another crate's `outbound` module from an outbound adapter.
 - Use `\cd` instead of `cd` to bypass repository shell aliases.
 
 ## Before handing off

@@ -1,0 +1,13 @@
+query PartialMail {
+  user {
+    id
+    emailLinks { id }
+    soup(input: { initial: { limit: 1, emailView: ALL } }) {
+      items {
+        __typename
+        id
+        ... on GraphqlSoupEmailThread { isRead inboxVisible }
+      }
+    }
+  }
+}

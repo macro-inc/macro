@@ -7,21 +7,21 @@ import {
   createElicitationController,
   type ElicitationController,
 } from '@app/features/block-agent/context/create-elicitation-controller';
-import { useUserId } from '@core/context/user';
 import {
   MAGIC_CHIP_STATUSES,
-  type MagicChipDecoratorProps,
+  type MagicChipData,
   type MagicChipStatus,
 } from '@macro-inc/lexical-core';
+import { useAgentSessionQuery } from '@queries/agent-session/session';
 import {
   acquireAgentSessionFold,
   subscribeAgentSessionLog,
 } from '@queries/agent-session/session-fold';
+import { queryReadyGate } from '@queries/gate';
 import type {
   FoldedMessage,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentSessionLogEntryDto,
   SessionStatusDto,
@@ -33,9 +33,6 @@ import {
   type MagicChipPresentation,
   type MagicChipQuestion,
 } from './presentation';
-
-const STATUS_POLL_INTERVAL_MS = 5_000;
-const MAX_STATUS_POLLS = 120;
 
 function systemEvent(entry: AgentSessionLogEntryDto): string | undefined {
   const content = entry.content;
@@ -52,7 +49,11 @@ function magicChipStatus(
 }
 
 /** What the session row says about who runs it, until the fold says more. */
-type SessionIdentity = { harness: string; model: string };
+type SessionIdentity = {
+  harness: string;
+  model: string;
+  pullRequestUrl?: string | null;
+};
 
 /**
  * The persona as the header names it: the runtime's product name followed
@@ -86,23 +87,26 @@ function modelName(
  * row names its owner, and {@link ElicitationController} sends the answer.
  * The header names the persona and model from the session row and the fold.
  */
-export function createMagicChipModel(props: MagicChipDecoratorProps): {
+export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
   elicitation: ElicitationController;
 } {
   const [latestEvent, setLatestEvent] = createSignal<string>();
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
-  const [persistedStatus, setPersistedStatus] = createSignal(props.status);
-  const [ownerId, setOwnerId] = createSignal<string>();
-  const [session, setSession] = createSignal<SessionIdentity>();
+  const sessionQuery = useAgentSessionQuery(() => props.agentSessionId);
+  // Guard pending data so a cold query cannot suspend the surrounding editor.
+  const session = () =>
+    queryReadyGate(sessionQuery) ? sessionQuery.data : undefined;
+  const canEdit = () => session()?.canEdit;
+  const persistedStatus = () => {
+    const status = session()?.status;
+    return (status ? magicChipStatus(status) : undefined) ?? props.status;
+  };
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
   const pendingElicitation = () => metadata()?.pendingElicitation ?? undefined;
-  const viewerId = useUserId();
   let active = true;
   let release: (() => void) | undefined;
-  let statusTimer: ReturnType<typeof setTimeout> | undefined;
-  let statusPolls = 0;
   const unsubscribe = subscribeAgentSessionLog(
     props.agentSessionId,
     (event) => {
@@ -110,31 +114,6 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
       if (name) setLatestEvent(name);
     }
   );
-
-  const refreshStatus = async () => {
-    statusPolls += 1;
-    const result = await agentHarnessServiceClient
-      .get(props.agentSessionId)
-      .catch(() => undefined);
-    if (!active) return;
-    if (result?.isOk()) {
-      setOwnerId(result.value.ownerId);
-      setSession({
-        harness: result.value.harness,
-        model: result.value.model,
-      });
-    }
-    const status = result?.isOk()
-      ? magicChipStatus(result.value.status)
-      : undefined;
-    if (status) setPersistedStatus(status);
-    const retry =
-      result === undefined || status === 'no_messages' || status === 'booting';
-    if (retry && statusPolls < MAX_STATUS_POLLS) {
-      statusTimer = setTimeout(refreshStatus, STATUS_POLL_INTERVAL_MS);
-    }
-  };
-  void refreshStatus();
 
   void acquireAgentSessionFold({
     agentSessionId: props.agentSessionId,
@@ -171,22 +150,28 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
 
   onCleanup(() => {
     active = false;
-    clearTimeout(statusTimer);
     unsubscribe();
     release?.();
   });
 
-  // This chip is one turn's surface; only a question asked in that turn is
-  // its to offer.
+  // Fold patches can arrive out of order. Follow the highest turn, including
+  // a pending question whose metadata arrives before its message patch.
+  const turn = () =>
+    props.promptedMessage?.turn ??
+    messages().reduce(
+      (latest, message) => Math.max(latest, message.turn),
+      pendingElicitation()?.turn ?? 0
+    );
+
+  // A locked chip only offers questions from its anchored turn.
   const questionForTurn = () => {
     const question = pendingElicitation();
-    return question?.turn === props.promptedMessage.turn ? question : undefined;
+    return question?.turn === turn() ? question : undefined;
   };
   const elicitation = createElicitationController({
     sessionId: () => props.agentSessionId,
     pending: questionForTurn,
-    ownerId,
-    viewerId,
+    canEdit,
   });
   const asking = (): MagicChipQuestion | undefined => {
     const question = questionForTurn();
@@ -194,16 +179,15 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
     return {
       question,
       canAnswer: elicitation.canAnswer(),
-      ownerName: elicitation.ownerName(),
     };
   };
 
   // Memoized: the view reads these from many places per flush, and a fold
   // pushes a frame per streamed chunk.
   const presentation = createMemo(() => {
-    const turn = props.promptedMessage.turn;
+    const currentTurn = turn();
     const messagesForTurn = messages().filter(
-      (message) => message.turn === turn
+      (message) => message.turn === currentTurn
     );
     return deriveMagicChipPresentation({
       persistedStatus: persistedStatus(),
@@ -219,7 +203,10 @@ export function createMagicChipModel(props: MagicChipDecoratorProps): {
   const header = createMemo((): MagicChipHeader | undefined => {
     const agent = agentName(session()?.harness);
     const model = modelName(metadata(), session());
-    return agent || model ? { agent, model } : undefined;
+    const pullRequestUrl = session()?.pullRequestUrl ?? undefined;
+    return agent || model || pullRequestUrl
+      ? { agent, model, pullRequestUrl }
+      : undefined;
   });
 
   return { presentation, header, elicitation };

@@ -84,6 +84,7 @@ use foreign_entity::{
 };
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use github::domain::service::{GithubSyncConfig, GithubSyncServiceImpl};
+use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
@@ -555,6 +556,7 @@ async fn run() -> anyhow::Result<()> {
         (*notification_ingress_service).clone(),
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
+        ConnectionGatewayGithubRealtime::new(conn_gateway_client.clone()),
     );
 
     let foreign_entity_state = ForeignEntityRouterState::new(
@@ -1405,6 +1407,10 @@ async fn run() -> anyhow::Result<()> {
                 document_service,
                 markdown_initializer,
                 documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
+                documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker::new(
+                    db.clone(),
+                    lexical_client.clone(),
+                ),
             ),
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
         },

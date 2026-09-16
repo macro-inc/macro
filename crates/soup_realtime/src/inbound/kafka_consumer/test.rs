@@ -8,7 +8,10 @@ use channels::domain::{
     },
     models::{ChannelSender, ChannelType, SimpleMention},
 };
-use chat::domain::events::{ChatMessageDeletedMetadata, ChatTopicEvent, ChatUpdatedMetadata};
+use chat::domain::events::{
+    ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
+    ChatUpdatedMetadata,
+};
 use chrono::Utc;
 use documents::domain::events::{
     DocumentContentUploadedMetadata, DocumentCreatedMetadata, DocumentDeletedMetadata,
@@ -297,6 +300,25 @@ fn deleted_chat_messages_do_not_change_soup() {
 }
 
 #[test]
+fn sent_chat_messages_refresh_the_soup_model() {
+    for role in [ChatMessageRole::User, ChatMessageRole::Assistant] {
+        let event = ChatTopicEvent::MessageSent(ChatMessageSentMetadata {
+            chat_id: DOCUMENT_ID.to_string(),
+            message_id: Uuid::now_v7().to_string(),
+            role,
+            model: "openai/gpt-5.6".to_string(),
+            actor_user_id: None,
+            attachment_count: 0,
+        });
+        let patches = patches_from_chat_event(&event);
+        assert_eq!(patches.len(), 1);
+        assert!(matches!(patches[0].patch, Patch::Updated(_)));
+        assert_eq!(patch_entity(&patches[0]).entity_type, EntityType::Chat);
+        assert_eq!(patch_entity(&patches[0]).entity_id, DOCUMENT_ID);
+    }
+}
+
+#[test]
 fn task_property_updates_map_to_document_updates() {
     let event = PropertyTopicEvent::EntityPropertyUpdated(EntityPropertyUpdatedMetadata {
         entity_property_id: Uuid::now_v7(),
@@ -532,6 +554,37 @@ fn posted_message_mentions_update_referenced_documents_for_channel_members() {
     assert_eq!(patches.len(), 3);
     assert_eq!(patch_entity(&patches[2]).entity_type, EntityType::Document);
     assert_eq!(patch_entity(&patches[2]).entity_id, DOCUMENT_ID);
+    assert_eq!(patches[2].access_source.entity_type, EntityType::Channel);
+    assert_eq!(patches[2].access_source.entity_id, channel_id.to_string());
+}
+
+#[test]
+fn posted_message_mentions_update_referenced_agent_sessions_for_channel_members() {
+    let channel_id = Uuid::now_v7();
+    let session_id = Uuid::now_v7().to_string();
+    let event = ChannelTopicEvent::MessagePosted(ChannelMessagePostedMetadata {
+        channel_id,
+        message_id: Uuid::now_v7(),
+        thread_id: None,
+        sender: ChannelSender::new_from_user(user()),
+        triggered_by: None,
+        channel_type: ChannelType::Private,
+        content: "shared an agent session".to_string(),
+        mentions: vec![SimpleMention {
+            entity_type: "agent_session".to_string(),
+            entity_id: session_id.to_string(),
+        }],
+        attachments: Vec::new(),
+        created_at: Utc::now(),
+    });
+
+    let patches = patches_from_channel_event(&event);
+    assert_eq!(patches.len(), 3);
+    assert_eq!(
+        patch_entity(&patches[2]).entity_type,
+        EntityType::AgentSession
+    );
+    assert_eq!(patch_entity(&patches[2]).entity_id, session_id);
     assert_eq!(patches[2].access_source.entity_type, EntityType::Channel);
     assert_eq!(patches[2].access_source.entity_id, channel_id.to_string());
 }

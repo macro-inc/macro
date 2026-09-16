@@ -77,4 +77,6 @@ topics! {
     MacroChatsTopic => "macro.chats",
     /// Calendar event changes, from provider sync and user mutations alike.
     MacroCalendarTopic => "macro.calendar",
+    /// Agent session lifecycle facts: opened, turns, waiting for input, settled, stopped, renamed, deleted.
+    MacroAgentSessionLifecycleTopic => "macro.agent_session_lifecycle",
 }

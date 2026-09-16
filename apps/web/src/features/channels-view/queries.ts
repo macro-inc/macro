@@ -4,6 +4,7 @@ import {
   defineQueryFilters,
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
+import { compareDateDesc } from '@core/util/date';
 import { type ChannelEntity, type EntityData, isChannelEntity } from '@entity';
 import {
   type SoupAstItemsQueryArgs,
@@ -26,7 +27,9 @@ type ChannelsQueryDefinition = {
 
 export type ChannelsDataSource = ListDataSource<ChannelEntity>;
 
-export type ChannelsSources = Record<ChannelsQueryScope, ChannelsDataSource>;
+export type ChannelsSourceScope = ChannelsQueryScope | 'search';
+
+export type ChannelsSources = Record<ChannelsSourceScope, ChannelsDataSource>;
 
 export const CHANNELS_QUERY_DEFINITIONS = {
   recents: {
@@ -48,7 +51,7 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     matches: (channel) => !isDirectMessage(channel),
   },
   direct_messages: {
-    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
     filters: defineQueryFilters({
       include: {
         channelType: ['direct_message'],
@@ -57,10 +60,17 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     }),
     matches: isDirectMessage,
   },
-} satisfies Record<ChannelsQueryScope, ChannelsQueryDefinition>;
+  search: {
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
+    filters: defineQueryFilters({
+      include: { channelIsParticipant: [true] },
+    }),
+    matches: () => true,
+  },
+} satisfies Record<ChannelsSourceScope, ChannelsQueryDefinition>;
 
 export function channelsQueryArgs(
-  scope: ChannelsQueryScope
+  scope: ChannelsSourceScope
 ): SoupAstItemsQueryArgs {
   const definition = CHANNELS_QUERY_DEFINITIONS[scope];
 
@@ -71,7 +81,7 @@ export function channelsQueryArgs(
 }
 
 export function filterChannelsForScope(
-  scope: ChannelsQueryScope,
+  scope: ChannelsSourceScope,
   channels: readonly ChannelEntity[]
 ): ChannelEntity[] {
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
@@ -127,7 +137,7 @@ export function resolveSelectedChannel(
 }
 
 function useChannelsDataSource(
-  scope: ChannelsQueryScope,
+  scope: ChannelsSourceScope,
   enabled: Accessor<boolean>
 ): ChannelsDataSource {
   const query = useSoupAstItemsQuery(
@@ -137,8 +147,16 @@ function useChannelsDataSource(
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isLoading) return previous;
 
-    const channels = (query.data?.entities ?? []).filter(isChannelEntity);
-    return filterChannelsForScope(scope, channels);
+    const channels = filterChannelsForScope(
+      scope,
+      (query.data?.entities ?? []).filter(isChannelEntity)
+    );
+
+    if (scope !== 'direct_messages' && scope !== 'search') return channels;
+
+    return channels
+      .slice()
+      .sort((left, right) => compareDateDesc(left.updatedAt, right.updatedAt));
   }, []);
 
   return {
@@ -163,7 +181,7 @@ function useChannelsDataSource(
 }
 
 export function useChannelsSources(
-  enabled: (scope: ChannelsQueryScope) => boolean
+  enabled: (scope: ChannelsSourceScope) => boolean
 ): ChannelsSources {
   return {
     channels: useChannelsDataSource('channels', () => enabled('channels')),
@@ -171,6 +189,7 @@ export function useChannelsSources(
       enabled('direct_messages')
     ),
     recents: useChannelsDataSource('recents', () => enabled('recents')),
+    search: useChannelsDataSource('search', () => enabled('search')),
   };
 }
 

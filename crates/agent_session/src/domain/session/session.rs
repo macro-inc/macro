@@ -345,15 +345,12 @@ impl<Token> SessionMachine<Token> {
         if matches!(self.phase, SessionPhase::Live { .. }) {
             // The in-flight turn's answer ends the turn whichever shape it
             // takes: a result carries the stop reason, an error is the agent
-            // refusing the prompt. Either way the agent can take another.
+            // refusing the prompt. The fold reads the frame from the log and
+            // signals the end; the machine only lets go of the turn.
             if let Some((request_id, _)) = &self.in_flight_turn
                 && frame.response_id() == Some(request_id)
             {
-                let (_, action_id) = self
-                    .in_flight_turn
-                    .take()
-                    .expect("checked just above; nothing between the check and the take");
-                effects.push(Effect::TurnEnded { action_id });
+                self.in_flight_turn = None;
                 if self.reload_required {
                     self.begin_reload(effects);
                 }

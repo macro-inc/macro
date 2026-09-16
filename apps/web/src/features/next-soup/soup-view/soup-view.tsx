@@ -453,7 +453,9 @@ export const SoupView = (props: SoupViewProps) => {
         if (owners.length > 0 !== soup.predicates.isActive('company-owner')) {
           soup.predicates.toggle({ and: ['company-owner'] });
         }
-        soupView.setViewMode(initialCrmView.viewMode ?? 'board');
+        soupView.setViewMode(
+          initialCrmView.viewMode ?? (isTouchDevice() ? 'list' : 'board')
+        );
       }
     });
   });
@@ -741,6 +743,11 @@ export const SoupView = (props: SoupViewProps) => {
             setPreviewOpenPreference(open);
         }}
       />
+      <Show when={soupView.source.cachedMail?.()}>
+        <p role="status" class="px-4 py-1 text-xs text-ink-muted">
+          Showing cached mail. Only synchronized messages are available.
+        </p>
+      </Show>
       <Show when={applyDefaultCrmView}>
         <CrmDefaultViewLoader />
       </Show>
@@ -763,15 +770,19 @@ export const SoupView = (props: SoupViewProps) => {
             content that is already constrained in both layouts. */}
         <Show
           when={
-            ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isTouchDevice() &&
+            ENABLE_UNIFIED_LIST_AI_INPUT &&
             !isInboxView() &&
             !panel.handle.isControllerSplit() &&
             !isBoardRendered() &&
             !isComponentListView('search')
           }
         >
-          <SoupChatInput />
+          <div class="absolute bottom-0 inset-x-px pb-2.5 px-2 flex justify-center pointer-events-none">
+            <div class="pointer-events-auto w-full min-w-0 max-w-3xl">
+              <SoupChatInput />
+            </div>
+          </div>
         </Show>
       </Suspense>
     </div>
@@ -938,6 +949,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     isFetching: source.isFetching,
     isFetchingNextPage: source.isFetchingNextPage,
     fetchNextPage: source.fetchNextPage,
+    error: source.error,
   });
 
   // Register entity action hotkeys
@@ -1331,7 +1343,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                 <Match when={showLoadError()}>
                   <div
                     ref={setEmptyStateRef}
-                    class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+                    class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
                     <LoadErrorPanel onRetry={retryLoad} />
                   </div>
@@ -1363,7 +1375,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                 <Match when={showEmptyState()}>
                   <div
                     ref={setEmptyStateRef}
-                    class="flex-1 min-h-0 flex flex-col touch:pt-(--mobile-content-inset-top) touch:pb-(--mobile-content-inset-bottom)"
+                    class="flex-1 min-h-0 flex flex-col touch:pb-(--mobile-content-inset-bottom)"
                   >
                     <EmptyState
                       listView={currentView()}

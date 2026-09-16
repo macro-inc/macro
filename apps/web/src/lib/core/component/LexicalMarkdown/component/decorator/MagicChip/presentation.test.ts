@@ -323,6 +323,30 @@ describe('deriveMagicChipPresentation', () => {
     });
   });
 
+  it("shows the runtime's reason under a failed turn", () => {
+    const presentation = deriveMagicChipPresentation({
+      persistedStatus: 'acp_ready',
+      response: response({
+        parts: [],
+        stop: {
+          kind: 'failed',
+          message:
+            "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again.",
+        },
+      }),
+    });
+
+    expect(presentation).toEqual({
+      kind: 'working',
+      activity: {
+        label: "Agent couldn't answer",
+        detail:
+          "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again.",
+        busy: false,
+      },
+    });
+  });
+
   it('settles into final markdown without completion chrome', () => {
     const presentation = deriveMagicChipPresentation({
       persistedStatus: 'booting',
@@ -355,7 +379,6 @@ describe('deriveMagicChipPresentation', () => {
         },
       },
       canAnswer: true,
-      ownerName: 'Alice Owner',
     };
 
     it('outranks whatever else the open turn is doing, keeping the answer so far', () => {
@@ -461,7 +484,6 @@ describe('presentationStatus', () => {
       message: 'Which?',
       request: { kind: 'unrecognized' as const, mode: 'x', raw: {} },
     },
-    ownerName: 'Alice Owner',
   };
 
   it('reads the activity while the agent works or writes', () => {
@@ -485,7 +507,7 @@ describe('presentationStatus', () => {
         markdown: '',
         asking: { ...question, canAnswer: false },
       })
-    ).toEqual({ label: 'Waiting for Alice Owner', busy: false });
+    ).toEqual({ label: 'Waiting for an editor', busy: false });
   });
 
   it('reads Done once settled', () => {

@@ -9,7 +9,7 @@ use tracing::{
 
 const PATCH_SELECTION: &str = r#"
     __typename
-    ... on SoupUpdated { item { __typename id displayName cacheProjection } }
+    ... on SoupUpdated { item { __typename id displayName cacheProjection ... on GraphqlSoupChat { model } } }
     ... on GraphqlCacheDeletion { graphqlTypeName entityId }
 "#;
 
@@ -136,6 +136,24 @@ async fn later_batches_can_update_the_same_entity_again() {
         );
     }
     assert_eq!(calls.load(Ordering::SeqCst), 2);
+}
+
+#[tokio::test]
+async fn chat_updates_hydrate_the_saved_model() {
+    let soup = CountingSoupService::default();
+    let chat_id = Uuid::from_u128(91);
+    soup.set_raw_response(vec![soup_chat(chat_id)]);
+    let responses = subscription_responses(
+        soup,
+        vec![Patch::Updated(
+            ModelEntityType::Chat.with_entity_string(chat_id.to_string()),
+        )],
+    )
+    .await;
+    assert_eq!(responses.len(), 1);
+    assert!(responses[0].errors.is_empty(), "{:?}", responses[0].errors);
+    let data = responses[0].data.clone().into_json().unwrap();
+    assert_eq!(data["soupUpdates"][0]["item"]["model"], "openai/gpt-5.6");
 }
 
 #[tokio::test]

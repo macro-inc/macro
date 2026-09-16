@@ -97,9 +97,10 @@ function matchesTab(
     .exhaustive();
 }
 
-export function useInboxDataSource(
-  state: InboxDataSourceInput
-): InboxDataSource {
+/** Shared feed membership for the Inbox list and its sidebar unread indicator. */
+export function useInboxEntitiesQuery(
+  state: Pick<InboxDataSourceInput, 'tab' | 'facets'>
+) {
   const notificationSource = useGlobalNotificationSource();
   const userId = useUserId();
 
@@ -153,6 +154,15 @@ export function useInboxDataSource(
       )
       .filter((entity) => matchesTab(entity, context.tab, notificationSource));
   };
+
+  return { query, viewContext, transformEntities };
+}
+
+export function useInboxDataSource(
+  state: InboxDataSourceInput
+): InboxDataSource {
+  const { query, viewContext, transformEntities } =
+    useInboxEntitiesQuery(state);
 
   const { entityPool } = useSearchContext();
   const localPool = createMemo(() => {

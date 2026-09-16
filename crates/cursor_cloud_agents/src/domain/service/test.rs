@@ -4,11 +4,11 @@ use crate::domain::event::{CursorEvent, InteractionUpdate, ToolCallEvent, Trunca
 use crate::domain::model::{
     McpHeader, McpServer, McpTransport, RepoUrl, RunListing, RunOutcome, RunStatus,
 };
-use crate::testing::{CursorCall, FakeCursor, FixedRepos, RecordingNotifier};
+use crate::testing::{CursorCall, FakeCursor, FixedChooser, RecordingNotifier};
 use agent_client_protocol::schema::v1::{SessionUpdate, StopReason, ToolCallStatus};
 use std::path::Path;
 
-type Service = CursorSessionService<FakeCursor, RecordingNotifier, FixedRepos>;
+type Service = CursorSessionService<FakeCursor, RecordingNotifier, FixedChooser>;
 
 fn service(repo: Option<RepoUrl>) -> (Arc<Service>, FakeCursor, RecordingNotifier) {
     let cursor = FakeCursor::new();
@@ -16,7 +16,7 @@ fn service(repo: Option<RepoUrl>) -> (Arc<Service>, FakeCursor, RecordingNotifie
     let service = Arc::new(CursorSessionService::new(
         cursor.clone(),
         notifier.clone(),
-        FixedRepos(repo),
+        FixedChooser(repo.clone(), repo.is_some()),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
     ));
     (service, cursor, notifier)
@@ -94,6 +94,7 @@ fn finished(run: &str) -> CursorEvent {
         status: RunStatus::Finished,
         text: None,
         duration_ms: Some(1),
+        git: None,
     }
 }
 
@@ -103,6 +104,7 @@ fn cancelled(run: &str) -> CursorEvent {
         status: RunStatus::Cancelled,
         text: None,
         duration_ms: Some(1),
+        git: None,
     }
 }
 
@@ -143,6 +145,7 @@ async fn first_prompt_creates_the_agent_with_the_session_repo() {
         vec![CursorCall::CreateAgent(
             "do it".to_owned(),
             Some(repo),
+            true,
             Vec::new(),
             None
         )]
@@ -553,6 +556,7 @@ async fn a_cancelled_result_reports_cancelled_without_a_client_cancel() {
             status: RunStatus::Cancelled,
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -627,6 +631,7 @@ async fn an_error_run_status_fails_the_turn() {
             status: RunStatus::Error,
             text: None,
             duration_ms: Some(1),
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -658,6 +663,7 @@ async fn an_unknown_terminal_status_fails_the_turn() {
             status: RunStatus::Unknown("EXPLODED".to_owned()),
             text: None,
             duration_ms: None,
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -754,6 +760,7 @@ async fn a_cancelled_run_reports_cancelled_from_its_result() {
             status: RunStatus::Cancelled,
             text: None,
             duration_ms: Some(1),
+            git: None,
         })
         .expect("stream open");
     events.send(CursorEvent::Done).expect("stream open");
@@ -795,6 +802,7 @@ async fn session_mcp_servers_reach_agent_creation() {
         vec![CursorCall::CreateAgent(
             "go".to_owned(),
             None,
+            false,
             servers,
             None
         )]
@@ -818,6 +826,7 @@ async fn a_session_without_mcp_servers_forwards_none() {
         vec![CursorCall::CreateAgent(
             "go".to_owned(),
             None,
+            false,
             Vec::new(),
             None
         )]
@@ -984,7 +993,7 @@ async fn new_sessions_never_collide_with_restored_ids() {
         None,
     );
 
-    let fresh = service.new_session(Path::new("/workspace"), Vec::new());
+    let fresh = service.new_session(Path::new(""), Vec::new());
     assert_ne!(fresh, SessionId::new("cursor-acp-1"));
     assert!(service.has_session(&SessionId::new("cursor-acp-1")));
     assert!(service.has_session(&fresh));
@@ -1261,7 +1270,7 @@ async fn restore_recovers_runs_after_the_durable_watermark_once() {
     let service = CursorSessionService::new(
         cursor.clone(),
         notifier.clone(),
-        FixedRepos(None),
+        FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
     );
     let session = SessionId::new("cursor-acp-restored");
@@ -1377,7 +1386,7 @@ async fn restore_without_a_watermark_hydrates_every_run_on_load() {
     let service = CursorSessionService::new(
         cursor.clone(),
         notifier.clone(),
-        FixedRepos(None),
+        FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
     );
     let session = SessionId::new("cursor-acp-restored");
@@ -1440,7 +1449,7 @@ async fn restore_waits_for_session_load_before_recovering_runs() {
     let service = CursorSessionService::new(
         cursor.clone(),
         notifier.clone(),
-        FixedRepos(None),
+        FixedChooser(None, false),
         Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
     );
     let session = SessionId::new("cursor-acp-restored");
@@ -1649,7 +1658,7 @@ async fn durable_multiturn_load_replays_full_history_and_supports_continuation()
     let service = CursorSessionService::new(
         cursor.clone(),
         live.clone(),
-        FixedRepos(None),
+        FixedChooser(None, false),
         journal.clone(),
     );
     let id = service.new_session(Path::new(""), vec![]);
@@ -1675,7 +1684,7 @@ async fn durable_multiturn_load_replays_full_history_and_supports_continuation()
     let restored = Arc::new(CursorSessionService::new(
         cursor.clone(),
         replayed.clone(),
-        FixedRepos(None),
+        FixedChooser(None, false),
         journal.clone(),
     ));
     restored.restore_session(id.clone(), Some(CursorAgentId::new("bc-fake")), None, None);
@@ -1758,7 +1767,7 @@ async fn append_failure_publishes_nothing_and_never_advances_delivery_or_retries
     let service = CursorSessionService::new(
         cursor.clone(),
         output.clone(),
-        FixedRepos(None),
+        FixedChooser(None, false),
         journal.clone(),
     );
     let id = service.new_session(Path::new(""), vec![]);
@@ -2310,7 +2319,7 @@ async fn model_resolution_precedes_intent_and_definite_rejection_aborts_it() {
         CursorSessionService::new(
             cursor.clone(),
             RecordingNotifier::new(),
-            FixedRepos(None),
+            FixedChooser(None, false),
             journal.clone(),
         )
         .with_default_model(Some("model".into())),
@@ -2508,4 +2517,150 @@ async fn actual_load_frames_restore_terminal_outcomes_and_leave_partial_tail_ope
             );
         }
     }
+}
+
+/// A repository the Cursor account has not connected is the one rejection a
+/// person can fix, and they can only fix it if the error says which
+/// repository and what to do — not Cursor's raw error body.
+#[tokio::test]
+async fn an_unconnected_repository_reaches_the_client_as_an_instruction() {
+    let repo = RepoUrl::parse("https://github.com/macro-inc/macro").expect("an https remote");
+    let (service, cursor, _output) = service(Some(repo));
+    let id = service.new_session(Path::new(""), vec![]);
+    cursor.script_repository_rejection();
+
+    let error = service
+        .prompt(&id, "do the thing")
+        .await
+        .expect_err("an unconnected repository fails the prompt");
+
+    // What `inbound::acp` puts in the JSON-RPC error, verbatim.
+    assert_eq!(
+        error.to_string(),
+        "Cursor can't access macro-inc/macro. Connect the repository to Cursor's GitHub app, then prompt again."
+    );
+    assert!(
+        !error.to_string().contains("repository_access"),
+        "cursor's own body stays in the logs: {error}"
+    );
+    assert!(
+        service
+            .session(&id)
+            .expect("session exists")
+            .state
+            .lock()
+            .expect("state poisoned")
+            .journal_entries
+            .iter()
+            .any(|entry| matches!(entry.input, JournalInput::PromptAborted(_))),
+        "a rejected prompt is journalled as aborted"
+    );
+}
+
+#[tokio::test]
+async fn repository_setup_failure_is_retryable_and_not_reported_as_prompt_ambiguity() {
+    struct UnavailableChooser;
+    impl RepositoryChooser for UnavailableChooser {
+        async fn choose(
+            &self,
+            _: &str,
+            _: &Path,
+        ) -> Result<crate::domain::ports::SessionIntent, rootcause::Report> {
+            Err(rootcause::report!("GitHub repository listing unavailable"))
+        }
+    }
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        UnavailableChooser,
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+    );
+    let id = service.new_session(Path::new(""), vec![]);
+    for _ in 0..2 {
+        let error = service
+            .prompt(&id, "update macro-inc/macro README")
+            .await
+            .unwrap_err();
+        assert!(
+            error
+                .to_string()
+                .contains("Couldn't prepare repository access")
+        );
+    }
+    assert!(
+        cursor.calls().is_empty(),
+        "failed setup never creates remote work"
+    );
+}
+
+#[tokio::test]
+async fn native_pr_is_reported_to_the_host_without_cursor_metadata() {
+    let (service, cursor, notifier) = service(None);
+    let session = service.new_session(Path::new(""), Vec::new());
+    let events = cursor.script_stream();
+    events
+        .send(CursorEvent::Result {
+            run_id: CursorRunId::new("run-fake-1"),
+            status: RunStatus::Finished,
+            text: Some("Done".into()),
+            duration_ms: None,
+            git: Some(crate::domain::event::GitState {
+                branches: vec![crate::domain::event::GitBranch {
+                    repo_url: "github.com/org/repo".into(),
+                    branch: Some("fix".into()),
+                    pr_url: Some("https://github.com/org/repo/pull/1".into()),
+                }],
+            }),
+        })
+        .unwrap();
+    drop(events);
+    service.prompt(&session, "fix it").await.unwrap();
+    assert_eq!(
+        notifier.pull_requests(),
+        ["https://github.com/org/repo/pull/1"]
+    );
+    assert!(
+        !notifier
+            .updates()
+            .iter()
+            .any(|(_, update)| matches!(update, SessionUpdate::SessionInfoUpdate(_)))
+    );
+}
+
+#[tokio::test]
+async fn repository_choice_receives_each_sessions_working_directory() {
+    #[derive(Default)]
+    struct RecordingChooser(Mutex<Vec<std::path::PathBuf>>);
+    impl RepositoryChooser for RecordingChooser {
+        async fn choose(
+            &self,
+            _prompt: &str,
+            cwd: &Path,
+        ) -> Result<crate::domain::ports::SessionIntent, rootcause::Report> {
+            self.0.lock().unwrap().push(cwd.to_path_buf());
+            Ok(crate::domain::ports::SessionIntent::default())
+        }
+    }
+    let cursor = FakeCursor::new();
+    let service = CursorSessionService::new(
+        cursor.clone(),
+        RecordingNotifier::new(),
+        RecordingChooser::default(),
+        Arc::new(crate::outbound::memory_journal::MemoryJournal::default()),
+    );
+    for cwd in ["/workspace/one", "/workspace/two"] {
+        let id = service.new_session(Path::new(cwd), vec![]);
+        let events = cursor.script_stream();
+        events.send(finished("run")).unwrap();
+        events.send(CursorEvent::Done).unwrap();
+        service.prompt(&id, "work here").await.unwrap();
+    }
+    assert_eq!(
+        *service.chooser.0.lock().unwrap(),
+        vec![
+            std::path::PathBuf::from("/workspace/one"),
+            std::path::PathBuf::from("/workspace/two")
+        ]
+    );
 }

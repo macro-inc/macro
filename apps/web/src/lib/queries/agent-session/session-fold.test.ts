@@ -39,7 +39,7 @@ function event(session: string, n: number) {
   return { agentSessionId: session, ...frame(n) };
 }
 
-const bot = { id: 'bot-id', name: 'Agent' };
+const bot = { id: 'bot-id', name: 'Agent', handle: 'agent' };
 const message = { agentSessionId: 'session-a' } as FoldedMessage;
 const metadata = {
   model: null,

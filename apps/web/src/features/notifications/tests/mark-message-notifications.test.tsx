@@ -21,7 +21,7 @@ function documentMentionNotification(
     entity_id: 'channel-1',
     entity_type: 'channel',
     created_at: '2026-08-17T00:00:00.000Z',
-    done: false,
+    state: 'unseen',
     notification_event_type: 'document_mention',
     notification_metadata: {
       tag: 'document_mention',
@@ -45,6 +45,7 @@ describe('MarkMessageNotifications', () => {
     ];
     bulkMarkAsRead.mockImplementation(async (notifications) => {
       for (const notification of notifications) {
+        notification.state = 'seen';
         notification.viewed_at = '2026-08-17T00:01:00.000Z';
       }
     });

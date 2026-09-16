@@ -12,7 +12,7 @@ import type { SyncServiceSource } from '@macro-inc/collaboration/sync-service/so
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { Telemetry } from '@macro-inc/observability';
 import type { LanguageModel } from 'ai';
-import { supervisor } from './ai-editing/agents';
+import { fastEditor, supervisor } from './ai-editing/agents';
 import type { DocumentOp } from './ai-editing/editor';
 import type { CodeRunner } from './ai-editing/runtime';
 import type { UsageEntry } from './ai-editing/token-tracker';
@@ -21,10 +21,19 @@ import { serializeWithXml } from './ai-editing/utils';
 import { EditingWorkspace } from './editing-workspace';
 import { buildTraceSession, type TraceSession } from './trace-log';
 
+export type Provider = 'anthropic' | 'cerebras' | 'openai' | 'google';
+
 export type Model = {
-  provider: 'anthropic' | 'cerebras' | 'openai';
+  provider: Provider;
   model: string;
 };
+
+/**
+ * `supervised` is the full interpreter → supervisor → coders pipeline.
+ * `fast` skips all of that: one model sees the whole document and edits it
+ * directly through `runCode`. See ai-editing/agents/fast.ts.
+ */
+export type EditMode = 'supervised' | 'fast';
 
 export type Models = {
   supervisor: Model;
@@ -32,10 +41,23 @@ export type Models = {
   coding: Model;
 };
 
-export type ResolvedModels = {
+/** The three roles of the supervised pipeline. */
+export type SupervisedModels = {
   supervisor: LanguageModel;
   interpret: LanguageModel;
+  /** Fresh fallback chain per coder, so one coder's fallback state does not
+   *  leak into a sibling running in parallel. */
   coding: () => LanguageModel;
+};
+
+/**
+ * Only the pipeline the request runs is resolved, so a request never touches
+ * a provider it will not call: a supervised edit must not fail because the
+ * fast chain's key is missing, and vice versa.
+ */
+export type ResolvedModels = {
+  supervised?: SupervisedModels;
+  fast?: LanguageModel;
 };
 
 export type RunEditArgs = {
@@ -44,6 +66,7 @@ export type RunEditArgs = {
   documentId: string;
   prompt: string;
   models: ResolvedModels;
+  mode?: EditMode;
   /** Snippet runner — QuickJS sandbox in prod, `new Function` in local dev. */
   runner?: CodeRunner;
   typingAnimations?: boolean;
@@ -108,6 +131,10 @@ export async function runEditSession(
   // here too would double the content — so route live sync to a no-op sink
   // that acks everything and forwards nothing.
   const shouldPropagate = args.propagate ?? true;
+  // Typing animations exist for people watching the shared doc. With no
+  // propagation nobody can watch, so every animation pause is pure latency —
+  // measured at 3.4 s of a 6.3 s fast-mode step.
+  const typingAnimations = shouldPropagate ? args.typingAnimations : false;
   const liveSource: LiveSyncSource = shouldPropagate
     ? source
     : createNoopLiveSyncSource(args.documentId);
@@ -135,6 +162,16 @@ export async function runEditSession(
   const sessionId = crypto.randomUUID();
   const startedAt = new Date();
   try {
+    const shared = {
+      borrowWriter: () => workspace.borrowWriter(),
+      typingAnimations,
+      sleep: args.sleep,
+      signal: args.signal,
+      runner: args.runner,
+      onOps: (ops: DocumentOp[]) => allOps.push(...ops),
+      onCoderResult: (codes: CoderRunCode[]) => coderCodeBlocks.push([codes]),
+      onEditTrace: (edit: DispatchEditTrace) => dispatchEditTraces.push([edit]),
+    };
     const {
       totalUsage,
       steps,
@@ -142,17 +179,29 @@ export async function runEditSession(
       intent,
       interpretDurationMs,
       clarification,
-    } = await supervisor(workspace.session, args.prompt, args.models, {
-      borrowWriter: () => workspace.borrowWriter(),
-      typingAnimations: args.typingAnimations,
-      sleep: args.sleep,
-      signal: args.signal,
-      interpret: args.interpret,
-      runner: args.runner,
-      onOps: (ops) => allOps.push(...ops),
-      onCoderResult: (codes) => coderCodeBlocks.push([codes]),
-      onEditTrace: (edit) => dispatchEditTraces.push([edit]),
-    });
+    } = await (args.mode === 'fast' ? runFast() : runSupervised());
+
+    async function runSupervised() {
+      const models = args.models.supervised;
+      if (!models)
+        throw new Error('supervised mode requires models.supervised');
+      return supervisor(workspace.session, args.prompt, models, {
+        ...shared,
+        interpret: args.interpret,
+      });
+    }
+
+    async function runFast() {
+      const model = args.models.fast;
+      if (!model) throw new Error('fast mode requires models.fast');
+      const result = await fastEditor(
+        workspace.session,
+        args.prompt,
+        model,
+        shared
+      );
+      return { ...result, intent: '', interpretDurationMs: undefined };
+    }
 
     // Drain the queued propagates (plus a final catch-all sync) and ensure every
     // commit reached the server before we disconnect. No-op sink when not

@@ -10,6 +10,7 @@ import {
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import type {
+  AgentSessionEntity,
   CalendarEventEntity,
   CalendarEventEntityTime,
   CallEntity,
@@ -54,6 +55,7 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match, P } from 'ts-pattern';
+import { mapAgentSessionSearchResult } from './agent-session-search';
 
 type InnerSearchResult =
   | DocumentSearchResult
@@ -67,6 +69,7 @@ type DisplayableSoupItem = SoupPage['items'][number];
 type SoupDocument = Extract<DisplayableSoupItem, { tag: 'document' }>['data'];
 
 type SoupEntity =
+  | AgentSessionEntity
   | DocumentEntity
   | ChatEntity
   | ProjectEntity
@@ -313,6 +316,8 @@ export const useSearchResponseItemMapper = () => {
     searchQuery: string
   ): (WithSearch<EntityData> | undefined)[] => {
     switch (result.type) {
+      case 'agentSession':
+        return [mapAgentSessionSearchResult(result)];
       case 'company': {
         const primaryDomain = result.domains[0]?.domain;
         const nameHighlight = result.nameHighlighted
@@ -698,6 +703,7 @@ function toReferencedEntity(
       P.union(
         'document',
         'chat',
+        'agent_session',
         'project',
         'channel',
         'channel_message',
@@ -721,6 +727,12 @@ export const mapApiSoupItemToEntity = (
   item: DisplayableSoupItem
 ): SoupEntity => {
   const entity = match(item)
+    .with({ tag: 'agentSession' }, (item) => ({
+      ...item.data,
+      type: 'agent_session' as const,
+      name: item.data.name || 'Agent session',
+      frecencyScore: item.frecency_score,
+    }))
     .with({ tag: 'chat' }, (item) => ({
       ...item.data,
       createdAt: item.data.createdAt,

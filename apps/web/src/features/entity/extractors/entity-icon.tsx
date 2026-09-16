@@ -13,8 +13,10 @@ import type { StreamEvent } from '@service-connection/generated/schemas';
 import { Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
+import { ChatProviderIcon } from '../components/ChatProviderIcon';
 import type {
   ChannelEntity,
+  ChatEntity,
   EntityData,
   GithubPullRequestEntity,
 } from '../types/entity';
@@ -123,6 +125,7 @@ export function EntityIcon(props: EntityIconProps) {
         .with({ type: 'document' }, ({ fileType }) => {
           return fileType ?? 'default';
         })
+        .with({ type: 'agent_session' }, () => 'agent')
         .with({ type: 'chat' }, () => 'chat')
         .with({ type: 'project' }, () => 'project')
         .with({ type: 'email' }, ({ isRead, hasIcsAttachment }) =>
@@ -152,6 +155,7 @@ export function EntityIcon(props: EntityIconProps) {
   };
 
   const isDirectMessage = () => iconType() === 'direct_message';
+  const isChatEntity = () => props.entity.type === 'chat';
 
   return (
     <Switch
@@ -177,6 +181,15 @@ export function EntityIcon(props: EntityIconProps) {
           class={props.class}
           suppressClick={props.suppressClick}
           showTooltip={props.showTooltip}
+          weight={props.weight}
+        />
+      </Match>
+      <Match when={isChatEntity()}>
+        <ChatProviderIcon
+          id={props.entity.id}
+          model={(props.entity as ChatEntity).model}
+          animate={props.streamState?.type === 'created'}
+          class={`size-full ${props.class ?? ''}`}
           weight={props.weight}
         />
       </Match>

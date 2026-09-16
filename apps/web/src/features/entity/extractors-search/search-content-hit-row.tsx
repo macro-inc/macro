@@ -49,7 +49,7 @@ export function SearchContentHitRow(props: SearchContentHitRowProps) {
             </span>
           </div>
         </Show>
-        <Show when={props.hit.type === 'pdf'}>
+        <Show when={props.hit.type === 'pdf' || props.hit.type === 'agent'}>
           <SearchLoc hit={props.hit} />
         </Show>
         <SearchContent hit={props.hit} />

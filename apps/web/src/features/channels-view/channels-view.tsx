@@ -1,4 +1,5 @@
 import { ViewShell } from '@app/components/view-shell';
+import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
@@ -36,6 +37,7 @@ function ChannelsViewRoot() {
   const orchestrator = useGlobalBlockOrchestrator();
   const { state, setAsideWidth, setMobileTab, setRailMode } = useChannelsView();
   const [workspace, setWorkspace] = createSignal<HTMLDivElement>();
+  const [railSearchOpen, setRailSearchOpen] = createSignal(false);
   const workspaceSize = createElementSize(workspace);
   const breakpoints = createSizeBreakpoints(
     () => workspaceSize.width ?? undefined,
@@ -61,18 +63,20 @@ function ChannelsViewRoot() {
           preserveDuringResize: false,
         };
 
-  const sources = useChannelsSources((scope) =>
-    isTouchDevice()
-      ? state.mobileTab === scope
-      : scope === 'recents'
-        ? state.tab === 'recents'
-        : state.tab === 'browse'
-  );
+  const sources = useChannelsSources((scope) => {
+    if (isTouchDevice()) return scope !== 'search' && state.mobileTab === scope;
+    if (railSearchOpen()) return scope === 'search';
+    if (scope === 'search') return false;
+    return scope === 'recents'
+      ? state.tab === 'recents'
+      : state.tab === 'browse';
+  });
   const loadedChannels = createMemo(() =>
     deduplicateChannels([
       sources.channels.items(),
       sources.direct_messages.items(),
       sources.recents.items(),
+      sources.search.items(),
     ])
   );
   const loadedSelectedChannel = createMemo(() =>
@@ -126,6 +130,8 @@ function ChannelsViewRoot() {
                         sources={sources}
                         mode={railMode()}
                         onModeChange={setRailMode}
+                        searchOpen={railSearchOpen()}
+                        onSearchOpenChange={setRailSearchOpen}
                       />
                     </ViewShell.Aside>
                     <ViewShell.Main class="overflow-hidden">
@@ -168,22 +174,24 @@ function ChannelsViewRoot() {
                 </div>
               }
             >
-              <Suspense
-                fallback={
-                  <div class="grid size-full place-items-center text-ink-muted">
-                    <SpinnerIcon
-                      aria-label="Loading channels"
-                      class="size-5 animate-spin"
-                    />
-                  </div>
-                }
-              >
-                <ChannelsMobileView
-                  source={sources[state.mobileTab]}
-                  tab={state.mobileTab}
-                  onTabChange={setMobileTab}
-                />
-              </Suspense>
+              <MaybeSoupEntityActionDrawerManager>
+                <Suspense
+                  fallback={
+                    <div class="grid size-full place-items-center text-ink-muted">
+                      <SpinnerIcon
+                        aria-label="Loading channels"
+                        class="size-5 animate-spin"
+                      />
+                    </div>
+                  }
+                >
+                  <ChannelsMobileView
+                    source={sources[state.mobileTab]}
+                    tab={state.mobileTab}
+                    onTabChange={setMobileTab}
+                  />
+                </Suspense>
+              </MaybeSoupEntityActionDrawerManager>
             </Show>
           </SplitPanel.Body>
         </SplitPanel.Root>

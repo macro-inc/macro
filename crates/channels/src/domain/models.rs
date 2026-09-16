@@ -59,6 +59,9 @@ pub struct ChannelMessageFilters {
     /// When set, only return top-level messages created at or after this timestamp.
     #[serde(default)]
     pub created_after: Option<DateTime<Utc>>,
+    /// When set, only return top-level messages created strictly after this timestamp.
+    #[serde(default)]
+    pub created_after_exclusive: Option<DateTime<Utc>>,
     /// When set, only return top-level messages created before this timestamp.
     #[serde(default)]
     pub created_before: Option<DateTime<Utc>>,
@@ -81,26 +84,8 @@ pub struct ChannelMessageFilters {
     pub notification_filters: NotificationFilters,
 }
 
-/// Notification state filters for channel message queries.
-#[derive(Debug, Clone, Copy, Default, Deserialize)]
-#[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-pub struct NotificationFilters {
-    /// Filter by notification done state. `Some(true)` selects done
-    /// notifications; `Some(false)` selects not-done notifications.
-    #[serde(default)]
-    pub done: Option<bool>,
-    /// Filter by notification seen state. `Some(true)` selects seen
-    /// notifications; `Some(false)` selects not-seen notifications.
-    #[serde(default)]
-    pub seen: Option<bool>,
-}
-
-impl NotificationFilters {
-    /// Returns true when no notification constraints are requested.
-    pub fn is_empty(&self) -> bool {
-        self.done.is_none() && self.seen.is_none()
-    }
-}
+/// Notification state filters shared with all other item types.
+pub use item_filters::NotificationFilters;
 
 /// Where a channel message sits in the channel/thread model.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -814,6 +799,8 @@ impl SimpleMention {
 /// Shareable entity type referenced by a channel message.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ReferencedShareItemType {
+    /// Agent session entity.
+    AgentSession,
     /// Document entity.
     Document,
     /// Chat entity.
@@ -830,6 +817,7 @@ impl ReferencedShareItemType {
     /// Parse a raw entity type from the transport/storage representation.
     pub fn from_raw(raw: &str) -> Option<Self> {
         match raw {
+            "agent_session" => Some(Self::AgentSession),
             "document" => Some(Self::Document),
             "chat" => Some(Self::Chat),
             "project" => Some(Self::Project),
@@ -842,6 +830,7 @@ impl ReferencedShareItemType {
     /// Return the storage representation of this item type.
     pub fn as_str(self) -> &'static str {
         match self {
+            Self::AgentSession => "agent_session",
             Self::Document => "document",
             Self::Chat => "chat",
             Self::Project => "project",

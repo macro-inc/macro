@@ -174,6 +174,7 @@ export const ContentSearch = z.object({
   entityTypes: z
     .array(
       z.enum([
+        'agent_sessions',
         'documents',
         'chats',
         'emails',
@@ -791,6 +792,62 @@ export const SearchToolResponse = z.object({
                 ),
               }),
               z.object({ type: z.literal('calendarEvent') })
+            ),
+            z.intersection(
+              z.object({
+                id: z.string().uuid(),
+                name: z.string(),
+                owner_id: z.string(),
+                bot_id: z.string().uuid(),
+                created_at: z.string().datetime({ offset: true }),
+                updated_at: z.string().datetime({ offset: true }),
+                agent_session_search_results: z.array(
+                  z.object({
+                    goto: z
+                      .union([
+                        z.object({
+                          message_turn: z.number().int().gte(0),
+                          author: z.any().superRefine((x, ctx) => {
+                            const schemas = [
+                              z.literal('user'),
+                              z.literal('agent'),
+                            ];
+                            const errors = schemas.reduce<z.ZodError[]>(
+                              (errors, schema) =>
+                                ((result) =>
+                                  result.error
+                                    ? [...errors, result.error]
+                                    : errors)(schema.safeParse(x)),
+                              []
+                            );
+                            if (schemas.length - errors.length !== 1) {
+                              ctx.addIssue({
+                                path: ctx.path,
+                                code: 'invalid_union',
+                                unionErrors: errors,
+                                message:
+                                  'Invalid input: Should pass single schema',
+                              });
+                            }
+                          }),
+                        }),
+                        z.null(),
+                      ])
+                      .optional(),
+                    highlight: z.object({
+                      name: z.union([z.string(), z.null()]).optional(),
+                      content: z.array(z.string()).optional(),
+                      user_id: z.union([z.string(), z.null()]).optional(),
+                      sender: z.union([z.string(), z.null()]).optional(),
+                      recipients: z.array(z.string()).optional(),
+                      cc: z.array(z.string()).optional(),
+                      bcc: z.array(z.string()).optional(),
+                    }),
+                    score: z.union([z.number(), z.null()]).optional(),
+                  })
+                ),
+              }),
+              z.object({ type: z.literal('agentSession') })
             ),
           ];
           const errors = schemas.reduce<z.ZodError[]>(
@@ -1458,6 +1515,7 @@ export const DisplayResultsResponse = z.object({ message: z.string() });
 export const EditDocument = z.object({
   document_id: z.string(),
   instructions: z.string(),
+  fast: z.boolean().optional(),
 });
 
 export const EditDocumentResponse = z.object({
@@ -2402,8 +2460,35 @@ export const ListLabelsResponse = z.object({
 
 export const ListNotifications = z.object({
   limit: z.union([z.number().int().gte(0), z.null()]).optional(),
-  done: z.union([z.boolean(), z.null()]).optional(),
-  seen: z.union([z.boolean(), z.null()]).optional(),
+  states: z
+    .union([
+      z.array(
+        z.any().superRefine((x, ctx) => {
+          const schemas = [
+            z.literal('unseen'),
+            z.literal('seen'),
+            z.literal('done'),
+          ];
+          const errors = schemas.reduce<z.ZodError[]>(
+            (errors, schema) =>
+              ((result) => (result.error ? [...errors, result.error] : errors))(
+                schema.safeParse(x)
+              ),
+            []
+          );
+          if (schemas.length - errors.length !== 1) {
+            ctx.addIssue({
+              path: ctx.path,
+              code: 'invalid_union',
+              unionErrors: errors,
+              message: 'Invalid input: Should pass single schema',
+            });
+          }
+        })
+      ),
+      z.null(),
+    ])
+    .optional(),
   includeTypes: z
     .union([
       z.array(
@@ -2419,6 +2504,7 @@ export const ListNotifications = z.object({
           'github',
           'reminder',
           'calendar',
+          'agent',
         ])
       ),
       z.null(),
@@ -2445,6 +2531,7 @@ export const ListNotifications = z.object({
             'crm_contact',
             'reminder',
             'skill',
+            'scheduled_action',
           ]),
           id: z.string(),
         })
@@ -2461,8 +2548,28 @@ export const ListNotificationsResponse = z.object({
       eventType: z.string(),
       entityType: z.string(),
       entityId: z.string(),
-      seen: z.boolean(),
-      done: z.boolean(),
+      state: z.any().superRefine((x, ctx) => {
+        const schemas = [
+          z.literal('unseen'),
+          z.literal('seen'),
+          z.literal('done'),
+        ];
+        const errors = schemas.reduce<z.ZodError[]>(
+          (errors, schema) =>
+            ((result) => (result.error ? [...errors, result.error] : errors))(
+              schema.safeParse(x)
+            ),
+          []
+        );
+        if (schemas.length - errors.length !== 1) {
+          ctx.addIssue({
+            path: ctx.path,
+            code: 'invalid_union',
+            unionErrors: errors,
+            message: 'Invalid input: Should pass single schema',
+          });
+        }
+      }),
       createdAt: z.string(),
       metadata: z.any(),
       senderId: z.union([z.string(), z.null()]).optional(),
@@ -2791,6 +2898,7 @@ export const NameSearch = z.object({
   entityTypes: z
     .array(
       z.enum([
+        'agent_sessions',
         'documents',
         'chats',
         'emails',

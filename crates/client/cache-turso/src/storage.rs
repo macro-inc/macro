@@ -1479,6 +1479,22 @@ impl PredicateIndexStorage for TursoStorage {
         keys: &[EntityKey<'static>],
         projection_keys: &[PredicateRecordKey],
     ) -> Result<(), Self::Error> {
+        self.delete_batch_with_projection_changes(
+            keys,
+            projection_keys
+                .iter()
+                .cloned()
+                .map(ProjectionMutation::Delete)
+                .collect(),
+        )
+        .await
+    }
+
+    async fn delete_batch_with_projection_changes(
+        &mut self,
+        keys: &[EntityKey<'static>],
+        projections: Vec<ProjectionMutation>,
+    ) -> Result<(), Self::Error> {
         self.require_healthy()?;
         let result = (|| {
             let keys = keys
@@ -1505,17 +1521,7 @@ impl PredicateIndexStorage for TursoStorage {
                         key,
                     )?;
                 }
-                for key in projection_keys {
-                    let changed = driver::execute(
-                        &connection,
-                        INDEX_DOCUMENT_DELETE,
-                        vec![text(key.as_str())],
-                    )?;
-                    if !(0..=1).contains(&changed) {
-                        return Err(invariant());
-                    }
-                }
-                Ok(())
+                write_projection_mutations(&connection, projections)
             })
         })();
         self.latch_result(result)
@@ -1809,10 +1815,52 @@ fn write_projection_mutations(
         .filter_map(|(key, state)| state.map(|state| (key, state)))
         .collect::<HashMap<_, _>>();
 
-    for mutation in &mutations {
-        let key = mutation.record_key().clone();
-        apply_authoritative_projection_mutations(&mut states, std::slice::from_ref(mutation));
-        write_projection_state(connection, &key, states.get(&key))?;
+    apply_authoritative_projection_mutations(&mut states, &mutations);
+    // A snapshot can include many child contributions to the same parent.
+    // Preserve mutation order in memory, but persist each final state only once.
+    for key in &keys {
+        write_projection_state(connection, key, states.get(key))?;
+    }
+    if !keys.is_empty() {
+        // Network snapshots and realtime writes must rebase pending member edits
+        // in the same transaction, not leave a shadow based on older authority.
+        let sources = driver::query(connection, QUEUE_SELECT, Vec::new())?
+            .into_iter()
+            .map(|row| {
+                let row = parse_queue_row(&row)?;
+                let source = cache_core::queue::decode_optimistic_source(
+                    &row.optimistic.ok_or_else(invariant)?.optimistic_data_json,
+                )
+                .map_err(|_| invariant())?;
+                Ok((row.id, source))
+            })
+            .collect::<Result<Vec<_>, TursoStorageError>>()?;
+        let layers = sources
+            .iter()
+            .map(
+                |(owner, source)| cache_core::predicate::ProjectionMutationLayer {
+                    owner: *owner,
+                    mutations: &source.projection_mutations,
+                },
+            )
+            .collect::<Vec<_>>();
+        for key in keys {
+            delete_optimistic_projection(connection, &key)?;
+            if let Some(shadow) = cache_core::predicate::compose_effective_optimistic_projection(
+                &key,
+                states.get(&key),
+                &layers,
+            )
+            .map_err(|_| invariant())?
+            {
+                insert_optimistic_projection(
+                    connection,
+                    mutation_id_to_sql(shadow.owner)?,
+                    shadow.state,
+                    shadow.uncertainty,
+                )?;
+            }
+        }
     }
     Ok(())
 }
@@ -2579,6 +2627,18 @@ impl SqlPredicateCompiler {
                 ));
                 name
             }
+            PredicateExpr::ExactExists { attribute } => {
+                let name = self.next_name();
+                for _ in 0..2 {
+                    self.parameters.push(text(profile.token().as_str()));
+                    self.parameters.push(text(partition.as_str()));
+                    self.parameters.push(text(attribute.as_str()));
+                }
+                self.ctes.push(format!(
+                    "{name}(source, document_id) AS (SELECT 0, f.document_id FROM exact_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? UNION SELECT 1, f.document_id FROM optimistic_exact_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?)"
+                ));
+                name
+            }
             PredicateExpr::I64Range {
                 attribute,
                 lower,
@@ -2610,6 +2670,37 @@ impl SqlPredicateCompiler {
                 self.ctes.push(format!(
                     "{name}(source, document_id) AS (SELECT 0, f.document_id FROM integer_facts AS f JOIN effective_documents AS d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range} UNION SELECT 1, f.document_id FROM optimistic_integer_facts AS f JOIN effective_documents AS d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ?{range})"
                 ));
+                name
+            }
+            PredicateExpr::After {
+                attribute,
+                value,
+                key,
+                direction,
+                tie_direction,
+            } => {
+                let name = self.next_name();
+                let cmp = if *direction == SortDirection::Asc {
+                    ">"
+                } else {
+                    "<"
+                };
+                let tie = if *tie_direction == SortDirection::Asc {
+                    ">"
+                } else {
+                    "<"
+                };
+                for _ in 0..2 {
+                    self.parameters.extend([
+                        text(profile.token().as_str()),
+                        text(partition.as_str()),
+                        text(attribute.as_str()),
+                        Value::from_i64(*value),
+                        Value::from_i64(*value),
+                        text(key.as_str()),
+                    ]);
+                }
+                self.ctes.push(format!("{name}(source, document_id) AS (SELECT 0, f.document_id FROM sort_facts f JOIN effective_documents d ON d.source = 0 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)) UNION SELECT 1, f.document_id FROM optimistic_sort_facts f JOIN effective_documents d ON d.source = 1 AND d.document_id = f.document_id WHERE d.profile = ? AND d.partition = ? AND f.attribute = ? AND (f.value {cmp} ? OR (f.value = ? AND d.record_key {tie} ?)))"));
                 name
             }
             PredicateExpr::And(left, right) | PredicateExpr::Or(left, right) => {

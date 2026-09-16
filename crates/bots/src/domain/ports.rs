@@ -1,15 +1,15 @@
 //! Bot ports.
 
 use super::models::{
-    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotToken,
-    BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
+    Agent, AuthenticatedBot, Bot, BotChannel, BotChannelListCaller, BotId, BotOwner, BotProfile,
+    BotToken, BotTokenCandidate, CreateAgentRequest, CreateBotRequest, CreateBotTokenRequest,
     CreateBotTokenResponse, CreateChannelScopedBotRequest, CreateChannelScopedBotResponse,
     HarnessId, HarnessOwner, PatchBotRequest, UpdateAgentRequest,
 };
 use bot_token::HashedBotToken;
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
-use std::future::Future;
+use std::{collections::HashMap, future::Future};
 use uuid::Uuid;
 
 /// Bot repository.
@@ -34,7 +34,11 @@ pub trait BotRepo: Send + Sync + 'static {
         req: UpdateAgentRequest,
     ) -> impl Future<Output = Result<Option<Agent>, Self::Err>> + Send;
 
-    /// List active agents manageable by a caller.
+    /// List active agents the caller can manage or start a managed session as.
+    ///
+    /// Own and team-owned agents are included, plus selected-channel agents
+    /// installed in a channel the caller belongs to — the same personas they
+    /// can `@` mention there.
     fn list_manageable_agents(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -75,6 +79,14 @@ pub trait BotRepo: Send + Sync + 'static {
     fn get_bot(&self, bot_id: BotId)
     -> impl Future<Output = Result<Option<Bot>, Self::Err>> + Send;
 
+    /// Get presentation profiles for the requested bots.
+    ///
+    /// Historical profiles remain available after a bot is soft-deleted.
+    fn get_bot_profiles(
+        &self,
+        bot_ids: &[BotId],
+    ) -> impl Future<Output = Result<HashMap<BotId, BotProfile>, Self::Err>> + Send;
+
     /// Get an active persisted agent by bot id.
     fn get_agent(
         &self,
@@ -98,6 +110,13 @@ pub trait BotRepo: Send + Sync + 'static {
     fn bot_active_in_channel(
         &self,
         channel_id: Uuid,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Whether the user and bot share at least one active channel.
+    fn user_shares_channel_with_bot(
+        &self,
+        caller: MacroUserIdStr<'static>,
         bot_id: BotId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
@@ -208,7 +227,7 @@ pub trait BotService: Send + Sync + 'static {
         req: UpdateAgentRequest,
     ) -> impl Future<Output = Result<Agent, BotError>> + Send;
 
-    /// List agents manageable by the caller.
+    /// List agents the caller can manage or start a managed session as.
     fn list_agents(
         &self,
         caller: MacroUserIdStr<'static>,

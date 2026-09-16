@@ -158,9 +158,6 @@ gen-dcs-models:
 clean-env:
     bun scripts/clean-env.js
 
-check-tailwind:
-    bun scripts/check-tailwind.ts
-
 fix-lock:
     cd {{ justfile_directory() }}/../.. && git fetch origin dev:dev && git checkout dev -- bun.lock && bun i && git add bun.lock
 

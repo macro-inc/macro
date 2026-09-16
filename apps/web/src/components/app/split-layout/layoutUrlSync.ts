@@ -122,14 +122,13 @@ export function createLayoutUrlSync(
     const nextState = managerUrlState();
     const pathChanged = nextState.segments.join('/') !== pairs().join('/');
     const currentQuery = new URLSearchParams(environment.search());
-    // On a direct macrod pairing link, the settings split initially serializes
-    // its default tab before the settings wrapper reads `settings/harness`.
-    // Let that wrapper select Harness instead of replacing the requested URL.
+    // Action links can mount before settings has selected its requested tab.
+    // Preserve their query until the wrapper has canonicalized that tab.
     if (
       pathChanged &&
       pairs()[0] === 'settings' &&
-      pairs()[1] === 'harness' &&
-      currentQuery.get('pair')
+      ((pairs()[1] === 'harness' && currentQuery.get('pair')) ||
+        (pairs()[1] === 'agents' && currentQuery.get('createAgent') === 'true'))
     ) {
       return;
     }

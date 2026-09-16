@@ -32,6 +32,7 @@ const SOURCES: CalendarSource[] = [
     emailAddress: 'gabtest1@macro.com',
     emailLinkId: 'link-test',
     isPrimary: true,
+    syncError: 'Precondition check failed.',
   },
 ];
 
@@ -108,6 +109,21 @@ describe('SourceControls', () => {
       '[title="Subscription calendar"]'
     );
     expect(indicators).toHaveLength(1);
+  });
+
+  it('badges a calendar with a persistent sync failure', () => {
+    const { expandAccount, container } = renderControls();
+    expandAccount('gabtest1@macro.com');
+    const badge = container.querySelector(
+      '[title="Sync failed: Precondition check failed."]'
+    );
+    expect(badge).toBeTruthy();
+  });
+
+  it('leaves a healthy calendar unbadged', () => {
+    const { expandAccount, container } = renderControls();
+    expandAccount('gab@macro.com');
+    expect(container.querySelector('[title^="Sync failed:"]')).toBeNull();
   });
 
   it('collapses an account again to hide its calendars', () => {

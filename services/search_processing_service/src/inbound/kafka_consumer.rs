@@ -16,6 +16,7 @@
 
 #![allow(clippy::enum_variant_names)]
 
+mod agent_session;
 mod calendar_event;
 mod call;
 mod channel;
@@ -36,6 +37,7 @@ use std::{
     time::Duration,
 };
 
+use ::agent_session::domain::events::AgentSessionLifecycleMacroEvent;
 use ::call::domain::events::CallMacroEvent;
 use ::chat::domain::events::ChatMacroEvent;
 use ::email::domain::events::EmailMacroEvent;
@@ -83,6 +85,7 @@ type SearchProcessingKafkaConsumer =
 
 macro_event_broker::declare_topics!(
     DeclaredMacroEvent:
+        AgentSessionLifecycleMacroEvent,
         CalendarMacroEvent,
         CallMacroEvent,
         ChannelMacroEvent,
@@ -180,6 +183,7 @@ where
 /// pool.
 fn ordering_key(event: &DeclaredMacroEvent) -> Cow<'_, str> {
     match event {
+        DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => Cow::Borrowed(event.key()),
         DeclaredMacroEvent::CalendarMacroEvent(event) => Cow::Borrowed(event.key()),
         DeclaredMacroEvent::CallMacroEvent(event) => Cow::Borrowed(event.key()),
         DeclaredMacroEvent::ChannelMacroEvent(event) => Cow::Borrowed(event.key()),
@@ -268,6 +272,9 @@ async fn process_event(
     let opensearch_client = context.opensearch_client.as_ref();
 
     match event {
+        DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(event) => {
+            agent_session::process_agent_session_event(context, event).await
+        }
         DeclaredMacroEvent::CallMacroEvent(event) => {
             process_call_event(db, opensearch_client, event, partition, offset).await
         }

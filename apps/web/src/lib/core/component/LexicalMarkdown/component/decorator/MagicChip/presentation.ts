@@ -24,18 +24,18 @@ export type MagicChipHeader = {
   agent?: string;
   /** The model's display name, when the runtime has reported one. */
   model?: string;
+  /** The pull request the session's work is on, once the runtime reports one. */
+  pullRequestUrl?: string;
 };
 
 /**
  * A question the agent is waiting on, as the chip offers it: the live slot
- * from the session's metadata, and whether this viewer is the one who may
- * answer (the session's owner) or is watching someone else be asked.
+ * from the session's metadata, and whether this viewer may answer (edit
+ * access on the session) or is watching someone else be asked.
  */
 export type MagicChipQuestion = {
   question: PendingElicitation;
   canAnswer: boolean;
-  /** Who the chip is waiting on when it is not the viewer. */
-  ownerName: string;
 };
 
 /**
@@ -260,10 +260,12 @@ function turnEndedActivity(
         busy: false,
       }))
       .with({ kind: 'other' }, ({ reason }) => ({ label: reason, busy: false }))
-      // The runtime errored the prompt. The chip has one line, so it says that
-      // much and leaves the runtime's message to the session itself.
-      .with({ kind: 'failed' }, () => ({
+      // The runtime errored the prompt. The label says that much; the
+      // runtime's own message goes in the detail line, because some of these
+      // are the user's to act on — a repository Cursor cannot reach, say.
+      .with({ kind: 'failed' }, ({ message }) => ({
         label: "Agent couldn't answer",
+        detail: message,
         busy: false,
       }))
       .exhaustive()
@@ -352,9 +354,7 @@ export function presentationStatus(
   return match(presentation)
     .with({ kind: 'working' }, { kind: 'answering' }, (p) => p.activity)
     .with({ kind: 'asking' }, ({ asking }) => ({
-      label: asking.canAnswer
-        ? 'Waiting for you'
-        : `Waiting for ${asking.ownerName}`,
+      label: asking.canAnswer ? 'Waiting for you' : 'Waiting for an editor',
       busy: false,
     }))
     .with({ kind: 'settled' }, () => ({ label: 'Done', busy: false }))

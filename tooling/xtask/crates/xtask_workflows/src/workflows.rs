@@ -36,6 +36,7 @@ mod deploy_web_app;
 mod docs_check;
 mod ensure_daytona_snapshot;
 mod path_validation;
+mod publish_sdk;
 mod pulumi_preview_pr;
 mod push_local_stack_binaries;
 mod reusable_deploy_service;
@@ -250,6 +251,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "push_local_stack_binaries",
         file_name: "push_local_stack_binaries.yml",
         render_yaml: || render_gh_workflow(push_local_stack_binaries::push_local_stack_binaries)(),
+    },
+    WorkflowFile {
+        slug: "publish_sdk",
+        file_name: "publish-sdk.yml",
+        render_yaml: || render_gh_workflow(publish_sdk::publish_sdk)(),
     },
     WorkflowFile {
         slug: "pulumi_preview_pr",

@@ -538,8 +538,12 @@ fn stream_and_save_message(
         };
         let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> =
             Arc::new(mcp_select::CombinedToolSet::new(static_tools, mcp_tools));
-        let agent_loop =
-            AgentLoop::new(tool_context.recorder.clone()).with_model(&model);
+        // The chat is the conversation every span of this turn belongs to
+        // (`gen_ai.conversation.id`), so the turns of one chat form one session
+        // in the observability backend.
+        let agent_loop = AgentLoop::new(tool_context.recorder.clone())
+            .with_model(&model)
+            .with_conversation_id(&chat_id);
 
 
         let rig_messages = agent::to_rig_messages(&request);

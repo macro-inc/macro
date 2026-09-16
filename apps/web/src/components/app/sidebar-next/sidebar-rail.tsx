@@ -7,11 +7,13 @@ import {
 } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
+import { useActiveCallsQuery } from '@queries/call/call';
 import { For } from 'solid-js';
 import { SidebarRailCreateButton } from './create-button';
 import { FooterActions } from './footer-actions';
 import { ListNav } from './list-nav';
 import { visibleNavItems } from './nav-items';
+import { useSidebarUnread } from './queries/use-sidebar-unread';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
 
@@ -38,6 +40,11 @@ export const SidebarRail = (props: SidebarRailProps) => {
   const gates = useNavItemGates();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
+  const hasUnread = useSidebarUnread();
+  const activeCallsQuery = useActiveCallsQuery();
+  // Keep the rail mounted while the shared call query loads.
+  const hasActiveCall = () =>
+    !activeCallsQuery.isPending && (activeCallsQuery.data?.length ?? 0) > 0;
 
   const isExpanded = () => (props.sidebarState ?? 'expanded') === 'expanded';
 
@@ -66,7 +73,7 @@ export const SidebarRail = (props: SidebarRailProps) => {
     <div
       {...hotkeyScopeNeutralAttribute}
       data-ui="sidebar-rail"
-      class={`relative flex h-full ${RAIL_WIDTH} shrink-0 flex-col items-center gap-2 overflow-hidden bg-surface px-3 pb-3 pt-3`}
+      class={`relative flex h-full ${RAIL_WIDTH} shrink-0 flex-col items-center gap-2 overflow-hidden border-r border-thread-rail bg-surface px-3 pb-3 pt-3`}
     >
       <SidebarRailCreateButton />
       <SearchRailButton />
@@ -76,7 +83,11 @@ export const SidebarRail = (props: SidebarRailProps) => {
           <For each={visibleNavItems(gates())}>
             {(item) => (
               <li class="flex">
-                <ListNav item={item} />
+                <ListNav
+                  item={item}
+                  unread={hasUnread(item.id)}
+                  activeCall={item.id === 'channels' && hasActiveCall()}
+                />
               </li>
             )}
           </For>

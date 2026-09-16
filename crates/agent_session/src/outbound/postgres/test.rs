@@ -1,4 +1,5 @@
 use super::*;
+mod search;
 use crate::domain::model::{AgentMcpServer, DEFAULT_AGENT_SESSION_NAME};
 use crate::domain::ports::AgentSessionRepo;
 use agent_client_protocol::RawJsonRpcMessage;
@@ -352,6 +353,54 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn set_repo_url_replaces_and_clears_the_repository(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+
+    repo.set_repo_url(id, Some("https://github.com/macro-inc/macro".to_owned()))
+        .await
+        .expect("persist repository");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .repo_url
+            .as_deref(),
+        Some("https://github.com/macro-inc/macro")
+    );
+
+    // Clearing is a real answer, not a no-op: a session that chose no
+    // repository must not keep the one it was stamped with at open.
+    repo.set_repo_url(id, None).await.expect("clear repository");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .repo_url,
+        None
+    );
+
+    // Idempotent: restating the same absence changes nothing.
+    let modified_at = AgentSessionRepo::get(&repo, id)
+        .await
+        .expect("get session")
+        .modified_at;
+    repo.set_repo_url(id, None)
+        .await
+        .expect("restate repository");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .modified_at,
+        modified_at
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn set_name_updates_only_the_name(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
@@ -659,6 +708,49 @@ async fn find_all_for_thread_returns_every_session_on_the_thread(pool: PgPool) {
     assert!(empty.is_empty());
 }
 
+/// The recent list is the owner's own, newest first, and stops at `limit` -
+/// a prompt summarizing what someone has been working on must not be handed
+/// somebody else's work, nor an unbounded history.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn recent_for_owner_returns_the_owners_newest_sessions(pool: PgPool) {
+    const OTHER_OWNER: &str = "macro|agent-session-other-owner@example.com";
+
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    insert_user(&pool, OTHER_OWNER).await;
+
+    let oldest = create_session(&repo, new_session(bot_id, None, None)).await;
+    let middle = create_session(&repo, new_session(bot_id, None, None)).await;
+    let newest = create_session(&repo, new_session(bot_id, None, None)).await;
+    let someone_else = create_session(
+        &repo,
+        CreateAgentSessionParams {
+            owner_id: user_id(OTHER_OWNER),
+            ..new_session(bot_id, None, None)
+        },
+    )
+    .await;
+
+    let recent = AgentSessionRepo::recent_for_owner(
+        &repo,
+        &user_id(OWNER),
+        NonZeroUsize::new(2).expect("2 is not zero"),
+    )
+    .await
+    .expect("list the owner's recent sessions");
+
+    assert_eq!(
+        recent.iter().map(|session| session.id).collect::<Vec<_>>(),
+        vec![newest.id, middle.id]
+    );
+    assert!(recent.iter().all(|session| session.id != oldest.id));
+    assert!(recent.iter().all(|session| session.id != someone_else.id));
+    assert_eq!(recent[0].name, DEFAULT_AGENT_SESSION_NAME);
+    assert_eq!(recent[0].harness, newest.harness);
+    assert_eq!(recent[0].repo_url, newest.repo_url);
+    assert_eq!(recent[0].created_at, newest.created_at);
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn find_for_channel_requires_thread_and_bot_for_originating_match(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
@@ -807,6 +899,154 @@ async fn create_without_a_mention_grants_only_the_owner(pool: PgPool) {
     assert_eq!(grants[0].access_level, "owner");
 }
 
+/// Creating a session records it in the owner's history under the
+/// `agent_session` item type, the same row `POST /history/agent_session/{id}`
+/// touches later, so Soup's `viewed_at` is set from the moment it exists.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_records_the_session_in_the_owners_history(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+
+    let params = new_session(bot_id, None, None);
+    let id = params.id;
+    create_session(&repo, params).await;
+
+    let history = sqlx::query!(
+        r#"
+        SELECT "userId" AS user_id, "itemType" AS item_type
+        FROM "UserHistory"
+        WHERE "itemId" = $1
+        "#,
+        id.as_uuid().to_string(),
+    )
+    .fetch_all(&pool)
+    .await
+    .expect("read the session's history rows");
+
+    assert_eq!(history.len(), 1);
+    assert_eq!(history[0].user_id, OWNER);
+    assert_eq!(history[0].item_type, "agent_session");
+}
+
+/// A preview answers every requested id one way or another: the owner sees
+/// the session's fields, a channel member sees them through the channel's
+/// grant, a stranger learns only that it exists, and an unknown id is
+/// reported as such. Duplicates in the request are the caller's problem
+/// (the service collapses them); the repo answers what it is asked.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let (channel_id, thread_id, originating_message_id) =
+        insert_originating_thread_fixture(&pool).await;
+
+    let from_channel = create_session(
+        &repo,
+        new_session(bot_id, Some(thread_id), Some(originating_message_id)),
+    )
+    .await;
+    let private = create_session(&repo, new_session(bot_id, None, None)).await;
+    append_system_event(&repo, private.id, SystemEvent::AcpReady).await;
+    let missing = AgentSessionId::new();
+
+    let member = "macro|agent-session-channel-member@example.com";
+    let stranger = "macro|agent-session-stranger@example.com";
+    sqlx::query!(
+        "INSERT INTO comms_channel_participants (channel_id, user_id, role) VALUES ($1, $2, 'member')",
+        channel_id,
+        member,
+    )
+    .execute(&pool)
+    .await
+    .expect("add channel member");
+
+    let ids = [from_channel.id, private.id, missing];
+
+    let mut owner_view = repo
+        .preview(&user_id(OWNER), &ids)
+        .await
+        .expect("owner preview");
+    owner_view.sort_by_key(|preview| preview.id().as_uuid());
+    let mut expected = vec![
+        AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
+            id: from_channel.id,
+            bot: None,
+            name: DEFAULT_AGENT_SESSION_NAME.to_string(),
+            owner_id: user_id(OWNER),
+            bot_id,
+            status: SessionStatus::NoMessages,
+            created_at: from_channel.created_at,
+            modified_at: from_channel.modified_at,
+        })),
+        AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
+            id: private.id,
+            bot: None,
+            name: DEFAULT_AGENT_SESSION_NAME.to_string(),
+            owner_id: user_id(OWNER),
+            bot_id,
+            status: SessionStatus::Event(SystemEvent::AcpReady),
+            created_at: private.created_at,
+            // Bumped by the status event, so read back rather than assumed.
+            modified_at: AgentSessionRepo::get(&repo, private.id)
+                .await
+                .expect("reload")
+                .modified_at,
+        })),
+        AgentSessionPreview::DoesNotExist(missing),
+    ];
+    expected.sort_by_key(|preview| preview.id().as_uuid());
+    assert_eq!(owner_view, expected);
+
+    let member_view = repo
+        .preview(&user_id(member), &ids)
+        .await
+        .expect("member preview");
+    assert_eq!(member_view.len(), 3);
+    assert!(matches!(
+        member_view.iter().find(|p| p.id() == from_channel.id),
+        Some(AgentSessionPreview::Access(_))
+    ));
+    assert_eq!(
+        member_view.iter().find(|p| p.id() == private.id),
+        Some(&AgentSessionPreview::NoAccess(private.id))
+    );
+    assert_eq!(
+        member_view.iter().find(|p| p.id() == missing),
+        Some(&AgentSessionPreview::DoesNotExist(missing))
+    );
+
+    let stranger_view = repo
+        .preview(&user_id(stranger), &ids)
+        .await
+        .expect("stranger preview");
+    assert_eq!(
+        stranger_view.iter().find(|p| p.id() == from_channel.id),
+        Some(&AgentSessionPreview::NoAccess(from_channel.id))
+    );
+    assert_eq!(
+        stranger_view.iter().find(|p| p.id() == private.id),
+        Some(&AgentSessionPreview::NoAccess(private.id))
+    );
+
+    // A member who has left the channel loses the channel's grant with it.
+    sqlx::query!(
+        "UPDATE comms_channel_participants SET left_at = NOW() WHERE channel_id = $1 AND user_id = $2",
+        channel_id,
+        member,
+    )
+    .execute(&pool)
+    .await
+    .expect("member leaves channel");
+    let left_view = repo
+        .preview(&user_id(member), &[from_channel.id])
+        .await
+        .expect("former member preview");
+    assert_eq!(
+        left_view,
+        vec![AgentSessionPreview::NoAccess(from_channel.id)]
+    );
+}
+
 /// `entity_access.entity_id` carries no foreign key, so deleting a session
 /// has to take its grants with it or they accumulate forever.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -836,6 +1076,20 @@ async fn delete_removes_the_session_grants(pool: PgPool) {
     .expect("count the session's grants");
 
     assert_eq!(remaining, 0);
+
+    let remaining_history = sqlx::query_scalar!(
+        r#"
+        SELECT COUNT(*) AS "count!"
+        FROM "UserHistory"
+        WHERE "itemId" = $1 AND "itemType" = 'agent_session'
+        "#,
+        id.as_uuid().to_string(),
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count the session's history rows");
+
+    assert_eq!(remaining_history, 0);
 }
 
 fn cursor_external(agent: &str) -> ExternalSession {
@@ -1532,5 +1786,135 @@ async fn history_boundary_range_uses_order_index_and_uuid_tie_break(pool: PgPool
             .unwrap()
             .len(),
         10000
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn participants_are_the_distinct_users_the_log_attributes(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot_id = create_test_bot(&pool).await;
+    let session_id = create_session(&repo, new_session(bot_id, None, None))
+        .await
+        .id;
+    let alice = user_id("macro|alice@example.com");
+    let bob = user_id("macro|bob@example.com");
+
+    // Two prompts from alice, one from bob, and a frame from nobody.
+    for user in [
+        Some(alice.clone()),
+        Some(bob.clone()),
+        Some(alice.clone()),
+        None,
+    ] {
+        let _ = AgentSessionLogRepo::create(
+            &repo,
+            AgentSessionLog {
+                agent_session_id: session_id,
+                user_id: user,
+                content: Message::ToRuntime(ToRuntimeMessage::Acp(acp_notification())),
+            },
+        )
+        .await
+        .expect("create log entry");
+    }
+
+    let mut participants = repo
+        .participants(session_id)
+        .await
+        .expect("list participants");
+    participants.sort_by(|a, b| a.to_string().cmp(&b.to_string()));
+
+    assert_eq!(participants, vec![alice, bob]);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
+    use crate::domain::pull_request::SessionPullRequestRepo;
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let url = "https://github.com/org/repo/pull/123";
+    let (first, second) = tokio::join!(
+        repo.record_pull_request(session.id, &session.owner_id, url),
+        repo.record_pull_request(session.id, &session.owner_id, url),
+    );
+    assert_eq!(
+        usize::from(first.unwrap()) + usize::from(second.unwrap()),
+        1
+    );
+    let replica = ReplicaId::mint();
+    let ClaimOutcome::Claimed(claim) = repo.claim(session.id, replica).await.unwrap() else {
+        panic!("claim");
+    };
+    let initialization = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+    repo.create_fenced_with_boundary(
+        fenced_log(session.id),
+        &claim,
+        Some(crate::domain::model::HistoryBoundary {
+            initialization_log_id: initialization.id,
+        }),
+    )
+    .await
+    .unwrap();
+    let log = AgentSessionLogRepo::list_by_session(&repo, session.id)
+        .await
+        .unwrap();
+    assert_eq!(log[0].id, initialization.id);
+    assert_eq!(
+        log.len(),
+        2,
+        "registering a PR does not add protocol frames"
+    );
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .unwrap()
+            .pull_request_url
+            .as_deref(),
+        Some(url)
+    );
+    assert!(
+        !repo
+            .record_pull_request(session.id, &session.owner_id, url)
+            .await
+            .unwrap()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rotating_a_session_credential_revokes_the_previous_one(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    repo.set_egress_token_hash(session.id, "first-token-hash")
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.find_by_egress_token_hash("first-token-hash")
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        session.id
+    );
+    repo.set_egress_token_hash(session.id, "second-token-hash")
+        .await
+        .unwrap();
+    assert!(
+        repo.find_by_egress_token_hash("first-token-hash")
+            .await
+            .unwrap()
+            .is_none()
+    );
+    assert_eq!(
+        repo.find_by_egress_token_hash("second-token-hash")
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        session.id
     );
 }

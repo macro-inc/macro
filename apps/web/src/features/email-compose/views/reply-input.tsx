@@ -14,12 +14,13 @@ import DotsThree from '@phosphor/dots-three.svg';
 import Paperclip from '@phosphor/paperclip.svg';
 import Trash from '@phosphor/trash.svg';
 import { isIOS } from '@solid-primitives/platform';
-import { Button, cn, Layer, SendButton, Surface, Tooltip } from '@ui';
+import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
 import { MacroSignatureButton } from '../components/macro-signature-button';
+import { MobileReplyToolbar } from '../components/mobile-reply-toolbar';
 import { SignaturePreview } from '../components/signature-preview';
 import type { EmailComposeContext } from '../context/compose-capabilities';
 import { getOrInitEmailFormContext } from '../context/email-form-context';
@@ -284,10 +285,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     </Show>
   );
 
-  const AttachButton = (buttonProps?: {
-    variant?: 'ghost' | 'outline';
-    class?: string;
-  }) => (
+  const AttachButton = () => (
     <Button
       ref={(el) =>
         fileSelector(el, () => ({
@@ -296,8 +294,6 @@ export function ReplyInputView(props: ReplyInputViewProps) {
         }))
       }
       size="icon-sm"
-      variant={buttonProps?.variant}
-      class={buttonProps?.class}
       tooltip="Attach"
     >
       <Paperclip />
@@ -309,7 +305,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       class={cn(
         'relative flex flex-col flex-1 max-w-full min-h-0',
         isMobileDrawer() && 'min-h-full overflow-y-scroll overscroll-y-none',
-        props.unframed ? 'rounded-lg' : 'rounded-xl'
+        props.unframed ? 'rounded-lg' : 'rounded-xl bg-menu-glass glass-input'
       )}
       style={props.unframed ? { 'background-color': 'transparent' } : undefined}
       hideBorder={props.unframed}
@@ -320,35 +316,19 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       solid
     >
       <Show when={isMobileDrawer()}>
-        <Layer depth={0}>
-          <div
-            data-corvu-no-drag=""
-            class="sticky top-0 right-0 left-0 z-10 shrink-0 p-3 pt-0 flex items-center justify-between bg-surface"
-          >
-            <div class="flex items-center gap-1 min-w-0">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="rounded-full border border-edge-muted/70 bg-transparent"
-                tooltip={savedDraftId() ? 'Delete draft' : 'Discard draft'}
-                onClick={deleteDraftAndReset}
-              >
-                <Trash class="size-4" />
-              </Button>
-            </div>
-            <div class="ml-auto flex items-center gap-1">
-              <AttachButton
-                variant="ghost"
-                class="rounded-full border border-edge-muted/70 bg-transparent"
-              />
-              <SendButton
-                disabled={sendActionDisabled() || sendActionHidden()}
-                pending={isSending()}
-                onClick={() => sendEmail()}
-              />
-            </div>
-          </div>
-        </Layer>
+        <MobileReplyToolbar
+          discardLabel={savedDraftId() ? 'Delete draft' : 'Discard draft'}
+          onDiscard={deleteDraftAndReset}
+          attachRef={(element) =>
+            fileSelector(element, () => ({
+              multiple: true,
+              onSelect: handleAddAttachments,
+            }))
+          }
+          sendDisabled={sendActionDisabled() || sendActionHidden()}
+          sending={isSending()}
+          onSend={() => sendEmail()}
+        />
       </Show>
       <ReplyEnvelope
         fields={state.recipients}

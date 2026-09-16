@@ -18,6 +18,7 @@ import { type EntityData, isDocumentEntity, isTaskEntity } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { createEffect, onCleanup } from 'solid-js';
+import type { EntityActionNavigationEvent } from './entity-action-context';
 import {
   makeAddTagAction,
   makeCopyAction,
@@ -128,9 +129,16 @@ export const useBlockEntityCommands = (
   };
 
   /** Follows the list's next row into this split, as the triage flow does. */
-  const advanceSplitTo = (nextEntity: EntityData) => {
+  const advanceSplitTo = ({
+    entity: nextEntity,
+  }: EntityActionNavigationEvent) => {
     const splitHandle = splitPanel?.handle;
     if (!splitHandle) return;
+    if (!nextEntity) {
+      splitHandle.resetPreview();
+      return;
+    }
+
     void openEntityInSplitFromUnifiedList(nextEntity, {
       splitHandle,
       mergeHistory: true,

@@ -104,6 +104,22 @@ describe('runSoupBackfills', () => {
     vi.restoreAllMocks();
   });
 
+  it('refreshes all Mail metadata instead of using message timestamps for archive/read changes', async () => {
+    const fetchPage = vi.fn(
+      async (
+        _input: Parameters<NonNullable<SoupBackfillParams['fetchPage']>>[0]
+      ) => ({ nextCursor: null })
+    );
+    const params = {
+      ...lane('email-filter-metadata', fetchPage),
+      refreshAll: true,
+    };
+    await Effect.runPromise(runSoupBackfill('user-1', params));
+    await Effect.runPromise(runSoupBackfill('user-1', params));
+    expect(fetchPage).toHaveBeenCalledTimes(2);
+    expect(fetchPage.mock.calls[1]?.[0]).toEqual(fetchPage.mock.calls[0]?.[0]);
+  });
+
   it('runs each lane to completion before starting the next lane', async () => {
     const order: string[] = [];
     let finishFirstLane!: () => void;
@@ -391,9 +407,31 @@ describe('runSoupBackfills', () => {
     rendered.unmount();
   });
 
+  it('does not reuse pre-projection native backfill checkpoints', () => {
+    localStorage.setItem(
+      'graphql-soup-backfill:v12:user-1:email-filter-metadata',
+      JSON.stringify({
+        userId: 'user-1',
+        nextCursor: 'old-page',
+        pagesFetched: 3,
+        completed: false,
+        scanStartedAt: '2026-09-01T00:00:00.000Z',
+        updatedSince: null,
+        completedAt: null,
+      })
+    );
+    expect(
+      loadSoupBackfillCheckpoint('user-1', 'email-filter-metadata')
+    ).toMatchObject({
+      nextCursor: null,
+      pagesFetched: 0,
+      completed: false,
+    });
+  });
+
   it('restarts from the beginning when the cache generation is replaced', async () => {
     localStorage.setItem(
-      'graphql-soup-backfill:v8:user-1:core-entities',
+      'graphql-soup-backfill:v13:user-1:core-entities',
       JSON.stringify({
         userId: 'user-1',
         nextCursor: 'stale-cursor',

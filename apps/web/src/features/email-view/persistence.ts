@@ -1,3 +1,4 @@
+import { createCollapsedSidebarSectionsStorage } from '@app/components/view-shell';
 import { INBOX_FILTER_ENTRY_KEY } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { normalizeFacetSelection } from '@app/features/soup';
 import type {
@@ -230,6 +231,7 @@ export type CreateEmailViewPersistenceOptions = {
   userId: Accessor<string | undefined>;
   restoreEntryState?: boolean;
   restoreLocalState?: boolean;
+  restorePreferences?: boolean;
 };
 
 /**
@@ -244,6 +246,11 @@ export function createEmailViewPersistence(
 
   return {
     storages: [
+      createCollapsedSidebarSectionsStorage({
+        key: 'macro:email:preferences:v1',
+        userId: options.userId,
+        restore: options.restorePreferences ?? true,
+      }),
       createEmailLocalStateStorage({
         userId: options.userId,
         restore: options.restoreLocalState ?? true,

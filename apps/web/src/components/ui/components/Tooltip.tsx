@@ -22,6 +22,18 @@ type TooltipProps = ParentProps<{
   disabled?: boolean;
 }>;
 
+export type TooltipClassOptions = {
+  class?: string;
+};
+
+/** Canonical classes for tooltip content and tooltip-like static hints. */
+export function tooltipClasses(options: TooltipClassOptions = {}): string {
+  return cn(
+    'flex items-center justify-center rounded-lg bg-tooltip p-2 text-xs text-ink-muted wrap-break-word',
+    options.class
+  );
+}
+
 /**
  * @example
  * <Tooltip label="" hotkey={}>
@@ -121,10 +133,7 @@ export function Tooltip(props: TooltipProps) {
       <Show when={open()}>
         <KobalteTooltip.Portal>
           <KobalteTooltip.Content class="z-tool-tip max-w-[calc(100vw-32px)]">
-            <Surface
-              class="flex items-center justify-center p-2 text-ink-muted text-xs wrap-break-word bg-tooltip"
-              depth={3}
-            >
+            <Surface class={tooltipClasses()} depth={3}>
               <div class="flex flex-row items-center gap-2">
                 <div class="text-xs">{props.label}</div>
                 <Show when={hasHotkey()}>

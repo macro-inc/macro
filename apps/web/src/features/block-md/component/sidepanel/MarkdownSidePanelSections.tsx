@@ -553,7 +553,7 @@ function NotificationsSectionConditional(props: { entity: Entity }) {
   );
   const count = createMemo(() => notifications().length);
   const unreadCount = createMemo(
-    () => notifications().filter((n) => !n.viewed_at).length
+    () => notifications().filter((n) => n.state === 'unseen').length
   );
 
   return (

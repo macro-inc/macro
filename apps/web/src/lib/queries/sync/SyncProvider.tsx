@@ -2,17 +2,24 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { WebsocketEvent } from '@macro-inc/collaboration/websocket';
 import { handleAgentSessionQueue } from '@queries/agent-session/queue-sync';
 import {
   AGENT_SESSION_LOG_EVENT,
   AGENT_SESSION_QUEUE_EVENT,
   AGENT_SESSION_RENAMED_EVENT,
+  AGENT_SESSION_UPDATED_EVENT,
   type AgentSessionLogEvent,
   type AgentSessionQueueEvent,
   type AgentSessionRenamedEvent,
+  type AgentSessionUpdatedEvent,
 } from '@queries/agent-session/realtime-protocol';
 import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
-import { handleAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
+import {
+  handleAgentSessionRenamed,
+  handleAgentSessionUpdated,
+  invalidateAgentSessionMetadata,
+} from '@queries/agent-session/session-metadata-sync';
 import {
   handleCommsAttachment,
   handleCommsMessage,
@@ -28,6 +35,10 @@ import {
 } from '@queries/notification/user-notifications';
 import { invalidateAllProperties } from '@queries/properties/tags';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
+import {
+  handlePullRequestUpdated,
+  invalidatePullRequestMentions,
+} from '@queries/storage/pr-mention-sync';
 import { handleTaskDuplicateMatchesUpdated } from '@queries/storage/task-duplicates';
 import { handleRefreshCalendar } from '../calendar/sync';
 // Side-effect import: registers the scheduled-action live-update websocket
@@ -37,8 +48,9 @@ import '@queries/agent-schedule/sync';
 import {
   createConnectionWebsocketEffect,
   parseWebsocketPayload,
+  ws,
 } from '@service-connection/websocket';
-import type { Accessor, ParentProps } from 'solid-js';
+import { type Accessor, onCleanup, type ParentProps } from 'solid-js';
 import { match } from 'ts-pattern';
 
 type SyncProviderProps = ParentProps<{
@@ -57,8 +69,23 @@ function withParsedWebsocketPayload<T>(
 }
 
 export function QuerySyncProvider(props: SyncProviderProps) {
+  // Also cover the first connection: a lookup can finish before the socket opens.
+  ws.addEventListener(WebsocketEvent.Open, invalidateAgentSessionMetadata);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidateAgentSessionMetadata)
+  );
+  ws.addEventListener(WebsocketEvent.Open, invalidatePullRequestMentions);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidatePullRequestMentions)
+  );
+
   createConnectionWebsocketEffect((data) => {
     match(data)
+      .with({ type: 'github_pull_request_updated' }, () => {
+        withParsedWebsocketPayload(data.type, data.data, (payload) => {
+          void handlePullRequestUpdated(payload);
+        });
+      })
       .with({ type: 'contacts_invalidation' }, () => {
         invalidateContacts();
       })
@@ -73,6 +100,13 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           data.type,
           data.data,
           handleAgentSessionLog
+        );
+      })
+      .with({ type: AGENT_SESSION_UPDATED_EVENT }, () => {
+        withParsedWebsocketPayload<AgentSessionUpdatedEvent>(
+          data.type,
+          data.data,
+          handleAgentSessionUpdated
         );
       })
       .with({ type: AGENT_SESSION_RENAMED_EVENT }, () => {

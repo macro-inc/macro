@@ -9,6 +9,8 @@ pub mod fold;
 pub mod harness;
 /// Durable snapshot and live-row ingestion around the append-only protocol fold.
 pub mod ingestion;
+/// A fold that also reports what each frame meant for the turn.
+pub mod lifecycle;
 /// The raw log vocabulary the fold consumes.
 pub mod log;
 /// The renderable message vocabulary.

@@ -45,6 +45,7 @@ export { Thought, type ThoughtProps } from './Thought';
 export { TodoList } from './TodoList';
 export { ToolCard, type ToolCardProps } from './ToolCard';
 export { ToolErrorCard, type ToolErrorCardProps } from './ToolErrorCard';
+export { ToolGroup, type ToolGroupProps } from './ToolGroup';
 export {
   ToolStatusTitle,
   type ToolStatusTitleProps,
@@ -56,3 +57,5 @@ export {
   type TodoItem,
   type ToolStatus,
 } from './types';
+export { WorkingLine } from './WorkingLine';
+export { createVerbDraw, WORKING_LABEL } from './working-verbs';

@@ -9,7 +9,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 
 use crate::domain::{
-    models::{Favorite, FavoritesError, FavoritesMutationActor, SetFavoriteResult},
+    models::{Favorite, FavoriteFilter, FavoritesError, FavoritesMutationActor, SetFavoriteResult},
     ports::{FavoritesAuthorizer, FavoritesMutationService, FavoritesService},
 };
 
@@ -76,7 +76,9 @@ where
         ordered: Vec<Entity<'static>>,
     ) -> Result<Vec<Favorite>, FavoritesError> {
         self.favorites.reorder_favorites(&user_id, &ordered).await?;
-        self.favorites.list_favorites(&user_id).await
+        self.favorites
+            .list_favorites(&user_id, &FavoriteFilter::default())
+            .await
     }
 }
 
@@ -103,6 +105,8 @@ fn validate_favoritable(entity_type: EntityType) -> Result<(), FavoritesError> {
         | EntityType::CalendarEvent
         | EntityType::Reminder
         | EntityType::Skill
-        | EntityType::AgentSession => Err(FavoritesError::UnsupportedEntityType(entity_type)),
+        | EntityType::AgentSession
+        | EntityType::ScheduledAction
+        | EntityType::Initiative => Err(FavoritesError::UnsupportedEntityType(entity_type)),
     }
 }

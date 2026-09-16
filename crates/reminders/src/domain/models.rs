@@ -469,8 +469,15 @@ impl ReminderPatch {
 /// Which of a user's reminders to list, and where in the ordering to resume.
 #[derive(Debug, Clone, Default)]
 pub struct ReminderFilter {
-    /// Restrict to reminders attached to this entity.
-    pub entity: Option<Entity<'static>>,
+    /// Restrict to reminders attached to an entity of one of these types.
+    ///
+    /// Independent of [`ReminderFilter::entity_ids`]. Within a dimension the
+    /// values are alternatives, and the two dimensions are both required. An
+    /// empty vector constrains nothing. A standalone reminder is attached to
+    /// nothing, so constraining either dimension excludes it.
+    pub entity_types: Vec<EntityType>,
+    /// Restrict to reminders attached to one of these entity ids.
+    pub entity_ids: Vec<Uuid>,
     /// Include reminders that have already fired.
     pub include_completed: bool,
     /// Resume after this position in the ordering.

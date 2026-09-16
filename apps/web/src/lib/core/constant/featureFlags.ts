@@ -107,12 +107,14 @@ export function isFeatureEnabled(flag: Flag): boolean {
 
 /**
  * Switches Inbox, Tasks, and Channels from the current SoupView implementations
- * to the new composable view implementations. Override locally with
- * VITE_ENABLE_NEW_APP_VIEWS.
+ * to the new composable view implementations. Enabled by default in local
+ * development; production follows PostHog. Override locally with
+ * VITE_ENABLE_NEW_APP_VIEWS=false.
  */
 export const enableNewAppViews = defineFlag({
   key: 'enable-new-app-views',
   env: 'ENABLE_NEW_APP_VIEWS',
+  default: DEV_MODE_ENV || undefined,
 });
 
 /**
@@ -639,16 +641,6 @@ export const enableActivityFeed = defineFlag({
 export const enableChatV3Agents = defineFlag({
   key: 'enable-chat-v3-agents',
   env: 'ENABLE_CHAT_V3_AGENTS',
-  default: onInDev,
-});
-
-// The agent session composer behind `Create → Agent`: pick an agent and a
-// model override before the session opens. Off, the entry opens a managed
-// session straight away as it always has. Override with
-// VITE_ENABLE_AGENT_SESSION_COMPOSER.
-export const enableAgentSessionComposer = defineFlag({
-  key: 'enable-agent-session-composer',
-  env: 'ENABLE_AGENT_SESSION_COMPOSER',
   default: onInDev,
 });
 

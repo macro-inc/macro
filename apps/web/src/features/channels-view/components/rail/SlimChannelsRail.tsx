@@ -1,7 +1,13 @@
 import { runCreateAction } from '@app/features/command/Launcher';
+import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
+import {
+  useFavoriteDisplayName,
+  useFavoriteDmRecipientId,
+} from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { SplitPanel } from '@components/app/split-panel';
+import { UserIcon } from '@core/component/UserIcon';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type ChannelEntity, Entity } from '@entity';
 import ArrowClockwiseIcon from '@phosphor/arrow-clockwise.svg';
@@ -10,6 +16,8 @@ import ChatTextIcon from '@phosphor/chat-text.svg';
 import ChatsIcon from '@phosphor/chats-circle.svg';
 import ChannelIcon from '@phosphor/hash-straight.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import StarIcon from '@phosphor/star.svg';
+import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Button, cn, Dropdown, Tabs, Tooltip } from '@ui';
 import {
   type Component,
@@ -27,10 +35,12 @@ import {
   ChannelCallIndicator,
   ChannelMutedIndicator,
   ChannelRailItemContextMenu,
+  isPrimaryMouseDown,
 } from './ChannelRailItems';
 import {
   domIdForRow,
   rowKeyForChannel,
+  rowKeyForFavorite,
   rowKeyForSection,
   useChannelsRail,
 } from './ChannelsRailContext';
@@ -41,16 +51,18 @@ import {
   RailModeButton,
 } from './ChannelsRailSection';
 import {
+  useChannelRailFavoriteItemState,
+  useChannelRailFavoritesState,
   useChannelRailItemState,
   useChannelRailScopeState,
   useChannelRailSectionState,
   useChannelRailVirtualizer,
 } from './hooks/useChannelRailState';
 
-function BrowseTabLabel() {
+function AllTabLabel() {
   return (
     <>
-      <span class="sr-only">Browse</span>
+      <span class="sr-only">All</span>
       <span aria-hidden="true" class="[&_svg]:size-4">
         <ChatsIcon />
       </span>
@@ -58,10 +70,10 @@ function BrowseTabLabel() {
   );
 }
 
-function RecentsTabLabel() {
+function RecentTabLabel() {
   return (
     <>
-      <span class="sr-only">Recents</span>
+      <span class="sr-only">Recent</span>
       <span aria-hidden="true" class="[&_svg]:size-4">
         <ChatTextIcon />
       </span>
@@ -70,8 +82,8 @@ function RecentsTabLabel() {
 }
 
 const SLIM_CHANNEL_TABS = [
-  { value: 'browse', label: BrowseTabLabel },
-  { value: 'recents', label: RecentsTabLabel },
+  { value: 'browse', label: AllTabLabel },
+  { value: 'recents', label: RecentTabLabel },
 ];
 
 type GroupConfig = {
@@ -89,6 +101,77 @@ const GROUPS: GroupConfig[] = [
   },
 ];
 
+function SlimFavoriteAvatar(props: {
+  favorite: Favorite;
+  displayName: () => string;
+}) {
+  const dmRecipientId = useFavoriteDmRecipientId(props.favorite);
+
+  return (
+    <Switch>
+      <Match when={dmRecipientId()}>
+        {(recipientId) => (
+          <span class="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-surface-2">
+            <UserIcon
+              id={recipientId()}
+              size="fill"
+              suppressClick
+              showTooltip={false}
+            />
+          </span>
+        )}
+      </Match>
+      <Match when={props.favorite.channelType === 'direct_message'}>
+        <span class="relative flex size-8 shrink-0 items-center justify-center overflow-hidden rounded-full border border-edge bg-surface-2">
+          <FavoriteIcon favorite={props.favorite} class="size-4" />
+        </span>
+      </Match>
+      <Match when={true}>
+        <span class="flex size-8 shrink-0 items-center justify-center rounded-full border border-edge bg-surface-2 text-xs font-semibold tracking-wide text-ink">
+          {channelInitials(props.displayName())}
+        </span>
+      </Match>
+    </Switch>
+  );
+}
+
+function SlimFavoriteItem(props: { favorite: Favorite }) {
+  const rail = useChannelsRail();
+  const displayName = useFavoriteDisplayName(props.favorite);
+  const item = useChannelRailFavoriteItemState(() => props.favorite);
+
+  return (
+    <Tooltip label={displayName()} placement="right" class="size-10">
+      <button
+        id={item().domId}
+        type="button"
+        role="treeitem"
+        tabIndex={-1}
+        class={cn(
+          'flex size-10 items-center justify-center rounded-full text-left outline-none transition-colors',
+          item().selected && !isTouchDevice() && 'bg-active text-ink',
+          (!item().selected || isTouchDevice()) && 'text-ink-muted',
+          !item().selected &&
+            !isTouchDevice() &&
+            item().focused &&
+            'bg-hover text-ink',
+          !item().selected &&
+            !isTouchDevice() &&
+            !item().focused &&
+            'hover:bg-hover hover:text-ink'
+        )}
+        aria-current={item().selected ? 'page' : undefined}
+        onClick={() => rail.activateRow(rowKeyForFavorite(props.favorite))}
+      >
+        <SlimFavoriteAvatar
+          favorite={props.favorite}
+          displayName={displayName}
+        />
+      </button>
+    </Tooltip>
+  );
+}
+
 function SlimListError(props: { retry: () => Promise<void> }) {
   return (
     <div class="flex min-h-10 items-center justify-center">
@@ -102,6 +185,50 @@ function SlimListError(props: { retry: () => Promise<void> }) {
         <ArrowClockwiseIcon class="size-4" />
       </Button>
     </div>
+  );
+}
+
+function SlimFavoritesSection() {
+  const rail = useChannelsRail();
+  const section = useChannelRailFavoritesState();
+
+  return (
+    <Show when={section().items.length > 0}>
+      <CollapsibleSection.Root open={section().open} class="items-center">
+        <CollapsibleSection.Header
+          focused={section().focused}
+          focusWithin={section().containsFocus}
+          class="h-10 justify-center"
+        >
+          <button
+            id={section().domId}
+            type="button"
+            role="treeitem"
+            tabIndex={-1}
+            class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none"
+            aria-expanded={section().open}
+            aria-label="Favorites"
+            onClick={() => rail.activateRow(rowKeyForSection('favorites'))}
+          >
+            <StarIcon class="size-4" />
+          </button>
+        </CollapsibleSection.Header>
+        <CollapsibleSection.Content
+          open={section().open}
+          contentRef={(element) => rail.registerScrollRef('favorites', element)}
+          containerClass="w-full"
+          class="flex min-h-0 w-full flex-col items-center gap-0.5"
+        >
+          <For each={section().items}>
+            {(favorite) => (
+              <div class="flex justify-center">
+                <SlimFavoriteItem favorite={favorite} />
+              </div>
+            )}
+          </For>
+        </CollapsibleSection.Content>
+      </CollapsibleSection.Root>
+    </Show>
   );
 }
 
@@ -142,7 +269,7 @@ function SlimChannelItem(props: { channel: ChannelEntity }) {
           role="treeitem"
           tabIndex={-1}
           class={cn(
-            'flex size-10 items-center justify-center rounded-full text-left outline-none transition-colors',
+            'flex size-10 items-center justify-center rounded-full text-left outline-none',
             item().selected && !isTouchDevice() && 'bg-active text-ink',
             (!item().selected || isTouchDevice()) && 'text-ink-muted',
             !item().selected &&
@@ -155,7 +282,10 @@ function SlimChannelItem(props: { channel: ChannelEntity }) {
               'hover:bg-hover hover:text-ink'
           )}
           aria-current={item().selected ? 'page' : undefined}
-          onClick={() => rail.activateRow(rowKeyForChannel(props.channel.id))}
+          onMouseDown={(event) => {
+            if (!isPrimaryMouseDown(event)) return;
+            rail.activateRow(rowKeyForChannel(props.channel.id));
+          }}
         >
           <span class="relative">
             <SlimChannelAvatar channel={props.channel} />
@@ -224,7 +354,7 @@ function SlimHeader() {
   };
 
   return (
-    <div class="flex shrink-0 flex-col items-center gap-3">
+    <div class="flex shrink-0 flex-col items-center gap-3 pt-2">
       <div class="flex w-full items-center justify-center px-2">
         <SplitPanel.ControlGroup>
           <SplitPanel.CloseButton size="icon-sm" />
@@ -263,7 +393,7 @@ function SlimGroupSection(props: { config: GroupConfig }) {
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
-  const { state: section, clearVisibleActivity } = useChannelRailSectionState(
+  const { state: section } = useChannelRailSectionState(
     () => props.config.group
   );
   const pagination = useChannelRailVirtualizer(() => props.config.group);
@@ -291,7 +421,10 @@ function SlimGroupSection(props: { config: GroupConfig }) {
           class="relative flex size-10 min-w-10 flex-none items-center justify-center rounded-full outline-none"
           aria-expanded={section().open}
           aria-label={props.config.label}
-          onClick={() => rail.activateRow(rowKeyForSection(props.config.group))}
+          onMouseDown={(event) => {
+            if (!isPrimaryMouseDown(event)) return;
+            rail.activateRow(rowKeyForSection(props.config.group));
+          }}
         >
           <span class="flex items-center justify-center [&_svg]:size-4">
             <Dynamic component={props.config.icon} />
@@ -310,7 +443,6 @@ function SlimGroupSection(props: { config: GroupConfig }) {
         class="flex min-h-0 w-full flex-col items-center gap-0.5"
         activityTargetId={section().targetId}
         activityTooltip
-        onActivityVisible={clearVisibleActivity}
       >
         <Switch>
           <Match when={forceEmptyState()}>{null}</Match>
@@ -360,6 +492,7 @@ function SlimGroupSection(props: { config: GroupConfig }) {
 function SlimBrowse() {
   return (
     <div class="flex h-full min-h-0 flex-col gap-3 px-2">
+      <SlimFavoritesSection />
       <For each={GROUPS}>
         {(config) => <SlimGroupSection config={config} />}
       </For>

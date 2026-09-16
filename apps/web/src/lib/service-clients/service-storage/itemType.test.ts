@@ -7,6 +7,13 @@ import {
 } from './itemType';
 
 describe('itemTypeToReferenceEntityType', () => {
+  test('agent block, history, and reference spellings agree', () => {
+    expect(blockNameToItemType('agent')).toBe('agent_session');
+    expect(stringToItemType('agent_session')).toBe('agent_session');
+    expect(itemTypeToReferenceEntityType('agent_session')).toBe(
+      'agent_session'
+    );
+  });
   test('maps email to the thread type used by referencium', () => {
     expect(itemTypeToReferenceEntityType('email')).toBe('thread');
   });
@@ -65,6 +72,7 @@ describe('blockNameToItemType', () => {
     ['automation', 'automation'],
     ['company', 'crm_company'],
     ['contact', 'crm_contact'],
+    ['pr', 'foreign'],
   ] as const)('maps block %s to item type %s', (blockName, itemType) => {
     expect(blockNameToItemType(blockName)).toBe(itemType);
   });

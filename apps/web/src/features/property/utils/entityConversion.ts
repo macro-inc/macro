@@ -81,6 +81,11 @@ export function macroEntityToPropertyEntityType(
       // No CONTACT in the properties-service EntityType yet.
       throw new Error('crm contacts do not support properties');
     })
+    .with({ type: 'agent_session' }, () => {
+      throw new Error(
+        'agent sessions are not property-service mutation targets'
+      );
+    })
     .with({ type: 'automation' }, () => {
       throw new Error('automation entities do not support properties');
     })

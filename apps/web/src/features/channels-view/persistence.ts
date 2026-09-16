@@ -36,6 +36,7 @@ const channelsExpandedGroupsSchema = z.preprocess(
     };
   },
   z.object({
+    favorites: z.boolean().default(true),
     channels: z.boolean().default(true),
     direct_messages: z.boolean().default(true),
   })
@@ -49,6 +50,7 @@ const channelsEntryStateSchemaWithDefaults = z.object({
     .default('channels'),
   selectedChannelId: z.string().optional(),
   expandedGroups: channelsExpandedGroupsSchema.default({
+    favorites: true,
     channels: true,
     direct_messages: true,
   }),
@@ -62,6 +64,7 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
   mobileTab: 'channels',
   selectedChannelId: undefined,
   expandedGroups: {
+    favorites: true,
     channels: true,
     direct_messages: true,
   },

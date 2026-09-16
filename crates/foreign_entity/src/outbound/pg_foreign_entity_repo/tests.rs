@@ -1,3 +1,5 @@
+mod notification_state;
+
 use std::sync::Arc;
 
 use chrono::Utc;
@@ -762,31 +764,31 @@ async fn insert_foreign_entity_notification(
     .expect("notification row should be inserted");
 
     let seen_at: Option<chrono::NaiveDateTime> = seen.then(|| Utc::now().naive_utc());
-    sqlx::query(
+    sqlx::query!(
         r#"
-        INSERT INTO user_notification (user_id, notification_id, done, seen_at)
-        VALUES ($1, $2, $3, $4)
+        INSERT INTO user_notification (user_id, notification_id, state, seen_at)
+        VALUES ($1, $2, CASE WHEN $3::bool THEN 'done'::notification_state
+            WHEN $4::timestamp IS NOT NULL THEN 'seen'::notification_state
+            ELSE 'unseen'::notification_state END, $4)
         "#,
+        user_id,
+        notification_id,
+        done,
+        seen_at,
     )
-    .bind(user_id)
-    .bind(notification_id)
-    .bind(done)
-    .bind(seen_at)
     .execute(pool)
     .await
     .expect("user_notification row should be inserted");
 }
 
-fn notification_done_filter(done: bool) -> LiteralTree<ForeignEntityLiteral> {
-    Some(Arc::new(Expr::val(ForeignEntityLiteral::NotificationDone(
-        done,
-    ))))
-}
-
-fn notification_seen_filter(seen: bool) -> LiteralTree<ForeignEntityLiteral> {
-    Some(Arc::new(Expr::val(ForeignEntityLiteral::NotificationSeen(
-        seen,
-    ))))
+fn notification_states_filter(
+    states: &[item_filters::NotificationState],
+) -> LiteralTree<ForeignEntityLiteral> {
+    states
+        .iter()
+        .map(|state| Expr::val(ForeignEntityLiteral::NotificationState(*state)))
+        .reduce(Expr::or)
+        .map(Arc::new)
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -823,7 +825,9 @@ async fn get_for_user_notification_done_filters_by_done_state(pool: PgPool) {
             Some(macro_id.to_string()),
             vec![SourceId::user(macro_id)],
             10,
-            filter_query(notification_done_filter(true)),
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Done,
+            ])),
         )
         .await
         .expect("done=true filter should be applied");
@@ -833,7 +837,10 @@ async fn get_for_user_notification_done_filters_by_done_state(pool: PgPool) {
             Some(macro_id.to_string()),
             vec![SourceId::user(macro_id)],
             10,
-            filter_query(notification_done_filter(false)),
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Unseen,
+                item_filters::NotificationState::Seen,
+            ])),
         )
         .await
         .expect("done=false filter should be applied");
@@ -867,7 +874,10 @@ async fn get_for_user_notification_seen_filters_by_seen_state(pool: PgPool) {
             Some(macro_id.to_string()),
             vec![SourceId::user(macro_id)],
             10,
-            filter_query(notification_seen_filter(true)),
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Seen,
+                item_filters::NotificationState::Done,
+            ])),
         )
         .await
         .expect("seen=true filter should be applied");
@@ -877,7 +887,9 @@ async fn get_for_user_notification_seen_filters_by_seen_state(pool: PgPool) {
             Some(macro_id.to_string()),
             vec![SourceId::user(macro_id)],
             10,
-            filter_query(notification_seen_filter(false)),
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Unseen,
+            ])),
         )
         .await
         .expect("seen=false filter should be applied");
@@ -910,7 +922,9 @@ async fn get_for_user_notification_done_composes_with_source(pool: PgPool) {
         Expr::val(ForeignEntityLiteral::ForeignEntitySource(
             "github_pull_request".to_string(),
         )),
-        Expr::val(ForeignEntityLiteral::NotificationDone(true)),
+        Expr::val(ForeignEntityLiteral::NotificationState(
+            item_filters::NotificationState::Done,
+        )),
     )));
 
     let matches = repo
@@ -948,7 +962,9 @@ async fn get_for_user_notification_done_scopes_to_requesting_user(pool: PgPool) 
             Some(macro_id.to_string()),
             vec![SourceId::user(macro_id)],
             10,
-            filter_query(notification_done_filter(true)),
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Done,
+            ])),
         )
         .await
         .expect("notification filter scoped to requesting user should be applied");
@@ -971,7 +987,9 @@ async fn get_for_user_notification_filter_without_requesting_user_returns_empty(
             None,
             vec![SourceId::user(macro_id)],
             10,
-            filter_query(notification_done_filter(true)),
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Done,
+            ])),
         )
         .await
         .expect("notification filter without a requesting user should succeed");
@@ -980,7 +998,7 @@ async fn get_for_user_notification_filter_without_requesting_user_returns_empty(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn get_for_user_contradictory_notification_done_matches_nothing(pool: PgPool) {
+async fn get_for_user_notification_state_and_requires_each_witness(pool: PgPool) {
     let repo = PgForeignEntityRepo::new(pool.clone());
     let macro_id = "macro|user@example.com";
 
@@ -995,7 +1013,9 @@ async fn get_for_user_contradictory_notification_done_matches_nothing(pool: PgPo
             Some(macro_id.to_string()),
             vec![SourceId::user(macro_id)],
             10,
-            filter_query(notification_done_filter(true)),
+            filter_query(notification_states_filter(&[
+                item_filters::NotificationState::Done,
+            ])),
         )
         .await
         .expect("done=true filter should be applied");
@@ -1004,8 +1024,17 @@ async fn get_for_user_contradictory_notification_done_matches_nothing(pool: PgPo
     // done=true AND done=false is contradictory and must match nothing rather than
     // collapsing to a single-sided predicate.
     let contradiction = Some(Arc::new(Expr::and(
-        Expr::val(ForeignEntityLiteral::NotificationDone(true)),
-        Expr::val(ForeignEntityLiteral::NotificationDone(false)),
+        Expr::val(ForeignEntityLiteral::NotificationState(
+            item_filters::NotificationState::Done,
+        )),
+        Expr::or(
+            filter_ast::Expr::val(ForeignEntityLiteral::NotificationState(
+                item_filters::NotificationState::Unseen,
+            )),
+            filter_ast::Expr::val(ForeignEntityLiteral::NotificationState(
+                item_filters::NotificationState::Seen,
+            )),
+        ),
     )));
     let matches = repo
         .get_foreign_entities_for_user(

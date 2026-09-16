@@ -7,9 +7,10 @@
  * own. Renders nothing until the harness has advertised its models.
  *
  * Touch devices get a bottom sheet (`MobileDrawer`, the same chrome as the
- * split title menu) listing every model with a check on the current one.
- * Desktop keeps a popover: a compact scrolling list for short catalogs, the
- * searchable `ModelCatalogPicker` for long ones.
+ * split title menu) listing every model with a check on the current one, and
+ * a search field once the catalog is long enough to need one. Desktop keeps
+ * a popover: a compact scrolling list for short catalogs, the searchable
+ * `ModelCatalogPicker` for long ones.
  *
  * Harnesses advertise as many models as they like, so the desktop list
  * scrolls rather than growing without bound: it shows at most
@@ -20,19 +21,25 @@
 
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
-import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
+import {
+  type CatalogModelOption,
+  isLargeModelCatalog,
+  matchesModelQuery,
+} from '@core/component/AI/component/input/modelCatalog';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import Check from '@phosphor/check.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
 import CaretDown from '@phosphor-icons/core/regular/caret-down.svg?component-solid';
 import type { ModelOption } from '@service-agent-fold/generated/types';
 import { Button, cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { groupOptions, withoutRedundantGroups } from './model-groups';
 import { TextShimmer } from './TextShimmer';
 
 /** Compact ghost pill — same size as the short-list trigger and chat's selector. */
 const PILL_TRIGGER_CLASS =
-  'h-6 w-auto max-w-[9rem] min-w-0 justify-start gap-1 rounded-full border-transparent bg-ink/5 px-2 text-left text-xs text-ink-muted hover:bg-ink/10';
+  'h-6 w-auto max-w-[9rem] min-w-0 justify-start gap-1 rounded-full border-transparent bg-ink/5 px-2 text-left text-sm text-ink-subtle hover:bg-ink/10';
 
 /** Height of one model row — `h-7` on the item, so the cap is exact. */
 const ROW_HEIGHT_PX = 28;
@@ -40,6 +47,8 @@ const ROW_HEIGHT_PX = 28;
 const MAX_VISIBLE_ROWS = 10;
 /** The scroll container's own top padding, inside the capped window. */
 const LIST_PADDING_PX = 6;
+/** Past this many models the sheet gets a search field. */
+const SEARCHABLE_MODEL_COUNT = 8;
 
 /**
  * Ten whole rows plus half of the eleventh, clamped to the room the popper
@@ -66,41 +75,43 @@ export interface AgentModelSelectorProps {
   onSelect: (model: string) => void;
 }
 
-/** Consecutive options under one harness heading (`null` = no heading). */
-type ModelGroup = { label: string | null; options: ModelOption[] };
-
-function groupOptions(options: ModelOption[]): ModelGroup[] {
-  const groups: ModelGroup[] = [];
-  for (const option of options) {
-    const label = option.group ?? null;
-    const last = groups[groups.length - 1];
-    if (last && last.label === label) last.options.push(option);
-    else groups.push({ label, options: [option] });
-  }
-  return groups;
-}
-
 export function AgentModelSelector(props: AgentModelSelectorProps) {
   const [listRef, setListRef] = createSignal<HTMLElement>();
   const [sheetOpen, setSheetOpen] = createSignal(false);
+  const [query, setQuery] = createSignal('');
   const shown = () => props.changingTo ?? props.model;
   const label = () =>
     props.options.find((option) => option.id === shown())?.name ??
     shown() ??
     'Model';
-  const catalogOptions = () =>
-    props.options.map((option) => ({
-      id: option.id,
-      label: option.name,
-      description: option.description ?? undefined,
-      group: option.group ?? undefined,
-    }));
+  const options = createMemo(() => withoutRedundantGroups(props.options));
+  const toCatalogOption = (option: ModelOption): CatalogModelOption => ({
+    id: option.id,
+    label: option.name,
+    description: option.description ?? undefined,
+    group: option.group ?? undefined,
+  });
+  const catalogOptions = () => options().map(toCatalogOption);
   const useCatalog = () => isLargeModelCatalog(catalogOptions());
-  const groups = createMemo(() => groupOptions(props.options));
+  const searchable = () => props.options.length > SEARCHABLE_MODEL_COUNT;
+  const groups = createMemo(() => {
+    const normalizedQuery = query().trim().toLowerCase();
+    const matching = normalizedQuery
+      ? options().filter((option) =>
+          matchesModelQuery(toCatalogOption(option), normalizedQuery)
+        )
+      : options();
+    return groupOptions(matching);
+  });
   const disabled = () => props.disabled || props.changingTo !== undefined;
 
+  const openSheet = (open: boolean) => {
+    setSheetOpen(open);
+    if (!open) setQuery('');
+  };
+
   const pick = (id: string) => {
-    setSheetOpen(false);
+    openSheet(false);
     if (id !== props.model) props.onSelect(id);
   };
 
@@ -108,7 +119,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
     <MobileDrawer
       side="bottom"
       open={sheetOpen()}
-      onOpenChange={setSheetOpen}
+      onOpenChange={openSheet}
       preventScroll={false}
       preventScrollbarShift={false}
     >
@@ -119,7 +130,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         size="sm"
         aria-label="Agent model"
         disabled={disabled()}
-        class="h-8 max-w-[60vw] min-w-0 justify-start gap-1 rounded-lg border-none bg-transparent px-1.5 text-left text-sm text-ink-muted hover:bg-hover"
+        class="h-8 max-w-[60vw] min-w-0 justify-start gap-1 rounded-lg border-none bg-transparent px-1.5 text-left text-sm text-ink-subtle hover:bg-hover"
       >
         <TextShimmer
           text={label()}
@@ -129,10 +140,28 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         <CaretDown class="size-3.5 shrink-0" />
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content aria-label="Choose a model">
           <MobileDrawer.Handle />
+          <Show when={searchable()}>
+            <div class="mx-4 mb-3 flex shrink-0 items-center gap-2 rounded-lg border border-edge-muted bg-surface px-3 py-2">
+              <SearchIcon class="size-3.5 shrink-0 text-ink-muted" />
+              <input
+                type="text"
+                aria-label="Search models"
+                placeholder="Search models"
+                value={query()}
+                onInput={(event) => setQuery(event.currentTarget.value)}
+                class="min-w-0 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-ink-placeholder"
+              />
+            </div>
+          </Show>
           <MobileDrawer.ScrollBody>
+            <Show when={groups().length === 0}>
+              <div class="px-4 py-6 text-center text-sm text-ink-muted">
+                No models match that search.
+              </div>
+            </Show>
             <For each={groups()}>
               {(group) => (
                 <>
@@ -148,12 +177,11 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                   >
                     <For each={group.options}>
                       {(option) => (
-                        <button
+                        <MobileDrawer.Item
                           type="button"
                           role="radio"
                           aria-checked={option.id === shown()}
                           title={option.description ?? undefined}
-                          class="flex w-full items-center gap-3 bg-surface px-4 py-3 text-left text-sm text-ink hover:bg-hover hover-transition-bg not-last:mb-px"
                           onClick={() => pick(option.id)}
                         >
                           <span class="min-w-0 flex-1 truncate">
@@ -162,7 +190,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                           <Show when={option.id === shown()}>
                             <Check class="size-3.5 shrink-0 text-accent" />
                           </Show>
-                        </button>
+                        </MobileDrawer.Item>
                       )}
                     </For>
                   </MobileDrawer.Section>
@@ -186,7 +214,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         <TextShimmer text={label()} active={props.changingTo !== undefined} />
         <CaretDown />
       </Dropdown.Trigger>
-      <Dropdown.Content class="overflow-hidden">
+      <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)] overflow-hidden">
         {/* The gradients anchor here, outside the scrolling box, and read
             the menu background through `--color-surface`. */}
         <div class="relative [--color-surface:var(--color-menu)]">
@@ -196,7 +224,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
             style={{ 'max-height': LIST_MAX_HEIGHT }}
           >
             <div class="flex flex-col p-1.5">
-              <For each={props.options}>
+              <For each={options()}>
                 {(option) => (
                   <Dropdown.Item
                     class={cn(
@@ -206,7 +234,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                     title={option.description ?? undefined}
                     onSelect={() => pick(option.id)}
                   >
-                    <span class="flex-1 truncate text-xs">{option.name}</span>
+                    <span class="flex-1 truncate">{option.name}</span>
                   </Dropdown.Item>
                 )}
               </For>

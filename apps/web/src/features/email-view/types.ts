@@ -14,7 +14,12 @@ export type EmailTab =
   | 'shared'
   | 'all';
 
-export type EmailFilterGroupId = 'read' | 'done' | 'attachments' | 'calendar';
+export type EmailFilterGroupId =
+  | 'read'
+  | 'done'
+  | 'attachments'
+  | 'calendar'
+  | 'tags';
 
 export type EmailFilterOptionId =
   | 'all'
@@ -42,6 +47,8 @@ export type EmailViewState = {
    * next visit, the way the Channels view reopens its selected channel.
    */
   openThreadId?: string;
+  /** Sidebar sections the user folded away; kept per user, not per visit. */
+  collapsedSidebarSectionIds: string[];
 };
 
 export type EmailViewStateOptions = Partial<EmailViewState>;

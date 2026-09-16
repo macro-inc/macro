@@ -180,30 +180,30 @@ VALUES
 -- than fail the page on the cast.
 ('0190a000-0000-7000-8000-000000000021', 'channel_invite', 'not-a-uuid', 'channel', 'test', '2024-06-01 10:21:00', '{}', 'macro|user-2@test.com', NULL, NULL);
 
-INSERT INTO public.user_notification ("user_id", "notification_id", "created_at", "sent", "seen_at", "deleted_at", "done", "is_important_v0")
+INSERT INTO public.user_notification ("user_id", "notification_id", "created_at", "sent", "seen_at", "deleted_at", "state", "is_important_v0")
 VALUES
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000001', '2024-06-01 10:01:00', TRUE, '2024-06-01 10:01:30', NULL, TRUE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000009', '2024-06-01 10:09:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-2@test.com', '0190a000-0000-7000-8000-000000000030', '2024-06-01 10:30:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000008', '2024-06-01 10:08:00', TRUE, '2024-06-01 10:08:30', NULL, TRUE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000007', '2024-06-01 10:07:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000006', '2024-06-01 10:06:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000000', '2024-06-01 10:00:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000005', '2024-06-01 10:05:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000004', '2024-06-01 10:04:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000003', '2024-06-01 10:03:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000002', '2024-06-01 10:02:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000010', '2024-06-01 10:10:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000011', '2024-06-01 10:11:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000012', '2024-06-01 10:12:00', TRUE, NULL, '2024-06-01 10:12:30', FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000013', '2024-06-01 10:13:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000014', '2024-06-01 10:14:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000015', '2024-06-01 10:15:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000016', '2024-06-01 10:16:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000017', '2024-06-01 10:17:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000018', '2024-06-01 10:18:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000019', '2024-06-01 10:19:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000020', '2024-06-01 10:20:00', TRUE, NULL, NULL, FALSE, FALSE),
-('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000021', '2024-06-01 10:21:00', TRUE, NULL, NULL, FALSE, FALSE);
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000001', '2024-06-01 10:01:00', TRUE, '2024-06-01 10:01:30', NULL, 'done', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000009', '2024-06-01 10:09:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-2@test.com', '0190a000-0000-7000-8000-000000000030', '2024-06-01 10:30:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000008', '2024-06-01 10:08:00', TRUE, '2024-06-01 10:08:30', NULL, 'done', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000007', '2024-06-01 10:07:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000006', '2024-06-01 10:06:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000000', '2024-06-01 10:00:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000005', '2024-06-01 10:05:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000004', '2024-06-01 10:04:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000003', '2024-06-01 10:03:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000002', '2024-06-01 10:02:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000010', '2024-06-01 10:10:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000011', '2024-06-01 10:11:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000012', '2024-06-01 10:12:00', TRUE, NULL, '2024-06-01 10:12:30', 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000013', '2024-06-01 10:13:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000014', '2024-06-01 10:14:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000015', '2024-06-01 10:15:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000016', '2024-06-01 10:16:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000017', '2024-06-01 10:17:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000018', '2024-06-01 10:18:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000019', '2024-06-01 10:19:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000020', '2024-06-01 10:20:00', TRUE, NULL, NULL, 'unseen', FALSE),
+('macro|user-1@test.com', '0190a000-0000-7000-8000-000000000021', '2024-06-01 10:21:00', TRUE, NULL, NULL, 'unseen', FALSE);
 
 SET session_replication_role = 'origin';

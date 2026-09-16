@@ -41,7 +41,6 @@ import HashStraight from '@phosphor/hash-straight.svg';
 import FileImage from '@phosphor/image.svg';
 import ListChecks from '@phosphor/list-checks.svg';
 import PhoneCall from '@phosphor/phone-call.svg';
-import Robot from '@phosphor/robot.svg';
 import Shapes from '@phosphor/shapes.svg';
 import Sparkle from '@phosphor/sparkle.svg';
 import Users from '@phosphor/users.svg';
@@ -74,7 +73,6 @@ import HashStraightBold from '@phosphor-icons/core/bold/hash-straight-bold.svg';
 import FileImageBold from '@phosphor-icons/core/bold/image-bold.svg';
 import ListChecksBold from '@phosphor-icons/core/bold/list-checks-bold.svg';
 import PhoneCallBold from '@phosphor-icons/core/bold/phone-call-bold.svg';
-import RobotBold from '@phosphor-icons/core/bold/robot-bold.svg';
 import ShapesBold from '@phosphor-icons/core/bold/shapes-bold.svg';
 import SparkleBold from '@phosphor-icons/core/bold/sparkle-bold.svg';
 import UsersBold from '@phosphor-icons/core/bold/users-bold.svg';
@@ -330,8 +328,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Pull Request',
   },
   agent: {
-    icon: Robot,
-    boldIcon: RobotBold,
+    icon: Sparkle,
+    boldIcon: SparkleBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Agent',
@@ -561,6 +559,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
     // reminder first, and what it points at is iconed beside its name instead
     // — see `reminderReferenceIconType`.
     .with({ type: 'reminder' }, () => 'reminder')
+    .with({ type: 'agent_session' }, () => 'agent')
     .with({ type: 'calendar_event' }, () => 'calendar')
     .otherwise((e) => e.type);
 

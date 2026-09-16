@@ -410,6 +410,44 @@ async fn create_user_owned_bot_records_user_owner(pool: PgPool) -> anyhow::Resul
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn bot_profiles_batch_persisted_system_deleted_and_missing_bots(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let service = service(&pool);
+    let mut request = create_req("profile-batch");
+    request.avatar_url = Some("https://static.example/profile-batch.png".to_string());
+    let bot = service.create_bot(user_id(USER_OWNER), request).await?;
+    let missing = BotId::new_from_uuid(Uuid::new_v4());
+    let repo = PgBotsRepo::new(pool);
+
+    let profiles = repo
+        .get_bot_profiles(&[bot.id, bot_id::MACRO_NEW_BOT_ID, missing])
+        .await?;
+    let profile = profiles.get(&bot.id).expect("persisted bot profile");
+    assert_eq!(profile.id, bot.id);
+    assert_eq!(profile.name, bot.name);
+    assert_eq!(profile.avatar_url, bot.avatar_url);
+    assert_eq!(
+        profiles
+            .get(&bot_id::MACRO_NEW_BOT_ID)
+            .expect("system bot profile")
+            .name,
+        bot_id::MACRO_NEW_NAME
+    );
+    assert!(!profiles.contains_key(&missing));
+
+    service.delete_bot(user_id(USER_OWNER), bot.id).await?;
+    assert!(repo.get_bot(bot.id).await?.is_none());
+    assert!(
+        repo.get_bot_profiles(&[bot.id])
+            .await?
+            .contains_key(&bot.id)
+    );
+
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn created_agent_round_trips_every_agent_field(pool: PgPool) -> anyhow::Result<()> {
     let service = service(&pool);
     let created = service
@@ -467,6 +505,91 @@ async fn create_team_agent_requires_membership_not_admin(pool: PgPool) -> anyhow
         .await
         .expect_err("a non-member must not create a team agent");
     assert!(matches!(error, BotError::Unauthorized));
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn team_member_can_list_a_team_agent_created_by_someone_else(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let team_id = Uuid::new_v4();
+    insert_team_user(&pool, team_id, TEAM_ADMIN, "admin").await?;
+    insert_team_user(&pool, team_id, TEAM_MEMBER, "member").await?;
+    let service = service(&pool);
+    let mut create = create_agent_req("team-shared", AgentChannelScope::All);
+    create.team_id = Some(team_id);
+    let created = service.create_agent(user_id(TEAM_ADMIN), create).await?;
+
+    let listed = service.list_agents(user_id(TEAM_MEMBER)).await?;
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].bot.id, created.bot.id);
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn channel_co_member_can_list_a_selected_agent_they_can_mention(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let channel_id = Uuid::new_v4();
+    insert_channel_member(&pool, channel_id, USER_OWNER).await?;
+    insert_user(&pool, USER_OTHER).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at)
+        VALUES ($1, $2, 'member'::comms_participant_role, NULL)
+        "#,
+        channel_id,
+        USER_OTHER,
+    )
+    .execute(&pool)
+    .await?;
+
+    let service = service(&pool);
+    let mut request = create_agent_req("shared-reviewer", AgentChannelScope::Selected);
+    request.channel_ids = vec![channel_id];
+    let created = service.create_agent(user_id(USER_OWNER), request).await?;
+
+    let listed = service.list_agents(user_id(USER_OTHER)).await?;
+    assert_eq!(listed.len(), 1);
+    assert_eq!(listed[0].bot.id, created.bot.id);
+    assert_eq!(listed[0].bot.handle, "shared-reviewer");
+
+    assert!(service.list_agents(user_id(TEAM_OTHER)).await?.is_empty());
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn all_channel_private_agent_is_not_listed_for_a_channel_co_member(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    let channel_id = Uuid::new_v4();
+    insert_channel_member(&pool, channel_id, USER_OWNER).await?;
+    insert_user(&pool, USER_OTHER).await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_channel_participants (channel_id, user_id, role, left_at)
+        VALUES ($1, $2, 'member'::comms_participant_role, NULL)
+        "#,
+        channel_id,
+        USER_OTHER,
+    )
+    .execute(&pool)
+    .await?;
+
+    let service = service(&pool);
+    let created = service
+        .create_agent(
+            user_id(USER_OWNER),
+            create_agent_req("private-global", AgentChannelScope::All),
+        )
+        .await?;
+    // All-channel agents are not channel participants unless selected, so a
+    // co-member of some other channel still cannot list them.
+    assert!(service.list_agents(user_id(USER_OTHER)).await?.is_empty());
+    assert_eq!(
+        service.list_agents(user_id(USER_OWNER)).await?[0].bot.id,
+        created.bot.id
+    );
     Ok(())
 }
 

@@ -1,6 +1,12 @@
 import { $dfsIterator } from '@lexical/utils';
 import { $getRoot, type LexicalNode } from 'lexical';
 import {
+  $isAgentSessionMentionNode,
+  type AgentSessionMentionInfo,
+  type AgentSessionMentionNode,
+  buildAgentSessionMentionMarkdown,
+} from '../nodes/AgentSessionMentionNode';
+import {
   $isContactMentionNode,
   type ContactMentionInfo,
   type ContactMentionNode,
@@ -45,6 +51,7 @@ export type MentionNode =
   | DocumentMentionNode
   | ContactMentionNode
   | DateMentionNode
+  | AgentSessionMentionNode
   | PullRequestMentionNode
   | GroupMentionNode;
 
@@ -54,6 +61,7 @@ export function $isMentionNode(node: LexicalNode): node is MentionNode {
     $isDocumentMentionNode(node) ||
     $isContactMentionNode(node) ||
     $isDateMentionNode(node) ||
+    $isAgentSessionMentionNode(node) ||
     $isPullRequestMentionNode(node) ||
     $isGroupMentionNode(node)
   );
@@ -131,6 +139,8 @@ export function $extractChannelMentions(): ChannelMention[] {
         entityType: documentMentionEntityType(node.getBlockName()),
         entityId: node.getDocumentId(),
       });
+    } else if ($isAgentSessionMentionNode(node)) {
+      push({ entityType: 'agent_session', entityId: node.getId() });
     } else if ($isUserMentionNode(node)) {
       const userId = node.getUserId();
       push({
@@ -145,6 +155,7 @@ export function $extractChannelMentions(): ChannelMention[] {
 export type MentionInfo =
   | (UserMentionInfo & { type: 'user' })
   | (DocumentMentionInfo & { type: 'document' })
+  | (AgentSessionMentionInfo & { type: 'agent_session' })
   | (PullRequestMentionInfo & { type: 'pr' })
   | (ContactMentionInfo & { type: 'contact' })
   | (DateMentionInfo & { type: 'date' })
@@ -156,6 +167,8 @@ export function buildMentionMarkdownString(info: MentionInfo): string {
       return wrapXml('m-user-mention', dropKey(info, 'type'));
     case 'document':
       return wrapXml('m-document-mention', dropKey(info, 'type'));
+    case 'agent_session':
+      return buildAgentSessionMentionMarkdown(dropKey(info, 'type'));
     case 'pr':
       return wrapXml('m-pr-mention', dropKey(info, 'type'));
     case 'contact':

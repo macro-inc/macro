@@ -1,10 +1,16 @@
 import type { AnthropicProviderOptions } from '@ai-sdk/anthropic';
+import type { GoogleGenerativeAIProviderOptions } from '@ai-sdk/google';
 import type { ModelMessage } from 'ai';
 
 export const EDIT_PROVIDER_OPTIONS = {
   anthropic: {
     thinking: { type: 'disabled' },
   } satisfies AnthropicProviderOptions,
+  // Gemini 3.x defaults to medium thinking; the fast path wants tokens out,
+  // not deliberation. `runCode` takes arbitrary JS, so there is little to plan.
+  google: {
+    thinkingConfig: { thinkingLevel: 'low' },
+  } satisfies GoogleGenerativeAIProviderOptions,
 };
 
 /**

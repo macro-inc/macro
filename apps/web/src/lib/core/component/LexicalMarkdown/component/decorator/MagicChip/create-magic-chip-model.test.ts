@@ -1,10 +1,16 @@
 import type { MagicChipDecoratorProps } from '@macro-inc/lexical-core';
+import {
+  handleAgentSessionUpdated,
+  invalidateAgentSessionMetadata,
+} from '@queries/agent-session/session-metadata-sync';
+import { queryClient } from '@queries/client';
 import type {
   FoldedMessage,
   PendingElicitation,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
-import { createRoot } from 'solid-js';
+import { QueryClientProvider } from '@tanstack/solid-query';
+import { createComponent, createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const sessionFold = vi.hoisted(() => ({
@@ -12,13 +18,19 @@ const sessionFold = vi.hoisted(() => ({
   subscribeAgentSessionLog: vi.fn(),
 }));
 const serviceClient = vi.hoisted(() => ({ get: vi.fn(), control: vi.fn() }));
-const viewer = vi.hoisted(() => ({ id: 'macro|wolf@macro.com' }));
 
+vi.mock('@queries/client', async () => {
+  const { QueryClient } = await import('@tanstack/solid-query');
+  return {
+    queryClient: new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    }),
+  };
+});
 vi.mock('@queries/agent-session/session-fold', () => sessionFold);
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: serviceClient,
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => viewer.id }));
 vi.mock('@core/user', () => ({
   tryMacroId: (id: string) => (id.startsWith('macro|') ? id : undefined),
   getDisplayName: (id: string) =>
@@ -29,6 +41,18 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 import { createMagicChipModel } from './create-magic-chip-model';
+
+function createModel(props: MagicChipDecoratorProps) {
+  let model!: ReturnType<typeof createMagicChipModel>;
+  createComponent(QueryClientProvider, {
+    client: queryClient,
+    get children() {
+      model = createMagicChipModel(props);
+      return null;
+    },
+  });
+  return model;
+}
 
 const prompt: FoldedMessage = {
   requestId: null,
@@ -79,15 +103,13 @@ const props = {
 
 /** Let the fold acquisition and the status fetch settle. */
 const settle = async () => {
-  await Promise.resolve();
-  await Promise.resolve();
-  await Promise.resolve();
+  await new Promise((resolve) => setTimeout(resolve, 10));
 };
 
 describe('createMagicChipModel', () => {
   beforeEach(() => {
+    queryClient.clear();
     vi.clearAllMocks();
-    viewer.id = 'macro|wolf@macro.com';
     sessionFold.subscribeAgentSessionLog.mockReturnValue(vi.fn());
     sessionFold.acquireAgentSessionFold.mockResolvedValue({
       messages: [prompt, response],
@@ -96,18 +118,176 @@ describe('createMagicChipModel', () => {
     });
     serviceClient.get.mockResolvedValue({
       isOk: () => true,
+      isErr: () => false,
       value: {
         status: { kind: 'disconnected' },
         ownerId: 'macro|alice@macro.com',
+        canEdit: true,
       },
     });
     serviceClient.control.mockResolvedValue({ isErr: () => false });
   });
 
+  it('reloads the session PR on gateway updates and reconnect without folding it', async () => {
+    const snapshot = (pullRequestUrl: string | null) => ({
+      isOk: () => true,
+      isErr: () => false,
+      value: {
+        status: { kind: 'disconnected' },
+        harness: 'cursor',
+        model: '',
+        canEdit: true,
+        pullRequestUrl,
+      },
+    });
+    const first = 'https://github.com/org/repo/pull/1';
+    const second = 'https://github.com/org/repo/pull/2';
+    serviceClient.get.mockResolvedValue(snapshot(null));
+    let model!: ReturnType<typeof createMagicChipModel>;
+    let sibling!: ReturnType<typeof createMagicChipModel>;
+    const dispose = createRoot((dispose) => {
+      model = createModel(props);
+      sibling = createModel(props);
+      return dispose;
+    });
+    await settle();
+    expect(model.header()?.pullRequestUrl).toBeUndefined();
+    expect(serviceClient.get).toHaveBeenCalledTimes(1);
+
+    let resolveStale!: (value: ReturnType<typeof snapshot>) => void;
+    serviceClient.get.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveStale = resolve;
+      })
+    );
+    void handleAgentSessionUpdated({ agentSessionId: 'session' });
+    await settle();
+    serviceClient.get.mockResolvedValue(snapshot(first));
+    await handleAgentSessionUpdated({ agentSessionId: 'session' });
+    await settle();
+    expect(model.header()?.pullRequestUrl).toBe(first);
+    resolveStale(snapshot(null));
+    await settle();
+    expect(model.header()?.pullRequestUrl).toBe(first);
+
+    sessionFold.acquireAgentSessionFold.mock.calls[0]![0].onReplace([]);
+    expect(model.header()?.pullRequestUrl).toBe(first);
+    serviceClient.get.mockResolvedValue(snapshot(second));
+    await invalidateAgentSessionMetadata();
+    await settle();
+    expect(model.header()?.pullRequestUrl).toBe(second);
+    expect(sibling.header()?.pullRequestUrl).toBe(second);
+    dispose();
+    const calls = serviceClient.get.mock.calls.length;
+    await handleAgentSessionUpdated({ agentSessionId: 'session' });
+    await invalidateAgentSessionMetadata();
+    expect(serviceClient.get).toHaveBeenCalledTimes(calls);
+  });
+
+  it('restarts an initial pending snapshot when registration arrives', async () => {
+    const snapshot = (pullRequestUrl: string | null) => ({
+      isErr: () => false,
+      value: { status: { kind: 'disconnected' }, pullRequestUrl },
+    });
+    let resolveInitial!: (value: ReturnType<typeof snapshot>) => void;
+    serviceClient.get.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveInitial = resolve;
+      })
+    );
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const dispose = createRoot((dispose) => {
+      model = createModel(props);
+      return dispose;
+    });
+    await settle();
+    const url = 'https://github.com/org/repo/pull/3';
+    serviceClient.get.mockResolvedValue(snapshot(url));
+    await handleAgentSessionUpdated({ agentSessionId: 'session' });
+    await settle();
+    expect(model.header()?.pullRequestUrl).toBe(url);
+    resolveInitial(snapshot(null));
+    await settle();
+    expect(model.header()?.pullRequestUrl).toBe(url);
+    dispose();
+  });
+
+  it('follows the latest turn and streaming updates without rewinding for late patches', async () => {
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const release = vi.fn();
+    sessionFold.acquireAgentSessionFold.mockResolvedValue({
+      messages: [prompt, response],
+      metadata: metadata(null),
+      release,
+    });
+    const dispose = createRoot((dispose) => {
+      model = createModel({ ...props, promptedMessage: null });
+      return dispose;
+    });
+    await settle();
+    expect(model.presentation()).toEqual({ kind: 'settled', markdown: 'Hi!' });
+    const callbacks = sessionFold.acquireAgentSessionFold.mock.calls[0]![0];
+    callbacks.onChange([{ ...prompt, turn: 3 }]);
+    expect(model.presentation()).not.toMatchObject({ markdown: 'Hi!' });
+    callbacks.onChange([
+      {
+        ...openResponse,
+        turn: 3,
+        parts: [{ kind: 'text', text: 'Newest stream' }],
+      },
+    ]);
+    expect(model.presentation()).toMatchObject({
+      kind: 'answering',
+      markdown: 'Newest stream',
+    });
+    callbacks.onChange([
+      {
+        ...response,
+        turn: 1,
+        parts: [{ kind: 'text', text: 'Late old patch' }],
+      },
+    ]);
+    expect(model.presentation()).toMatchObject({ markdown: 'Newest stream' });
+    callbacks.onChange([
+      {
+        ...response,
+        turn: 3,
+        parts: [{ kind: 'text', text: 'Newest answer' }],
+      },
+    ]);
+    expect(model.presentation()).toEqual({
+      kind: 'settled',
+      markdown: 'Newest answer',
+    });
+    callbacks.onMetadata(metadata({ ...question, turn: 4 }));
+    expect(model.presentation()).toMatchObject({
+      kind: 'asking',
+      asking: { question: { turn: 4 } },
+    });
+    dispose();
+    expect(release).toHaveBeenCalledOnce();
+  });
+
+  it('keeps an explicit message lock when later turns arrive', async () => {
+    let model!: ReturnType<typeof createMagicChipModel>;
+    const dispose = createRoot((dispose) => {
+      model = createModel(props);
+      return dispose;
+    });
+    await settle();
+    const callbacks = sessionFold.acquireAgentSessionFold.mock.calls[0]![0];
+    callbacks.onChange([
+      { ...response, turn: 3, parts: [{ kind: 'text', text: 'New turn' }] },
+    ]);
+    callbacks.onMetadata(metadata({ ...question, turn: 3 }));
+    expect(model.presentation()).toEqual({ kind: 'settled', markdown: 'Hi!' });
+    dispose();
+  });
+
   it('settles after the attached turn completes despite stale acp_ready status', async () => {
     let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
     const dispose = createRoot((rootDispose) => {
-      presentation = createMagicChipModel(props).presentation;
+      presentation = createModel(props).presentation;
       return rootDispose;
     });
 
@@ -127,7 +307,7 @@ describe('createMagicChipModel', () => {
   it('replaces the referenced answer after a successful load', async () => {
     let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
     const dispose = createRoot((rootDispose) => {
-      presentation = createMagicChipModel(props).presentation;
+      presentation = createModel(props).presentation;
       return rootDispose;
     });
     await Promise.resolve();
@@ -156,7 +336,7 @@ describe('createMagicChipModel', () => {
     });
     let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
     const dispose = createRoot((rootDispose) => {
-      presentation = createMagicChipModel(props).presentation;
+      presentation = createModel(props).presentation;
       return rootDispose;
     });
 
@@ -170,8 +350,7 @@ describe('createMagicChipModel', () => {
     dispose();
   });
 
-  it('offers a question asked in its turn, to the owner, and answers on the request id', async () => {
-    viewer.id = 'macro|alice@macro.com';
+  it('offers a question asked in its turn to an editor, and answers on the request id', async () => {
     sessionFold.acquireAgentSessionFold.mockResolvedValue({
       messages: [prompt, openResponse],
       metadata: metadata(question),
@@ -179,7 +358,7 @@ describe('createMagicChipModel', () => {
     });
     let model!: ReturnType<typeof createMagicChipModel>;
     const dispose = createRoot((rootDispose) => {
-      model = createMagicChipModel(props);
+      model = createModel(props);
       return rootDispose;
     });
 
@@ -188,7 +367,7 @@ describe('createMagicChipModel', () => {
     expect(model.presentation()).toEqual({
       kind: 'asking',
       markdown: 'Setting that up.',
-      asking: { question, canAnswer: true, ownerName: 'Alice Owner' },
+      asking: { question, canAnswer: true },
     });
     expect(await model.elicitation.respond({ action: 'decline' })).toBe(true);
     expect(serviceClient.control).toHaveBeenCalledWith('session', {
@@ -206,9 +385,18 @@ describe('createMagicChipModel', () => {
       metadata: metadata(question),
       release: vi.fn(),
     });
+    serviceClient.get.mockResolvedValue({
+      isOk: () => true,
+      isErr: () => false,
+      value: {
+        status: { kind: 'disconnected' },
+        ownerId: 'macro|alice@macro.com',
+        canEdit: false,
+      },
+    });
     let model!: ReturnType<typeof createMagicChipModel>;
     const dispose = createRoot((rootDispose) => {
-      model = createMagicChipModel(props);
+      model = createModel(props);
       return rootDispose;
     });
 
@@ -218,7 +406,6 @@ describe('createMagicChipModel', () => {
     expect(presentation.kind).toBe('asking');
     if (presentation.kind === 'asking') {
       expect(presentation.asking.canAnswer).toBe(false);
-      expect(presentation.asking.ownerName).toBe('Alice Owner');
     }
     expect(await model.elicitation.respond({ action: 'decline' })).toBe(false);
     expect(serviceClient.control).not.toHaveBeenCalled();
@@ -240,7 +427,7 @@ describe('createMagicChipModel', () => {
     );
     let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
     const dispose = createRoot((rootDispose) => {
-      presentation = createMagicChipModel(props).presentation;
+      presentation = createModel(props).presentation;
       return rootDispose;
     });
 

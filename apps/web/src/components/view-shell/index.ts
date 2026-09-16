@@ -3,6 +3,10 @@ export {
   type CollapsibleSectionRootProps,
 } from './CollapsibleSection';
 export {
+  createCollapsedSidebarSectionsStorage,
+  setSidebarSectionCollapsed,
+} from './collapsed-sections';
+export {
   type ListControlOption,
   ListFilterDropdown,
   type ListFilterDropdownProps,

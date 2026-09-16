@@ -4,6 +4,39 @@ use super::*;
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_dynamic_query"))
+)]
+async fn mail_projection_excludes_trashed_messages(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool);
+    let draft = uuid::uuid!("20000008-0000-0000-0000-000000000008");
+    let trash = uuid::uuid!("20000009-0000-0000-0000-000000000009");
+    let rows = repo
+        .thread_mail_projections_by_ids(
+            macro_user_id::user_id::MacroUserIdStr::parse_from_str("macro|user1@test.com")?,
+            &[draft, trash],
+        )
+        .await?;
+    assert!(
+        rows.iter()
+            .find(|row| row.thread_id == draft)
+            .unwrap()
+            .previews
+            .all
+            .is_some()
+    );
+    assert!(
+        rows.iter()
+            .find(|row| row.thread_id == trash)
+            .unwrap()
+            .previews
+            .all
+            .is_none()
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_thread"))
 )]
 async fn test_thread_by_id_exists(pool: Pool<Postgres>) -> anyhow::Result<()> {
@@ -67,6 +100,48 @@ async fn thread_metadata_by_ids_returns_canonical_rows(pool: Pool<Postgres>) -> 
     assert_eq!(metadata[1].thread_id, second_id);
     assert_eq!(metadata[1].link_id, canonical_link_id);
 
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_thread"))
+)]
+async fn mail_archive_filters_do_not_require_notifications(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
+    use filter_ast::Expr;
+    use item_filters::ast::email::EmailLiteral;
+    let inbox = uuid::uuid!("11111111-1111-1111-1111-111111111111");
+    let archived = uuid::uuid!("22222222-2222-2222-2222-222222222222");
+    for (visible, expected) in [(true, inbox), (false, archived)] {
+        let filter = Expr::and(
+            Expr::or(
+                Expr::val(EmailLiteral::ThreadId(inbox)),
+                Expr::val(EmailLiteral::ThreadId(archived)),
+            ),
+            Expr::val(EmailLiteral::InboxVisible(visible)),
+        );
+        let rows = super::super::dynamic::dynamic_email_thread_cursor(
+            &pool,
+            &[uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")],
+            50,
+            &PreviewView::StandardLabel(PreviewViewStandardLabel::All),
+            models_pagination::Query::new(
+                None,
+                models_pagination::SimpleSortMethod::UpdatedAt,
+                std::sync::Arc::new(filter),
+            ),
+            "macro|user1@test.com",
+            None,
+        )
+        .await?;
+        assert_eq!(
+            rows.iter().map(|row| row.id).collect::<Vec<_>>(),
+            vec![expected]
+        );
+    }
     Ok(())
 }
 

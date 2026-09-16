@@ -88,6 +88,7 @@ const KNOWN_TYPES: Record<KnownNode['type'], 1> = {
   'contact-mention': 1,
   'group-mention': 1,
   'pr-mention': 1,
+  'agent-session-mention': 1,
   'tag-mention': 1,
   'theme-mention': 1,
   'unknown-mention': 1,
@@ -328,6 +329,11 @@ export function serializeNode(node: SerNode): FxpNode {
         nodeAttrs(n, {
           ...(n.documentId && { documentId: n.documentId }),
           ...(n.documentName && { name: n.documentName }),
+          ...(n.blockName && { blockName: n.blockName }),
+          ...(n.blockParams &&
+            Object.keys(n.blockParams).length > 0 && {
+              blockParams: JSON.stringify(n.blockParams),
+            }),
         })
       )
     )
@@ -348,6 +354,17 @@ export function serializeNode(node: SerNode): FxpNode {
         'group-mention',
         [],
         nodeAttrs(n, { ...(n.groupAlias && { alias: n.groupAlias }) })
+      )
+    )
+    .with({ type: 'agent-session-mention' }, (n) =>
+      el(
+        'agent-session-mention',
+        [],
+        nodeAttrs(n, {
+          sessionId: n.id,
+          ...(n.label && { label: n.label }),
+          ...(n.expanded && { expanded: 'true' }),
+        })
       )
     )
     .with({ type: 'pr-mention' }, (n) =>

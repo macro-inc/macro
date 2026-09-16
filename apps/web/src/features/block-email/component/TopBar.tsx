@@ -34,7 +34,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildEntityData } from '@entity';
-import { AnimatedNoiseIcon } from '@icon/wide-noise';
+import NoiseIcon from '@icon/phosphor-noise.svg';
 import IconShared from '@icon/wide-share.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CheckIcon from '@phosphor/check.svg';
@@ -154,7 +154,7 @@ export function TopBar(props: {
       return soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
     })();
 
-    const handle = trashEmails([thread.db_id]);
+    const handle = trashEmails([{ id: thread.db_id, linkId: thread.link_id }]);
 
     if (soup && nextRow) {
       soup.selection.clear();
@@ -261,7 +261,7 @@ export function TopBar(props: {
     {
       group: 'sender',
       label: 'Sender → Noise',
-      icon: AnimatedNoiseIcon,
+      icon: NoiseIcon,
       action: () => emailCtx.markSenderNoise(),
       condition: isOwnThread,
     },

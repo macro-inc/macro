@@ -51,6 +51,8 @@ impl UnifiedSearchArgs {
 
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedSearchArgs {
+    /// Authorized folded-agent-session search.
+    pub agent_session_search_args: super::agent_sessions::AgentSessionSearchArgs,
     pub user_id: String,
     pub page: u32,
     pub page_size: u32,
@@ -316,6 +318,7 @@ pub struct UnifiedProjectSearchArgs {
 /// physical index it happened to live in.
 #[derive(Debug)]
 pub(crate) enum UnifiedSearchIndex {
+    AgentSession(super::agent_sessions::AgentSessionIndex),
     ChannelMessage(ChannelMessageIndex),
     Document(DocumentIndex),
     Chat(ChatIndex),
@@ -358,6 +361,7 @@ impl UnifiedSearchIndex {
         }
 
         Ok(match entity {
+            OpenSearchEntityType::AgentSessions => Self::AgentSession(parse(&entity, source)?),
             OpenSearchEntityType::Channels => Self::ChannelMessage(parse(&entity, source)?),
             OpenSearchEntityType::Documents => Self::Document(parse(&entity, source)?),
             OpenSearchEntityType::Chats => Self::Chat(parse(&entity, source)?),
@@ -371,6 +375,7 @@ impl UnifiedSearchIndex {
 
 #[derive(Default)]
 pub struct SplitUnifiedSearchResponseValues {
+    pub agent_session: Vec<SearchHit>,
     pub channel_message: Vec<SearchHit>,
     pub chat: Vec<SearchHit>,
     pub document: Vec<SearchHit>,
@@ -393,6 +398,7 @@ where
         let mut split = SplitUnifiedSearchResponseValues::default();
         for item in self {
             match item.entity_type {
+                SearchEntityType::AgentSessions => split.agent_session.push(item),
                 SearchEntityType::Channels => split.channel_message.push(item),
                 SearchEntityType::Chats => split.chat.push(item),
                 SearchEntityType::Documents => split.document.push(item),
@@ -415,6 +421,16 @@ where
 /// unpack those into child-level hits; everything else (channels,
 /// emails) takes the 1:1 conversion.
 fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
+    if let UnifiedSearchIndex::AgentSession(source) = hit.source {
+        return super::agent_sessions::expand(Hit {
+            source,
+            index: hit.index,
+            matched_queries: hit.matched_queries,
+            score: hit.score,
+            highlight: hit.highlight,
+            inner_hits: hit.inner_hits,
+        });
+    }
     match &hit.source {
         UnifiedSearchIndex::Document(parent) => {
             let entity_id = parent.entity_id;
@@ -527,6 +543,25 @@ fn expand_hit_into_search_hits(hit: Hit<UnifiedSearchIndex>) -> Vec<SearchHit> {
 impl From<Hit<UnifiedSearchIndex>> for SearchHit {
     fn from(index: Hit<UnifiedSearchIndex>) -> Self {
         match index.source {
+            UnifiedSearchIndex::AgentSession(a) => SearchHit {
+                entity_id: a.agent_session_id,
+                entity_type: SearchEntityType::AgentSessions,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: "name",
+                                content_key: "content",
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+                updated_at: millis_to_datetime(Some(a.updated_at_millis)),
+            },
             UnifiedSearchIndex::ChannelMessage(a) => SearchHit {
                 entity_id: a.entity_id,
                 entity_type: SearchEntityType::Channels,
@@ -709,6 +744,15 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 
     // There will always be 1 query as the indices are never empty
     bool_query.minimum_should_match(1);
+    if args
+        .search_indices
+        .contains(&OpenSearchEntityType::AgentSessions)
+    {
+        let mut query =
+            super::agent_sessions::build_query(&args.agent_session_search_args, &args.match_type)?;
+        query.name(OpenSearchEntityType::AgentSessions.query_name());
+        bool_query.should(query.build().into());
+    }
 
     if args
         .search_indices

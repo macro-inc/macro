@@ -31,6 +31,8 @@ export type CodeExecutionErrorCode =
   | 'string_not_found';
 /**
  * Canonical entity type accepted when an AI tool targets an entity's properties.
+ * Tasks are targeted as `document`; email threads (type `email` in ListEntities
+ * and search results) are targeted as `thread`.
  */
 export type ToolPropertyTargetEntityType =
   | 'document'
@@ -66,6 +68,7 @@ export type BotOwnerSummary =
  */
 export type SearchMatchType = 'partial' | 'exact';
 export type UnifiedSearchIndex =
+  | 'agent_sessions'
   | 'documents'
   | 'chats'
   | 'emails'
@@ -117,6 +120,9 @@ export type TaggedSearchResult1 =
     })
   | (CalendarEventSearchResponseItemWithMetadata & {
       type: 'calendarEvent';
+    })
+  | (AgentSessionSearchResponseItem & {
+      type: 'agentSession';
     });
 /**
  * The document sub type enum represents all values of document sub types.
@@ -167,6 +173,10 @@ export type CalendarEventSearchTime =
       endDate: string;
       kind: 'allDay';
     };
+/**
+ * Side of a folded conversation.
+ */
+export type AgentSessionAuthor = 'user' | 'agent';
 /**
  * The mutually exclusive time shape supplied to calendar tools.
  */
@@ -484,6 +494,10 @@ export type EntityItem =
       type: 'foreignEntity';
     };
 /**
+ * The mutually exclusive lifecycle states of a user's notification.
+ */
+export type NotificationState = 'unseen' | 'seen' | 'done';
+/**
  * User-facing notification categories used for list filtering.
  */
 export type NotificationCategory =
@@ -497,7 +511,8 @@ export type NotificationCategory =
   | 'task'
   | 'github'
   | 'reminder'
-  | 'calendar';
+  | 'calendar'
+  | 'agent';
 /**
  * Canonical entity types accepted by the notification-listing tool.
  *
@@ -520,7 +535,8 @@ export type NotificationEntityType =
   | 'crm_company'
   | 'crm_contact'
   | 'reminder'
-  | 'skill';
+  | 'skill'
+  | 'scheduled_action';
 /**
  * Channel-access change to apply to a bot.
  */
@@ -1705,6 +1721,63 @@ export interface CalendarEventSearchResult {
   score?: number | null;
 }
 /**
+ * One accessible agent session, grouped with its matching folded messages.
+ */
+export interface AgentSessionSearchResponseItem {
+  /**
+   * Session ID.
+   */
+  id: string;
+  /**
+   * Current persisted name.
+   */
+  name: string;
+  /**
+   * Session owner.
+   */
+  owner_id: string;
+  /**
+   * Agent persona ID.
+   */
+  bot_id: string;
+  /**
+   * Session creation time.
+   */
+  created_at: string;
+  /**
+   * Current persisted modification time.
+   */
+  updated_at: string;
+  /**
+   * Name and folded-message matches.
+   */
+  agent_session_search_results: AgentSessionSearchResult[];
+}
+/**
+ * A name match or one matching folded message.
+ */
+export interface AgentSessionSearchResult {
+  /**
+   * Absent for a name-only match.
+   */
+  goto?: SearchGotoAgentSession | null;
+  highlight: SearchHighlight;
+  /**
+   * Search score.
+   */
+  score?: number | null;
+}
+/**
+ * Stable navigation target from the fold, independent of raw ACP log IDs.
+ */
+export interface SearchGotoAgentSession {
+  /**
+   * Fold-assigned turn.
+   */
+  message_turn: number;
+  author: AgentSessionAuthor;
+}
+/**
  * Create a bot with a name, stable handle, and optional profile. Omit teamId for a bot owned by the current user; provide teamId to create a team-owned bot, which requires team administrator or owner permission. Pass channelId when the bot should post to a channel immediately: the current user must be a member of that channel. The response then includes that channel's webhook URL and a credential proposal. The user mints the bearer token from the chat card or bot settings; the secret is never returned in this tool result. Omit channelId to create the bot only, then use ManageBotChannelAccess and IssueBotCredential for later setup.
  */
 export interface CreateBot {
@@ -2449,7 +2522,7 @@ export interface DisplayResultsResponse {
   message: string;
 }
 /**
- * Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Uploaded files -- PDFs, DOCX, spreadsheets, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert mention(s), include each person's userId and email. To insert document-card(s), include each document's documentId and documentName.
+ * Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Uploaded files -- PDFs, DOCX, spreadsheets, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips, include each referenced item's ids and details in `instructions`: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and automations; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips. To insert document-card(s), include each document's documentId and documentName.
  */
 export interface EditDocument {
   /**
@@ -2457,9 +2530,13 @@ export interface EditDocument {
    */
   document_id: string;
   /**
-   * Natural language instructions. For mention(s), include userId and email per person. For document-card(s), include documentId and documentName per document. You may need to look these up.
+   * Natural language instructions. For @-mention chips, include each item's ids and details: userId/email for people; documentId/documentName/blockName for documents and similar items; session id for agent sessions; ISO datetime and displayFormat for time chips. For document-card(s), include documentId and documentName per document. You may need to look these up.
    */
   instructions: string;
+  /**
+   * Set true for one quick, contained edit -- rewrite this paragraph, translate the selected list, fix a heading, bold a phrase. A single model applies it directly in a few seconds. Leave false (the default) for anything with several parts or that restructures the document; the default pipeline plans, dispatches, and reviews its own work, which takes longer but is what multi-step edits need.
+   */
+  fast?: boolean;
 }
 export interface EditDocumentResponse {
   /**
@@ -3457,7 +3534,7 @@ export interface ToolLabel {
   type: string;
 }
 /**
- * List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `done` and `seen` to request done/not-done or seen/unseen notifications.
+ * List the current user's notifications. By default returns active notifications (not deleted, not done), ordered by most recent first. Use `states` to select exact unseen, seen, or done states. Seen excludes done; an empty list includes all states.
  */
 export interface ListNotifications {
   /**
@@ -3465,13 +3542,9 @@ export interface ListNotifications {
    */
   limit?: number | null;
   /**
-   * Filter by done status. If omitted, only not-done notifications are returned. Set true for done notifications, false for not-done notifications.
+   * Exact states to include: unseen, seen, done. Defaults to [unseen, seen]. An empty list includes all states.
    */
-  done?: boolean | null;
-  /**
-   * Filter by seen status. If omitted, both seen and unseen notifications are returned. Set true for seen notifications, false for unseen notifications.
-   */
-  seen?: boolean | null;
+  states?: NotificationState[] | null;
   /**
    * Filter to specific notification item types. If omitted, returns all types. Example: ["email", "message"] returns only email and message notifications.
    */
@@ -3524,14 +3597,7 @@ export interface NotificationItem {
    * The ID of the entity this notification is about.
    */
   entityId: string;
-  /**
-   * Whether the notification has been seen.
-   */
-  seen: boolean;
-  /**
-   * Whether the notification is marked as done.
-   */
-  done: boolean;
+  state: NotificationState;
   /**
    * When the notification was created (ISO 8601).
    */

@@ -206,7 +206,10 @@ function Zone(props: ParentProps<ZoneProps>) {
     >
       <ResizeZoneContext.Provider value={ctx}>
         {props.children}
-        <Show when={gutterEnabled() && visibleLayouts().length > 1}>
+        {/* A gutter renders between every visible pair of panels so the
+            divider it paints is present even in a fixed layout; only a
+            resizable zone makes it draggable. */}
+        <Show when={gutterPx() > 0 && visibleLayouts().length > 1}>
           <Index each={visibleLayouts()}>
             {(panel, visibleIndex) => {
               const actualIndex = solver.order().indexOf(panel().id);
@@ -215,6 +218,7 @@ function Zone(props: ParentProps<ZoneProps>) {
                   <Gutter
                     offset={panel().offset + panel().size}
                     index={actualIndex}
+                    resizable={gutterEnabled()}
                     nudge={solver.moveHandle}
                     onChangeStart={beginResizeChange}
                     onChangeEnd={endResizeChange}
@@ -410,30 +414,44 @@ function Panel(props: ParentProps<PanelProps>) {
 type GutterProps = {
   offset: number;
   index: number;
+  /** Draggable and keyboard-focusable; otherwise a static divider. */
+  resizable: boolean;
   nudge: (index: number, amt: number) => void;
   onChangeStart: () => void;
   onChangeEnd: () => void;
   root: () => HTMLDivElement | undefined;
 };
 
+/**
+ * Minimum drag target across the gutter axis. The layout gutter itself can be
+ * as thin as the 1px divider it paints, so the hit area grows symmetrically
+ * over the neighbouring panels' edges to stay grabbable.
+ */
+const GUTTER_HIT_AREA = 8;
+
 function Gutter(props: GutterProps) {
   const ctx = useContext(ResizeZoneContext)!;
+  const hitSize = () =>
+    props.resizable
+      ? Math.max(ctx.gutterSize(), GUTTER_HIT_AREA)
+      : ctx.gutterSize();
   const styles = createMemo(() => {
+    const inset = (hitSize() - ctx.gutterSize()) / 2;
     if (ctx.direction() === 'horizontal') {
       return {
         top: '0px',
         bottom: '0px',
         height: '100%',
-        left: props.offset + 'px',
-        width: ctx.gutterSize() + 'px',
+        left: props.offset - inset + 'px',
+        width: hitSize() + 'px',
       };
     } else {
       return {
         left: '0px',
         right: '0px',
         width: '100%',
-        top: props.offset + 'px',
-        height: ctx.gutterSize() + 'px',
+        top: props.offset - inset + 'px',
+        height: hitSize() + 'px',
       };
     }
   });
@@ -513,40 +531,56 @@ function Gutter(props: GutterProps) {
     queueMicrotask(props.onChangeEnd);
   }
 
+  const horizontal = () => ctx.direction() === 'horizontal';
+  // Centre a bar of the given thickness on the gutter axis.
+  const barStyle = (thickness: string) => ({
+    left: horizontal() ? '50%' : '0',
+    top: horizontal() ? '0' : '50%',
+    width: horizontal() ? thickness : '100%',
+    height: horizontal() ? '100%' : thickness,
+    transform: horizontal() ? 'translateX(-50%)' : 'translateY(-50%)',
+  });
+
   return (
     <div
-      class="group"
+      class={cn('group', !props.resizable && 'pointer-events-none')}
       role="separator"
-      aria-orientation={
-        ctx.direction() === 'horizontal' ? 'vertical' : 'horizontal'
-      }
-      tabIndex={0}
-      aria-label={`resize at ${props.index}`}
+      aria-orientation={horizontal() ? 'vertical' : 'horizontal'}
+      aria-hidden={!props.resizable}
+      tabIndex={props.resizable ? 0 : undefined}
+      aria-label={props.resizable ? `resize at ${props.index}` : undefined}
       style={{
         position: 'absolute',
-        cursor: ctx.direction() === 'horizontal' ? 'col-resize' : 'row-resize',
+        cursor: props.resizable
+          ? horizontal()
+            ? 'col-resize'
+            : 'row-resize'
+          : undefined,
         ...styles(),
       }}
-      onPointerDown={onPointerDown}
-      onKeyDown={onKeyDown}
+      onPointerDown={props.resizable ? onPointerDown : undefined}
+      onKeyDown={props.resizable ? onKeyDown : undefined}
     >
+      {/* The always-on 1px divider between the two panels. Touch layouts keep
+          their own spacing and do not draw it. */}
       <div
         class={cn(
-          'bg-accent absolute opacity-0 group-focus:opacity-100 rounded-[1px]',
-          !ptrDown() && 'group-hover:opacity-50',
-          ptrDown() && 'opacity-100'
+          'absolute border-thread-rail touch:hidden',
+          horizontal() ? 'border-l-[1px]' : 'border-t-[1px]'
         )}
-        style={{
-          left: ctx.direction() === 'horizontal' ? '50%' : '0',
-          top: ctx.direction() === 'vertical' ? '50%' : '0',
-          width: ctx.direction() === 'horizontal' ? '2px' : '100%',
-          height: ctx.direction() === 'vertical' ? '2px' : '100%',
-          transform:
-            ctx.direction() === 'horizontal'
-              ? 'translateX(-50%)'
-              : 'translateY(-50%)',
-        }}
-      ></div>
+        style={barStyle('1px')}
+      />
+      {/* Hover, focus and drag feedback paints over the divider. */}
+      <Show when={props.resizable}>
+        <div
+          class={cn(
+            'bg-accent absolute opacity-0 group-focus:opacity-100 rounded-[1px]',
+            !ptrDown() && 'group-hover:opacity-50',
+            ptrDown() && 'opacity-100'
+          )}
+          style={barStyle('2px')}
+        />
+      </Show>
     </div>
   );
 }

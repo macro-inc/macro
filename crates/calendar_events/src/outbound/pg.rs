@@ -11,10 +11,11 @@ use uuid::Uuid;
 
 use crate::domain::{
     models::{
-        ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus, CalendarAttendee,
-        CalendarBackfillClaim, CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome,
-        CalendarBackfillJob, CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget,
-        CalendarEvent, CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
+        ActorInboxes, AppliedGoogleGrant, AttendeeResponseStatus,
+        CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD, CalendarAttendee, CalendarBackfillClaim,
+        CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJob,
+        CalendarBackfillJobKey, CalendarBackfillKind, CalendarCreationTarget, CalendarEvent,
+        CalendarEventMutationTarget, CalendarEventOverride, CalendarEventSource,
         CalendarEventSourceContent, CalendarEventUpsert, CalendarGrantIntent,
         CalendarLinkTokenIdentity, CalendarMentionEvent, CalendarMentionPreview,
         CalendarMentionRequestItem, CalendarOccurrence, CalendarOccurrenceCursor,
@@ -22,8 +23,8 @@ use crate::domain::{
         DisconnectedGoogleCalendar, DueCalendarReminder, EventReminderOverride, EventReminders,
         EventStart, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
         GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
-        OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
-        is_system_calendar,
+        OccurrenceContent, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
+        TeamOutOfOffice, VisibleCalendar, is_system_calendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -284,6 +285,10 @@ struct OccurrenceJoinRow {
     occurrence_start_date: Option<NaiveDate>,
     occurrence_end_date: Option<NaiveDate>,
     is_cancelled: bool,
+    override_title: Option<String>,
+    override_description: Option<String>,
+    override_location: Option<String>,
+    override_status: Option<String>,
     owner_id: String,
     ical_uid: String,
     title: String,
@@ -878,6 +883,10 @@ impl CalendarRepository for PgCalendarRepository {
                 occurrence.start_date AS occurrence_start_date,
                 occurrence.end_date AS occurrence_end_date,
                 occurrence.is_cancelled,
+                override.title AS override_title,
+                override.description AS override_description,
+                override.location AS override_location,
+                override.status AS override_status,
                 event.owner_id,
                 event.ical_uid,
                 event.title,
@@ -907,6 +916,9 @@ impl CalendarRepository for PgCalendarRepository {
                 event.updated_at
             FROM calendar_event_occurrences occurrence
             JOIN calendar_events event ON event.id = occurrence.event_id
+            LEFT JOIN calendar_event_overrides override
+                ON override.event_id = occurrence.event_id
+               AND override.recurrence_id = occurrence.recurrence_id
             WHERE occurrence.owner_id IN (
                     SELECT $1::text
                     UNION
@@ -1384,6 +1396,9 @@ impl CalendarRepository for PgCalendarRepository {
             UPDATE calendars
             SET sync_token = $3,
                 synced_at = now(),
+                last_sync_error = NULL,
+                last_sync_error_at = NULL,
+                consecutive_sync_failures = 0,
                 materialized_starts_at = CASE
                     WHEN $4 THEN $5
                     ELSE materialized_starts_at
@@ -1425,6 +1440,38 @@ impl CalendarRepository for PgCalendarRepository {
 
         tx.commit().await.map_err(report)?;
         Ok(retired)
+    }
+
+    #[tracing::instrument(skip(self, message), fields(job_id = %key.job_id), err)]
+    async fn record_google_calendar_sync_error(
+        &self,
+        key: CalendarBackfillJobKey,
+        lease_token: Uuid,
+        account_id: Uuid,
+        calendar_id: Uuid,
+        message: &str,
+    ) -> Result<(), Report> {
+        let mut tx = self.pool.begin().await.map_err(report)?;
+        fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
+        sqlx::query!(
+            r#"
+            UPDATE calendars
+            SET last_sync_error = $3,
+                last_sync_error_at = now(),
+                consecutive_sync_failures = consecutive_sync_failures + 1,
+                updated_at = now()
+            WHERE id = $1
+              AND account_id = $2
+              AND NOT is_deleted
+            "#,
+            calendar_id,
+            account_id,
+            message,
+        )
+        .execute(&mut *tx)
+        .await
+        .map_err(report)?;
+        tx.commit().await.map_err(report)
     }
 
     #[tracing::instrument(skip(self, channel), fields(job_id = %key.job_id), err)]
@@ -1922,7 +1969,9 @@ impl CalendarRepository for PgCalendarRepository {
                 calendar.is_primary,
                 calendar.access_role,
                 calendar.provider_calendar_id,
-                calendar.default_reminders
+                calendar.default_reminders,
+                calendar.last_sync_error,
+                calendar.consecutive_sync_failures
             FROM email_links link
             JOIN calendar_accounts account ON account.email_link_id = link.id
             JOIN calendars calendar ON calendar.account_id = account.id
@@ -1961,6 +2010,9 @@ impl CalendarRepository for PgCalendarRepository {
                 is_primary: row.is_primary,
                 is_writable: matches!(row.access_role.as_deref(), Some("owner" | "writer")),
                 is_subscription: is_system_calendar(&row.provider_calendar_id),
+                sync_error: row.last_sync_error.filter(|_| {
+                    row.consecutive_sync_failures >= CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD
+                }),
                 default_reminders: serde_json::from_value(row.default_reminders)
                     .inspect_err(|e| {
                         tracing::error!(error = ?e, calendar_id = %row.id, "malformed calendar default_reminders json");
@@ -2238,6 +2290,18 @@ async fn upsert_calendar_tx(
             is_selected = EXCLUDED.is_selected,
             is_deleted = false,
             default_reminders = EXCLUDED.default_reminders,
+            last_sync_error = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error
+            END,
+            last_sync_error_at = CASE
+                WHEN calendars.is_deleted THEN NULL
+                ELSE calendars.last_sync_error_at
+            END,
+            consecutive_sync_failures = CASE
+                WHEN calendars.is_deleted THEN 0
+                ELSE calendars.consecutive_sync_failures
+            END,
             updated_at = now()
         RETURNING
             id,
@@ -3910,11 +3974,15 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
 }
 
 fn event_from_join(
-    row: OccurrenceJoinRow,
+    mut row: OccurrenceJoinRow,
     attendees: Vec<CalendarAttendee>,
     sources: Vec<CalendarEventSourceContent>,
 ) -> Result<CalendarEvent, Report> {
-    Ok(CalendarEvent {
+    let override_title = row.override_title.take();
+    let override_description = row.override_description.take();
+    let override_location = row.override_location.take();
+    let override_status = row.override_status.take();
+    let mut event = CalendarEvent {
         id: row.event_id,
         owner_id: row.owner_id,
         ical_uid: row.ical_uid,
@@ -3954,7 +4022,16 @@ fn event_from_join(
         attendees,
         created_at: row.created_at,
         updated_at: row.updated_at,
-    })
+    };
+    // An exception's content replaces the series content for that occurrence
+    // alone, the same way its attendee list shadows the series list.
+    event.apply_occurrence_content(OccurrenceContent {
+        title: override_title.as_deref(),
+        description: override_description.as_deref(),
+        location: override_location.as_deref(),
+        status: override_status.as_deref().map(event_status),
+    });
+    Ok(event)
 }
 
 fn occurrence_from_join(row: &OccurrenceJoinRow) -> Result<CalendarOccurrence, Report> {

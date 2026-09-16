@@ -14,6 +14,7 @@ import {
   TextNode,
 } from 'lexical';
 import { AgentContextNode } from './nodes/AgentContextNode';
+import { AgentSessionMentionNode } from './nodes/AgentSessionMentionNode';
 import { AwaitNode } from './nodes/AwaitNode';
 import { ClassedBlockNode } from './nodes/ClassedBlockNode';
 import { CommentNode } from './nodes/CommentNode';
@@ -84,6 +85,7 @@ export const SupportedNodeTypes = [
   ContactMentionNode,
   DateMentionNode,
   PullRequestMentionNode,
+  AgentSessionMentionNode,
   ReplyTargetNode,
   GroupMentionNode,
   InlineSearchNode,

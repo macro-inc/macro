@@ -53,6 +53,7 @@ where
             EntityType::AgentSession => {
                 self.repo.get_agent_session_access(entity_id, user_id).await
             }
+            EntityType::Initiative => self.repo.get_initiative_access(entity_id, user_id).await,
             EntityType::CalendarEvent => {
                 self.repo
                     .get_calendar_event_access(entity_id, user_id)
@@ -181,7 +182,8 @@ where
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::Call
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::Initiative => {
                 let access_level = self
                     .repo
                     .get_team_entity_access(bot_id, team_id, entity_id, entity_type)
@@ -245,7 +247,8 @@ where
             | EntityType::CalendarEvent
             // A reminder belongs to a user, so a team-scoped bot never reaches one.
             | EntityType::Reminder
-            | EntityType::Skill => {
+            | EntityType::Skill
+            | EntityType::ScheduledAction => {
                 Err(AccessError::BadRequest("Unsupported bot entity type"))
             }
         }
@@ -416,7 +419,8 @@ where
             | EntityType::EmailThread
             | EntityType::Call
             | EntityType::CalendarEvent
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::Initiative => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
             }
@@ -438,7 +442,8 @@ where
             EntityType::Team
             | EntityType::User
             | EntityType::ChannelMessage
-            | EntityType::Skill => Ok(None),
+            | EntityType::Skill
+            | EntityType::ScheduledAction => Ok(None),
         }
     }
 
@@ -491,7 +496,8 @@ where
             | EntityType::EmailThread
             | EntityType::Call
             | EntityType::CalendarEvent
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::Initiative => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
                     .await?;
@@ -591,10 +597,15 @@ where
         entity_type: EntityType,
     ) -> Result<Vec<MacroUserIdStr<'static>>, AccessError> {
         match entity_type {
+            // Agent sessions grant their owner directly and their originating
+            // channel as a channel source, both of which the generic accessor
+            // query expands.
             EntityType::Document
             | EntityType::Chat
             | EntityType::Project
-            | EntityType::EmailThread => {
+            | EntityType::EmailThread
+            | EntityType::AgentSession
+            | EntityType::Initiative => {
                 let entity_id = Uuid::parse_str(entity_id).map_err(|_| {
                     AccessError::BadRequest("invalid entity_id for get_users_by_entity")
                 })?;

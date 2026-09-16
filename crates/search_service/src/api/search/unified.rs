@@ -71,6 +71,7 @@ pub async fn handler(
 
     // Split the results by entity type
     let SplitUnifiedSearchResponseValues {
+        agent_session,
         channel_message,
         chat,
         document,
@@ -82,6 +83,7 @@ pub async fn handler(
     } = results.into_iter().split_search_response();
 
     let (
+        enriched_agent_session_results,
         enriched_document_results,
         enriched_chat_results,
         enriched_channel_results,
@@ -91,6 +93,13 @@ pub async fn handler(
         enriched_crm_results,
         enriched_calendar_event_results,
     ) = tokio::try_join!(
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            agent_session,
+            models_opensearch::SearchEntityType::AgentSessions,
+            None,
+        ),
         enrich_search_response(
             &ctx,
             &user_context.user_id,
@@ -146,6 +155,7 @@ pub async fn handler(
 
     let results = {
         let mut results = vec![];
+        results.extend(enriched_agent_session_results);
 
         results.extend(enriched_document_results);
         results.extend(enriched_chat_results);

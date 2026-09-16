@@ -101,6 +101,8 @@ export type SoupAstItemsFlatPage = {
 };
 
 export type SoupAstItemsData = {
+  /** Local Mail results cover synchronized metadata, not the entire mailbox. */
+  cachedMail?: boolean;
   entities: EntityData[];
   groups: GroupMeta[] | undefined;
   /** Raw API item pool. Only present when query is grouped. */

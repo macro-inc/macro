@@ -1,12 +1,15 @@
 import { mdStore } from '@block-md/signal/markdownBlockData';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
-import { toast } from '@core/component/Toast/Toast';
 import clickOutside from '@core/directive/clickOutside';
 import { TOKENS } from '@core/hotkey/tokens';
 import SparkleIcon from '@phosphor/sparkle.svg';
-import { cancelAiEdit, requestAiEdit } from '@service-ai-editing/client';
-import { Button, SendButton, Surface } from '@ui';
+import {
+  cancelAiEdit,
+  requestAiEdit,
+  toastAiEditResult,
+} from '@service-ai-editing/client';
+import { Button, ComposerSurface, SendButton } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
 false && clickOutside;
@@ -21,7 +24,6 @@ export function DocumentAiEditBar(props: { documentId: string }) {
   const [expanded, setExpanded] = createSignal(false);
   const [editing, setEditing] = createSignal(false);
   const [hovering, setHovering] = createSignal(false);
-  const [focused, setFocused] = createSignal(false);
   const [prompt, setPrompt] = createSignal('');
 
   let editor = buildChatEditor();
@@ -44,9 +46,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
       documentId: props.documentId,
       prompt: value,
     })
-      .then((result) => {
-        if (result === 'failed') toast.failure('AI edit failed');
-      })
+      .then(toastAiEditResult)
       .finally(() => setEditing(false));
   };
 
@@ -118,19 +118,8 @@ export function DocumentAiEditBar(props: { documentId: string }) {
           </Button>
         }
       >
-        <Surface
-          onFocusIn={() => setFocused(true)}
-          onFocusOut={(event) => {
-            const next = event.relatedTarget as Node | null;
-            if (next && event.currentTarget.contains(next)) return;
-            setFocused(false);
-          }}
-          active={focused()}
-          class="w-96 max-w-full rounded-xl"
-          depth={2}
-          solid
-        >
-          <div class="flex flex-col gap-2 p-3" use:clickOutside={collapse}>
+        <ComposerSurface class="h-auto w-96 max-w-full">
+          <div class="flex flex-col gap-2 p-2" use:clickOutside={collapse}>
             <div class="flex items-start gap-2">
               <span class="flex h-8 w-4 shrink-0 items-center justify-center text-accent">
                 <SparkleIcon />
@@ -152,7 +141,7 @@ export function DocumentAiEditBar(props: { documentId: string }) {
               />
             </div>
           </div>
-        </Surface>
+        </ComposerSurface>
       </Show>
     </div>
   );

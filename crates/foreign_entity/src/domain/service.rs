@@ -3,12 +3,15 @@
 #[cfg(test)]
 mod tests;
 
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
+use entity_access::domain::{
+    models::{AccessError, EntityAccessReceipt, EntityType, ViewAccessLevel},
+    ports::EntityAccessService,
+};
 use uuid::Uuid;
 
 use super::models::{
-    CreateForeignEntity, ForeignEntity, ForeignEntityError, PatchForeignEntity, SourceId,
-    validate_foreign_entity_lookup,
+    CreateForeignEntity, ForeignEntity, ForeignEntityError, ForeignEntityLookupCaller,
+    PatchForeignEntity, SourceId, validate_foreign_entity_lookup,
 };
 use super::ports::{ForeignEntityListQuery, ForeignEntityRepository, ForeignEntityService};
 
@@ -142,5 +145,78 @@ where
             .await
             .map_err(|error| ForeignEntityError::Internal(error.into()))?
             .ok_or(ForeignEntityError::NotFound(id))
+    }
+}
+
+/// Fetch the foreign entity a caller may view for an external identifier.
+///
+/// External identifiers are not unique: several documents can store a mapping
+/// for the same pull request. Candidates the caller cannot view are skipped and
+/// the first visible record wins. A caller with no visible candidate gets the
+/// same not-found error as a lookup for an identifier that was never synced, so
+/// the lookup never reveals mappings stored for documents the caller cannot see.
+///
+/// Visibility uses the same check as the by-id route: view access on the
+/// foreign entity record itself, with internal service callers unconditionally
+/// allowed.
+pub async fn get_visible_foreign_entity_by_source<Service, Access>(
+    service: &Service,
+    entity_access: &Access,
+    caller: &ForeignEntityLookupCaller,
+    foreign_entity_source: &str,
+    foreign_entity_id: &str,
+) -> Result<ForeignEntity, ForeignEntityError>
+where
+    Service: ForeignEntityService,
+    Access: EntityAccessService,
+{
+    let candidates = service
+        .get_foreign_entities_by_foreign_entity_id(foreign_entity_id, Some(foreign_entity_source))
+        .await?;
+
+    for candidate in candidates {
+        if caller_may_view(entity_access, caller, &candidate).await? {
+            return Ok(candidate);
+        }
+    }
+
+    Err(ForeignEntityError::NotFoundForSource {
+        foreign_entity_source: foreign_entity_source.to_string(),
+        foreign_entity_id: foreign_entity_id.to_string(),
+    })
+}
+
+async fn caller_may_view<Access>(
+    entity_access: &Access,
+    caller: &ForeignEntityLookupCaller,
+    candidate: &ForeignEntity,
+) -> Result<bool, ForeignEntityError>
+where
+    Access: EntityAccessService,
+{
+    let user = match caller {
+        ForeignEntityLookupCaller::Internal => return Ok(true),
+        ForeignEntityLookupCaller::User(user) => user,
+    };
+
+    let permission = entity_access
+        .get_entity_permission(
+            Some(user),
+            &candidate.id.to_string(),
+            EntityType::ForeignEntity,
+            None,
+        )
+        .await;
+
+    match permission {
+        Ok(permission) => Ok(permission.satisfies::<ViewAccessLevel>()),
+        Err(
+            AccessError::Unauthorized
+            | AccessError::UnauthorizedWithMessage(_)
+            | AccessError::NotFound(_),
+        ) => Ok(false),
+        Err(error) => Err(ForeignEntityError::Internal(anyhow::anyhow!(
+            "foreign entity access check failed: {error}"
+        ))),
     }
 }

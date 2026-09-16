@@ -2,6 +2,7 @@
 
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
 use agent_egress::domain::model::McpServerSlug;
+use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
 use agent_session::domain::ports::ControlEvent;
@@ -211,14 +212,18 @@ pub enum HarnessCommand {
         /// The user responsible, as on [`Self::EditQueued`].
         actor: Option<MacroUserIdStr<'static>>,
     },
-    /// The session's runtime answered its in-flight turn: clear the busy
-    /// mark and dispatch the next queued action. Internal - enqueued by the
-    /// turn observer on the managing replica, never forwarded.
-    TurnEnded,
+    /// The session's fold reported a turn fact: an ended turn clears the
+    /// busy mark and dispatches the next queued action; a raised or cleared
+    /// question is published as is. Internal - enqueued by the turn observer
+    /// on the managing replica, never forwarded.
+    Turn(TurnSignal),
     /// The session's live actor stopped: clear the busy mark and nothing
     /// more - resuming a dead runtime stays the next user action's job.
-    /// Internal, like [`Self::TurnEnded`].
-    SessionStopped,
+    /// Internal, like [`Self::Turn`].
+    SessionStopped {
+        /// Why the actor stopped.
+        reason: String,
+    },
     /// Change the session's sandbox size and the owner's default.
     SetSandboxSize(SandboxSize),
     /// Release a session's live resources and delete it.
@@ -306,6 +311,13 @@ pub struct SessionAnnouncement {
     pub triggered_by: MacroUserIdStr<'static>,
 }
 
+/// The channel message an announcement became.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct AnnouncedMessage {
+    /// The posted message: the magic chip its turn renders into.
+    pub message_id: Uuid,
+}
+
 /// Values required to provision a new session container.
 #[derive(Debug, Clone)]
 pub struct SpawnContainer {
@@ -371,6 +383,9 @@ pub const SESSION_TOKEN_VARIABLE: &str = "MACRO_SESSION_TOKEN";
 /// kept short and stable because agents namespace tool names under it.
 pub const MACRO_MCP_NAME: &str = "macro";
 
+/// Harness-owned session tools, separate from the workspace MCP catalog.
+pub const INTERNAL_MCP_NAME: &str = "macro_internal";
+
 impl SandboxEgress {
     /// Where the proxy serves `slug` - the URL a client dials to reach that
     /// server, whichever client it is.
@@ -403,16 +418,35 @@ impl SandboxEgress {
         ]
     }
 
-    /// Every server the session may dial, as `(name, url)` pairs: Macro's own
-    /// server first, then the advertised apps under their Pipedream slugs.
+    /// The workspace and internal MCP servers, followed by the owner's apps,
+    /// as `(name, url)` pairs.
     ///
     /// The one enumeration behind both renderings - [`Self::acp_servers`] and
     /// the Cursor API's - so the two can never advertise different sets.
     pub fn server_entries(&self) -> impl Iterator<Item = (String, String)> + '_ {
-        std::iter::once((MACRO_MCP_NAME.to_owned(), self.macro_mcp_url())).chain(
+        [
+            (MACRO_MCP_NAME.to_owned(), self.macro_mcp_url()),
+            (
+                INTERNAL_MCP_NAME.to_owned(),
+                format!("{}/mcp/internal", self.base_url),
+            ),
+        ]
+        .into_iter()
+        .chain(
             self.mcp_servers
                 .iter()
                 .map(|slug| (slug.as_str().to_owned(), self.mcp_url(slug))),
+        )
+    }
+
+    /// Session-scoped internal tools, also supplied to external runtimes.
+    pub fn internal_mcp_server(&self) -> AcpMcpServer {
+        AcpMcpServer::Http(
+            McpServerHttp::new(INTERNAL_MCP_NAME, format!("{}/mcp/internal", self.base_url))
+                .headers(vec![HttpHeader::new(
+                    "Authorization",
+                    self.authorization_header(),
+                )]),
         )
     }
 

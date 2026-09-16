@@ -1,0 +1,53 @@
+/* Token classes emitted by Lezer's `classHighlighter`, mapped onto theme
+   palette tokens so snippets recolor with the rest of the app. Scoped to the
+   gallery so nothing here leaks into product surfaces. */
+.ui-gallery {
+  .tok-comment {
+    color: var(--color-ink-subtle);
+    font-style: italic;
+  }
+  .tok-keyword,
+  .tok-modifier,
+  .tok-controlKeyword,
+  .tok-operatorKeyword {
+    color: var(--color-purple);
+  }
+  .tok-string,
+  .tok-string2,
+  .tok-attributeValue {
+    color: var(--color-green);
+  }
+  .tok-number,
+  .tok-bool,
+  .tok-null,
+  .tok-atom {
+    color: var(--color-orange);
+  }
+  .tok-tagName,
+  .tok-typeName,
+  .tok-className,
+  .tok-namespace {
+    color: var(--color-blue);
+  }
+  .tok-attributeName,
+  .tok-propertyName {
+    color: var(--color-cyan);
+  }
+  .tok-variableName {
+    color: var(--color-ink);
+  }
+  .tok-function {
+    color: var(--color-yellow);
+  }
+  .tok-operator,
+  .tok-punctuation,
+  .tok-bracket,
+  .tok-angleBracket,
+  .tok-separator,
+  .tok-derefOperator {
+    color: var(--color-ink-subtle);
+  }
+  .tok-invalid {
+    color: var(--color-failure);
+  }
+}

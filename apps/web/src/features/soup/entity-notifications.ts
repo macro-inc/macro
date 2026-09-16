@@ -1,4 +1,9 @@
-import type { EntityData } from '@entity/types/entity';
+import type {
+  ChannelEntity,
+  ChannelMessageEntity,
+  ChannelThreadEntity,
+  EntityData,
+} from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
 import { toNotificationEntity } from '@entity/utils/notification';
 import { channelThreadRootId } from '@notifications/channel-thread-root';
@@ -47,12 +52,17 @@ function channelThreadNotificationIds(
   return ids;
 }
 
+export type ChannelNotificationScopeEntity =
+  | Pick<ChannelEntity, 'type'>
+  | Pick<ChannelMessageEntity, 'type'>
+  | Pick<ChannelThreadEntity, 'type' | 'messageId'>;
+
 /**
  * Splits notifications shared by channel and channel-thread entities into the
  * stack rendered by each Inbox row.
  */
 export function scopeChannelNotificationsForEntity(
-  entity: EntityData,
+  entity: ChannelNotificationScopeEntity,
   notifications: UnifiedNotification[]
 ): UnifiedNotification[] {
   if (entity.type === 'channel') {
@@ -73,7 +83,7 @@ export function scopeChannelNotificationsForEntity(
   return notifications;
 }
 
-type EntityWithRawNotifications = EntityData & {
+type EntityWithRawNotifications<T extends EntityData> = T & {
   notifications?: UnifiedNotification[] | Accessor<UnifiedNotification[]>;
 };
 
@@ -81,11 +91,11 @@ type EntityWithRawNotifications = EntityData & {
  * Normalizes GraphQL notification arrays and the global notification source
  * into the accessor shape expected by reusable list-entity components.
  */
-export function withEntityNotifications(
-  entity: EntityWithRawNotifications,
+export function withEntityNotifications<T extends EntityData>(
+  entity: EntityWithRawNotifications<T>,
   source: NotificationSource,
   options: { scopeChannelThreads?: boolean } = {}
-): WithNotification<EntityData> {
+): WithNotification<T> {
   const attached = entity.notifications;
   const read = (): UnifiedNotification[] => {
     if (typeof attached === 'function') return attached();
@@ -100,7 +110,10 @@ export function withEntityNotifications(
     ...entity,
     notifications: () => {
       const notifications = read();
-      return options.scopeChannelThreads
+      return options.scopeChannelThreads &&
+        (entity.type === 'channel' ||
+          entity.type === 'channel_message' ||
+          entity.type === 'channel_thread')
         ? scopeChannelNotificationsForEntity(entity, notifications)
         : notifications;
     },

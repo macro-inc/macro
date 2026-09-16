@@ -7,6 +7,7 @@ import type { EntityActionListState } from './entity-action-context';
 export const makeMoveToProjectAction = () => {
   const canExecute = (entity: EntityData): boolean => {
     return (
+      entity.type !== 'agent_session' &&
       entity.type !== 'channel' &&
       entity.type !== 'channel_message' &&
       entity.type !== 'channel_thread' &&

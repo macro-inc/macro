@@ -22,7 +22,7 @@ export function EmailControls(props: EmailControlsProps) {
           label="Filter email"
           open={props.filterOpen}
           onOpenChange={props.onFilterOpenChange}
-          groups={filters.groups}
+          groups={filters.groups()}
           isSelected={filters.isSelected}
           onSelectionChange={filters.setSelected}
           onClear={filters.clear}

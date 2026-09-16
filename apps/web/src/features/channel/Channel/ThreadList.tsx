@@ -4,6 +4,7 @@ import {
   type ScrollDirection,
 } from '@core/util/scroll-intent';
 import { Key } from '@solid-primitives/keyed';
+import { isIOS, isSafari } from '@solid-primitives/platform';
 import {
   createVirtualizer,
   defaultRangeExtractor,
@@ -26,6 +27,7 @@ import {
   onMount,
 } from 'solid-js';
 import { NEAR_BOTTOM_THRESHOLD } from './constants';
+import { createScrollCompensation } from './create-scroll-compensation';
 import { createScrollLifecycle } from './create-scroll-lifecycle';
 
 type ScrollAlignment = NonNullable<ScrollToOptions['align']>;
@@ -97,6 +99,8 @@ type ThreadListProps = {
 };
 
 const NEAR_TOP_THRESHOLD = 800;
+const HISTORY_BUFFER_VIEWPORTS = 3;
+const WEBKIT_HISTORY_BUFFER_VIEWPORTS = 6;
 const EXPLICIT_SCROLL_DOWN_TRIGGER_DISTANCE = 64;
 
 const clamp = (value: number, min: number, max: number) =>
@@ -131,13 +135,39 @@ export function ThreadList(props: ThreadListProps) {
     snapshot?.measurements?.map(({ key, size }) => [key, size])
   );
   let programmaticOffset: number | undefined;
-  let userScrollActive = false;
   let stateQueued = false;
-  let nearTopFired = false;
+  let nearTopKey: string | undefined;
   let nearBottomFired = false;
   let previousScrollOffset = snapshot?.scrollOffset ?? 0;
   let explicitScrollDownDistance = 0;
   let releaseNavigation: void | (() => void);
+  const scrollCompensation =
+    isSafari || isIOS
+      ? createScrollCompensation({
+          getElement: () => scrollEl(),
+          setAdjustment: (adjustment) => {
+            if (!contentRef) return;
+            contentRef.style.setProperty(
+              '--channel-scroll-adjustment',
+              `${adjustment}px`
+            );
+            // Shifted rows must not change the logical scroll extent.
+            contentRef.style.overflow = adjustment === 0 ? '' : 'clip';
+          },
+          writeOffset: (offset) => {
+            const element = scrollEl();
+            if (!element) return;
+            element.scrollTo({ top: offset });
+            programmaticOffset = element.scrollTop;
+            scheduleScrollState();
+          },
+        })
+      : undefined;
+  const historyBufferViewports = scrollCompensation
+    ? WEBKIT_HISTORY_BUFFER_VIEWPORTS
+    : HISTORY_BUFFER_VIEWPORTS;
+  const logicalScrollOffset = (offset: number) =>
+    scrollCompensation?.logicalOffset(offset) ?? offset;
 
   // Publish after Solid has committed the virtual rows and spacer height.
   // Geometry notifications also cover reactions, streamed content and resizes
@@ -198,6 +228,8 @@ export function ThreadList(props: ThreadListProps) {
     // next frame exposes stale geometry and can lose the end anchor on send.
     useAnimationFrameWithResizeObserver: false,
     useScrollendEvent: true,
+    // The patched core delegates iOS deferral to our visual compensation.
+    useIOSScrollDeferral: !scrollCompensation,
     anchorTo: 'end',
     get followOnAppend() {
       return lifecycle.isReady() && (props.followOnAppend ?? true);
@@ -249,36 +281,52 @@ export function ThreadList(props: ThreadListProps) {
       if (contentRef) {
         contentRef.style.height = `${Math.max(viewportSize(), instance.getTotalSize())}px`;
       }
-      // A deferred prepend has already advanced the logical offset while
-      // the DOM is still at the old position. Positive corrections in that
-      // state must start at the DOM offset; normal corrections (including
-      // shrink clamping) still use TanStack's requested offset.
-      const domOffset = instance.scrollElement?.scrollTop ?? offset;
-      const deferredPrepend =
-        (options.adjustments ?? 0) > 0 &&
-        offset > domOffset + 1.5 &&
-        (userScrollActive || scrollIntent.isUserInteracting());
-      elementScroll(deferredPrepend ? domOffset : offset, options, instance);
+      // WebKit ends native momentum on scrollTo writes. Keep TanStack's logical
+      // offset, but counter-shift the rows until wheel/touch scrolling settles.
+      // Explicit navigation finishes compensation before calculating its target.
+      if (
+        lifecycle.isReady() &&
+        scrollCompensation?.defer(offset + (options.adjustments ?? 0))
+      ) {
+        return;
+      }
+      elementScroll(offset, options, instance);
       programmaticOffset =
         options.behavior === 'smooth'
           ? undefined
           : instance.scrollElement?.scrollTop;
     },
-    observeElementOffset: (instance, callback) =>
-      observeElementOffset(instance, (offset, isScrolling) => {
-        // An instant navigation/correction is not touch momentum. Reporting
-        // its scroll event as momentum makes iOS defer size compensation and
-        // replay it after scrollToIndex has already reconciled the same sizes.
+    observeElementOffset: (instance, callback) => {
+      const element = instance.scrollElement;
+      const onWheel = scrollCompensation?.onWheel;
+      const onTouchStart = scrollCompensation?.onTouchStart;
+      if (onWheel)
+        element?.addEventListener('wheel', onWheel, { passive: true });
+      if (onTouchStart)
+        element?.addEventListener('touchstart', onTouchStart, {
+          passive: true,
+        });
+      const cleanup = observeElementOffset(instance, (offset, isScrolling) => {
+        // An instant navigation/correction must not extend gesture compensation.
         const isOwnScroll =
           programmaticOffset !== undefined &&
           Math.abs(offset - programmaticOffset) < 1.5;
         programmaticOffset = undefined;
-        if (isScrolling && !isOwnScroll) userScrollActive = true;
-        callback(offset, isScrolling && !isOwnScroll);
-        // Keep the gesture active while the end callback flushes any deferred
-        // correction, including momentum lasting past the input-event timeout.
-        if (!isScrolling || isOwnScroll) userScrollActive = false;
-      }),
+        if (isScrolling && !isOwnScroll) scrollIntent.observeScroll();
+        const logicalOffset =
+          scrollCompensation?.observeOffset(
+            offset,
+            isScrolling && !isOwnScroll
+          ) ?? offset;
+        callback(logicalOffset, isScrolling && !isOwnScroll);
+      });
+      return () => {
+        cleanup?.();
+        if (onWheel) element?.removeEventListener('wheel', onWheel);
+        if (onTouchStart)
+          element?.removeEventListener('touchstart', onTouchStart);
+      };
+    },
     observeElementRect: (instance, callback) =>
       observeElementRect(instance, (rect) => {
         const previousHeight = instance.scrollRect?.height ?? 0;
@@ -293,11 +341,28 @@ export function ThreadList(props: ThreadListProps) {
         // The core anchors item resizes; viewport resizes (composer, keyboard,
         // split pane) need an explicit end scroll when previously pinned.
         if (previousHeight > 0 && previousHeight !== rect.height && wasAtEnd) {
+          scrollCompensation?.finish();
           instance.scrollToEnd();
         }
       }),
     onChange: scheduleScrollState,
   });
+
+  if (scrollCompensation) {
+    virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (
+      item,
+      _delta,
+      instance
+    ) => {
+      const offset = (instance.scrollOffset ?? 0) + instance.scrollAdjustments;
+      // The core skips remeasurement corrections while scrolling backward.
+      // Our counter-translation makes these safe: a late-loading image above
+      // the viewport must preserve the reading anchor in either direction.
+      return instance.itemSizeCache.has(item.key)
+        ? item.end <= offset
+        : item.start < offset;
+    };
+  }
 
   const shortListOffset = () =>
     Math.max(0, viewportSize() - virtualizer.getTotalSize());
@@ -314,6 +379,7 @@ export function ThreadList(props: ThreadListProps) {
   ): boolean => {
     const index = props.keys().indexOf(id);
     if (index < 0) return false;
+    scrollCompensation?.finish();
     virtualizer.scrollToIndex(index, { align });
     scheduleScrollState();
     return true;
@@ -328,6 +394,7 @@ export function ThreadList(props: ThreadListProps) {
     scrollToLatest: () => {
       if (!canNavigate() || !props.keys().length) return false;
       lifecycle.send('navigate');
+      scrollCompensation?.finish();
       virtualizer.scrollToEnd();
       scheduleScrollState();
       return true;
@@ -342,6 +409,7 @@ export function ThreadList(props: ThreadListProps) {
       const el = scrollEl();
       if (!canNavigate() || !el || !el.contains(targetElement)) return false;
       lifecycle.send('navigate');
+      scrollCompensation?.finish();
       // Both rects come from the same committed layout, including short-list
       // bottom alignment and floating chrome. No stale estimate is involved.
       const targetRect = targetElement.getBoundingClientRect();
@@ -366,9 +434,14 @@ export function ThreadList(props: ThreadListProps) {
     if (!el) return;
     // This microtask runs after synchronous row measurements, before paint.
     lifecycle.send('layout');
-    const distanceFromTop = el.scrollTop;
+    const distanceFromTop = logicalScrollOffset(el.scrollTop);
     const distanceFromBottom = virtualizer.getDistanceFromEnd();
-    const nearTop = distanceFromTop <= NEAR_TOP_THRESHOLD;
+    // WebKit cannot move the native top boundary during a fling without a
+    // scroll write. Fill a bounded history buffer ahead of the next gesture,
+    // including after initial positioning or navigation into older messages.
+    const nearTop =
+      distanceFromTop <=
+      Math.max(NEAR_TOP_THRESHOLD, el.clientHeight * historyBufferViewports);
     const nearBottom = distanceFromBottom <= NEAR_BOTTOM_THRESHOLD;
     const hasUserIntent = scrollIntent.isUserInteracting();
     const delta = distanceFromTop - previousScrollOffset;
@@ -398,10 +471,14 @@ export function ThreadList(props: ThreadListProps) {
       : undefined;
     props.onScroll?.(state, snapshot);
     if (!lifecycle.isReady()) return;
-    if (nearTop && !nearTopFired && hasUserIntent) {
-      nearTopFired = true;
+    if (
+      nearTop &&
+      (hasUserIntent || scrollCompensation) &&
+      nearTopKey !== props.keys()[0]
+    ) {
+      nearTopKey = props.keys()[0];
       props.onScrollNearTop?.();
-    } else if (!nearTop) nearTopFired = false;
+    } else if (!nearTop) nearTopKey = undefined;
     if (nearBottom && !nearBottomFired && hasUserIntent) {
       nearBottomFired = true;
       props.onScrollNearBottom?.();
@@ -420,6 +497,7 @@ export function ThreadList(props: ThreadListProps) {
         viewportSize() -
         (virtualizer.scrollOffset ?? 0);
       if (delta !== 0 && previousDistance <= NEAR_BOTTOM_THRESHOLD) {
+        scrollCompensation?.finish();
         virtualizer.scrollToEnd();
       }
       scheduleScrollState();
@@ -441,6 +519,7 @@ export function ThreadList(props: ThreadListProps) {
     onCleanup(() => attachmentObserver.disconnect());
   });
   onCleanup(() => {
+    scrollCompensation?.dispose();
     lifecycle.send('dispose');
     releaseNavigation?.();
   });
@@ -493,7 +572,7 @@ export function ThreadList(props: ThreadListProps) {
                     top: 0,
                     left: 0,
                     width: '100%',
-                    transform: `translateY(${item().start + shortListOffset()}px)`,
+                    transform: `translateY(calc(${item().start + shortListOffset()}px - var(--channel-scroll-adjustment, 0px)))`,
                     'overflow-anchor': 'none',
                   }}
                 >
@@ -507,9 +586,10 @@ export function ThreadList(props: ThreadListProps) {
       <CustomScrollbar
         scrollContainer={scrollEl}
         watchContent
-        onScrollIntent={(delta) =>
-          scrollIntent.markUserIntent(delta > 0 ? 'down' : 'up')
-        }
+        onScrollIntent={(delta) => {
+          scrollCompensation?.finish();
+          scrollIntent.markUserIntent(delta > 0 ? 'down' : 'up');
+        }}
       />
     </>
   );

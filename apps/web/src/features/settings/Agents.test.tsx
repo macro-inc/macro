@@ -18,8 +18,21 @@ import {
   useQuery,
 } from '@tanstack/solid-query';
 import { Suspense } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
+
+const [searchParams, updateSearchParams] = createStore<{
+  createAgent?: string;
+}>({});
+const setSearchParams = vi.fn((next: { createAgent?: string }) =>
+  updateSearchParams(next)
+);
+
+vi.mock('@solidjs/router', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@solidjs/router')>()),
+  useSearchParams: () => [searchParams, setSearchParams],
+}));
 
 const cursorMocks = vi.hoisted(() => ({
   status: {
@@ -233,6 +246,8 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  updateSearchParams({ createAgent: undefined });
+  setSearchParams.mockClear();
   cursorMocks.status.data = {
     registered: false,
     updatedAt: null,
@@ -276,6 +291,21 @@ const MACROD_HARNESS = {
 };
 
 describe('Agents', () => {
+  it('opens the new-agent form from a link and clears the action on cancel', () => {
+    updateSearchParams({ createAgent: 'true' });
+    render(() => <Agents />);
+    const dialog = screen.getByRole('dialog');
+    expect(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    ).toBeTruthy();
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }));
+    expect(setSearchParams).toHaveBeenCalledWith(
+      { createAgent: undefined },
+      { replace: true }
+    );
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
   it.each(['success', 'error'] as const)(
     'keeps settings visible while Cursor models load and after %s',
     async (outcome) => {
@@ -452,6 +482,59 @@ describe('Agents', () => {
         /All channels/
       )
     ).toBeTruthy();
+  });
+
+  it('does not list a coworker private agent in Settings', () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-shared',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|coworker@example.com' },
+          name: 'Shared Reviewer',
+          handle: 'shared-reviewer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Review pull requests.',
+        harness: 'in-memory',
+        default_model: Model.sonnet5,
+        channel_scope: 'selected',
+        channel_ids: ['channel-engineering'],
+      },
+    ];
+
+    render(() => <Agents />);
+
+    expect(screen.queryByText('Shared Reviewer')).toBeNull();
+    expect(screen.getByText('No private agents yet.')).toBeTruthy();
+  });
+
+  it("does not list another team's mentionable agent in Settings", () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-other-team',
+          kind: 'owned',
+          owner: { type: 'team', team_id: 'team-other' },
+          name: 'Other Team Helper',
+          handle: 'other-team-helper',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Help the other team.',
+        harness: 'in-memory',
+        default_model: Model.sonnet5,
+        channel_scope: 'selected',
+        channel_ids: ['channel-engineering'],
+      },
+    ];
+
+    render(() => <Agents />);
+
+    expect(screen.queryByText('Other Team Helper')).toBeNull();
   });
 
   it('edits and persists an existing agent through the agents API', async () => {

@@ -133,7 +133,10 @@ where
                 // session works on exactly one, and the sandbox has no way to
                 // name another because there is no place in the route to put
                 // one.
-                let base = self.tokens.resolve(&grant.owner, &grant.repo).await?;
+                let repo = grant.repo.as_ref().ok_or(EgressError::Unauthenticated(
+                    "the session has no repository for git access",
+                ))?;
+                let base = self.tokens.resolve(&grant.owner, repo).await?;
 
                 // The endpoint comes from the allowlist, not from the port, so
                 // no credential adapter can widen what the sandbox reaches.

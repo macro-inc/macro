@@ -96,8 +96,9 @@ export function EmailThreadView(props: EmailThreadViewProps) {
             <div class="size-full select-none overscroll-none overflow-hidden flex flex-col">
               {props.header}
               {props.actions}
+              {/* Measure message gutters against the thread, excluding the side panel. */}
               <div
-                class="w-full flex-1 flex flex-col items-center overflow-hidden"
+                class="@container w-full flex-1 flex flex-col items-center overflow-hidden"
                 ref={context.registerMessagesContainer}
               >
                 <MessageList
@@ -124,7 +125,10 @@ export function EmailThreadView(props: EmailThreadViewProps) {
               </div>
               <Show when={isTouchDevice() && mobileBottomReplyMessage()}>
                 {(lastMessage) => (
-                  <BottomReplyButtons lastMessage={lastMessage()} />
+                  <BottomReplyButtons
+                    lastMessage={lastMessage()}
+                    navigation={props.host?.listNavigation}
+                  />
                 )}
               </Show>
               <Show when={isTouchDevice()}>

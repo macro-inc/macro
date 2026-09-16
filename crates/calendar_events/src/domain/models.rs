@@ -669,6 +669,72 @@ pub struct CalendarEventOverride {
     pub attendees: Option<Vec<CalendarAttendee>>,
 }
 
+impl CalendarEventOverride {
+    /// The content this exception replaces on its occurrence.
+    pub fn content(&self) -> OccurrenceContent<'_> {
+        OccurrenceContent {
+            title: self.title.as_deref(),
+            description: self.description.as_deref(),
+            location: self.location.as_deref(),
+            status: self.status,
+        }
+    }
+
+    /// Overlay this exception on its series event so the event reads as the
+    /// overridden occurrence: the exception's content, its time, and its own
+    /// attendee list when it carries one.
+    pub fn apply_to(&self, event: &mut CalendarEvent) {
+        event.apply_occurrence_content(self.content());
+        event.time = self.time.clone();
+        if let Some(attendees) = &self.attendees {
+            event.attendees = attendees.clone();
+        }
+    }
+}
+
+/// The content an exception replaces on one occurrence of a series. A field
+/// left `None` inherits the series value.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct OccurrenceContent<'a> {
+    /// Replacement title.
+    pub title: Option<&'a str>,
+    /// Replacement description.
+    pub description: Option<&'a str>,
+    /// Replacement location.
+    pub location: Option<&'a str>,
+    /// Replacement status.
+    pub status: Option<EventStatus>,
+}
+
+impl CalendarEvent {
+    /// Read this series event as one occurrence: the exception's content
+    /// replaces the series content on the entity and on every calendar copy,
+    /// so a client showing any copy sees the occurrence's own text.
+    pub fn apply_occurrence_content(&mut self, content: OccurrenceContent<'_>) {
+        if let Some(title) = content.title {
+            self.title = title.to_string();
+            for source in &mut self.sources {
+                source.title = title.to_string();
+            }
+        }
+        if let Some(description) = content.description {
+            self.description = Some(description.to_string());
+            for source in &mut self.sources {
+                source.description = Some(description.to_string());
+            }
+        }
+        if let Some(location) = content.location {
+            self.location = Some(location.to_string());
+            for source in &mut self.sources {
+                source.location = Some(location.to_string());
+            }
+        }
+        if let Some(status) = content.status {
+            self.status = status;
+        }
+    }
+}
+
 /// A start-only value used to identify an overridden occurrence.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -1135,6 +1201,10 @@ pub struct VisibleCalendar {
     /// Whether this is one of Google's shared system calendars (holidays,
     /// birthdays) the account subscribes to rather than one a person maintains.
     pub is_subscription: bool,
+    /// A persistent sync failure isolated to this calendar, surfaced so the
+    /// settings row can badge it. `None` while the calendar is syncing
+    /// normally or a failure has not yet crossed the persistence threshold.
+    pub sync_error: Option<String>,
     /// Default reminders applied to events that keep `useDefault`.
     pub default_reminders: Vec<EventReminderOverride>,
 }
@@ -1198,6 +1268,11 @@ pub struct StoredGoogleCalendar {
 /// chronically resets their sync tokens, turning every poll into a full
 /// snapshot; a daily cadence keeps them fresh without that churn.
 pub const SYSTEM_CALENDAR_SYNC_INTERVAL: chrono::Duration = chrono::Duration::hours(24);
+
+/// Consecutive isolated sync failures a calendar must accumulate before its
+/// error surfaces to the user. A one-off transient failure clears on the next
+/// successful poll, so only a persistent failure earns a settings-row badge.
+pub const CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD: i32 = 3;
 
 /// Whether a provider calendar is one of Google's shared system calendars
 /// (`en.usa#holiday@group.v.calendar.google.com` and friends) rather than a

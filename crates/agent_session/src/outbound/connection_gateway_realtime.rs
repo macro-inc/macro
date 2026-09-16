@@ -86,6 +86,14 @@ pub struct AgentSessionLogEvent {
     pub message: Message,
 }
 
+/// A persisted session changed; viewers should reload its current metadata.
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentSessionUpdatedEvent {
+    /// Changed session.
+    pub agent_session_id: Uuid,
+}
+
 /// User-facing metadata changed for an agent session.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -240,6 +248,30 @@ where
             .await
             .map_err(|error| rootcause::report!(error))?;
 
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err, fields(agent.session.id = %session))]
+    async fn publish_updated(&self, session: AgentSessionId) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(session).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+        let payload = serde_json::to_value(AgentSessionUpdatedEvent {
+            agent_session_id: session.as_uuid(),
+        })
+        .map_err(|error| rootcause::report!(error))?;
+        self.client
+            .batch_send_message(
+                "agent_session_updated".to_owned(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
         Ok(())
     }
 

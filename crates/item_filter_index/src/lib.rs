@@ -4,6 +4,7 @@
 use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst,
+    agent_session::AgentSessionLiteral,
     calendar_event::CalendarEventLiteral,
     call::CallLiteral,
     channel::{ChannelLiteral, ChannelThreadLiteral},
@@ -15,6 +16,7 @@ use item_filters::ast::{
     foreign_entity::ForeignEntityLiteral,
     project::ProjectLiteral,
     properties::{PropertiesLiteral, PropertyEntityType, PropertyMatchValue},
+    reminder::ReminderLiteral,
 };
 use predicate_index::{
     ExactValue, IndexQuery, PartitionPredicate, PredicateExpr, Profile, RangeBound, SortDirection,
@@ -26,12 +28,17 @@ use uuid::Uuid;
 #[cfg(test)]
 mod test;
 
+mod channels;
+pub mod mail;
+
 /// Stable direct-field profile name retained for existing browser projections.
 pub const SOUP_FLAT_V1: &str = "soup-flat-v1";
 /// Stable server-minted profile containing exact derived document facts.
 pub const SOUP_FLAT_V2: &str = "soup-flat-v2";
 /// Stable server-minted profile containing viewer-relative task facts.
 pub const SOUP_FLAT_V3: &str = "soup-flat-v3";
+/// Browser-composed profile with complete active-notification membership.
+pub const SOUP_FLAT_V4: &str = "soup-flat-v4";
 
 // Keep this lightweight crate wasm-compatible instead of depending on the
 // native `system_properties` crate. A native test locks this stable UUID to
@@ -63,6 +70,21 @@ pub mod vocabulary {
         Profile::new(token(SOUP_FLAT_V3))
     }
 
+    /// Browser-composed active-notification profile.
+    pub fn profile_v4() -> Profile {
+        Profile::new(token(super::SOUP_FLAT_V4))
+    }
+
+    /// IDs of unseen notifications for the viewer and primary entity.
+    pub fn notification_unseen() -> Token {
+        token("notification-unseen")
+    }
+
+    /// IDs of seen, still-active notifications for the viewer and primary entity.
+    pub fn notification_seen() -> Token {
+        token("notification-seen")
+    }
+
     /// Document partition.
     pub fn document_partition() -> Token {
         token("document")
@@ -76,6 +98,31 @@ pub mod vocabulary {
     /// Chat partition.
     pub fn chat_partition() -> Token {
         token("chat")
+    }
+
+    /// Channel partition in the browser-composed profile.
+    pub fn channel_partition() -> Token {
+        token("channel")
+    }
+
+    /// Canonical channel type.
+    pub fn channel_type() -> Token {
+        token("channel-type")
+    }
+
+    /// Channel team UUID, when present.
+    pub fn channel_team() -> Token {
+        token("channel-team")
+    }
+
+    /// Channel organization ID as a signed 64-bit big-endian integer.
+    pub fn channel_organization() -> Token {
+        token("channel-organization")
+    }
+
+    /// Whether the viewer is an active channel participant.
+    pub fn channel_participant() -> Token {
+        token("channel-participant")
     }
 
     /// Record identity attribute.
@@ -196,17 +243,17 @@ pub enum CompileError {
 
 /// Check the complete materialized forest against the direct-field v1 profile.
 pub fn check_soup_flat_v1(ast: &EntityFilterAst, request: SoupFlatRequest) -> Eligibility {
-    check_soup_flat(ast, request, supported_document_literal_v1, false)
+    check_soup_flat(ast, request, supported_document_literal_v1, false, false)
 }
 
 /// Check the complete materialized forest against the server-minted v2 profile.
 pub fn check_soup_flat_v2(ast: &EntityFilterAst, request: SoupFlatRequest) -> Eligibility {
-    check_soup_flat(ast, request, supported_document_literal_v2, false)
+    check_soup_flat(ast, request, supported_document_literal_v2, false, false)
 }
 
 /// Check the complete materialized forest against the server-minted v3 profile.
 pub fn check_soup_flat_v3(ast: &EntityFilterAst, request: SoupFlatRequest) -> Eligibility {
-    check_soup_flat(ast, request, supported_document_literal_v3, true)
+    check_soup_flat(ast, request, supported_document_literal_v3, true, false)
 }
 
 fn check_soup_flat(
@@ -214,6 +261,7 @@ fn check_soup_flat(
     request: SoupFlatRequest,
     supported_document_literal: impl Fn(&DocumentLiteral) -> bool + Copy,
     supports_status_properties: bool,
+    supports_notifications: bool,
 ) -> Eligibility {
     if request.has_cursor {
         return Eligibility::Unsupported(UnsupportedReason::Cursor);
@@ -248,6 +296,18 @@ fn check_soup_flat(
         return Eligibility::Unsupported(UnsupportedReason::GlobalProperties);
     }
 
+    if supports_notifications
+        && ast.properties_filter.is_some()
+        && unsupported_partition(
+            ast.channel_filter.as_deref(),
+            "channel",
+            |literal| matches!(literal, ChannelLiteral::ChannelId(id) if id.is_nil()),
+        )
+        .is_err()
+    {
+        return Eligibility::Unsupported(UnsupportedReason::GlobalProperties);
+    }
+
     for result in [
         unsupported_partition(
             ast.calendar_event_filter.as_deref(),
@@ -264,15 +324,19 @@ fn check_soup_flat(
         } else {
             Ok(())
         },
-        unsupported_partition(
-            ast.channel_filter.as_deref(),
-            "channel",
-            |literal| matches!(literal, ChannelLiteral::ChannelId(id) if id.is_nil()),
-        ),
+        if supports_notifications {
+            channels::check(ast.channel_filter.as_deref())
+        } else {
+            unsupported_partition(
+                ast.channel_filter.as_deref(),
+                "channel",
+                |literal| matches!(literal, ChannelLiteral::ChannelId(id) if id.is_nil()),
+            )
+        },
         unsupported_partition(
             ast.channel_thread_filter.as_deref(),
             "channelThread",
-            |literal| matches!(literal, ChannelThreadLiteral::ThreadId(id) if id.is_nil()),
+            |literal| matches!(literal, ChannelThreadLiteral::ThreadId(id) | ChannelThreadLiteral::ChannelId(id) if id.is_nil()),
         ),
         unsupported_partition(
             ast.call_filter.as_deref(),
@@ -295,9 +359,24 @@ fn check_soup_flat(
         }
     }
 
-    // Reminders are uniquely excluded by Soup when their tree is omitted.
-    if ast.reminder_filter.is_some() {
+    // These opt-in partitions are empty when omitted. The UI's confine()
+    // also excludes them with a positive nil ID. Accept only proven emptiness,
+    // not arbitrary trees over partitions that have no local index.
+    if ast.reminder_filter.as_deref().is_some_and(|expr| {
+        !proves_none(
+            expr,
+            |literal| matches!(literal, ReminderLiteral::Id(id) if id.is_nil()),
+        )
+    }) {
         return Eligibility::Unsupported(UnsupportedReason::Partition("reminder"));
+    }
+    if ast.agent_session_filter.as_deref().is_some_and(|expr| {
+        !proves_none(
+            expr,
+            |literal| matches!(literal, AgentSessionLiteral::Id(id) if id.is_nil()),
+        )
+    }) {
+        return Eligibility::Unsupported(UnsupportedReason::Partition("agent_session"));
     }
 
     if !supported_expr(ast.document_filter.as_deref(), supported_document_literal)
@@ -306,10 +385,18 @@ fn check_soup_flat(
     {
         return Eligibility::Unsupported(UnsupportedReason::Literal("document"));
     }
-    if !supported_expr(ast.project_filter.as_deref(), supported_project_literal) {
+    if !supported_expr(ast.project_filter.as_deref(), |lit| {
+        supported_project_literal(lit)
+            || (supports_notifications
+                && matches!(lit, ProjectLiteral::NotificationState(state) if active_notification_state(state)))
+    }) {
         return Eligibility::Unsupported(UnsupportedReason::Literal("project"));
     }
-    if !supported_expr(ast.chat_filter.as_deref(), supported_chat_literal) {
+    if !supported_expr(ast.chat_filter.as_deref(), |lit| {
+        supported_chat_literal(lit)
+            || (supports_notifications
+                && matches!(lit, ChatLiteral::NotificationState(state) if active_notification_state(state)))
+    }) {
         return Eligibility::Unsupported(UnsupportedReason::Literal("chat"));
     }
 
@@ -328,6 +415,7 @@ pub fn compile_soup_flat_v1(
         supported_document_literal_v1,
         compile_document_literal_v1,
         None,
+        false,
     )
 }
 
@@ -343,6 +431,7 @@ pub fn compile_soup_flat_v2(
         supported_document_literal_v2,
         compile_document_literal_v2,
         None,
+        false,
     )
 }
 
@@ -358,7 +447,51 @@ pub fn compile_soup_flat_v3(
         supported_document_literal_v3,
         compile_document_literal_v3,
         Some(compile_status_property_literal),
+        false,
     )
+}
+
+/// Compile participant-scoped Channels and exact UNSEEN/SEEN notification
+/// predicates in addition to v3 literals. DONE is intentionally unsupported:
+/// the active edge contains no done history.
+pub fn compile_soup_flat_v4(
+    ast: &EntityFilterAst,
+    request: SoupFlatRequest,
+) -> Result<LocalCompileOutcome, CompileError> {
+    compile_soup_flat(
+        ast,
+        request,
+        vocabulary::profile_v4(),
+        |lit| {
+            supported_document_literal_v3(lit)
+                || matches!(lit, DocumentLiteral::NotificationState(state) if active_notification_state(state))
+        },
+        |lit| match lit {
+            DocumentLiteral::NotificationState(state) => Ok(notification_state_expr(state)),
+            _ => compile_document_literal_v3(lit),
+        },
+        Some(compile_status_property_literal),
+        true,
+    )
+}
+
+fn active_notification_state(state: &item_filters::NotificationState) -> bool {
+    matches!(
+        state,
+        item_filters::NotificationState::Unseen | item_filters::NotificationState::Seen
+    )
+}
+
+fn notification_state_expr(state: &item_filters::NotificationState) -> PredicateExpr {
+    PredicateExpr::ExactExists {
+        attribute: match state {
+            item_filters::NotificationState::Unseen => vocabulary::notification_unseen(),
+            item_filters::NotificationState::Seen => vocabulary::notification_seen(),
+            item_filters::NotificationState::Done => {
+                unreachable!("eligibility excludes done history")
+            }
+        },
+    }
 }
 
 type PropertyLiteralCompiler = fn(&PropertiesLiteral) -> Result<PredicateExpr, CompileError>;
@@ -370,12 +503,14 @@ fn compile_soup_flat(
     supported_document_literal: impl Fn(&DocumentLiteral) -> bool + Copy,
     compile_document_literal: impl Fn(&DocumentLiteral) -> Result<PredicateExpr, CompileError> + Copy,
     compile_properties_literal: Option<PropertyLiteralCompiler>,
+    supports_notifications: bool,
 ) -> Result<LocalCompileOutcome, CompileError> {
     if let Eligibility::Unsupported(reason) = check_soup_flat(
         ast,
         request,
         supported_document_literal,
         compile_properties_literal.is_some(),
+        supports_notifications,
     ) {
         return Ok(LocalCompileOutcome::Unsupported(reason));
     }
@@ -408,11 +543,21 @@ fn compile_soup_flat(
             },
             PartitionPredicate {
                 partition: vocabulary::project_partition(),
-                predicate: compile_expr(ast.project_filter.as_deref(), compile_project_literal)?,
+                predicate: compile_expr(ast.project_filter.as_deref(), |lit| match lit {
+                    ProjectLiteral::NotificationState(state) if supports_notifications => {
+                        Ok(notification_state_expr(state))
+                    }
+                    _ => compile_project_literal(lit),
+                })?,
             },
             PartitionPredicate {
                 partition: vocabulary::chat_partition(),
-                predicate: compile_expr(ast.chat_filter.as_deref(), compile_chat_literal)?,
+                predicate: compile_expr(ast.chat_filter.as_deref(), |lit| match lit {
+                    ChatLiteral::NotificationState(state) if supports_notifications => {
+                        Ok(notification_state_expr(state))
+                    }
+                    _ => compile_chat_literal(lit),
+                })?,
             },
         ],
         sort_attribute,
@@ -421,6 +566,12 @@ fn compile_soup_flat(
         limit: request.limit,
     };
 
+    let mut query = query;
+    if supports_notifications {
+        query
+            .partitions
+            .push(channels::compile(ast.channel_filter.as_deref())?);
+    }
     Ok(LocalCompileOutcome::Supported(ValidatedIndexQuery::new(
         query,
     )?))

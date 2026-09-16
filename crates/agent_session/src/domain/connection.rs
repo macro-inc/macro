@@ -150,6 +150,12 @@ pub struct RuntimeAttachment<Connector> {
     /// fresh at each attach - the set follows what the owner has connected
     /// *now*, not what they had connected when the session was created.
     pub(crate) mcp_servers: Vec<McpServer>,
+    /// Cancelled by the connector the moment its transport ends, for
+    /// connectors that can tell - most can, via whatever already tears their
+    /// pipe or socket down. `None` for a connector with no such signal;
+    /// callers waiting on a reply then fall back to their own timeout alone,
+    /// exactly as before this existed.
+    pub(crate) closed: Option<CancellationToken>,
 }
 
 /// Activate attachment-owned resources with the exact acquired ownership claim.
@@ -168,6 +174,7 @@ impl<Connector> RuntimeAttachment<Connector> {
             connector,
             handshake,
             mcp_servers: Vec::new(),
+            closed: None,
         }
     }
 
@@ -178,6 +185,17 @@ impl<Connector> RuntimeAttachment<Connector> {
         self
     }
 
+    /// Wire up the connector's own transport-closed signal, when it has one.
+    ///
+    /// Lets a command waiting on this session's reply fail the moment the
+    /// transport is known to be gone, rather than only once its own
+    /// wall-clock timeout separately elapses.
+    #[must_use]
+    pub fn with_closed(mut self, closed: CancellationToken) -> Self {
+        self.closed = Some(closed);
+        self
+    }
+
     /// Change the carrier without losing its handshake or activation lifecycle.
     pub fn map_transport<T>(self, map: impl FnOnce(Connector) -> T) -> RuntimeAttachment<T> {
         RuntimeAttachment {
@@ -185,6 +203,7 @@ impl<Connector> RuntimeAttachment<Connector> {
             handshake: self.handshake,
             mcp_servers: self.mcp_servers,
             activation: self.activation,
+            closed: self.closed,
         }
     }
 
@@ -361,6 +380,9 @@ where
             // External runtimes hold no egress environment; the sessions
             // they serve are not handed proxied MCP servers.
             mcp_servers: Vec::new(),
+            // This connection already tracks its own end (`evict`, or the
+            // router task finishing) - the same signal `closed()` awaits.
+            closed: Some(self.closed.clone()),
         }
     }
 

@@ -1,5 +1,6 @@
 import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { AgentsView } from '@app/features/agents-view/views/AgentsView';
 import { ComposeAgentSession } from '@app/features/block-agent/component/ComposeAgentSession';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
@@ -157,15 +158,15 @@ type ComponentRegistration = {
 
 const REGISTRY = new Map<string, ComponentRegistration>();
 
-function registerComponent<TMeta extends Record<string, unknown>>(
+function registerComponent(
   name: string,
   factory: ComponentFactory,
-  initialMeta?: TMeta
+  initialMeta?: ComponentMeta
 ) {
   const metaWithKind = initialMeta ? { kind: name, ...initialMeta } : undefined;
   REGISTRY.set(name, {
     factory,
-    initialMeta: metaWithKind as ComponentMeta,
+    initialMeta: metaWithKind,
   });
 }
 
@@ -372,27 +373,44 @@ registerComponent('my-activity', () => (
   <RedirectSplit to={{ type: 'component', id: 'activity' }} />
 ));
 
-registerComponent(
-  'agents',
-  withAuth(() => {
-    usePageViewTracking('agents');
-    const user = useUserContext();
-    const preset = getViewPreset('agents', undefined, {
-      userId: user.userId(),
-      isTeamAdmin: false,
-    });
-    const automationEntities = useAutomationEntities();
-    return (
-      <SoupView
-        viewName="Agents"
-        initialFilters={preset?.filters}
-        initialClientFilters={preset?.clientFilters}
-        initialGroupBy={preset?.groupBy}
-        additionalEntities={automationEntities}
-      />
-    );
-  })
-);
+function LegacyAgentsView() {
+  const user = useUserContext();
+  const preset = getViewPreset('agents', undefined, {
+    userId: user.userId(),
+    isTeamAdmin: false,
+  });
+  const automationEntities = useAutomationEntities();
+
+  return (
+    <SoupView
+      viewName="Agents"
+      initialFilters={preset?.filters}
+      initialClientFilters={preset?.clientFilters}
+      initialGroupBy={preset?.groupBy}
+      additionalEntities={automationEntities}
+    />
+  );
+}
+
+function RegisteredAgentsView() {
+  usePageViewTracking('agents');
+  const newAppViews = useNewAppViews({
+    enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
+  });
+
+  return (
+    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+      <Show
+        when={newAppViews.enabled() && !isTouchDevice()}
+        fallback={<LegacyAgentsView />}
+      >
+        <AgentsView />
+      </Show>
+    </Show>
+  );
+}
+
+registerComponent('agents', withAuth(RegisteredAgentsView));
 
 function LegacyMailView() {
   const preset = getViewPreset('mail');
@@ -888,4 +906,12 @@ if (DEV_MODE_ENV) {
 registerComponent(
   'icon-gallery',
   lazy(() => import('@core/internal/IconGallery'))
+);
+
+// Component library. Registered outside LOCAL_ONLY so design can browse it on
+// preview deploys; the whole gallery is one lazy chunk the app never loads
+// unless the route is opened.
+registerComponent(
+  'ui',
+  lazy(() => import('@app/features/ui-gallery/UiGallery'))
 );

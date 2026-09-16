@@ -15,8 +15,10 @@ export interface EmptyStatePanelProps {
   graphic?: Component<{ class?: string }>;
   graphicClass?: string;
   title?: string;
+  titleClass?: string;
   description?: JSXElement;
   descriptionClass?: string;
+  topSpacerClass?: string;
   primaryAction?: EmptyStateAction;
   actionsClass?: string;
   /**
@@ -48,11 +50,9 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
         // too tight, so we widen the padding and let the centered column keep
         // comfortable space from the split's edges (content stays left-aligned).
         'flex size-full flex-col overflow-y-auto px-10 pb-8 @4xl:px-2',
-        // Centered states can span full-bleed mobile panels (e.g. the entity
-        // load gate), where the panel extends behind the floating top chrome
-        // — inset the content below it like other full-bleed content.
-        props.centered &&
-          'items-center text-center touch:pt-(--mobile-content-inset-top)',
+        // Both alignments inset their content below the floating mobile chrome.
+        'touch:pt-(--mobile-content-inset-top)',
+        props.centered && 'items-center text-center',
         props.class
       )}
     >
@@ -60,9 +60,15 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
           the same baseline for every empty state, regardless of what's below
           it. The graphic box has a fixed height too, so the title's vertical
           position is constant; the bottom grows to fill. On mobile the viewport
-          is short and the wrapper already adds a top inset, so the spacer is
+          is short and the panel already adds a top inset, so the spacer is
           reduced to keep content from overflowing the visible area. */}
-      <div aria-hidden="true" class="shrink-0 basis-[28%] mobile:basis-[8%]" />
+      <div
+        aria-hidden="true"
+        class={cn(
+          'shrink-0 basis-[28%] mobile:basis-[8%]',
+          props.topSpacerClass
+        )}
+      />
       <div
         class={cn(
           // Explicit vertical rhythm: a generous gap below the graphic, then a
@@ -86,7 +92,9 @@ export function EmptyStatePanel(props: EmptyStatePanelProps) {
           )}
         </Show>
         <Show when={props.title}>
-          <h2 class="text-base font-semibold text-ink">{props.title}</h2>
+          <h2 class={cn('text-base font-semibold text-ink', props.titleClass)}>
+            {props.title}
+          </h2>
         </Show>
         <Show when={props.description}>
           <p

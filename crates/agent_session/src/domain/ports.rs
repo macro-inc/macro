@@ -1,12 +1,18 @@
+use std::pin::Pin;
+
 use super::error::{AgentSessionError, Result};
 use super::model::*;
-use agent_client_protocol::schema::v1::SessionId;
+use super::session::StopReason;
+use crate::domain::events::AgentSessionLifecycleEvent;
+use agent_client_protocol::schema::v1::{McpServer, SessionId};
+use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use bots::domain::models::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use std::num::NonZeroUsize;
 
 /// A bidirectional connection to an agent runtime.
 pub trait AgentConnector:
@@ -40,6 +46,9 @@ pub struct BotFacts {
     /// Runtime profile for a persisted agent. Fixed system bots have no
     /// persisted profile and use deployment defaults instead.
     pub managed_profile: Option<ManagedAgentProfile>,
+    /// Whether the persona is limited to selected channels. Channel co-members
+    /// may start a session as it, matching `@` mentions in those channels.
+    pub selected_channels: bool,
 }
 
 /// Runtime settings snapshotted when a managed persona opens a session.
@@ -76,6 +85,13 @@ pub trait BotDirectory: Send + Sync + 'static {
         user: MacroUserIdStr<'static>,
         team_id: Uuid,
     ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Whether the user and bot share at least one active channel.
+    fn user_shares_channel_with_bot(
+        &self,
+        user: MacroUserIdStr<'static>,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Why a user cannot select a bot as a managed session persona.
@@ -96,9 +112,10 @@ pub enum ManagedPersonaError {
 /// Resolve and authorize a managed persona for a user.
 ///
 /// Ownership policy lives in the domain: private personas belong to their
-/// owner, team personas are available to team members, and managed system
-/// bots (the deployment's own coders) are available to everyone, exactly as
-/// they are when mentioned in a channel.
+/// owner, team personas are available to team members, selected-channel
+/// personas are available to anyone who can `@` them in a shared channel,
+/// and managed system bots (the deployment's own coders) are available to
+/// everyone, exactly as they are when mentioned in a channel.
 pub async fn managed_persona_for_user<Bots: BotDirectory>(
     bots: &Bots,
     bot_id: BotId,
@@ -121,12 +138,22 @@ pub async fn managed_persona_for_user<Bots: BotDirectory>(
             profile: None,
         });
     }
-    let authorized = if let Some(owner) = facts.owner_user_id {
+    let authorized = if let Some(owner) = &facts.owner_user_id {
         owner.as_ref() == user.as_ref()
+            || (facts.selected_channels
+                && bots
+                    .user_shares_channel_with_bot(user.clone(), bot_id)
+                    .await
+                    .map_err(ManagedPersonaError::Lookup)?)
     } else if let Some(team_id) = facts.owner_team_id {
         bots.user_has_team(user.clone(), team_id)
             .await
             .map_err(ManagedPersonaError::Lookup)?
+            || (facts.selected_channels
+                && bots
+                    .user_shares_channel_with_bot(user.clone(), bot_id)
+                    .await
+                    .map_err(ManagedPersonaError::Lookup)?)
     } else {
         false
     };
@@ -252,6 +279,27 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     /// Get an agent session by id.
     fn get(&self, id: AgentSessionId) -> impl Future<Output = Result<AgentSession>> + Send;
 
+    /// Resolve each of `ids` to what `viewer` may see of it, for chips.
+    ///
+    /// One [`AgentSessionPreview`] per id in `ids`, in no particular order.
+    /// Access is the session's own `entity_access` grants resolved against
+    /// the viewer - as themselves, through the channels they are still in,
+    /// and through their teams - the same predicate the read routes' access
+    /// extractor applies, so a preview says `Access` exactly when
+    /// `GET /agent-sessions/{id}` would answer.
+    fn preview(
+        &self,
+        viewer: &MacroUserIdStr<'static>,
+        ids: &[AgentSessionId],
+    ) -> impl Future<Output = Result<Vec<AgentSessionPreview>>> + Send;
+
+    /// Replace the session credential when attaching an external runtime.
+    fn set_egress_token_hash(
+        &self,
+        id: AgentSessionId,
+        hash: &str,
+    ) -> impl Future<Output = Result<()>> + Send;
+
     /// The session a sandbox's egress token stands for, if any still does.
     ///
     /// `egress_token_hash` is the SHA-256 hex of the token as presented, never
@@ -292,6 +340,13 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         thread_id: Uuid,
     ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
 
+    /// The owner's newest sessions, newest first, at most `limit`.
+    fn recent_for_owner<'owner>(
+        &self,
+        owner: &MacroUserIdStr<'owner>,
+        limit: NonZeroUsize,
+    ) -> impl Future<Output = Result<Vec<AgentSession>>> + Send;
+
     /// The agent behind a session, for rendering the messages it sent.
     ///
     /// A bot that has been deleted still has messages in the channel, so this
@@ -304,6 +359,20 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         &self,
         id: AgentSessionId,
         acp_session_id: SessionId,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Persist the repository the session works on, or clear it. Idempotent.
+    ///
+    /// Written after the session is open, because for some runtimes the
+    /// repository is not known at creation: a Cursor session's repository
+    /// follows from what its first prompt asks for. The row is authoritative
+    /// once written - the egress proxy pins the sandbox's git traffic to it -
+    /// so `None` is a real answer meaning "this session works on no
+    /// repository", not "leave whatever is there".
+    fn set_repo_url(
+        &self,
+        id: AgentSessionId,
+        repo_url: Option<String>,
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Persist the model the session is running on. Idempotent.
@@ -478,22 +547,94 @@ pub trait AgentSessionLogRepo: Send + Sync + 'static {
         &self,
         agent_session_id: AgentSessionId,
     ) -> impl Future<Output = Result<Vec<StoredAgentSessionLog>>> + Send;
+
+    /// Every user the log has attributed a frame to: whoever prompted,
+    /// answered, or otherwise drove the session. Distinct, unordered; the
+    /// owner appears only if they acted. Spans the whole log, resumes
+    /// included - someone who prompted before a resume still cares how it
+    /// ends.
+    fn participants(
+        &self,
+        agent_session_id: AgentSessionId,
+    ) -> impl Future<Output = Result<Vec<MacroUserIdStr<'static>>>> + Send;
+}
+
+/// One tool a session's agent may call, as the MCP server offering it
+/// describes it - the same name, description and parameter schema the agent
+/// itself is shown.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SessionToolDefinition {
+    /// The name the agent calls the tool by, exactly as the server registers
+    /// it for this session (an MCP tool arrives as `mcp__<server>__<tool>`).
+    pub name: String,
+    /// The description the agent chooses the tool on.
+    pub description: String,
+    /// The JSON schema of the tool's arguments.
+    pub parameters: serde_json::Value,
+}
+
+/// Lists the tools a session's MCP servers advertise, so the session's
+/// telemetry can say what the agent had to choose from
+/// (`gen_ai.tool.definitions`).
+///
+/// Best-effort by contract: a listing that fails, or takes too long, costs
+/// a span its tool definitions and nothing else. The one production
+/// implementation dials the same egress-proxy URLs the agent is handed, in
+/// process, so what it lists is what the agent sees - Macro's own tools and
+/// the owner's connected apps alike. A harness's built-in tools (its shell,
+/// its file editor) are not on any server and are not listed; the
+/// convention does not require them.
+///
+/// Object-safe on purpose: the session service stores it erased so wiring it
+/// is not another type parameter.
+pub trait SessionToolCatalog: Send + Sync + 'static {
+    /// Every tool the given servers offer. Empty when none do, or when the
+    /// listing failed.
+    fn tool_definitions(
+        &self,
+        servers: Vec<McpServer>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Vec<SessionToolDefinition>> + Send + '_>>;
+}
+
+/// A [`SessionToolCatalog`] that lists nothing: tests, offline tooling, and
+/// deployments with no in-process MCP client.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoOpToolCatalog;
+
+impl SessionToolCatalog for NoOpToolCatalog {
+    fn tool_definitions(
+        &self,
+        _servers: Vec<McpServer>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Vec<SessionToolDefinition>> + Send + '_>> {
+        Box::pin(async { Vec::new() })
+    }
+}
+
+/// One frame appended: its durable identity, and what the fold made of it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Appended {
+    /// The log row the frame became.
+    pub log_id: Uuid,
+    /// What the frame meant for the turn, per the connection's live fold.
+    /// Empty for most frames; never filled while catching up on history.
+    pub signals: Vec<TurnSignal>,
 }
 
 /// Sequential live log writer owned by one session actor.
 pub trait AgentSessionLogWriter: Send + 'static {
     /// Persist and fold one frame into this connection's live projection.
-    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Uuid>> + Send {
+    fn append(&mut self, log: AgentSessionLog) -> impl Future<Output = Result<Appended>> + Send {
         self.append_with_boundary(log, None)
     }
 
     /// Persist a frame and optional successful-load boundary in one transaction.
-    /// Returns its durable row identity before the actor continues.
+    /// Returns its durable row identity, and the turn signals the frame
+    /// implied, before the actor continues.
     fn append_with_boundary(
         &mut self,
         log: AgentSessionLog,
         boundary: Option<HistoryBoundary>,
-    ) -> impl Future<Output = Result<Uuid>> + Send;
+    ) -> impl Future<Output = Result<Appended>> + Send;
 }
 
 /// A session's queue changed; this is the whole queue as it stands now.
@@ -524,6 +665,14 @@ pub trait AgentSessionRealtime {
         event: LogAppended,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 
+    /// Tell viewers to refetch changed session metadata.
+    fn publish_updated(
+        &self,
+        _session: AgentSessionId,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send {
+        async { Ok(()) }
+    }
+
     /// Publish a user-facing name change to the session's viewers.
     fn publish_renamed(
         &self,
@@ -542,33 +691,79 @@ pub trait AgentSessionRealtime {
     }
 }
 
-/// Told when a session's turn ends and when its live actor stops.
+/// Publishing a session's lifecycle facts for anyone downstream: webhooks,
+/// notifications, observability.
+///
+/// Best effort by contract: an implementation logs a failed publish and never
+/// returns it, because nothing about the session itself went wrong. Object-
+/// safe so the harness and this service can hold it erased rather than as one
+/// more type parameter; the broker's `send_event` is generic and cannot be.
+pub trait AgentSessionLifecyclePublisher: Send + Sync + 'static {
+    /// Publish one fact. Resolves once the publish has been attempted.
+    fn publish(
+        &self,
+        event: AgentSessionLifecycleEvent,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>>;
+}
+
+impl<Publisher: AgentSessionLifecyclePublisher + ?Sized> AgentSessionLifecyclePublisher
+    for std::sync::Arc<Publisher>
+{
+    fn publish(
+        &self,
+        event: AgentSessionLifecycleEvent,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        (**self).publish(event)
+    }
+}
+
+/// An [`AgentSessionLifecyclePublisher`] that publishes nothing: tests,
+/// offline tooling, and replay.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoopLifecyclePublisher;
+
+impl AgentSessionLifecyclePublisher for NoopLifecyclePublisher {
+    fn publish(
+        &self,
+        _event: AgentSessionLifecycleEvent,
+    ) -> Pin<Box<dyn Future<Output = ()> + Send + '_>> {
+        Box::pin(async {})
+    }
+}
+
+/// Told what the session's log meant for its turn, and when its live actor
+/// stops.
 ///
 /// What the harness gates its prompt queue on: a turn ending means the agent
 /// can take the next queued prompt, an actor stopping means no turn is in
-/// flight anymore however the last one looked. Both fire from the actor's own
-/// task, so implementations must only hand the fact off - enqueue, notify -
-/// never do the resulting work inline.
+/// flight anymore however the last one looked. Every method fires from the
+/// actor's own task, so implementations must only hand the fact off -
+/// enqueue, notify - never do the resulting work inline.
+///
+/// Turn signals come from the connection's live fold - the same fold the
+/// chip renders from - so "the turn ended" has one definition. That includes
+/// turns nobody here prompted: a resumed session's runtime reports those
+/// with `_session/turn_complete`, and the fold closes them too.
 ///
 /// Object-safe and synchronous on purpose: the service stores it erased so
 /// wiring it is not another type parameter, and the one production
 /// implementation admits work to a queue synchronously.
 pub trait SessionTurnObserver: Send + Sync + 'static {
-    /// The runtime answered the session's in-flight turn.
-    fn turn_ended(&self, id: AgentSessionId);
+    /// A fold-derived fact about the session's turn.
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal);
 
     /// The session's live actor is gone - disconnect, teardown, or crash. Any
-    /// in-flight turn went with it, without [`Self::turn_ended`] firing.
-    fn session_stopped(&self, id: AgentSessionId);
+    /// in-flight turn went with it, without a [`TurnSignal::TurnEnded`].
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason);
 }
 
 impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> {
-    fn turn_ended(&self, id: AgentSessionId) {
-        (**self).turn_ended(id);
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
+        (**self).signal(id, signal);
     }
 
-    fn session_stopped(&self, id: AgentSessionId) {
-        (**self).session_stopped(id);
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
+        (**self).session_stopped(id, reason);
     }
 }
 
@@ -578,9 +773,9 @@ impl<T: SessionTurnObserver + ?Sized> SessionTurnObserver for std::sync::Arc<T> 
 pub struct NoOpTurnObserver;
 
 impl SessionTurnObserver for NoOpTurnObserver {
-    fn turn_ended(&self, _id: AgentSessionId) {}
+    fn signal(&self, _id: AgentSessionId, _signal: TurnSignal) {}
 
-    fn session_stopped(&self, _id: AgentSessionId) {}
+    fn session_stopped(&self, _id: AgentSessionId, _reason: StopReason) {}
 }
 
 /// A [`SessionTurnObserver`] bound after construction, for the composition
@@ -609,15 +804,15 @@ impl LateBoundTurnObserver {
 }
 
 impl SessionTurnObserver for LateBoundTurnObserver {
-    fn turn_ended(&self, id: AgentSessionId) {
+    fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
         if let Some(observer) = self.observer.get() {
-            observer.turn_ended(id);
+            observer.signal(id, signal);
         }
     }
 
-    fn session_stopped(&self, id: AgentSessionId) {
+    fn session_stopped(&self, id: AgentSessionId, reason: StopReason) {
         if let Some(observer) = self.observer.get() {
-            observer.session_stopped(id);
+            observer.session_stopped(id, reason);
         }
     }
 }
@@ -780,3 +975,6 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
         id: AgentSessionId,
     ) -> impl Future<Output = Result<Option<harness_id::HarnessId>>> + Send;
 }
+
+#[cfg(test)]
+mod test;
