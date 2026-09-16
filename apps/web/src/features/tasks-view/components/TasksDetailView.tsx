@@ -26,36 +26,11 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { TASK_TABS } from '../constants';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskDetailTarget } from '../types';
 import { TaskDetail, TaskDetailBodyState } from './TaskDetail';
 
 type EntityDetailEntry = EntityDetailNavigationStackEntry;
-
-function TaskViewBreadcrumbItem() {
-  const { state } = useTasksView();
-  const tabName = () =>
-    TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
-
-  return (
-    <ViewBreadcrumbs.Item
-      value="tasks-view"
-      metadata={{ type: 'tasks' }}
-      order={0}
-    >
-      {(item) => (
-        <ViewBreadcrumbs.ReturnButton
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-          tooltip={tabName()}
-        >
-          <span class="truncate">{tabName()}</span>
-        </ViewBreadcrumbs.ReturnButton>
-      )}
-    </ViewBreadcrumbs.Item>
-  );
-}
 
 function TaskDetailAncestorBreadcrumbs() {
   const navigationStack = useEntityDetailNavigationStack();
@@ -77,7 +52,7 @@ function TaskDetailTopBar(props: {
   const panel = useSplitPanelOrThrow();
 
   return (
-    <ViewShell.TopBar class="px-3 touch:flex">
+    <ViewShell.TopBar class="touch:flex">
       <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
       <ViewBreadcrumbs.Outlet
         aria-label="Task location"
@@ -146,77 +121,65 @@ export function TasksDetailView(props: { task: TaskDetailTarget }) {
         close: () => setShareOpen(false),
       }}
     >
-      <ViewBreadcrumbs.Root
-        value={navigationStack.active()?.value ?? 'tasks-view'}
-        onChange={(value) => {
-          if (value === 'tasks-view') {
-            closeTask();
-            return;
-          }
-          navigationStack.popTo(value);
-        }}
-      >
-        <TaskViewBreadcrumbItem />
-        <TaskDetailAncestorBreadcrumbs />
-        <SidePanel.Root>
-          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <TaskDetailTopBar
-              documentId={props.task.id}
-              showTaskActions={isTaskActive()}
-            />
-            <div class="relative min-h-0 min-w-0 flex-1">
-              <EntityDetailNavigationStack.Outlet>
-                {(entry, state) => (
-                  <Switch>
-                    <Match when={entry.value === taskEntry()?.value}>
-                      <TaskDetail
-                        task={props.task}
-                        shareOpen={shareOpen()}
-                        onShareOpenChange={setShareOpen}
-                      >
-                        {(context) => (
-                          <MarkdownDetailBreadcrumbItem
-                            value={entry.value}
-                            metadata={entry.data}
-                            order={state.entries.length}
-                            documentId={props.task.id}
-                            kind="task"
-                            fallbackName={props.task.fallbackName}
-                            ownerId={context.data.metadata.owner}
-                            projectId={
-                              context.data.metadata.projectId ?? undefined
-                            }
-                            onClose={closeTask}
-                            onDuplicate={(id, name) =>
-                              openTask({ id, fallbackName: name })
-                            }
-                          />
-                        )}
-                      </TaskDetail>
-                    </Match>
-                    <Match when={true}>
-                      <ErrorBoundary
-                        fallback={(error, reset) => (
-                          <TaskDetailBodyState
-                            error={error}
-                            actionLabel="Reset"
-                            onAction={reset}
-                          />
-                        )}
-                      >
-                        <StackEntityDetail
-                          entry={entry}
+      <TaskDetailAncestorBreadcrumbs />
+      <SidePanel.Root>
+        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+          <TaskDetailTopBar
+            documentId={props.task.id}
+            showTaskActions={isTaskActive()}
+          />
+          <div class="relative min-h-0 min-w-0 flex-1">
+            <EntityDetailNavigationStack.Outlet>
+              {(entry, state) => (
+                <Switch>
+                  <Match when={entry.value === taskEntry()?.value}>
+                    <TaskDetail
+                      task={props.task}
+                      shareOpen={shareOpen()}
+                      onShareOpenChange={setShareOpen}
+                    >
+                      {(context) => (
+                        <MarkdownDetailBreadcrumbItem
+                          value={entry.value}
+                          metadata={entry.data}
                           order={state.entries.length}
+                          documentId={props.task.id}
+                          kind="task"
+                          fallbackName={props.task.fallbackName}
+                          ownerId={context.data.metadata.owner}
+                          projectId={
+                            context.data.metadata.projectId ?? undefined
+                          }
+                          onClose={closeTask}
+                          onDuplicate={(id, name) =>
+                            openTask({ id, fallbackName: name })
+                          }
                         />
-                      </ErrorBoundary>
-                    </Match>
-                  </Switch>
-                )}
-              </EntityDetailNavigationStack.Outlet>
-            </div>
+                      )}
+                    </TaskDetail>
+                  </Match>
+                  <Match when={true}>
+                    <ErrorBoundary
+                      fallback={(error, reset) => (
+                        <TaskDetailBodyState
+                          error={error}
+                          actionLabel="Reset"
+                          onAction={reset}
+                        />
+                      )}
+                    >
+                      <StackEntityDetail
+                        entry={entry}
+                        order={state.entries.length}
+                      />
+                    </ErrorBoundary>
+                  </Match>
+                </Switch>
+              )}
+            </EntityDetailNavigationStack.Outlet>
           </div>
-        </SidePanel.Root>
-      </ViewBreadcrumbs.Root>
+        </div>
+      </SidePanel.Root>
     </ShareDialogContext.Provider>
   );
 }

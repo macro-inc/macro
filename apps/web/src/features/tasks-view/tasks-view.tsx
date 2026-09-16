@@ -1,12 +1,26 @@
-import { EntityDetailNavigationStack } from '@app/components/entity-detail/EntityDetailNavigationStack';
-import { ViewShell } from '@app/components/view-shell';
+import {
+  EntityDetailNavigationStack,
+  useEntityDetailNavigationStack,
+} from '@app/components/entity-detail/EntityDetailNavigationStack';
+import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { createSignal, Match, onMount, Suspense, Switch } from 'solid-js';
+import {
+  createSignal,
+  Match,
+  onMount,
+  type ParentProps,
+  Suspense,
+  Switch,
+} from 'solid-js';
 import { TasksDetailView } from './components/TasksDetailView';
-import { TasksHeader, TasksTopBar } from './components/TasksHeader';
+import {
+  TasksHeader,
+  TasksTopBar,
+  TaskViewBreadcrumbItem,
+} from './components/TasksHeader';
 import { TasksSidebar } from './components/TasksSidebar';
 import { TaskList } from './components/task-list/TaskList';
 import { TasksViewProvider, useTasksView } from './tasks-view-context';
@@ -22,6 +36,27 @@ function TasksListFallback() {
     <div class="grid size-full min-h-0 min-w-0 place-items-center text-ink-muted">
       <SpinnerIcon aria-label="Loading tasks" class="size-5 animate-spin" />
     </div>
+  );
+}
+
+function TasksViewBreadcrumbs(props: ParentProps) {
+  const { closeTask } = useTasksView();
+  const navigationStack = useEntityDetailNavigationStack();
+
+  return (
+    <ViewBreadcrumbs.Root
+      value={navigationStack.active()?.value ?? 'tasks-view'}
+      onChange={(value) => {
+        if (value === 'tasks-view') {
+          closeTask();
+          return;
+        }
+        navigationStack.popTo(value);
+      }}
+    >
+      <TaskViewBreadcrumbItem />
+      {props.children}
+    </ViewBreadcrumbs.Root>
   );
 }
 
@@ -75,7 +110,9 @@ export function TasksView(props: TasksViewProps) {
     >
       <ListEntityMetadataQueryProvider>
         <TasksViewProvider initialState={props.initialState}>
-          <TasksViewRoot />
+          <TasksViewBreadcrumbs>
+            <TasksViewRoot />
+          </TasksViewBreadcrumbs>
         </TasksViewProvider>
       </ListEntityMetadataQueryProvider>
     </EntityDetailNavigationStack.Root>
