@@ -237,10 +237,14 @@ export function DriveLayout(props: {
           </ViewShell.Aside>
           <ViewShell.Main>
             <ViewShell.TopBar class="touch:flex">
+              <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
+              <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
+                Drive
+              </h1>
               <Show
                 when={props.state.location.kind === 'folder'}
                 fallback={
-                  <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
+                  <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:hidden">
                     {title()}
                   </h1>
                 }
@@ -248,7 +252,7 @@ export function DriveLayout(props: {
                 <span
                   role="navigation"
                   aria-label="Folder breadcrumbs"
-                  class="inline-flex max-w-full items-center gap-1 overflow-x-auto align-middle"
+                  class="inline-flex max-w-full items-center gap-1 overflow-x-auto align-middle @max-[720px]/view-shell:hidden"
                 >
                   <Button
                     variant="ghost"
@@ -286,7 +290,6 @@ export function DriveLayout(props: {
               <div class="flex min-w-0 flex-col gap-3">
                 <div class="hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
                   <SplitPanel.ControlGroup>
-                    <SplitPanel.CloseButton />
                     <SplitPanel.BackButton />
                     <SplitPanel.ForwardButton />
                   </SplitPanel.ControlGroup>
