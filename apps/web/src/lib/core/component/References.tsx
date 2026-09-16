@@ -227,7 +227,6 @@ export function References(props: ReferenceProps) {
   const blockOrchestrator = useGlobalBlockOrchestrator();
 
   const navigateToItem = ({
-    event,
     blockId,
     blockName,
   }: {
@@ -235,17 +234,13 @@ export function References(props: ReferenceProps) {
     blockName: BlockName | BlockAlias;
     blockId: string;
   }) => {
-    openWithSplit(
-      { type: blockName, id: blockId },
-      { preferNewSplit: event?.shiftKey !== true }
-    );
+    openWithSplit({ type: blockName, id: blockId }, { preferNewSplit: true });
   };
 
   const navigateToMessage = ({
     channelId,
     messageId,
     threadId,
-    event,
   }: {
     event?: KeyboardEvent | MouseEvent;
     channelId: string;
@@ -258,7 +253,7 @@ export function References(props: ReferenceProps) {
       messageId,
       threadId,
       {
-        preferNewSplit: event?.shiftKey !== true,
+        preferNewSplit: true,
       }
     );
   };

@@ -61,6 +61,21 @@ describe('makeDeleteAction.execute', () => {
     expect(mocks.openBulkEditModal).toHaveBeenCalledOnce();
   });
 
+  it('notifies after a confirmed deletion succeeds', async () => {
+    const onDeleted = vi.fn();
+    const doc = entity('document');
+    const action = makeDeleteAction({ userId: () => ME, onDeleted });
+
+    await action.execute([doc]);
+
+    expect(onDeleted).not.toHaveBeenCalled();
+    const [{ onFinish }] = mocks.openBulkEditModal.mock.calls[0] as unknown as [
+      { onFinish: () => void },
+    ];
+    onFinish();
+    expect(onDeleted).toHaveBeenCalledWith([doc]);
+  });
+
   // A mixed selection confirms only the entities the modal actually lists;
   // the reminders in it are already gone by then.
   it('splits a mixed selection, confirming only the non-reminders', async () => {

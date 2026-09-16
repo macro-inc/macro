@@ -41,10 +41,20 @@ pub struct RustService {
     /// Opt-in services (e.g. `search_processing_service`) only start with an
     /// explicit profile and are never converted to the runtime image.
     pub opt_in: bool,
-    /// Built locally with `--no-default-features` (plus any [`Self::build_features`]).
-    /// `authentication_service` drops the default `rate_limit` feature (removing
-    /// the 1-request/minute login-code throttle that makes local dev painful);
-    /// `search_processing_service` drops the default amd64-only `pdf` feature.
+    /// Built locally in its own `cargo` invocation with `--no-default-features`
+    /// (plus [`Self::local_features`]), because the feature it must drop is a
+    /// *default* one and cargo can only drop defaults per-package.
+    ///
+    /// Keep this at zero services if you possibly can. A package-scoped
+    /// invocation resolves features over a different package selection than the
+    /// unified build, which invalidates the shared dependency artifacts the
+    /// unified build just produced — measured at 230 units and ~2 minutes of
+    /// rebuild on the *next* `run_local`, forever. Prefer an additive opt-out
+    /// feature (see `authentication_service`'s `no_rate_limit`), which composes
+    /// into the one unified invocation.
+    ///
+    /// `search_processing_service` genuinely cannot: its `pdf` default feature
+    /// pulls an optional dependency, and no additive feature can un-pull one.
     pub no_default_features: bool,
 }
 
@@ -60,15 +70,19 @@ impl RustService {
         self.opt_in
     }
 
-    /// Cargo features to re-enable alongside `--no-default-features` for this
-    /// service's local build (empty = none). Only `search_processing_service`
-    /// needs this: `authentication_service` opts into local passwordless code
-    /// responses, and dropping `search_processing_service` default features
-    /// removes the amd64-only `pdf` feature, but its bin still requires
-    /// `processing`/`service`.
-    pub fn build_features(&self) -> &'static [&'static str] {
+    /// Cargo features this service's local build enables (empty = none).
+    ///
+    /// For a unified-build service these are passed package-qualified
+    /// (`<package>/<feature>`) so they compose with every other binary in the
+    /// same invocation. For a [`Self::no_default_features`] service they are
+    /// the features re-enabled alongside the dropped defaults.
+    ///
+    /// `authentication_service` opts into local passwordless code responses and
+    /// out of the login-code throttles; `search_processing_service` loses
+    /// `processing`/`service` with its defaults and its bin requires them.
+    pub fn local_features(&self) -> &'static [&'static str] {
         match self.cargo_bin {
-            "authentication_service" => &["return_passwordless_code"],
+            "authentication_service" => &["return_passwordless_code", "no_rate_limit"],
             "search_processing_service" => &["processing", "service"],
             _ => &[],
         }
@@ -86,7 +100,9 @@ pub const RUST_SERVICES: &[RustService] = &[
         is_websocket: false,
         modes: &[Mode::Local, Mode::Dev],
         opt_in: false,
-        no_default_features: true,
+        // Joins the unified invocation: the local behavior it needs
+        // (`no_rate_limit`, `return_passwordless_code`) is additive.
+        no_default_features: false,
     },
     RustService {
         compose_name: "connection_gateway",

@@ -177,24 +177,27 @@ describe('MagicChipView', () => {
     expect(label?.textContent).toContain('Thinking');
   });
 
-  it('places the pull request in the header once the session opened one', () => {
-    const { container } = render(() => (
-      <MagicChipView
-        agentSessionId="session-1"
-        presentation={{ kind: 'settled', markdown: 'Opened a PR.' }}
-        header={{
-          agent: 'Cursor Agent',
-          pullRequestUrl: 'https://github.com/macro-inc/macro/pull/6303',
-        }}
-      />
-    ));
-    const link = header(container)?.querySelector(
-      '[data-testid="chip-pull-request"]'
-    );
-    expect(link?.getAttribute('href')).toBe(
-      'https://github.com/macro-inc/macro/pull/6303'
-    );
-  });
+  it.each(['Cursor Agent', 'Codex Agent'])(
+    'places the pull request in the %s header once the session opened one',
+    (agent) => {
+      const { container } = render(() => (
+        <MagicChipView
+          agentSessionId="session-1"
+          presentation={{ kind: 'settled', markdown: 'Opened a PR.' }}
+          header={{
+            agent,
+            pullRequestUrl: 'https://github.com/macro-inc/macro/pull/6303',
+          }}
+        />
+      ));
+      const link = header(container)?.querySelector(
+        '[data-testid="chip-pull-request"]'
+      );
+      expect(link?.getAttribute('href')).toBe(
+        'https://github.com/macro-inc/macro/pull/6303'
+      );
+    }
+  );
 
   it('keeps the same answer height once the answer streams in', () => {
     const { container } = render(() => (

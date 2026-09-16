@@ -82,6 +82,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
       messageId={props.message.db_id}
       isSelected={props.isSelected}
       allowHover={props.allowHover}
+      isTouch={props.isTouch}
       onActivate={isBodyExpanded() ? undefined : props.onExpand}
       onSelect={props.onSelect}
       onHover={props.onHover}
@@ -121,7 +122,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
               </div>
             }
           />
-          <div class="ph-no-capture text-sm text-ink pr-4 mobile:pr-0">
+          <div class="ph-no-capture text-base text-ink pr-4 mobile:pr-0">
             <EmailMessageBody
               message={props.message}
               isPersonal={props.isPersonal}

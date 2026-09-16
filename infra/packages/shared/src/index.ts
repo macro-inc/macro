@@ -11,6 +11,9 @@ export const project = pulumi.getProject();
 
 export const stack = pulumi.getStack();
 
+/** Stable alias shared by auth and the harness without a stack cycle. */
+export const CODEX_OAUTH_KMS_ALIAS = `alias/authentication-service-codex-oauth-${stack}`;
+
 export const config = new pulumi.Config();
 
 export const MACRO_ORG_NAME = 'macro-inc';

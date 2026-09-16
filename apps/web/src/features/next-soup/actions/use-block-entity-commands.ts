@@ -7,7 +7,7 @@ import { useAllProperties } from '@app/features/property/editor/hooks/useAllProp
 import { openPropertyEditor } from '@app/features/property/editor/state/propertyEditor';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
-import { useBlockId } from '@core/block';
+import { useMaybeBlockId } from '@core/block';
 import { useQuickAccess } from '@core/context/quickAccess';
 import { useUserId } from '@core/context/user';
 import { HotkeyTags } from '@core/hotkey/constants';
@@ -49,10 +49,24 @@ import {
  * source: `condition()` runs inside command-menu evaluation, where a pending
  * query must not suspend.
  */
+export type UseBlockEntityCommandsOptions = {
+  id?: string;
+  scopeId?: string;
+  resolveEntity?: () => EntityData | undefined;
+  onDeleted?: () => void;
+};
+
 export const useBlockEntityCommands = (
-  resolveEntity?: () => EntityData | undefined
+  options: UseBlockEntityCommandsOptions = {}
 ) => {
-  const blockId = useBlockId();
+  const blockId = options.id ?? useMaybeBlockId();
+
+  if (!blockId) {
+    throw new Error(
+      'useBlockEntityCommands requires an explicit id or an enclosing block'
+    );
+  }
+
   const quickAccess = useQuickAccess();
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
@@ -64,7 +78,10 @@ export const useBlockEntityCommands = (
     notificationSource: () => notificationSource,
   });
 
-  const deleteAction = makeDeleteAction({ userId: () => userId() });
+  const deleteAction = makeDeleteAction({
+    userId: () => userId(),
+    onDeleted: options.onDeleted,
+  });
   const renameAction = makeRenameAction({ userId: () => userId() });
   const copyAction = makeCopyAction();
   const moveToProjectAction = makeMoveToProjectAction();
@@ -87,7 +104,7 @@ export const useBlockEntityCommands = (
   const assignees = () => propertyById(SYSTEM_PROPERTY_IDS.ASSIGNEES);
 
   const getEntity = (): EntityData | undefined => {
-    const provided = resolveEntity?.();
+    const provided = options.resolveEntity?.();
     if (provided) return provided;
     const item = quickAccess.getById(blockId);
     if (item?.kind === 'entity') return item.data;
@@ -205,7 +222,7 @@ export const useBlockEntityCommands = (
   };
 
   createEffect(() => {
-    const scopeId = blockHotkeyScopeSignal.get();
+    const scopeId = options.scopeId ?? blockHotkeyScopeSignal.get();
     if (!scopeId) return;
 
     const group = createHotkeyGroup();

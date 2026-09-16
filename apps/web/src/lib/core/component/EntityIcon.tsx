@@ -10,6 +10,7 @@ import type {
   DocumentEntity,
   EmailEntity,
   EntityData,
+  ForeignEntity,
   NamedSubType,
   ReminderEntity,
 } from '@entity';
@@ -35,6 +36,7 @@ import FileVideo from '@phosphor/file-video.svg';
 import Files from '@phosphor/files.svg';
 import Folder from '@phosphor/folder-simple.svg';
 import FolderUser from '@phosphor/folder-simple-user.svg';
+import GitMerge from '@phosphor/git-merge.svg';
 import GitPullRequest from '@phosphor/git-pull-request.svg';
 import GlobeIcon from '@phosphor/globe.svg';
 import HashStraight from '@phosphor/hash-straight.svg';
@@ -67,6 +69,7 @@ import FileVideoBold from '@phosphor-icons/core/bold/file-video-bold.svg';
 import FilesBold from '@phosphor-icons/core/bold/files-bold.svg';
 import FolderBold from '@phosphor-icons/core/bold/folder-simple-bold.svg';
 import FolderUserBold from '@phosphor-icons/core/bold/folder-simple-user-bold.svg';
+import GitMergeBold from '@phosphor-icons/core/bold/git-merge-bold.svg';
 import GitPullRequestBold from '@phosphor-icons/core/bold/git-pull-request-bold.svg';
 import GlobeIconBold from '@phosphor-icons/core/bold/globe-bold.svg';
 import HashStraightBold from '@phosphor-icons/core/bold/hash-straight-bold.svg';
@@ -100,10 +103,14 @@ export type EntityWithValidIcon =
   | ChannelType
   | 'organization'
   | 'default'
+  | 'document'
   | 'sharedProject'
   | 'emailRead'
   | 'emailInvite'
   | 'githubPullRequest'
+  | 'githubPullRequestOpen'
+  | 'githubPullRequestMerged'
+  | 'githubPullRequestClosed'
   | 'archive'
   | 'files'
   | 'crm_company'
@@ -117,6 +124,13 @@ const ARCHIVE_EXTENSIONS = new Set(
 );
 
 export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
+  document: {
+    icon: File,
+    boldIcon: FileBold,
+    foreground: 'text-default',
+    background: 'bg-default/20',
+    prettyName: 'Document',
+  },
   call: {
     icon: PhoneCall,
     boldIcon: PhoneCallBold,
@@ -320,6 +334,27 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default/20',
     prettyName: 'GitHub Pull Request',
   },
+  githubPullRequestOpen: {
+    icon: GitPullRequest,
+    boldIcon: GitPullRequestBold,
+    foreground: 'text-success',
+    background: 'bg-success/20',
+    prettyName: 'Open Pull Request',
+  },
+  githubPullRequestMerged: {
+    icon: GitMerge,
+    boldIcon: GitMergeBold,
+    foreground: 'text-note',
+    background: 'bg-note/20',
+    prettyName: 'Merged Pull Request',
+  },
+  githubPullRequestClosed: {
+    icon: GitPullRequest,
+    boldIcon: GitPullRequestBold,
+    foreground: 'text-failure',
+    background: 'bg-failure/20',
+    prettyName: 'Closed Pull Request',
+  },
   pr: {
     icon: GitPullRequest,
     boldIcon: GitPullRequestBold,
@@ -469,12 +504,10 @@ export function EntityIcon(props: EntityIconProps) {
   const getName = () => {
     // Special cases:
     if (props.targetType === 'project' && props.shared) return 'sharedProject';
-    return validateEntity(props.targetType || 'default');
+    return props.targetType || 'default';
   };
 
-  const config = () => ENTITY_ICON_CONFIGS[getName()];
-  const icon = () =>
-    props.weight === 'bold' ? config().boldIcon : config().icon;
+  const config = () => getIconConfig(getName(), props.weight);
   const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
 
@@ -489,7 +522,7 @@ export function EntityIcon(props: EntityIconProps) {
       )}
     >
       {/* size-full: Safari needs a CSS size, not the SVG's % attributes. */}
-      <Dynamic component={icon()} class="size-full" />
+      <Dynamic component={config().icon} class="size-full" />
     </div>
   );
 }
@@ -544,26 +577,49 @@ type EntityIconData = Pick<EntityData, 'type'> & {
   fileType?: DocumentEntity['fileType'] | null;
   subType?: DocumentEntity['subType'];
   isRead?: EmailEntity['isRead'];
-  /** Reminders icon as the entity they reference. */
+  hasIcsAttachment?: EmailEntity['hasIcsAttachment'];
+  foreignSource?: ForeignEntity['foreignSource'];
+  metadata?: ForeignEntity['metadata'];
+  /** Reference metadata carried by reminder entities. */
   referencedEntity?: ReminderEntity['referencedEntity'];
 };
 
+/** The shared entity-to-icon mapping used by lists, previews, and drag images. */
 export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
-  const typeString = match(entity)
-    .with({ type: 'channel' }, (e) => e.channelType || 'channel')
-    .with({ type: 'channel_message' }, (e) => e.channelType || 'channel')
-    .with({ type: 'document' }, (e) => itemToBlockName(e, true) ?? 'default')
-    .with({ type: 'email', isRead: true }, () => 'emailRead')
-    .with({ type: 'email' }, () => 'email')
-    // Always the bell, never the referenced entity's icon: a reminder is a
-    // reminder first, and what it points at is iconed beside its name instead
-    // — see `reminderReferenceIconType`.
-    .with({ type: 'reminder' }, () => 'reminder')
+  return match<EntityIconData, EntityWithValidIcon>(entity)
+    .with({ type: 'document' }, (e) => {
+      if (e.subType?.type === 'task') return 'task';
+      if (e.fileType && isArchiveType(e.fileType)) return 'archive';
+      const blockName = itemToBlockName(e, true);
+      return blockName === 'unknown' ? 'document' : blockName;
+    })
+    .with(
+      { type: 'channel' },
+      { type: 'channel_message' },
+      { type: 'channel_thread' },
+      (e) => (e.channelType === 'direct_message' ? 'direct_message' : 'channel')
+    )
+    .with({ type: 'email' }, (e) =>
+      e.hasIcsAttachment ? 'emailInvite' : e.isRead ? 'emailRead' : 'email'
+    )
+    .with({ type: 'chat' }, () => 'chat')
     .with({ type: 'agent_session' }, () => 'agent')
+    .with({ type: 'project' }, () => 'project')
     .with({ type: 'calendar_event' }, () => 'calendar')
-    .otherwise((e) => e.type);
-
-  return validateEntity(typeString);
+    .with({ type: 'reminder' }, () => 'reminder')
+    .with({ type: 'call' }, () => 'call')
+    .with({ type: 'automation' }, () => 'automation')
+    .with({ type: 'foreign' }, (e) => {
+      if (e.foreignSource !== 'github_pull_request') return 'default';
+      return match<unknown, EntityWithValidIcon>(e.metadata?.status)
+        .with('open', () => 'githubPullRequestOpen')
+        .with('merged', () => 'githubPullRequestMerged')
+        .with('closed', () => 'githubPullRequestClosed')
+        .otherwise(() => 'githubPullRequest');
+    })
+    .with({ type: 'crm_company' }, () => 'crm_company')
+    .with({ type: 'crm_contact' }, () => 'contact')
+    .exhaustive();
 }
 
 /** What the block resolvers return when they cannot place something. */
@@ -575,7 +631,7 @@ const UNRESOLVED_ICONS: ReadonlySet<string> = new Set(['default', 'unknown']);
  * Synchronous by design: the referenced entity's `fileType`/`subType` are
  * resolved server-side precisely so this costs no fetch per row.
  *
- * A reference that resolves to nothing gets the bell, not the unknown-file
+ * A reference that resolves to nothing gets the reminder icon, not the unknown-file
  * glyph, which on a reminder row reads as breakage rather than as a reminder.
  * That needs both sentinels and neither is falsy: `fileTypeToBlockName`
  * returns the literal `unknown`, and `validateEntity` returns `default`.

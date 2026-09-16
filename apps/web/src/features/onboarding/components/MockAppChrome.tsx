@@ -3,8 +3,8 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
 import MacroIcon from '@icon/macro-logo.svg';
-import { AnimatedGearIcon } from '@icon/wide-gear';
-import { AnimatedPlusIcon } from '@icon/wide-plus';
+import GearIcon from '@phosphor/gear.svg';
+import PlusIcon from '@phosphor/plus.svg';
 import { cn, HoverCard } from '@ui';
 import {
   createSignal,
@@ -175,7 +175,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
             }}
             title="Create"
           >
-            <AnimatedPlusIcon />
+            <PlusIcon />
           </button>
           <hr class="border-ink/5 w-full my-1" />
           <button
@@ -266,7 +266,7 @@ export function MockAppChrome(props: MockAppChromeProps) {
               onClick={(e) => e.preventDefault()}
               title="Settings"
             >
-              <AnimatedGearIcon />
+              <GearIcon />
             </button>
           </div>
         </div>

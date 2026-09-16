@@ -32,6 +32,11 @@ TAURI_CONFIG=$(< "$web/tests/native/tauri.e2e.conf.json")
 export CARGO_TARGET_DIR="$out/cargo"
 \cd "$web/tauri/src-tauri"
 # Dev-protocol binary: Vite serves the real UI. No production bundle or OTA.
-cargo build --locked -p app --no-default-features
-cp "$CARGO_TARGET_DIR/debug/app" "$out/app"
+# Keep the dev protocol/UI, but run the database VM with production optimization.
+# Exhaustive matrices execute hundreds of thousands of real indexed queries.
+cargo build --locked -p app --no-default-features \
+  --config 'profile.dev.package.turso_core.opt-level=3'
+# Publish atomically so an existing isolated run can finish on its old inode.
+cp "$CARGO_TARGET_DIR/debug/app" "$out/app.next"
+mv "$out/app.next" "$out/app"
 echo "Built isolated E2E application: $out/app"

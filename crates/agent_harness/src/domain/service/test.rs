@@ -39,7 +39,7 @@ use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeliverAction, HarnessCommand,
     HarnessDefaults, MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults,
-    SpawnContainer,
+    SessionRepository, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoPeers,
@@ -353,12 +353,21 @@ fn harness_with_mentions(
         prompt_composer,
         EgressProvisionerMock::new(),
         NoPeers,
-        SessionDefaults {
+        HarnessDefaults::new(SessionDefaults {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
-        },
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
+        })
+        .with_bot(
+            bot_id::CODEX_BOT_ID,
+            SessionDefaults {
+                bot_id: bot_id::CODEX_BOT_ID,
+                model: String::new(),
+                harness: "codex-cloud".into(),
+                repo_url: None,
+            },
+        ),
         lifecycle.clone(),
         crate::domain::pending::PendingCommands::new(),
         mentions,
@@ -1886,7 +1895,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
         })
         .with_bot(
             inmem_bot,
@@ -1894,7 +1903,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
                 bot_id: inmem_bot,
                 model: "fast-model".to_owned(),
                 harness: "macro-inmem".to_owned(),
-                repo_url: "https://github.com/macro-inc/macro".to_owned(),
+                repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
             },
         )
         .with_managed_bot(inmem_bot),
@@ -2344,7 +2353,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
         },
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
@@ -2395,7 +2404,7 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
         },
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
@@ -2848,3 +2857,99 @@ mod lifecycle_events {
         assert_eq!(events.len(), 5, "nothing follows deleted: {events:#?}");
     }
 }
+
+#[tokio::test]
+async fn codex_named_session_provisions_egress_without_advertising_mcp() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        owner: sender(),
+        instructions: None,
+        prompt: Some("inspect".into()),
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: bot_id::CODEX_BOT_ID,
+            profile: None,
+        }),
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    let session = opened.unwrap();
+    assert_eq!(service.inner.egress.provisioned().len(), 1);
+    assert_eq!(
+        repo.find_by_egress_token_hash("test-token-hash")
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        session.id
+    );
+    assert_eq!(session.harness, "codex-cloud");
+    assert!(session.repo_url.is_none());
+    assert_eq!(
+        repo.get(session.id).await.unwrap().mcp_servers,
+        AgentMcpServers::Selected {
+            servers: Vec::new()
+        }
+    );
+    let requests = container.agent().received_requests();
+    let ClientRequest::NewSessionRequest(request) = &requests[1] else {
+        panic!("expected session/new")
+    };
+    assert!(request.mcp_servers.is_empty());
+}
+
+#[tokio::test]
+async fn codex_channel_mention_provisions_egress_without_advertising_mcp() {
+    let (service, repo, containers, announcer, _) = harness();
+    let mut command = open_command();
+    command.bot_id = bot_id::CODEX_BOT_ID;
+    command.runtime = AgentRuntimeConfig {
+        kind: AgentKind::CodexCloud,
+        model: String::new(),
+        harness: "codex-cloud".into(),
+        instructions: String::new(),
+        mcp_servers: AgentMcpServers::Selected {
+            servers: Vec::new(),
+        },
+    };
+    command.origin.content = "@codex inspect the repository".into();
+    let id = AgentSessionId::new();
+    let open = service.execute(id, HarnessCommand::Open(command));
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_handshake(&container).await;
+        container
+    };
+    let (opened, container) = tokio::join!(open, drive);
+    opened.unwrap();
+    let stored = repo.get(id).await.unwrap();
+    assert_eq!(stored.bot_id, bot_id::CODEX_BOT_ID);
+    assert_eq!(service.inner.egress.provisioned().len(), 1);
+    assert_eq!(
+        repo.find_by_egress_token_hash("test-token-hash")
+            .await
+            .unwrap()
+            .unwrap()
+            .id,
+        id
+    );
+    assert_eq!(stored.harness, "codex-cloud");
+    assert!(stored.repo_url.is_none());
+    assert_eq!(announcer.announced()[0].bot_id, bot_id::CODEX_BOT_ID);
+    let requests = container.agent().received_requests();
+    let ClientRequest::NewSessionRequest(request) = &requests[1] else {
+        panic!("expected session/new")
+    };
+    assert!(request.mcp_servers.is_empty());
+}
+
+mod reopen;

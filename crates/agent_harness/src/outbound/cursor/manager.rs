@@ -702,15 +702,18 @@ where
         &self,
         agent: &CursorAgentId,
         run: &CursorRunId,
+        resume_from: Option<&str>,
     ) -> std::result::Result<
-        impl Stream<
-            Item = std::result::Result<
-                cursor_cloud_agents::domain::journal::NativeRecord,
-                rootcause::Report,
-            >,
-        > + Send,
-        rootcause::Report,
+        cursor_cloud_agents::domain::ports::ConnectedStream<
+            impl Stream<
+                Item = std::result::Result<
+                    cursor_cloud_agents::domain::journal::NativeRecord,
+                    rootcause::Report,
+                >,
+            > + Send,
+        >,
+        cursor_cloud_agents::domain::ports::StreamConnectError,
     > {
-        self.client.raw_stream(agent, run).await
+        self.client.raw_stream(agent, run, resume_from).await
     }
 }

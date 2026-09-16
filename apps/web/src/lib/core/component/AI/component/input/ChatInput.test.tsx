@@ -8,6 +8,7 @@ const mocks = vi.hoisted(() => ({
   touch: true,
   emitChange: undefined as ((value: string) => void) | undefined,
   root: undefined as HTMLDivElement | undefined,
+  upload: vi.fn(),
   mount: vi.fn(),
   unmount: vi.fn(),
 }));
@@ -15,8 +16,12 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
+vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
+  createHasLineBreaks: () => () => true,
+}));
 vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => false }));
 vi.mock('@core/component/AI/constant', () => ({
+  SUPPORTED_ATTACHMENT_EXTENSIONS: ['pdf', 'png'],
   Model: { test: 'test' },
   modelsForPlan: () => ['test'],
   defaultModelForPlan: () => 'test',
@@ -26,7 +31,11 @@ vi.mock('@core/component/AI/context', () => ({
     model: () => 'test',
     setModel: vi.fn(),
     isGenerating: () => false,
-    uploadQueue: { popComplete: () => [], uploading: () => [] },
+    uploadQueue: {
+      popComplete: () => [],
+      uploading: () => [],
+      upload: mocks.upload,
+    },
     attachments: { attached: () => [], setAttached: vi.fn() },
   }),
 }));
@@ -110,6 +119,7 @@ function setup(collapseOnBlur = true) {
   const draft = 'First line\nSecond line of the unsent prompt';
   const onSend = vi.fn();
   const editor = {
+    buildHandle: () => ({ lexical: {} }),
     withFilePaste: () => editor,
     onEnter: () => editor,
     onEscape: () => editor,
@@ -196,4 +206,21 @@ describe('compact mobile chat drafts', () => {
     const { wrapper } = setup();
     expect(wrapper.classList.contains('max-h-5')).toBe(false);
   });
+});
+
+it('opens the desktop file picker directly and uploads the selected files', () => {
+  mocks.touch = false;
+  setup();
+  const click = vi.spyOn(HTMLInputElement.prototype, 'click');
+  fireEvent.click(screen.getByRole('button', { name: 'Attach files' }));
+  expect(click).toHaveBeenCalledOnce();
+  click.mockRestore();
+  expect(
+    screen.queryByRole('textbox', { name: 'Search attachments' })
+  ).toBeNull();
+  const picker =
+    document.querySelector<HTMLInputElement>('input[type="file"]')!;
+  const file = new File(['pdf'], 'report.pdf', { type: 'application/pdf' });
+  fireEvent.change(picker, { target: { files: [file] } });
+  expect(mocks.upload).toHaveBeenCalledExactlyOnceWith([file]);
 });

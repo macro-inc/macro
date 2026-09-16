@@ -218,7 +218,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
             <div class="text-sm min-w-16 pl-4">Subject</div>
             <input
               type="text"
-              class="flex-1 text-sm bg-transparent outline-none border-0 px-3 py-1"
+              class="flex-1 text-base bg-transparent outline-none border-0 px-3 py-1"
               value={props.subject()}
               onInput={(e) => {
                 props.onSubjectChange(e.currentTarget.value);

@@ -73,17 +73,16 @@ import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
 import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
-import { AnimatedActivityIcon } from '@icon/wide-activity';
-import { AnimatedHomeIcon } from '@icon/wide-home';
-import { AnimatedInboxIcon } from '@icon/wide-inbox';
-import { AnimatedSearchIcon } from '@icon/wide-search';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import GearIcon from '@phosphor/gear.svg';
+import HomeIcon from '@phosphor/house.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
 import PhoneIcon from '@phosphor/phone-call.svg';
+import ActivityIcon from '@phosphor/pulse.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import XIcon from '@phosphor/x.svg';
@@ -124,10 +123,8 @@ export interface SidebarItem {
   label: string;
   href: string;
   params?: Record<string, unknown>;
-  icon?: Component<
-    JSX.SvgSVGAttributes<SVGSVGElement> & { triggerAnimation?: boolean }
-  >;
-  hotkey: ValidHotkey;
+  icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  hotkey?: ValidHotkey | ValidHotkey[];
   hotkeyToken: HotkeyToken;
   standaloneHotkey?: boolean;
   hiddenFromSidebar?: boolean;
@@ -182,17 +179,17 @@ const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 const SIDEBAR_LINKS = [
   {
     id: 'inbox',
-    label: 'Notifications',
+    label: 'Home',
     href: LIST_VIEW_PATHS.inbox,
-    icon: AnimatedInboxIcon,
-    hotkey: 'i',
+    icon: HomeIcon,
+    hotkey: ['h', 'i'],
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {
     id: 'search',
     label: 'Search',
     href: LIST_VIEW_PATHS.search,
-    icon: AnimatedSearchIcon,
+    icon: SearchIcon,
     hotkey: '/',
     hotkeyToken: TOKENS.sidebar.goTo.search,
     standaloneHotkey: true,
@@ -390,7 +387,7 @@ const resetGoToHotkeysState = () => {
 /**
  * Hosts the always-on global shortcuts that must keep working even on
  * full-cover routes like solo settings: the "g" leader key with its per-link
- * "go to" nav hotkeys (e.g. "g i" for inbox), plus Send Invites. Rendered
+ * "go to" nav hotkeys (e.g. "g h" for Home), plus Send Invites. Rendered
  * unconditionally from `Layout` — unlike `AppSidebar`, which unmounts on those
  * routes — so none of them go dead there.
  */
@@ -456,7 +453,7 @@ export const GoToHotkeys = () => {
   });
 
   const registeredGoToKeys = () =>
-    new Set<ValidHotkey>(links().map((link) => link.hotkey));
+    new Set<ValidHotkey>(links().flatMap((link) => link.hotkey ?? []));
 
   // When the go to command scope is active, we want to prevent
   // other default hotkeys from running. So doing "g" + some key
@@ -593,20 +590,16 @@ const SidebarSectionMenu = (props: {
 type TryCardItem = {
   id: TryItemId;
   label: string;
-  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  icon: Component<{ class?: string }>;
   onClick: () => void;
 };
 
 const TryCardRow = (props: { item: TryCardItem }) => {
-  const [isHovering, setIsHovering] = createSignal(false);
-
   return (
     <button
       type="button"
       aria-label={props.item.label}
       class="flex h-7 w-full items-center justify-start gap-2 rounded-md px-1.5 py-0 text-sm font-medium text-ink-muted outline-none hover:bg-ink/5 hover:text-ink focus-visible:bg-ink/5 focus-visible:text-ink [&_svg]:size-3.5"
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
       onMouseDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
@@ -614,7 +607,7 @@ const TryCardRow = (props: { item: TryCardItem }) => {
       onClick={props.item.onClick}
     >
       <span class="size-5 shrink-0 flex items-center justify-center">
-        <Dynamic component={props.item.icon} triggerAnimation={isHovering()} />
+        <Dynamic component={props.item.icon} />
       </span>
       <span class="min-w-0 flex-1 truncate text-left">{props.item.label}</span>
     </button>
@@ -660,7 +653,6 @@ const SidebarDropdownLink = (
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const location = useLocation();
-  const [isHovering, setIsHovering] = createSignal(false);
   let contextMenuOpen = false;
 
   const isActive = () => {
@@ -746,13 +738,11 @@ const SidebarDropdownLink = (
           'bg-ink/6 text-ink hover:bg-ink/6 data-highlighted:bg-ink/6'
       )}
       data-active={isActive() ? '' : undefined}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
       onSelect={openInCurrentSplit}
     >
       <Show when={props.icon}>
         <div class="shrink-0 [&_svg]:size-3.5">
-          <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+          <Dynamic component={props.icon} />
         </div>
       </Show>
       <span class="min-w-0 flex-1 truncate text-ink">{props.label}</span>
@@ -1019,10 +1009,9 @@ const COMPANIES_LINK: SidebarItem = {
 
 const DASHBOARD_LINK: SidebarItem = {
   id: 'home',
-  label: 'Home',
+  label: 'Assistant',
   href: '/home',
-  icon: AnimatedHomeIcon,
-  hotkey: 'h',
+  icon: HomeIcon,
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
@@ -1039,7 +1028,7 @@ const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
   label: 'Activity',
   href: '/activity',
-  icon: AnimatedActivityIcon,
+  icon: ActivityIcon,
   hotkey: 'y',
   hotkeyToken: TOKENS.sidebar.goTo.activity,
 };
@@ -1048,7 +1037,7 @@ const RECENT_LINK: SidebarItem = {
   id: 'recent',
   label: 'Recent',
   href: LIST_VIEW_PATHS.recent,
-  icon: AnimatedActivityIcon,
+  icon: ActivityIcon,
   // `r` is Calendar and `e`/`c`/`t` are taken; `n` is the only letter of
   // "recent" that is not already a sidebar destination.
   hotkey: 'n',
@@ -1416,7 +1405,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     const addTryItem = (
       id: TryItemId,
       label: string,
-      icon: Component<{ triggerAnimation?: boolean; class?: string }>,
+      icon: Component<{ class?: string }>,
       onClick: () => void
     ) => {
       if (!tryVisibility()[id]) return;
@@ -1486,7 +1475,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
       class={cn(
         'group/sidebar flex flex-col gap-0 overflow-hidden bg-surface px-3 pb-3 pt-4 text-[13px]',
         isExpanded() &&
-          'relative h-full shrink-0 max-w-55 w-55 border-r border-thread-rail opacity-100',
+          'relative h-full shrink-0 max-w-55 w-55 border-r border-edge-muted opacity-100',
         props.sidebarState === 'hidden' &&
           'fixed left-0 top-0 bottom-0 h-full -translate-x-full max-w-0 w-0 opacity-0 pointer-events-none',
         isCollapsed() && 'fixed z-modal-content',
@@ -1864,9 +1853,11 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
       onMouseEnter={() => setIsHovering(true)}
       label={`Go to ${props.label}`}
       hotkey={
-        props.standaloneHotkey
-          ? props.hotkeyToken
-          : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
+        props.hotkey
+          ? props.standaloneHotkey
+            ? props.hotkeyToken
+            : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
+          : undefined
       }
       tooltipDisabled={props.sidebarState !== 'slim' || props.id === 'calendar'}
       onMouseLeave={() => setIsHovering(false)}
@@ -1913,9 +1904,7 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
                 ? props.removeAction
                 : undefined
             }
-            fallback={
-              <Dynamic component={props.icon} triggerAnimation={isHovering()} />
-            }
+            fallback={<Dynamic component={props.icon} />}
           >
             {(removeAction) => (
               <Tooltip label={removeAction().tooltip} as="span" placement="top">
@@ -1981,6 +1970,7 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
 
       <Show
         when={
+          props.hotkey &&
           isHovering() &&
           !props.hotkeyVisible &&
           !(isActive() && props.trailingWhenActive !== undefined)
@@ -2004,7 +1994,7 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
           </div>
         </div>
       </Show>
-      <Show when={props.hotkeyVisible}>
+      <Show when={props.hotkey && props.hotkeyVisible}>
         <div
           class={cn(
             'text-xs size-4 rounded-xs flex items-center justify-center overflow-hidden bg-accent/10 border border-accent/30 text-accent',

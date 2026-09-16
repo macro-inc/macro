@@ -71,32 +71,47 @@ const ListEntitiesToolResponse = (props: {
     }
   };
 
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   const getClickHandler = (item: ListEntitiesItem) => {
     switch (item.type) {
       case 'document':
-        return () => {
-          replaceOrInsertSplit({
-            type: fileTypeToBlockName(item.subType ?? item.fileType),
-            id: item.id,
-          });
+        return (event: MouseEvent) => {
+          openWithSplit(
+            {
+              type: fileTypeToBlockName(item.subType ?? item.fileType),
+              id: item.id,
+            },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
         };
       case 'aiChat':
-        return () => {
-          replaceOrInsertSplit({ type: 'chat', id: item.id });
+        return (event: MouseEvent) => {
+          openWithSplit(
+            { type: 'chat', id: item.id },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
         };
       case 'project':
-        return () => {
-          replaceOrInsertSplit({ type: 'project', id: item.id });
+        return (event: MouseEvent) => {
+          openWithSplit(
+            { type: 'project', id: item.id },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
         };
       case 'email':
-        return () => {
-          replaceOrInsertSplit({ type: 'email', id: item.id });
+        return (event: MouseEvent) => {
+          openWithSplit(
+            { type: 'email', id: item.id },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
         };
       case 'channel':
-        return () => {
-          replaceOrInsertSplit({ type: 'channel', id: item.id });
+        return (event: MouseEvent) => {
+          openWithSplit(
+            { type: 'channel', id: item.id },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
         };
       default:
         return undefined;

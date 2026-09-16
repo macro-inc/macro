@@ -81,8 +81,12 @@ export const FILTER_TARGETS = {
     },
     emailSeen: { backend: 'Read', domain: [true, false] },
     emailDone: {
-      backend: 'NotificationState',
-      notification: 'done',
+      backend: 'InboxVisible',
+      formatValue: (value) => {
+        if (typeof value !== 'boolean')
+          throw new Error('Invalid mail done filter');
+        return !value;
+      },
       domain: [true, false],
     },
     emailImportance: { backend: 'Importance', domain: [true, false] },

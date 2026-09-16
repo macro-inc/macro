@@ -31,6 +31,10 @@ vi.hoisted(() => {
   });
 });
 
+vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
+  createHasLineBreaks: () => () => false,
+}));
+
 vi.mock('@core/util/upload', () => ({
   chatRuleset: {},
   uploadFile: vi.fn(),
@@ -38,6 +42,10 @@ vi.mock('@core/util/upload', () => ({
 
 vi.mock('@core/cursor/flag', () => ({
   useCursorAgentsAccess: () => () => true,
+}));
+
+vi.mock('@core/codex/flag', () => ({
+  useCodexAgentsAccess: () => () => false,
 }));
 
 // Several service clients in StaticMarkdown's import graph build websocket
@@ -353,20 +361,25 @@ describe('Input slots', () => {
       })()
     );
 
-    expect(container.querySelector('[data-input-actions]')).toBeTruthy();
-    expect(container.querySelector('[data-input-actions-left]')).toBeTruthy();
-    expect(container.querySelector('[data-input-actions-right]')).toBeTruthy();
+    const layout = container.querySelector('[data-input-layout]');
+    expect(
+      container.querySelector('[data-input-actions-left]')?.parentElement
+    ).toBe(layout);
+    expect(
+      container.querySelector('[data-input-actions-right]')?.parentElement
+    ).toBe(layout);
 
     await user.click(screen.getByRole('button', { name: 'Send message' }));
     const clickSpy = vi.spyOn(HTMLInputElement.prototype, 'click');
     await user.click(screen.getByRole('button', { name: 'Attach files' }));
-    await user.click(screen.getByRole('button', { name: 'Format' }));
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Format' })).toBeNull();
     await user.click(screen.getByRole('button', { name: 'Delete reply' }));
 
     expect(onSend).toHaveBeenCalledOnce();
     expect(clickSpy).toHaveBeenCalledOnce();
     clickSpy.mockRestore();
-    expect(onToggleFormatRibbon).toHaveBeenCalledOnce();
+    expect(onToggleFormatRibbon).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledOnce();
     expect(onSend.mock.calls[0]?.[0]?.value).toBe('reply');
   });

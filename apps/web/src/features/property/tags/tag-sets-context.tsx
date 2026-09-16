@@ -10,10 +10,15 @@ import {
   useContext,
 } from 'solid-js';
 
+import { buildTagTree, type TagTreeNode } from './core/tag-tree';
+import { listTagOptions, type TagOptionSummary } from './list-tag-options';
+
 type TagSets = Accessor<TagSetResponse[]>;
 type TagOption = { option: PropertyOptionResponse; scope: TagScope };
 type TagSetsContextValue = {
   tagSets: TagSets;
+  options: Accessor<TagOptionSummary[]>;
+  tree: Accessor<TagTreeNode[]>;
   /** False only while the sets are still being fetched for the first time. */
   ready: Accessor<boolean>;
   optionById: Accessor<ReadonlyMap<string, TagOption>>;
@@ -29,6 +34,8 @@ export const TagSetsProvider: FlowComponent<{
   /** Omit when the sets are caller-owned and available from the start. */
   ready?: Accessor<boolean>;
 }> = (props) => {
+  const options = createMemo(() => listTagOptions(props.tagSets()));
+  const tree = createMemo(() => buildTagTree(options()));
   const optionById = createMemo(() => {
     const options = new Map<string, TagOption>();
     for (const set of props.tagSets()) {
@@ -43,6 +50,8 @@ export const TagSetsProvider: FlowComponent<{
     <TagSetsContext.Provider
       value={{
         tagSets: props.tagSets,
+        options,
+        tree,
         ready: () => props.ready?.() ?? ALWAYS_READY(),
         optionById,
       }}
@@ -91,4 +100,13 @@ export function useTagSetsReady(): Accessor<boolean> {
 /** Returns the provider-owned tag-option index shared by every list row. */
 export function useTagOptionById() {
   return useTagSetsContext().optionById;
+}
+
+/** Shared display projections, rebuilt only when the catalog changes. */
+export function useTagOptionSummaries() {
+  return useTagSetsContext().options;
+}
+
+export function useTagTree() {
+  return useTagSetsContext().tree;
 }

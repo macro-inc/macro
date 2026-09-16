@@ -38,7 +38,7 @@ export type ChannelRailItemProps = {
   incomingCallId?: string;
   selected: boolean;
   focused: boolean;
-  onActivate: () => void;
+  onActivate: (event: MouseEvent) => void;
 };
 
 export const CHANNEL_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
@@ -125,7 +125,7 @@ export function ChannelMutedIndicator(props: {
       <Tooltip
         as="span"
         label="Notifications are muted"
-        placement="right"
+        placement="top"
         class={cn(
           'size-4 shrink-0 justify-center text-ink-extra-muted',
           props.class
@@ -303,7 +303,7 @@ export function ConversationCard(props: ConversationCardProps) {
       )}
       aria-current={props.selected ? 'page' : undefined}
       onMouseDown={(event) => {
-        if (isPrimaryMouseDown(event)) props.onActivate();
+        if (isPrimaryMouseDown(event)) props.onActivate(event);
       }}
     >
       <div

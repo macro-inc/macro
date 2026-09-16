@@ -1,8 +1,34 @@
+import type { ItemType } from '@service-storage/client';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { LinkShare } from '@service-storage/generated/schemas/linkShare';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 
 export const NO_LINK_SHARE = 'NONE' as const;
+
+/**
+ * Entity types whose backend honors `sharePermission.teamShareAccessLevel`
+ * (documents via `PATCH /documents/{id}`, AI chats via `PATCH /chats/{id}`).
+ */
+const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ItemType> = new Set<ItemType>([
+  'document',
+  'chat',
+]);
+
+export function isTeamShareSupportedForItem(itemType: ItemType): boolean {
+  return TEAM_SHAREABLE_ITEM_TYPES.has(itemType);
+}
+
+/** Human noun for share-modal copy such as "Share this chat with the owner's team." */
+export function getShareItemNoun(itemType: ItemType): string {
+  switch (itemType) {
+    case 'email':
+      return 'email thread';
+    case 'agent_session':
+      return 'agent session';
+    default:
+      return itemType;
+  }
+}
 
 export type LinkShareScope = LinkShare | typeof NO_LINK_SHARE;
 

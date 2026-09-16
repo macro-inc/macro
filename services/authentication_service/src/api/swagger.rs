@@ -87,6 +87,13 @@ use model::user::{
                 // Cursor API key (settings -> Connections). Fully qualified:
                 // the `cursor_api_key` crate shadows the module of the same
                 // name in this path position.
+                crate::api::codex::status,
+                crate::api::codex::start_login,
+                crate::api::codex::poll_login,
+                crate::api::codex::cancel_login,
+                crate::api::codex::disconnect,
+                crate::api::codex::environments,
+                crate::api::codex::configure,
                 crate::api::cursor_api_key::get_cursor_api_key::handler,
                 crate::api::cursor_api_key::put_cursor_api_key::handler,
                 crate::api::cursor_api_key::delete_cursor_api_key::handler,

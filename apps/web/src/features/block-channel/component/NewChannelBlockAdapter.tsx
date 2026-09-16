@@ -42,7 +42,7 @@ import {
 } from '@channel/Channel/link';
 import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipantsTab';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
+import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderRight } from '@components/app/split-layout/components/SplitHeader';
 import { SplitTitleFileMenu } from '@components/app/split-layout/components/SplitLabel';
 import {
@@ -229,7 +229,7 @@ function NewTop(props: { channelId: string }) {
         onTabChange={setActiveTab}
       />
       <SplitTitleFileMenu>
-        <SplitFileMenu
+        <BlockSplitFileMenu
           id={props.channelId}
           itemType="channel"
           name={channelName() ?? 'New Channel'}

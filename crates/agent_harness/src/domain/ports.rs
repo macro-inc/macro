@@ -282,11 +282,14 @@ pub trait SandboxEgressProvisioner: Send + Sync + 'static {
     /// [`AgentMcpServers::OwnerConnections`] the owner's enabled apps are
     /// advertised; under [`AgentMcpServers::Selected`] exactly the listed
     /// apps are, connected or not.
+    ///
+    /// The session's repository is not named here: nothing about minting a
+    /// token depends on it, and the URL a session carries is read as a
+    /// repository once, where it is configured.
     fn provision(
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
-        repo_url: &str,
         selection: &AgentMcpServers,
     ) -> impl Future<Output = Result<ProvisionedEgress>> + Send;
 

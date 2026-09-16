@@ -1,5 +1,6 @@
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import {
+  isInBlock,
   type PreviewState,
   useBlockOwner,
   useMaybeBlockName,
@@ -12,7 +13,6 @@ import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { matches } from '@core/util/match';
-import DotsThree from '@icon/dots-three-large.svg';
 import {
   $convertCardToMention,
   $getId,
@@ -26,6 +26,7 @@ import {
 } from '@macro-inc/lexical-core';
 import Minimize from '@phosphor/arrows-in.svg';
 import Clipboard from '@phosphor/clipboard.svg';
+import DotsThree from '@phosphor/dots-three.svg';
 import LoadingSpinner from '@phosphor/spinner.svg';
 import TrashSimple from '@phosphor/trash-simple.svg';
 import {
@@ -89,6 +90,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const wrapper = useContext(LexicalWrapperContext);
   const editor = () => wrapper?.editor;
   const selection = () => wrapper?.selection;
+  const portalMount = isInBlock() ? blockElementSignal.get : () => undefined;
 
   const currentBlockName = useMaybeBlockName();
 
@@ -424,7 +426,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
               >
                 <DotsThree />
               </Dropdown.Trigger>
-              <Dropdown.Content mount={blockElementSignal.get()}>
+              <Dropdown.Content mount={portalMount()}>
                 <Dropdown.Group>
                   <Dropdown.Item onSelect={convertToMention}>
                     <Minimize class="size-4 shrink-0" />

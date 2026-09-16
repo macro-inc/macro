@@ -31,6 +31,13 @@ pub struct LocalEnv {
     frontend_port: u16,
     /// Browser-facing route to document cognition's MCP OAuth callback.
     mcp_public_url: String,
+    /// Browser-facing base the static file service stamps into permalinks.
+    /// Only the service itself reads `STATIC_FILE_SERVICE_URL`; callers
+    /// reach it in-network through the `OVERRIDE_` form below. Without this
+    /// a named instance mints `http://localhost:8100/file/...`, the
+    /// single-instance CDN port, which nothing on a named instance serves;
+    /// the proxy's `/static-file/*` block is what does.
+    static_file_public_url: String,
     infra: InfraEnv,
     storage: StorageEnv,
     queues: QueueEnv,
@@ -66,6 +73,10 @@ impl LocalEnv {
                 instance.port(Port::Frontend)
             },
             mcp_public_url: format!("http://localhost:{}/cognition", instance.port(Port::Proxy)),
+            static_file_public_url: format!(
+                "http://localhost:{}/static-file",
+                instance.port(Port::Proxy)
+            ),
             infra: InfraEnv::local(),
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
@@ -85,6 +96,10 @@ impl LocalEnv {
         env.insert("PORT".into(), "8080".into());
         env.insert("FRONTEND_PORT".into(), self.frontend_port.to_string());
         env.insert("MCP_PUBLIC_URL".into(), self.mcp_public_url.clone());
+        env.insert(
+            "STATIC_FILE_SERVICE_URL".into(),
+            self.static_file_public_url.clone(),
+        );
         // Pipedream's hosted Connect UI refuses to be opened from an origin
         // outside this list, and document_cognition's own local default only
         // names port 3000 - a named instance's frontend lives on a derived
@@ -194,6 +209,14 @@ impl InfraEnv {
             "OVERRIDE_AUTH_SERVICE_URL".into(),
             "http://authentication-service:8080".into(),
         );
+        // Same split for the static file service: without this a service
+        // storing a file (the agent harness re-hosting a Cursor artifact)
+        // asks http://localhost:8100, the host port of the single-instance
+        // CDN, which inside a container is the caller itself.
+        env.insert(
+            "OVERRIDE_STATIC_FILE_SERVICE_URL".into(),
+            "http://static-file-service:8080".into(),
+        );
         // The alias LocalStack provisions for the Cursor API key CMK. Named by
         // alias rather than key id because `CreateKey` mints a random id every
         // run, and KMS accepts an alias anywhere a key id goes. Required by
@@ -204,6 +227,10 @@ impl InfraEnv {
         env.insert(
             "CURSOR_API_KEY_KMS_KEY_ID".into(),
             resources::CURSOR_API_KEY_KMS_ALIAS.into(),
+        );
+        env.insert(
+            "CODEX_OAUTH_KMS_KEY_ID".into(),
+            resources::CODEX_OAUTH_KMS_ALIAS.into(),
         );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());

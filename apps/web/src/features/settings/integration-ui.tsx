@@ -1,7 +1,18 @@
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
 import SpinnerIcon from '@phosphor/spinner-gap.svg';
 import { cn } from '@ui';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
+
+export function HarnessIcon(props: { children: JSX.Element }) {
+  return (
+    <div
+      aria-hidden="true"
+      class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-ink/4 text-ink-muted [&_svg]:size-5"
+    >
+      {props.children}
+    </div>
+  );
+}
 
 /*
  * Shared bits for the Connected accounts integration cards: the trailing

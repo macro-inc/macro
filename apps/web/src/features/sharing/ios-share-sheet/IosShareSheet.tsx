@@ -434,47 +434,45 @@ function IosShareSheetComposer(props: {
                 onDragEnd={() => inputState.setIsDraggedOver(false)}
               >
                 <Input.Layout>
-                  <Input.DropOverlay />
-                  <Input.FormatRibbon>
-                    <FormatButtons
-                      selectionState={() => markdownEditor.selection}
-                      onInlineFormat={(format) =>
-                        applyInlineFormat(markdownEditor.lexical, format)
-                      }
-                      onNodeFormat={(format) =>
-                        applyNodeFormat(markdownEditor.lexical, format)
-                      }
-                    />
-                  </Input.FormatRibbon>
-                  <Input.EditorShell
-                    ref={setScrollContainer}
-                    onClick={(event) => {
-                      if (!isMobile()) {
-                        event.stopPropagation();
-                        markdownEditor.controls.focus();
-                      }
-                    }}
-                  >
-                    <Input.Editor>
-                      <MarkdownShell
-                        config={markdownEditor}
-                        placeholder={inputState.view().placeholder}
-                        initialValue={inputState.view().value}
-                        autofocus={false}
-                        class="text-sm"
+                  <Input.Layout.Body>
+                    <Input.DropOverlay />
+                    <Input.FormatRibbon>
+                      <FormatButtons
+                        selectionState={() => markdownEditor.selection}
+                        onInlineFormat={(format) =>
+                          applyInlineFormat(markdownEditor.lexical, format)
+                        }
+                        onNodeFormat={(format) =>
+                          applyNodeFormat(markdownEditor.lexical, format)
+                        }
                       />
-                    </Input.Editor>
-                  </Input.EditorShell>
-                  <Input.Attachments kind="media" />
-                  <Input.Attachments kind="document" />
-                  <Input.Footer>
-                    <Input.Actions>
-                      <Input.Actions.Left>
-                        <Input.AttachNativeMediaAction />
-                        <Input.ToggleFormatAction />
-                      </Input.Actions.Left>
-                    </Input.Actions>
-                  </Input.Footer>
+                    </Input.FormatRibbon>
+                    <Input.Layout.Editor
+                      ref={setScrollContainer}
+                      onClick={(event) => {
+                        if (!isMobile()) {
+                          event.stopPropagation();
+                          markdownEditor.controls.focus();
+                        }
+                      }}
+                    >
+                      <Input.Editor>
+                        <MarkdownShell
+                          config={markdownEditor}
+                          placeholder={inputState.view().placeholder}
+                          initialValue={inputState.view().value}
+                          autofocus={false}
+                          class="text-sm"
+                        />
+                      </Input.Editor>
+                    </Input.Layout.Editor>
+                    <Input.Attachments kind="media" />
+                    <Input.Attachments kind="document" />
+                  </Input.Layout.Body>
+                  <Input.Layout.ActionsLeft>
+                    <Input.AttachNativeMediaAction />
+                    <Input.ToggleFormatAction />
+                  </Input.Layout.ActionsLeft>
                 </Input.Layout>
               </Input.DropZone>
             </ChannelInputContainer>

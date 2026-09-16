@@ -34,24 +34,33 @@ const ReadProjectToolResponse = (props: { items: ReadProjectItem[] }) => {
     }
   };
 
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   const getClickHandler = (item: ReadProjectItem) => {
     switch (item.itemType) {
       case 'document':
-        return () => {
-          replaceOrInsertSplit({
-            type: fileTypeToBlockName(item.fileType),
-            id: item.id,
-          });
+        return (event: MouseEvent) => {
+          openWithSplit(
+            {
+              type: fileTypeToBlockName(item.fileType),
+              id: item.id,
+            },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
         };
       case 'chat':
-        return () => {
-          replaceOrInsertSplit({ type: 'chat', id: item.id });
+        return (event: MouseEvent) => {
+          openWithSplit(
+            { type: 'chat', id: item.id },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
         };
       case 'project':
-        return () => {
-          replaceOrInsertSplit({ type: 'project', id: item.id });
+        return (event: MouseEvent) => {
+          openWithSplit(
+            { type: 'project', id: item.id },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
         };
       default:
         return undefined;

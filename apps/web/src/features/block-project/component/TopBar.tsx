@@ -13,8 +13,8 @@ import {
 import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
 import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import {
+  BlockSplitFileMenu,
   type FileOperation,
-  SplitFileMenu,
 } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -40,8 +40,8 @@ import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import IconShared from '@icon/wide-share.svg';
 import Info from '@phosphor/info.svg';
+import IconShared from '@phosphor/share.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
 
@@ -132,7 +132,7 @@ export function TopBar() {
       </SplitHeaderRight>
       <ResponsivePermissionsBadge />
       <SplitTitleFileMenu>
-        <SplitFileMenu
+        <BlockSplitFileMenu
           id={id}
           itemType="project"
           name={name()}

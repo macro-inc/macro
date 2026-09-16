@@ -12,7 +12,6 @@ import {
 } from '@app/features/next-soup/utils';
 import type { BlockTool } from '@components/app/ResponsiveBlockToolbar';
 import { ResponsiveBlockToolbar } from '@components/app/ResponsiveBlockToolbar';
-import { useSidePanel } from '@components/app/side-panel';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -21,7 +20,6 @@ import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@components/app/split-layout/components/SplitLabel';
-import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
@@ -29,25 +27,24 @@ import {
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
 import { ENABLE_EMAIL_SHARING } from '@core/constant/featureFlags';
-import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { getActiveCommandByToken, runCommand } from '@core/hotkey/utils';
 import { isMobile } from '@core/mobile/isMobile';
 import { buildEntityData } from '@entity';
-import NoiseIcon from '@icon/phosphor-noise.svg';
-import IconShared from '@icon/wide-share.svg';
 import ArrowRightIcon from '@phosphor/arrow-right.svg';
 import CheckIcon from '@phosphor/check.svg';
 import EnvelopeSimpleIcon from '@phosphor/envelope-simple.svg';
 import EnvelopeSimpleOpenIcon from '@phosphor/envelope-simple-open.svg';
 import TaskIcon from '@phosphor/list-checks.svg';
 import ProhibitIcon from '@phosphor/prohibit.svg';
+import IconShared from '@phosphor/share.svg';
 import TrashIcon from '@phosphor/trash.svg';
+import NoiseIcon from '@phosphor/waveform.svg';
 import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import ArrowCounterClockwise from '@phosphor-icons/core/regular/arrow-counter-clockwise.svg?component-solid';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { Button } from '@ui';
-import { onCleanup, Show } from 'solid-js';
+import { Show } from 'solid-js';
 
 export function TopBar(props: {
   id: string;
@@ -55,29 +52,11 @@ export function TopBar(props: {
   isDraft?: boolean;
   onCreateTask?: () => void;
 }) {
-  const splitPanel = useSplitPanel();
   const shareCtx = useShareDialogContext();
   const emailCtx = useEmailThreadState();
   const soup = useMaybeSoup();
   const linksQuery = useEmailLinksQuery();
-  const sidePanel = useSidePanel();
   const moveToProjectAction = makeMoveToProjectAction();
-
-  if (splitPanel?.splitHotkeyScope) {
-    const reg = registerHotkey({
-      hotkey: ']',
-      scopeId: splitPanel.splitHotkeyScope,
-      hotkeyToken: TOKENS.block.toggleSidePanel,
-      description: 'Toggle Side Panel',
-      keyDownHandler: () => {
-        if (!sidePanel) return false;
-        if (!sidePanel.hasSections()) return false;
-        sidePanel.toggle();
-        return true;
-      },
-    });
-    onCleanup(() => reg.dispose());
-  }
 
   const isInvite = () => {
     const row = soup?.items.get(props.id);

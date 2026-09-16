@@ -15,7 +15,7 @@ import {
   isMultiPageSelection,
   useResetSelection,
 } from '@block-pdf/util/selectionUtils';
-import { useBlockId, useIsNestedBlock } from '@core/block';
+import { useIsNestedBlock } from '@core/block';
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
 import {
   ENABLE_PDF_LOCATION_AUTOSAVE,
@@ -25,7 +25,6 @@ import { IS_MAC } from '@core/constant/isMac';
 import { observedSize } from '@core/directive/observedSize';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { blockMetadataSignal } from '@core/signal/load';
-import { tempRedirectLocation } from '@core/signal/location';
 import { isInDOMRect } from '@core/util/rect';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
@@ -58,7 +57,6 @@ import {
   locationChangedSignal,
   URL_PARAMS,
   useGoToLinkLocation,
-  useGoToTempRedirect,
   useSetLocationStore,
 } from '../signal/location';
 import {
@@ -469,17 +467,6 @@ export function Document() {
         selectionChangeHandler
       );
     });
-  });
-
-  createEffect(() => {
-    const goToTempRedirect = useGoToTempRedirect();
-    const documentId = useBlockId();
-    const recentState = tempRedirectLocation();
-    if (!documentId || !recentState) return;
-
-    setTimeout(() => {
-      goToTempRedirect(documentId, recentState);
-    }, 0);
   });
 
   createEffect(() => {

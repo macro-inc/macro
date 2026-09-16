@@ -39,7 +39,10 @@ export const MAX_FEATURED_MODELS = 5;
  */
 export function isManagedHarness(harness: string): boolean {
   return (
-    harness === 'in-memory' || harness === 'macro-inmem' || harness === 'cursor'
+    harness === 'in-memory' ||
+    harness === 'macro-inmem' ||
+    harness === 'cursor' ||
+    harness === 'codex-cloud'
   );
 }
 
@@ -73,6 +76,8 @@ export function agentRuntimeDescription(
   if (persona.harness === 'cursor') {
     return 'Bring in Cursor for some heavier coding work';
   }
+  if (persona.harness === 'codex-cloud')
+    return 'Runs in your selected Codex cloud environment';
   if (persona.harness === 'macrod') {
     return `Do work locally using ${persona.name}${ownerName ? ` owned by ${ownerName}` : ''}`;
   }
@@ -91,6 +96,8 @@ export function harnessDisplayName(harness: string): string {
       return 'Macro';
     case 'cursor':
       return 'Cursor';
+    case 'codex-cloud':
+      return 'Codex';
     default:
       return harness;
   }

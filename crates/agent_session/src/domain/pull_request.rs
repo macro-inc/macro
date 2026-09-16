@@ -5,7 +5,7 @@ use std::pin::Pin;
 use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{AgentSessionError, Result};
-use super::model::AgentSessionId;
+use super::model::{AgentSessionId, SessionClaim};
 use super::ports::{AgentSessionRealtime, AgentSessionRepo};
 use tracing::Instrument;
 
@@ -20,17 +20,20 @@ pub trait SessionPullRequests: Send + Sync {
         session: AgentSessionId,
         owner: &'a MacroUserIdStr<'static>,
         url: &'a str,
+        claim: Option<SessionClaim>,
     ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>>;
 }
 
 /// Persist the session's current PR independently of conversation history.
 pub trait SessionPullRequestRepo: Send + Sync {
     /// Update only if the current URL differs; return whether the row changed.
+    /// A supplied claim must match atomically with the write, even for an unchanged URL.
     fn record_pull_request(
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
         url: &str,
+        claim: Option<SessionClaim>,
     ) -> impl Future<Output = Result<bool>> + Send;
 }
 
@@ -57,6 +60,7 @@ where
         session: AgentSessionId,
         owner: &'a MacroUserIdStr<'static>,
         url: &'a str,
+        claim: Option<SessionClaim>,
     ) -> Pin<Box<dyn Future<Output = Result<String>> + Send + 'a>> {
         let span = tracing::info_span!(
             "agent.session.set_pull_request",
@@ -71,7 +75,10 @@ where
                         return Err(AgentSessionError::Forbidden);
                     }
                     let url = canonical_url(url)?;
-                    let changed = self.repo.record_pull_request(session, owner, &url).await?;
+                    let changed = self
+                        .repo
+                        .record_pull_request(session, owner, &url, claim)
+                        .await?;
                     tracing::Span::current()
                         .record("outcome", if changed { "updated" } else { "unchanged" });
                     if changed {

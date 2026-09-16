@@ -1,0 +1,118 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            i.id,\n            i.name,\n            i.description,\n            i.owner_user_id,\n            i.created_at,\n            i.updated_at,\n            i.share_permission_id,\n            COALESCE(\n                array_agg(DISTINCT m.user_id) FILTER (WHERE m.user_id IS NOT NULL),\n                '{}'::text[]\n            ) AS \"member_ids!\",\n            COALESCE(\n                array_agg(DISTINCT t.task_id) FILTER (WHERE t.task_id IS NOT NULL),\n                '{}'::text[]\n            ) AS \"task_ids!\",\n            sp.\"linkShare\" AS \"link_share?\",\n            sp.\"linkShareAccessLevel\" AS \"link_share_access_level?: AccessLevel\",\n            sp.team_share_access_level AS \"team_share_access_level?: AccessLevel\",\n            COALESCE(\n                json_agg(json_build_object(\n                    'channel_id', channel.\"channel_id\",\n                    'access_level', channel.\"access_level\"\n                )) FILTER (WHERE channel.\"channel_id\" IS NOT NULL),\n                '[]'\n            ) AS \"channel_share_permissions?\"\n        FROM initiative i\n        JOIN \"SharePermission\" sp ON sp.id = i.share_permission_id\n        LEFT JOIN initiative_member m ON m.initiative_id = i.id\n        LEFT JOIN task_initiative t ON t.initiative_id = i.id\n        LEFT JOIN \"ChannelSharePermission\" channel\n            ON channel.\"share_permission_id\" = sp.id\n        WHERE i.id = $1\n        GROUP BY\n            i.id,\n            i.name,\n            i.description,\n            i.owner_user_id,\n            i.created_at,\n            i.updated_at,\n            i.share_permission_id,\n            sp.\"linkShare\",\n            sp.\"linkShareAccessLevel\",\n            sp.team_share_access_level\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "description",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "owner_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "share_permission_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "member_ids!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 8,
+        "name": "task_ids!",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 9,
+        "name": "link_share?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "link_share_access_level?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 11,
+        "name": "team_share_access_level?: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "\"AccessLevel\"",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 12,
+        "name": "channel_share_permissions?",
+        "type_info": "Json"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      true,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "87b606e8880ffd99d09bee637fa4b2942a6734ad3225b9104222cd930969cb8f"
+}

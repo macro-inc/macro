@@ -28,9 +28,6 @@ vi.mock('@core/constant/allBlocks', () => ({
 vi.mock('@core/util/create', () => ({
   createChat: mocks.createChat,
 }));
-vi.mock('@icon/wide-star', () => ({
-  AnimatedStarIcon: () => null,
-}));
 vi.mock('@ui', () => ({
   Button: () => null,
 }));

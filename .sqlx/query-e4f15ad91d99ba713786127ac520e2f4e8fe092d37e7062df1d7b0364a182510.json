@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM task_initiative\n        WHERE task_id = $1 AND initiative_id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e4f15ad91d99ba713786127ac520e2f4e8fe092d37e7062df1d7b0364a182510"
+}

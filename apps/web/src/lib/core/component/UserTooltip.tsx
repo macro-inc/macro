@@ -4,10 +4,10 @@ import { toast } from '@core/component/Toast/Toast';
 import { enableCrm } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useIsConnectedSecondaryInbox } from '@core/user';
-import WideCopy from '@icon/wide-copy.svg';
 import WideContact from '@phosphor/address-book.svg';
 import WideChat from '@phosphor/chat.svg';
 import IconCheck from '@phosphor/check.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import WideTask from '@phosphor/list-checks.svg';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { useCrmContactByEmailQuery } from '@queries/crm/contacts';
@@ -225,7 +225,7 @@ function CopyActionItem(props: {
       {copied() ? (
         <IconCheck class="size-3.5" />
       ) : (
-        <WideCopy class="size-3.5" />
+        <CopyIcon class="size-3.5" />
       )}
       {props.children}
     </ActionItem>

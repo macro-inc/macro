@@ -6,6 +6,11 @@
  */
 import type {
   AppleLoginRequest,
+  CodexConfigRequest,
+  CodexConnectionStatus,
+  CodexEnvironment,
+  CodexLoginPoll,
+  CodexLoginStart,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
   CreateInProgressLinkResponse,
@@ -72,6 +77,247 @@ import type {
   UserQuota,
   UserTokensResponse,
 } from './schemas';
+
+export type getCodexConnectionResponse200 = {
+  data: CodexConnectionStatus;
+  status: 200;
+};
+
+export type getCodexConnectionResponseSuccess =
+  getCodexConnectionResponse200 & {
+    headers: Headers;
+  };
+
+export type getCodexConnectionResponse = getCodexConnectionResponseSuccess;
+
+export const getGetCodexConnectionUrl = () => {
+  return `/codex`;
+};
+
+export const getCodexConnection = async (
+  options?: RequestInit
+): Promise<getCodexConnectionResponse> => {
+  const res = await fetch(getGetCodexConnectionUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getCodexConnectionResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getCodexConnectionResponse;
+};
+
+export type disconnectCodexResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type disconnectCodexResponseSuccess = disconnectCodexResponse204 & {
+  headers: Headers;
+};
+
+export type disconnectCodexResponse = disconnectCodexResponseSuccess;
+
+export const getDisconnectCodexUrl = () => {
+  return `/codex`;
+};
+
+export const disconnectCodex = async (
+  options?: RequestInit
+): Promise<disconnectCodexResponse> => {
+  const res = await fetch(getDisconnectCodexUrl(), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: disconnectCodexResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as disconnectCodexResponse;
+};
+
+export type configureCodexResponse200 = {
+  data: CodexConnectionStatus;
+  status: 200;
+};
+
+export type configureCodexResponseSuccess = configureCodexResponse200 & {
+  headers: Headers;
+};
+
+export type configureCodexResponse = configureCodexResponseSuccess;
+
+export const getConfigureCodexUrl = () => {
+  return `/codex/config`;
+};
+
+export const configureCodex = async (
+  codexConfigRequest: CodexConfigRequest,
+  options?: RequestInit
+): Promise<configureCodexResponse> => {
+  const res = await fetch(getConfigureCodexUrl(), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(codexConfigRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: configureCodexResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as configureCodexResponse;
+};
+
+export type listCodexEnvironmentsResponse200 = {
+  data: CodexEnvironment[];
+  status: 200;
+};
+
+export type listCodexEnvironmentsResponseSuccess =
+  listCodexEnvironmentsResponse200 & {
+    headers: Headers;
+  };
+
+export type listCodexEnvironmentsResponse =
+  listCodexEnvironmentsResponseSuccess;
+
+export const getListCodexEnvironmentsUrl = () => {
+  return `/codex/environments`;
+};
+
+export const listCodexEnvironments = async (
+  options?: RequestInit
+): Promise<listCodexEnvironmentsResponse> => {
+  const res = await fetch(getListCodexEnvironmentsUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listCodexEnvironmentsResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listCodexEnvironmentsResponse;
+};
+
+export type startCodexLoginResponse200 = {
+  data: CodexLoginStart;
+  status: 200;
+};
+
+export type startCodexLoginResponseSuccess = startCodexLoginResponse200 & {
+  headers: Headers;
+};
+
+export type startCodexLoginResponse = startCodexLoginResponseSuccess;
+
+export const getStartCodexLoginUrl = () => {
+  return `/codex/login`;
+};
+
+export const startCodexLogin = async (
+  options?: RequestInit
+): Promise<startCodexLoginResponse> => {
+  const res = await fetch(getStartCodexLoginUrl(), {
+    ...options,
+    method: 'POST',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: startCodexLoginResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as startCodexLoginResponse;
+};
+
+export type pollCodexLoginResponse200 = {
+  data: CodexLoginPoll;
+  status: 200;
+};
+
+export type pollCodexLoginResponseSuccess = pollCodexLoginResponse200 & {
+  headers: Headers;
+};
+
+export type pollCodexLoginResponse = pollCodexLoginResponseSuccess;
+
+export const getPollCodexLoginUrl = (attemptId: string) => {
+  return `/codex/login/${attemptId}`;
+};
+
+export const pollCodexLogin = async (
+  attemptId: string,
+  options?: RequestInit
+): Promise<pollCodexLoginResponse> => {
+  const res = await fetch(getPollCodexLoginUrl(attemptId), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: pollCodexLoginResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as pollCodexLoginResponse;
+};
+
+export type cancelCodexLoginResponse204 = {
+  data: void;
+  status: 204;
+};
+
+export type cancelCodexLoginResponseSuccess = cancelCodexLoginResponse204 & {
+  headers: Headers;
+};
+
+export type cancelCodexLoginResponse = cancelCodexLoginResponseSuccess;
+
+export const getCancelCodexLoginUrl = (attemptId: string) => {
+  return `/codex/login/${attemptId}`;
+};
+
+export const cancelCodexLogin = async (
+  attemptId: string,
+  options?: RequestInit
+): Promise<cancelCodexLoginResponse> => {
+  const res = await fetch(getCancelCodexLoginUrl(attemptId), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: cancelCodexLoginResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as cancelCodexLoginResponse;
+};
 
 /**
  * Never returns the key, or any part of it. There is no screen that needs one,

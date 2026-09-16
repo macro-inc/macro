@@ -32,6 +32,7 @@ use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{
     AgentKind, AgentRuntimeConfig, HarnessCommand, HarnessDefaults, SessionDefaults,
+    SessionRepository,
 };
 use agent_harness::domain::model_load::AgentModelsServiceImpl;
 use agent_harness::domain::ports::AgentRuntimeDirectory as _;
@@ -469,6 +470,59 @@ async fn run() -> anyhow::Result<()> {
         },
         pending_commands.clone(),
     )
+    .with_pull_requests(session_pull_requests.clone());
+    let codex_connections: Option<Arc<dyn codex_connection::domain::ConnectionService>> = config
+        .codex_oauth_kms_key_id()
+        .map(|key| {
+            let cipher = codex_connection::outbound::cipher::EnvelopeCipher::new(
+                aws_sdk_kms::Client::new(&aws_config),
+                key,
+            )?;
+            let repository = codex_connection::outbound::postgres::PostgresRepository::new(
+                pool.clone(),
+                Arc::new(cipher),
+            );
+            let provider = codex_cloud_agents::outbound::openai::OpenAi::new()
+                .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+            Ok::<Arc<dyn codex_connection::domain::ConnectionService>, anyhow::Error>(Arc::new(
+                codex_connection::domain::ConnectionServiceImpl::new(
+                    Arc::new(repository),
+                    provider,
+                ),
+            ))
+        })
+        .transpose()?;
+    let codex_provider = codex_cloud_agents::outbound::openai::OpenAi::new()
+        .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+    let codex_journal_pool = pool.clone();
+    let codex_manager = agent_harness::outbound::codex::CodexContainerManager::new(
+        Arc::new(codex_provider),
+        codex_connections,
+        session_repo.clone(),
+        Arc::new(move |id| {
+            let journal = Arc::new(
+                codex_cloud_agents::outbound::postgres_journal::PgCodexJournal::new(
+                    codex_journal_pool.clone(),
+                    id,
+                    replica,
+                ),
+            );
+            let activated = journal.clone();
+            (
+                journal,
+                Box::new(move |claim| {
+                    activated
+                        .activate(claim.session, claim.replica, claim.fence)
+                        .map_err(|e| {
+                            agent_runtime_protocol::domain::ports::TransportError::Client(
+                                e.to_string(),
+                            )
+                            .into()
+                        })
+                }),
+            )
+        }),
+    )
     .with_pull_requests(session_pull_requests);
     // Fixed system agents retain their deployment defaults. User/team agents
     // are resolved from agent_configs for every trigger so newly-created or
@@ -503,6 +557,18 @@ async fn run() -> anyhow::Result<()> {
             mcp_servers: AgentMcpServers::OwnerConnections,
         },
     ));
+    fixed_runtimes.push((
+        bot_id::CODEX_BOT_ID,
+        AgentRuntimeConfig {
+            kind: AgentKind::CodexCloud,
+            model: String::new(),
+            harness: "codex-cloud".into(),
+            instructions: String::new(),
+            mcp_servers: AgentMcpServers::Selected {
+                servers: Vec::new(),
+            },
+        },
+    ));
     let runtime_directory =
         PgAgentRuntimeDirectory::new(PgBotsRepo::new(pool.clone()), fixed_runtimes.clone());
     // Logged because the failure mode this replaced was silent: a harness that
@@ -515,8 +581,12 @@ async fn run() -> anyhow::Result<()> {
         environment = %config.environment,
         "agent harness serving bots"
     );
-    let containers =
-        RoutedContainerManager::new(sandbox_and_inmem, cursor_manager, session_repo.clone());
+    let containers = RoutedContainerManager::new(
+        sandbox_and_inmem,
+        cursor_manager,
+        codex_manager,
+        session_repo.clone(),
+    );
 
     let contacts_ingress = Arc::new(contacts::domain::service::SqsContactsIngress {
         queue: contacts::outbound::ingress::SqsContactsQueue::new(
@@ -559,11 +629,21 @@ async fn run() -> anyhow::Result<()> {
     let runtimes = RuntimeRegistry::with_presence(Arc::new(PgHarnessPresence::new(pool.clone())));
     let redis = redis::Client::open(config.redis_uri.as_ref())
         .context("failed to create the runtime command Redis client")?;
+    // Read once, here, rather than at every session this deployment opens: a
+    // URL that names no repository is a misconfiguration of the deployment,
+    // and refusing it at startup is the difference between one loud failure
+    // and every session failing to open.
+    let repo_url = SessionRepository::parse(&config.harness_repo_url).with_context(|| {
+        format!(
+            "HARNESS_REPO_URL does not name a github repository: {}",
+            config.harness_repo_url
+        )
+    })?;
     let defaults = HarnessDefaults::new(SessionDefaults {
         bot_id,
         model: config.harness_model.clone(),
         harness: config.harness_slug.clone(),
-        repo_url: config.harness_repo_url.clone(),
+        repo_url: Some(repo_url.clone()),
     })
     .with_bot(
         inmem_bot,
@@ -573,7 +653,20 @@ async fn run() -> anyhow::Result<()> {
             harness: config.inmem_harness_slug.clone(),
             // Stamped but unused: the in-process agent has no
             // workspace to clone anything into.
-            repo_url: config.harness_repo_url.clone(),
+            repo_url: Some(repo_url),
+        },
+    )
+    .with_bot(
+        bot_id::CODEX_BOT_ID,
+        SessionDefaults {
+            bot_id: bot_id::CODEX_BOT_ID,
+            model: String::new(),
+            harness: "codex-cloud".into(),
+            // A Codex cloud session works in whatever repository its cloud
+            // environment holds, and records it on the row once that
+            // environment resolves. Nothing to seed it with here, and this
+            // deployment's own repository would be the wrong guess.
+            repo_url: None,
         },
     )
     // Sessions nothing names a bot for (the create menu's) run in-process;

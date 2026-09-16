@@ -2,12 +2,12 @@ import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { enableCrm } from '@core/constant/featureFlags';
-import BellIcon from '@phosphor/bell.svg';
-import BellFillIcon from '@phosphor-fill/bell-fill.svg';
-import CalendarFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
-import ChatsFillIcon from '@phosphor-fill/chats-circle-fill.svg';
+import HouseIcon from '@phosphor/house.svg';
+import CalendarFillIcon from '@phosphor-fill/calendar-fill.svg';
 import EmailFillIcon from '@phosphor-fill/envelope-fill.svg';
-import FilesFillIcon from '@phosphor-fill/folder-simple-fill.svg';
+import FilesFillIcon from '@phosphor-fill/files-fill.svg';
+import ChannelFillIcon from '@phosphor-fill/hash-straight-fill.svg';
+import HouseFillIcon from '@phosphor-fill/house-fill.svg';
 import { createMemo } from 'solid-js';
 import type { MobileDockIcon } from './MobileDockButton';
 import type { MobileNavViewId } from './mobile-nav-views';
@@ -15,7 +15,7 @@ import type { MobileNavViewId } from './mobile-nav-views';
 export type MobileDockView = {
   id: Exclude<MobileNavViewId, 'search' | 'settings'>;
   label: string;
-  /** Same Phosphor glyph as the desktop sidebar. */
+  /** Phosphor glyph for this view. */
   icon: MobileDockIcon;
   iconActive?: MobileDockIcon;
   /** When set, the scope pill renders icon-only with this icon. */
@@ -30,10 +30,10 @@ export type MobileDockView = {
 const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
   {
     id: 'inbox',
-    label: 'Notifications',
-    icon: BellIcon,
-    iconActive: BellFillIcon,
-    pillIcon: BellIcon,
+    label: 'Home',
+    icon: HouseIcon,
+    iconActive: HouseFillIcon,
+    pillIcon: HouseIcon,
   },
   {
     id: 'calendar',
@@ -52,7 +52,7 @@ const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
     id: 'channels',
     label: 'Channels',
     icon: getIconConfig('channel').icon,
-    iconActive: ChatsFillIcon,
+    iconActive: ChannelFillIcon,
   },
   {
     id: 'documents',

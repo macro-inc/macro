@@ -532,6 +532,56 @@ pub async fn page<S: PredicateIndexStorage>(
     limit: u16,
     request: PageRequest,
 ) -> Result<PageResult, PageError<S::Error>> {
+    page_impl(
+        engine,
+        generation,
+        filters,
+        sort_method,
+        direction,
+        limit,
+        request,
+        false,
+    )
+    .await
+}
+
+/// Evaluate Mail using complete property-aware projections.
+pub async fn page_current<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    generation: &str,
+    filters: Value,
+    sort_method: &str,
+    direction: &str,
+    limit: u16,
+    request: PageRequest,
+) -> Result<PageResult, PageError<S::Error>> {
+    page_impl(
+        engine,
+        generation,
+        filters,
+        sort_method,
+        direction,
+        limit,
+        request,
+        true,
+    )
+    .await
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "retains the host page API while selecting the projection version"
+)]
+async fn page_impl<S: PredicateIndexStorage>(
+    engine: &mut Engine<S>,
+    generation: &str,
+    filters: Value,
+    sort_method: &str,
+    direction: &str,
+    limit: u16,
+    request: PageRequest,
+    current: bool,
+) -> Result<PageResult, PageError<S::Error>> {
     let revision = engine.current_revision().to_string();
     if limit == 0 || limit >= predicate_index::MAX_QUERY_LIMIT {
         return Err(error(format!(
@@ -578,7 +628,12 @@ pub async fn page<S: PredicateIndexStorage>(
         "DESC" => SortDirection::Desc,
         _ => return Err(error("invalid sort direction").into()),
     };
-    let outcome = vocabulary::compile(
+    let compile = if current {
+        item_filter_index::properties::compile_mail
+    } else {
+        vocabulary::compile
+    };
+    let outcome = compile(
         &ast,
         SoupFlatRequest {
             sort,

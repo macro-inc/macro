@@ -5,7 +5,6 @@
 pub mod append_attachment_to_chat;
 pub mod copy_messages;
 pub mod create_chat_message;
-pub mod create_empty_chat;
 pub mod delete_chat_message;
 pub mod get_attachment;
 pub mod get_attachments_for_message;

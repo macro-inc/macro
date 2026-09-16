@@ -13,7 +13,6 @@ import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils'
 import {
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
-  useSoupListNavigationHotkeys,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
@@ -45,14 +44,12 @@ import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
 import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import {
   createEffect,
   createMemo,
   createSignal,
   Match,
-  onCleanup,
   type Setter,
   Show,
   Suspense,
@@ -108,7 +105,7 @@ export type TaskListProps = {
 
 export function TaskList(props: TaskListProps) {
   const panel = useSplitPanelOrThrow();
-  const { state, setState } = useTasksView();
+  const { state, setState, openTask } = useTasksView();
   const userId = useUserId();
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
@@ -149,12 +146,6 @@ export function TaskList(props: TaskListProps) {
     });
   }
 
-  const previewAfterNavigation = debounce(
-    (entity: EntityData) => openEntity(entity, { mergeHistory: true }),
-    150
-  );
-  onCleanup(() => previewAfterNavigation.clear());
-
   function onActivate({
     item,
     metadata,
@@ -188,14 +179,18 @@ export function TaskList(props: TaskListProps) {
 
     if (sourceRow?.kind !== 'entity') return;
 
-    previewAfterNavigation.clear();
-
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    openEntity(sourceRow.entity, {
-      openInNewSplit: newSplit,
-      replacePreview: metadata?.event?.altKey === true && !newSplit,
+    if (newSplit) {
+      openEntity(sourceRow.entity, { openInNewSplit: true });
+
+      return;
+    }
+
+    openTask({
+      id: sourceRow.entity.id,
+      fallbackName: sourceRow.entity.name,
     });
   }
 
@@ -211,21 +206,6 @@ export function TaskList(props: TaskListProps) {
       onActivate,
     })
   );
-
-  withSplitPanelOwner(listOwnedSlotName('navigation-hotkeys'), () => {
-    useSoupListNavigationHotkeys({
-      splitHotkeyScope: panel.splitHotkeyScope,
-      viewId: 'tasks',
-      dataSource: source,
-      controller: list,
-      handle: panel.handle,
-      openEntityInSplit: (task, options) => {
-        openEntity(task, {
-          mergeHistory: options.mergeHistory,
-        });
-      },
-    });
-  });
 
   const entityActionViewContext = () =>
     resolveEntityActionViewContext({
@@ -329,13 +309,6 @@ export function TaskList(props: TaskListProps) {
     enabled: panel.isPanelActive,
     navigation: {
       onNavigate: (event) => {
-        previewAfterNavigation.clear();
-
-        const row = event.result?.item;
-        if (row?.kind === 'entity' && panel.handle.isControllerSplit()) {
-          previewAfterNavigation(row.entity);
-        }
-
         if (event.kind !== 'move' || event.direction !== 1) return;
         if (source.isLoadingMore() || !source.hasMore()) {
           return;
@@ -391,10 +364,8 @@ export function TaskList(props: TaskListProps) {
     if (nextTab === activeTab) return;
 
     activeTab = nextTab;
-    previewAfterNavigation.clear();
     listInteractions.selection.clear();
     list.focus.clear({ reason: 'programmatic' });
-    panel.handle.resetPreview();
     setPersistedListState((current) => ({ ...current, scrollOffset: 0 }));
   });
 
@@ -408,10 +379,6 @@ export function TaskList(props: TaskListProps) {
     });
     if (restored) return;
     if (isTouchDevice()) return;
-    if (panel.handle.isControllerSplit()) {
-      panel.handle.resetPreview();
-      return;
-    }
 
     list.focus.first({
       isNavigable: (row) => row.kind === 'entity',

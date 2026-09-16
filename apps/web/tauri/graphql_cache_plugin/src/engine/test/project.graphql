@@ -12,6 +12,7 @@ query NativeProject {
           createdAt
           updatedAt
           notifications { __typename id }
+          properties { id }
         }
       }
     }

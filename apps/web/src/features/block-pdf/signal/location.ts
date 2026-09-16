@@ -5,8 +5,6 @@ import {
   type IUpdateFindControlStateEvent,
 } from '@block-pdf/PdfViewer/EventBus';
 import type { FindController } from '@block-pdf/PdfViewer/FindController';
-import { useScrollToCommentThread } from '@block-pdf/store/comments/commentOperations';
-import { activeCommentThreadSignal } from '@block-pdf/store/comments/commentStore';
 import {
   createBlockEffect,
   createBlockSignal,
@@ -14,10 +12,6 @@ import {
   useBlockId,
 } from '@core/block';
 import { useReferralCode } from '@core/context/user';
-import {
-  setTempRedirectLocation,
-  type TempRedirectLocation,
-} from '@core/signal/location';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { waitForSignal } from '@core/util/waitForSignal';
 import { createCallback } from '@solid-primitives/rootless';
@@ -541,31 +535,6 @@ async function applyCustomHighlights(
 
   viewer.markPageHighlightsSelected(pageIndex);
 }
-
-export const useGoToTempRedirect = () => {
-  const [activeThreadId, setActiveThreadId] = activeCommentThreadSignal;
-  const scrollToCommentThread = useScrollToCommentThread();
-
-  return (documentId: string, state: TempRedirectLocation) => {
-    if (state.itemId !== documentId) {
-      return;
-    }
-    setTempRedirectLocation(undefined);
-
-    const threadId = state.location?.threadId;
-    if (!threadId) return;
-
-    const prevActiveThreadId = activeThreadId();
-    setActiveThreadId(threadId);
-
-    // if the thread is already active, scroll to it directly
-    // Note that there is already a block effect in comment operations that will
-    // scroll to a new active thread signal on change
-    if (prevActiveThreadId === threadId) {
-      scrollToCommentThread(threadId);
-    }
-  };
-};
 
 /**
  * Go to the given location in the pdf viewer

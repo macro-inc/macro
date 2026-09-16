@@ -1835,8 +1835,8 @@ async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
     let session = create_session(&repo, new_session(bot, None, None)).await;
     let url = "https://github.com/org/repo/pull/123";
     let (first, second) = tokio::join!(
-        repo.record_pull_request(session.id, &session.owner_id, url),
-        repo.record_pull_request(session.id, &session.owner_id, url),
+        repo.record_pull_request(session.id, &session.owner_id, url, None),
+        repo.record_pull_request(session.id, &session.owner_id, url, None),
     );
     assert_eq!(
         usize::from(first.unwrap()) + usize::from(second.unwrap()),
@@ -1878,7 +1878,7 @@ async fn pull_request_is_atomic_and_survives_history_selection(pool: PgPool) {
     );
     assert!(
         !repo
-            .record_pull_request(session.id, &session.owner_id, url)
+            .record_pull_request(session.id, &session.owner_id, url, None)
             .await
             .unwrap()
     );
@@ -1917,4 +1917,72 @@ async fn rotating_a_session_credential_revokes_the_previous_one(pool: PgPool) {
             .id,
         session.id
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pull_request_waiting_on_takeover_cannot_overwrite_successor(pool: PgPool) {
+    use crate::domain::pull_request::SessionPullRequestRepo;
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let ClaimOutcome::Claimed(old) = repo.claim(session.id, ReplicaId::mint()).await.unwrap()
+    else {
+        panic!("claim")
+    };
+    let original_url = "https://github.com/org/repo/pull/1";
+    assert!(
+        repo.record_pull_request(session.id, &session.owner_id, original_url, Some(old))
+            .await
+            .unwrap()
+    );
+    assert!(
+        !repo
+            .record_pull_request(session.id, &session.owner_id, original_url, Some(old))
+            .await
+            .unwrap()
+    );
+    // A takeover holds the same row lock as PR publication until commit.
+    let mut takeover = pool.begin().await.unwrap();
+    sqlx::query!("UPDATE agent_session SET manager_fence = manager_fence + 1, pull_request_url = $2 WHERE id = $1", session.id.as_uuid(), "https://github.com/org/repo/pull/2")
+        .execute(&mut *takeover).await.unwrap();
+    let stale_repo = repo.clone();
+    let owner = session.owner_id.clone();
+    let mut stale = tokio::spawn(async move {
+        stale_repo
+            .record_pull_request(
+                session.id,
+                &owner,
+                "https://github.com/org/repo/pull/1",
+                Some(old),
+            )
+            .await
+    });
+    assert!(
+        tokio::time::timeout(std::time::Duration::from_millis(50), &mut stale)
+            .await
+            .is_err(),
+        "publication must wait for the locked ownership row"
+    );
+    takeover.commit().await.unwrap();
+    assert!(
+        matches!(stale.await.unwrap(), Err(AgentSessionError::FencedOut(id)) if id == session.id)
+    );
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .unwrap()
+            .pull_request_url
+            .as_deref(),
+        Some("https://github.com/org/repo/pull/2")
+    );
+    assert!(matches!(
+        repo.record_pull_request(
+            session.id,
+            &session.owner_id,
+            "https://github.com/org/repo/pull/2",
+            Some(old)
+        )
+        .await,
+        Err(AgentSessionError::FencedOut(_))
+    ));
 }

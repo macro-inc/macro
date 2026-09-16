@@ -46,7 +46,11 @@ import {
   untrack,
 } from 'solid-js';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
-import { mapSoupPageToEntityList } from '../transform-utils';
+import { soupPageTimestamp } from '../page-timestamp';
+import {
+  mapApiSoupItemToEntity,
+  mapSoupPageToEntityList,
+} from '../transform-utils';
 import { makeGraphqlSoupInput } from './ast';
 import { isCachedMailView, materializeMailView } from './mail-view';
 import {
@@ -442,6 +446,7 @@ export function createGraphqlSoupAstItemsQuery(
     ServerProjection
   >(() => {
     const firstInput = firstPageInput();
+    const sortMethod = args().params.sort_method;
     const queryOptions = options();
     const showSupportedForeignEntities =
       queryOptions.showSupportedForeignEntities;
@@ -476,18 +481,27 @@ export function createGraphqlSoupAstItemsQuery(
         recordAuthority('network');
         finishStaleFallback('network');
       },
-      select: ({ pages }) => ({
-        records: pages.flatMap((page) => page.user.soup.items),
-        data: {
-          entities: pages.flatMap((page) =>
-            mapSoupPageToEntityList(mapGraphqlSoupPage(page), {
-              instructionsIdQuery,
-              showSupportedForeignEntities,
-            })
-          ),
-          groups: undefined,
-        },
-      }),
+      select: ({ pages }) => {
+        const mappedPages = pages.map(mapGraphqlSoupPage);
+        const oldestFetchedTimestamp = soupPageTimestamp(
+          mappedPages.flatMap((page) => page.items.map(mapApiSoupItemToEntity)),
+          sortMethod
+        );
+        const entities = mappedPages.flatMap((page) =>
+          mapSoupPageToEntityList(page, {
+            instructionsIdQuery,
+            showSupportedForeignEntities,
+          })
+        );
+        return {
+          records: pages.flatMap((page) => page.user.soup.items),
+          data: {
+            entities,
+            groups: undefined,
+            oldestFetchedTimestamp,
+          },
+        };
+      },
     };
   });
 
@@ -563,15 +577,15 @@ export function createGraphqlSoupAstItemsQuery(
 
   const error = (): CombinedError | undefined => {
     const error = query.error;
-    // A background transport failure must not replace usable cached Mail
-    // (including an exact empty page) with the full-screen error state.
+    // A background transport failure must not replace usable current-query
+    // cache results (including an empty result) with the full-screen error state.
     // Keep server responses (including HTTP auth failures), GraphQL errors,
     // and failures without current-query local proof visible.
     if (
       error?.networkError &&
       !error.response &&
       error.graphQLErrors.length === 0 &&
-      displayLocalProjection()?.mail
+      displayLocalProjection()
     ) {
       return undefined;
     }
@@ -586,7 +600,15 @@ export function createGraphqlSoupAstItemsQuery(
   );
 
   return {
-    data: displayData,
+    data: createMemo(() => {
+      const data = displayData();
+      return (
+        data && {
+          ...data,
+          oldestFetchedTimestamp: query.data?.data.oldestFetchedTimestamp,
+        }
+      );
+    }),
     error,
     isSupported,
     isEnabled: () => query.isEnabled,
