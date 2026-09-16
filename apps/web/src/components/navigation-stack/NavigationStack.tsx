@@ -72,7 +72,7 @@ function Root<TData = unknown, TNavigateOptions = unknown>(
     props.defaultValue?.map(createEntry) ?? []
   );
   const active = () => entries.at(-1);
-  const notifyChange = () => props.onChange?.(entries);
+  const notifyChange = () => props.onChange?.([...entries]);
 
   const push = (data: TData) => {
     const entry = createEntry(data);

@@ -3,6 +3,7 @@ import { onCleanup, onMount } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   NavigationStack,
+  type NavigationStackEntry,
   type NavigationStackState,
   useNavigationStack,
 } from './NavigationStack';
@@ -67,6 +68,33 @@ describe('NavigationStack', () => {
 
     expect(state?.entries.map(({ data }) => data)).toEqual(['Task']);
     expect(state?.active()?.data).toBe('Task');
+  });
+
+  it('notifies with a distinct path snapshot after each change', () => {
+    let state: NavigationStackState<string> | undefined;
+    const snapshots: Array<readonly NavigationStackEntry<string>[]> = [];
+
+    function CaptureState() {
+      state = useNavigationStack<string>();
+      return null;
+    }
+
+    render(() => (
+      <NavigationStack.Root
+        onChange={(entries) => {
+          snapshots.push(entries);
+        }}
+      >
+        <CaptureState />
+      </NavigationStack.Root>
+    ));
+
+    state?.push('Task');
+    state?.push('Document');
+
+    expect(snapshots[0]).not.toBe(snapshots[1]);
+    expect(snapshots[0]?.map(({ data }) => data)).toEqual(['Task']);
+    expect(snapshots[1]?.map(({ data }) => data)).toEqual(['Task', 'Document']);
   });
 
   it('only handles navigation accepted by the root', () => {
