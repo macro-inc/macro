@@ -4,16 +4,13 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import {
-  EntityLoadGate,
-  toEntityLoadError,
-} from '@core/component/EntityLoadGate';
+import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import { buildEntityData } from '@entity';
-import { EmailDebouncedReadMarker } from '@notifications';
 import { useThreadQuery } from '@queries/email/thread';
 import { representativeThreadMessage } from '@queries/email/thread-subject';
 import { createMemo, Show, Suspense } from 'solid-js';
 import { EmailBlockAdapter } from '../EmailBlockAdapter';
+import { EmailThreadLoadGate } from './EmailThreadLoadGate';
 
 export default function BlockEmail() {
   const blockId = useBlockId();
@@ -78,27 +75,22 @@ export default function BlockEmail() {
     <Suspense>
       <DocumentBlockContainer title={title() ?? 'Email'}>
         <div class="size-full" tabIndex={-1}>
-          <EntityLoadGate
+          <EmailThreadLoadGate
             result={threadLoadResult}
-            loadErrorTitle="Unable to load this email"
+            notificationSource={notificationSource}
+            threadId={threadId()}
+            linkId={threadData()?.thread?.link_id}
+            debounceTime={isPreview ? 1_500 : 100}
             onRetry={() => void threadQuery.refetch()}
           >
             <Show when={threadId()}>
               {(id) => (
-                <>
-                  <EmailDebouncedReadMarker
-                    notificationSource={notificationSource}
-                    threadId={id()}
-                    linkId={threadData()?.thread?.link_id}
-                    debounceTime={isPreview ? 1_500 : 100}
-                  />
-                  <Suspense>
-                    <EmailBlockAdapter title={title()} threadId={id} />
-                  </Suspense>
-                </>
+                <Suspense>
+                  <EmailBlockAdapter title={title()} threadId={id} />
+                </Suspense>
               )}
             </Show>
-          </EntityLoadGate>
+          </EmailThreadLoadGate>
         </div>
       </DocumentBlockContainer>
     </Suspense>

@@ -169,7 +169,7 @@ export function TopBar(props: {
     icon: IconShared,
     action: () => shareCtx.open(),
     condition: () => ENABLE_EMAIL_SHARING,
-    buttonComponent: () => <ShareTrigger />,
+    buttonComponent: () => <ShareTrigger id={props.id} blockType="email" />,
     focusTarget: getShareDrawerRecipientInput,
   };
 

@@ -1391,10 +1391,18 @@ export function ShareTrigger(props: {
   const shareCtx = useShareDialogContext();
   const isAuthenticated = useIsAuthenticated();
   const inBlock = isInBlock();
-  const contextualBlockType = inBlock
-    ? useBlockAliasedName()
-    : useMaybeBlockAliasedName();
-  const contextualBlockId = inBlock ? useBlockId() : useMaybeBlockId();
+  const contextualBlockType =
+    props.blockType === undefined
+      ? inBlock
+        ? useBlockAliasedName()
+        : useMaybeBlockAliasedName()
+      : undefined;
+  const contextualBlockId =
+    props.id === undefined
+      ? inBlock
+        ? useBlockId()
+        : useMaybeBlockId()
+      : undefined;
   const analytics = useAnalytics();
 
   const blockType = (): BlockName | BlockAlias => {
