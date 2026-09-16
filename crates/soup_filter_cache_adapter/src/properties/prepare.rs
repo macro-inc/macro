@@ -349,7 +349,7 @@ pub(super) async fn prepare<S: PredicateIndexStorage>(
         }
         let mut record = if reuse {
             storage
-                .get_batch(&[key.clone()])
+                .get_batch(std::slice::from_ref(key))
                 .await
                 .map_err(ProjectionError::Storage)?
                 .pop()
@@ -394,7 +394,7 @@ pub(super) async fn deletion_updates<S: PredicateIndexStorage>(
     {
         let key = EntityKey(key.clone().into());
         let Some(record) = storage
-            .get_batch(&[key.clone()])
+            .get_batch(std::slice::from_ref(&key))
             .await
             .map_err(ProjectionError::Storage)?
             .pop()
@@ -407,7 +407,7 @@ pub(super) async fn deletion_updates<S: PredicateIndexStorage>(
         };
         for parent in owners(storage, &key, definition).await? {
             let Some(state) = storage
-                .load_projection_states(&[parent.clone()])
+                .load_projection_states(std::slice::from_ref(&parent))
                 .await
                 .map_err(ProjectionError::Storage)?
                 .pop()
