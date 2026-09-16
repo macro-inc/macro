@@ -1,4 +1,4 @@
-//! Handler for `PATCH /initiatives/{initiative_id}`.
+//! Handler for updating an initiative.
 
 use axum::{Json, extract::State};
 use entity_access::domain::models::EditAccessLevel;

@@ -1,4 +1,4 @@
-//! Handler for `DELETE /initiatives/{initiative_id}`.
+//! Handler for deleting an initiative.
 
 use axum::{Json, extract::State};
 use entity_access::domain::models::OwnerAccessLevel;

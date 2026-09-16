@@ -1,5 +1,3 @@
-//! HTTP-level tests: status mapping, receipt minting, and JSON shape.
-
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 

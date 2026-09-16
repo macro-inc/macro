@@ -1,4 +1,4 @@
-//! Handler for `POST /initiatives`.
+//! Handler for creating an initiative.
 
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;

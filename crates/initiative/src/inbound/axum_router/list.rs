@@ -1,4 +1,4 @@
-//! Handler for `GET /initiatives`.
+//! Handler for listing initiatives.
 
 use axum::{Json, extract::State};
 use entity_access::domain::ports::EntityAccessService;

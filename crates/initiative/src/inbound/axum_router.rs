@@ -3,19 +3,12 @@
 #[cfg(test)]
 mod test;
 
-/// Assign tasks to an initiative.
 pub mod assign_tasks;
-/// Create an initiative.
 pub mod create;
-/// Delete an initiative.
 pub mod delete;
-/// Fetch one initiative.
 pub mod get;
-/// List initiatives.
 pub mod list;
-/// Unassign one task from an initiative.
 pub mod unassign_task;
-/// Update an initiative.
 pub mod update;
 
 use std::str::FromStr;
@@ -120,14 +113,7 @@ pub struct UnassignTaskParams {
 
 /// Build the initiative router.
 ///
-/// Nested under `/initiatives` by the composition root. Routes:
-/// - `GET /` — list initiatives the caller can view.
-/// - `POST /` — create an initiative.
-/// - `GET /{initiative_id}` — fetch one initiative.
-/// - `PATCH /{initiative_id}` — update an initiative.
-/// - `PUT /{initiative_id}/tasks` — assign tasks.
-/// - `DELETE /{initiative_id}/tasks/{task_id}` — unassign one task.
-/// - `DELETE /{initiative_id}` — delete an initiative.
+/// Nested under `/initiatives` by the composition root.
 pub fn initiative_router<S, Eas, Auth, T>(state: InitiativeRouterState<S, Eas, Auth>) -> Router<T>
 where
     S: InitiativeService,
@@ -165,7 +151,6 @@ where
         .with_state(state)
 }
 
-/// Load [`InitiativeBasic`] into request extensions, or 404 if it does not exist.
 #[tracing::instrument(skip(state, request, next))]
 async fn ensure_initiative_exists<S, Eas, Auth>(
     State(state): State<InitiativeRouterState<S, Eas, Auth>>,

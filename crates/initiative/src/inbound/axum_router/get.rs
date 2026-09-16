@@ -1,4 +1,4 @@
-//! Handler for `GET /initiatives/{initiative_id}`.
+//! Handler for fetching one initiative.
 
 use axum::{Json, extract::State};
 use entity_access::domain::models::ViewAccessLevel;

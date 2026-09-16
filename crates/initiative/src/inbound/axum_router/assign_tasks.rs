@@ -1,4 +1,4 @@
-//! Handler for `PUT /initiatives/{initiative_id}/tasks`.
+//! Handler for assigning tasks to an initiative.
 
 use axum::{Json, extract::State};
 use entity_access::domain::models::{

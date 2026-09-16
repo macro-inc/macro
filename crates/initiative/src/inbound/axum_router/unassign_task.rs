@@ -1,4 +1,4 @@
-//! Handler for `DELETE /initiatives/{initiative_id}/tasks/{task_id}`.
+//! Handler for unassigning one task from an initiative.
 
 use axum::{
     Json,
