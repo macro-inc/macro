@@ -106,6 +106,7 @@ import {
   useContext,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
+import { applyDocumentTabScope } from './document-tab-scope';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
@@ -852,6 +853,9 @@ export const SoupViewContextProvider: FlowComponent<
     let next = applyInboxFilter(state);
     next = applyInboxThreadFilter(next);
     next = applyInboxReadFilter(next);
+    if (activeListView() === 'documents') {
+      next = applyDocumentTabScope(next, activeTab(), userId());
+    }
     return next;
   };
 

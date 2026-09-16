@@ -24,6 +24,7 @@ import {
   getViewPreset,
   VIEW_TAB_PRESETS,
 } from '../../src/features/next-soup/sidebar/soup-filter-presets';
+import { applyDocumentTabScope } from '../../src/features/next-soup/soup-view/document-tab-scope';
 import { createTagFacetContext, testFacets } from '../../src/features/soup';
 import { TASK_TABS } from '../../src/features/tasks-view/constants';
 import {
@@ -332,7 +333,10 @@ function* cases(view?: View): Generator<Case> {
           })),
         },
       });
-      const query = { params: { limit: 100 }, body: compileToAst(state) };
+      const query = {
+        params: { limit: 100 },
+        body: compileToAst(applyDocumentTabScope(state, tab, USER_ID)),
+      };
       const expected: FixtureRow[] = [];
       for (const row of corpus) {
         if (!intersects(selection.tags, row.tags)) continue;

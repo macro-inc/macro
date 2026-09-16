@@ -249,6 +249,12 @@ copy, and move-to-folder actions are not offered on agent-session search rows.
 Tabs `Owned` / `Shared` / `Attachments` / `Folders` / `All`; `New` menu; rows show title,
 tags, updated time. Clicking a row opens the doc.
 
+Shared always excludes files owned by you. Selecting **Created by → Me** therefore
+returns no files; selecting Me together with another creator returns only that
+other creator's shared files. Clearing the creator selection restores all Shared
+results. This applies to restored filters, search, and flat/grouped requests—not
+just client-side row filtering.
+
 With `enable-new-app-views` enabled, Files opens **Drive** using the same
 shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
 `Shared with me`, collapsible Favorites, and a searchable folder hierarchy.
