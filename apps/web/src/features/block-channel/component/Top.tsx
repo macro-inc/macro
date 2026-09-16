@@ -1,4 +1,5 @@
 import type { ChannelTabId } from '@channel/Channel/channel-tabs';
+import { ChannelAvatar } from '@channel/channel-avatar';
 import { CollapsibleHeaderItem } from '@components/app/split-layout/components/CollapsibleItem';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
@@ -12,13 +13,11 @@ import { useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PhoneIcon from '@icon/wide-call.svg';
-import ChannelIcon from '@icon/wide-channel.svg';
 import ChatTextIcon from '@phosphor/chat-text.svg';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import UsersIcon from '@phosphor/users.svg';
 import type { ChannelParticipant } from '@queries/channel/types';
-import { ChannelTypeEnum } from '@service-storage/client';
-import type { ChannelType } from '@service-storage/generated/schemas/channelType';
+import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { type Component, type JSX, Show } from 'solid-js';
 
 export const CHANNEL_TAB_ICONS: Record<
@@ -32,6 +31,7 @@ export const CHANNEL_TAB_ICONS: Record<
 };
 
 type TopIconProps = {
+  channelId: string;
   channelType: ChannelType;
   participants: ChannelParticipant[];
 };
@@ -44,8 +44,8 @@ function TopIcon(props: TopIconProps) {
 
   return (
     <Show
-      when={props.channelType === ChannelTypeEnum.DirectMessage && recipient()}
-      fallback={<ChannelIcon class="size-4 shrink-0" />}
+      when={props.channelType === ChannelType.direct_message && recipient()}
+      fallback={<ChannelAvatar channelId={props.channelId} />}
     >
       {(recipient) => {
         return (
@@ -94,6 +94,7 @@ export function ChannelTopLeft(props: ChannelTopLeftProps) {
       <HeaderIsland class="shrink">
         <div class="ph-no-capture z-split-header-content relative flex items-center gap-2 max-w-full h-full shrink min-w-15">
           <TopIcon
+            channelId={props.channelId}
             channelType={props.channelType}
             participants={props.participants}
           />

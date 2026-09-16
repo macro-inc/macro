@@ -245,6 +245,7 @@ struct ChannelInfoRow {
 /// Intermediate row for batch channel preview lookups.
 #[derive(Debug, sqlx::FromRow)]
 struct ChannelPreviewQueryRow {
+    profile_picture_id: Option<Uuid>,
     id: Uuid,
     name: Option<String>,
     channel_type: ChannelType,
@@ -1691,6 +1692,22 @@ impl ChannelAttachmentRepo for PgChannelsRepo {
 }
 
 impl ChannelRepo for PgChannelsRepo {
+    async fn set_channel_picture(
+        &self,
+        channel_id: Uuid,
+        picture_id: Option<Uuid>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "UPDATE comms_channels SET profile_picture_id = $2, updated_at = NOW() WHERE id = $1",
+            channel_id,
+            picture_id,
+        )
+        .execute(&self.pool)
+        .await
+        .context("unable to update channel picture")?;
+        Ok(())
+    }
+
     type Err = anyhow::Error;
 
     #[tracing::instrument(err, skip(self))]
@@ -2719,6 +2736,7 @@ impl ChannelRepo for PgChannelsRepo {
             SELECT
                 c.id,
                 c.name,
+                c.profile_picture_id,
                 c.channel_type AS "channel_type: ChannelType",
                 c.org_id,
                 c.team_id,
@@ -2745,6 +2763,7 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(rows
             .into_iter()
             .map(|row| ChannelPreviewRow {
+                profile_picture_id: row.profile_picture_id,
                 info: ChannelInfo {
                     id: row.id,
                     name: row.name,

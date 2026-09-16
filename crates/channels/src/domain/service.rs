@@ -1564,6 +1564,38 @@ where
     M: ChannelMentionExtractor,
     anyhow::Error: From<R::Err>,
 {
+    #[tracing::instrument(err, skip(self, access))]
+    async fn set_channel_picture(
+        &self,
+        access: EntityAccessReceipt<entity_access::domain::models::AdminParticipantRole>,
+        picture_id: Option<Uuid>,
+    ) -> Result<(), ChannelMutationErr> {
+        if access.entity().entity_type != EntityType::Channel {
+            return Err(ChannelMutationErr::BadRequest(
+                "channel access receipt required".into(),
+            ));
+        }
+        access
+            .get_authenticated_user()
+            .map_err(|_| ChannelMutationErr::Unauthorized("authenticated user required".into()))?;
+        let channel_id = Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| ChannelMutationErr::BadRequest(error.to_string()))?;
+        let info = self
+            .repo
+            .get_channel_info(channel_id)
+            .await
+            .map_err(|error| ChannelMutationErr::Repo(error.into()))?;
+        if info.channel_type == ChannelType::DirectMessage {
+            return Err(ChannelMutationErr::BadRequest(
+                "direct messages use the participant's profile picture".into(),
+            ));
+        }
+        self.repo
+            .set_channel_picture(channel_id, picture_id)
+            .await
+            .map_err(|error| ChannelMutationErr::Repo(error.into()))
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_channel_messages(
         &self,
@@ -1683,6 +1715,7 @@ where
                 .await
                 .map_err(anyhow::Error::from)?;
             previews.push(ChannelPreview::Access(ChannelPreviewData {
+                profile_picture_id: row.has_access.then_some(row.profile_picture_id).flatten(),
                 channel_id: channel_id_str,
                 channel_name,
                 channel_type,

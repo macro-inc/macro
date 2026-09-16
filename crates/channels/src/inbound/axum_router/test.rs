@@ -71,6 +71,7 @@ struct PermissionCall {
 struct TestAccessService {
     mode: AccessMode,
     channel_view_only: bool,
+    channel_role: EntityParticipantRole,
     permission_calls: Arc<Mutex<Vec<PermissionCall>>>,
 }
 
@@ -98,6 +99,7 @@ impl TestAccessService {
         Self {
             mode,
             channel_view_only: false,
+            channel_role: EntityParticipantRole::Member,
             permission_calls: Arc::default(),
         }
     }
@@ -143,7 +145,7 @@ impl EntityAccessService for TestAccessService {
                 entity_type,
             },
             EntityPermission::ChannelRole {
-                role: EntityParticipantRole::Member,
+                role: self.channel_role,
             },
         )
     }
@@ -218,7 +220,7 @@ impl EntityAccessService for TestAccessService {
         match self.mode {
             AccessMode::Allow => match entity_type {
                 EntityType::Channel => Ok(EntityPermission::ChannelRole {
-                    role: EntityParticipantRole::Member,
+                    role: self.channel_role,
                 }),
                 _ => Ok(EntityPermission::AccessLevel {
                     access_level: AccessLevel::View,
@@ -288,6 +290,16 @@ fn bot_actor_from_receipt_uses_canonical_principal() {
 struct MockService;
 
 impl ChannelService for MockService {
+    async fn set_channel_picture(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::AdminParticipantRole,
+        >,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -412,6 +424,16 @@ impl ChannelService for MockService {
 struct ErrorService;
 
 impl ChannelService for ErrorService {
+    async fn set_channel_picture(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::AdminParticipantRole,
+        >,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -471,6 +493,16 @@ impl ChannelService for ErrorService {
 struct ParticipantsService;
 
 impl ChannelService for ParticipantsService {
+    async fn set_channel_picture(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::AdminParticipantRole,
+        >,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -582,6 +614,16 @@ impl JoinLinkService {
 }
 
 impl ChannelService for JoinLinkService {
+    async fn set_channel_picture(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::AdminParticipantRole,
+        >,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -674,11 +716,24 @@ impl ChannelService for JoinLinkService {
 
 #[derive(Clone, Default)]
 struct RecordingMutationService {
+    pictures: Arc<Mutex<Vec<(String, Option<Uuid>)>>>,
     joins: Arc<Mutex<Vec<(Sender, Uuid)>>>,
     posts: Arc<Mutex<Vec<(Sender, Uuid, PostMessageRequest)>>>,
 }
 
 impl ChannelService for RecordingMutationService {
+    async fn set_channel_picture(
+        &self,
+        access: EntityAccessReceipt<AdminParticipantRole>,
+        picture_id: Option<Uuid>,
+    ) -> Result<(), ChannelMutationErr> {
+        self.pictures
+            .lock()
+            .unwrap()
+            .push((access.entity().entity_id.clone(), picture_id));
+        Ok(())
+    }
+
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -1657,6 +1712,16 @@ async fn participants_returns_500_on_service_error() {
 struct NotFoundService;
 
 impl ChannelService for NotFoundService {
+    async fn set_channel_picture(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::AdminParticipantRole,
+        >,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -1729,6 +1794,16 @@ struct AroundHasItemsService {
 }
 
 impl ChannelService for AroundHasItemsService {
+    async fn set_channel_picture(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::AdminParticipantRole,
+        >,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -1945,6 +2020,16 @@ impl CapturingService {
 }
 
 impl ChannelService for std::sync::Arc<CapturingService> {
+    async fn set_channel_picture(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::AdminParticipantRole,
+        >,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -2454,6 +2539,16 @@ struct ActivityService {
 }
 
 impl ChannelService for ActivityService {
+    async fn set_channel_picture(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::AdminParticipantRole,
+        >,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -2668,4 +2763,50 @@ async fn post_activity_rejects_invalid_channel_id() {
 
     let res = router.oneshot(request).await.unwrap();
     assert_eq!(res.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
+async fn picture_endpoint_requires_channel_admin_and_passes_the_verified_channel() {
+    for role in [
+        EntityParticipantRole::Member,
+        EntityParticipantRole::Admin,
+        EntityParticipantRole::Owner,
+    ] {
+        let service = RecordingMutationService::default();
+        let pictures = service.pictures.clone();
+        let mut access = TestAccessService::allow();
+        access.channel_role = role;
+        let app = channels_router(ChannelsRouterState::new(
+            service,
+            access,
+            authorization_state(),
+        ));
+        let channel_id = Uuid::new_v4();
+        let picture_id = Uuid::new_v4();
+        let response = app
+            .oneshot(
+                Request::put(format!("/{channel_id}/profile_picture"))
+                    .header(
+                        header::AUTHORIZATION,
+                        format!("Bearer {VALID_BEARER_TOKEN}"),
+                    )
+                    .header(header::CONTENT_TYPE, "application/json")
+                    .body(Body::from(
+                        serde_json::json!({"profile_picture_id": picture_id}).to_string(),
+                    ))
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        if role == EntityParticipantRole::Member {
+            assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+            assert!(pictures.lock().unwrap().is_empty());
+        } else {
+            assert_eq!(response.status(), StatusCode::NO_CONTENT);
+            assert_eq!(
+                *pictures.lock().unwrap(),
+                vec![(channel_id.to_string(), Some(picture_id))]
+            );
+        }
+    }
 }
