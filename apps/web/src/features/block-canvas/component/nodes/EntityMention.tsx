@@ -92,7 +92,7 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
 
   const blockId = useBlockId();
 
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   const [selfMouseDownPosition, setSelfMouseDownPosition] =
     createSignal<Vector2>();
@@ -184,10 +184,13 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
                 if (
                   matches(item(), (i) => !i.loading && i.access === 'access')
                 ) {
-                  replaceOrInsertSplit({
-                    type: blockName() as BlockName,
-                    id: props.node.file,
-                  });
+                  openWithSplit(
+                    {
+                      type: blockName() as BlockName,
+                      id: props.node.file,
+                    },
+                    { activate: true, preferNewSplit: e.shiftKey }
+                  );
                 }
               }}
             >

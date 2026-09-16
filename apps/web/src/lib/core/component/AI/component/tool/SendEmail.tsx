@@ -90,21 +90,24 @@ function DraftPreviewButton(props: {
   subject: string;
   threadId?: string;
 }) {
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
 
   return (
     <button
       class="text-ink text-xs border border-edge-muted rounded-xs hover:bg-hover flex flex-row h-6 px-2 justify-center items-center"
-      onClick={() =>
-        replaceOrInsertSplit({
-          ...(props.threadId
-            ? { type: 'email' as const, id: props.threadId }
-            : {
-                type: 'component' as const,
-                id: 'email-compose',
-                params: { draftID: props.draftId },
-              }),
-        })
+      onClick={(event) =>
+        openWithSplit(
+          {
+            ...(props.threadId
+              ? { type: 'email' as const, id: props.threadId }
+              : {
+                  type: 'component' as const,
+                  id: 'email-compose',
+                  params: { draftID: props.draftId },
+                }),
+          },
+          { activate: true, preferNewSplit: event.shiftKey }
+        )
       }
     >
       <div class="flex justify-start items-center size-3.5 mr-2">

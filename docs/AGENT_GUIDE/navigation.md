@@ -27,6 +27,12 @@
 Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
 (`/app/<left>/<right>`). Each pane has its own Close / Go Back / Go Forward buttons.
 
+Shift-click on content links requests a new split wherever splits are supported,
+including mentions, references, folder links, and list rows with a linked preview.
+Unmodified clicks keep each surface’s default (same split, preview, or new split).
+Existing-content deduplication and split-capacity limits still apply; touch devices
+continue to navigate in place.
+
 A block mounted in an inline preview cannot also open in a split. An attempt
 shows `Content already open.` and keeps the preview in place. Select another
 preview item or leave that view before opening the block in a split. Duplicate

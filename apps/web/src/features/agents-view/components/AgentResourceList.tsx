@@ -56,11 +56,14 @@ export function AgentResourceList(props: { page: 'routines' | 'skills' }) {
             <Button
               variant="ghost"
               class="h-12 w-full justify-start gap-3 rounded-xl px-3 font-normal"
-              onClick={() =>
-                layout.openWithSplit({
-                  type: props.page === 'routines' ? 'automation' : 'skill',
-                  id: item.id,
-                })
+              onClick={(event) =>
+                layout.openWithSplit(
+                  {
+                    type: props.page === 'routines' ? 'automation' : 'skill',
+                    id: item.id,
+                  },
+                  { preferNewSplit: event.shiftKey }
+                )
               }
             >
               <Dynamic

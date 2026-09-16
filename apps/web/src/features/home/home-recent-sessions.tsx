@@ -47,13 +47,13 @@ function RecentSessionsContent(props: { limit?: number }) {
   const sessions = useRecentChatSessions(props.limit);
   const splitPanel = useSplitPanel();
 
-  const openChat = (id: string) => {
-    if (splitPanel) {
+  const openChat = (id: string, event: MouseEvent) => {
+    if (splitPanel && !event.shiftKey) {
       splitPanel.handle.replace({ next: { type: 'chat', id } });
     } else {
       globalSplitManager()?.openWithSplit(
         { type: 'chat', id },
-        { activate: true }
+        { activate: true, preferNewSplit: event.shiftKey }
       );
     }
   };
@@ -70,7 +70,7 @@ function RecentSessionsContent(props: { limit?: number }) {
               <button
                 type="button"
                 class="group flex w-full items-center gap-3.5 rounded-xl border border-edge-muted bg-active px-4 py-3 text-left transition-colors hover:bg-hover"
-                onClick={() => openChat(session.id)}
+                onClick={(event) => openChat(session.id, event)}
               >
                 <ChatProviderIcon
                   id={session.id}

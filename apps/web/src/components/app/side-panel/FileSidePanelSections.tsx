@@ -128,8 +128,8 @@ function DetailsSectionContent() {
 }
 
 export function FolderLink(props: { projectId: string; projectName: string }) {
-  const open = createCallback((e: MouseEvent) => {
-    openDocument('project', props.projectId, undefined, !e.shiftKey);
+  const open = createCallback(() => {
+    openDocument('project', props.projectId, undefined, true);
   });
   const navHandlers = useSplitNavigationHandler<HTMLSpanElement>(open);
 

@@ -56,14 +56,14 @@ export type DriveViewProps = {
 
 function DriveFavorite(props: {
   favorite: Favorite;
-  onOpen: (favorite: Favorite) => void;
+  onOpen: (favorite: Favorite, event: MouseEvent) => void;
 }) {
   const name = useFavoriteDisplayName(props.favorite);
   return (
     <ViewSidebar.Item
       class="font-normal"
       title={name()}
-      onClick={() => props.onOpen(props.favorite)}
+      onClick={(event) => props.onOpen(props.favorite, event)}
     >
       <FavoriteIcon favorite={props.favorite} class="size-4 shrink-0" />
       <span class="truncate">{name()}</span>
@@ -246,11 +246,13 @@ export function DriveView(props: DriveViewProps) {
         {(favorite) => (
           <DriveFavorite
             favorite={favorite}
-            onOpen={(item) => {
-              if (item.entityType === 'project') selectFolder(item.entityId);
+            onOpen={(item, event) => {
+              if (item.entityType === 'project' && !event.shiftKey)
+                selectFolder(item.entityId);
               else
                 layout.openWithSplit(favoriteSplitContent(item), {
                   referredFrom: 'sidebar',
+                  preferNewSplit: event.shiftKey,
                 });
             }}
           />
