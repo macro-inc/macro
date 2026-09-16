@@ -161,6 +161,27 @@ fn removal_skips_the_removed_entry_at_dispatch() {
 }
 
 #[test]
+fn mark_announced_remembers_the_chip_on_the_waiting_entry() {
+    let queues = SessionQueues::new();
+    let session = AgentSessionId::TEST_A;
+    let first = prompt_entry("first");
+    let second = prompt_entry("second");
+    queues.enqueue(session, first.clone()).unwrap();
+    queues.enqueue(session, second.clone()).unwrap();
+
+    assert_eq!(queues.position(session, first.action_id), Some(0));
+    assert_eq!(queues.position(session, second.action_id), Some(1));
+
+    let chip = Uuid::from_u128(0xc1);
+    queues
+        .mark_announced(session, second.action_id, chip)
+        .unwrap();
+
+    assert_eq!(queues.claim_next(session).unwrap().announced, None);
+    assert_eq!(queues.claim_next(session).unwrap().announced, Some(chip));
+}
+
+#[test]
 fn a_requeued_entry_is_next_in_line() {
     let queues = SessionQueues::new();
     let session = AgentSessionId::TEST_A;

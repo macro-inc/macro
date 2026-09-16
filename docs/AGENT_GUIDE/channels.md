@@ -75,6 +75,10 @@ own time zone (their primary calendar's), so it resolves relative times ("tomorr
 bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+A follow-up sent while that session is still working stops the current turn,
+posts a new Magic Chip on the follow-up message, and steers the agent with
+that text — the chip appears at the follow-up, not after the cancelled turn
+finishes.
 The reply renders a Magic Chip: a rounded card of constant height that is present
 from the moment the session boots. Its header names the persona (`Macro Agent`,
 `Cursor Agent`), the model, and what the turn is doing (`Booting agent`, `Running

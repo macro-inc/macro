@@ -3,9 +3,11 @@
 //! Prompts (and compaction) occupy a whole agent turn, and ACP runs one turn
 //! at a time - so while a turn runs, further turn-occupying actions wait here
 //! rather than interleaving on the wire. Entries hold the *raw* user text:
-//! composition and announcement happen at dispatch, which is what makes a
-//! queued prompt editable and gives it fresh channel context when it actually
-//! runs.
+//! composition happens at dispatch, which is what makes a queued prompt
+//! editable and gives it fresh channel context when it actually runs. The
+//! chip is usually announced then too, except a channel follow-up that
+//! steers a running turn posts its chip when it is accepted so the reply
+//! sits on the follow-up rather than after the cancelled turn.
 //!
 //! In-memory on purpose. The queue lives beside the session's live actor on
 //! the replica that manages it, and dies with the process - a restart loses
@@ -185,6 +187,31 @@ impl SessionQueues {
         self.queues
             .get(&session)
             .is_some_and(|queue| queue.iter().any(|entry| entry.action_id == action_id))
+    }
+
+    /// How many entries sit ahead of this one, when it is still waiting.
+    #[must_use]
+    pub fn position(&self, session: AgentSessionId, action_id: AgentActionId) -> Option<usize> {
+        self.queues
+            .get(&session)
+            .and_then(|queue| queue.iter().position(|entry| entry.action_id == action_id))
+    }
+
+    /// Remember that this entry's chip has been posted, so dispatch does not
+    /// announce it a second time.
+    pub fn mark_announced(
+        &self,
+        session: AgentSessionId,
+        action_id: AgentActionId,
+        message_id: Uuid,
+    ) -> Result<(), QueueError> {
+        let mut queue = self.queues.get_mut(&session).ok_or(QueueError::NotFound)?;
+        let entry = queue
+            .iter_mut()
+            .find(|entry| entry.action_id == action_id)
+            .ok_or(QueueError::NotFound)?;
+        entry.announced = Some(message_id);
+        Ok(())
     }
 
     /// Replace a queued prompt's text. The entry keeps its place and its id.

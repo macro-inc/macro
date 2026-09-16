@@ -490,6 +490,10 @@ where
     /// necessarily: entries can linger from a drain that failed, and FIFO
     /// order holds regardless. The outcome reports what happened to *this*
     /// action - still waiting, or on the wire.
+    ///
+    /// A channel follow-up (`announce` set) that lands on a running turn
+    /// steers: the chip is posted on that follow-up immediately, and a stop
+    /// cancels the current turn so this prompt flushes next.
     pub(super) async fn enqueue_then_dispatch(
         &self,
         session_id: AgentSessionId,
@@ -501,6 +505,8 @@ where
             _ => None,
         };
         let actor = command.actor.clone();
+        let announce = command.announce.clone();
+        let action = command.action.clone();
         queue_result(
             self.queues.enqueue(
                 session_id,
@@ -518,8 +524,13 @@ where
         // Mentions are a fact about the prompt, not the turn: published as
         // soon as the prompt is accepted, whether it dispatches now or waits.
         if let Some(prompt) = prompt {
-            self.publish_mentions(session_id, action_id, actor, &prompt)
+            self.publish_mentions(session_id, action_id, actor.clone(), &prompt)
                 .await;
+        }
+
+        if announce.is_some() && self.busy.turn(session_id).is_some() {
+            self.steer_channel_follow_up(session_id, action_id, &action, actor.as_ref(), announce)
+                .await?;
         }
 
         let dispatched = if self.busy.is_pending(session_id) {
@@ -549,6 +560,70 @@ where
         } else {
             CommandOutcome::Completed
         })
+    }
+
+    /// Cancel a running turn and post the chip on the channel follow-up that
+    /// interrupted it, so the follow-up flushes as the next prompt.
+    ///
+    /// Stop is delivered first: the fold records it as its own control turn,
+    /// and the chip has to name the prompt turn that comes after that, not
+    /// the id the fold would have handed out before the cancel. A failed
+    /// cancel is best-effort — the prompt is already queued and still drains
+    /// when the current turn ends on its own.
+    async fn steer_channel_follow_up(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+        action: &AgentAction,
+        actor: Option<&MacroUserIdStr<'static>>,
+        announce: Option<AnnounceOrigin>,
+    ) -> Result<()> {
+        if let Err(error) = self
+            .deliver(
+                session_id,
+                DeliverAction {
+                    id: AgentActionId::mint(),
+                    action: AgentAction::Stop,
+                    actor: actor.cloned(),
+                    announce: None,
+                },
+            )
+            .await
+        {
+            tracing::warn!(
+                error = ?error,
+                %session_id,
+                "failed to stop the running turn for a channel follow-up"
+            );
+        }
+
+        let prompted_message_id = self.queued_prompt_message_id(session_id, action_id).await?;
+        let announcement = self
+            .announcement(session_id, action, actor, announce, prompted_message_id)
+            .await?;
+        if let Some(announcement) = announcement {
+            let announced = self.announcer.announce(announcement).await?;
+            queue_result(
+                self.queues
+                    .mark_announced(session_id, action_id, announced.message_id),
+                session_id,
+            )?;
+        }
+        Ok(())
+    }
+
+    /// The fold id this queued prompt will open, counting entries ahead of it
+    /// that have not opened a turn yet.
+    async fn queued_prompt_message_id(
+        &self,
+        session_id: AgentSessionId,
+        action_id: AgentActionId,
+    ) -> Result<MessageId> {
+        let mut prompted = self.sessions.next_prompt_message_id(session_id).await?;
+        if let Some(index) = self.queues.position(session_id, action_id) {
+            prompted.turn.0 = prompted.turn.0.saturating_add(index as u32);
+        }
+        Ok(prompted)
     }
 
     /// Push the queue as it now stands to the session's viewers.
