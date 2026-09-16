@@ -50,6 +50,7 @@ import FilterIcon from '@phosphor/funnel-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
+import { TagSetsProvider } from '@property/tags/tag-sets-context';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import { useProjectsQuery } from '@queries/storage/projects';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -452,9 +453,11 @@ function DriveViewContent(props: DriveViewProps) {
         favorites={Favorites}
         detail={
           navigationStack.active() ? (
-            <DriveDetailView
-              breadcrumbOrderOffset={locationBreadcrumbs().length}
-            />
+            <TagSetsProvider tagSets={view.tagFilter.tagSets}>
+              <DriveDetailView
+                breadcrumbOrderOffset={locationBreadcrumbs().length}
+              />
+            </TagSetsProvider>
           ) : undefined
         }
       >
