@@ -146,6 +146,7 @@ export function useCallRecordQuery(callId: Accessor<string>) {
     // primed record from triggering an immediate duplicate fetch on mount.
     // Mutations still invalidate, so sharing edits stay reactive.
     staleTime: 60_000,
+    enabled: callId().length > 0,
   }));
 }
 
@@ -177,22 +178,22 @@ export function buildCallTeamSharePayload(
 }
 
 export function setCallRecordTeamShareCache(callId: string, shared: boolean) {
-  queryClient.setQueryData<CallRecord>(
-    callKeys.record(callId).queryKey,
-    (prev) => {
-      if (!prev) return prev;
-      return {
-        ...prev,
-        shareWithTeam: shared,
-        // A live call has no canonical level until it is archived.
-        teamShareAccessLevel: prev.isActive
-          ? prev.teamShareAccessLevel
-          : shared
-            ? 'view'
-            : null,
-      };
-    }
-  );
+  const queryKey = callKeys.record(callId).queryKey;
+  // Drop in-flight GETs so a slower record response cannot overwrite this write.
+  void queryClient.cancelQueries({ queryKey });
+  queryClient.setQueryData<CallRecord>(queryKey, (prev) => {
+    if (!prev) return prev;
+    return {
+      ...prev,
+      shareWithTeam: shared,
+      // A live call has no canonical level until it is archived.
+      teamShareAccessLevel: prev.isActive
+        ? prev.teamShareAccessLevel
+        : shared
+          ? 'view'
+          : null,
+    };
+  });
 }
 
 function invalidateCallRecord(callId: string) {

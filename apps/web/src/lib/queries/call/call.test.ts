@@ -191,4 +191,33 @@ describe('call team sharing helpers', () => {
       queryClient.getQueryData(callKeys.record('missing').queryKey)
     ).toBeUndefined();
   });
+
+  it('setCallRecordTeamShareCache drops a late record fetch', async () => {
+    const key = callKeys.record('call-live').queryKey;
+    queryClient.setQueryData(
+      key,
+      record({ callId: 'call-live', isActive: true, shareWithTeam: false })
+    );
+
+    let resolveFetch: (value: CallRecord) => void = () => {};
+    const pending = new Promise<CallRecord>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetchResult = queryClient.fetchQuery({
+      queryKey: key,
+      staleTime: 0,
+      retry: false,
+      queryFn: () => pending,
+    });
+
+    setCallRecordTeamShareCache('call-live', true);
+    resolveFetch(
+      record({ callId: 'call-live', isActive: true, shareWithTeam: false })
+    );
+    await fetchResult.catch(() => undefined);
+
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      shareWithTeam: true,
+    });
+  });
 });
