@@ -190,7 +190,14 @@ fn local_proxy_uses_tls_and_wildcard_cors() {
     assert!(local.contains("@cors header Origin *"));
     assert!(local.contains("@cors_preflight"));
     assert!(local.contains("Access-Control-Allow-Origin \"{http.request.header.Origin}\""));
-    assert!(local.contains("-Access-Control-Allow-Origin"));
+    assert!(
+        local.contains("defer"),
+        "CORS overlay must defer so reverse_proxy cannot overwrite the reflected Origin"
+    );
+    assert!(
+        !local.contains("-Access-Control-Allow-Origin"),
+        "deferred -Access-Control-* deletes strip the CORS headers this overlay sets"
+    );
 
     let dev = caddyfile(Mode::Dev, false);
     assert!(dev.contains("tls /etc/caddy/certs/localhost.pem /etc/caddy/certs/localhost-key.pem"));
