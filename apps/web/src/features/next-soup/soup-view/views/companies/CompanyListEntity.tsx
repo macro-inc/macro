@@ -67,6 +67,7 @@ export function CompanyListEntity(props: BaseListEntityProps) {
   const draggable = createEntityDraggable({
     entity: props.entity,
     splitId: useSplitPanel()?.handle?.id,
+    deferUntilInteraction: () => props.deferInteractions === true,
   });
 
   const isWide = useListLayout()?.isWide ?? (() => true);

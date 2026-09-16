@@ -79,6 +79,14 @@ Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
 with regular-weight labels and consistent icon spacing.
 
+## List-row dragging
+
+GraphQL-backed Soup rows initialize dragging on the first primary-button press;
+a preparatory hover is not required. REST-backed rows retain eager registration.
+Verify first-press dragging after navigation as well as ordinary row clicks and
+right-click menus. A completed drop can move or copy real data; use a disposable
+test item when verifying drop actions.
+
 ## Favorites
 
 Use an entity's command/context menu to add or remove it from Favorites; drag rows
