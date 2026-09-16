@@ -157,6 +157,10 @@ where
             };
         }
         let defaults = self.inner.defaults.for_bot(bot_id);
+        // A Codex cloud session clones nothing here: it works in its cloud
+        // environment's own checkout, so this deployment's repository URL is
+        // neither stored on the row nor validated at provisioning.
+        let repo_url = (kind != AgentKind::CodexCloud).then(|| defaults.repo_url.clone());
         let sandbox_size = self
             .inner
             .sessions
@@ -169,7 +173,12 @@ where
         let egress = self
             .inner
             .egress
-            .provision(session_id, &request.owner, &defaults.repo_url, &mcp_servers)
+            .provision(
+                session_id,
+                &request.owner,
+                repo_url.as_deref(),
+                &mcp_servers,
+            )
             .await
             .map_err(into_session_error)?;
         let session = self
@@ -183,7 +192,7 @@ where
                 originating_message_id: None,
                 model,
                 harness,
-                repo_url: (kind != AgentKind::CodexCloud).then(|| defaults.repo_url.clone()),
+                repo_url,
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,
@@ -331,7 +340,9 @@ where
         } = command;
         tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
         let defaults = self.defaults.for_bot(bot_id);
-        let repo_url = defaults.repo_url.clone();
+        // See the request path: a Codex cloud session has no repository URL
+        // of this deployment's to clone, store, or validate.
+        let repo_url = (runtime.kind != AgentKind::CodexCloud).then(|| defaults.repo_url.clone());
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
 
         // Provisioned before the session exists, because the row is what makes
@@ -341,7 +352,12 @@ where
         // credentials, so there is nowhere else it could correctly come from.
         let egress = self
             .egress
-            .provision(session_id, &origin.sender, &repo_url, &runtime.mcp_servers)
+            .provision(
+                session_id,
+                &origin.sender,
+                repo_url.as_deref(),
+                &runtime.mcp_servers,
+            )
             .await?;
 
         let session = self
@@ -354,7 +370,7 @@ where
                 originating_message_id: Some(origin.message_id),
                 model: runtime.model.clone(),
                 harness: runtime.harness.clone(),
-                repo_url: (runtime.kind != AgentKind::CodexCloud).then(|| repo_url.clone()),
+                repo_url,
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
                 sandbox_size,

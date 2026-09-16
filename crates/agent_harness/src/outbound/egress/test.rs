@@ -97,7 +97,7 @@ async fn lists_enabled_app_slugs_verbatim() {
         .provision(
             AgentSessionId::new(),
             &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            "https://github.com/macro-inc/macro",
+            Some("https://github.com/macro-inc/macro"),
             &AgentMcpServers::OwnerConnections,
         )
         .await
@@ -110,6 +110,30 @@ async fn lists_enabled_app_slugs_verbatim() {
         .map(ToString::to_string)
         .collect();
     assert_eq!(slugs, ["linear", "google_sheets"]);
+}
+
+/// A session that clones nothing from this deployment provisions without a
+/// repository URL: a Codex cloud session works in its cloud environment's own
+/// checkout, and there is no configured URL to hold it to.
+#[tokio::test]
+async fn provisions_a_session_that_has_no_repository_url() {
+    let provisioner = EgressProvisioner::new(
+        Arc::new(FixedConnections(vec![connection("linear", true)])),
+        "https://egress.macro.com",
+    );
+
+    let provisioned = provisioner
+        .provision(
+            AgentSessionId::new(),
+            &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
+            None,
+            &selected(&[]),
+        )
+        .await
+        .expect("provisioned");
+
+    assert!(provisioned.sandbox.mcp_servers.is_empty());
+    assert!(!provisioned.session_token_hash.is_empty());
 }
 
 /// `restore` rebuilds the same environment around a token that already
@@ -169,7 +193,7 @@ async fn a_selected_list_is_advertised_regardless_of_connections() {
         .provision(
             AgentSessionId::new(),
             &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            "https://github.com/macro-inc/macro",
+            Some("https://github.com/macro-inc/macro"),
             &selected(&["notion", "linear", "Not A Slug!"]),
         )
         .await
@@ -212,7 +236,7 @@ async fn an_empty_selection_offers_nothing_of_the_owners() {
         .provision(
             AgentSessionId::new(),
             &MacroUserIdStr::try_from_email("owner@example.com").expect("a valid user id"),
-            "https://github.com/macro-inc/macro",
+            Some("https://github.com/macro-inc/macro"),
             &selected(&[]),
         )
         .await

@@ -11,7 +11,7 @@ use crate::domain::ports::SandboxEgressProvisioner;
 
 /// One recorded provisioning: session, owner, repository URL, and the MCP
 /// selection it was asked to advertise.
-pub type RecordedProvisioning = (AgentSessionId, String, String, AgentMcpServers);
+pub type RecordedProvisioning = (AgentSessionId, String, Option<String>, AgentMcpServers);
 
 /// A [`SandboxEgressProvisioner`] that records who it was asked for and hands
 /// back a fixed environment. Cloning shares one record.
@@ -43,7 +43,7 @@ impl SandboxEgressProvisioner for EgressProvisionerMock {
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
-        repo_url: &str,
+        repo_url: Option<&str>,
         selection: &AgentMcpServers,
     ) -> Result<ProvisionedEgress> {
         self.provisioned
@@ -52,7 +52,7 @@ impl SandboxEgressProvisioner for EgressProvisionerMock {
             .push((
                 session,
                 owner.to_string(),
-                repo_url.to_owned(),
+                repo_url.map(str::to_owned),
                 selection.clone(),
             ));
 
