@@ -1,6 +1,6 @@
 import { useEntityDetailNavigationStack } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list-navigation-hotkeys';
-import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
@@ -176,7 +176,7 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
       />
       <SidePanel.Root defaultOpen={false}>
         <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <div class="flex h-12 min-w-0 shrink-0 items-center gap-1 border-edge border-b px-3">
+          <ViewShell.TopBar class="touch:flex">
             <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
             <ViewBreadcrumbs.Outlet
               class="flex-1"
@@ -192,7 +192,7 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
               </Show>
               <SidePanel.Toggle />
             </div>
-          </div>
+          </ViewShell.TopBar>
           <div
             ref={container}
             class="relative min-h-0 min-w-0 flex-1"

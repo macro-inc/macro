@@ -50,7 +50,7 @@ export function EmailViewBreadcrumbItem() {
 
 export function EmailTopBar() {
   return (
-    <ViewShell.TopBar class="px-3">
+    <ViewShell.TopBar>
       <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
       <ViewBreadcrumbs.Outlet class="flex-1" aria-label="Email location" />
     </ViewShell.TopBar>
