@@ -15,22 +15,9 @@ import {
 import type { Accessor } from 'solid-js';
 
 function channelThreadNotificationIds(
-  notifications: UnifiedNotification[],
-  threadId?: string
+  notifications: UnifiedNotification[]
 ): Set<string> {
   const ids = new Set<string>();
-
-  if (threadId !== undefined) {
-    for (const notification of notifications) {
-      const metadata = notification.notification_metadata;
-      const belongsToThread =
-        metadata.tag === 'channel_message_send'
-          ? metadata.content.messageId === threadId
-          : channelThreadRootId(notification) === threadId;
-      if (belongsToThread) ids.add(notification.id);
-    }
-    return ids;
-  }
 
   // Match channel stacking's membership rules without constructing or sorting
   // display stacks. Inbox predicates call this for every channel in the list.
@@ -96,10 +83,15 @@ export function scopeChannelNotificationsForEntity(
     );
   }
   if (entity.type === 'channel_thread') {
-    const threadIds = channelThreadNotificationIds(
-      notifications,
-      entity.messageId
-    );
+    const threadIds = new Set<string>();
+    for (const notification of notifications) {
+      const metadata = notification.notification_metadata;
+      const belongsToThread =
+        metadata.tag === 'channel_message_send'
+          ? metadata.content.messageId === entity.messageId
+          : channelThreadRootId(notification) === entity.messageId;
+      if (belongsToThread) threadIds.add(notification.id);
+    }
     return notifications.filter((notification) =>
       threadIds.has(notification.id)
     );
