@@ -590,7 +590,8 @@ registerComponent(
         initialCrmView={initialCrmView}
       />
     );
-  })
+  }),
+  { splitPanelLayout: 'composable' }
 );
 
 registerComponent(

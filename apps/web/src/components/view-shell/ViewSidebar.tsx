@@ -90,8 +90,8 @@ function Item(props: NavRowProps) {
       active={local.active}
       aria-current={ariaCurrent()}
       class={cn(
-        'h-8 gap-2 rounded-xl border-0 px-2.5 py-0 text-sm font-normal text-ink-muted transition-none not-disabled:hover:bg-hover not-disabled:hover:text-ink touch:h-11',
-        local.active && 'bg-active text-ink not-disabled:hover:bg-active',
+        'h-8 gap-2 rounded-xl border-0 px-2.5 py-0 text-sm font-normal transition-none touch:h-11',
+        !local.active && 'text-ink-muted',
         local.class
       )}
     />

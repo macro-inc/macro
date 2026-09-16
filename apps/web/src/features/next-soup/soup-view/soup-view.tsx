@@ -67,6 +67,7 @@ import { useDealStages } from '@companies/crm/deal-stages';
 import { CrmStageIcon } from '@companies/crm/StageIcon';
 import type { CrmViewConfig } from '@companies/crm/saved-views';
 import { useCrmUnavailable } from '@companies/crm/team-crm-config';
+import { CrmWorkspace } from '@companies/views/CrmWorkspace';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
@@ -583,174 +584,176 @@ export const SoupView = (props: SoupViewProps) => {
     },
   });
 
-  return (
+  const content = (onOpenEntity?: (entity: EntityData) => boolean) => (
     <div
       class="size-full flex flex-col @container"
       data-list-view={activeListView()}
     >
-      <div class="flex flex-col w-full">
-        <SplitHeaderLeft>
-          <div
-            class={cn(
-              'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
-              {
-                'shrink-0': !isTouchDevice() && !narrowSearchExpanded(),
-                'flex-1 min-w-0': !isTouchDevice() && narrowSearchExpanded(),
-                'w-full flex-1 min-w-0': isTouchDevice(),
-              }
-            )}
-          >
-            {/* On mobile/tablet the header strip hosts the filter pills instead of
+      <Show when={!isComponentListView('companies')}>
+        <div class="flex flex-col w-full">
+          <SplitHeaderLeft>
+            <div
+              class={cn(
+                'h-full flex gap-3 @max-[380px]/split-header:gap-2 items-center',
+                {
+                  'shrink-0': !isTouchDevice() && !narrowSearchExpanded(),
+                  'flex-1 min-w-0': !isTouchDevice() && narrowSearchExpanded(),
+                  'w-full flex-1 min-w-0': isTouchDevice(),
+                }
+              )}
+            >
+              {/* On mobile/tablet the header strip hosts the filter pills instead of
                 the view title (the bottom accessory region now belongs to the
                 global views row). */}
-            <Show when={isTouchDevice()}>
-              <MobileSoupViewTabs />
-            </Show>
-            <Show when={!isTouchDevice() && !narrowSearchExpanded()}>
-              <div class="flex items-center gap-1">
-                <span class="text-sm font-semibold">{props.viewName}</span>
-                <Show when={docsUrl()}>
-                  {(url) => (
-                    <Button
-                      variant="ghost"
-                      class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
-                      label="View documentation"
-                      onClick={() => openExternalUrl(url())}
-                    >
-                      <InfoIcon class="size-3.5" />
-                    </Button>
-                  )}
-                </Show>
-              </div>
-            </Show>
-            <Show
-              when={!narrowSearchExpanded() && !isComponentListView('search')}
-            >
-              <Show when={!isTouchDevice()}>
-                <CollapsibleHeaderItem
-                  id="tabs"
-                  priority={1}
-                  containerClass="h-full"
-                >
-                  {(isCollapsed) => (
-                    <Show
-                      when={!isCollapsed()}
-                      fallback={props.customTabs ?? <CollapsedSoupViewTabs />}
-                    >
-                      {props.customTabs ?? <SoupViewTabs />}
-                    </Show>
-                  )}
-                </CollapsibleHeaderItem>
+              <Show when={isTouchDevice()}>
+                <MobileSoupViewTabs />
               </Show>
-            </Show>
-            <Show
-              when={
-                !isTouchDevice() &&
-                !narrowSearchExpanded() &&
-                isComponentListView('mail')
-              }
-            >
-              <InboxSelector />
-            </Show>
-          </div>
-        </SplitHeaderLeft>
-        <Show when={!isTouchDevice()}>
-          <SplitHeaderRight>
-            <Show
-              when={
-                !narrowSearchExpanded() &&
-                !isComponentListView('search') &&
-                props.showCreateButton !== false
-              }
-            >
-              <SoupViewCreateButton />
-            </Show>
-            <Show when={narrowSearchExpanded()}>
-              <Layer depth={2}>
-                <div class="flex-1 min-w-0">
-                  <SoupSearchbar
-                    variant="secondary"
-                    autoFocus
-                    initialValue={props.initialSearchText}
-                    onDismiss={() => setNarrowSearchExpanded(false)}
-                  />
+              <Show when={!isTouchDevice() && !narrowSearchExpanded()}>
+                <div class="flex items-center gap-1">
+                  <span class="text-sm font-semibold">{props.viewName}</span>
+                  <Show when={docsUrl()}>
+                    {(url) => (
+                      <Button
+                        variant="ghost"
+                        class="p-0.5 rounded-sm text-ink-extra-muted hover:text-ink-muted @max-[380px]/split-header:hidden"
+                        label="View documentation"
+                        onClick={() => openExternalUrl(url())}
+                      >
+                        <InfoIcon class="size-3.5" />
+                      </Button>
+                    )}
+                  </Show>
                 </div>
-              </Layer>
-            </Show>
-            <Show
-              when={!isComponentListView('search')}
-              fallback={
-                <>
-                  <Layer depth={2}>
-                    <div class="grow ml-2 min-w-0 [contain:inline-size]">
-                      <SoupSearchbar
-                        variant="secondary"
-                        placeholder="Search, @mention contacts"
-                        initialValue={props.initialSearchText}
-                      />
-                    </div>
-                  </Layer>
-                  <SearchAskAiButton />
-                </>
-              }
-            >
-              <Show when={!narrowSearchExpanded()}>
-                <CollapsibleHeaderItem
-                  id="search"
-                  priority={0}
-                  onCollapsedChange={(isCollapsed) => {
-                    setSearchIsCollapsed(isCollapsed);
-                    if (!isCollapsed) setNarrowSearchExpanded(false);
-                  }}
-                >
-                  {(isCollapsed) => (
-                    <Show
-                      when={!isCollapsed()}
-                      fallback={
-                        <Tooltip label="Search" hotkey={TOKENS.soup.openSearch}>
-                          <Button
-                            variant="outline"
-                            class="p-1 size-7 rounded-lg ml-2 bg-surface"
-                            onClick={() => setNarrowSearchExpanded(true)}
-                            depth={2}
-                          >
-                            <SearchIcon class="size-4 touch:size-6" />
-                          </Button>
-                        </Tooltip>
-                      }
-                    >
-                      <Layer depth={2}>
-                        <div class="w-60 ml-2">
-                          <SoupSearchbar
-                            variant="secondary"
-                            initialValue={props.initialSearchText}
-                          />
-                        </div>
-                      </Layer>
-                    </Show>
-                  )}
-                </CollapsibleHeaderItem>
               </Show>
-            </Show>
-          </SplitHeaderRight>
-        </Show>
-      </div>
-      <SoupFiltersBar
-        variant={props.filterBarVariant}
-        hasPreviewItems={hasPreviewItems()}
-        onPreviewEngage={openFocusedEntityInPreview}
-        onPreviewOpenChange={(open) => {
-          if (DEFAULT_PREVIEW_VIEWS.has(contentId))
-            setPreviewOpenPreference(open);
-        }}
-      />
+              <Show
+                when={!narrowSearchExpanded() && !isComponentListView('search')}
+              >
+                <Show when={!isTouchDevice()}>
+                  <CollapsibleHeaderItem
+                    id="tabs"
+                    priority={1}
+                    containerClass="h-full"
+                  >
+                    {(isCollapsed) => (
+                      <Show
+                        when={!isCollapsed()}
+                        fallback={props.customTabs ?? <CollapsedSoupViewTabs />}
+                      >
+                        {props.customTabs ?? <SoupViewTabs />}
+                      </Show>
+                    )}
+                  </CollapsibleHeaderItem>
+                </Show>
+              </Show>
+              <Show
+                when={
+                  !isTouchDevice() &&
+                  !narrowSearchExpanded() &&
+                  isComponentListView('mail')
+                }
+              >
+                <InboxSelector />
+              </Show>
+            </div>
+          </SplitHeaderLeft>
+          <Show when={!isTouchDevice()}>
+            <SplitHeaderRight>
+              <Show
+                when={
+                  !narrowSearchExpanded() &&
+                  !isComponentListView('search') &&
+                  props.showCreateButton !== false
+                }
+              >
+                <SoupViewCreateButton />
+              </Show>
+              <Show when={narrowSearchExpanded()}>
+                <Layer depth={2}>
+                  <div class="flex-1 min-w-0">
+                    <SoupSearchbar
+                      variant="secondary"
+                      autoFocus
+                      initialValue={props.initialSearchText}
+                      onDismiss={() => setNarrowSearchExpanded(false)}
+                    />
+                  </div>
+                </Layer>
+              </Show>
+              <Show
+                when={!isComponentListView('search')}
+                fallback={
+                  <>
+                    <Layer depth={2}>
+                      <div class="grow ml-2 min-w-0 [contain:inline-size]">
+                        <SoupSearchbar
+                          variant="secondary"
+                          placeholder="Search, @mention contacts"
+                          initialValue={props.initialSearchText}
+                        />
+                      </div>
+                    </Layer>
+                    <SearchAskAiButton />
+                  </>
+                }
+              >
+                <Show when={!narrowSearchExpanded()}>
+                  <CollapsibleHeaderItem
+                    id="search"
+                    priority={0}
+                    onCollapsedChange={(isCollapsed) => {
+                      setSearchIsCollapsed(isCollapsed);
+                      if (!isCollapsed) setNarrowSearchExpanded(false);
+                    }}
+                  >
+                    {(isCollapsed) => (
+                      <Show
+                        when={!isCollapsed()}
+                        fallback={
+                          <Tooltip
+                            label="Search"
+                            hotkey={TOKENS.soup.openSearch}
+                          >
+                            <Button
+                              variant="outline"
+                              class="p-1 size-7 rounded-lg ml-2 bg-surface"
+                              onClick={() => setNarrowSearchExpanded(true)}
+                              depth={2}
+                            >
+                              <SearchIcon class="size-4 touch:size-6" />
+                            </Button>
+                          </Tooltip>
+                        }
+                      >
+                        <Layer depth={2}>
+                          <div class="w-60 ml-2">
+                            <SoupSearchbar
+                              variant="secondary"
+                              initialValue={props.initialSearchText}
+                            />
+                          </div>
+                        </Layer>
+                      </Show>
+                    )}
+                  </CollapsibleHeaderItem>
+                </Show>
+              </Show>
+            </SplitHeaderRight>
+          </Show>
+        </div>
+        <SoupFiltersBar
+          variant={props.filterBarVariant}
+          hasPreviewItems={hasPreviewItems()}
+          onPreviewEngage={openFocusedEntityInPreview}
+          onPreviewOpenChange={(open) => {
+            if (DEFAULT_PREVIEW_VIEWS.has(contentId))
+              setPreviewOpenPreference(open);
+          }}
+        />
+      </Show>
       <Show when={soupView.source.cachedMail?.()}>
         <p role="status" class="px-4 py-1 text-xs text-ink-muted">
           Showing cached mail. Only synchronized messages are available.
         </p>
-      </Show>
-      <Show when={applyDefaultCrmView}>
-        <CrmDefaultViewLoader />
       </Show>
       <div class="relative grow min-h-1 flex max-sm:flex-col flex-row size-full">
         <Suspense>
@@ -758,11 +761,11 @@ export const SoupView = (props: SoupViewProps) => {
             when={!isBoardMode()}
             fallback={
               <MaybeSoupEntityActionDrawerManager>
-                <CompanyKanban />
+                <CompanyKanban onOpenEntity={onOpenEntity} />
               </MaybeSoupEntityActionDrawerManager>
             }
           >
-            <SoupViewList />
+            <SoupViewList onOpenEntity={onOpenEntity} />
           </Show>
         </Suspense>
       </div>
@@ -788,9 +791,21 @@ export const SoupView = (props: SoupViewProps) => {
       </Suspense>
     </div>
   );
+  return (
+    <>
+      <Show when={applyDefaultCrmView}>
+        <CrmDefaultViewLoader />
+      </Show>
+      <Show when={isComponentListView('companies')} fallback={content()}>
+        <CrmWorkspace>{(onOpenEntity) => content(onOpenEntity)}</CrmWorkspace>
+      </Show>
+    </>
+  );
 };
 
 interface SoupViewListProps {
+  /** Return true when the host handles ordinary activation in its own detail view. */
+  onOpenEntity?: (entity: EntityData) => boolean;
   emptyState?: () => JSX.Element;
   timestamp?: (entity: EntityData) => DateValue | null | undefined;
   navigationKey?: string;
@@ -812,6 +827,7 @@ export const SoupViewList = (props: SoupViewListProps) => (
       customScrollbarHidden={props.customScrollbarHidden}
       scopeId={props.scopeId}
       onOpenProject={props.onOpenProject}
+      onOpenEntity={props.onOpenEntity}
       uploadProjectId={props.uploadProjectId}
       disableTabHotkeys={props.disableTabHotkeys}
       timestamp={props.timestamp}
@@ -1003,6 +1019,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     applyTabPreset,
     fetchNextGroupPage,
     onOpenProject: props.onOpenProject,
+    onOpenEntity: props.onOpenEntity,
     disableTabHotkeys: props.disableTabHotkeys,
   });
 
@@ -1055,6 +1072,15 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     }
 
     markReminderSeenOnOpen(entity, notificationSource);
+
+    if (
+      !event.metaKey &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey &&
+      props.onOpenEntity?.(entity)
+    )
+      return;
 
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {

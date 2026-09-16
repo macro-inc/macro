@@ -282,7 +282,10 @@ export const createSearchState = ({
           include_crm: true,
           filters: {
             ...baseFilters,
-            crm_company_filters: { hidden: state.include.crmCompanyHidden },
+            crm_company_filters: {
+              company_ids: state.include.crmCompanyId,
+              hidden: state.include.crmCompanyHidden,
+            },
           },
         }
       : {
