@@ -272,6 +272,12 @@ only when their card opens; syntax highlighting may appear after the diff text.
 Opening a session or expanding a group should leave the app responsive, even
 when the session contains many file edits.
 
+A thought row reads **Thinking** and shimmers only while it is the last part
+of an open turn. Earlier thoughts settle to **Thought** as soon as a tool or
+answer follows, including during long Cursor turns. A trailing thought stays
+outside the tool group so the live reasoning row stays visible. Do not wait
+for every Thinking label to disappear — only the tail one is in flight.
+
 ### Sharing a session
 
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;

@@ -92,8 +92,10 @@ vi.mock('../../ui', () => ({
   FoldedPathList: (props: { paths: string[] }) => (
     <div data-testid="path-list">{props.paths.join(',')}</div>
   ),
-  Thought: (props: { text: string }) => (
-    <div data-testid="thought">{props.text}</div>
+  Thought: (props: { text: string; active?: boolean }) => (
+    <div data-active={String(props.active ?? false)} data-testid="thought">
+      {props.text}
+    </div>
   ),
 }));
 
@@ -568,6 +570,50 @@ describe('ToolCallPart subagents', () => {
     expect(rendered.getByTestId('body').textContent).toContain(
       'Run python and report the output.'
     );
+  });
+
+  it('shimmers only a trailing child thought while the subagent is live', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'subagent',
+            title: 'Add 5+5 with Python',
+            agentType: 'general-purpose',
+            description: 'Add 5+5 with Python',
+            prompt: 'Run python and report the output.',
+            background: false,
+            children: [
+              { kind: 'thought', text: 'already decided' },
+              toolUse(
+                {
+                  kind: 'terminal',
+                  command: 'python3 -c "print(5+5)"',
+                  output: '10',
+                  exitCode: 0,
+                },
+                { id: 'child', name: 'Bash' }
+              ),
+              { kind: 'thought', text: 'still weighing this' },
+            ],
+            result: null,
+          },
+          { name: 'Agent', status: 'running' }
+        )}
+        context={{
+          sessionId: 'session',
+          messageId: 'session:0:agent',
+          partIndex: 0,
+          inFlight: true,
+        }}
+      />
+    ));
+    const rows = rendered.getAllByTestId('thought');
+    expect(rows.map((el) => el.textContent)).toEqual([
+      'already decided',
+      'still weighing this',
+    ]);
+    expect(rows.map((el) => el.dataset.active)).toEqual(['false', 'true']);
   });
 
   it('shows a failed subagent faded with its error', () => {
