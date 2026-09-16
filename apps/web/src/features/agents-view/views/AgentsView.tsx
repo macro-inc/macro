@@ -1,11 +1,8 @@
 import { ViewShell } from '@app/components/view-shell';
-import { startPendingSession } from '@app/features/block-agent/context/pending-session';
-import { AgentInput } from '@app/features/block-agent/ui';
-import { HomeChatInput } from '@app/features/home/home';
+import { HomeChatInput } from '@app/features/home/home-chat-input';
 import { QUERY_FILTERS_BASE } from '@app/features/next-soup/filters/query-filters';
 import { Agents } from '@app/features/settings/Agents';
 import { McpConnections } from '@app/features/settings/McpConnections';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -13,7 +10,6 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
@@ -58,8 +54,6 @@ function AgentsWorkspace() {
 
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
-
-  const agentsFlag = useFeatureFlag(enableChatV3Agents);
 
   const [page, setPage] = createSignal<AgentsPage>('new');
   const [selected, setSelected] = createSignal<SelectedConversation>();
@@ -117,11 +111,6 @@ function AgentsWorkspace() {
       conversation: { id: conversation.id, type: conversation.type },
       activeConversationId: conversation.id,
     });
-  };
-
-  const startSession = (prompt: string) => {
-    const id = startPendingSession({ prompt });
-    openConversation({ id, type: 'agent_session' });
   };
 
   const adoptSessionId = (placeholderId: string, sessionId: string) => {
@@ -186,25 +175,17 @@ function AgentsWorkspace() {
                     <Suspense fallback={<LoadingComposer />}>
                       <Switch>
                         <Match when={page() === 'new'}>
-                          <div class="flex size-full items-center justify-center px-6 pb-16">
-                            <div class="w-full max-w-2xl">
-                              <Switch>
-                                <Match when={agentsFlag().loading}>
-                                  <LoadingComposer />
-                                </Match>
-                                <Match when={agentsFlag().enabled}>
-                                  <AgentInput
-                                    autofocus
-                                    placeholder="Message the agent, @mention anything"
-                                    onSend={startSession}
-                                  />
-                                </Match>
-                                <Match when={true}>
-                                  <ChatInputProvider>
-                                    <HomeChatInput />
-                                  </ChatInputProvider>
-                                </Match>
-                              </Switch>
+                          {/* The home composer, at home's width, so the box
+                              matches the chat that opens once you send. */}
+                          <div class="flex size-full items-center justify-center px-4 pb-16">
+                            <div class="w-full max-w-3xl">
+                              <ChatInputProvider>
+                                <HomeChatInput
+                                  openChat={(id) =>
+                                    openConversation({ id, type: 'chat' })
+                                  }
+                                />
+                              </ChatInputProvider>
                             </div>
                           </div>
                         </Match>

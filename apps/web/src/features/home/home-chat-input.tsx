@@ -23,6 +23,12 @@ export const HomeChatInput = (props: {
   class?: string;
   placeholder?: string;
   autoFocusOnMount?: boolean;
+  /**
+   * Where a newly created chat opens. By default the composer's split is
+   * replaced with the chat block; a host that keeps its own chrome around
+   * the conversation (the Agents view and its sidebar) opens it in place.
+   */
+  openChat?: (chatId: string) => void;
 }) => {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
@@ -117,10 +123,14 @@ export const HomeChatInput = (props: {
         model: request.model,
       });
 
-      // Replace the soup split with the chat split
-      splitPanelContext.handle.replace({
-        next: { type: 'chat', id: chatId },
-      });
+      if (props.openChat) {
+        props.openChat(chatId);
+      } else {
+        // Replace the soup split with the chat split
+        splitPanelContext.handle.replace({
+          next: { type: 'chat', id: chatId },
+        });
+      }
     }
   };
 
