@@ -57,17 +57,18 @@ fn call_entity(call_id: &Uuid) -> Entity<'static> {
     EntityType::Call.with_entity_string(call_id.to_string())
 }
 
-/// A pre-canonical direct View grant for the creator's team that canonical
-/// sharing never touched: what the previous archive code and `shareWithTeam`
-/// edits wrote. Adopting it lets the creator's next edit succeed instead of
-/// conflicting with an untracked grant. Grants at any other level are not
-/// adopted (calls only share at View) and keep conflicting.
+/// A direct View grant for the creator's team beside NULL canonical state.
+/// That is what the previous archive code and `shareWithTeam` edits wrote,
+/// including an old writer that re-inserted the row after a canonical clear.
+/// Adopting it lets the creator's next edit succeed instead of conflicting
+/// with an untracked grant. Grants at any other level are not adopted (calls
+/// only share at View) and keep conflicting.
 async fn legacy_view_grant(
     transaction: &mut Transaction<'_, Postgres>,
     call_id: &Uuid,
     facts: &TeamShareFacts,
 ) -> Result<Option<TeamShareGrant>, CallError> {
-    if facts.current.is_some() || facts.revision != 0 {
+    if facts.current.is_some() {
         return Ok(None);
     }
     let Some(team_id) = facts.owner_team_id else {

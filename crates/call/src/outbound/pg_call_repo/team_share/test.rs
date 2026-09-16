@@ -270,6 +270,61 @@ async fn get_team_share_facts_adopts_legacy_view_grant_but_not_other_levels(
     Ok(())
 }
 
+#[sqlx::test(
+    fixtures(path = "../../../../fixtures", scripts("call_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn get_team_share_facts_adopts_legacy_view_grant_after_canonical_clear(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = repo(pool.clone());
+    give_user_a_team(&pool, USER_A.as_ref(), &TEAM_ID).await?;
+
+    // Canonical clear leaves NULL/rev 2. An old writer then inserts the View
+    // grant without touching SharePermission. Adopt that row so the creator
+    // can revoke it instead of hitting UntrackedGrant forever.
+    sqlx::query!(
+        r#"
+        UPDATE "SharePermission"
+        SET team_share_access_level = NULL,
+            team_share_team_id = NULL,
+            team_share_revision = 2
+        WHERE id = (SELECT share_permission_id FROM call_records WHERE id = $1)
+        "#,
+        CALL_ARCHIVED,
+    )
+    .execute(&pool)
+    .await?;
+    insert_legacy_team_row(&pool, CALL_ARCHIVED, AccessLevel::View).await?;
+
+    let adopted = repo.get_team_share_facts(&CALL_ARCHIVED).await?;
+    assert_eq!(
+        adopted.current,
+        Some(TeamShareGrant {
+            team_id: TEAM_ID,
+            level: TeamShareLevel::View,
+        })
+    );
+    assert_eq!(adopted.revision, 3);
+    assert_eq!(
+        stored_team_share(&pool, CALL_ARCHIVED).await,
+        shared_view(3)
+    );
+    assert_eq!(team_entity_access_count(&pool, CALL_ARCHIVED).await?, 1);
+
+    set_team_share(&repo, CALL_ARCHIVED, None).await?;
+    assert_eq!(
+        stored_team_share(&pool, CALL_ARCHIVED).await,
+        StoredTeamShare {
+            level: None,
+            team_id: None,
+            revision: 4,
+        }
+    );
+    assert_eq!(team_entity_access_count(&pool, CALL_ARCHIVED).await?, 0);
+    Ok(())
+}
+
 // -- create_call --------------------------------------------------------------
 
 #[sqlx::test(
