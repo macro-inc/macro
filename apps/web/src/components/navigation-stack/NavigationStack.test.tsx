@@ -80,7 +80,7 @@ describe('NavigationStack', () => {
     }
 
     render(() => (
-      <NavigationStack.Root
+      <NavigationStack.Root<string>
         onChange={(entries) => {
           snapshots.push(entries);
         }}
