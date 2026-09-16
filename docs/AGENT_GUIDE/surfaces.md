@@ -188,8 +188,9 @@ selecting it again clears that tag filter. Favorite rows open their tasks.
 Normal row and favorite activation replaces the list with the editable task
 document; its originating-tab breadcrumb returns to the list and its
 header exposes Share and the task Details/Properties panel. Shift-click opens
-the task in a new split instead. Keyboard navigation moves list focus without
-opening a task until activation.
+the task in a new split instead. While the list is visible, `J` and `K` move
+focus without opening a task until activation. In an open task detail, they
+replace it with the next or previous task in the same filtered order.
 
 The desktop `Create` → `Task` modal uses the standard dialog panel, circular
 icon controls, and a pill-shaped `Create Task` button with 16px outer padding.
@@ -596,7 +597,8 @@ without comment permission have no comment composer, so Ask AI remains visible.
 On touch devices, an email thread's floating action bar has Previous email and
 Next email arrows beside the larger Mark done checkmark. The arrows follow the
 source list's filtered order, skip non-email items, and disable at its ends.
-They do not wrap; a thread opened without a source list has disabled arrows.
+`J` and `K` use that same order in the Email view. They do not wrap; a thread
+opened without a source list has disabled arrows.
 Mark done archives the current thread and opens the next email in that same
 filtered list, loading pages until another email is found or the list ends.
 On native mobile, stepping replaces the current email while preserving the

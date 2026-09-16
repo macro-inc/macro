@@ -5,6 +5,8 @@ import {
   type EntityDetailTarget,
   useEntityDetailNavigationStack,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
+import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list-navigation-hotkeys';
+import { useListDetailNavigation } from '@app/components/list';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { useMarkdownName } from '@block-md/component/MarkdownNameProvider';
@@ -18,6 +20,7 @@ import {
   type EntityIconSelector,
 } from '@core/component/EntityIcon';
 import { Permissions } from '@core/component/SharePermissions';
+import { toast } from '@core/component/Toast/Toast';
 import {
   ShareDialogContext,
   ShareTrigger,
@@ -273,8 +276,9 @@ function StackEntityDetail(props: { entry: EntityDetailEntry; order: number }) {
 }
 
 export function TasksDetailView(props: { task: TaskDetailTarget }) {
-  const { closeTask } = useTasksView();
+  const { source, openTask, closeTask } = useTasksView();
   const navigationStack = useEntityDetailNavigationStack();
+  const panel = useSplitPanelOrThrow();
   const [shareOpen, setShareOpen] = createSignal(false);
   const taskEntry = () =>
     navigationStack.entries.find(
@@ -283,6 +287,25 @@ export function TasksDetailView(props: { task: TaskDetailTarget }) {
     );
   const isTaskActive = () =>
     navigationStack.active()?.value === taskEntry()?.value;
+  const listNavigation = useListDetailNavigation({
+    currentId: () => props.task.id,
+    source,
+    getEntity: (row) => (row.kind === 'entity' ? row.entity : undefined),
+    getContinuation: (row) => {
+      if (row.kind !== 'load-more') return;
+      const groupId = row.groupId;
+      return groupId === undefined
+        ? source.loadMore
+        : () => source.loadMoreGroup(groupId);
+    },
+    open: (task) => openTask({ id: task.id, fallbackName: task.name }),
+    onError: () => toast.failure('Unable to open the next or previous task'),
+  });
+  useListNavigationHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: () => panel.isPanelActive() && isTaskActive(),
+    navigation: listNavigation,
+  });
 
   return (
     <ShareDialogContext.Provider

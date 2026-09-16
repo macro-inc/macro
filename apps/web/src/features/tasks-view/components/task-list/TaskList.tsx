@@ -1,9 +1,4 @@
-import {
-  createListController,
-  type ListActivation,
-  listOwnedSlotName,
-  useListInteractions,
-} from '@app/components/list';
+import { type ListActivation, useListInteractions } from '@app/components/list';
 import {
   resolveEntityActionViewContext,
   toEntityActionListState,
@@ -22,11 +17,7 @@ import {
   toggleValue,
 } from '@app/lib/signals/store-array-updaters';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
-import {
-  useSplitPanelOrThrow,
-  withSplitPanelOwner,
-} from '@components/app/split-layout/layoutUtils';
-import { useUserId } from '@core/context/user';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
@@ -41,7 +32,6 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property';
-import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { Button, cn } from '@ui';
@@ -61,11 +51,11 @@ import {
   DEFAULT_TASKS_LIST_STATE,
   type TasksListStateSnapshot,
 } from '../../persistence';
+import type { TasksDataSourceItem } from '../../queries/use-tasks-query';
 import {
-  type TasksDataSourceItem,
-  useTasksDataSource,
-} from '../../queries/use-tasks-query';
-import { useTasksView } from '../../tasks-view-context';
+  type TasksListActivationMetadata,
+  useTasksView,
+} from '../../tasks-view-context';
 import { TaskGroupHeader } from './TaskGroupHeader';
 import { TaskListEntity } from './TaskListEntity';
 import { TaskListHeader } from './TaskListHeader';
@@ -93,11 +83,6 @@ const getStatusProperty = (task: TaskEntityWithProperties) => {
   }
 };
 
-type TasksListActivationMetadata = {
-  event?: MouseEvent;
-  newSplit?: boolean;
-};
-
 export type TaskListProps = {
   /** The focusable list root, for callers that hand keyboard focus back. */
   ref?: (element: HTMLDivElement) => void;
@@ -105,8 +90,14 @@ export type TaskListProps = {
 
 export function TaskList(props: TaskListProps) {
   const panel = useSplitPanelOrThrow();
-  const { state, setState, openTask } = useTasksView();
-  const userId = useUserId();
+  const {
+    state,
+    setState,
+    source,
+    list,
+    registerListActivationHandler,
+    openTask,
+  } = useTasksView();
   const forceEmptyState = useDebugSetting(
     DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
   );
@@ -119,17 +110,6 @@ export function TaskList(props: TaskListProps) {
     );
   const toggleGroup = (groupId: string) =>
     setState('collapsedGroupIds', toggleValue(groupId));
-
-  const tagSets = useTagSets();
-  const tagSetsReady = useTagSetsReady();
-  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
-    useTasksDataSource(state, {
-      userId,
-      tagSets,
-      tagSetsReady,
-      isGroupExpanded,
-    })
-  );
 
   function openEntity(
     entity: EntityData,
@@ -194,18 +174,7 @@ export function TaskList(props: TaskListProps) {
     });
   }
 
-  const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
-    createListController<TasksDataSourceItem, TasksListActivationMetadata>({
-      items: source.items,
-      getKey: (row) => row.id,
-      selection: {
-        getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
-      },
-      isNavigable: (row) => row.kind !== 'section-header',
-      isSelectable: (row) => row.kind === 'entity',
-      onActivate,
-    })
-  );
+  registerListActivationHandler(onActivate);
 
   const entityActionViewContext = () =>
     resolveEntityActionViewContext({
@@ -226,7 +195,9 @@ export function TaskList(props: TaskListProps) {
     const current = readListState();
     const value = typeof next === 'function' ? next(current) : next;
 
-    if (value.focusKey !== current.focusKey) {
+    // The view-owned controller survives inline detail navigation. Restore
+    // persisted focus only on a cold mount that has no live focus to preserve.
+    if (current.focusKey === undefined && value.focusKey !== undefined) {
       list.focus.restore(value.focusKey, { reason: 'restore' });
     }
 

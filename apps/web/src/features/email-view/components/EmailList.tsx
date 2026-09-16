@@ -1,10 +1,5 @@
 import '@entity/composed/ListEntity.css';
-import {
-  createListController,
-  type ListActivation,
-  listOwnedSlotName,
-  useListInteractions,
-} from '@app/components/list';
+import { type ListActivation, useListInteractions } from '@app/components/list';
 import {
   resolveEntityActionViewContext,
   toEntityActionListState,
@@ -20,10 +15,7 @@ import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { makePersistedState } from '@app/lib/persistence';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
-import {
-  useSplitPanelOrThrow,
-  withSplitPanelOwner,
-} from '@components/app/split-layout/layoutUtils';
+import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
   type EntityData,
@@ -55,7 +47,10 @@ import {
   soupNavigationTouchHighlight,
 } from '../../next-soup/soup-view/soup-navigation-touch-highlight';
 import { openEntityInSplitFromUnifiedList } from '../../next-soup/utils';
-import { useEmailView } from '../email-view-context';
+import {
+  type EmailListActivationMetadata,
+  useEmailView,
+} from '../email-view-context';
 import {
   createEmailListEntryStorage,
   DEFAULT_EMAIL_LIST_STATE,
@@ -71,18 +66,13 @@ type EmailActionRow = {
   rowId: string;
 };
 
-type EmailListActivationMetadata = {
-  event?: MouseEvent;
-  newSplit?: boolean;
-};
-
 export type EmailListProps = {
   /** The focusable list root, for callers that hand keyboard focus back. */
   ref?: (element: HTMLDivElement) => void;
 };
 
 export function EmailList(props: EmailListProps) {
-  const { state, source, listFocusTarget, clearListFocusTarget, openThread } =
+  const { state, source, list, registerListActivationHandler, openThread } =
     useEmailView();
   const panel = useSplitPanelOrThrow();
 
@@ -154,30 +144,7 @@ export function EmailList(props: EmailListProps) {
     });
   }
 
-  const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
-    createListController<EmailDataSourceItem, EmailListActivationMetadata>({
-      items: source.items,
-      getKey: (row) => row.id,
-      selection: {
-        getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
-      },
-      isNavigable: (row) => row.kind === 'entity' || row.kind === 'load-more',
-      isSelectable: (row) => row.kind === 'entity',
-      onActivate,
-    })
-  );
-
-  createEffect(() => {
-    const target = listFocusTarget();
-    if (!target) return;
-    const row = source
-      .items()
-      .find((item) => item.kind === 'entity' && item.entity.id === target);
-    if (!row) return;
-    list.focus.set(row.id, { reason: 'programmatic', force: true });
-    list.selection.setAnchor(row.id);
-    clearListFocusTarget();
-  });
+  registerListActivationHandler(onActivate);
 
   const { buildActionGroups } = createSoupEntityActions();
   const entityActionViewContext = () =>
@@ -207,7 +174,9 @@ export function EmailList(props: EmailListProps) {
     const current = readListState();
     const value = typeof next === 'function' ? next(current) : next;
 
-    if (value.focusKey !== current.focusKey) {
+    // The view-owned controller survives inline detail navigation. Restore
+    // persisted focus only on a cold mount that has no live focus to preserve.
+    if (current.focusKey === undefined && value.focusKey !== undefined) {
       list.focus.restore(value.focusKey, { reason: 'restore' });
     }
 

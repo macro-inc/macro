@@ -2,14 +2,24 @@ import {
   entityDetailTarget,
   useEntityDetailNavigationStack,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
+import {
+  createListController,
+  type ListActivation,
+  type ListController,
+  listOwnedSlotName,
+} from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { normalizeFacetSelection } from '@app/features/soup';
 import { makePersistedState } from '@app/lib/persistence';
-import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import {
+  useSplitPanelOrThrow,
+  withSplitPanelOwner,
+} from '@components/app/split-layout/layoutUtils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
+import { useTagSets, useTagSetsReady } from '@property/tags/tag-sets-context';
 import type { ContextProviderProps } from '@solid-primitives/context';
-import type { Accessor } from 'solid-js';
+import { type Accessor, onCleanup } from 'solid-js';
 import {
   createStore,
   produce,
@@ -20,6 +30,11 @@ import {
 import { TASK_DEFAULT_GROUP_BY } from './constants';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
 import { createTasksViewPersistence } from './persistence';
+import {
+  type TasksDataSource,
+  type TasksDataSourceItem,
+  useTasksDataSource,
+} from './queries/use-tasks-query';
 import type {
   TaskDetailTarget,
   TaskSortId,
@@ -32,10 +47,30 @@ type TasksViewProviderProps = ContextProviderProps & {
   initialState?: TasksViewStateOptions;
 };
 
+export type TasksListActivationMetadata = {
+  event?: MouseEvent;
+  newSplit?: boolean;
+};
+
+type TasksListController = ListController<
+  TasksDataSourceItem,
+  TasksListActivationMetadata
+>;
+
 export type TasksViewContext = {
   state: Store<TasksViewState>;
   setState: SetStoreFunction<TasksViewState>;
   selectedTask: Accessor<TaskDetailTarget | undefined>;
+  source: TasksDataSource;
+  list: TasksListController;
+  registerListActivationHandler: (
+    handler: (
+      activation: ListActivation<
+        TasksDataSourceItem,
+        TasksListActivationMetadata
+      >
+    ) => void
+  ) => void;
   openTask: (task: TaskDetailTarget) => void;
   closeTask: () => void;
   setTab: (tab: TaskTab) => void;
@@ -52,6 +87,8 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const panel = useSplitPanelOrThrow();
   const navigationStack = useEntityDetailNavigationStack();
   const userId = useUserId();
+  const tagSets = useTagSets();
+  const tagSetsReady = useTagSetsReady();
 
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'my-tasks';
@@ -80,6 +117,45 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     })
   );
 
+  const isGroupExpanded = (groupId: string) =>
+    !state.collapsedGroupIds.includes(groupId);
+  const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
+    useTasksDataSource(state, {
+      userId,
+      tagSets,
+      tagSetsReady,
+      isGroupExpanded,
+    })
+  );
+  let listActivationHandler:
+    | ((
+        activation: ListActivation<
+          TasksDataSourceItem,
+          TasksListActivationMetadata
+        >
+      ) => void)
+    | undefined;
+  const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
+    createListController<TasksDataSourceItem, TasksListActivationMetadata>({
+      items: source.items,
+      getKey: (row) => row.id,
+      selection: {
+        getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
+      },
+      isNavigable: (row) => row.kind !== 'section-header',
+      isSelectable: (row) => row.kind === 'entity',
+      onActivate: (activation) => listActivationHandler?.(activation),
+    })
+  );
+  const registerListActivationHandler = (
+    handler: NonNullable<typeof listActivationHandler>
+  ) => {
+    listActivationHandler = handler;
+    onCleanup(() => {
+      if (listActivationHandler === handler) listActivationHandler = undefined;
+    });
+  };
+
   const selectedTask = (): TaskDetailTarget | undefined => {
     const taskEntry = navigationStack.entries.find(
       (entry) =>
@@ -100,6 +176,14 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   };
 
   const openTask = (task: TaskDetailTarget) => {
+    const row = source
+      .items()
+      .find((item) => item.kind === 'entity' && item.entity.id === task.id);
+    if (row) {
+      list.focus.set(row.id, { reason: 'programmatic', force: true });
+      list.selection.setAnchor(row.id);
+    }
+
     navigationStack.reset(
       entityDetailTarget.document({
         id: task.id,
@@ -150,6 +234,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     state,
     setState,
     selectedTask,
+    source,
+    list,
+    registerListActivationHandler,
     openTask,
     closeTask,
     setTab,

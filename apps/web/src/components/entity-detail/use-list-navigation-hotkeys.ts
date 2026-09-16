@@ -1,18 +1,12 @@
+import type { ListDetailNavigationTarget } from '@app/components/list';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { type Accessor, onCleanup } from 'solid-js';
 
-export type ListNavigationHotkeyTarget = {
-  canPrevious: Accessor<boolean>;
-  canNext: Accessor<boolean>;
-  previous: () => void;
-  next: () => void;
-};
-
 export function useListNavigationHotkeys(options: {
   scopeId: string;
   enabled: Accessor<boolean>;
-  navigation: ListNavigationHotkeyTarget;
+  navigation: ListDetailNavigationTarget;
 }) {
   const group = createHotkeyGroup();
 
