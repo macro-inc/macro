@@ -266,6 +266,12 @@ to open the title menu (caret), then **Rename** — that opens the generic entit
 rename dialog. Do not expect a tap on the name itself to start
 an inline edit.
 
+When the session has opened a pull request, a compact `#N` status chip
+appears in the header (top right) and in the side-panel Details. Click it
+to open the PR entity in a split; until GitHub has synced the entity the
+chip is a GitHub link instead. The icon and status word follow open /
+merged / closed.
+
 Tool groups and individual tool cards start collapsed. Expand a group to see
 its calls, then expand an edit card to view its file diffs. Diff bodies load
 only when their card opens; syntax highlighting may appear after the diff text.
