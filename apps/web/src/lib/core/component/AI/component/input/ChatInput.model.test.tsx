@@ -20,7 +20,7 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { type JSX, onMount, type ParentProps } from 'solid-js';
+import { type JSX, onMount } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ChatInput } from './ChatInput';
 
@@ -241,18 +241,14 @@ it('preserves a real soup composer selection when creating and opening its first
   ).toBeTruthy();
 });
 vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
-  MarkdownShell: Object.assign(
-    (props: ParentProps) => {
-      onMount(() => mocks.change?.('Test first message'));
-      return (
-        <div contentEditable tabIndex={0} role="textbox" aria-label="Prompt">
-          Test first message
-          {props.children}
-        </div>
-      );
-    },
-    { Editable: () => null, Placeholder: () => null }
-  ),
+  MarkdownShell: () => {
+    onMount(() => mocks.change?.('Test first message'));
+    return (
+      <div contentEditable tabIndex={0} role="textbox" aria-label="Prompt">
+        Test first message
+      </div>
+    );
+  },
 }));
 
 let motionStyles: HTMLStyleElement;

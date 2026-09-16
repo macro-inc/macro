@@ -543,7 +543,6 @@ export function ChannelInput(props: ChannelInputProps) {
         />
       </Show>
       <ComposerSurface
-        appearance="chat"
         onFocusOut={(e) => {
           const next = e.relatedTarget as Node | null;
           if (next && e.currentTarget.contains(next)) return;

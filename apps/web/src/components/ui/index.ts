@@ -57,10 +57,7 @@ export {
   CommandMenuShell,
   createCommandListController,
 } from './components/CommandMenuPrimitives';
-export {
-  ComposerSurface,
-  composerSurfaceClasses,
-} from './components/ComposerSurface';
+export { ComposerSurface } from './components/ComposerSurface';
 export type {
   ConfirmDialogDisplayProps,
   ConfirmDialogProps,

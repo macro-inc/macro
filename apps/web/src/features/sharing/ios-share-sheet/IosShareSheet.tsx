@@ -447,7 +447,7 @@ function IosShareSheetComposer(props: {
                         }
                       />
                     </Input.FormatRibbon>
-                    <Input.EditorShell
+                    <Input.Layout.Editor
                       ref={setScrollContainer}
                       onClick={(event) => {
                         if (!isMobile()) {
@@ -465,18 +465,14 @@ function IosShareSheetComposer(props: {
                           class="text-sm"
                         />
                       </Input.Editor>
-                    </Input.EditorShell>
+                    </Input.Layout.Editor>
                     <Input.Attachments kind="media" />
                     <Input.Attachments kind="document" />
                   </Input.Layout.Body>
-                  <Input.Footer class="col-span-full row-start-2">
-                    <Input.Actions>
-                      <Input.Actions.Left>
-                        <Input.AttachNativeMediaAction />
-                        <Input.ToggleFormatAction />
-                      </Input.Actions.Left>
-                    </Input.Actions>
-                  </Input.Footer>
+                  <Input.Layout.ActionsLeft>
+                    <Input.AttachNativeMediaAction />
+                    <Input.ToggleFormatAction />
+                  </Input.Layout.ActionsLeft>
                 </Input.Layout>
               </Input.DropZone>
             </ChannelInputContainer>

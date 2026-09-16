@@ -14,7 +14,6 @@ import {
   type Component,
   createEffect,
   createSignal,
-  type JSX,
   on,
   onCleanup,
   Show,
@@ -45,20 +44,14 @@ import {
   createFilesReadyHandler,
   getDragDropPosition,
 } from '../utils/fileUploadUtils';
-import {
-  MarkdownEditable,
-  MarkdownPlaceholder,
-  MarkdownShellContext,
-} from './MarkdownShellParts';
+import { MarkdownShellContent } from './MarkdownShellContent';
 import type { EditorBuilder, EditorComponentProps } from './types';
 
 export type MarkdownShellProps = EditorComponentProps & {
   config: EditorBuilder;
-  /** Compose one Editable and an optional Placeholder; defaults to both. */
-  children?: JSX.Element;
 };
 
-const MarkdownShellRoot: Component<MarkdownShellProps> = (props) => {
+export const MarkdownShell: Component<MarkdownShellProps> = (props) => {
   const handle = props.config.buildHandle();
   const state = handle._internal;
   const {
@@ -231,27 +224,18 @@ const MarkdownShellRoot: Component<MarkdownShellProps> = (props) => {
             : undefined
         }
       >
-        <MarkdownShellContext.Provider
-          value={{
-            connectRoot: (element) => {
-              onElementConnect(element, () => {
-                editor.setRootElement(element);
-                onConnect();
-              });
-              props.refFn?.(element);
-            },
-            disabled: () => !!props.disabled,
-            showPlaceholder,
-            placeholder: () => props.placeholder ?? '...',
+        <MarkdownShellContent
+          connectRoot={(element) => {
+            onElementConnect(element, () => {
+              editor.setRootElement(element);
+              onConnect();
+            });
+            props.refFn?.(element);
           }}
-        >
-          {props.children ?? (
-            <>
-              <MarkdownEditable />
-              <MarkdownPlaceholder />
-            </>
-          )}
-        </MarkdownShellContext.Provider>
+          disabled={!!props.disabled}
+          showPlaceholder={showPlaceholder()}
+          placeholder={props.placeholder ?? '...'}
+        />
 
         <DecoratorRenderer editor={editor} />
 
@@ -408,8 +392,3 @@ const MarkdownShellRoot: Component<MarkdownShellProps> = (props) => {
     </LexicalWrapperContext.Provider>
   );
 };
-
-export const MarkdownShell = Object.assign(MarkdownShellRoot, {
-  Editable: MarkdownEditable,
-  Placeholder: MarkdownPlaceholder,
-});

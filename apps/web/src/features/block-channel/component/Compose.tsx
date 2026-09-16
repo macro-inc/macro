@@ -275,7 +275,7 @@ export function ChannelCompose() {
                 input={inputState.view()}
                 commands={inputState.commands}
               >
-                <ComposerSurface appearance="chat">
+                <ComposerSurface>
                   <Input.DropZone
                     onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
                     onDragEnd={() => inputState.setIsDraggedOver(false)}

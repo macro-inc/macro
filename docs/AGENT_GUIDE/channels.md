@@ -42,6 +42,8 @@ actions below the editor.
 When checking this transition, add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
 should remain usable in both layouts, including when editing an existing message.
+The iOS share sheet keeps its editor above the attachment and formatting controls.
+Check this arrangement at both phone and tablet widths.
 
 The shared `@` menu also offers `Recent agent sessions` after Channels and
 before Companies (the latest 500 accessible sessions, searchable by title or

@@ -277,7 +277,6 @@ export function DiscussionInput(props: DiscussionInputProps) {
         />
       </Show>
       <ComposerSurface
-        appearance="chat"
         class={isCollapsed() ? 'hidden' : 'h-auto'}
         onFocusOut={(event) => {
           const next = event.relatedTarget as Node | null;

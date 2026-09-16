@@ -355,7 +355,6 @@ export function ChatInput(props: ChatInputComponentProps) {
         />
       </Show>
       <ComposerSurface
-        appearance="chat"
         class={cn(
           'h-auto',
           !isMultiline() &&
@@ -482,10 +481,7 @@ export function ChatInput(props: ChatInputComponentProps) {
                   !isTouchDevice() &&
                   props.autoFocusOnMount !== false
                 }
-              >
-                <ComposerEditor.Editable />
-                <ComposerEditor.Placeholder />
-              </ComposerEditor>
+              />
               <Show when={isTallVariant()}>
                 <div class="h-[15px] touch:hidden" />
               </Show>

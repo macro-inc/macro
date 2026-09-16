@@ -34,9 +34,16 @@ import { interceptMailtoLinks } from '@core/util/interceptMailtoLinks';
 import { useEmailLinksQuery, useEmailSignature } from '@queries/email/link';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { debounce } from '@solid-primitives/scheduled';
-import { cn, composerSurfaceClasses } from '@ui';
+import { ComposerSurface, cn } from '@ui';
 import type { LexicalEditor } from 'lexical';
-import { createMemo, createSignal, type JSX, onCleanup, Show } from 'solid-js';
+import {
+  type ComponentProps,
+  createMemo,
+  createSignal,
+  type JSX,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import type { UserToolReviewSink } from '../user-tool-review';
 
 export type EmailDraftComposerProps = {
@@ -71,6 +78,10 @@ function fromEmailRecipients(
       'name' in recipient.data ? (recipient.data.name ?? null) : null;
     return { email, name };
   });
+}
+
+function DraftComposerSurface(props: ComponentProps<typeof ComposerSurface>) {
+  return <ComposerSurface {...props} as="div" />;
 }
 
 export function EmailDraftComposer(props: EmailDraftComposerProps) {
@@ -278,11 +289,11 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
     <ComposeProvider value={ctx}>
       <div class="relative">
         <ComposeLayout
+          as={DraftComposerSurface}
           bodyDebugName={`chat-compose:${props.debugName}`}
           class={cn(
             'relative flex flex-col w-full text-xs p-4',
             isTouchDevice() && 'rounded-lg bg-surface',
-            composerSurfaceClasses(),
             uiDisabled() &&
               '[&_button:disabled]:opacity-50 [&_button:disabled]:text-ink-disabled [&_input:disabled]:text-ink-muted'
           )}

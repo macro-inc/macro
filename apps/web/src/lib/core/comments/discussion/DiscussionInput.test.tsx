@@ -53,9 +53,7 @@ vi.mock('@channel/Input/Input', () => {
         ActionsLeft: Slot,
         ActionsRight: Slot,
       }),
-      EditorShell: Slot,
       Editor: Slot,
-      Footer: Slot,
       FormatRibbon: () => null,
     },
   };

@@ -16,7 +16,7 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import { Button } from '@ui';
+import { Button, cn } from '@ui';
 import { $setSelection } from 'lexical';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
@@ -61,8 +61,12 @@ function PinnedReplyComposer(props: {
     <ThreadContext.Provider value={{ mentionsSignal }}>
       <StaticMarkdownContext theme={drawerCommentTheme}>
         <div
-          class="shrink-0 px-3"
-          classList={{ 'pb-(--safe-bottom)': !virtualKeyboardVisible() }}
+          class={cn(
+            'shrink-0 px-3',
+            virtualKeyboardVisible()
+              ? 'pb-4'
+              : 'pb-[max(16px,var(--mobile-sheet-safe-padding))]'
+          )}
         >
           <NewReplyInput
             textValue={text()}

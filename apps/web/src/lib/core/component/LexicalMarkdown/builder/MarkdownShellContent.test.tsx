@@ -1,42 +1,32 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import {
-  MarkdownEditable,
-  MarkdownPlaceholder,
-  MarkdownShellContext,
-} from './MarkdownShellParts';
+import { MarkdownShellContent } from './MarkdownShellContent';
 
 afterEach(cleanup);
 
-describe('MarkdownShell composition', () => {
+describe('MarkdownShell content', () => {
   it('connects one editable element and retains its contents as presentation and disabled state change', () => {
     const connectRoot = vi.fn();
     const [disabled, setDisabled] = createSignal(false);
-    const [className, setClassName] = createSignal('min-h-8');
-    render(() => (
-      <MarkdownShellContext.Provider
-        value={{
-          connectRoot,
-          disabled,
-          showPlaceholder: () => false,
-          placeholder: () => '',
-        }}
-      >
-        <MarkdownEditable
-          role="textbox"
-          aria-label="Message"
-          class={className()}
-        />
-      </MarkdownShellContext.Provider>
+    const [showPlaceholder, setShowPlaceholder] = createSignal(false);
+    const { container } = render(() => (
+      <MarkdownShellContent
+        connectRoot={connectRoot}
+        disabled={disabled()}
+        showPlaceholder={showPlaceholder()}
+        placeholder="Message"
+      />
     ));
 
-    const editable = screen.getByRole('textbox', { name: 'Message' });
+    const editable =
+      container.querySelector<HTMLDivElement>('[contenteditable]')!;
+    expect(container.querySelectorAll('[contenteditable]')).toHaveLength(1);
     editable.textContent = 'Unsent draft';
-    setClassName('min-h-12');
+    setShowPlaceholder(true);
     setDisabled(true);
 
-    expect(screen.getByRole('textbox')).toBe(editable);
+    expect(container.querySelector('[contenteditable]')).toBe(editable);
     expect(editable.textContent).toBe('Unsent draft');
     expect(editable.getAttribute('contenteditable')).toBe('false');
     expect(connectRoot.mock.calls[0][0]).toBe(editable);
@@ -46,25 +36,20 @@ describe('MarkdownShell composition', () => {
     expect(connectRoot).toHaveBeenCalledOnce();
   });
 
-  it('shares reactive placeholder visibility and text with composed markup', () => {
+  it('updates placeholder text and visibility without replacing the editable', () => {
     const [showPlaceholder, setShowPlaceholder] = createSignal(true);
     const [placeholder, setPlaceholder] = createSignal('Write a message');
-    render(() => (
-      <MarkdownShellContext.Provider
-        value={{
-          connectRoot: vi.fn(),
-          disabled: () => false,
-          showPlaceholder,
-          placeholder,
-        }}
-      >
-        <MarkdownPlaceholder>
-          {(text) => <span>{text()}</span>}
-        </MarkdownPlaceholder>
-      </MarkdownShellContext.Provider>
+    const { container } = render(() => (
+      <MarkdownShellContent
+        connectRoot={vi.fn()}
+        disabled={false}
+        showPlaceholder={showPlaceholder()}
+        placeholder={placeholder()}
+      />
     ));
 
-    expect(screen.getByText('Write a message').tagName).toBe('SPAN');
+    const editable = container.querySelector('[contenteditable]');
+    expect(screen.getByText('Write a message')).toBeTruthy();
     setPlaceholder('Reply to thread');
     expect(screen.queryByText('Write a message')).toBeNull();
     expect(screen.getByText('Reply to thread')).toBeTruthy();
@@ -72,5 +57,6 @@ describe('MarkdownShell composition', () => {
     expect(screen.queryByText('Reply to thread')).toBeNull();
     setShowPlaceholder(true);
     expect(screen.getByText('Reply to thread')).toBeTruthy();
+    expect(container.querySelector('[contenteditable]')).toBe(editable);
   });
 });

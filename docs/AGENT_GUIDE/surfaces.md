@@ -520,9 +520,11 @@ Those rows are available on the next fetch/refetch. Signal delivery and the exis
 staff/customer eligibility rules are unchanged; no browser eligibility request is needed.
 
 Discussion composers on companies, contacts, documents, tasks, and PRs use the
-shared channel/AI glass surface, 22px desktop corners, 15px desktop text, and
-a circular neutral Send button. Document comment replies/edits and Edit with AI
-use the same composer treatment. Attachment and formatting actions stay available.
+shared channel/AI composer surface, 26.25px desktop corners, 15px desktop text, and
+a circular neutral Send button. Edit with AI uses the same composer treatment.
+Inline comments, replies, and their edits use a plain
+input without a surface background, rounded frame, or shadow. Attachment and
+formatting actions stay available.
 On mobile, open documents and tasks put their new-comment composer in the
 accessory dock above navigation, using the channel input's compact pill and
 expanded surface. Ask AI and New are hidden in these open views only when the
