@@ -39,7 +39,7 @@ use crate::domain::error::HarnessError;
 use crate::domain::model::{
     AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeliverAction, HarnessCommand,
     HarnessDefaults, MentionOrigin, OpenSession, PriorChannelMessage, SessionDefaults,
-    SpawnContainer,
+    SessionRepository, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ChannelPromptContext, ContainerManager as _, NoPeers,
@@ -357,7 +357,7 @@ fn harness_with_mentions(
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
         })
         .with_bot(
             bot_id::CODEX_BOT_ID,
@@ -365,7 +365,7 @@ fn harness_with_mentions(
                 bot_id: bot_id::CODEX_BOT_ID,
                 model: String::new(),
                 harness: "codex-cloud".into(),
-                repo_url: String::new(),
+                repo_url: None,
             },
         ),
         lifecycle.clone(),
@@ -1895,7 +1895,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
         })
         .with_bot(
             inmem_bot,
@@ -1903,7 +1903,7 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
                 bot_id: inmem_bot,
                 model: "fast-model".to_owned(),
                 harness: "macro-inmem".to_owned(),
-                repo_url: "https://github.com/macro-inc/macro".to_owned(),
+                repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
             },
         )
         .with_managed_bot(inmem_bot),
@@ -2353,7 +2353,7 @@ async fn commands_for_a_peer_managed_session_forward_through_redis() {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
         },
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),
@@ -2404,7 +2404,7 @@ async fn unmanaged_external_session_forwards_to_its_remote_harness() {
             bot_id: BotId::TEST_A,
             model: "claude".to_owned(),
             harness: "opencode".to_owned(),
-            repo_url: "https://github.com/macro-inc/macro".to_owned(),
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
         },
         NoopLifecyclePublisher,
         crate::domain::pending::PendingCommands::new(),

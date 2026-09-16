@@ -177,7 +177,11 @@ function AgentsWorkspace() {
               keyed
               fallback={
                 <>
-                  <ViewShell.TopBar>{PAGE_TITLES[page()]}</ViewShell.TopBar>
+                  <ViewShell.TopBar>
+                    <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
+                      {PAGE_TITLES[page()]}
+                    </h1>
+                  </ViewShell.TopBar>
                   <div class="min-h-0 flex-1">
                     <Suspense fallback={<LoadingComposer />}>
                       <Switch>

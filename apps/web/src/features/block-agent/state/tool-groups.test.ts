@@ -10,6 +10,7 @@ const tool = (): MessagePart => ({
   status: 'completed',
   detail: { kind: 'read', paths: ['a.rs'] },
 });
+const thought = (): MessagePart => ({ kind: 'thought', text: 'thinking...' });
 const permission = (): MessagePart => ({
   kind: 'permission',
   toolCall: 'call',
@@ -61,5 +62,43 @@ describe('segmentParts', () => {
 
   it('is empty for no parts', () => {
     expect(segmentParts([])).toEqual([]);
+  });
+
+  it('groups thinking blocks with tool calls', () => {
+    expect(segmentParts([text(), thought(), tool(), tool(), text()])).toEqual([
+      { kind: 'part', start: 0, end: 1 },
+      { kind: 'tools', start: 1, end: 4 },
+      { kind: 'part', start: 4, end: 5 },
+    ]);
+  });
+
+  it('groups consecutive thinking blocks with tool calls', () => {
+    expect(
+      segmentParts([thought(), tool(), thought(), tool(), thought()])
+    ).toEqual([{ kind: 'tools', start: 0, end: 5 }]);
+  });
+
+  it('keeps a lone thinking block as its own part', () => {
+    expect(segmentParts([text(), thought(), text()])).toEqual([
+      { kind: 'part', start: 0, end: 1 },
+      { kind: 'part', start: 1, end: 2 },
+      { kind: 'part', start: 2, end: 3 },
+    ]);
+  });
+
+  it('groups thinking blocks at the start with tool calls', () => {
+    expect(segmentParts([thought(), thought(), tool()])).toEqual([
+      { kind: 'tools', start: 0, end: 3 },
+    ]);
+  });
+
+  it('breaks a run at permissions even with thinking blocks', () => {
+    expect(
+      segmentParts([thought(), tool(), permission(), thought(), tool()])
+    ).toEqual([
+      { kind: 'tools', start: 0, end: 2 },
+      { kind: 'part', start: 2, end: 3 },
+      { kind: 'tools', start: 3, end: 5 },
+    ]);
   });
 });

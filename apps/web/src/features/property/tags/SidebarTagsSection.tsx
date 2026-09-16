@@ -2,10 +2,11 @@ import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import PlusIcon from '@phosphor/plus.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
-import { TagDot } from './TagDot';
+import { createSignal, Show } from 'solid-js';
+import { TagTree } from './components/tag-tree';
+import type { TagTreeNode } from './core/tag-tree';
 import { TagEditorDialog } from './TagEditorDialog';
-import { useTagOptions } from './tag-options';
+import { useTagTree } from './tag-sets-context';
 
 export type SidebarTagsSectionProps = {
   /** Tag option ids the view is currently showing. */
@@ -38,12 +39,21 @@ export function selectSidebarTag(
  * sets from the nearest `TagSetsProvider`.
  */
 export function SidebarTagsSection(props: SidebarTagsSectionProps) {
-  const tags = useTagOptions();
+  const tree = useTagTree();
+  const [expanded, setExpanded] = createSignal<Record<string, boolean>>({});
+  const containsActiveTag = (node: TagTreeNode): boolean =>
+    Boolean(node.tag && props.activeIds.includes(node.tag.id)) ||
+    node.children.some(containsActiveTag);
+  const isExpanded = (node: TagTreeNode): boolean =>
+    expanded()[node.id] ?? node.children.some(containsActiveTag);
+  const toggle = (node: TagTreeNode) => {
+    const nextOpen = !isExpanded(node);
+    setExpanded((current) => ({ ...current, [node.id]: nextOpen }));
+  };
   const teamQuery = useCurrentTeamQuery();
   const [creating, setCreating] = createSignal(false);
   const teamAvailable = () =>
     teamQuery.isSuccess && Boolean(teamQuery.data?.team);
-  const isActive = (id: string) => props.activeIds.includes(id);
 
   return (
     <CollapsibleSection.Root
@@ -68,30 +78,22 @@ export function SidebarTagsSection(props: SidebarTagsSectionProps) {
       </div>
       <CollapsibleSection.Content>
         <Show
-          when={tags().length > 0}
+          when={tree().length > 0}
           fallback={
             <p class="px-3 py-2 text-sm text-ink-extra-muted">No tags yet</p>
           }
         >
           <ViewSidebar.Nav aria-label="Tags">
-            <For each={tags()}>
-              {(tag) => (
-                <ViewSidebar.Item
-                  active={isActive(tag.id)}
-                  onClick={() => {
-                    props.onActiveIdsChange(
-                      selectSidebarTag(props.activeIds, tag.id)
-                    );
-                    props.onNavigate?.();
-                  }}
-                >
-                  <ViewSidebar.Icon>
-                    <TagDot color={tag.color} />
-                  </ViewSidebar.Icon>
-                  <span class="truncate">{tag.label}</span>
-                </ViewSidebar.Item>
-              )}
-            </For>
+            <TagTree
+              nodes={tree()}
+              activeIds={props.activeIds}
+              isExpanded={isExpanded}
+              onToggle={toggle}
+              onSelect={(id) => {
+                props.onActiveIdsChange(selectSidebarTag(props.activeIds, id));
+                props.onNavigate?.();
+              }}
+            />
           </ViewSidebar.Nav>
         </Show>
       </CollapsibleSection.Content>

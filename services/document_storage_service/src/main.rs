@@ -88,6 +88,10 @@ use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealti
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
 use harnesses::outbound::pg_harness_repo::PgHarnessRepo;
+use initiative::{
+    domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
+    outbound::PgInitiativeRepo,
+};
 use lexical_client::LexicalClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
@@ -1070,6 +1074,9 @@ async fn run() -> anyhow::Result<()> {
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
     let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
+    let initiative_service = Arc::new(InitiativeServiceImpl::new(PgInitiativeRepo::new(
+        db.clone(),
+    )));
 
     let collab_surface_service = CollabSurfaceServiceImpl::new(
         Arc::new(PgCollabSurfaceRepo::new(db.clone())),
@@ -1347,6 +1354,11 @@ async fn run() -> anyhow::Result<()> {
         ),
         reminders_state: RemindersRouterState::new(
             Arc::new(reminders_service),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        initiative_state: InitiativeRouterState::new(
+            initiative_service,
             entity_access_service.clone(),
             authorization_state.clone(),
         ),

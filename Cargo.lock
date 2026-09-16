@@ -5386,6 +5386,7 @@ dependencies = [
  "harnesses",
  "hex",
  "http-body-util",
+ "initiative",
  "jsonwebtoken 10.3.0",
  "last_online_tracker",
  "lazy_static",

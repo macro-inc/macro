@@ -239,6 +239,10 @@ fn api_router(state: ApiContext) -> Router {
             reminders::inbound::axum_router::reminders_router(state.reminders_state.clone()),
         )
         .nest(
+            "/initiatives",
+            initiative::inbound::axum_router::initiative_router(state.initiative_state.clone()),
+        )
+        .nest(
             "/collab_surfaces",
             collab_surface::inbound::axum_router::collab_surface_router(
                 state.collab_surface_state.clone(),

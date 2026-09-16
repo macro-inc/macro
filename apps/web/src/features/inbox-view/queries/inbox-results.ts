@@ -5,9 +5,13 @@ import {
 } from '@app/features/soup/collection/transforms';
 import type { SoupGroup } from '@app/features/soup/collection/types';
 import type { EntityWithRawNotifications } from '@app/features/soup/entity-notifications';
-import { compareDateDesc, type DateValue } from '@core/util/date';
+import type { DateValue } from '@core/util/date';
 import type { EntityData } from '@entity';
-import { homeDateBucket } from './home-date-buckets';
+import {
+  homeDateBucket,
+  homeDateBucketRank,
+  homeTimestamp,
+} from './home-date-buckets';
 import {
   type InboxViewContext,
   inboxTabOrdersByNotification,
@@ -46,10 +50,24 @@ export function groupInboxEntitiesByDate<T extends EntityData>(
   });
 }
 
+const compareHomeDates = (first: unknown, second: unknown) => {
+  const a = homeTimestamp(first) ?? -Infinity;
+  const b = homeTimestamp(second) ?? -Infinity;
+  return a === b ? 0 : a > b ? -1 : 1;
+};
+
+const compareIdentity = (a: string, b: string) =>
+  a === b ? 0 : a < b ? -1 : 1;
+
+const compareHomeEntities = (a: EntityData, b: EntityData) =>
+  compareHomeDates(a.sortTs, b.sortTs) ||
+  compareIdentity(a.type, b.type) ||
+  compareIdentity(a.id, b.id);
+
 const latestTimestamp = (
   first: DateValue | null | undefined,
   second: DateValue | null | undefined
-) => (compareDateDesc(first, second) <= 0 ? first : second);
+) => (compareHomeDates(first, second) <= 0 ? first : second);
 
 /** Content freshness and Home ordering are independent: keep the newest
  * payload, both source stamps, and the notification source's metadata. */
@@ -66,7 +84,7 @@ export function mergeHomeEntities(
       })),
       // Cache inserts from other users are not the viewer's own activity.
       ...recents
-        .filter((entity) => entity.touchedAt)
+        .filter((entity) => homeTimestamp(entity.touchedAt) !== undefined)
         .map((entity) => ({
           ...entity,
           sortTs: entity.touchedAt,
@@ -75,7 +93,7 @@ export function mergeHomeEntities(
     {
       getKey: (entity) => `${entity.type}:${entity.id}`,
       resolveConflict: (existing, incoming) => ({
-        ...(compareDateDesc(
+        ...(compareHomeDates(
           incoming.updatedAt ?? incoming.createdAt,
           existing.updatedAt ?? existing.createdAt
         ) < 0
@@ -87,12 +105,7 @@ export function mergeHomeEntities(
         sortTs: latestTimestamp(existing.sortTs, incoming.sortTs),
       }),
     }
-  ).sort(
-    (a, b) =>
-      compareDateDesc(a.sortTs, b.sortTs) ||
-      a.type.localeCompare(b.type) ||
-      a.id.localeCompare(b.id)
-  );
+  ).sort(compareHomeEntities);
 }
 
 /** Home uses its merged timestamp and finer intraday sections. */
@@ -100,9 +113,11 @@ export function groupHomeEntitiesByDate<T extends EntityData>(
   entities: T[],
   now: Date
 ): SoupGroup<T>[] {
-  return groupSoupEntities(entities, {
+  return groupSoupEntities([...entities].sort(compareHomeEntities), {
     getGroupId: (entity) => homeDateBucket(entity.sortTs, now).key,
     getGroupLabel: (_groupId, firstEntity) =>
       homeDateBucket(firstEntity.sortTs, now).label,
+    compareGroups: (a, b) =>
+      homeDateBucketRank(a.id) - homeDateBucketRank(b.id),
   });
 }

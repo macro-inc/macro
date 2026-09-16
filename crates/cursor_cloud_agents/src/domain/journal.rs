@@ -48,6 +48,24 @@ pub enum JournalInput {
     PromptAborted(i64),
     /// Transport failure, retained without prematurely closing running tools.
     TransportError(String),
+    /// The run's stream broke or went silent and a reconnect was attempted.
+    ///
+    /// Journaled rather than merely logged because the journal is the durable
+    /// record of what the transport did: a transcript with a gap in it is only
+    /// explicable if the gap's cause is in the same ordered record as the
+    /// content around it, and a later replay of the session has no other way
+    /// to know a reconnect happened here. Like
+    /// [`JournalInput::TransportError`] it projects to nothing — it is a fact
+    /// about the connection, never about the conversation.
+    StreamInterrupted {
+        /// What broke, in the transport's own words.
+        reason: String,
+        /// The last provider event id captured before the break, if any; what
+        /// the reconnect resumed from.
+        last_event_id: Option<String>,
+        /// Which reconnect attempt this interruption started, from one.
+        attempt: u32,
+    },
     /// Raw complete provider message, including unknown payloads.
     Sse(NativeRecord),
     /// Original successful polling response body.
@@ -201,7 +219,8 @@ impl ReplayMachine {
             | JournalInput::Reconciled
             | JournalInput::PromptAccepted(_)
             | JournalInput::PromptAborted(_)
-            | JournalInput::TransportError(_) => Ok(Vec::new()),
+            | JournalInput::TransportError(_)
+            | JournalInput::StreamInterrupted { .. } => Ok(Vec::new()),
         }
     }
     fn event(

@@ -395,7 +395,8 @@ Reopening or resuming the session must retain that selection and logo.
 
 Both AI composers display their model trigger label at the input text size
 (15px), using the softer secondary text color. This includes the agent model
-catalog trigger and mobile model sheet trigger.
+catalog trigger and mobile model sheet trigger. Opening the agent model
+catalog focuses the `Search models` field so you can type immediately.
 
 Soup and recent-chat icons recognize the provider in the saved model ID even
 when that model is no longer selectable. For example, `openai/gpt-5.5` retains

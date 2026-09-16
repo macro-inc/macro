@@ -17,7 +17,7 @@ const option = (
 });
 
 describe('listTagOptions', () => {
-  it('lists personal tags before team tags, each in display order', () => {
+  it('lists team tags before personal tags, each in display order', () => {
     const tagSets = [
       {
         scope: 'team',
@@ -36,6 +36,13 @@ describe('listTagOptions', () => {
 
     expect(listTagOptions(tagSets)).toEqual([
       {
+        id: 'launch',
+        label: 'Launch',
+        color: '#123',
+        scope: 'team',
+        propertyDefinitionId: 'team-definition',
+      },
+      {
         id: 'urgent',
         label: 'Urgent',
         color: undefined,
@@ -48,13 +55,6 @@ describe('listTagOptions', () => {
         color: undefined,
         scope: 'user',
         propertyDefinitionId: 'personal-definition',
-      },
-      {
-        id: 'launch',
-        label: 'Launch',
-        color: '#123',
-        scope: 'team',
-        propertyDefinitionId: 'team-definition',
       },
     ]);
   });

@@ -97,7 +97,6 @@ where
                         .provision(
                             session_id,
                             &session.owner_id,
-                            session.repo_url.as_deref(),
                             &AgentMcpServers::Selected {
                                 servers: Vec::new(),
                             },
