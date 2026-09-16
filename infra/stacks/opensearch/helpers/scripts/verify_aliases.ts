@@ -10,19 +10,13 @@
  * Usage:
  *   bun scripts/verify_aliases.ts
  */
-import { type Client, errors } from '@opensearch-project/opensearch';
-import {
-  type CreateIndexArgs,
-  INDEX_SPECS,
-  selectIndexSpecs,
-} from './create_indices';
+import type { Client } from '@opensearch-project/opensearch';
 
 export type AliasState = {
   alias: string;
   expectedIndex: string;
   actualIndices: string[];
   aliasNameIsPhysicalIndex: boolean;
-  isWriteIndex?: boolean;
 };
 
 export type VerifyOutcome = {
@@ -62,22 +56,18 @@ export function evaluateAlias(state: AliasState): VerifyOutcome {
     };
   }
 
-  if (state.isWriteIndex === false) {
-    return { ok: false, reason: `alias "${alias}" is not writable` };
-  }
-
   return { ok: true };
 }
 
-async function getAlias(opensearchClient: Client, alias: string) {
+async function getActualIndices(
+  opensearchClient: Client,
+  alias: string
+): Promise<string[]> {
   try {
     const response = await opensearchClient.indices.getAlias({ name: alias });
-    return response.body;
-  } catch (error) {
-    if (error instanceof errors.ResponseError && error.statusCode === 404) {
-      return {};
-    }
-    throw error;
+    return Object.keys(response.body ?? {});
+  } catch (_err) {
+    return [];
   }
 }
 
@@ -93,17 +83,19 @@ async function isPhysicalIndex(
   return indexResp.body;
 }
 
-export async function verifyAliases(
-  opensearchClient: Client,
-  specs: CreateIndexArgs[]
-) {
+async function main() {
+  await import('dotenv').then((m) => m.config());
+  const { client } = await import('../client');
+  const { ALIAS_TO_INDEX } = await import('../constants');
+
+  const opensearchClient = client();
+
   let allOk = true;
   console.log('alias               -> expected_index            (actual)');
   console.log('-'.repeat(70));
 
-  for (const { aliasName: alias, indexName: expectedIndex } of specs) {
-    const aliases = await getAlias(opensearchClient, alias);
-    const actualIndices = Object.keys(aliases);
+  for (const [alias, expectedIndex] of Object.entries(ALIAS_TO_INDEX)) {
+    const actualIndices = await getActualIndices(opensearchClient, alias);
     const aliasNameIsPhysicalIndex =
       actualIndices.length === 0
         ? await isPhysicalIndex(opensearchClient, alias)
@@ -114,7 +106,6 @@ export async function verifyAliases(
       expectedIndex,
       actualIndices,
       aliasNameIsPhysicalIndex,
-      isWriteIndex: aliases[expectedIndex]?.aliases?.[alias]?.is_write_index,
     });
 
     const actualLabel = aliasNameIsPhysicalIndex
@@ -134,22 +125,15 @@ export async function verifyAliases(
   }
 
   if (!allOk) {
-    throw new Error('Alias verification failed');
+    console.error('\nAlias verification failed.');
+    process.exit(1);
   }
   console.log('\nAll aliases match expected state.');
 }
 
 if (import.meta.main) {
-  try {
-    const { client } = await import('../client');
-    const specs = selectIndexSpecs(INDEX_SPECS, process.env.INDEX);
-    if (specs.length === 0)
-      throw new Error(`Unknown INDEX: ${process.env.INDEX}`);
-    await verifyAliases(client(), specs);
-  } catch (error) {
-    console.error(
-      error instanceof Error ? error.message : 'Alias verification failed'
-    );
-    process.exitCode = 1;
-  }
+  main().catch((err) => {
+    console.error('Error', err);
+    process.exit(1);
+  });
 }

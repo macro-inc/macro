@@ -23,7 +23,6 @@ pub fn reusable_deploy_service() -> Workflow {
         .add_job("setup", setup())
         .add_job("build-service-binaries", build_service_binaries())
         .add_job("build-lambda-artifacts", build_lambda_artifacts())
-        .add_job("provision-search", provision_search())
         .add_job("deploy", deploy())
 }
 
@@ -183,18 +182,6 @@ fn log_lambda_receipt() -> Step<Run> {
         .shell("bash")
 }
 
-fn provision_search() -> Job {
-    Job::default()
-        .name("Provision search indices")
-        .needs(vec!["setup".to_string()])
-        .cond(Expression::new(
-            "${{ inputs.service-name == 'search-processing-service' || inputs.pulumi-stack-name == 'search-processing-service' }}",
-        ))
-        .runs_on("db-migrator")
-        .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
-        .add_step(steps::provision_search_indices())
-}
-
 /// A build job is skipped when the service has no binaries/lambdas (and a
 /// service may legitimately have neither). Proceed as long as nothing
 /// actually failed or was cancelled — skipped needs are expected here.
@@ -206,7 +193,6 @@ fn deploy() -> Job {
             "setup".to_string(),
             "build-service-binaries".to_string(),
             "build-lambda-artifacts".to_string(),
-            "provision-search".to_string(),
         ])
         .cond(Expression::new("${{ !failure() && !cancelled() }}"))
         .runs_on(runners::Runner::Small.to_string())

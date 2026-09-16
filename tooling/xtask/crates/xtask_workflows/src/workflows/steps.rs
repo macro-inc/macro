@@ -478,15 +478,3 @@ pub fn teardown_nix() -> Step<Use> {
     )
     .if_condition(Expression::new("always()"))
 }
-/// Provision the agent-session schema on the VPC runner before consumer rollout.
-/// The action is index-agnostic; deployments explicitly select the required alias.
-pub fn provision_search_indices() -> Step<Use> {
-    uses_local(
-        "Provision and verify search indices",
-        xtask_paths::repo_dir!(".github/actions/provision-search-indices"),
-    )
-    .add_with(("environment", "${{ inputs.environment }}"))
-    .add_with(("index", "agent_sessions"))
-    .add_with(("aws-access-key", "${{ secrets.AWS_ACCESS_KEY }}"))
-    .add_with(("aws-secret-key", "${{ secrets.AWS_SECRET_ACCESS_KEY }}"))
-}

@@ -306,11 +306,6 @@ fn migrate_db() -> Job {
         .runs_on(DB_MIGRATOR_RUNNER)
         .add_step(steps::checkout_v4().add_with(("sparse-checkout", ".github/")))
         .add_step(run_migrations())
-        .add_step(
-            steps::provision_search_indices().if_condition(Expression::new(
-                "${{ contains(fromJson(needs.setup.outputs.matrix), 'search-processing-service') }}",
-            )),
-        )
 }
 
 fn run_migrations() -> Step<Use> {

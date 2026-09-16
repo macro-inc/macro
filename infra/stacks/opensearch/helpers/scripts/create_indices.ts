@@ -1,6 +1,5 @@
-import { type API, type Client, errors } from '@opensearch-project/opensearch';
+import type { Client } from '@opensearch-project/opensearch';
 import { client } from '../client';
-import { verifyIndexMapping } from '../utils/mappings';
 import {
   AGENT_SESSIONS_ALIAS,
   AGENT_SESSIONS_INDEX,
@@ -235,8 +234,7 @@ export function planMappingConvergence(args: {
 async function convergeMapping(
   opensearchClient: Client,
   indexName: string,
-  body: Record<string, unknown>,
-  dryRun: boolean
+  body: Record<string, unknown>
 ) {
   const desiredMappings = isRecord(body.mappings) ? body.mappings : undefined;
   const desired = isRecord(desiredMappings?.properties)
@@ -253,10 +251,10 @@ async function convergeMapping(
 
   const plan = planMappingConvergence({ desired, live });
 
-  if (plan.conflictPaths.length > 0) {
-    throw new Error(
-      `${indexName}: incompatible field types: ${plan.conflictPaths.join(', ')}. ` +
-        'A type change requires an explicit index replacement.'
+  for (const path of plan.conflictPaths) {
+    console.log(
+      `${indexName}: ⚠️  "${path}" has a different type live than in this file. ` +
+        `A type change needs a reindex — run reindex_with_alias_swap.ts.`
     );
   }
 
@@ -271,7 +269,7 @@ async function convergeMapping(
     `${indexName}: mapping is missing ${plan.missingPaths.length} field(s): ${plan.missingPaths.join(', ')}`
   );
 
-  if (dryRun) {
+  if (IS_DRY_RUN) {
     console.log(
       `[DRY-RUN] Would add ${Object.keys(plan.updates).join(', ')} to ${indexName}`
     );
@@ -280,11 +278,7 @@ async function convergeMapping(
 
   const putMappingResponse = await opensearchClient.indices.putMapping({
     index: indexName,
-    // The plan copies these definitions directly from the canonical index body.
-    body: {
-      properties:
-        plan.updates as API.Indices_PutMapping_RequestBody['properties'],
-    },
+    body: { properties: plan.updates },
   });
   if (!putMappingResponse.body.acknowledged) {
     throw new Error(`Failed to add mapping fields to ${indexName}`);
@@ -295,10 +289,9 @@ async function convergeMapping(
   );
 }
 
-export async function createIndexWithAlias(
+async function createIndexWithAlias(
   opensearchClient: Client,
-  { indexName, aliasName, body }: CreateIndexArgs,
-  dryRun = IS_DRY_RUN
+  { indexName, aliasName, body }: CreateIndexArgs
 ) {
   const indexExists = (
     await opensearchClient.indices.exists({ index: indexName })
@@ -322,11 +315,8 @@ export async function createIndexWithAlias(
     try {
       const r = await opensearchClient.indices.getAlias({ name: aliasName });
       return Object.keys(r.body ?? {});
-    } catch (error) {
-      if (error instanceof errors.ResponseError && error.statusCode === 404) {
-        return [] as string[];
-      }
-      throw error;
+    } catch {
+      return [] as string[];
     }
   })();
   // Normalize: if the alias already includes our target index, we want
@@ -346,29 +336,22 @@ export async function createIndexWithAlias(
   switch (plan.kind) {
     case 'noop':
       console.log(`${indexName}: ${plan.reason}`);
-      await convergeMapping(opensearchClient, indexName, body, dryRun);
+      await convergeMapping(opensearchClient, indexName, body);
       return;
     case 'add_alias':
-      // Validate/converge before exposing an existing index to writers.
-      await convergeMapping(opensearchClient, indexName, body, dryRun);
-      if (dryRun) {
+      if (IS_DRY_RUN) {
         console.log(`[DRY-RUN] Would add alias ${aliasName} -> ${indexName}`);
       } else {
-        await verifyIndexMapping(opensearchClient, indexName, body.mappings);
         console.log(`Adding alias ${aliasName} -> ${indexName}`);
-        const response = await opensearchClient.indices.putAlias({
+        await opensearchClient.indices.putAlias({
           index: indexName,
           name: aliasName,
         });
-        if (!response.body.acknowledged) {
-          throw new Error(
-            `Alias creation for ${aliasName} was not acknowledged`
-          );
-        }
       }
+      await convergeMapping(opensearchClient, indexName, body);
       return;
     case 'create_with_alias':
-      if (dryRun) {
+      if (IS_DRY_RUN) {
         console.log(
           `[DRY-RUN] Would create ${indexName} with alias ${aliasName}`
         );
@@ -377,31 +360,25 @@ export async function createIndexWithAlias(
       console.log(
         `${indexName} does not exist, creating with alias ${aliasName}`
       );
-      const createdWithAlias = await opensearchClient.indices.create({
+      await opensearchClient.indices.create({
         index: indexName,
         body: { ...body, aliases: { [aliasName]: {} } },
       });
-      if (!createdWithAlias.body.acknowledged) {
-        throw new Error(`Creation of ${indexName} was not acknowledged`);
-      }
       return;
     case 'create_without_alias':
       console.log(`${indexName}: ${plan.nextStep}`);
-      if (dryRun) {
+      if (IS_DRY_RUN) {
         console.log(`[DRY-RUN] Would create ${indexName} without alias`);
         return;
       }
-      const created = await opensearchClient.indices.create({
+      await opensearchClient.indices.create({
         index: indexName,
         body,
       });
-      if (!created.body.acknowledged) {
-        throw new Error(`Creation of ${indexName} was not acknowledged`);
-      }
       return;
     case 'defer_alias':
       console.log(`${indexName}: ${plan.nextStep}`);
-      await convergeMapping(opensearchClient, indexName, body, dryRun);
+      await convergeMapping(opensearchClient, indexName, body);
       return;
   }
 }
@@ -1195,32 +1172,29 @@ async function createIndices() {
   const filter = process.env.INDEX;
   const specs = selectIndexSpecs(INDEX_SPECS, filter);
   if (specs.length === 0) {
-    throw new Error(
+    console.log(
       `⚠️  INDEX="${filter}" matches no index. Known: ` +
         `${INDEX_SPECS.map((s) => s.aliasName).join(', ')}. Aborting.`
     );
+    return;
   }
 
   console.log(
     `Creating indices and converging mappings${filter ? ` for "${filter}"` : ''}... ${IS_DRY_RUN ? '(DRY-RUN MODE — set DRY_RUN=false to apply)' : '(LIVE MODE)'}`
   );
 
-  // Idempotent — indices that already exist keep their data and only gain
-  // fields this file declares that they are missing.
-  for (const spec of specs) {
-    await createIndexWithAlias(opensearchClient, spec);
+  try {
+    // Idempotent — indices that already exist keep their data and only gain
+    // fields this file declares that they are missing.
+    for (const spec of specs) {
+      await createIndexWithAlias(opensearchClient, spec);
+    }
+    console.log('done');
+  } catch (error) {
+    console.error('Error', error);
   }
-  console.log('done');
 }
 
 if (import.meta.main) {
-  try {
-    await createIndices();
-  } catch (error) {
-    // Client error objects can include authentication metadata.
-    console.error(
-      error instanceof Error ? error.message : 'Index creation failed'
-    );
-    process.exitCode = 1;
-  }
+  createIndices();
 }

@@ -314,14 +314,6 @@ jobs:
       uses: ./.github/actions/migrate-cloud-storage-db
       with:
         environment: ${{ inputs.environment }}
-    - name: Provision and verify search indices
-      if: ${{ contains(fromJson(needs.setup.outputs.matrix), 'search-processing-service') }}
-      uses: ./.github/actions/provision-search-indices
-      with:
-        environment: ${{ inputs.environment }}
-        index: agent_sessions
-        aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   deploy-services:
     needs:
     - setup

@@ -144,31 +144,11 @@ jobs:
     - name: Teardown Nix
       if: always()
       uses: ./.github/actions/teardown-nix
-  provision-search:
-    needs:
-    - setup
-    if: ${{ inputs.service-name == 'search-processing-service' || inputs.pulumi-stack-name == 'search-processing-service' }}
-    name: Provision search indices
-    runs-on: db-migrator
-    steps:
-    - name: Checkout Repo
-      uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
-      with:
-        persist-credentials: 'false'
-        sparse-checkout: .github/
-    - name: Provision and verify search indices
-      uses: ./.github/actions/provision-search-indices
-      with:
-        environment: ${{ inputs.environment }}
-        index: agent_sessions
-        aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
-        aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
   deploy:
     needs:
     - setup
     - build-service-binaries
     - build-lambda-artifacts
-    - provision-search
     if: ${{ !failure() && !cancelled() }}
     name: Deploy ${{ inputs.service-name }}
     runs-on: namespace-profile-linux-small
