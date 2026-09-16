@@ -1,9 +1,11 @@
 import { openCreateContactModal } from '@app/features/companies/CreateContactModal';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { SidePanel } from '@components/app/side-panel';
+import { enableCrmLists } from '@core/constant/featureFlags';
 import PlusIcon from '@phosphor/plus.svg';
-import { useCompanyQuery } from '@queries/crm/companies';
+import { type CompanyContact, useCompanyQuery } from '@queries/crm/companies';
 import { Button } from '@ui';
-import { Suspense } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import { CompanyListsSection } from '../views/CompanyListsSection';
 import { CompanyContactsSection } from './CompanyContactsSection';
 import { CompanyDiscussionSection } from './CompanyDiscussionSection';
@@ -23,7 +25,9 @@ export function Company(props: {
   companyId: string;
   headerToggle?: boolean;
   onHidden?: () => void;
+  onOpenContact?: (contact: CompanyContact) => void;
 }) {
+  const listsFlag = useFeatureFlag(enableCrmLists);
   const { company, contacts } = useCompanyQuery(() => props.companyId);
 
   return (
@@ -52,9 +56,11 @@ export function Company(props: {
       >
         <CompanyPropertiesSection companyId={props.companyId} />
       </SidePanel.Section>
-      <Suspense>
-        <CompanyListsSection companyId={props.companyId} />
-      </Suspense>
+      <Show when={listsFlag().enabled}>
+        <Suspense>
+          <CompanyListsSection companyId={props.companyId} />
+        </Suspense>
+      </Show>
       <SidePanel.Section
         id="company-contacts"
         title="Contacts"
@@ -78,7 +84,11 @@ export function Company(props: {
           </Button>
         }
       >
-        <CompanyContactsSection company={company()} contacts={contacts()} />
+        <CompanyContactsSection
+          company={company()}
+          contacts={contacts()}
+          onOpenContact={props.onOpenContact}
+        />
       </SidePanel.Section>
       <SidePanel.Section id="company-sharing" title="Sharing" order={25}>
         <CompanySharingSection company={company()} onHidden={props.onHidden} />

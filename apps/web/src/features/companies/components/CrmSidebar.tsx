@@ -18,6 +18,7 @@ export function CrmSidebar(props: {
   onViewModeChange: (mode: 'board' | 'list') => void;
   lists: { id: string; name: string; count: number }[];
   savedViews: { id: string; name: string }[];
+  listsEnabled: boolean;
   listsLoading: boolean;
   listsError: boolean;
   canCreateList: boolean;
@@ -103,51 +104,56 @@ export function CrmSidebar(props: {
             </ViewSidebar.Nav>
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
-        <CollapsibleSection.Root open={listsOpen()} onOpenChange={setListsOpen}>
-          <CollapsibleSection.Trigger class="text-xs">
-            <span>Lists</span>
-            <CollapsibleSection.Indicator />
-          </CollapsibleSection.Trigger>
-          <CollapsibleSection.Content>
-            <ViewSidebar.Nav aria-label="Company lists">
-              <For each={props.lists}>
-                {(list) => (
-                  <ViewSidebar.Item
-                    active={props.active === `list:${list.id}`}
-                    title={list.name}
-                    onClick={() => props.onNavigate(`list:${list.id}`)}
-                  >
-                    <ViewSidebar.Icon>
-                      <ListIcon class="size-4" />
-                    </ViewSidebar.Icon>
-                    <span class="min-w-0 flex-1 truncate">{list.name}</span>
-                    <span class="text-xs tabular-nums text-ink-extra-muted">
-                      {list.count}
-                    </span>
-                  </ViewSidebar.Item>
-                )}
-              </For>
-              <Show when={!props.lists.length}>
-                <p class="px-3 pb-2 text-xs leading-5 text-ink-extra-muted">
-                  {props.listsLoading
-                    ? 'Loading lists…'
-                    : props.listsError
-                      ? 'Could not load lists.'
-                      : 'Your own collections of companies.'}
-                </p>
-              </Show>
-              <ViewSidebar.Item
-                onClick={props.onNewList}
-                disabled={!props.canCreateList}
-              >
-                <ViewSidebar.Icon>
-                  <PlusIcon class="size-4" />
-                </ViewSidebar.Icon>
-                <span>New list</span>
-              </ViewSidebar.Item>
-            </ViewSidebar.Nav>
-          </CollapsibleSection.Content>
-        </CollapsibleSection.Root>
+        <Show when={props.listsEnabled}>
+          <CollapsibleSection.Root
+            open={listsOpen()}
+            onOpenChange={setListsOpen}
+          >
+            <CollapsibleSection.Trigger class="text-xs">
+              <span>Lists</span>
+              <CollapsibleSection.Indicator />
+            </CollapsibleSection.Trigger>
+            <CollapsibleSection.Content>
+              <ViewSidebar.Nav aria-label="Company lists">
+                <For each={props.lists}>
+                  {(list) => (
+                    <ViewSidebar.Item
+                      active={props.active === `list:${list.id}`}
+                      title={list.name}
+                      onClick={() => props.onNavigate(`list:${list.id}`)}
+                    >
+                      <ViewSidebar.Icon>
+                        <ListIcon class="size-4" />
+                      </ViewSidebar.Icon>
+                      <span class="min-w-0 flex-1 truncate">{list.name}</span>
+                      <span class="text-xs tabular-nums text-ink-extra-muted">
+                        {list.count}
+                      </span>
+                    </ViewSidebar.Item>
+                  )}
+                </For>
+                <Show when={!props.lists.length}>
+                  <p class="px-3 pb-2 text-xs leading-5 text-ink-extra-muted">
+                    {props.listsLoading
+                      ? 'Loading lists…'
+                      : props.listsError
+                        ? 'Could not load lists.'
+                        : 'Your own collections of companies.'}
+                  </p>
+                </Show>
+                <ViewSidebar.Item
+                  onClick={props.onNewList}
+                  disabled={!props.canCreateList}
+                >
+                  <ViewSidebar.Icon>
+                    <PlusIcon class="size-4" />
+                  </ViewSidebar.Icon>
+                  <span>New list</span>
+                </ViewSidebar.Item>
+              </ViewSidebar.Nav>
+            </CollapsibleSection.Content>
+          </CollapsibleSection.Root>
+        </Show>
       </ViewSidebar.Content>
       <div class="shrink-0 border-t border-edge-muted p-1.5 py-3">
         <ViewSidebar.Nav aria-label="CRM tools">

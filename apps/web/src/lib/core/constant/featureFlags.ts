@@ -423,6 +423,13 @@ export const enableCrm = defineFlag({
   default: onInDev,
 });
 
+// Company collections are paused until ready; preserve stored lists while off.
+export const enableCrmLists = defineFlag({
+  key: 'enable-crm-lists',
+  env: 'ENABLE_CRM_LISTS',
+  default: false,
+});
+
 // Reminders: the "Remind me" entry in the command menu, the soup
 // context menu and the block ⋯ menu, its 'h' shortcut, and the composer modal.
 // Every surface routes through `makeCreateReminderAction().canExecute`, so this

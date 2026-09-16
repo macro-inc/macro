@@ -1,11 +1,21 @@
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { Contact } from '@app/features/contacts/Contact/Contact';
 import { SidePanel } from '@components/app/side-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import { useCompanyQuery } from '@queries/crm/companies';
+import { type CompanyContact, useCompanyQuery } from '@queries/crm/companies';
+import { useContactQuery } from '@queries/crm/contacts';
 import { Button, Tooltip } from '@ui';
-import { ErrorBoundary, type JSX, onMount, Show, Suspense } from 'solid-js';
+import {
+  createSignal,
+  ErrorBoundary,
+  type JSX,
+  onMount,
+  Show,
+  Suspense,
+} from 'solid-js';
 import { Company } from '../Company/Company';
+import { CrmCopyLinkButton } from '../components/CrmCopyLinkButton';
 
 export function CrmCompanyDetail(props: {
   company: { id: string; name: string };
@@ -15,14 +25,31 @@ export function CrmCompanyDetail(props: {
 }) {
   const { query, company } = useCompanyQuery(() => props.company.id);
   const companyName = () => company()?.name ?? props.company.name;
+  const [selectedContact, setSelectedContact] = createSignal<CompanyContact>();
+  const contactQuery = useContactQuery(() => selectedContact()?.id ?? '');
+  const contactName = () => {
+    const contact = contactQuery.isSuccess
+      ? contactQuery.data
+      : selectedContact();
+    return contact?.name ?? contact?.email ?? 'Contact';
+  };
+  const closeContact = () => setSelectedContact(undefined);
+  const activeQuery = () => (selectedContact() ? contactQuery : query);
+  const closeDetail = () =>
+    selectedContact() ? closeContact() : props.onClose();
   let container: HTMLDivElement | undefined;
   onMount(() => container?.focus());
 
   return (
     <ViewBreadcrumbs.Root
-      value={`company:${props.company.id}`}
+      value={
+        selectedContact()
+          ? `contact:${selectedContact()!.id}`
+          : `company:${props.company.id}`
+      }
       onChange={(value) => {
         if (value === 'crm-view') props.onClose();
+        if (value === `company:${props.company.id}`) closeContact();
       }}
     >
       <ViewBreadcrumbs.Item value="crm-view" order={0}>
@@ -51,6 +78,24 @@ export function CrmCompanyDetail(props: {
           </Tooltip>
         )}
       </ViewBreadcrumbs.Item>
+      <Show when={selectedContact()}>
+        {(contact) => (
+          <ViewBreadcrumbs.Item value={`contact:${contact().id}`} order={2}>
+            {(item) => (
+              <Tooltip label={contactName()} class="min-w-0">
+                <ViewBreadcrumbs.Button
+                  isActive={item.isActive()}
+                  onClick={item.onSelect}
+                  class="gap-1.5"
+                >
+                  <EntityIcon targetType="contact" size="xs" class="shrink-0" />
+                  <span class="truncate">{contactName()}</span>
+                </ViewBreadcrumbs.Button>
+              </Tooltip>
+            )}
+          </ViewBreadcrumbs.Item>
+        )}
+      </Show>
       <SidePanel.Root persistKey="crm-company">
         <div
           ref={container}
@@ -60,44 +105,84 @@ export function CrmCompanyDetail(props: {
           <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 border-b border-edge-muted px-4">
             {props.navigation}
             <ViewBreadcrumbs.Outlet
-              aria-label="Company location"
+              aria-label="CRM record location"
               class="flex-1"
             />
-            <SidePanel.Toggle />
+            <div class="ml-auto flex shrink-0 items-center gap-2">
+              <CrmCopyLinkButton
+                type={selectedContact() ? 'contact' : 'company'}
+                id={selectedContact()?.id ?? props.company.id}
+              />
+              <SidePanel.Toggle />
+            </div>
           </div>
           <div class="relative min-h-0 min-w-0 flex-1">
-            <ErrorBoundary
-              fallback={(_, reset) => (
-                <DetailError onRetry={reset} onClose={props.onClose} />
-              )}
-            >
-              <Show
-                when={!query.isError}
-                fallback={
-                  <DetailError
-                    onRetry={() => void query.refetch()}
-                    onClose={props.onClose}
-                  />
-                }
-              >
-                <Suspense
-                  fallback={
-                    <div class="grid size-full place-items-center text-ink-muted">
-                      <SpinnerIcon
-                        aria-label="Loading company"
-                        class="size-5 animate-spin"
+            <Show when={selectedContact()?.id ?? props.company.id} keyed>
+              {(_recordId) => (
+                <ErrorBoundary
+                  fallback={(error, reset) => {
+                    console.error('Failed to render CRM record', error);
+                    return (
+                      <DetailError
+                        onRetry={reset}
+                        onClose={closeDetail}
+                        isContact={!!selectedContact()}
                       />
-                    </div>
-                  }
+                    );
+                  }}
                 >
-                  <Company
-                    companyId={props.company.id}
-                    headerToggle={false}
-                    onHidden={props.onClose}
-                  />
-                </Suspense>
-              </Show>
-            </ErrorBoundary>
+                  <Show
+                    when={!activeQuery().isError}
+                    fallback={
+                      <DetailError
+                        onRetry={() => void activeQuery().refetch()}
+                        onClose={closeDetail}
+                        isContact={!!selectedContact()}
+                      />
+                    }
+                  >
+                    <Suspense
+                      fallback={
+                        <div class="grid size-full place-items-center text-ink-muted">
+                          <SpinnerIcon
+                            aria-label={
+                              selectedContact()
+                                ? 'Loading contact'
+                                : 'Loading company'
+                            }
+                            class="size-5 animate-spin"
+                          />
+                        </div>
+                      }
+                    >
+                      <Show
+                        when={selectedContact()}
+                        fallback={
+                          <Company
+                            companyId={props.company.id}
+                            headerToggle={false}
+                            onHidden={props.onClose}
+                            onOpenContact={setSelectedContact}
+                          />
+                        }
+                      >
+                        {(contact) => (
+                          <Contact
+                            contactId={contact().id}
+                            headerToggle={false}
+                            onOpenCompany={(companyId) => {
+                              if (companyId !== props.company.id) return false;
+                              closeContact();
+                              return true;
+                            }}
+                          />
+                        )}
+                      </Show>
+                    </Suspense>
+                  </Show>
+                </ErrorBoundary>
+              )}
+            </Show>
           </div>
         </div>
       </SidePanel.Root>
@@ -105,16 +190,20 @@ export function CrmCompanyDetail(props: {
   );
 }
 
-function DetailError(props: { onRetry: () => void; onClose: () => void }) {
+function DetailError(props: {
+  onRetry: () => void;
+  onClose: () => void;
+  isContact: boolean;
+}) {
   return (
     <div class="flex size-full flex-col items-center justify-center gap-3 text-sm text-ink-muted">
-      <p>This company couldn’t be loaded.</p>
+      <p>This {props.isContact ? 'contact' : 'company'} couldn’t be loaded.</p>
       <div class="flex gap-2">
         <Button variant="outline" size="sm" onClick={props.onRetry}>
           Try again
         </Button>
         <Button variant="ghost" size="sm" onClick={props.onClose}>
-          Back to view
+          {props.isContact ? 'Back to company' : 'Back to view'}
         </Button>
       </div>
     </div>

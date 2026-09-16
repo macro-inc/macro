@@ -18,8 +18,10 @@ import {
   CompanyViewsMenu,
 } from '@app/features/next-soup/soup-view/views/companies/CompanyViewsMenu';
 import { useApplyCrmView } from '@app/features/next-soup/soup-view/views/companies/use-apply-crm-view';
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { usePreference } from '@app/preferences/use-preference';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { enableCrmLists } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { type EntityData, isCrmCompanyEntity } from '@entity';
@@ -29,7 +31,7 @@ import { useCrmLists } from '@queries/crm/lists';
 import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button, Dropdown, Tooltip } from '@ui';
-import { createSignal, type JSX, Show, Suspense } from 'solid-js';
+import { createSignal, type JSX, onMount, Show, Suspense } from 'solid-js';
 import { openCreateCompanyModal } from '../CreateCompanyModal';
 import { CrmListDialog } from '../components/CrmListDialog';
 import { CrmSidebar } from '../components/CrmSidebar';
@@ -177,8 +179,8 @@ export function CrmWorkspace(props: {
   const teamQuery = useCurrentTeamQuery();
   const teamId = () =>
     teamQuery.isSuccess ? teamQuery.data?.team.id : undefined;
-  const lists = useCrmLists(teamId);
-  const companies = useQuickAccessCrmCompaniesQuery();
+  const listsFlag = useFeatureFlag(enableCrmLists);
+  const lists = useCrmLists(() => (listsFlag().enabled ? teamId() : undefined));
   const personal = usePersonalCrmViews();
   const team = useTeamCrmViews();
   const savedViews = () => [
@@ -208,6 +210,7 @@ export function CrmWorkspace(props: {
     CRM_VIEWS.find((v) => v.id === active())?.label ??
     'Companies';
   const navigate = (id: string) => {
+    if (!listsFlag().enabled && id.startsWith('list:')) id = 'active';
     closeCompany();
     const saved = savedViews().find((v) => v.id === id);
     if (saved) {
@@ -249,6 +252,10 @@ export function CrmWorkspace(props: {
       viewMode: view.viewMode(),
     });
   };
+  onMount(() => {
+    if (!listsFlag().enabled && active().startsWith('list:'))
+      navigate('active');
+  });
   const sidebar = () => (
     <CrmSidebar
       active={active()}
@@ -263,6 +270,7 @@ export function CrmWorkspace(props: {
         count: list.config.companyIds.length,
       }))}
       savedViews={savedViews()}
+      listsEnabled={listsFlag().enabled}
       listsLoading={lists.query.isLoading}
       listsError={lists.query.isError}
       canCreateList={!!teamId()}
@@ -326,7 +334,7 @@ export function CrmWorkspace(props: {
                 <Suspense>
                   <CompanyViewsMenu hideLabel />
                 </Suspense>
-                <Show when={activeList()}>
+                <Show when={listsFlag().enabled && activeList()}>
                   {(list) => (
                     <Button
                       variant="ghost"
@@ -354,33 +362,36 @@ export function CrmWorkspace(props: {
           </div>
         </Show>
       </ViewShell.Main>
-      <Show when={editing()}>
-        {(initial) => (
-          <CrmListDialog
-            initial={
-              initial().id ? { ...initial(), id: initial().id! } : undefined
-            }
-            companies={companies.companies()}
-            loading={companies.query.isLoading}
-            onClose={() => setEditing(undefined)}
-            onSave={async (name, companyIds) => {
-              const id = await lists.save.mutateAsync({
-                id: initial().id,
-                name,
-                companyIds,
-              });
-              navigate(`list:${id}`);
-            }}
-            onDelete={
-              initial().id
-                ? async () => {
-                    await lists.remove.mutateAsync(initial().id!);
-                    navigate('active');
-                  }
-                : undefined
-            }
-          />
-        )}
+      <Show when={listsFlag().enabled && editing()}>
+        {(initial) => {
+          const companies = useQuickAccessCrmCompaniesQuery();
+          return (
+            <CrmListDialog
+              initial={
+                initial().id ? { ...initial(), id: initial().id! } : undefined
+              }
+              companies={companies.companies()}
+              loading={companies.query.isLoading}
+              onClose={() => setEditing(undefined)}
+              onSave={async (name, companyIds) => {
+                const id = await lists.save.mutateAsync({
+                  id: initial().id,
+                  name,
+                  companyIds,
+                });
+                navigate(`list:${id}`);
+              }}
+              onDelete={
+                initial().id
+                  ? async () => {
+                      await lists.remove.mutateAsync(initial().id!);
+                      navigate('active');
+                    }
+                  : undefined
+              }
+            />
+          );
+        }}
       </Show>
       <Show when={exporting()}>
         <CrmExport

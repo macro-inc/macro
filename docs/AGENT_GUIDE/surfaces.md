@@ -474,12 +474,26 @@ segment to return with the same filters, layout, and list scroll position. Selec
 another sidebar view or switching Board/List closes the company details.
 Shift-click still opens the company in a separate split. Direct company links use
 the standalone company page.
+Clicking a contact in an embedded company's Contacts section appends a third
+breadcrumb: `<current view or list> > <company> > <contact>`. The CRM sidebar stays
+visible. Click the company breadcrumb or the contact's Company link to return to
+the company; click the first breadcrumb to return directly to the originating
+view. Shift-click still opens a contact in a separate split. Direct contact links
+use the standalone contact page.
+Company and contact headers have `Copy link` beside the side-panel toggle.
+It copies the record's direct URL and shows a confirmation toast; this is also
+available in the embedded company and contact breadcrumb header.
 
 `Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
 At narrow widths, `Show CRM navigation` opens the same navigation in a menu.
 The sidebar's Views and Lists sections can also collapse independently.
 
-Lists are personal, team-scoped collections of explicit company IDs, persisted through
+CRM lists are currently disabled by `enableCrmLists` (default `false`). The sidebar
+Lists section, list editor, and company membership controls only mount when enabled.
+Existing list data is preserved; a restored list view returns to All companies while
+disabled. Board/List layout and saved filter views remain available.
+
+When enabled, lists are personal, team-scoped collections of explicit company IDs, persisted through
 saved-view storage separately from saved filter views. `New list` opens a name and
 company picker; `Edit list` changes membership or deletes the collection. An empty list
 must not show every company. The picker browses up to 500 recent companies. Canceling
