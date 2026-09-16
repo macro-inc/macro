@@ -10,7 +10,7 @@
     />
     <meta name="color-scheme" content="light" />
     <meta name="supported-color-schemes" content="light" />
-    <title>Verify your email</title>
+    <title>Invitation to Macro</title>
     <!--[if mso]>
       <noscript
         ><xml
@@ -53,7 +53,7 @@
         mso-hide: all;
       "
     >
-      Confirm your email address for Macro.
+      You've been invited to join an organization on Macro.
     </div>
     <table
       role="presentation"
@@ -125,7 +125,7 @@
                     color: #222222;
                   "
                 >
-                  Verify your email
+                  You're invited
                 </h1>
                 <p
                   style="
@@ -135,7 +135,8 @@
                     color: #525252;
                   "
                 >
-                  Confirm your email address to continue to Macro.
+                  You've been invited to join <strong>{ORG_NAME}</strong> on
+                  Macro.
                 </p>
                 <table
                   role="presentation"
@@ -153,7 +154,7 @@
                       "
                     >
                       <a
-                        href="{{URL}}/email/verify/{{VERIFICATION_ID}}"
+                        href="https://{PREFIX}macro.com/app/?login=true"
                         style="
                           display: inline-block;
                           padding: 14px 24px;
@@ -167,21 +168,11 @@
                           text-decoration: none;
                           mso-padding-alt: 0;
                         "
-                        >Verify email</a
+                        >Accept invitation</a
                       >
                     </td>
                   </tr>
                 </table>
-                <p
-                  style="
-                    margin: 28px 0 0;
-                    font-size: 14px;
-                    line-height: 22px;
-                    color: #737373;
-                  "
-                >
-                  If you didn't request this, you can safely ignore this email.
-                </p>
               </td>
             </tr>
             <tr>

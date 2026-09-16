@@ -4,6 +4,7 @@ Preview script for digest.html — renders the Askama template with dummy data
 using Jinja2 (which has nearly identical syntax) and opens it in a browser.
 """
 
+import base64
 import re
 import sys
 import tempfile
@@ -75,6 +76,8 @@ def askama_to_jinja2(src: str) -> str:
         src,
     )
 
+    src = src.replace("unsubscribe_url.as_ref()", "unsubscribe_url")
+
     # Askama uses `!expr` for logical negation; Jinja2 uses `not expr`
     # Only touch it inside block tags ({% … %})
     def replace_bang(m: re.Match) -> str:
@@ -94,10 +97,20 @@ def main() -> None:
     raw = TEMPLATE_PATH.read_text(encoding="utf-8")
     converted = askama_to_jinja2(raw)
 
-    env = Environment(autoescape=False)
+    env = Environment(autoescape=True)
     tmpl = env.from_string(converted)
 
-    html = tmpl.render(notifs=DUMMY_NOTIFS)
+    html = tmpl.render(
+        notifs=DUMMY_NOTIFS,
+        total_count=len(DUMMY_NOTIFS),
+        num_truncated=0,
+        unsubscribe_url="https://example.com/unsubscribe",
+    )
+    logo = Path(__file__).resolve().parents[2] / "apps/web/public/macro-email-logo.png"
+    html = html.replace(
+        "https://macro.com/app/macro-email-logo.png",
+        "data:image/png;base64," + base64.b64encode(logo.read_bytes()).decode("ascii"),
+    )
 
     # Write to a temp file that persists until the script exits
     with tempfile.NamedTemporaryFile(
