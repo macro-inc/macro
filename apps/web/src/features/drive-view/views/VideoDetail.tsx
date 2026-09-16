@@ -1,4 +1,5 @@
 import { VideoContent } from '@block-video/component/VideoContent';
+import type { JSX } from 'solid-js';
 import {
   FileDetailLayout,
   FileDetailLoadGate,
@@ -9,10 +10,15 @@ import {
   type VideoDocumentData,
 } from '../queries/video-document';
 
+export type VideoDetailContext = {
+  data: VideoDocumentData;
+};
+
 export function VideoDetailDocument(
   props: FileDetailShareProps & {
     documentId: string;
     data: VideoDocumentData;
+    children?: (context: VideoDetailContext) => JSX.Element;
   }
 ) {
   return (
@@ -25,6 +31,7 @@ export function VideoDetailDocument(
       shareOpen={props.shareOpen}
       onShareOpenChange={props.onShareOpenChange}
     >
+      {props.children?.({ data: props.data })}
       <VideoContent
         videoUrl={props.data.videoUrl}
         fileType={props.data.documentMetadata.fileType}
@@ -35,7 +42,10 @@ export function VideoDetailDocument(
 }
 
 export function VideoDetail(
-  props: FileDetailShareProps & { documentId: string }
+  props: FileDetailShareProps & {
+    documentId: string;
+    children?: (context: VideoDetailContext) => JSX.Element;
+  }
 ) {
   return (
     <FileDetailLoadGate
@@ -49,6 +59,7 @@ export function VideoDetail(
           data={data}
           shareOpen={props.shareOpen}
           onShareOpenChange={props.onShareOpenChange}
+          children={props.children}
         />
       )}
     </FileDetailLoadGate>

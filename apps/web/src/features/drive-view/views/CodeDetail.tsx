@@ -5,7 +5,7 @@ import {
 import { CodeModeControl } from '@block-code/component/CodeModeControl';
 import { isHtmlFileType } from '@block-code/util/fileMode';
 import { Rerun } from '@solid-primitives/keyed';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 import {
   FileDetailLayout,
   FileDetailLoadGate,
@@ -16,6 +16,10 @@ import {
   loadCodeDocument,
   saveCodeDocument,
 } from '../queries/code-document';
+
+export type CodeDetailContext = {
+  data: CodeDocumentData;
+};
 
 function CodeDetailContent(props: {
   documentId: string;
@@ -58,6 +62,7 @@ export function CodeDetailDocument(
   props: FileDetailShareProps & {
     documentId: string;
     data: CodeDocumentData;
+    children?: (context: CodeDetailContext) => JSX.Element;
   }
 ) {
   const blockType = () =>
@@ -74,6 +79,7 @@ export function CodeDetailDocument(
       shareOpen={props.shareOpen}
       onShareOpenChange={props.onShareOpenChange}
     >
+      {props.children?.({ data: props.data })}
       <Rerun
         on={() =>
           `${props.documentId}:${props.data.documentMetadata.documentVersionId}`
@@ -88,7 +94,10 @@ export function CodeDetailDocument(
 }
 
 export function CodeDetail(
-  props: FileDetailShareProps & { documentId: string }
+  props: FileDetailShareProps & {
+    documentId: string;
+    children?: (context: CodeDetailContext) => JSX.Element;
+  }
 ) {
   return (
     <FileDetailLoadGate
@@ -102,6 +111,7 @@ export function CodeDetail(
           data={data}
           shareOpen={props.shareOpen}
           onShareOpenChange={props.onShareOpenChange}
+          children={props.children}
         />
       )}
     </FileDetailLoadGate>

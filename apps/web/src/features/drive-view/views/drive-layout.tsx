@@ -44,6 +44,7 @@ export function DriveLayout(props: {
   onRootOpen: (open: boolean) => void;
   createMenu: () => JSX.Element;
   favorites: () => JSX.Element;
+  detail?: JSX.Element;
   children: JSX.Element;
 }) {
   const [folderSearch, setFolderSearch] = createSignal('');
@@ -207,123 +208,134 @@ export function DriveLayout(props: {
             </ViewSidebar.Root>
           </ViewShell.Aside>
           <ViewShell.Main>
-            <ViewShell.TopBar class="touch:flex">
-              <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
-              <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
-                Drive
-              </h1>
-              <Show
-                when={props.state.location.kind === 'folder'}
-                fallback={
-                  <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:hidden">
-                    {title()}
-                  </h1>
-                }
-              >
-                <span
-                  role="navigation"
-                  aria-label="Folder breadcrumbs"
-                  class="inline-flex max-w-full items-center gap-1 overflow-x-auto align-middle @max-[720px]/view-shell:hidden"
-                >
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    class="text-sm font-semibold tracking-[-0.03em] text-ink"
-                    onClick={() => props.onFolder(null)}
-                  >
-                    Drive
-                  </Button>
-                  <For each={breadcrumbs()}>
-                    {(folder) => (
-                      <>
-                        <span
-                          aria-hidden="true"
-                          class="shrink-0 text-ink-extra-muted"
-                        >
-                          /
-                        </span>
+            <Show
+              when={props.detail}
+              fallback={
+                <>
+                  <ViewShell.TopBar class="touch:flex">
+                    <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
+                    <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
+                      Drive
+                    </h1>
+                    <Show
+                      when={props.state.location.kind === 'folder'}
+                      fallback={
+                        <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:hidden">
+                          {title()}
+                        </h1>
+                      }
+                    >
+                      <span
+                        role="navigation"
+                        aria-label="Folder breadcrumbs"
+                        class="inline-flex max-w-full items-center gap-1 overflow-x-auto align-middle @max-[720px]/view-shell:hidden"
+                      >
                         <Button
                           variant="ghost"
                           size="sm"
-                          class="max-w-48 shrink-0 truncate rounded-md px-1.5 text-sm font-semibold tracking-[-0.03em] text-ink"
-                          title={folder.name}
-                          onClick={() => props.onFolder(folder.id)}
+                          class="text-sm font-semibold tracking-[-0.03em] text-ink"
+                          onClick={() => props.onFolder(null)}
                         >
-                          {folder.name}
+                          Drive
                         </Button>
-                      </>
-                    )}
-                  </For>
-                </span>
-              </Show>
-            </ViewShell.TopBar>
-            <ViewShell.Header>
-              <div class="flex min-w-0 flex-col gap-3">
-                <div class="hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
-                  <Dropdown
-                    open={navigationOpen()}
-                    onOpenChange={setNavigationOpen}
-                    placement="bottom-start"
-                  >
-                    <h1 class="min-w-0">
-                      <Dropdown.Trigger
-                        variant="ghost"
-                        size="sm"
-                        class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
-                        aria-label={`Select Drive view: ${title()}`}
-                      >
-                        <span class="truncate">{title()}</span>
-                        <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
-                      </Dropdown.Trigger>
-                    </h1>
-                    <Dropdown.Content class="max-h-[70vh] w-72 overflow-auto rounded-2xl">
-                      <Dropdown.Group class="gap-5 p-3">
-                        <SidebarContent />
-                      </Dropdown.Group>
-                    </Dropdown.Content>
-                  </Dropdown>
-                  <div class="ml-auto shrink-0">
-                    <props.createMenu />
-                  </div>
-                </div>
-                <div class="flex min-w-0 items-center justify-between gap-3">
-                  <SearchBar
-                    ref={props.searchRef}
-                    label="Search Drive"
-                    placeholder={
-                      selectedFolder() ? 'Search this folder' : 'Search files'
-                    }
-                    value={props.search}
-                    onValueChange={props.onSearch}
-                    hotkey="cmd+f"
-                    class="max-w-md flex-1"
-                  />
-                  <div class="flex shrink-0 items-center gap-2">
-                    <Show
-                      when={
-                        !(
-                          props.state.location.kind === 'tab' &&
-                          props.state.location.tab === 'recent'
-                        )
-                      }
-                    >
-                      <ListSortDropdown
-                        label="Sort files"
-                        value={props.state.sort}
-                        onChange={props.onSort}
-                        options={[
-                          { id: 'updated_at', label: 'Last modified' },
-                          { id: 'created_at', label: 'Created' },
-                          { id: 'viewed_at', label: 'Last viewed' },
-                        ]}
-                      />
+                        <For each={breadcrumbs()}>
+                          {(folder) => (
+                            <>
+                              <span
+                                aria-hidden="true"
+                                class="shrink-0 text-ink-extra-muted"
+                              >
+                                /
+                              </span>
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                class="max-w-48 shrink-0 truncate rounded-md px-1.5 text-sm font-semibold tracking-[-0.03em] text-ink"
+                                title={folder.name}
+                                onClick={() => props.onFolder(folder.id)}
+                              >
+                                {folder.name}
+                              </Button>
+                            </>
+                          )}
+                        </For>
+                      </span>
                     </Show>
-                    <props.filterMenu />
-                  </div>
-                </div>
-              </div>
-            </ViewShell.Header>
-            <ViewShell.Content>{props.children}</ViewShell.Content>
+                  </ViewShell.TopBar>
+                  <ViewShell.Header>
+                    <div class="flex min-w-0 flex-col gap-3">
+                      <div class="hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
+                        <Dropdown
+                          open={navigationOpen()}
+                          onOpenChange={setNavigationOpen}
+                          placement="bottom-start"
+                        >
+                          <h1 class="min-w-0">
+                            <Dropdown.Trigger
+                              variant="ghost"
+                              size="sm"
+                              class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
+                              aria-label={`Select Drive view: ${title()}`}
+                            >
+                              <span class="truncate">{title()}</span>
+                              <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
+                            </Dropdown.Trigger>
+                          </h1>
+                          <Dropdown.Content class="max-h-[70vh] w-72 overflow-auto rounded-2xl">
+                            <Dropdown.Group class="gap-5 p-3">
+                              <SidebarContent />
+                            </Dropdown.Group>
+                          </Dropdown.Content>
+                        </Dropdown>
+                        <div class="ml-auto shrink-0">
+                          <props.createMenu />
+                        </div>
+                      </div>
+                      <div class="flex min-w-0 items-center justify-between gap-3">
+                        <SearchBar
+                          ref={props.searchRef}
+                          label="Search Drive"
+                          placeholder={
+                            selectedFolder()
+                              ? 'Search this folder'
+                              : 'Search files'
+                          }
+                          value={props.search}
+                          onValueChange={props.onSearch}
+                          hotkey="cmd+f"
+                          class="max-w-md flex-1"
+                        />
+                        <div class="flex shrink-0 items-center gap-2">
+                          <Show
+                            when={
+                              !(
+                                props.state.location.kind === 'tab' &&
+                                props.state.location.tab === 'recent'
+                              )
+                            }
+                          >
+                            <ListSortDropdown
+                              label="Sort files"
+                              value={props.state.sort}
+                              onChange={props.onSort}
+                              options={[
+                                { id: 'updated_at', label: 'Last modified' },
+                                { id: 'created_at', label: 'Created' },
+                                { id: 'viewed_at', label: 'Last viewed' },
+                              ]}
+                            />
+                          </Show>
+                          <props.filterMenu />
+                        </div>
+                      </div>
+                    </div>
+                  </ViewShell.Header>
+                  <ViewShell.Content>{props.children}</ViewShell.Content>
+                </>
+              }
+            >
+              {(detail) => detail()}
+            </Show>
           </ViewShell.Main>
         </ViewShell.Root>
       </SplitPanel.Body>

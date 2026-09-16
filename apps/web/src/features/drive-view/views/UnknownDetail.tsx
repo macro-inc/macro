@@ -2,7 +2,7 @@ import { UnknownContent } from '@block-unknown/component/UnknownContent';
 import { toast } from '@core/component/Toast/Toast';
 import { downloadFile } from '@filesystem/download';
 import { formatDocumentName } from '@service-storage/util/filename';
-import { createSignal } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import {
   FileDetailLayout,
   FileDetailLoadGate,
@@ -14,10 +14,15 @@ import {
   type UnknownDocumentData,
 } from '../queries/unknown-document';
 
+export type UnknownDetailContext = {
+  data: UnknownDocumentData;
+};
+
 export function UnknownDetailDocument(
   props: FileDetailShareProps & {
     documentId: string;
     data: UnknownDocumentData;
+    children?: (context: UnknownDetailContext) => JSX.Element;
   }
 ) {
   const [localShareOpen, setLocalShareOpen] = createSignal(false);
@@ -56,6 +61,7 @@ export function UnknownDetailDocument(
       shareOpen={shareOpen()}
       onShareOpenChange={setShareOpen}
     >
+      {props.children?.({ data: props.data })}
       <UnknownContent
         fileName={props.data.documentMetadata.documentName}
         onShare={() => setShareOpen(true)}
@@ -66,7 +72,10 @@ export function UnknownDetailDocument(
 }
 
 export function UnknownDetail(
-  props: FileDetailShareProps & { documentId: string }
+  props: FileDetailShareProps & {
+    documentId: string;
+    children?: (context: UnknownDetailContext) => JSX.Element;
+  }
 ) {
   return (
     <FileDetailLoadGate
@@ -80,6 +89,7 @@ export function UnknownDetail(
           data={data}
           shareOpen={props.shareOpen}
           onShareOpenChange={props.onShareOpenChange}
+          children={props.children}
         />
       )}
     </FileDetailLoadGate>

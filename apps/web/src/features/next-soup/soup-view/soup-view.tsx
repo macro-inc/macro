@@ -796,6 +796,11 @@ interface SoupViewListProps {
   navigationKey?: string;
   /** Composed folder browsers keep ordinary folder activation in their pane. */
   onOpenProject?: (id: string) => void;
+  /** Returns true when a composed view handles ordinary entity activation. */
+  onOpenEntity?: (
+    entity: EntityData,
+    event?: KeyboardEvent | MouseEvent
+  ) => boolean;
   uploadProjectId?: string;
   disableTabHotkeys?: boolean;
   customScrollbarHidden?: boolean;
@@ -812,6 +817,7 @@ export const SoupViewList = (props: SoupViewListProps) => (
       customScrollbarHidden={props.customScrollbarHidden}
       scopeId={props.scopeId}
       onOpenProject={props.onOpenProject}
+      onOpenEntity={props.onOpenEntity}
       uploadProjectId={props.uploadProjectId}
       disableTabHotkeys={props.disableTabHotkeys}
       timestamp={props.timestamp}
@@ -1003,6 +1009,7 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     applyTabPreset,
     fetchNextGroupPage,
     onOpenProject: props.onOpenProject,
+    onOpenEntity: props.onOpenEntity,
     disableTabHotkeys: props.disableTabHotkeys,
   });
 
@@ -1065,6 +1072,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         markChannelNotificationsSeenOnOpen(entity, notificationSource);
         openEntityInNewTab({ entity, location });
       }
+      return;
+    }
+
+    if (type === 'entity' && props.onOpenEntity?.(entity, event)) {
       return;
     }
 

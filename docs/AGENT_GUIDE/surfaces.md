@@ -399,9 +399,13 @@ is restricted to your own files. Recent offers only file-scope filtering.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,
-while modified clicks retain existing split navigation. On narrow layouts, use
-`Select Drive view` for tabs, favorites, and folders. Navigation state and expanded
-folders are restored when returning from an opened file.
+while Markdown, code/CSV, image, video, and unrecognized file clicks and Enter
+replace the list with a breadcrumbed detail. Choose the Drive breadcrumb to return
+to the list; choosing an ancestor file drops newer detail entries. Modified clicks
+and file types without a dedicated detail, including PDF and canvas, retain existing
+split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
+and folders. Navigation state and expanded folders are restored when returning from
+an opened file.
 
 ## Calendar — `/app/calendar/view`
 
