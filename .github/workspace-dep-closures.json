@@ -6698,6 +6698,8 @@
       "crates/entity_access_db_utils",
       "crates/entity_access_management",
       "crates/entity_mutation",
+      "crates/entity_registry/entity_registry_db_utils",
+      "crates/entity_registry/shared_entity_registry",
       "crates/filter_ast",
       "crates/foreign_entity",
       "crates/frecency",
