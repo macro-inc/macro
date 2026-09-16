@@ -134,7 +134,7 @@ pub async fn insert_instructions_document(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use sqlx::{Pool, Postgres};
+    use sqlx::{Pool, Postgres, Row};
 
     #[sqlx::test(fixtures(path = "../../fixtures", scripts("basic_user_with_documents")))]
     async fn test_create_instructions_document_success(pool: Pool<Postgres>) -> anyhow::Result<()> {
@@ -168,6 +168,28 @@ mod tests {
                 assert_eq!(document.name, INSTRUCTIONS_FILE_NAME);
                 assert_eq!(document.file_type.as_deref(), Some("md"));
                 assert_eq!(document.owner.as_str(), user_id.as_ref());
+
+                let entity = sqlx::query(
+                    r#"
+                    SELECT
+                        owner_type::text AS owner_type,
+                        owner_id,
+                        entity_type,
+                        deleted_at
+                    FROM entity
+                    WHERE id = $1
+                    "#,
+                )
+                .bind(macro_uuid::string_to_uuid(&document_id)?)
+                .fetch_one(&pool)
+                .await?;
+                assert_eq!(entity.get::<String, _>("owner_type"), "user");
+                assert_eq!(entity.get::<String, _>("owner_id"), user_id.as_ref());
+                assert_eq!(entity.get::<String, _>("entity_type"), "document");
+                assert_eq!(
+                    entity.get::<Option<chrono::DateTime<chrono::Utc>>, _>("deleted_at"),
+                    None
+                );
 
                 Ok(())
             }
