@@ -119,6 +119,15 @@ impl ReplayMachine {
         self.runs.get(run).and_then(|s| s.terminal.clone())
     }
     /// Process one journal input, identically during capture and replay.
+    ///
+    /// Every error here costs the whole session, permanently. Capture appends
+    /// before it projects, so a payload that reaches this point is already
+    /// durable: refusing it now refuses it again on every later replay, and a
+    /// session whose journal cannot be replayed can never be loaded or
+    /// prompted again. So failing is only right where the alternative is
+    /// worse than losing the session - reporting an outcome nobody has read
+    /// as a success, say. Wherever a sound reading of the payload exists,
+    /// take it and report the surprise instead.
     pub fn push(
         &mut self,
         run: Option<&CursorRunId>,
@@ -249,19 +258,29 @@ impl ReplayMachine {
                 }
                 let mut updates = Vec::new();
                 if let Some(text) = text {
-                    // Polling can overlap an interrupted stream. Only append the
-                    // missing suffix; divergent answers cannot safely be guessed.
-                    if let Some(suffix) = text.strip_prefix(&state.text) {
-                        if !suffix.is_empty() {
-                            updates.extend(self.translator.push(CursorEvent::Assistant {
-                                text: suffix.to_owned(),
-                            }));
+                    // The final text restates the answer rather than continuing
+                    // it, and the restatement is not the streamed text: Cursor
+                    // drops inline images from it, and nothing promises that is
+                    // the only rewrite. So text that literally continues what
+                    // was captured is the missing suffix of a stream that
+                    // polling overtook, and is appended; anything else is the
+                    // same answer said differently, and the captured stream -
+                    // what the user watched arrive - stays as it is.
+                    match text.strip_prefix(state.text.as_str()) {
+                        Some(suffix) => {
+                            if !suffix.is_empty() {
+                                updates.extend(self.translator.push(CursorEvent::Assistant {
+                                    text: suffix.to_owned(),
+                                }));
+                            }
+                            state.text = text;
                         }
-                        state.text = text;
-                    } else if !state.text.is_empty() {
-                        return Err(rootcause::report!(
-                            "Cursor final text diverged from the captured stream for {run}"
-                        ));
+                        None => tracing::warn!(
+                            %run,
+                            captured = state.text.len(),
+                            restated = text.len(),
+                            "Cursor restated the answer; keeping the streamed text"
+                        ),
                     }
                 }
                 updates.extend(self.translator.push(CursorEvent::Result {
