@@ -2,6 +2,7 @@ import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
+import { queryReadyGate } from '@queries/gate';
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { type Accessor, createMemo } from 'solid-js';
@@ -54,9 +55,9 @@ export function useChannelBotMentionUsers(
 
   return createMemo(() =>
     availableBotMentionUsers(
-      channelBots.data ?? [],
-      agents.data ?? [],
-      cursorStatus.data?.registered ?? false
+      queryReadyGate(channelBots) ? channelBots.data : [],
+      queryReadyGate(agents) ? agents.data : [],
+      queryReadyGate(cursorStatus) ? cursorStatus.data.registered : false
     )
   );
 }

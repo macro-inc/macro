@@ -177,6 +177,11 @@ A touch tap leaves pending navigation intact; a vertical finger drag cancels it.
 The `[data-channel-scroll]` element is the scroll surface. Its virtualized rows are
 keyed by message ID; offscreen rows are normally absent from the DOM.
 
+On a cold channel open, verify that delayed bot/agent mention requests leave the
+messages and composer visible. Expand a thread while its replies are still
+loading: existing preview replies should remain visible until the full list
+arrives. Repeat after reopening the channel to cover both cold and cached data.
+
 Reopening a channel already loaded this session requests
 `GET /dss/channels/<id>/messages/catch-up?after=<newest cached created_at>&limit=50`
 and merges the result into the cached first page. A first open, a message link,
