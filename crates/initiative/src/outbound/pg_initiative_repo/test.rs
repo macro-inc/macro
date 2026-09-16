@@ -3,7 +3,7 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::channel_share_permission::{
-    UpdateChannelSharePermission, UpdateOperation,
+    ChannelSharePermission, UpdateChannelSharePermission, UpdateOperation,
 };
 use models_permissions::share_permission::team_share::TeamShareCreation;
 use models_permissions::share_permission::{
@@ -260,6 +260,59 @@ async fn create_writes_initiative_share_owner_members_and_optional_team_grant(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_detail_reports_each_channel_grant_once(pool: PgPool) -> anyhow::Result<()> {
+    insert_user(&pool, OWNER).await?;
+    insert_user(&pool, MEMBER).await?;
+    insert_user(&pool, TEAMMATE).await?;
+    let channel_id = Uuid::now_v7();
+    insert_channel(&pool, channel_id, OWNER, MEMBER).await?;
+    let task_a = Uuid::now_v7().to_string();
+    let task_b = Uuid::now_v7().to_string();
+    insert_document(&pool, &task_a, OWNER, true).await?;
+    insert_document(&pool, &task_b, OWNER, true).await?;
+
+    let repo = repo(pool);
+    let created = repo
+        .create(
+            create_args(OWNER, "Busy", &[MEMBER, TEAMMATE]),
+            share_off(),
+            TeamShareCreation::Unshared,
+        )
+        .await?;
+    repo.update(UpdateInitiativeRepoArgs {
+        id: created.id,
+        name: None,
+        description: None,
+        member_ids_added: Vec::new(),
+        member_ids_removed: Vec::new(),
+        share_permission: Some(UpdateSharePermissionRequestV2 {
+            link_share: None,
+            link_share_access_level: None,
+            team_share_access_level: None,
+            channel_share_permissions: Some(vec![UpdateChannelSharePermission {
+                operation: UpdateOperation::Add,
+                channel_id: channel_id.to_string(),
+                access_level: Some(AccessLevel::View),
+            }]),
+        }),
+        team_share: None,
+    })
+    .await?;
+    repo.assign_tasks(created.id, vec![task_a.clone(), task_b.clone()])
+        .await?;
+
+    let detail = repo.get_detail(created.id).await?.expect("busy");
+    assert_eq!(
+        detail.share_permission.channel_share_permissions,
+        Some(vec![ChannelSharePermission {
+            channel_id: channel_id.to_string(),
+            access_level: AccessLevel::View,
+        }])
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_share_with_team_without_owner_team_is_bad_request(
     pool: PgPool,
 ) -> anyhow::Result<()> {
@@ -489,7 +542,13 @@ async fn assign_tasks_moves_and_reports_non_tasks(pool: PgPool) -> anyhow::Resul
     let first_detail = repo.get_detail(first.id).await?.expect("first");
     let second_detail = repo.get_detail(second.id).await?.expect("second");
     assert_eq!(first_detail.task_ids, vec![task_b.clone()]);
-    assert_eq!(second_detail.task_ids, vec![task_a]);
+    assert_eq!(second_detail.task_ids, vec![task_a.clone()]);
+    assert!(second_detail.updated_at > second.updated_at);
+    assert!(matches!(
+        repo.assign_tasks(InitiativeId::generate(), vec![task_a])
+            .await,
+        Err(InitiativeError::NotFound)
+    ));
     Ok(())
 }
 
@@ -527,6 +586,7 @@ async fn unassign_task_ignores_links_owned_by_other_initiatives(
     repo.unassign_task(first.id, &task_id).await?;
     let detail = repo.get_detail(first.id).await?.expect("keeper");
     assert!(detail.task_ids.is_empty());
+    assert!(detail.updated_at > first.updated_at);
     Ok(())
 }
 

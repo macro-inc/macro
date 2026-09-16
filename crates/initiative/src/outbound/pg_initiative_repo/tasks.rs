@@ -22,6 +22,38 @@ pub(super) async fn assign_tasks(
         .map_err(map_sqlx)?;
     let initiative_id = id.as_uuid();
 
+    let locked = sqlx::query_scalar!(
+        r#"
+        SELECT id
+        FROM initiative
+        WHERE id = $1
+        FOR UPDATE
+        "#,
+        initiative_id,
+    )
+    .fetch_optional(tx.as_mut())
+    .await
+    .map_err(AdapterError::Sqlx)
+    .map_err(map_sqlx)?;
+    if locked.is_none() {
+        return Err(InitiativeError::NotFound);
+    }
+
+    sqlx::query!(
+        r#"
+        SELECT id
+        FROM "Document"
+        WHERE id = ANY($1)
+        ORDER BY id
+        FOR UPDATE
+        "#,
+        &task_ids,
+    )
+    .fetch_all(tx.as_mut())
+    .await
+    .map_err(AdapterError::Sqlx)
+    .map_err(map_sqlx)?;
+
     let prior_rows = sqlx::query!(
         r#"
         SELECT task_id, initiative_id
@@ -94,15 +126,21 @@ pub(super) async fn unassign_task(
     id: InitiativeId,
     task_id: &str,
 ) -> Result<(), InitiativeError> {
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(AdapterError::Sqlx)
+        .map_err(map_sqlx)?;
+    let initiative_id = id.as_uuid();
     let result = sqlx::query!(
         r#"
         DELETE FROM task_initiative
         WHERE task_id = $1 AND initiative_id = $2
         "#,
         task_id,
-        id.as_uuid(),
+        initiative_id,
     )
-    .execute(pool)
+    .execute(tx.as_mut())
     .await
     .map_err(AdapterError::Sqlx)
     .map_err(map_sqlx)?;
@@ -110,6 +148,24 @@ pub(super) async fn unassign_task(
     if result.rows_affected() == 0 {
         return Err(InitiativeError::NotFound);
     }
+
+    sqlx::query!(
+        r#"
+        UPDATE initiative
+        SET updated_at = now()
+        WHERE id = $1
+        "#,
+        initiative_id,
+    )
+    .execute(tx.as_mut())
+    .await
+    .map_err(AdapterError::Sqlx)
+    .map_err(map_sqlx)?;
+
+    tx.commit()
+        .await
+        .map_err(AdapterError::Sqlx)
+        .map_err(map_sqlx)?;
     Ok(())
 }
 

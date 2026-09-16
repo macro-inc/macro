@@ -5,7 +5,7 @@ use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, TeamLinkShareDefault, UpdateSharePermissionRequestV2,
     access_level::AccessLevel,
 };
-use share_permission_db_utils::team_share;
+use share_permission_db_utils::{InsertChannelSharePermissionResult, team_share};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -134,7 +134,7 @@ pub(super) async fn patch_share_permission(
     for channel in channel_updates {
         match channel.operation {
             UpdateOperation::Add => {
-                share_permission_db_utils::insert_channel_share_permission(
+                let insert = share_permission_db_utils::insert_channel_share_permission(
                     tx.as_mut(),
                     &share_permission_id,
                     &channel.channel_id,
@@ -143,6 +143,15 @@ pub(super) async fn patch_share_permission(
                 .await
                 .map_err(AdapterError::Sqlx)
                 .map_err(map_sqlx)?;
+                if insert == InsertChannelSharePermissionResult::AlreadyExists {
+                    update_channel_share_access(
+                        tx,
+                        &share_permission_id,
+                        &channel.channel_id,
+                        channel.access_level.unwrap_or(AccessLevel::View),
+                    )
+                    .await?;
+                }
             }
             UpdateOperation::Remove => {
                 sqlx::query!(
@@ -159,27 +168,51 @@ pub(super) async fn patch_share_permission(
                 .map_err(map_sqlx)?;
             }
             UpdateOperation::Replace => {
-                sqlx::query!(
-                    r#"
-                    UPDATE "ChannelSharePermission"
-                    SET access_level = $3::text::"AccessLevel"
-                    WHERE share_permission_id = $1 AND channel_id = $2
-                    "#,
-                    share_permission_id,
-                    channel.channel_id,
-                    channel
-                        .access_level
-                        .unwrap_or(AccessLevel::View)
-                        .to_string(),
+                let updated = update_channel_share_access(
+                    tx,
+                    &share_permission_id,
+                    &channel.channel_id,
+                    channel.access_level.unwrap_or(AccessLevel::View),
                 )
-                .execute(tx.as_mut())
-                .await
-                .map_err(AdapterError::Sqlx)
-                .map_err(map_sqlx)?;
+                .await?;
+                if !updated {
+                    share_permission_db_utils::insert_channel_share_permission(
+                        tx.as_mut(),
+                        &share_permission_id,
+                        &channel.channel_id,
+                        channel.access_level.unwrap_or(AccessLevel::View),
+                    )
+                    .await
+                    .map_err(AdapterError::Sqlx)
+                    .map_err(map_sqlx)?;
+                }
             }
         }
     }
     Ok(())
+}
+
+async fn update_channel_share_access(
+    tx: &mut Transaction<'_, Postgres>,
+    share_permission_id: &str,
+    channel_id: &str,
+    access_level: AccessLevel,
+) -> Result<bool, InitiativeError> {
+    let result = sqlx::query!(
+        r#"
+        UPDATE "ChannelSharePermission"
+        SET access_level = $3::text::"AccessLevel"
+        WHERE share_permission_id = $1 AND channel_id = $2
+        "#,
+        share_permission_id,
+        channel_id,
+        access_level.to_string(),
+    )
+    .execute(tx.as_mut())
+    .await
+    .map_err(AdapterError::Sqlx)
+    .map_err(map_sqlx)?;
+    Ok(result.rows_affected() > 0)
 }
 
 pub(super) async fn get_team_share_facts(

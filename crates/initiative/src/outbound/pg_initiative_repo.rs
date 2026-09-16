@@ -59,12 +59,12 @@ impl InitiativeRepo for PgInitiativeRepo {
 
     #[tracing::instrument(err, skip(self))]
     async fn get_basic(&self, id: InitiativeId) -> Result<Option<InitiativeBasic>, Self::Err> {
-        Ok(load_record(&self.pool, id)
+        load_record(&self.pool, id)
             .await
             .map_err(AdapterError::Sqlx)
             .map_err(map_sqlx)?
             .map(InitiativeRecord::into_basic)
-            .transpose()?)
+            .transpose()
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -136,7 +136,7 @@ struct InitiativeRecord {
     link_share: Option<String>,
     link_share_access_level: Option<AccessLevel>,
     team_share_access_level: Option<AccessLevel>,
-    channel_share_permissions: Option<serde_json::Value>,
+    channel_share_permissions: serde_json::Value,
 }
 
 impl InitiativeRecord {
@@ -195,13 +195,12 @@ fn parse_members(raw: Vec<String>) -> Result<Vec<MacroUserIdStr<'static>>, Initi
 fn share_permission_from_record(
     record: &InitiativeRecord,
 ) -> Result<SharePermissionV2, InitiativeError> {
-    let channel_share_permissions = record
-        .channel_share_permissions
-        .clone()
-        .map(serde_json::from_value::<Vec<ChannelSharePermission>>)
-        .transpose()
-        .map_err(|error| map_sqlx(AdapterError::Sqlx(sqlx::Error::Decode(Box::new(error)))))?
-        .filter(|permissions| !permissions.is_empty());
+    let channel_share_permissions = serde_json::from_value::<Vec<ChannelSharePermission>>(
+        record.channel_share_permissions.clone(),
+    )
+    .map_err(|error| map_sqlx(AdapterError::Sqlx(sqlx::Error::Decode(Box::new(error)))))?;
+    let channel_share_permissions =
+        Some(channel_share_permissions).filter(|permissions| !permissions.is_empty());
     let link_share = record
         .link_share
         .as_deref()
@@ -310,18 +309,20 @@ async fn load_record(
             sp."linkShareAccessLevel" AS "link_share_access_level?: AccessLevel",
             sp.team_share_access_level AS "team_share_access_level?: AccessLevel",
             COALESCE(
-                json_agg(json_build_object(
-                    'channel_id', channel."channel_id",
-                    'access_level', channel."access_level"
-                )) FILTER (WHERE channel."channel_id" IS NOT NULL),
-                '[]'
-            ) AS "channel_share_permissions?"
+                (
+                    SELECT json_agg(json_build_object(
+                        'channel_id', channel."channel_id",
+                        'access_level', channel."access_level"
+                    ))
+                    FROM "ChannelSharePermission" channel
+                    WHERE channel."share_permission_id" = i.share_permission_id
+                ),
+                '[]'::json
+            ) AS "channel_share_permissions!"
         FROM initiative i
         JOIN "SharePermission" sp ON sp.id = i.share_permission_id
         LEFT JOIN initiative_member m ON m.initiative_id = i.id
         LEFT JOIN task_initiative t ON t.initiative_id = i.id
-        LEFT JOIN "ChannelSharePermission" channel
-            ON channel."share_permission_id" = sp.id
         WHERE i.id = $1
         GROUP BY
             i.id,
