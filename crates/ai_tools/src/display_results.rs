@@ -17,8 +17,11 @@ pub struct DisplayResultsResponse {
 /// backend does no work — it just acknowledges so the model can continue.
 ///
 /// The input is arbitrary JSON (`view`) because the dynamic-UI schema is owned by
-/// the frontend (a Zod schema) and conveyed to the model out-of-band rather than
-/// duplicated here in Rust.
+/// the frontend (a Zod schema, next to the renderer that consumes it) and conveyed
+/// to the model out-of-band rather than duplicated here in Rust: the chat sends it
+/// as `additional_instructions`, and an agent session — whose turn runs entirely on
+/// the backend — gets it from `prompt::dynamic_ui`, generated from that same Zod
+/// schema.
 #[derive(Debug, Deserialize, JsonSchema)]
 #[schemars(
     title = "DisplayResults",

@@ -13,6 +13,7 @@ pub mod citations;
 pub mod connected_toolsets;
 pub mod do_not;
 pub mod document_content_links;
+pub mod dynamic_ui;
 pub mod email;
 pub mod math;
 pub mod mcp_item_links;
@@ -61,12 +62,18 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
 /// tool rules restated for a host that reviews those calls in the turn - a
 /// review card the user answers while the agent waits, not a composer left
 /// pending after it.
+///
+/// It also carries the [`dynamic_ui`] section, which chat gets from the
+/// frontend instead: a chat request arrives with the schema in
+/// `additional_instructions`, while an agent session's turn runs entirely on
+/// the backend and has nowhere else to learn the `view` shape from.
 pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&tool_usage::PROMPT)
     .compose(&user_tools::SESSION_PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
-    .compose(&email::PROMPT);
+    .compose(&email::PROMPT)
+    .compose(&dynamic_ui::PROMPT);
 
 /// Citation, do-not, Macro-terms, and document-content-linking rules surfaced
 /// to external MCP clients, composed together. These are static; the
@@ -190,6 +197,24 @@ mod tests {
         assert!(session.contains("review card"));
         assert!(session.contains("MUST use the `SendEmail` tool"));
         assert!(session.contains("do not ask for confirmation in prose"));
+    }
+
+    #[test]
+    fn only_the_session_prompt_states_the_dynamic_ui_view_contract() {
+        // An agent session's turn runs entirely on the backend, so this is
+        // the only place its model can learn the `view` shape. Chat sends the
+        // same text as `additional_instructions` from the frontend, which
+        // owns the Zod schema, so repeating it in the chat prompt would ship
+        // the schema twice; the MCP and channel-bot hosts render no view.
+        let session = SESSION_TOOL_USE_PROMPT.to_string();
+        assert!(session.contains("# displayResults"));
+        assert!(session.contains("\"widgets\""));
+        assert!(!TOOL_USE_PROMPT.to_string().contains("# displayResults"));
+        assert!(
+            !DIRECT_TOOL_USE_PROMPT
+                .to_string()
+                .contains("# displayResults")
+        );
     }
 
     #[test]

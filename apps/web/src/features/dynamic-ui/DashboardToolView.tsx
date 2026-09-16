@@ -16,19 +16,28 @@ import { Widget } from './widget';
  * dependency. Default export so it can be `lazy()`-loaded.
  */
 export default function DashboardToolView(props: { view: unknown }) {
-  const parsed = createMemo(() => ViewSchema.safeParse(props.view));
+  // The arguments stream in, and an agent session opens the call before it
+  // reports any input at all. Nothing has been composed yet at that point, so
+  // there is nothing to fail to render either - the "didn't match" notice is
+  // for a view the model actually sent.
+  const pending = () => props.view == null;
+  const parsed = createMemo(() =>
+    pending() ? undefined : ViewSchema.safeParse(props.view)
+  );
   const view = () => {
     const r = parsed();
-    return r.success ? r.data : undefined;
+    return r?.success ? r.data : undefined;
   };
 
   return (
     <Show
       when={view()}
       fallback={
-        <div class="text-ink-extra-muted rounded-lg border border-edge-muted p-3 text-xs">
-          Couldn't render dashboard — the view didn't match the schema.
-        </div>
+        <Show when={!pending()}>
+          <div class="text-ink-extra-muted rounded-lg border border-edge-muted p-3 text-xs">
+            Couldn't render dashboard — the view didn't match the schema.
+          </div>
+        </Show>
       }
     >
       {(v) => (

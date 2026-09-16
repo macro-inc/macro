@@ -411,6 +411,14 @@ agent as working, every Thinking label, **Calling N tools** row, shimmering
 tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. At most one shimmering row is ever expected.
 
+A `displayResults` call is the exception: it renders the dynamic-UI view the
+model composed — the same dashboard (markdown, timelines, entity lists, channel
+messages) that AI chat shows — full width in the transcript, and never folded
+into a tool group or behind a card. Expect the view itself, not a `DisplayResults`
+row. A view whose JSON does not match the dynamic-UI schema shows
+`Couldn't render dashboard` instead; nothing renders until the call reports its
+arguments.
+
 ### Sharing a session
 
 In the Agents workspace, saved sessions use the shared top-bar controls: session
