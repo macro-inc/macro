@@ -38,7 +38,6 @@ pub struct CreateDocumentArgs<'a> {
 }
 
 /// Creates a new document
-/// NOTE: used by seed_cli and instructions; needs to be deprecated
 #[instrument(skip(db))]
 pub async fn create_document(
     db: &Pool<Postgres>,

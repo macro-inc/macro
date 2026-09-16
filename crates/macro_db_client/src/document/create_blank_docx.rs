@@ -48,7 +48,6 @@ pub async fn create_blank_docx(
         None
     };
 
-    // TODO(ownership-v2): dual-write entity + Owner grant; covered by T2.8 reconciliation.
     let document = sqlx::query_as!(
         ID,
         r#"
