@@ -14,7 +14,6 @@ import {
   createSoupEntityActions,
   MaybeSoupEntityActionDrawerManager,
   SoupEntityContextMenu,
-  useSoupListNavigationHotkeys,
   viewedProjectIdFromContent,
 } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
@@ -178,19 +177,6 @@ export function EmailList(props: EmailListProps) {
     list.focus.set(row.id, { reason: 'programmatic', force: true });
     list.selection.setAnchor(row.id);
     clearListFocusTarget();
-  });
-
-  withSplitPanelOwner(listOwnedSlotName('navigation-hotkeys'), () => {
-    useSoupListNavigationHotkeys({
-      splitHotkeyScope: panel.splitHotkeyScope,
-      viewId: 'mail',
-      dataSource: source,
-      controller: list,
-      handle: panel.handle,
-      openEntityInSplit: (entity, options) => {
-        openEntity(entity, { mergeHistory: options.mergeHistory });
-      },
-    });
   });
 
   const { buildActionGroups } = createSoupEntityActions();

@@ -6,6 +6,7 @@ import { listOwnedSlotName } from '@app/components/list';
 import { setSidebarSectionCollapsed } from '@app/components/view-shell';
 import { registerInboxFilterSplit } from '@app/features/next-soup/soup-view/inbox-filter-controllers';
 import { normalizeFacetSelection } from '@app/features/soup';
+import { registerListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import { makePersistedState } from '@app/lib/persistence';
 import { usePreference } from '@app/lib/preferences/use-preference';
 import {
@@ -107,6 +108,21 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
 
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     useEmailDataSource(state, { tagSets, tagSetsReady })
+  );
+  withSplitPanelOwner(listOwnedSlotName('navigation-source'), () =>
+    registerListNavigationSource(panel.handle, {
+      viewId: 'mail',
+      entities: () =>
+        source
+          .items()
+          .flatMap((row) => (row.kind === 'entity' ? [row.entity] : [])),
+      hasMore: source.hasMore,
+      loadMore: async () => {
+        await source.loadMore();
+        const error = source.error();
+        if (error) throw error;
+      },
+    })
   );
   const [listFocusTarget, setListFocusTarget] = createSignal<string>();
 

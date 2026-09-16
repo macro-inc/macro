@@ -1,4 +1,5 @@
 import { useEntityDetailNavigationStack } from '@app/components/entity-detail/EntityDetailNavigationStack';
+import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list-navigation-hotkeys';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { displaySubject } from '@app/features/email-compose/core/subject-text';
 import type { EmailThreadHost } from '@app/features/email-thread/context/email-thread-context';
@@ -145,6 +146,13 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
         entry.data.type === 'email' && entry.data.id === props.thread.id
     );
   const breadcrumbValue = () => threadEntry()?.value ?? 'email-view';
+  useListNavigationHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: () =>
+      panel.isPanelActive() &&
+      navigationStack.active()?.value === breadcrumbValue(),
+    navigation: listNavigation,
+  });
   const loadResult = {
     data: threadData,
     error: () =>
