@@ -236,6 +236,33 @@ describe('ToolCallPart Macro tools', () => {
     expect(rendered.getByTestId('macro-tool').dataset.hasResponse).toBe('true');
   });
 
+  // The dynamic-UI view is the answer: the chat renderer hands `displayResults`
+  // to the dashboard component, and the agent transcript reuses that renderer
+  // rather than showing a card about the call.
+  it('hands a displayResults call to the chat renderer with its view', () => {
+    const view = {
+      title: 'This week',
+      widgets: [{ type: 'md', markdown: 'hi' }],
+    };
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'macro',
+            input: { view },
+            output: { message: 'The results have been displayed to the user.' },
+            error: null,
+          },
+          { name: 'DisplayResults', status: 'completed' }
+        )}
+      />
+    ));
+    expect(rendered.getByTestId('macro-tool').textContent).toBe(
+      'DisplayResults'
+    );
+    expect(rendered.queryByTestId('tool-card')).toBeNull();
+  });
+
   it('keeps a Macro tool the chat has no component for on a labelled card', () => {
     const rendered = render(() => (
       <ToolCallPart

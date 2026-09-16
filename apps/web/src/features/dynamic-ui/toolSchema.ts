@@ -6,29 +6,49 @@ import { ViewSchema } from './schema';
  *
  * The backend tool input is `any` (so the schema isn't duplicated in Rust), so
  * the model learns the shape from here instead: we convert the Zod `ViewSchema`
- * to JSON Schema and embed it in the chat request's `additional_instructions`
- * (see `buildRequest.ts`). Kept in its own module so importing it only pulls the
- * Zod schema, not the dynamic-ui component tree.
+ * to JSON Schema and embed it in the prompt. Kept in its own module so
+ * importing it only pulls the Zod schema, not the dynamic-ui component tree.
+ *
+ * Two surfaces read this, from the one source:
+ *
+ * - The AI chat embeds {@link displayResultsInstructions} in the chat
+ *   request's `additional_instructions` (see `buildRequest.ts`).
+ * - Agent sessions run their turn entirely on the backend, so the body is
+ *   generated into `crates/prompt/src/dynamic_ui.md`
+ *   (`bun run gen-dynamic-ui-prompt`) and composed into the session prompt
+ *   there. `bun run check` fails when that file goes stale.
  *
  * `unrepresentable: "any"` lets opaque schemas (the soup `Query` `z.custom`) fall
  * back to "accepts anything" rather than throwing during conversion.
  */
-let cached: string | undefined;
+let cachedBody: string | undefined;
 
-export function displayResultsInstructions(): string {
-  if (cached !== undefined) return cached;
+/** The heading the instructions are filed under in a composed prompt. */
+const PROMPT_TITLE = 'displayResults';
+
+/**
+ * The instructions without their heading, so a host that files prompt
+ * sections under their own title (the Rust `StaticPrompt`) does not print it
+ * twice.
+ */
+export function displayResultsPromptBody(): string {
+  if (cachedBody !== undefined) return cachedBody;
   const jsonSchema = z.toJSONSchema(ViewSchema, { unrepresentable: 'any' });
-  cached = [
-    '# displayResults',
-    '`displayResults` renders a rich, interactive view (lists, timelines, channel messages) directly in the chat. PREFER it over a plain-text answer whenever your response is largely about the user\'s workspace data — summaries of tasks/docs/activity, lists of entities, anything you would otherwise format as a markdown table or a long bulleted list. You do NOT need the user to ask for a "dashboard" or a "view": proactively call `displayResults` whenever it presents the information more clearly than text would.',
+  cachedBody = [
+    '`displayResults` renders a rich, interactive view (lists, timelines, channel messages) directly in the conversation — the chat, or the transcript of an agent session. PREFER it over a plain-text answer whenever your response is largely about the user\'s workspace data — summaries of tasks/docs/activity, lists of entities, anything you would otherwise format as a markdown table or a long bulleted list. You do NOT need the user to ask for a "dashboard" or a "view": proactively call `displayResults` whenever it presents the information more clearly than text would.',
     'Typical triggers — call it even though the user never said "dashboard": "what did I get done this week?", "what\'s <teammate> working on?", "show me my open tasks", "summarize this project", "what happened in <channel>?". When in doubt and the answer is mostly workspace entities or metrics, render a view.',
     '`ReadActivity` is the exception: it already renders its complete, entity-resolved response as a rich user-facing activity timeline. After calling `ReadActivity`, do NOT call `displayResults` to restate or summarize those events. Add at most one short textual takeaway.',
-    'When you DO render a view, keep any accompanying chat text short (a one-line lead-in at most) — the view IS the answer; do not also restate it in prose.',
+    'When you DO render a view, keep any accompanying text short (a one-line lead-in at most) — the view IS the answer; do not also restate it in prose.',
     'Its `view` argument MUST be a JSON object matching this JSON Schema (a `title` plus an ordered `widgets` array; layout is flexbox via the `container` widget):',
     '```json',
     JSON.stringify(jsonSchema, null, 2),
     '```',
     'Entity-backed widgets (`list`, `timeline`, `channelMessage`) take real workspace entity ids — use ids you obtained from other tools (ListEntities, search, etc.), never invented ones.',
   ].join('\n');
-  return cached;
+  return cachedBody;
+}
+
+/** The instructions as a standalone prompt section, heading included. */
+export function displayResultsInstructions(): string {
+  return `# ${PROMPT_TITLE}\n${displayResultsPromptBody()}`;
 }

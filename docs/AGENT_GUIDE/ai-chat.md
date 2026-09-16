@@ -272,6 +272,14 @@ only when their card opens; syntax highlighting may appear after the diff text.
 Opening a session or expanding a group should leave the app responsive, even
 when the session contains many file edits.
 
+A `displayResults` call is the exception: it renders the dynamic-UI view the
+model composed — the same dashboard (markdown, timelines, entity lists, channel
+messages) that AI chat shows — full width in the transcript, and never folded
+into a tool group or behind a card. Expect the view itself, not a `DisplayResults`
+row. A view whose JSON does not match the dynamic-UI schema shows
+`Couldn't render dashboard` instead; nothing renders until the call reports its
+arguments.
+
 ### Sharing a session
 
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;
