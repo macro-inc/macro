@@ -147,12 +147,7 @@ export function EventForm(props: EventFormProps) {
                 onAllDayChange={controller.setAllDay}
                 startDisabled={fieldIsDisabled('start')}
                 endDisabled={fieldIsDisabled('end')}
-                allDayDisabled={
-                  fieldIsDisabled('allDay') ||
-                  // Google requires timed out-of-office events. Leaving
-                  // all-day mode stays possible in case one was seeded.
-                  (isOutOfOffice() && !state().allDay)
-                }
+                allDayDisabled={fieldIsDisabled('allDay')}
                 invalid={controller.dateRangeError() !== undefined}
                 describedBy={dateRangeDescribedBy()}
               />

@@ -50,6 +50,11 @@ function shiftDateValue(value: string, days: number) {
   return format(addDays(parseISO(value), days), DATE_VALUE);
 }
 
+/** Local midnight of a `yyyy-MM-dd` date, as a UTC ISO instant. */
+function localMidnightIso(date: string): string {
+  return new Date(`${date}T00:00`).toISOString();
+}
+
 /** Default editor slot: the next full hour, one hour long. */
 function defaultEditorTimes(reference: Date) {
   const start = addHours(startOfHour(reference), 1);
@@ -205,11 +210,61 @@ export function eventGuestEmails(event: CalendarEvent): string[] {
     .map((attendee) => attendee.email);
 }
 
+/**
+ * The whole-day date range of an out-of-office event we stored as a full-day
+ * timed span (see `buildEventTime`), or undefined when the event is not one.
+ * Detecting it lets the editor round-trip the all-day choice the save set,
+ * since the provider hands the event back as a plain timed range.
+ */
+function outOfOfficeAllDayRange(
+  event: CalendarEvent
+): { start: string; end: string } | undefined {
+  if (event.eventType !== 'out_of_office' || event.allDay) return undefined;
+  const start = new Date(event.start);
+  const end = new Date(event.end);
+  if (Number.isNaN(start.getTime()) || Number.isNaN(end.getTime())) {
+    return undefined;
+  }
+  const atLocalMidnight = (date: Date) =>
+    date.getHours() === 0 &&
+    date.getMinutes() === 0 &&
+    date.getSeconds() === 0 &&
+    date.getMilliseconds() === 0;
+  if (!atLocalMidnight(start) || !atLocalMidnight(end) || end <= start) {
+    return undefined;
+  }
+  return {
+    start: format(start, DATE_VALUE),
+    end: shiftDateValue(format(end, DATE_VALUE), -1),
+  };
+}
+
 /** Converts an existing event into values for the shared editor. */
 export function calendarEventToEditorInitialValues(
   event: CalendarEvent
 ): EventEditorInitialValues {
   const guests = eventGuestEmails(event).join(', ');
+
+  // An out-of-office event saved as a full-day timed span reads back as timed;
+  // restore the all-day view so the editor shows the choice the save made.
+  const outOfOfficeAllDay = outOfOfficeAllDayRange(event);
+  if (outOfOfficeAllDay) {
+    return {
+      title: event.title,
+      allDay: true,
+      start: outOfOfficeAllDay.start,
+      end: outOfOfficeAllDay.end,
+      recurrenceLines: [...event.recurrenceLines],
+      calendarId: event.calendarId ?? event.calendar.id,
+      guests,
+      location: event.location ?? '',
+      description: event.description ?? '',
+      conference: initialConferenceChoice(event),
+      reminders: event.reminders,
+      eventType: event.eventType,
+      reminderEventType: event.reminderEventType,
+    };
+  }
 
   if (event.allDay) {
     const start = isDateOnly(event.start)
@@ -258,6 +313,18 @@ export function buildEventTime(
   if (state.allDay) {
     if (!state.start || !state.end || state.end < state.start) {
       return undefined;
+    }
+    // Google rejects a date-based out-of-office event, yet its own UI still
+    // offers an "all day" choice by storing a full-day *timed* span. Match
+    // that: an all-day out-of-office save becomes a timed range covering whole
+    // local days, so the provider accepts it and still reads as all-day.
+    if (state.eventType === 'out_of_office') {
+      return {
+        kind: 'timed',
+        startsAt: localMidnightIso(state.start),
+        endsAt: localMidnightIso(shiftDateValue(state.end, 1)),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      };
     }
     return {
       kind: 'allDay',

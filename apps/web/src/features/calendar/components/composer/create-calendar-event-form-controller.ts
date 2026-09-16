@@ -374,13 +374,14 @@ export function createCalendarEventFormController(
   const setEventKind = (kind: EventEditorEventKind) => {
     if (kind === eventKind()) return;
     if (kind === 'out_of_office') {
-      // Google requires a timed span, so the switch leaves all-day mode. The
-      // hidden guest, location, and conference values stay in state for a
+      // The all-day choice carries over: an all-day out-of-office save is sent
+      // as a full-day timed span the provider accepts (see buildEventTime).
+      // The hidden guest, location, and conference values stay in state for a
       // switch back; a save while out of office never submits them. The
       // description resets instead: its editor re-initializes from the
       // initial value when it reappears, so kept edits would be invisible.
       replaceState({
-        ...convertTimesForAllDay(state(), false),
+        ...state(),
         eventType: 'out_of_office',
         description: initialValue().description,
         outOfOffice: state().outOfOffice ?? {
