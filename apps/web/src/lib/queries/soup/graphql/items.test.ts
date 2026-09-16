@@ -211,6 +211,81 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   );
 
+  it('retains the page projection when only query activity changes', () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const [enabled, setEnabled] = createSignal(true);
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }),
+        () => ({ enabled: enabled() })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [{ id: 'retained' }], next_cursor: null })
+      );
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+      const entities = query.data()?.entities;
+
+      setEnabled(false);
+      expect(query.isEnabled()).toBe(false);
+      setEnabled(true);
+      expect(query.isEnabled()).toBe(true);
+      query.resetToInitialPage();
+
+      expect(query.data()?.entities).toBe(entities);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+      expect(mapSoupPageToEntityListMock).toHaveBeenCalledTimes(1);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('reprojects retained pages when projection inputs change', () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const [sort, setSort] = createSignal<'notified_at' | 'updated_at'>(
+      'updated_at'
+    );
+    const [showForeign, setShowForeign] = createSignal(false);
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: sort() }, body: {} }),
+        () => ({ enabled: true, showSupportedForeignEntities: showForeign() })
+      ),
+    }));
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ id: 'retained', notifiedAt: '2025-01-01T00:00:00Z' }],
+          next_cursor: null,
+        })
+      );
+      expect(query.data()?.oldestFetchedTimestamp).toBe(
+        Date.parse('2026-01-01T00:00:00Z')
+      );
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+
+      setSort('notified_at');
+      expect(query.data()?.oldestFetchedTimestamp).toBe(
+        Date.parse('2025-01-01T00:00:00Z')
+      );
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(2);
+
+      setShowForeign(true);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(3);
+      expect(mapSoupPageToEntityListMock).toHaveBeenLastCalledWith(
+        expect.anything(),
+        expect.objectContaining({ showSupportedForeignEntities: true })
+      );
+    } finally {
+      dispose();
+    }
+  });
+
   it('retains fetched coverage when display filtering hides every row', () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);

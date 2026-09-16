@@ -11,7 +11,10 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@app/lib/graphql-cache';
-import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
+import {
+  createUrqlInfiniteQuery,
+  type UrqlInfiniteData,
+} from '@app/lib/urql-solid';
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
@@ -439,6 +442,37 @@ export function createGraphqlSoupAstItemsQuery(
     })();
   });
 
+  // Keep the selector stable across activity/filter changes. The observer
+  // caches projections by selector and page identity; rebuilding the closure
+  // would remap and reconcile every notification when merely disabling a view.
+  const projectionSortMethod = createMemo(() => args().params.sort_method);
+  const projectionForeignEntities = createMemo(
+    () => options().showSupportedForeignEntities
+  );
+  const selectPages = createMemo(() => {
+    const sortMethod = projectionSortMethod();
+    const showSupportedForeignEntities = projectionForeignEntities();
+    return ({
+      pages,
+    }: UrqlInfiniteData<SoupQuery, string | null>): ServerProjection => {
+      const mappedPages = pages.map(mapGraphqlSoupPage);
+      const oldestFetchedTimestamp = soupPageTimestamp(
+        mappedPages.flatMap((page) => page.items.map(mapApiSoupItemToEntity)),
+        sortMethod
+      );
+      const entities = mappedPages.flatMap((page) =>
+        mapSoupPageToEntityList(page, {
+          instructionsIdQuery,
+          showSupportedForeignEntities,
+        })
+      );
+      return {
+        records: pages.flatMap((page) => page.user.soup.items),
+        data: { entities, groups: undefined, oldestFetchedTimestamp },
+      };
+    };
+  });
+
   const query = createUrqlInfiniteQuery<
     SoupQuery,
     SoupQueryVariables,
@@ -446,10 +480,7 @@ export function createGraphqlSoupAstItemsQuery(
     ServerProjection
   >(() => {
     const firstInput = firstPageInput();
-    const sortMethod = args().params.sort_method;
     const queryOptions = options();
-    const showSupportedForeignEntities =
-      queryOptions.showSupportedForeignEntities;
 
     return {
       query: SoupDocument,
@@ -481,27 +512,7 @@ export function createGraphqlSoupAstItemsQuery(
         recordAuthority('network');
         finishStaleFallback('network');
       },
-      select: ({ pages }) => {
-        const mappedPages = pages.map(mapGraphqlSoupPage);
-        const oldestFetchedTimestamp = soupPageTimestamp(
-          mappedPages.flatMap((page) => page.items.map(mapApiSoupItemToEntity)),
-          sortMethod
-        );
-        const entities = mappedPages.flatMap((page) =>
-          mapSoupPageToEntityList(page, {
-            instructionsIdQuery,
-            showSupportedForeignEntities,
-          })
-        );
-        return {
-          records: pages.flatMap((page) => page.user.soup.items),
-          data: {
-            entities,
-            groups: undefined,
-            oldestFetchedTimestamp,
-          },
-        };
-      },
+      select: selectPages(),
     };
   });
 
