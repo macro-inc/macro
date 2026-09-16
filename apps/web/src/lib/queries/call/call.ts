@@ -177,23 +177,26 @@ export function buildCallTeamSharePayload(
   return { teamShareAccessLevel: shared ? 'view' : null };
 }
 
+function patchCachedCallTeamShare(
+  record: CallRecord,
+  shared: boolean
+): CallRecord {
+  return {
+    ...record,
+    shareWithTeam: shared,
+    teamShareAccessLevel: record.isActive
+      ? record.teamShareAccessLevel
+      : buildCallTeamSharePayload(shared).teamShareAccessLevel,
+  };
+}
+
 export function setCallRecordTeamShareCache(callId: string, shared: boolean) {
   const queryKey = callKeys.record(callId).queryKey;
   // Drop in-flight GETs so a slower record response cannot overwrite this write.
   void queryClient.cancelQueries({ queryKey });
-  queryClient.setQueryData<CallRecord>(queryKey, (prev) => {
-    if (!prev) return prev;
-    return {
-      ...prev,
-      shareWithTeam: shared,
-      // A live call has no canonical level until it is archived.
-      teamShareAccessLevel: prev.isActive
-        ? prev.teamShareAccessLevel
-        : shared
-          ? 'view'
-          : null,
-    };
-  });
+  queryClient.setQueryData<CallRecord>(queryKey, (prev) =>
+    prev ? patchCachedCallTeamShare(prev, shared) : prev
+  );
 }
 
 function invalidateCallRecord(callId: string) {
