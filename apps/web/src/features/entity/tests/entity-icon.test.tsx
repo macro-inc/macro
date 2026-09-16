@@ -4,6 +4,7 @@ import EnvelopeOpenIcon from '@phosphor/envelope-open.svg';
 import FileIcon from '@phosphor/file-dashed.svg';
 import GitMergeIcon from '@phosphor/git-merge.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
+import DirectMessageIcon from '@phosphor/users.svg';
 import GitMergeBold from '@phosphor-icons/core/bold/git-merge-bold.svg';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
@@ -25,7 +26,7 @@ const channelPicture = vi.hoisted(() => ({
 vi.mock('@queries/channel/picture', () => ({
   useChannelPicture: (channelId: () => string) => {
     channelPicture.channelIds.push(channelId());
-    return { url: () => channelPicture.url };
+    return { url: () => channelPicture.url, revision: () => 1 };
   },
 }));
 vi.mock('@core/constant/allBlocks', () => ({
@@ -35,7 +36,11 @@ vi.mock('@core/constant/allBlocks', () => ({
   itemToBlockName: vi.fn(),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
-vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
+vi.mock('@core/component/UserIcon', () => ({
+  UserIcon: (props: { id: string }) => (
+    <span data-testid="user-avatar" data-user-id={props.id} />
+  ),
+}));
 vi.mock('../components/ChatProviderIcon', () => ({
   ChatProviderIcon: () => null,
 }));
@@ -130,11 +135,43 @@ describe('Entity.Icon', () => {
   });
 
   it('keeps direct messages on their participant avatar', () => {
-    render(() => (
-      <EntityIcon entity={{ ...channel, channelType: 'direct_message' }} />
+    const { container } = render(() => (
+      <EntityIcon
+        entity={{
+          ...channel,
+          channelType: 'direct_message',
+          participantIds: ['user', 'other-user'],
+        }}
+      />
     ));
     expect(channelPicture.channelIds).toEqual([]);
+    expect(
+      container
+        .querySelector('[data-testid="user-avatar"]')
+        ?.getAttribute('data-user-id')
+    ).toBe('other-user');
   });
+
+  it.each(['user', 'other-user'])(
+    'keeps DM message rows on their DM glyph without fetching channel pictures (sender %s)',
+    (senderId) => {
+      const message: ChannelMessageEntity = {
+        type: 'channel_message',
+        id: 'message-id',
+        name: 'Message',
+        ownerId: 'user',
+        channelId: 'dm-channel',
+        channelName: 'Direct message',
+        channelType: 'direct_message',
+        messageId: 'message-id',
+        senderId,
+        content: 'Message',
+      };
+      const { container } = render(() => <EntityIcon entity={message} />);
+      expect(channelPicture.channelIds).toEqual([]);
+      expectGlyph(container, DirectMessageIcon);
+    }
+  );
 
   it.each([
     [false, false, EnvelopeIcon, 'text-email'],

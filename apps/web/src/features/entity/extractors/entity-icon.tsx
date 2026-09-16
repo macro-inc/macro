@@ -71,7 +71,11 @@ export function EntityIcon(props: EntityIconProps) {
   const channelId = () => {
     const entity = props.entity;
     if (entity.type === 'channel') return entity.id;
-    if (entity.type === 'channel_message') return entity.channelId;
+    if (
+      entity.type === 'channel_message' &&
+      entity.channelType !== 'direct_message'
+    )
+      return entity.channelId;
   };
 
   return (

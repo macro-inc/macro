@@ -64,6 +64,7 @@ export function useChannelPicture(channelId: Accessor<string>) {
       return id ? staticFileSizedEndpoint(id, 'small') : undefined;
     },
     isLoading: () => query.isPending,
+    revision: () => query.dataUpdatedAt,
   };
 }
 

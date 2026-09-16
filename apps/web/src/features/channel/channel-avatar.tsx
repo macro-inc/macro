@@ -13,6 +13,7 @@ export function ChannelAvatar(props: {
     <Suspense fallback={props.fallback}>
       <ChannelPicture
         url={picture.url()}
+        revision={picture.revision()}
         class={props.class}
         fallback={props.fallback}
       />

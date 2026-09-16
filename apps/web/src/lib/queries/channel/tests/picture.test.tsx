@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 
+import { ChannelAvatar } from '@channel/channel-avatar';
 import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import { QueryObserver } from '@tanstack/query-core';
@@ -7,6 +8,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { previewDataLoader } from '../../preview/dataloader';
 import { channelKeys } from '../keys';
 
 let client: QueryClient;
@@ -27,6 +29,9 @@ vi.mock('@service-storage/client', () => ({
 }));
 vi.mock('@service-static-files/client', () => ({
   staticFileClient: { getMetadata: vi.fn() },
+}));
+vi.mock('@ui', async () => ({
+  cn: (await import('@ui/utils/classname')).cn,
 }));
 
 import {
@@ -217,3 +222,59 @@ it('refreshes another session immediately on picture events and after reconnect'
     unsubscribe();
   }
 });
+
+it.each(['picture event', 'reconnect'] as const)(
+  'retries a failed image at the same URL after a %s',
+  async (trigger) => {
+    const queryKey = channelKeys.picture('channel').queryKey;
+    client.setQueryData(queryKey, 'same-picture', {
+      updatedAt: Date.now() - 1_000,
+    });
+    vi.mocked(previewDataLoader.load).mockResolvedValue({
+      id: 'channel',
+      type: 'channel',
+      access: 'access',
+      loading: false,
+      name: 'Channel',
+      rawName: 'Channel',
+      profilePictureId: 'same-picture',
+    });
+    dispose = render(
+      () => (
+        <QueryClientProvider client={client}>
+          <ChannelAvatar
+            channelId="channel"
+            fallback={<span data-testid="picture-fallback" />}
+          />
+        </QueryClientProvider>
+      ),
+      document.body
+    );
+    await vi.waitFor(() =>
+      expect(document.querySelector('img')).not.toBeNull()
+    );
+    const failedImage = document.querySelector('img')!;
+    failedImage.dispatchEvent(new Event('error'));
+    expect(document.querySelector('img')).toBeNull();
+    expect(
+      document.querySelector('[data-testid="picture-fallback"]')
+    ).not.toBeNull();
+    expect(previewDataLoader.load).not.toHaveBeenCalled();
+
+    if (trigger === 'reconnect') invalidateChannelPictures();
+    else handleChannelPictureChanged({ channel_id: 'channel' });
+
+    await vi.waitFor(() => {
+      const retriedImage = document.querySelector('img');
+      expect(retriedImage).not.toBeNull();
+      expect(retriedImage).not.toBe(failedImage);
+      expect(retriedImage?.getAttribute('src')).toBe('/file/same-picture');
+    });
+    expect(previewDataLoader.load).toHaveBeenCalledTimes(1);
+
+    const recoveredImage = document.querySelector('img');
+    await client.invalidateQueries({ queryKey });
+    expect(previewDataLoader.load).toHaveBeenCalledTimes(2);
+    expect(document.querySelector('img')).toBe(recoveredImage);
+  }
+);
