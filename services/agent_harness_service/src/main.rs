@@ -32,6 +32,7 @@ use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{
     AgentKind, AgentRuntimeConfig, HarnessCommand, HarnessDefaults, SessionDefaults,
+    SessionRepository,
 };
 use agent_harness::domain::model_load::AgentModelsServiceImpl;
 use agent_harness::domain::ports::AgentRuntimeDirectory as _;
@@ -628,11 +629,21 @@ async fn run() -> anyhow::Result<()> {
     let runtimes = RuntimeRegistry::with_presence(Arc::new(PgHarnessPresence::new(pool.clone())));
     let redis = redis::Client::open(config.redis_uri.as_ref())
         .context("failed to create the runtime command Redis client")?;
+    // Read once, here, rather than at every session this deployment opens: a
+    // URL that names no repository is a misconfiguration of the deployment,
+    // and refusing it at startup is the difference between one loud failure
+    // and every session failing to open.
+    let repo_url = SessionRepository::parse(&config.harness_repo_url).with_context(|| {
+        format!(
+            "HARNESS_REPO_URL does not name a github repository: {}",
+            config.harness_repo_url
+        )
+    })?;
     let defaults = HarnessDefaults::new(SessionDefaults {
         bot_id,
         model: config.harness_model.clone(),
         harness: config.harness_slug.clone(),
-        repo_url: config.harness_repo_url.clone(),
+        repo_url: Some(repo_url.clone()),
     })
     .with_bot(
         inmem_bot,
@@ -642,7 +653,7 @@ async fn run() -> anyhow::Result<()> {
             harness: config.inmem_harness_slug.clone(),
             // Stamped but unused: the in-process agent has no
             // workspace to clone anything into.
-            repo_url: config.harness_repo_url.clone(),
+            repo_url: Some(repo_url),
         },
     )
     .with_bot(
@@ -651,7 +662,11 @@ async fn run() -> anyhow::Result<()> {
             bot_id: bot_id::CODEX_BOT_ID,
             model: String::new(),
             harness: "codex-cloud".into(),
-            repo_url: String::new(),
+            // A Codex cloud session works in whatever repository its cloud
+            // environment holds, and records it on the row once that
+            // environment resolves. Nothing to seed it with here, and this
+            // deployment's own repository would be the wrong guess.
+            repo_url: None,
         },
     )
     // Sessions nothing names a bot for (the create menu's) run in-process;

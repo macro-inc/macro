@@ -1,7 +1,7 @@
 //! Commands and values used by the harness domain.
 
 use agent_client_protocol::schema::v1::{HttpHeader, McpServer as AcpMcpServer, McpServerHttp};
-use agent_egress::domain::model::McpServerSlug;
+use agent_egress::domain::model::{McpServerSlug, RepoSlug};
 use agent_fold::domain::model::TurnSignal;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use agent_session::domain::model::{AgentMcpServers, AgentSessionId, MessageId, SandboxSize};
@@ -500,6 +500,36 @@ impl std::fmt::Debug for SandboxEgress {
     }
 }
 
+/// The repository a deployment's sessions work in, valid by construction.
+///
+/// Held as the URL a session's row carries, not as the [`RepoSlug`] it was
+/// read as: the row is what the egress proxy re-reads to decide which
+/// repository a sandbox's git traffic may reach, so the URL is the value
+/// that has to survive. Parsing is what makes it a repository rather than a
+/// string - a URL that names no repository could only fail later, at a clone
+/// nobody is watching - and the parse is the proxy's own.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionRepository(String);
+
+impl SessionRepository {
+    /// Read a configured GitHub URL as the repository it names.
+    ///
+    /// [`None`] for a URL that names no repository. That is a deployment
+    /// misconfiguration, and the composition root is where it should be
+    /// refused: every session this deployment would go on to open carries it.
+    #[must_use]
+    pub fn parse(repository_url: &str) -> Option<Self> {
+        RepoSlug::parse_github_url(repository_url)?;
+        Some(Self(repository_url.to_owned()))
+    }
+
+    /// The URL, as a session's row carries it.
+    #[must_use]
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
 /// Session-row values that remain deployment configuration for now.
 #[derive(Debug, Clone)]
 pub struct SessionDefaults {
@@ -513,8 +543,16 @@ pub struct SessionDefaults {
     pub model: String,
     /// Harness slug, e.g. `opencode`.
     pub harness: String,
-    /// Repository sessions run against.
-    pub repo_url: String,
+    /// Repository this bot's sessions open against, or [`None`] for a bot
+    /// whose sessions do not learn one until they run.
+    ///
+    /// A Codex cloud session is the latter: it works in whatever repository
+    /// its cloud environment holds, which is not known until the environment
+    /// resolves, and the row is written then (see
+    /// `CodexRuntime::resolve_target`). Seeding the row with a deployment
+    /// default would make it briefly claim a repository the session will
+    /// never touch.
+    pub repo_url: Option<SessionRepository>,
 }
 
 /// Session defaults for every bot a deployment answers for.
@@ -579,5 +617,28 @@ impl HarnessDefaults {
 impl From<SessionDefaults> for HarnessDefaults {
     fn from(default: SessionDefaults) -> Self {
         Self::new(default)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::SessionRepository;
+
+    /// The URL survives verbatim - it is what a session's row carries, and
+    /// what the egress proxy re-reads - and one that names no repository is
+    /// refused rather than repaired. The shapes themselves are the parser's
+    /// own tests, in `agent_egress`.
+    #[test]
+    fn a_session_repository_keeps_the_url_it_was_read_from() {
+        let repository =
+            SessionRepository::parse("https://github.com/macro-inc/macro.git").expect("a repo");
+        assert_eq!(
+            repository.as_str(),
+            "https://github.com/macro-inc/macro.git"
+        );
+
+        for url in ["", "https://github.com/macro-inc", "not a url"] {
+            assert_eq!(SessionRepository::parse(url), None, "accepted {url}");
+        }
     }
 }

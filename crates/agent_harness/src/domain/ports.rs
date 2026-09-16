@@ -283,17 +283,13 @@ pub trait SandboxEgressProvisioner: Send + Sync + 'static {
     /// advertised; under [`AgentMcpServers::Selected`] exactly the listed
     /// apps are, connected or not.
     ///
-    /// `repo_url` is [`None`] for a session that clones nothing from this
-    /// deployment's repository - a Codex cloud session works in the cloud
-    /// environment's own checkout - and the deployment's configured URL
-    /// otherwise, which is validated here so a session whose git traffic
-    /// could never resolve fails at provisioning rather than at the agent's
-    /// first clone.
+    /// The session's repository is not named here: nothing about minting a
+    /// token depends on it, and the URL a session carries is read as a
+    /// repository once, where it is configured.
     fn provision(
         &self,
         session: AgentSessionId,
         owner: &MacroUserIdStr<'static>,
-        repo_url: Option<&str>,
         selection: &AgentMcpServers,
     ) -> impl Future<Output = Result<ProvisionedEgress>> + Send;
 
