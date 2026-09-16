@@ -1,0 +1,15 @@
+[package]
+name = "dictation"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+reqwest = { workspace = true, features = ["multipart"] }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync"] }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["net", "io-util"] }

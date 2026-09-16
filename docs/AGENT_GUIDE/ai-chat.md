@@ -268,6 +268,34 @@ notified when the AI responds). Legacy Home background sends preserve the submit
 
 ## Composer anatomy (a11y)
 
+AI chat (including Home and doc-scoped chat) and agent session composers have
+a **Start dictation** microphone beside Send. It uses only the browser's
+on-device speech recognition in the browser's language when available. Otherwise,
+**Start dictation with OpenAI Whisper** records in memory and uploads to the
+authenticated `/dictation/transcribe` storage endpoint only on confirmation.
+Whisper is available on all plans without consuming chat credits; its server
+credential is never exposed to the browser. Unsupported recording environments
+show a disabled microphone. If a language pack is missing, the tooltip
+offers a download. Click to download, then click again to start recording.
+
+While dictating, a scrolling microphone-volume timeline and **Cancel dictation** / **Use dictation**
+replace the composer controls. Cancel (or Escape) preserves the original draft.
+Each bar records 200ms of measured volume: silence stays dotted, louder speech
+creates taller bars, and earlier levels move left without changing height.
+Volume analysis stays on-device and stops on confirm, cancel, error, or close.
+Use dictation stops listening, waits for final words, and appends plain text to
+the draft without sending it. Existing rich text and attachments remain intact.
+If the browser stops listening on its own, **Ready** waits for confirmation.
+Closing the composer releases the microphone. Microphone and download failures
+appear below the composer.
+
+The Whisper fallback supports WebM, MP4, and Ogg recording depending on browser.
+Recordings stop after five minutes or near 8 MB and wait for confirmation.
+Cancel discards the recording; cancel during transcription aborts the request and
+ignores any late result. Failed uploads keep the recording in memory for an explicit
+retry with the checkmark. No audio or transcript is persisted by the dictation
+endpoint. The backend meters provider duration/cost without charging user credits.
+
 Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.
 

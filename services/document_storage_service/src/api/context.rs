@@ -556,6 +556,8 @@ pub(crate) type DssSseStreamState =
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
+    pub dictation_service:
+        Arc<dictation::domain::DictationService<dictation::outbound::WhisperClient>>,
     pub db: PgPool,
     pub readonly_db: ReadOnlyPool,
     pub redis_client: Arc<Redis>,

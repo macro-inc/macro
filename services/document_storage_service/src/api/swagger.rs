@@ -150,6 +150,7 @@ use utoipa::OpenApi;
         terms_of_service = "https://macro.com/terms",
     ),
     paths(
+        crate::api::dictation::transcribe,
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
         calendar_events::inbound::axum_router::mention_previews,
