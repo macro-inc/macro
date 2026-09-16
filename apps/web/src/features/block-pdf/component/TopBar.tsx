@@ -47,11 +47,13 @@ import {
   storageServiceClient,
 } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
-import { pdfDocumentProxy } from '../signal/document';
+import { usePdfDocument } from '../context/pdf-document-context';
 import { LocationType, useCreateShareUrl } from '../signal/location';
 import { PdfSplitToolbar } from './PdfSplitToolbar';
 
 export function TopBar() {
+  const pdf = usePdfDocument();
+  const [documentProxy] = pdf.state.signals.documentProxy;
   const isAuth = useIsAuthenticated();
   const documentId = useBlockId();
   const blockName = useBlockName();
@@ -77,10 +79,10 @@ export function TopBar() {
   const printFile = createCallback(async () => {
     if (!isAuth()) return openLoginModal();
 
-    const documentProxy = pdfDocumentProxy();
-    if (!documentProxy) return;
+    const proxy = documentProxy();
+    if (!proxy) return;
 
-    const data = (await documentProxy.getData()) as Uint8Array<ArrayBuffer>;
+    const data = (await proxy.getData()) as Uint8Array<ArrayBuffer>;
     const blob = new Blob([data], { type: 'application/pdf' });
 
     return doPrint(blob);
@@ -89,10 +91,10 @@ export function TopBar() {
   const download = createCallback(async () => {
     if (!isAuth()) return openLoginModal();
 
-    const documentProxy = pdfDocumentProxy();
-    if (!documentProxy) return toast.failure('Unable to download file');
+    const proxy = documentProxy();
+    if (!proxy) return toast.failure('Unable to download file');
 
-    const data = (await documentProxy.getData()) as Uint8Array<ArrayBuffer>;
+    const data = (await proxy.getData()) as Uint8Array<ArrayBuffer>;
     const blob = new Blob([data], { type: 'application/pdf' });
 
     const fileNameWithExtension = `${fileName()}.pdf`;

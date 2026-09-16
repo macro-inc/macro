@@ -1,17 +1,10 @@
-import { generalPopupLocationSignal } from '@block-pdf/signal/location';
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
-import {
-  createBlockEffect,
-  createBlockMemo,
-  createBlockStore,
-} from '@core/block';
 import { createCallback } from '@solid-primitives/rootless';
-import { batch } from 'solid-js';
+import { batch, createEffect } from 'solid-js';
 import { produce, reconcile } from 'solid-js/store';
+import { usePdfDocument } from '../context/pdf-document-context';
 import { Highlight, type IHighlight } from '../model/Highlight';
 import {
-  anchorsResource,
-  commentThreadsResource,
   useCreateUnthreadedHighlightResource,
   useDeleteUnthreadedHighlightResource,
 } from './commentsResource';
@@ -22,121 +15,88 @@ export type HighlightUuidMap = Partial<Record<string, IHighlight>>;
 export type HighlightPageMap = Partial<Record<number, HighlightUuidMap>>;
 
 /**
- * Map of highlight page index to highlights on that page.
- * Highlights are stored as an object mapping UUID to highlight object. See {@link Highlight}.
- * NOTE: page number is 0-indexed, and is converted to a string as a Record is a JS object under the hood
+ * Keeps the document-scoped highlight store synchronized with annotation
+ * resources. Invoke once inside the PDF document provider.
  */
-export const highlightStore = createBlockStore<HighlightPageMap>({});
+export function useSyncHighlightStore() {
+  const pdf = usePdfDocument();
+  const [, setHighlightStore] = pdf.state.stores.highlights;
+  const [anchorsData] = pdf.state.resources.anchors;
+  const [commentThreadsData] = pdf.state.resources.commentThreads;
 
-createBlockEffect(() => {
-  const clearHighlightStore = useClearHighlightStore();
-  clearHighlightStore();
+  createEffect(() => {
+    setHighlightStore(reconcile({}));
 
-  const [anchorsData] = anchorsResource;
-  const anchors = anchorsData();
-  if (!anchors || anchors.length === 0) return;
+    const anchors = anchorsData();
+    if (!anchors || anchors.length === 0) return;
 
-  const [commentThreadsData] = commentThreadsResource;
-  const commentThreads = commentThreadsData() ?? [];
-
-  const highlightAnchors = anchors.filter((a) => a.anchorType === 'highlight');
-
-  const mappedAnchors = highlightAnchors.flatMap((a) => {
-    const commentThread = commentThreads.find(
-      (ct) => ct.thread.threadId === a.threadId
+    const commentThreads = commentThreadsData() ?? [];
+    const highlightAnchors = anchors.filter(
+      (anchor) => anchor.anchorType === 'highlight'
     );
-    // this is an error but probably resolves eventually as the data is fetched asynchronously
-    if (!commentThread && a.threadId) {
-      return [];
-    }
 
-    // TODO: deprecate unneeded fields
-    const highlight: IHighlight = {
-      owner: a.owner,
-      existsOnServer: true,
-      pageNum: a.page,
-      rects: a.highlightRects,
-      color: {
-        red: a.red,
-        green: a.green,
-        blue: a.blue,
-        alpha: a.alpha,
-      },
-      hasTempThread: false,
-      uuid: a.uuid,
-      text: a.text,
-      type: a.highlightType,
-      pageViewport: {
-        width: a.pageViewportWidth,
-        height: a.pageViewportHeight,
-      },
-      thread: commentThread
-        ? {
-            threadId: commentThread.thread.threadId,
-            rootId: commentThread.comments[0].commentId,
-            anchorId: a.uuid,
-            page: a.page,
-            comments: commentThread.comments,
-            isResolved: commentThread.thread.resolved,
-          }
-        : null,
-    };
+    const mappedAnchors = highlightAnchors.flatMap((anchor) => {
+      const commentThread = commentThreads.find(
+        (thread) => thread.thread.threadId === anchor.threadId
+      );
+      // This is an error but may resolve once both resources have loaded.
+      if (!commentThread && anchor.threadId) return [];
 
-    return highlight;
+      // TODO: deprecate unneeded fields
+      const highlight: IHighlight = {
+        owner: anchor.owner,
+        existsOnServer: true,
+        pageNum: anchor.page,
+        rects: anchor.highlightRects,
+        color: {
+          red: anchor.red,
+          green: anchor.green,
+          blue: anchor.blue,
+          alpha: anchor.alpha,
+        },
+        hasTempThread: false,
+        uuid: anchor.uuid,
+        text: anchor.text,
+        type: anchor.highlightType,
+        pageViewport: {
+          width: anchor.pageViewportWidth,
+          height: anchor.pageViewportHeight,
+        },
+        thread: commentThread
+          ? {
+              threadId: commentThread.thread.threadId,
+              rootId: commentThread.comments[0].commentId,
+              anchorId: anchor.uuid,
+              page: anchor.page,
+              comments: commentThread.comments,
+              isResolved: commentThread.thread.resolved,
+            }
+          : null,
+      };
+
+      return highlight;
+    });
+
+    batch(() => {
+      for (const highlight of mappedAnchors) {
+        setHighlightStore(highlight.pageNum, (previous) => ({
+          ...previous,
+          [highlight.uuid]: highlight,
+        }));
+      }
+    });
   });
-
-  batch(() => {
-    for (const highlight of mappedAnchors) {
-      highlightStore.set(highlight.pageNum, (prev) => ({
-        ...prev,
-        [highlight.uuid]: highlight,
-      }));
-    }
-  });
-});
-
-export const highlights = createBlockMemo(() => {
-  const out: IHighlight[] = [];
-  for (const pageHighlights of Object.values(highlightStore.get ?? {})) {
-    if (!pageHighlights) continue;
-    for (const highlight of Object.values(pageHighlights)) {
-      if (!highlight) continue;
-      out.push(highlight);
-    }
-  }
-  return out;
-});
-
-export const highlightsUuidMap = createBlockMemo(() => {
-  const out: HighlightUuidMap = {};
-  for (const pageHighlights of Object.values(highlightStore.get ?? {})) {
-    if (!pageHighlights) continue;
-    for (const [highlightUuid, highlight] of Object.entries(pageHighlights)) {
-      out[highlightUuid] = highlight;
-    }
-  }
-  return out;
-});
-
-export const selectionStore = createBlockStore<{
-  highlightsUnderSelection: IHighlight[];
-  selection: Selection | null;
-  selectionString: string;
-}>({
-  highlightsUnderSelection: [],
-  selection: null,
-  selectionString: '',
-});
+}
 
 export const useClearHighlightStore = () => {
-  const setHighlightStore = highlightStore.set;
+  const [, setHighlightStore] = usePdfDocument().state.stores.highlights;
   return () => {
     setHighlightStore(reconcile({}));
   };
 };
 
 export const useClearSelectionHighlights = () => {
-  const setSelectionStore = selectionStore.set;
+  const [, setSelectionStore] = usePdfDocument().state.stores.selection;
   return () => {
     setSelectionStore(
       reconcile({
@@ -149,8 +109,9 @@ export const useClearSelectionHighlights = () => {
 };
 
 export const useSetSelectionHighlights = () => {
-  const setSelectionStore = selectionStore.set;
-  const highlightStoreValue = highlightStore.get;
+  const { highlights, selection } = usePdfDocument().state.stores;
+  const [highlightStore] = highlights;
+  const [, setSelectionStore] = selection;
 
   return (selection: Selection) => {
     if (selection.isCollapsed) return;
@@ -167,7 +128,7 @@ export const useSetSelectionHighlights = () => {
         pageIndex,
         selectionHighlight,
       ] of selectionHighlights.entries()) {
-        const existingHighlights = highlightStoreValue[pageIndex];
+        const existingHighlights = highlightStore[pageIndex];
         if (!existingHighlights) continue;
 
         const overlappingHighlights = Object.values(existingHighlights).filter(
@@ -190,7 +151,7 @@ export const useSetSelectionHighlights = () => {
 };
 
 export const useAddNewHighlightComments = () => {
-  const setHighlightStore = highlightStore.set;
+  const [, setHighlightStore] = usePdfDocument().state.stores.highlights;
   return (highlights: IHighlight[]) =>
     setHighlightStore(
       produce((state) => {
@@ -222,7 +183,8 @@ export const useAddNewHighlights = () => {
 
 export function useRemoveHighlight() {
   const deleteHighlight = useDeleteUnthreadedHighlightResource();
-  const setGeneralPopupLocation = generalPopupLocationSignal.set;
+  const [, setGeneralPopupLocation] =
+    usePdfDocument().state.signals.generalPopupLocation;
 
   return (uuid: string) => {
     setGeneralPopupLocation(null);
@@ -231,13 +193,16 @@ export function useRemoveHighlight() {
 }
 
 export const useGetHighlightByUuid = () => {
+  const highlightsUuidMap = usePdfDocument().state.derived.highlightsUuidMap;
   return createCallback((uuid: string) => {
     return highlightsUuidMap()?.[uuid];
   });
 };
 
-export const hasHighlights = createBlockMemo(() => {
-  return Object.values(highlightStore.get ?? {}).some(
-    (page) => Object.values(page ?? {}).length > 0
-  );
-});
+export const useHasHighlights = () => {
+  const [highlightStore] = usePdfDocument().state.stores.highlights;
+  return () =>
+    Object.values(highlightStore).some(
+      (page) => Object.values(page ?? {}).length > 0
+    );
+};

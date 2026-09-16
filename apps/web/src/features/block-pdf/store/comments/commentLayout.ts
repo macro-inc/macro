@@ -1,47 +1,30 @@
-import { pageHeightStore } from '@block-pdf/signal/pdfViewer';
 import { MIN_THREAD_GAP } from '@block-pdf/signal/viewerThreeColumnLayout';
 import type {
   CommentLayout,
+  CommentStore,
   CommentViewerInitialLayout,
   Overflow,
   PdfRootLayout,
 } from '@block-pdf/type/comments';
-import {
-  createBlockMemo,
-  createBlockRenderEffect,
-  createBlockStore,
-} from '@core/block';
 import { isRoot, type Root } from '@core/comments/commentType';
+import { createMemo, createRenderEffect } from 'solid-js';
 import { reconcile } from 'solid-js/store';
-import { activeCommentThreadSignal, commentsStore } from './commentStore';
+import { usePdfDocument } from '../../context/pdf-document-context';
 
 // how much to pad the container for the "show more" buttons
 const CONTAINER_PADDING = 80;
 
 /** Maps thread id to height of its measure container */
-type ThreadHeights = Record<number, number>;
-export const threadHeightStore = createBlockStore<Partial<ThreadHeights>>({});
+export type ThreadHeights = Record<number, number>;
 
 /** Maps page index to comment layout on that page */
-type ThreadPositionsOnPage = Partial<Record<number, CommentLayout<Root>[]>>;
-export const threadsOnPagePositionStore =
-  createBlockStore<ThreadPositionsOnPage>({});
+export type ThreadPositionsOnPage = Partial<
+  Record<number, CommentLayout<Root>[]>
+>;
 
 const isPdfRootLayout = (
-  comment: (typeof commentsStore.get)[number]
+  comment: CommentStore[number]
 ): comment is PdfRootLayout => isRoot(comment) && 'layout' in comment;
-
-const rootCommentsGroupedByPage = createBlockMemo(() => {
-  const comments = commentsStore.get;
-
-  const out: Record<number, PdfRootLayout[]> = {};
-  comments.filter(isPdfRootLayout).forEach((comment) => {
-    const pageIndex = comment.layout.pageIndex;
-    if (!out[pageIndex]) out[pageIndex] = [];
-    out[pageIndex].push(comment);
-  });
-  return out;
-});
 
 function computeLayout<T>({
   initialAnchor,
@@ -97,111 +80,129 @@ function computeLayout<T>({
 // todo: optistic update (esp. for placeable drag)
 // TODO: make this dependent on current page only
 // i.e. move this logic into a page specific component so it only runs on for the selected page
-createBlockRenderEffect(() => {
-  const activeThread = activeCommentThreadSignal.get;
-  const setStore = threadsOnPagePositionStore.set;
-  const pageHeights = pageHeightStore.get;
-  const threadHeights = threadHeightStore.get;
-  const rootComments = rootCommentsGroupedByPage() ?? {};
+export function useCommentLayoutBehavior() {
+  const { signals, stores } = usePdfDocument().state;
+  const [activeCommentThread] = signals.activeCommentThread;
+  const [comments] = stores.comments;
+  const [pageHeights] = stores.pageHeight;
+  const [threadHeights] = stores.threadHeight;
+  const [, setThreadPositions] = stores.threadsOnPagePosition;
 
-  const groupedThreadLayoutsByPage: ThreadPositionsOnPage = {};
-  for (const [pageIndexStr, comments] of Object.entries(rootComments)) {
-    const pageIndex = parseInt(pageIndexStr);
+  const rootCommentsGroupedByPage = createMemo(() => {
+    const out: Record<number, PdfRootLayout[]> = {};
+    comments.filter(isPdfRootLayout).forEach((comment) => {
+      const pageIndex = comment.layout.pageIndex;
+      if (!out[pageIndex]) out[pageIndex] = [];
+      out[pageIndex].push(comment);
+    });
+    return out;
+  });
 
-    // TODO compute actual position based on container bounds, height and active atom
-    const pageHeight = pageHeights[pageIndex];
+  createRenderEffect(() => {
+    const activeThread = activeCommentThread();
+    const rootComments = rootCommentsGroupedByPage();
+    const groupedThreadLayoutsByPage: ThreadPositionsOnPage = {};
+    for (const [pageIndexStr, comments] of Object.entries(rootComments)) {
+      const pageIndex = parseInt(pageIndexStr);
 
-    // there are no bounds for the container, cant compute position
-    if (!pageHeight) {
-      groupedThreadLayoutsByPage[pageIndex] = [];
-      continue;
-    }
+      // TODO compute actual position based on container bounds, height and active atom
+      const pageHeight = pageHeights[pageIndex];
 
-    const sortedThreadsByOriginalPosition = comments
-      .sort((a, b) => a.layout.originalYPosition - b.layout.originalYPosition)
-      .map((t) => {
-        return {
-          ...t,
-          height: threadHeights[t.threadId] ?? 0,
-        };
+      // there are no bounds for the container, cant compute position
+      if (!pageHeight) {
+        groupedThreadLayoutsByPage[pageIndex] = [];
+        continue;
+      }
+
+      const sortedThreadsByOriginalPosition = comments
+        .sort((a, b) => a.layout.originalYPosition - b.layout.originalYPosition)
+        .map((t) => {
+          return {
+            ...t,
+            height: threadHeights[t.threadId] ?? 0,
+          };
+        });
+
+      // there are no comment threads on this page, cant position nothing
+      if (sortedThreadsByOriginalPosition.length === 0) {
+        groupedThreadLayoutsByPage[pageIndex] = [];
+        continue;
+      }
+
+      // if no threads is active by default
+      // position threads as if the first one is active
+      const anchorPositionId =
+        activeThread ?? sortedThreadsByOriginalPosition[0].threadId;
+
+      let sliceTo = sortedThreadsByOriginalPosition.findIndex(
+        (t) => t.threadId === anchorPositionId
+      );
+      if (sliceTo === -1) {
+        sliceTo = 0;
+      }
+      const sliceFrom = sliceTo + 1;
+
+      // all threads on page above the anchor with height
+      const sliceAboveAnchor = sortedThreadsByOriginalPosition.slice(
+        0,
+        sliceTo
+      );
+      // all threads on page below the anchor with height
+      const sliceBelowAnchor = sortedThreadsByOriginalPosition.slice(sliceFrom);
+
+      // calculate closest fit for anchor within bounds of container
+      const anchorElement = sortedThreadsByOriginalPosition[sliceTo];
+      const anchorId = anchorElement.threadId;
+      const anchorHeight = threadHeights[anchorId] ?? 0;
+
+      // check if original y plus height fits inside bounds for anchor
+      const paddedHeight = pageHeight - CONTAINER_PADDING;
+      let anchorTop = anchorElement.layout.originalYPosition;
+      let anchorEnd = anchorTop + anchorHeight;
+      if (anchorEnd > paddedHeight) {
+        const anchorOverflow = anchorEnd - paddedHeight;
+        anchorTop -= anchorOverflow;
+      }
+
+      // handle edge case where anchor element is larger than container
+      if (anchorTop < 0) {
+        anchorTop = 0;
+      }
+      anchorEnd = anchorTop + anchorHeight;
+
+      const layoutAboveAnchor = computeLayout({
+        initialAnchor: anchorTop,
+        direction: 'up',
+        input: sliceAboveAnchor,
+        containerHeight: pageHeight,
+        containerPadding: CONTAINER_PADDING,
       });
 
-    // there are no comment threads on this page, cant position nothing
-    if (sortedThreadsByOriginalPosition.length === 0) {
-      groupedThreadLayoutsByPage[pageIndex] = [];
-      continue;
-    }
+      const layoutBelowAnchor = computeLayout({
+        initialAnchor: anchorEnd,
+        direction: 'down',
+        input: sliceBelowAnchor,
+        containerHeight: pageHeight,
+        containerPadding: CONTAINER_PADDING,
+      });
 
-    // if no threads is active by default
-    // position threads as if the first one is active
-    const anchorPositionId =
-      activeThread() ?? sortedThreadsByOriginalPosition[0].threadId;
-
-    let sliceTo = sortedThreadsByOriginalPosition.findIndex(
-      (t) => t.threadId === anchorPositionId
-    );
-    if (sliceTo === -1) {
-      sliceTo = 0;
-    }
-    const sliceFrom = sliceTo + 1;
-
-    // all threads on page above the anchor with height
-    const sliceAboveAnchor = sortedThreadsByOriginalPosition.slice(0, sliceTo);
-    // all threads on page below the anchor with height
-    const sliceBelowAnchor = sortedThreadsByOriginalPosition.slice(sliceFrom);
-
-    // calculate closest fit for anchor within bounds of container
-    const anchorElement = sortedThreadsByOriginalPosition[sliceTo];
-    const anchorId = anchorElement.threadId;
-    const anchorHeight = threadHeights[anchorId] ?? 0;
-
-    // check if original y plus height fits inside bounds for anchor
-    const paddedHeight = pageHeight - CONTAINER_PADDING;
-    let anchorTop = anchorElement.layout.originalYPosition;
-    let anchorEnd = anchorTop + anchorHeight;
-    if (anchorEnd > paddedHeight) {
-      const anchorOverflow = anchorEnd - paddedHeight;
-      anchorTop -= anchorOverflow;
-    }
-
-    // handle edge case where anchor element is larger than container
-    if (anchorTop < 0) {
-      anchorTop = 0;
-    }
-    anchorEnd = anchorTop + anchorHeight;
-
-    const layoutAboveAnchor = computeLayout({
-      initialAnchor: anchorTop,
-      direction: 'up',
-      input: sliceAboveAnchor,
-      containerHeight: pageHeight,
-      containerPadding: CONTAINER_PADDING,
-    });
-
-    const layoutBelowAnchor = computeLayout({
-      initialAnchor: anchorEnd,
-      direction: 'down',
-      input: sliceBelowAnchor,
-      containerHeight: pageHeight,
-      containerPadding: CONTAINER_PADDING,
-    });
-
-    // the positioning of all threads on the page
-    const out: CommentLayout<Root>[] = [
-      ...layoutAboveAnchor,
-      {
-        ...anchorElement,
-        layout: {
-          height: anchorHeight,
-          calculatedYPos: anchorTop,
-          overflow: null,
+      // the positioning of all threads on the page
+      const out: CommentLayout<Root>[] = [
+        ...layoutAboveAnchor,
+        {
+          ...anchorElement,
+          layout: {
+            height: anchorHeight,
+            calculatedYPos: anchorTop,
+            overflow: null,
+          },
         },
-      },
-      ...layoutBelowAnchor,
-    ];
+        ...layoutBelowAnchor,
+      ];
 
-    groupedThreadLayoutsByPage[pageIndex] = out;
-  }
+      groupedThreadLayoutsByPage[pageIndex] = out;
+    }
 
-  setStore(reconcile(groupedThreadLayoutsByPage));
-});
+    setThreadPositions(reconcile(groupedThreadLayoutsByPage));
+  });
+}

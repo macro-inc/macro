@@ -1,16 +1,6 @@
 import { DEFAULT_COLOR, type IColor } from '@block-pdf/model/Color';
 import { PageModel } from '@block-pdf/model/Page';
-import { pdfModificationDataStore } from '@block-pdf/signal/document';
-import {
-  useCurrentScale,
-  useGetPopupContextViewer,
-} from '@block-pdf/signal/pdfViewer';
-import {
-  activePlaceableIdSignal,
-  newPlaceableSignal,
-  placeableModeSignal,
-} from '@block-pdf/signal/placeables';
-import { useDoEdit } from '@block-pdf/signal/save';
+import { useIsPopup } from '@block-pdf/signal/pdfViewer';
 import {
   useDeleteComment,
   useDeleteNewComments,
@@ -33,18 +23,16 @@ import {
 // import { reformatPdfjsDate } from '@block-pdf/util/DateUtils';
 import { normalizeRect } from '@block-pdf/util/pdfjsUtils';
 import { PDF_TO_CSS_UNITS } from '@block-pdf/util/pixelsPerInch';
-import {
-  createBlockEffect,
-  createBlockMemo,
-  createBlockSignal,
-} from '@core/block';
 import { useUserId } from '@core/context/user';
 import { createCallback } from '@solid-primitives/rootless';
 import type { PageViewport } from 'pdfjs-dist';
-import { batch } from 'solid-js';
+import { batch, createEffect, createMemo } from 'solid-js';
 import { v7 as uuid7 } from 'uuid';
-import { activeCommentThreadSignal } from './comments/commentStore';
-import { commentPlaceables, isThreadPlaceable } from './comments/freeComments';
+import { usePdfDocument } from '../context/pdf-document-context';
+import {
+  isThreadPlaceable,
+  useCommentPlaceables,
+} from './comments/freeComments';
 import { useEditPdfFreeCommentAnchor } from './commentsResource';
 
 interface AppearancePayload {
@@ -63,15 +51,37 @@ const DEFAULT_APPEARANCE_PAYLOAD: AppearancePayload = {
   size: 12,
 };
 
-export const placeableIdMap = createBlockMemo(() => {
-  const placeables = pdfModificationDataStore.get.placeables.concat(
-    commentPlaceables() ?? []
-  );
-  return Object.fromEntries(placeables.map((p) => [p.internalId, p])) as Record<
-    string,
-    IPlaceable
-  >;
-});
+export function usePlaceableIdMap() {
+  const [modificationData] = usePdfDocument().state.stores.modificationData;
+  const commentPlaceables = useCommentPlaceables();
+
+  return createMemo(() => {
+    const placeables = modificationData.placeables.concat(commentPlaceables());
+    return Object.fromEntries(
+      placeables.map((placeable) => [placeable.internalId, placeable])
+    ) as Record<string, IPlaceable>;
+  });
+}
+
+function useCurrentScale() {
+  const isPopup = useIsPopup();
+  const { currentScale, popupCurrentScale } = usePdfDocument().state.derived;
+
+  return () => (isPopup ? popupCurrentScale() : currentScale()) ?? 1;
+}
+
+function useGetPopupContextViewer() {
+  const isPopup = useIsPopup();
+  const { rootViewer, popupViewer } = usePdfDocument().state.signals;
+
+  return () => (isPopup ? popupViewer[0]() : rootViewer[0]());
+}
+
+function useDoEdit() {
+  const [, setNumOperations] = usePdfDocument().state.signals.numOperations;
+
+  return () => setNumOperations((previous) => previous + 1);
+}
 
 // function convertTextAnnotationToThread(
 //   annotation: Annotation,
@@ -173,9 +183,8 @@ function parseDefaultAppearance(appearance: string): AppearancePayload {
   };
 }
 
-// helper function to convert internal id (uuid) to array index
-function internalIdToIndex(id: string) {
-  const placeables = pdfModificationDataStore.get.placeables;
+// Helper function to convert internal id (uuid) to array index.
+function internalIdToIndex(placeables: IPlaceable[], id: string) {
   return placeables.findIndex((p) => p.internalId === id);
 }
 
@@ -556,11 +565,6 @@ function useMakeSignature() {
   };
 }
 
-const fontOptions = ['Times New Roman', 'Courier', 'Helvetica'] as const;
-export const fontPreferenceSignal = createBlockSignal<
-  (typeof fontOptions)[number]
->(fontOptions[0]);
-
 const textAnnotationProperties = {
   widthInPixels: 175,
   heightInPixels: 17,
@@ -569,7 +573,7 @@ const textAnnotationProperties = {
 
 function useMakeTextAnnotation() {
   const getViewer = useGetPopupContextViewer();
-  const fontPreference = fontPreferenceSignal.get;
+  const [fontPreference] = usePdfDocument().state.signals.fontPreference;
   const currentScale = useCurrentScale();
 
   return (
@@ -656,45 +660,54 @@ function useMakeTextAnnotation() {
 /**
  * Sets active placeable when a *click outside* event occurs that sets an active comment
  * Specifically in the comment MeasureContainer area
+ *
+ * Invoke once inside the PDF document provider.
  */
-createBlockEffect(() => {
-  const setActivePlaceableId = activePlaceableIdSignal.set;
-  const activeThreadId = activeCommentThreadSignal.get();
+export function useSyncActivePlaceableWithCommentThread() {
+  const placeableIdMap = usePlaceableIdMap();
+  const {
+    activePlaceableId: [activePlaceableId, setActivePlaceableId],
+    activeCommentThread: [activeCommentThread],
+  } = usePdfDocument().state.signals;
 
-  const activePlaceableId = activePlaceableIdSignal();
+  createEffect(() => {
+    const activeThreadId = activeCommentThread();
+    const activePlaceableIdValue = activePlaceableId();
+    const activePlaceable = activePlaceableIdValue
+      ? placeableIdMap()[activePlaceableIdValue]
+      : null;
 
-  const activePlaceable = activePlaceableId
-    ? placeableIdMap()?.[activePlaceableId]
-    : null;
+    if (
+      activeThreadId == null &&
+      activePlaceable &&
+      isThreadPlaceable(activePlaceable)
+    ) {
+      setActivePlaceableId(undefined);
+    }
+    if (activeThreadId == null) return;
 
-  if (
-    activeThreadId == null &&
-    activePlaceable &&
-    isThreadPlaceable(activePlaceable)
-  ) {
-    setActivePlaceableId(undefined);
-  }
-  if (activeThreadId == null) return;
+    const matchingFreeCommentPlaceable = Object.values(placeableIdMap()).find(
+      (placeable) =>
+        isThreadPlaceable(placeable) &&
+        placeable.payload?.threadId === activeThreadId
+    );
 
-  const matchingFreeCommentPlaceable = commentPlaceables()?.find(
-    (p) => p.payload?.threadId === activeThreadId
-  );
-
-  if (matchingFreeCommentPlaceable) {
-    setActivePlaceableId(matchingFreeCommentPlaceable.internalId);
-  }
-});
+    if (matchingFreeCommentPlaceable) {
+      setActivePlaceableId(matchingFreeCommentPlaceable.internalId);
+    }
+  });
+}
 
 export function useCreatePlaceable() {
   const makeThread = useMakeThread();
   const makeTextAnnotation = useMakeTextAnnotation();
   const makeSignature = useMakeSignature();
-  const [mode, setMode] = placeableModeSignal;
-  const [_pdfModificationDataValue, setPdfModificationData] =
-    pdfModificationDataStore;
-  const setActivePlaceableId = activePlaceableIdSignal.set;
-  const setNewPlaceable = newPlaceableSignal.set;
-  const setActiveCommentThread = activeCommentThreadSignal.set;
+  const pdf = usePdfDocument();
+  const [mode, setMode] = pdf.state.signals.placeableMode;
+  const [, setPdfModificationData] = pdf.state.stores.modificationData;
+  const [, setActivePlaceableId] = pdf.state.signals.activePlaceableId;
+  const [, setNewPlaceable] = pdf.state.signals.newPlaceable;
+  const [, setActiveCommentThread] = pdf.state.signals.activeCommentThread;
 
   return async (e: MouseEvent) => {
     let placeable: IPlaceable | null;
@@ -737,21 +750,21 @@ export function useCreatePlaceable() {
 }
 
 export function useModifyPlaceable() {
-  const [pdfModificationDataValue, setPdfModificationData] =
-    pdfModificationDataStore;
+  const [modificationData, setModificationData] =
+    usePdfDocument().state.stores.modificationData;
   const doEdit = useDoEdit();
 
   return (index: number, newPlaceable: IPlaceable) => {
     if (index < 0) return false;
 
-    const placeables = pdfModificationDataValue.placeables;
+    const placeables = modificationData.placeables;
 
     const currPlaceable = placeables.at(index);
     if (!currPlaceable) return false;
 
     if (newPlaceable.payloadType !== currPlaceable.payloadType) return false;
 
-    setPdfModificationData('placeables', index, {
+    setModificationData('placeables', index, {
       ...newPlaceable,
       wasEdited: true,
     });
@@ -764,6 +777,7 @@ export function useModifyPlaceable() {
 
 export function useModifyPayload() {
   const modifyPlaceable = useModifyPlaceable();
+  const [modificationData] = usePdfDocument().state.stores.modificationData;
 
   return <T extends PayloadType>(
     id: string,
@@ -772,10 +786,10 @@ export function useModifyPayload() {
       Extract<IPlaceablePayload, { payloadType: T }>['payload']
     >
   ) => {
-    const index = internalIdToIndex(id);
+    const index = internalIdToIndex(modificationData.placeables, id);
     if (index < 0) return false;
 
-    const existingPlaceable = pdfModificationDataStore.get.placeables.at(index);
+    const existingPlaceable = modificationData.placeables.at(index);
     if (!existingPlaceable) return false;
     if (payloadType !== existingPlaceable.payloadType) return false;
 
@@ -792,17 +806,18 @@ export function useModifyPayload() {
 }
 
 export function useDeletePlaceable() {
-  const [pdfModificationDataValue, setPdfModificationData] =
-    pdfModificationDataStore;
-  const setActivePlaceable = activePlaceableIdSignal.set;
+  const pdf = usePdfDocument();
+  const [modificationData, setModificationData] =
+    pdf.state.stores.modificationData;
+  const [, setActivePlaceable] = pdf.state.signals.activePlaceableId;
+  const placeableIdMap = usePlaceableIdMap();
   const doEdit = useDoEdit();
   const deleteComment = useDeleteComment();
 
   const arrayDelete = (index: number) => {
-    if (index < 0 || index >= pdfModificationDataValue.placeables.length)
-      return false;
+    if (index < 0 || index >= modificationData.placeables.length) return false;
 
-    setPdfModificationData('placeables', (prev) => [
+    setModificationData('placeables', (prev) => [
       ...prev.slice(0, index),
       ...prev.slice(index + 1),
     ]);
@@ -813,7 +828,7 @@ export function useDeletePlaceable() {
   };
 
   return createCallback((uuid: string) => {
-    const placeable = placeableIdMap()?.[uuid];
+    const placeable = placeableIdMap()[uuid];
     if (!placeable) {
       console.error('Placeable not found', uuid);
       return;
@@ -829,7 +844,7 @@ export function useDeletePlaceable() {
       return;
     }
 
-    const index = internalIdToIndex(uuid);
+    const index = internalIdToIndex(modificationData.placeables, uuid);
 
     let deleted = arrayDelete(index);
     if (deleted) {
@@ -842,7 +857,10 @@ export function useDeletePlaceable() {
 export function useUpdatePlaceablePosition() {
   const modifyPlaceable = useModifyPlaceable();
   const editPdfFreeCommentAnchor = useEditPdfFreeCommentAnchor();
-  const setNewPlaceable = newPlaceableSignal.set;
+  const pdf = usePdfDocument();
+  const [, setNewPlaceable] = pdf.state.signals.newPlaceable;
+  const [modificationData] = pdf.state.stores.modificationData;
+  const placeableIdMap = usePlaceableIdMap();
 
   return createCallback(
     (
@@ -861,7 +879,7 @@ export function useUpdatePlaceablePosition() {
         pageNum?: number;
       }
     ) => {
-      const placeable = placeableIdMap()?.[uuid];
+      const placeable = placeableIdMap()[uuid];
       if (!placeable) {
         console.error('Placeable not found', uuid);
         return;
@@ -942,7 +960,7 @@ export function useUpdatePlaceablePosition() {
         }
       }
 
-      const index = internalIdToIndex(uuid);
+      const index = internalIdToIndex(modificationData.placeables, uuid);
       return modifyPlaceable(index, newPlaceable);
     }
   );
