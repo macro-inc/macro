@@ -185,7 +185,7 @@ function useInboxFilters() {
 function FilterCountBadge(props: { count: number }) {
   return (
     <Show when={props.count > 0}>
-      <span class="pointer-events-none absolute -top-0.5 right-0 flex size-3 translate-x-1/2 items-center justify-center rounded-full bg-panel text-[9px] font-medium leading-none text-ink-muted">
+      <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-3 translate-x-1/2 items-center justify-center rounded-full bg-panel text-[9px] font-medium leading-none text-ink-muted">
         {props.count}
       </span>
     </Show>

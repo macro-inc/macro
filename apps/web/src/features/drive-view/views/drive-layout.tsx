@@ -18,12 +18,12 @@ import {
   filterFolderTree,
   folderAncestors,
 } from '../core/folder-tree';
-import {
-  DRIVE_TABS,
-  type DriveFolder,
-  type DriveSort,
-  type DriveState,
-  type DriveTab,
+import { driveLocationLabel } from '../core/location-label';
+import type {
+  DriveFolder,
+  DriveSort,
+  DriveState,
+  DriveTab,
 } from '../core/types';
 
 export function DriveLayout(props: {
@@ -61,14 +61,7 @@ export function DriveLayout(props: {
     const id = selectedFolder();
     return id ? folderAncestors(props.folders, id) : [];
   });
-  const title = () =>
-    props.state.location.kind === 'folder'
-      ? (breadcrumbs().at(-1)?.name ?? 'Drive')
-      : (DRIVE_TABS.find(
-          (tab) =>
-            props.state.location.kind === 'tab' &&
-            tab.id === props.state.location.tab
-        )?.label ?? 'My Files');
+  const title = () => driveLocationLabel(props.state.location, props.folders);
 
   const SidebarContent = () => (
     <>

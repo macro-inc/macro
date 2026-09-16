@@ -25,7 +25,8 @@
 | `/app/settings/account` | Settings (also `/app/settings/api-keys`, `/mcp-server`, `/shortcuts`, etc.) |
 
 Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
-(`/app/<left>/<right>`). Each pane has its own Close / Go Back / Go Forward buttons.
+(`/app/<left>/<right>`). Desktop panes expose Close when available and omit
+split-history back/forward buttons. Mobile content panes retain their back button.
 
 Shift-click on content links requests a new split wherever splits are supported,
 including mentions, references, folder links, and list rows with a linked preview.
@@ -38,6 +39,12 @@ shows `Content already open.` and keeps the preview in place. Select another
 preview item or leave that view before opening the block in a split. Duplicate
 mounts reached through direct layout paths show the same message instead of a
 second block instance.
+
+Desktop inline content previews use a 48px header with a muted bottom divider,
+aligned with the adjacent sidebar title bar (such as Home). Standalone block
+headers use the same height without a bottom divider. Preview headers and toolbars
+are transparent so they blend with the pane's inactive background. Header controls
+stay centered and the preview body fills the remaining height below the divider.
 
 ## Sidebar (a11y names are load-bearing)
 

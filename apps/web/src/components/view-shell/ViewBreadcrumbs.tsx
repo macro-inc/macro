@@ -135,6 +135,16 @@ function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
 
 export type ViewBreadcrumbsSeparatorProps = JSX.SvgSVGAttributes<SVGSVGElement>;
 
+function ReturnButton(props: ViewBreadcrumbsButtonProps) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+
+  return (
+    <BreadcrumbButton {...rest} class={cn('shrink-0', local.class)}>
+      {local.children}
+    </BreadcrumbButton>
+  );
+}
+
 function Separator(props: ViewBreadcrumbsSeparatorProps) {
   const [local, rest] = splitProps(props, ['class']);
 
@@ -228,6 +238,7 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
 export const ViewBreadcrumbs = Object.assign(Root, {
   Root,
   Button: BreadcrumbButton,
+  ReturnButton,
   Item,
   Separator,
   Outlet,

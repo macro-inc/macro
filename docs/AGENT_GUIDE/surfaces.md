@@ -372,9 +372,18 @@ just client-side row filtering. Cached inserts enforce the same rule before a
 refetch, including expanded groups and inactive cached Shared queries. Until
 viewer identity is available, document inserts into Shared are rejected.
 
-With `enable-new-app-views` enabled, Files opens **Drive** using the same
-shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+On touch devices (phones and tablets), Files keeps the original tabbed view and
+mobile navigation even when `enable-new-app-views` is enabled.
+
+On desktop, with `enable-new-app-views` enabled, Files opens **Drive** using the
+same shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
 `Shared with me`, collapsible Favorites, and a searchable folder hierarchy.
+Drive omits split-history back/forward buttons in both wide and narrow layouts;
+the split close button remains available when multiple splits are open.
+Files opened in place from Drive show a return link labeled with their originating
+subview (such as `My Files`, `Recent`, or `Shared with me`) or folder name. The text-only
+label's font weight matches the file title. The link
+restores the originating Drive view.
 The `Drive` folder row opens the folder overview. Click a folder name to browse
 its contents in the main pane; its separate expand/collapse button reveals child
 folders without navigating. Folder breadcrumbs in the top bar use `/` separators

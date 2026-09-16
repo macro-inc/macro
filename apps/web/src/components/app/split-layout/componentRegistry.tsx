@@ -443,7 +443,9 @@ registerComponent(
   'documents',
   withAuth((params: DocumentsComponentParams = {}) => {
     usePageViewTracking('documents');
-    const newAppViews = useNewAppViews();
+    const newAppViews = useNewAppViews({
+      enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
+    });
     const user = useUserContext();
     const preset = getViewPreset('documents', undefined, {
       userId: user.userId(),
@@ -460,7 +462,7 @@ registerComponent(
     return (
       <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
         <Show
-          when={newAppViews.enabled()}
+          when={newAppViews.enabled() && !isTouchDevice()}
           fallback={
             <SoupView
               viewName="Files"

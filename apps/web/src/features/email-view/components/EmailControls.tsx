@@ -28,7 +28,7 @@ export function EmailControls(props: EmailControlsProps) {
           onClear={filters.clear}
         />
         <Show when={filters.activeCount() > 0}>
-          <span class="pointer-events-none absolute -top-0.5 right-0 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
+          <span class="pointer-events-none absolute -top-0.5 right-0 z-10 flex size-4 translate-x-1/2 items-center justify-center rounded-full bg-accent text-xxs font-medium leading-none text-surface">
             {filters.activeCount()}
           </span>
         </Show>
