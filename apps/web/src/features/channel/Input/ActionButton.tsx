@@ -10,7 +10,6 @@ export function InputActionButton(props: {
 }) {
   return (
     <Button
-      title={props.label}
       aria-label={props.label}
       label={props.label}
       variant={props.active ? 'accent' : 'ghost'}

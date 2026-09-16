@@ -20,7 +20,8 @@ import {
 } from '@components/app/split-layout/components/SplitLabel';
 import { SplitToolbarLeft } from '@components/app/split-layout/components/SplitToolbar';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
-import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
+import { createHasMultilineStructure } from '@core/component/LexicalMarkdown/utils/create-has-multiline-structure';
+import { createHasWrappedLines } from '@core/component/LexicalMarkdown/utils/create-has-wrapped-lines';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -44,6 +45,7 @@ import { ComposerSurface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
 export function ChannelCompose() {
+  const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [channelName, setChannelName] = createSignal<string>('');
 
   const { users: destinationOptions } = useCombinedRecipients();
@@ -197,9 +199,18 @@ export function ChannelCompose() {
     },
   });
   clearComposer = () => markdownEditor.controls.clear();
-  const hasLineBreaks = createHasLineBreaks(
+  const hasMultilineStructure = createHasMultilineStructure(
     markdownEditor.buildHandle().lexical
   );
+  const oneLineInput = (): boolean =>
+    !inputState.view().showFormatRibbon &&
+    !inputState.view().attachments?.length &&
+    !hasMultilineStructure() &&
+    !hasWrappedLines();
+  const hasWrappedLines = createHasWrappedLines(markdownEditor.lexical, {
+    container: layout,
+    isCompact: oneLineInput,
+  });
 
   const placeholder = createMemo(() => {
     const name = channelName();
@@ -280,13 +291,7 @@ export function ChannelCompose() {
                     onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
                     onDragEnd={() => inputState.setIsDraggedOver(false)}
                   >
-                    <Input.Layout
-                      oneLineInput={
-                        !inputState.view().showFormatRibbon &&
-                        !inputState.view().attachments?.length &&
-                        !hasLineBreaks()
-                      }
-                    >
+                    <Input.Layout ref={setLayout} oneLineInput={oneLineInput()}>
                       <Input.DropOverlay />
                       <Input.Layout.Body>
                         <Input.FormatRibbon>

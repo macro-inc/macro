@@ -31,9 +31,19 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
-  createHasLineBreaks: () => () => false,
-}));
+vi.mock(
+  '@core/component/LexicalMarkdown/utils/create-has-wrapped-lines',
+  () => ({
+    createHasWrappedLines: () => () => false,
+  })
+);
+
+vi.mock(
+  '@core/component/LexicalMarkdown/utils/create-has-multiline-structure',
+  () => ({
+    createHasMultilineStructure: () => () => false,
+  })
+);
 
 vi.mock('@core/util/upload', () => ({
   chatRuleset: {},

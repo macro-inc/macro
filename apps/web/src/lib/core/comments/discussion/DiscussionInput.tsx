@@ -19,7 +19,8 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import type { ItemMention } from '@core/component/LexicalMarkdown/plugins';
 import { addMediaFromFile } from '@core/component/LexicalMarkdown/plugins/media';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
+import { createHasMultilineStructure } from '@core/component/LexicalMarkdown/utils/create-has-multiline-structure';
+import { createHasWrappedLines } from '@core/component/LexicalMarkdown/utils/create-has-wrapped-lines';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
@@ -105,6 +106,7 @@ function DefaultActions(props: { input: InputData; isSending: boolean }) {
 }
 
 export function DiscussionInput(props: DiscussionInputProps) {
+  const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   const [value, setValue] = createSignal(props.input.value ?? '');
   const [mentions, setMentions] = createSignal<ItemMention[]>([]);
@@ -156,7 +158,18 @@ export function DiscussionInput(props: DiscussionInputProps) {
 
   // Build the editor handle immediately to ensure lexical is available for commands
   markdownEditor.buildHandle();
-  const hasLineBreaks = createHasLineBreaks(markdownEditor.lexical);
+  const hasMultilineStructure = createHasMultilineStructure(
+    markdownEditor.lexical
+  );
+  const oneLineInput = (): boolean =>
+    !isTouchDevice() &&
+    !showFormatRibbon() &&
+    !hasMultilineStructure() &&
+    !hasWrappedLines();
+  const hasWrappedLines = createHasWrappedLines(markdownEditor.lexical, {
+    container: layout,
+    isCompact: oneLineInput,
+  });
 
   const commands = {
     send: async () => {
@@ -285,11 +298,7 @@ export function DiscussionInput(props: DiscussionInputProps) {
           collapsedInput.collapse();
         }}
       >
-        <Input.Layout
-          oneLineInput={
-            !isTouchDevice() && !showFormatRibbon() && !hasLineBreaks()
-          }
-        >
+        <Input.Layout ref={setLayout} oneLineInput={oneLineInput()}>
           <Input.Layout.Body>
             <Input.FormatRibbon>
               <FormatButtons

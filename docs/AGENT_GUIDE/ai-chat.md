@@ -22,8 +22,12 @@ More opens the full create menu in a glass bottom sheet. Other views show
 to the left of the navigation pill's right edge below. Agents has no separate
 create button; its AI input fills the row.
 The composer's compact height is 46px, matching the mobile chrome buttons,
-with a plus attachment control and centered text and actions. It expands for
-longer prompts while focused. Leaving the AI composer collapses a long draft to
+with a paperclip attachment control and centered text and actions. It expands for
+longer prompts while focused, including text that wraps without an explicit
+line break. Lists, blockquotes, headings, and other non-paragraph blocks also
+expand while editing, even when their text is short. Shortening a paragraph
+draft or widening the pane restores the compact layout when the text fits
+beside its controls. Leaving the AI composer collapses a long draft to
 a single-line preview in the accessory row; tapping it expands the same editor
 with the full draft intact. Screens with an available composer or reply controls show those
 instead; opening mobile search shows scope pills in their place. When neither

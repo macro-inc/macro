@@ -7,7 +7,8 @@ import {
   INSERT_DOCUMENT_MENTION_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
+import { createHasMultilineStructure } from '@core/component/LexicalMarkdown/utils/create-has-multiline-structure';
+import { createHasWrappedLines } from '@core/component/LexicalMarkdown/utils/create-has-wrapped-lines';
 import {
   clearDragInsertPreview,
   insertDocumentMentionAtDragCoordinates,
@@ -143,6 +144,7 @@ function DefaultActions(props: { input: InputData }) {
 }
 
 export function ChannelInput(props: ChannelInputProps) {
+  const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
   const mentionsTracker = createMentionsTracker();
   const attachmentTracker =
@@ -344,7 +346,17 @@ export function ChannelInput(props: ChannelInputProps) {
   });
   const markdownHandle = markdownEditor.buildHandle();
   const lexicalEditor = () => markdownHandle.lexical;
-  const hasLineBreaks = createHasLineBreaks(lexicalEditor());
+  const hasMultilineStructure = createHasMultilineStructure(lexicalEditor());
+  const oneLineInput = (): boolean =>
+    !isReplyInput(inputState.view()) &&
+    !inputState.view().showFormatRibbon &&
+    !inputState.view().attachments?.length &&
+    !hasMultilineStructure() &&
+    !hasWrappedLines();
+  const hasWrappedLines = createHasWrappedLines(lexicalEditor(), {
+    container: layout,
+    isCompact: oneLineInput,
+  });
   const [entityDragInsertStore, setEntityDragInsertStore] =
     createDragInsertStore();
 
@@ -458,13 +470,7 @@ export function ChannelInput(props: ChannelInputProps) {
         onDragStart={(valid) => inputState.setIsDraggedOver(valid)}
         onDragEnd={() => inputState.setIsDraggedOver(false)}
       >
-        <Input.Layout
-          oneLineInput={
-            !inputState.view().showFormatRibbon &&
-            !inputState.view().attachments?.length &&
-            !hasLineBreaks()
-          }
-        >
+        <Input.Layout ref={setLayout} oneLineInput={oneLineInput()}>
           <Input.DropOverlay />
           <Input.Layout.Body>
             <Input.FormatRibbon>

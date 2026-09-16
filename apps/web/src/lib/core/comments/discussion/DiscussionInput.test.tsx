@@ -23,9 +23,19 @@ vi.mock('@core/mobile/nativePhotoLibrary', () => ({
 vi.mock('@core/util/platform', () => ({
   isPlatform: (platform: string) => platform === 'ios' && editor.isIOS,
 }));
-vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
-  createHasLineBreaks: () => () => false,
-}));
+vi.mock(
+  '@core/component/LexicalMarkdown/utils/create-has-wrapped-lines',
+  () => ({
+    createHasWrappedLines: () => () => false,
+  })
+);
+
+vi.mock(
+  '@core/component/LexicalMarkdown/utils/create-has-multiline-structure',
+  () => ({
+    createHasMultilineStructure: () => () => false,
+  })
+);
 vi.mock('@channel/Input/ActionButton', () => ({}));
 vi.mock('@channel/Input/context', () => ({}));
 vi.mock('@channel/Input/FormatButtons', () => ({ FormatButtons: () => null }));

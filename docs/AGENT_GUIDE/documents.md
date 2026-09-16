@@ -118,8 +118,11 @@ access to the title and property controls.
 
 Below the editor: `Discussion` section with a `Leave a comment...` contenteditable.
 Desktop uses the same compact 15px composer as channels and AI chat, with an
-an `Attach images` paperclip that opens the image picker directly. Shift+Enter
-expands the editor above the controls. Touch keeps separate `Attach images` and
+`Attach images` paperclip that opens the image picker directly. Wrapping text or
+Shift+Enter expands the editor above the controls. Lists, blockquotes, and other
+non-paragraph blocks always expand while editing. A single paragraph returns to
+the compact layout once it fits on one line.
+Touch keeps separate `Attach images` and
 `Format` buttons. `Send comment` is disabled until text exists. Click the
 composer, `type_text`, then click `Send comment` (Enter also submits). The comment renders
 above the composer with author + timestamp. `@`-mentions in comments notify the mentioned

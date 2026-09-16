@@ -16,9 +16,19 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
-vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
-  createHasLineBreaks: () => () => true,
-}));
+vi.mock(
+  '@core/component/LexicalMarkdown/utils/create-has-wrapped-lines',
+  () => ({
+    createHasWrappedLines: () => () => false,
+  })
+);
+
+vi.mock(
+  '@core/component/LexicalMarkdown/utils/create-has-multiline-structure',
+  () => ({
+    createHasMultilineStructure: () => () => true,
+  })
+);
 vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => false }));
 vi.mock('@core/component/AI/constant', () => ({
   SUPPORTED_ATTACHMENT_EXTENSIONS: ['pdf', 'png'],

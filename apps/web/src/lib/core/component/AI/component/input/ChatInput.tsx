@@ -14,7 +14,8 @@ import { isImageAttachment } from '@core/component/AI/util/attachment';
 import { insertChatAttachmentMention } from '@core/component/AI/util/chatAttachmentMention';
 import type { EditorConfigBuilder } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
-import { createHasLineBreaks } from '@core/component/LexicalMarkdown/utils/create-has-line-breaks';
+import { createHasMultilineStructure } from '@core/component/LexicalMarkdown/utils/create-has-multiline-structure';
+import { createHasWrappedLines } from '@core/component/LexicalMarkdown/utils/create-has-wrapped-lines';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
@@ -26,7 +27,6 @@ import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideTo
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, ComposerSurface, cn, SendButton as UiSendButton } from '@ui';
@@ -170,17 +170,9 @@ export function ChatInput(props: ChatInputComponentProps) {
     !generating() &&
     !hasUploadingAttachments();
 
-  const LINE_HEIGHT_THRESHOLD = 40;
   let mdRef: undefined | HTMLDivElement;
-  const isMultiline = () => {
-    if (isCollapsed()) return false;
-    // Access markdownText to create reactive dependency
-    const text = markdownText();
-    if (hasLineBreaks()) return true;
-    if (text.trim().length === 0) return false;
-    if (!mdRef) return false;
-    return mdRef.scrollHeight > LINE_HEIGHT_THRESHOLD;
-  };
+  const isMultiline = (): boolean =>
+    !isCollapsed() && (hasMultilineStructure() || hasWrappedLines());
 
   const sendMessage = createCallback(
     async (opts?: { modelOverride?: Model; metaKey?: boolean }) => {
@@ -228,7 +220,13 @@ export function ChatInput(props: ChatInputComponentProps) {
       props.onChange?.(md);
     });
 
-  const hasLineBreaks = createHasLineBreaks(props.editor.buildHandle().lexical);
+  const hasMultilineStructure = createHasMultilineStructure(
+    props.editor.buildHandle().lexical
+  );
+  const hasWrappedLines = createHasWrappedLines(props.editor.lexical, {
+    container: lineEl,
+    isCompact: () => !isMultiline() && !isTallVariant(),
+  });
 
   const hasAttachments = () =>
     attachments.attached().some(isImageAttachment) ||
@@ -247,9 +245,7 @@ export function ChatInput(props: ChatInputComponentProps) {
         else fileInputRef?.click();
       }}
     >
-      <Show when={isTouchDevice()} fallback={<PaperclipIcon />}>
-        <PlusIcon />
-      </Show>
+      <PaperclipIcon />
     </Button>
   );
 
