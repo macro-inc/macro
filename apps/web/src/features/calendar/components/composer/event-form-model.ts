@@ -22,7 +22,6 @@ import {
 import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import type { CalendarEvent } from '../../types';
 import { parseLocalDate } from '../../utils/calendar-date';
-import { outOfOfficeAllDayRange } from '../../utils/out-of-office-display';
 import {
   buildRecurrenceLines,
   defaultCustomConfig,
@@ -217,27 +216,6 @@ export function calendarEventToEditorInitialValues(
 ): EventEditorInitialValues {
   const guests = eventGuestEmails(event).join(', ');
 
-  // An all-day out-of-office event is stored as a full-day timed span; present
-  // it as all-day so the editor shows the choice the save made and round-trips.
-  const outOfOfficeAllDay = outOfOfficeAllDayRange(event);
-  if (outOfOfficeAllDay) {
-    return {
-      title: event.title,
-      allDay: true,
-      start: outOfOfficeAllDay.start,
-      end: shiftDateValue(outOfOfficeAllDay.end, -1),
-      recurrenceLines: [...event.recurrenceLines],
-      calendarId: event.calendarId ?? event.calendar.id,
-      guests,
-      location: event.location ?? '',
-      description: event.description ?? '',
-      conference: initialConferenceChoice(event),
-      reminders: event.reminders,
-      eventType: event.eventType,
-      reminderEventType: event.reminderEventType,
-    };
-  }
-
   if (event.allDay) {
     const start = isDateOnly(event.start)
       ? event.start
@@ -287,9 +265,9 @@ export function buildEventTime(
       return undefined;
     }
     // Google has no date-based out-of-office event, so encode an all-day one as
-    // a timed span covering whole days in the editor's time zone. Keeping it
-    // timed preserves its busy time and provider writes; outOfOfficeAllDayRange
-    // recognizes the span so the grid, details, and editor show it as all-day.
+    // a timed span covering whole days in the editor's time zone. It then reads
+    // and renders as a full-day timed block, the same as Google Calendar shows
+    // its own all-day out-of-office events.
     if (state.eventType === 'out_of_office') {
       return {
         kind: 'timed',

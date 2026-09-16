@@ -57,7 +57,6 @@ import {
   REMINDER_METHOD_POPUP,
   resolveReminderOverrides,
 } from '../utils/event-reminders';
-import { outOfOfficeAllDayRange } from '../utils/out-of-office-display';
 import { formatRecurrenceDescription } from '../utils/recurrence';
 import {
   CALENDAR_TIME_FORMAT_OPTIONS,
@@ -310,25 +309,16 @@ function formatEventSchedule(
   event: CalendarEvent,
   timeFormat: CalendarTimeFormat
 ) {
-  // An all-day out-of-office event is stored as a full-day timed span; describe
-  // it as all-day rather than as a midnight-to-midnight time range.
-  const outOfOfficeAllDay = outOfOfficeAllDayRange(event);
-  if (event.allDay || outOfOfficeAllDay) {
-    const start = parseCalendarDate(
-      outOfOfficeAllDay ? outOfOfficeAllDay.start : event.start
-    );
-    const exclusiveEnd = parseCalendarDate(
-      outOfOfficeAllDay ? outOfOfficeAllDay.end : event.end
-    );
-    const inclusiveEnd = new Date(exclusiveEnd);
+  const start = parseCalendarDate(event.start);
+  const end = parseCalendarDate(event.end);
+
+  if (event.allDay) {
+    const inclusiveEnd = new Date(end);
     inclusiveEnd.setDate(inclusiveEnd.getDate() - 1);
     return isSameLocalDate(start, inclusiveEnd)
       ? `${formatDate.format(start)} · All day`
       : `${formatShortDate.format(start)}–${formatShortDate.format(inclusiveEnd)} · All day`;
   }
-
-  const start = parseCalendarDate(event.start);
-  const end = parseCalendarDate(event.end);
 
   return isSameLocalDate(start, end)
     ? `${formatDate.format(start)} · ${formatCalendarTime(start, timeFormat)}–${formatCalendarTime(end, timeFormat)}`

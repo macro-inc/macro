@@ -271,31 +271,4 @@ describe('mapCalendarEventToFullCalendar', () => {
     expect(rendered.title).toBe('[teo] OOO');
     expect(rendered.extendedProps?.calendarEventId).toBe(rendered.id);
   });
-
-  it('renders a full-day out-of-office span in the all-day row', () => {
-    const localMidnight = (date: string) =>
-      new Date(`${date}T00:00`).toISOString();
-    const span = {
-      kind: 'timed' as const,
-      startsAt: localMidnight('2026-09-17'),
-      endsAt: localMidnight('2026-09-18'),
-    };
-    const base = item([copy('primary')]);
-    const withSpan: CalendarOccurrenceItem = {
-      ...base,
-      event: { ...base.event, time: span },
-      occurrence: { ...base.occurrence, time: span },
-    };
-
-    const rendered = mapCalendarEventToFullCalendar(
-      mapCalendarOccurrence(withSpan, {
-        sourceById,
-        isSourceVisible: () => true,
-      })
-    );
-
-    expect(rendered.allDay).toBe(true);
-    expect(rendered.start).toBe('2026-09-17');
-    expect(rendered.end).toBe('2026-09-18');
-  });
 });
