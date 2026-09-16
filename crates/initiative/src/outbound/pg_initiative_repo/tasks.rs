@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use sqlx::PgPool;
+use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
 use super::{AdapterError, map_sqlx};
@@ -21,23 +21,7 @@ pub(super) async fn assign_tasks(
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
     let initiative_id = id.as_uuid();
-
-    let locked = sqlx::query_scalar!(
-        r#"
-        SELECT id
-        FROM initiative
-        WHERE id = $1
-        FOR UPDATE
-        "#,
-        initiative_id,
-    )
-    .fetch_optional(tx.as_mut())
-    .await
-    .map_err(AdapterError::Sqlx)
-    .map_err(map_sqlx)?;
-    if locked.is_none() {
-        return Err(InitiativeError::NotFound);
-    }
+    lock_initiative(&mut tx, initiative_id).await?;
 
     sqlx::query!(
         r#"
@@ -132,6 +116,7 @@ pub(super) async fn unassign_task(
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
     let initiative_id = id.as_uuid();
+    lock_initiative(&mut tx, initiative_id).await?;
     let result = sqlx::query!(
         r#"
         DELETE FROM task_initiative
@@ -166,6 +151,29 @@ pub(super) async fn unassign_task(
         .await
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
+    Ok(())
+}
+
+async fn lock_initiative(
+    tx: &mut Transaction<'_, Postgres>,
+    initiative_id: Uuid,
+) -> Result<(), InitiativeError> {
+    let locked = sqlx::query_scalar!(
+        r#"
+        SELECT id
+        FROM initiative
+        WHERE id = $1
+        FOR UPDATE
+        "#,
+        initiative_id,
+    )
+    .fetch_optional(tx.as_mut())
+    .await
+    .map_err(AdapterError::Sqlx)
+    .map_err(map_sqlx)?;
+    if locked.is_none() {
+        return Err(InitiativeError::NotFound);
+    }
     Ok(())
 }
 
