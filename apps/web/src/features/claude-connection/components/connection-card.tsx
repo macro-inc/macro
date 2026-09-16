@@ -97,10 +97,10 @@ export function ConnectionCard(props: ConnectionCardProps) {
                     rel="noopener noreferrer"
                     referrerPolicy="no-referrer"
                   >
-                    1. Open Claude sign-in ↗
+                    Didn't open? Open Claude sign-in ↗
                   </a>
                   <label for={inputId} class="text-sm text-ink">
-                    2. Paste the complete one-time code from Claude
+                    Paste the complete one-time code from Claude
                   </label>
                   <input
                     id={inputId}

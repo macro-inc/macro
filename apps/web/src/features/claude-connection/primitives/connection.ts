@@ -1,13 +1,21 @@
 import { createSignal, onCleanup } from 'solid-js';
-import type { ClaudeConnectionSource, ClaudeLogin } from '../core/connection';
+import type {
+  ClaudeConnectionSource,
+  ClaudeLogin,
+  ClaudeSignIn,
+} from '../core/connection';
 
 /** Owns consent UI state; the source owns transport and cache invalidation. */
-export function createClaudeConnection(source: ClaudeConnectionSource) {
+export function createClaudeConnection(
+  source: ClaudeConnectionSource,
+  openSignIn: () => ClaudeSignIn | undefined
+) {
   const [login, setLogin] = createSignal<ClaudeLogin>();
   const [code, setCode] = createSignal('');
   const [busy, setBusy] = createSignal(false);
   const [error, setError] = createSignal('');
   let disposed = false;
+  let pendingSignIn: ClaudeSignIn | undefined;
   let expiry: ReturnType<typeof setTimeout> | undefined;
   const clear = () => {
     clearTimeout(expiry);
@@ -16,6 +24,8 @@ export function createClaudeConnection(source: ClaudeConnectionSource) {
   };
   onCleanup(() => {
     disposed = true;
+    pendingSignIn?.close();
+    pendingSignIn = undefined;
     clearTimeout(expiry);
     setCode('');
   });
@@ -32,6 +42,8 @@ export function createClaudeConnection(source: ClaudeConnectionSource) {
     setBusy(true);
     setError('');
     try {
+      // Reserve the tab before the first await to retain the user's click activation.
+      pendingSignIn = openSignIn();
       const next = await source.begin();
       if (disposed) return;
       setLogin(next);
@@ -39,7 +51,11 @@ export function createClaudeConnection(source: ClaudeConnectionSource) {
         clear();
         setError('Sign-in expired. Start Connect Claude again.');
       }, next.expiresIn * 1000);
+      pendingSignIn?.navigate(next.authorizationUrl);
+      pendingSignIn = undefined;
     } catch (error) {
+      pendingSignIn?.close();
+      pendingSignIn = undefined;
       if (!disposed) report(error);
     } finally {
       if (!disposed) setBusy(false);

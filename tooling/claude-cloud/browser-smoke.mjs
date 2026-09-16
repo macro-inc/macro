@@ -81,6 +81,12 @@ try {
   if (order.indexOf('Claude Cloud (demo)') >= order.indexOf('Cursor'))
     throw new Error('Claude must appear above Cursor');
   // Reloading after the backend build is a manual step; this script fails visibly if stale.
+  await page
+    .context()
+    .route('https://claude.com/**', (route) =>
+      route.fulfill({ body: 'Claude sign-in intercepted by local smoke test' })
+    );
+  const signInOpening = page.waitForEvent('popup');
   const starting = page.waitForResponse(
     (response) =>
       response.url().endsWith('/claude-auth/start') &&
@@ -96,6 +102,14 @@ try {
   const consent = card.getByRole('link', { name: /Open Claude sign-in/ });
   await consent.waitFor({ timeout: 15000 });
   const url = new URL(await consent.getAttribute('href'));
+  const signIn = await signInOpening;
+  await signIn.waitForURL(url.href);
+  if (!(await signIn.evaluate(() => window.opener === null)))
+    throw new Error('Claude sign-in tab must not retain an opener');
+  await signIn.close();
+  console.log(
+    'PASS: the first Connect Claude click opens sign-in with no opener (provider intercepted).'
+  );
   if (
     url.origin !== 'https://claude.com' ||
     url.pathname !== '/cai/oauth/authorize' ||
@@ -150,6 +164,24 @@ try {
   if (replay.status() !== 409)
     throw new Error('Canceled attempt was not rejected');
   console.log('PASS: a canceled attempt cannot be exchanged.');
+  await page.evaluate(() => {
+    const original = window.open;
+    window.open = () => {
+      window.open = original;
+      return null;
+    };
+  });
+  await card
+    .getByRole('button', { name: 'Connect Claude', exact: true })
+    .click();
+  await card
+    .getByRole('link', { name: /Didn't open\? Open Claude sign-in/ })
+    .waitFor();
+  await card.getByLabel(/Paste the complete/).waitFor();
+  await card.getByRole('button', { name: 'Cancel', exact: true }).click();
+  console.log(
+    'PASS: a blocked popup retains the fallback sign-in link and code entry.'
+  );
   await page.goto(`${origin}/app/settings/agents`);
   await page
     .getByRole('heading', { name: 'Agents', exact: true })

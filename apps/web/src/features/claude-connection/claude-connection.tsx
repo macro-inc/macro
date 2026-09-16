@@ -2,11 +2,13 @@ import { useUserId } from '@core/context/user';
 import { useClaudeConnectionSource } from '@queries/claude-auth/connection';
 import { Suspense } from 'solid-js';
 import { ConnectionCard } from './components/connection-card';
+import { openClaudeSignIn } from './open-sign-in';
 import { createClaudeConnection } from './primitives/connection';
 
 function ConnectedCard() {
   const connection = createClaudeConnection(
-    useClaudeConnectionSource(useUserId())
+    useClaudeConnectionSource(useUserId()),
+    openClaudeSignIn
   );
   return (
     <ConnectionCard

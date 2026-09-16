@@ -248,7 +248,9 @@ picker; a failed catalog shows an inline error. The rest of settings stays usabl
 With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
 Settings → Harness, above Cursor, with the
 Anthropic logo. Settings → Agents selects an agent's harness but does not host
-Claude's connection form. Claude's model picker uses provider-reported IDs,
+Claude's connection form. **Connect Claude** starts authorization and opens sign-in
+on the first click; a fallback link remains if the browser blocks the tab.
+Claude's model picker uses provider-reported IDs,
 names, descriptions, and order. Settings discovers from recent account sessions;
 session catalogs update through replay, polling, and streaming. Before any catalog
 is available, only subscription default is shown with an explanation. It saves the next-turn preference

@@ -1,5 +1,5 @@
-import { useCodexAgentsAccess } from '@core/codex/flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useCodexAgentsAccess } from '@core/codex/flag';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';

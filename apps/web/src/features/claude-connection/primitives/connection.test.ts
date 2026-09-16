@@ -30,10 +30,74 @@ function setup() {
       }),
       refresh: vi.fn(async () => {}),
     };
-    return { state: createClaudeConnection(source), source, dispose };
+    const signIn = { navigate: vi.fn(), close: vi.fn() };
+    const openSignIn = vi.fn(() => signIn as typeof signIn | undefined);
+    return {
+      state: createClaudeConnection(source, openSignIn),
+      source,
+      dispose,
+      signIn,
+      openSignIn,
+    };
   });
 }
 describe('Claude connection controller', () => {
+  it('reserves a tab synchronously and navigates after authorization starts', async () => {
+    const { state, source, dispose, signIn, openSignIn } = setup();
+    const pending = state.begin();
+    expect(openSignIn).toHaveBeenCalledOnce();
+    expect(openSignIn.mock.invocationCallOrder[0]).toBeLessThan(
+      vi.mocked(source.begin).mock.invocationCallOrder[0]
+    );
+    expect(signIn.navigate).not.toHaveBeenCalled();
+    await state.begin();
+    await pending;
+    expect(openSignIn).toHaveBeenCalledOnce();
+    expect(signIn.navigate).toHaveBeenCalledWith('https://claude.com/consent');
+    dispose();
+    expect(signIn.close).not.toHaveBeenCalled();
+  });
+  it('keeps the sign-in link available when a popup is blocked', async () => {
+    const { state, dispose, openSignIn } = setup();
+    openSignIn.mockReturnValue(undefined);
+    await state.begin();
+    expect(state.login()?.authorizationUrl).toBe('https://claude.com/consent');
+    expect(state.error()).toBe('');
+    dispose();
+  });
+  it('closes the reserved tab when authorization setup fails', async () => {
+    const { state, source, dispose, signIn } = setup();
+    vi.mocked(source.begin).mockRejectedValueOnce(
+      new Error('Could not start sign-in')
+    );
+    await state.begin();
+    expect(signIn.close).toHaveBeenCalledOnce();
+    expect(signIn.navigate).not.toHaveBeenCalled();
+    expect(state.error()).toBe('Could not start sign-in');
+    expect(state.busy()).toBe(false);
+    dispose();
+  });
+  it('closes a pending tab on unmount and ignores a late authorization URL', async () => {
+    const { state, source, dispose, signIn } = setup();
+    let resolve!: (
+      login: Awaited<ReturnType<ClaudeConnectionSource['begin']>>
+    ) => void;
+    vi.mocked(source.begin).mockReturnValueOnce(
+      new Promise((done) => {
+        resolve = done;
+      })
+    );
+    const pending = state.begin();
+    dispose();
+    expect(signIn.close).toHaveBeenCalledOnce();
+    resolve({
+      attemptId: 'late',
+      authorizationUrl: 'https://claude.com/consent',
+      expiresIn: 600,
+    });
+    await pending;
+    expect(signIn.navigate).not.toHaveBeenCalled();
+  });
   it('connects and immediately clears the one-time code, then disconnects', async () => {
     const { state, source, dispose } = setup();
     await state.begin();

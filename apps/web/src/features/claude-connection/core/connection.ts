@@ -11,6 +11,12 @@ export type ClaudeLogin = {
   expiresIn: number;
 };
 
+/** Host-owned sign-in navigation, reserved synchronously during the click. */
+export type ClaudeSignIn = {
+  navigate: (url: string) => void;
+  close: () => void;
+};
+
 /** Narrow source contract; the controller does not know the query or transport library. */
 export type ClaudeConnectionSource = {
   status: () => ClaudeConnectionStatus | undefined;

@@ -16,7 +16,8 @@ terminal) and refresh the browser. In **Settings → Harness**, the
 **Claude Cloud (demo)** row has the Anthropic logo and appears above Cursor,
 even before an account is connected. Connection setup is not in Settings → Agents:
 
-1. Click **Connect Claude**, then **Open Claude sign-in**.
+1. Click **Connect Claude** to open Claude sign-in in a new tab automatically.
+   If the browser blocks it, use the **Didn't open? Open Claude sign-in** link.
 2. Sign in and approve on Claude's own page. Macro never asks for your password.
 3. Copy the entire one-time `code#state` displayed by Claude, paste it into Macro,
    and click **Finish connecting**.
