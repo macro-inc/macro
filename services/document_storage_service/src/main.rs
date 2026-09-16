@@ -960,6 +960,9 @@ async fn run() -> anyhow::Result<()> {
         !cohere_api_key.trim().is_empty(),
         "Cohere API key is required for task dedup reranking",
     );
+    let dictation_service = Arc::new(dictation::domain::DictationService::new(
+        dictation::outbound::WhisperClient::new(openai_api_key.clone())?,
+    ));
     let task_dedup_service = Arc::new(TaskDedupService::new(
         TextEmbedding3Small::new(openai_api_key),
         PgTaskVectorDb::new(db.clone()),
@@ -1482,6 +1485,7 @@ async fn run() -> anyhow::Result<()> {
         ));
 
     let api_context = ApiContext {
+        dictation_service,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),

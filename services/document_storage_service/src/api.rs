@@ -18,6 +18,7 @@ use utoipa_swagger_ui::SwaggerUi;
 
 // Utilities
 pub(crate) mod context;
+mod dictation;
 mod saved_views;
 pub(crate) mod util;
 
@@ -113,6 +114,7 @@ fn api_router(state: ApiContext) -> Router {
     );
 
     let internal_router = Router::new()
+        .nest("/dictation", dictation::router())
         .nest(
             "/github",
             github::inbound::github_sync_router::github_sync_router(
