@@ -10,7 +10,8 @@
 //! subprocesses remain outside the service.
 
 use crate::domain::model::{
-    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunListing,
+    ConversationLine, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
+    RunListing,
 };
 use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
@@ -90,6 +91,23 @@ pub trait CursorAgents: Sync {
         agent: &CursorAgentId,
         through: Option<&CursorRunId>,
     ) -> impl Future<Output = Result<Vec<RunListing>, rootcause::Report>> + Send;
+
+    /// The agent's prompts and replies in order, as Cursor still holds them.
+    ///
+    /// The longest-lived record Cursor keeps, and the reason this exists: a
+    /// run's stream expires within hours and its record drops its final text
+    /// within weeks, while this still answers for agents whose every other
+    /// trace is gone. It is where a prompt that was never captured here -
+    /// a run driven from cursor.com, mirrored after its stream aged out -
+    /// can still be found.
+    ///
+    /// Carries no run ids, so a line is tied to a run by matching text the
+    /// journal already holds, never by position. See
+    /// [`CursorSessionService::recover_lost_prompts`](crate::domain::service::CursorSessionService).
+    fn conversation(
+        &self,
+        agent: &CursorAgentId,
+    ) -> impl Future<Output = Result<Vec<ConversationLine>, rootcause::Report>> + Send;
 }
 
 /// One connected run stream, with what the provider said about resuming it.

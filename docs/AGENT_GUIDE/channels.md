@@ -36,10 +36,23 @@ toolbar, consistent at narrow and wide composer widths.
 The new-message compose screen and channel message/reply inputs use the same
 attachment and send controls on mobile and desktop, with no format toggle.
 iOS uses the native media attachment picker.
-Short drafts place attachment, message text, and send on one row on both mobile
-and desktop. Multiline drafts and attachments expand the composer with its
-actions below the editor.
-When checking this transition, add and remove a line break or attachment and
+Short top-level drafts place attachment, message text, and send on one row on
+both mobile and desktop. Text that wraps onto a second line, explicit line
+breaks, non-paragraph blocks (lists, blockquotes, headings, etc.), and attachments
+expand the composer with its actions below the editor. Even a short or empty
+non-paragraph block uses the expanded layout; converting it back to a single
+short paragraph restores the compact layout. A restored block draft that becomes a
+wrapping paragraph should stay expanded without briefly collapsing; check this
+after reopening the channel with a draft already saved. Open reply composers always place the editor
+above the action row, including for empty and single-line drafts, so the
+attachment, delete-reply, and send controls have their own space.
+Attachment controls use a paperclip in both expanded and collapsed composers,
+including the iOS media picker. Input action and formatting buttons show the
+app tooltip without a second native browser tooltip.
+When checking this transition, type a long draft without pressing Enter, then
+shorten it and resize the pane. It should expand when the text no longer fits
+beside the buttons and collapse when it fits again, without flickering between
+layouts. Also add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
 should remain usable in both layouts, including when editing an existing message.
 The iOS share sheet keeps its editor above the attachment and formatting controls.

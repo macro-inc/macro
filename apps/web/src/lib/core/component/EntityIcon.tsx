@@ -5,7 +5,6 @@ import {
   isBlockAlias,
   itemToBlockName,
 } from '@core/constant/allBlocks';
-import { USE_WIDE_ICONS } from '@core/constant/featureFlags';
 import type {
   ChannelEntity,
   DocumentEntity,
@@ -15,42 +14,72 @@ import type {
   NamedSubType,
   ReminderEntity,
 } from '@entity';
-import SkillIcon from '@icon/skill.svg';
-import WideBook from '@icon/wide-book.svg';
-import WideCsv from '@icon/wide-csv.svg';
-import WideDiagram from '@icon/wide-diagram.svg';
-import WideFileCode from '@icon/wide-file-code.svg';
-import WideFileImage from '@icon/wide-file-image.svg';
-import WideFiles from '@icon/wide-files.svg';
-import WideSnippet from '@icon/wide-snippet.svg';
-import WideUnknown from '@icon/wide-unknown.svg';
-import WideVideo from '@icon/wide-video.svg';
-import AlarmIcon from '@phosphor/alarm.svg';
-import ArticleIcon from '@phosphor/article.svg';
+import AddressBook from '@phosphor/address-book.svg';
+import BellSimple from '@phosphor/bell-simple.svg';
+import Blueprint from '@phosphor/blueprint.svg';
+import BracketsCurly from '@phosphor/brackets-curly.svg';
 import Building from '@phosphor/building.svg';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import ChatsIcon from '@phosphor/chats-circle.svg';
-import FileCode from '@phosphor/code.svg';
+import BuildingOffice from '@phosphor/building-office.svg';
+import Calendar from '@phosphor/calendar.svg';
+import ClockClockwise from '@phosphor/clock-clockwise.svg';
+import Code from '@phosphor/code.svg';
 import Email from '@phosphor/envelope.svg';
 import EmailRead from '@phosphor/envelope-open.svg';
 import File from '@phosphor/file.svg';
 import FileArchive from '@phosphor/file-archive.svg';
+import FileCsv from '@phosphor/file-csv.svg';
+import FileDashed from '@phosphor/file-dashed.svg';
+import FileDoc from '@phosphor/file-doc.svg';
 import FileHtml from '@phosphor/file-html.svg';
 import FilePdf from '@phosphor/file-pdf.svg';
 import FileVideo from '@phosphor/file-video.svg';
 import Files from '@phosphor/files.svg';
 import Folder from '@phosphor/folder-simple.svg';
-import GitMergeIcon from '@phosphor/git-merge.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import HashIcon from '@phosphor/hash.svg';
+import FolderUser from '@phosphor/folder-simple-user.svg';
+import GitMerge from '@phosphor/git-merge.svg';
+import GitPullRequest from '@phosphor/git-pull-request.svg';
+import GlobeIcon from '@phosphor/globe.svg';
+import HashStraight from '@phosphor/hash-straight.svg';
 import FileImage from '@phosphor/image.svg';
-import LightningIcon from '@phosphor/lightning.svg';
-import ListChecksIcon from '@phosphor/list-checks.svg';
-import Canvas from '@phosphor/pencil-circle.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import SparkleIcon from '@phosphor/sparkle.svg';
+import ListChecks from '@phosphor/list-checks.svg';
+import PhoneCall from '@phosphor/phone-call.svg';
+import Shapes from '@phosphor/shapes.svg';
+import Sparkle from '@phosphor/sparkle.svg';
 import Users from '@phosphor/users.svg';
+import UsersThree from '@phosphor/users-three.svg';
+import AddressBookBold from '@phosphor-icons/core/bold/address-book-bold.svg';
+import BellSimpleBold from '@phosphor-icons/core/bold/bell-simple-bold.svg';
+import BlueprintBold from '@phosphor-icons/core/bold/blueprint-bold.svg';
+import BracketsCurlyBold from '@phosphor-icons/core/bold/brackets-curly-bold.svg';
+import BuildingBold from '@phosphor-icons/core/bold/building-bold.svg';
+import BuildingOfficeBold from '@phosphor-icons/core/bold/building-office-bold.svg';
+import CalendarBold from '@phosphor-icons/core/bold/calendar-bold.svg';
+import ClockClockwiseBold from '@phosphor-icons/core/bold/clock-clockwise-bold.svg';
+import CodeBold from '@phosphor-icons/core/bold/code-bold.svg';
+import EmailBold from '@phosphor-icons/core/bold/envelope-bold.svg';
+import EmailReadBold from '@phosphor-icons/core/bold/envelope-open-bold.svg';
+import FileArchiveBold from '@phosphor-icons/core/bold/file-archive-bold.svg';
+import FileBold from '@phosphor-icons/core/bold/file-bold.svg';
+import FileCsvBold from '@phosphor-icons/core/bold/file-csv-bold.svg';
+import FileDashedBold from '@phosphor-icons/core/bold/file-dashed-bold.svg';
+import FileDocBold from '@phosphor-icons/core/bold/file-doc-bold.svg';
+import FileHtmlBold from '@phosphor-icons/core/bold/file-html-bold.svg';
+import FilePdfBold from '@phosphor-icons/core/bold/file-pdf-bold.svg';
+import FileVideoBold from '@phosphor-icons/core/bold/file-video-bold.svg';
+import FilesBold from '@phosphor-icons/core/bold/files-bold.svg';
+import FolderBold from '@phosphor-icons/core/bold/folder-simple-bold.svg';
+import FolderUserBold from '@phosphor-icons/core/bold/folder-simple-user-bold.svg';
+import GitMergeBold from '@phosphor-icons/core/bold/git-merge-bold.svg';
+import GitPullRequestBold from '@phosphor-icons/core/bold/git-pull-request-bold.svg';
+import GlobeIconBold from '@phosphor-icons/core/bold/globe-bold.svg';
+import HashStraightBold from '@phosphor-icons/core/bold/hash-straight-bold.svg';
+import FileImageBold from '@phosphor-icons/core/bold/image-bold.svg';
+import ListChecksBold from '@phosphor-icons/core/bold/list-checks-bold.svg';
+import PhoneCallBold from '@phosphor-icons/core/bold/phone-call-bold.svg';
+import ShapesBold from '@phosphor-icons/core/bold/shapes-bold.svg';
+import SparkleBold from '@phosphor-icons/core/bold/sparkle-bold.svg';
+import UsersBold from '@phosphor-icons/core/bold/users-bold.svg';
+import UsersThreeBold from '@phosphor-icons/core/bold/users-three-bold.svg';
 import type { PreviewItem } from '@queries/preview';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
@@ -62,6 +91,7 @@ import { match } from 'ts-pattern';
 
 type IconConfig = {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  boldIcon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   foreground: string;
   background: string;
   prettyName: string;
@@ -95,253 +125,295 @@ const ARCHIVE_EXTENSIONS = new Set(
 
 export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   document: {
-    icon: ArticleIcon,
+    icon: File,
+    boldIcon: FileBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Document',
   },
   call: {
-    icon: PhoneIcon,
+    icon: PhoneCall,
+    boldIcon: PhoneCallBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Call',
   },
   calendar: {
-    icon: CalendarIcon,
+    icon: Calendar,
+    boldIcon: CalendarBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Calendar',
   },
   canvas: {
-    icon: Canvas,
+    icon: Shapes,
+    boldIcon: ShapesBold,
     foreground: 'text-canvas',
     background: 'bg-canvas/20',
     prettyName: 'Canvas',
   },
   html: {
     icon: FileHtml,
+    boldIcon: FileHtmlBold,
     foreground: 'text-html',
     background: 'bg-html/20',
     prettyName: 'Webpage',
   },
   channel: {
-    icon: HashIcon,
+    icon: HashStraight,
+    boldIcon: HashStraightBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Channel',
   },
   public: {
-    icon: HashIcon,
+    icon: GlobeIcon,
+    boldIcon: GlobeIconBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Public Channel',
   },
   organization: {
     icon: Building,
+    boldIcon: BuildingBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Organization',
   },
   private: {
-    icon: HashIcon,
+    icon: HashStraight,
+    boldIcon: HashStraightBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Private Channel',
   },
   direct_message: {
-    icon: ChatsIcon,
+    icon: Users,
+    boldIcon: UsersBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Direct Message',
   },
   team: {
-    icon: HashIcon,
+    icon: UsersThree,
+    boldIcon: UsersThreeBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Team Channel',
   },
   email: {
     icon: Email,
+    boldIcon: EmailBold,
     foreground: 'text-email',
     background: 'bg-email/20',
     prettyName: 'Email',
   },
   code: {
-    icon: FileCode,
+    icon: Code,
+    boldIcon: CodeBold,
     foreground: 'text-code',
     background: 'bg-code/20',
     prettyName: 'Code',
   },
   csv: {
-    icon: WideCsv,
+    icon: FileCsv,
+    boldIcon: FileCsvBold,
     foreground: 'text-code',
     background: 'bg-code/20',
     prettyName: 'CSV',
   },
   pdf: {
     icon: FilePdf,
+    boldIcon: FilePdfBold,
     foreground: 'text-pdf',
     background: 'bg-pdf/20',
     prettyName: 'PDF',
   },
   md: {
-    icon: ArticleIcon,
+    icon: File,
+    boldIcon: FileBold,
     foreground: 'text-note',
     background: 'bg-note/20',
     prettyName: 'Note',
   },
   image: {
     icon: FileImage,
+    boldIcon: FileImageBold,
     foreground: 'text-image',
     background: 'bg-image/20',
     prettyName: 'Image',
   },
   write: {
-    icon: ArticleIcon,
+    icon: FileDoc,
+    boldIcon: FileDocBold,
     foreground: 'text-write',
     background: 'bg-write/20',
     prettyName: 'Document',
   },
   chat: {
-    icon: SparkleIcon,
+    icon: Sparkle,
+    boldIcon: SparkleBold,
     foreground: 'text-chat',
     background: 'bg-chat/20',
     prettyName: 'Chat',
   },
   project: {
     icon: Folder,
+    boldIcon: FolderBold,
     foreground: 'text-folder',
     background: 'bg-folder/20',
     prettyName: 'Folder',
   },
   sharedProject: {
-    icon: Folder,
+    icon: FolderUser,
+    boldIcon: FolderUserBold,
     foreground: 'text-folder',
     background: 'bg-folder/20',
     prettyName: 'Shared Folder',
   },
   unknown: {
-    icon: File,
+    icon: FileDashed,
+    boldIcon: FileDashedBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'File',
   },
   files: {
     icon: Files,
+    boldIcon: FilesBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Files',
   },
   archive: {
     icon: FileArchive,
+    boldIcon: FileArchiveBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Archive',
   },
   video: {
     icon: FileVideo,
+    boldIcon: FileVideoBold,
     foreground: 'text-video',
     background: 'bg-video/20',
     prettyName: 'Video',
   },
   contact: {
-    icon: Users,
+    icon: AddressBook,
+    boldIcon: AddressBookBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Contact',
   },
   default: {
-    icon: File,
+    icon: FileDashed,
+    boldIcon: FileDashedBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'File',
   },
   emailRead: {
     icon: EmailRead,
+    boldIcon: EmailReadBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Read Email',
   },
   emailInvite: {
-    icon: CalendarIcon,
+    icon: Calendar,
+    boldIcon: CalendarBold,
     foreground: 'text-calendar',
     background: 'bg-calendar/20',
     prettyName: 'Calendar Invite',
   },
   githubPullRequest: {
-    icon: GitPullRequestIcon,
+    icon: GitPullRequest,
+    boldIcon: GitPullRequestBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'GitHub Pull Request',
   },
   githubPullRequestOpen: {
-    icon: GitPullRequestIcon,
+    icon: GitPullRequest,
+    boldIcon: GitPullRequestBold,
     foreground: 'text-success',
     background: 'bg-success/20',
     prettyName: 'Open Pull Request',
   },
   githubPullRequestMerged: {
-    icon: GitMergeIcon,
+    icon: GitMerge,
+    boldIcon: GitMergeBold,
     foreground: 'text-note',
     background: 'bg-note/20',
     prettyName: 'Merged Pull Request',
   },
   githubPullRequestClosed: {
-    icon: GitPullRequestIcon,
+    icon: GitPullRequest,
+    boldIcon: GitPullRequestBold,
     foreground: 'text-failure',
     background: 'bg-failure/20',
     prettyName: 'Closed Pull Request',
   },
   pr: {
-    icon: GitPullRequestIcon,
+    icon: GitPullRequest,
+    boldIcon: GitPullRequestBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Pull Request',
   },
   agent: {
-    icon: SparkleIcon,
+    icon: Sparkle,
+    boldIcon: SparkleBold,
     foreground: 'text-chat',
     background: 'bg-chat/20',
     prettyName: 'Agent',
   },
   task: {
-    icon: ListChecksIcon,
+    icon: ListChecks,
+    boldIcon: ListChecksBold,
     foreground: 'text-task',
     background: 'bg-task/20',
     prettyName: 'Task',
   },
   snippet: {
-    icon: WideSnippet,
+    icon: BracketsCurly,
+    boldIcon: BracketsCurlyBold,
     foreground: 'text-snippet',
     background: 'bg-snippet/20',
     prettyName: 'Snippet',
   },
   skill: {
-    icon: SkillIcon,
+    icon: Blueprint,
+    boldIcon: BlueprintBold,
     foreground: 'text-chat',
     background: 'bg-chat/20',
     prettyName: 'Skill',
   },
   automation: {
-    icon: LightningIcon,
+    icon: ClockClockwise,
+    boldIcon: ClockClockwiseBold,
     foreground: 'text-chat',
     background: 'bg-chat/20',
     prettyName: 'Automation',
   },
   crm_company: {
-    icon: BuildingsIcon,
+    icon: BuildingOffice,
+    boldIcon: BuildingOfficeBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Company',
   },
   company: {
-    icon: BuildingsIcon,
+    icon: BuildingOffice,
+    boldIcon: BuildingOfficeBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Company',
   },
   reminder: {
-    icon: AlarmIcon,
+    icon: BellSimple,
+    boldIcon: BellSimpleBold,
     foreground: 'text-default',
     background: 'bg-default/20',
     prettyName: 'Reminder',
@@ -372,23 +444,6 @@ function validateEntity(entity: string): EntityWithValidIcon {
     return 'default';
   }
 }
-
-// File-format icons retain their wide variants; entity glyphs live in the
-// shared registry above so the feature flag cannot replace their mapping.
-const WIDE_ICONS: Partial<
-  Record<EntityWithValidIcon, Component<JSX.SvgSVGAttributes<SVGSVGElement>>>
-> = {
-  canvas: WideDiagram,
-  html: WideFileCode,
-  code: WideFileCode,
-  pdf: WideBook,
-  image: WideFileImage,
-  unknown: WideUnknown,
-  files: WideFiles,
-  archive: WideUnknown,
-  video: WideVideo,
-  default: WideUnknown,
-};
 
 const ICON_SIZES = {
   xs: 'w-4 h-4',
@@ -425,6 +480,8 @@ export type EntityIconProps = {
    * fill = "w-fill h-fill"
    */
   size?: keyof typeof ICON_SIZE_CLASSES;
+  /** Use the matching Phosphor weight. Defaults to regular. */
+  weight?: 'regular' | 'bold';
   theme?: 'monochrome';
   /**
    * Whether the item is shared. If true, certain icons will be rendered differently.
@@ -447,10 +504,10 @@ export function EntityIcon(props: EntityIconProps) {
   const getName = () => {
     // Special cases:
     if (props.targetType === 'project' && props.shared) return 'sharedProject';
-    return validateEntity(props.targetType || 'default');
+    return props.targetType || 'default';
   };
 
-  const config = () => getIconConfig(getName());
+  const config = () => getIconConfig(getName(), props.weight);
   const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
 
@@ -473,12 +530,19 @@ export function EntityIcon(props: EntityIconProps) {
 export function CustomEntityIcon(
   props: EntityIconProps & {
     icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+    boldIcon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   }
 ) {
   const config = () =>
     ENTITY_ICON_CONFIGS[validateEntity(props.targetType || 'default')];
   const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
+  const icon = () => {
+    if (props.weight === 'bold') {
+      return props.boldIcon ?? props.icon ?? config().boldIcon;
+    }
+    return props.icon ?? config().icon;
+  };
   return (
     <div
       class={sizeClass()}
@@ -491,20 +555,21 @@ export function CustomEntityIcon(
       }}
     >
       {/* size-full: see EntityIcon (Safari). */}
-      <Dynamic component={props.icon || config().icon} class="size-full" />
+      <Dynamic component={icon()} class="size-full" />
     </div>
   );
 }
 
 export function getIconConfig(
-  targetType: EntityWithValidIcon | FileType | (string & {})
+  targetType: EntityWithValidIcon | FileType | (string & {}),
+  weight: NonNullable<EntityIconProps['weight']> = 'regular'
 ) {
   const key = validateEntity(targetType);
-  const config = { ...ENTITY_ICON_CONFIGS[key] };
-  if (USE_WIDE_ICONS) {
-    config.icon = WIDE_ICONS[key] ?? config.icon;
-  }
-  return config;
+  const config = ENTITY_ICON_CONFIGS[key];
+  return {
+    ...config,
+    icon: weight === 'bold' ? config.boldIcon : config.icon,
+  };
 }
 
 type EntityIconData = Pick<EntityData, 'type'> & {
@@ -589,8 +654,11 @@ export function reminderReferenceIconType(
   return UNRESOLVED_ICONS.has(iconType) ? 'reminder' : iconType;
 }
 
-export function getEntityIconConfig(entity: EntityData) {
-  return getIconConfig(getEntityIconType(entity));
+export function getEntityIconConfig(
+  entity: EntityData,
+  weight?: EntityIconProps['weight']
+) {
+  return getIconConfig(getEntityIconType(entity), weight);
 }
 
 export function getPreviewItemIconType(item: PreviewItem): EntityWithValidIcon {

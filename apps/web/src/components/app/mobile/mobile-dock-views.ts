@@ -1,19 +1,12 @@
 import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-flag';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { getIconConfig } from '@core/component/EntityIcon';
 import { enableCrm } from '@core/constant/featureFlags';
-import CompanyIcon from '@icon/wide-company.svg';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
-import ChatsIcon from '@phosphor/chats-circle.svg';
-import EmailIcon from '@phosphor/envelope.svg';
-import FilesIcon from '@phosphor/folder-simple.svg';
 import HouseIcon from '@phosphor/house.svg';
-import TasksIcon from '@phosphor/list-checks.svg';
-import CallsIcon from '@phosphor/phone.svg';
-import AgentsIcon from '@phosphor/sparkle.svg';
-import CalendarFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
-import ChatsFillIcon from '@phosphor-fill/chats-circle-fill.svg';
+import CalendarFillIcon from '@phosphor-fill/calendar-fill.svg';
 import EmailFillIcon from '@phosphor-fill/envelope-fill.svg';
-import FilesFillIcon from '@phosphor-fill/folder-simple-fill.svg';
+import FilesFillIcon from '@phosphor-fill/files-fill.svg';
+import ChannelFillIcon from '@phosphor-fill/hash-straight-fill.svg';
 import HouseFillIcon from '@phosphor-fill/house-fill.svg';
 import { createMemo } from 'solid-js';
 import type { MobileDockIcon } from './MobileDockButton';
@@ -22,7 +15,7 @@ import type { MobileNavViewId } from './mobile-nav-views';
 export type MobileDockView = {
   id: Exclude<MobileNavViewId, 'search' | 'settings'>;
   label: string;
-  /** Same Phosphor glyph as the desktop sidebar. */
+  /** Phosphor glyph for this view. */
   icon: MobileDockIcon;
   iconActive?: MobileDockIcon;
   /** When set, the scope pill renders icon-only with this icon. */
@@ -45,32 +38,32 @@ const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
   {
     id: 'calendar',
     label: 'Calendar',
-    icon: CalendarIcon,
+    icon: getIconConfig('calendar').icon,
     iconActive: CalendarFillIcon,
-    pillIcon: CalendarIcon,
+    pillIcon: getIconConfig('calendar').icon,
   },
   {
     id: 'mail',
     label: 'Email',
-    icon: EmailIcon,
+    icon: getIconConfig('email').icon,
     iconActive: EmailFillIcon,
   },
   {
     id: 'channels',
     label: 'Channels',
-    icon: ChatsIcon,
-    iconActive: ChatsFillIcon,
+    icon: getIconConfig('channel').icon,
+    iconActive: ChannelFillIcon,
   },
   {
     id: 'documents',
     label: 'Files',
-    icon: FilesIcon,
+    icon: getIconConfig('files').icon,
     iconActive: FilesFillIcon,
   },
-  { id: 'agents', label: 'Agents', icon: AgentsIcon },
-  { id: 'tasks', label: 'Tasks', icon: TasksIcon },
-  { id: 'calls', label: 'Calls', icon: CallsIcon },
-  { id: 'companies', label: 'CRM', icon: CompanyIcon },
+  { id: 'agents', label: 'Agents', icon: getIconConfig('agent').icon },
+  { id: 'tasks', label: 'Tasks', icon: getIconConfig('task').icon },
+  { id: 'calls', label: 'Calls', icon: getIconConfig('call').icon },
+  { id: 'companies', label: 'CRM', icon: getIconConfig('company').icon },
 ];
 
 export function useMobileDockViews() {

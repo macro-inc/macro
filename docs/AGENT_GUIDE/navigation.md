@@ -86,6 +86,12 @@ Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
 with regular-weight labels and consistent icon spacing.
 
+Entity rows and navigation use Phosphor icons. Entity icons share one mapping
+across lists, previews, and drag images, with regular and bold weights. Read email
+uses an open envelope, calendar invitations use a calendar, and pull requests
+retain their open/merged/closed glyphs and status colors. Direct messages may
+show the other participant's avatar instead of a glyph.
+
 ## List-row dragging
 
 GraphQL-backed Soup rows initialize dragging on the first primary-button press;

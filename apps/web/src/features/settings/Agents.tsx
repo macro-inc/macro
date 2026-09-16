@@ -9,7 +9,7 @@ import { usePipedreamMcpFlag } from '@core/pipedream/flag';
 import MacroLogo from '@icon/macro-logo.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import AgentIcon from '@phosphor/sparkle.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import UploadIcon from '@phosphor/upload-simple.svg';
 import XIcon from '@phosphor/x.svg';
@@ -451,7 +451,7 @@ function AgentAvatar(props: { agent: AgentSummary }) {
           <Avatar.Fallback>
             <Show
               when={props.agent.id === MACRO_AGENT_BOT_ID}
-              fallback={<RobotIcon class="size-5" />}
+              fallback={<AgentIcon class="size-5" />}
             >
               <MacroLogo class="size-5" />
             </Show>

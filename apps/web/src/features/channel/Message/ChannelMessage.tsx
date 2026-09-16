@@ -2,7 +2,7 @@ import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-co
 import { touchHandler } from '@core/directive/touchHandler';
 import type { IUser } from '@core/user/types';
 import { messageSendMotion } from '@core/util/message-send-motion';
-import TrashIcon from '@icon/square-trash.svg';
+import TrashIcon from '@phosphor/trash.svg';
 import { type Accessor, type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';

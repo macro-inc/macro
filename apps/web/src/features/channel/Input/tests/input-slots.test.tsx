@@ -31,8 +31,14 @@ vi.hoisted(() => {
   });
 });
 
-vi.mock('@core/component/LexicalMarkdown/utils/create-has-line-breaks', () => ({
-  createHasLineBreaks: () => () => false,
+vi.mock('@core/component/LexicalMarkdown/utils/create-composer-layout', () => ({
+  createComposerLayout: (
+    _editor: unknown,
+    options: { mode?: () => 'auto' | 'expanded' | 'collapsed' }
+  ) => ({
+    isCompact: () => options.mode?.() !== 'expanded',
+    hasMultilineContent: () => false,
+  }),
 }));
 
 vi.mock('@core/util/upload', () => ({

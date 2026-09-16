@@ -32,6 +32,7 @@ import {
 } from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
+  onOpenEntity?: (entity: EntityData) => boolean;
   onOpenProject?: (id: string) => void;
   onOpenEntity?: (entity: EntityData, event?: KeyboardEvent) => boolean;
   disableTabHotkeys?: boolean;
@@ -189,6 +190,8 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
         return true;
       }
       if (options.onOpenEntity?.(entity, event)) return true;
+
+      if (options.onOpenEntity?.(entity)) return true;
 
       const contentHitData = isSearchEntity(entity)
         ? entity.search.contentHitData

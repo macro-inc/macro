@@ -29,10 +29,10 @@ import {
   useBlockDocumentName,
 } from '@core/util/currentBlockDocumentName';
 import { downloadFile } from '@filesystem/download';
-import IconShared from '@icon/wide-share.svg';
 import Download from '@phosphor/download-simple.svg';
 import Info from '@phosphor/info.svg';
 import Quotes from '@phosphor/quotes.svg';
+import IconShared from '@phosphor/share.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';

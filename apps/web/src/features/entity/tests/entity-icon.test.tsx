@@ -1,13 +1,13 @@
-import WideUnknown from '@icon/wide-unknown.svg';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
+import CalendarIcon from '@phosphor/calendar.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import EnvelopeOpenIcon from '@phosphor/envelope-open.svg';
-import FileIcon from '@phosphor/file.svg';
+import FileIcon from '@phosphor/file-dashed.svg';
 import GitMergeIcon from '@phosphor/git-merge.svg';
 import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
+import GitMergeBold from '@phosphor-icons/core/bold/git-merge-bold.svg';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HomeEntityIcon } from '../../inbox-view/components/HomeEntityIcon';
 import { EntityIcon } from '../extractors/entity-icon';
 import type {
@@ -16,12 +16,6 @@ import type {
   UnknownForeignEntity,
 } from '../types/entity';
 
-const flags = vi.hoisted(() => ({ wideIcons: false }));
-vi.mock('@core/constant/featureFlags', () => ({
-  get USE_WIDE_ICONS() {
-    return flags.wideIcons;
-  },
-}));
 vi.mock('@core/constant/allBlocks', () => ({
   blockAcceptedFileExtensionSet: new Set(),
   fileTypeToBlockName: vi.fn(),
@@ -79,11 +73,7 @@ function expectGlyph(container: HTMLElement, Glyph: typeof FileIcon) {
 
 afterEach(cleanup);
 
-describe.each([false, true])('Entity.Icon with wide icons %s', (wideIcons) => {
-  beforeEach(() => {
-    flags.wideIcons = wideIcons;
-  });
-
+describe('Entity.Icon', () => {
   it.each([
     [false, false, EnvelopeIcon, 'text-email'],
     [true, false, EnvelopeOpenIcon, 'text-default'],
@@ -129,7 +119,7 @@ describe.each([false, true])('Entity.Icon with wide icons %s', (wideIcons) => {
       metadata: { status: 'merged' },
     };
     const { container } = render(() => <EntityIcon entity={entity} />);
-    expectGlyph(container, wideIcons ? WideUnknown : FileIcon);
+    expectGlyph(container, FileIcon);
     expect(
       container.firstElementChild?.classList.contains('text-default')
     ).toBe(true);
@@ -148,6 +138,16 @@ describe.each([false, true])('Entity.Icon with wide icons %s', (wideIcons) => {
     expect(
       container.firstElementChild?.classList.contains('text-success')
     ).toBe(false);
+  });
+
+  it('forwards the requested weight for pull request states', () => {
+    const { container } = render(() => (
+      <EntityIcon entity={pullRequest('merged')} weight="bold" />
+    ));
+    expectGlyph(container, GitMergeBold);
+    expect(container.firstElementChild?.classList.contains('text-note')).toBe(
+      true
+    );
   });
 
   it('preserves pull request status colors in compact Home rows', () => {

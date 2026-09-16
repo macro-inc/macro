@@ -27,6 +27,7 @@ import {
   SessionStatusPill,
   TodoList,
 } from '../../ui';
+import { AgentPullRequestChip } from '../AgentPullRequestChip';
 import { harnessTitle } from '../AgentSplitHeader';
 
 export function AgentSidePanelSections() {
@@ -81,6 +82,13 @@ export function AgentSidePanelSections() {
                   <GitBranch class="size-3 shrink-0" />
                   <span class="truncate">{repoName(url())}</span>
                 </button>
+              </SidePanel.Row>
+            )}
+          </Show>
+          <Show when={session()?.pullRequestUrl}>
+            {(url) => (
+              <SidePanel.Row label="Pull request">
+                <AgentPullRequestChip url={url()} />
               </SidePanel.Row>
             )}
           </Show>

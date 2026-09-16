@@ -1,5 +1,6 @@
 import {
   EntityIcon as CoreEntityIcon,
+  type EntityIconProps as CoreEntityIconProps,
   getEntityIconType,
 } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
@@ -15,6 +16,7 @@ interface EntityIconProps {
   class?: string;
   suppressClick?: boolean;
   showTooltip?: boolean;
+  weight?: CoreEntityIconProps['weight'];
 }
 
 function DirectMessageIcon(props: {
@@ -22,6 +24,7 @@ function DirectMessageIcon(props: {
   class?: string;
   suppressClick?: boolean;
   showTooltip?: boolean;
+  weight?: CoreEntityIconProps['weight'];
 }) {
   const userId = useUserId();
   const participantId = () => {
@@ -38,6 +41,7 @@ function DirectMessageIcon(props: {
             targetType="direct_message"
             size="fill"
             class={props.class}
+            weight={props.weight}
           />
         }
       >
@@ -71,6 +75,7 @@ export function EntityIcon(props: EntityIconProps) {
           targetType={iconType()}
           size="fill"
           class={props.class}
+          weight={props.weight}
         />
       }
     >
@@ -80,6 +85,7 @@ export function EntityIcon(props: EntityIconProps) {
           class={props.class}
           suppressClick={props.suppressClick}
           showTooltip={props.showTooltip}
+          weight={props.weight}
         />
       </Match>
       <Match when={isChatEntity()}>
@@ -88,6 +94,7 @@ export function EntityIcon(props: EntityIconProps) {
           model={(props.entity as ChatEntity).model}
           animate={props.streamState?.type === 'created'}
           class={`size-full ${props.class ?? ''}`}
+          weight={props.weight}
         />
       </Match>
     </Switch>

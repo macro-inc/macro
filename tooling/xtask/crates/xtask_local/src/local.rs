@@ -431,7 +431,7 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         }
         // Non-interactive (piped/CI): just hold the dev server until it exits.
         Some(mut fe) => {
-            let status = fe.child.wait()?;
+            let status = fe.process.child.wait()?;
             if !status.success() {
                 let out = fe.tail_output(40);
                 if !out.trim().is_empty() {
@@ -447,7 +447,9 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
 
 /// Print the hotkey legend shown while attached to a running stack.
 fn print_hotkeys(stage: &Stage) {
-    stage.note("  [r] rebuild & reload services   [q] quit (tears the stack down)");
+    stage.note(
+        "  [r] rebuild & reload services   [f] restart Vite   [q] quit (tears the stack down)",
+    );
 }
 
 /// Re-build the service binaries on the host and restart only the containers
@@ -557,7 +559,8 @@ fn binary_mtime(
 }
 
 /// Stay attached to the running stack, handling hotkeys until the user quits or
-/// the frontend exits. `r` rebuilds + reloads the services; `q`/Esc/Ctrl-C stops
+/// the frontend exits. `r` rebuilds + reloads the services; `f` restarts Vite;
+/// `q`/Esc/Ctrl-C stops
 /// the frontend and tears the whole stack down (so the next run starts clean and
 /// fast). An unexpected frontend exit just returns, leaving the stack up for
 /// inspection — the next run's start-of-run teardown will reclaim it.
@@ -576,7 +579,7 @@ fn interact(
     print_hotkeys(stage);
     loop {
         // Noticed on the next keypress; the frontend running silently is fine.
-        if let Some(status) = fe.child.try_wait()? {
+        if let Some(status) = fe.process.child.try_wait()? {
             let out = fe.tail_output(40);
             if !out.trim().is_empty() {
                 stage.note("frontend output (last lines):");
@@ -596,6 +599,13 @@ fn interact(
                 // run_step renders ✗ + the captured build error on failure; keep
                 // the loop alive so the user can fix and press `r` again.
                 let _ = rebuild_and_reload(stage, mode, instance, env, target, build_aux_services);
+                print_hotkeys(stage);
+            }
+            Ok(Key::Char('f' | 'F')) => {
+                let _ = term.clear_last_lines(1);
+                // A failed restart returns with captured output and leaves the
+                // backend containers running, like an unexpected frontend exit.
+                fe.restart(stage)?;
                 print_hotkeys(stage);
             }
             Ok(Key::Char('q' | 'Q') | Key::Escape | Key::CtrlC) | Err(_) => {

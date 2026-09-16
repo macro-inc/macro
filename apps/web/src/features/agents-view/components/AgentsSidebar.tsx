@@ -26,7 +26,7 @@ import ClockIcon from '@phosphor/clock-clockwise.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlugsIcon from '@phosphor/plugs.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import RobotIcon from '@phosphor/robot.svg';
+import AgentIcon from '@phosphor/sparkle.svg';
 import SkillIcon from '@phosphor/sparkle.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import {
@@ -54,7 +54,7 @@ import type {
 const PAGES = [
   { id: 'new', label: 'New Chat', icon: PlusIcon },
   { id: 'routines', label: 'Routines', icon: ClockIcon },
-  { id: 'agents', label: 'Agents', icon: RobotIcon },
+  { id: 'agents', label: 'Agents', icon: AgentIcon },
   { id: 'connections', label: 'Connections', icon: PlugsIcon },
   { id: 'skills', label: 'Skills', icon: SkillIcon },
 ] satisfies {

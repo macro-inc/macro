@@ -3,8 +3,8 @@
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::NativeRecord;
 use crate::domain::model::{
-    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl, RunListing,
-    RunOutcome,
+    ConversationLine, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
+    RunListing, RunOutcome,
 };
 use crate::domain::ports::{
     ConnectedStream, CursorAgents, RepositoryChooser, RunStream, SessionIntent, SessionNotifier,
@@ -156,6 +156,8 @@ pub enum CursorCall {
     CancelRun(CursorAgentId, CursorRunId),
     /// `run_result(agent, run)`.
     RunResult(CursorAgentId, CursorRunId),
+    /// `conversation(agent)`.
+    Conversation(CursorAgentId),
 }
 
 /// A scripted Cursor: hands out ids, records calls, and streams whatever the
@@ -180,6 +182,7 @@ struct FakeCursorState {
     run_results: Vec<RunOutcome>,
     /// The answer every `list_runs` call gets.
     run_listings: Vec<RunListing>,
+    conversation: Vec<ConversationLine>,
     /// Errors the next `create_run` calls answer with, consumed in order.
     create_run_errors: Vec<String>,
     /// Held by the next create call until the test lets it finish.
@@ -306,6 +309,15 @@ impl FakeCursor {
     /// Set the models `list_models` answers with.
     pub fn script_models(&self, models: Vec<CursorModel>) {
         self.inner.lock().expect("fake cursor poisoned").models = models;
+    }
+
+    /// Set the agent's run history, newest first, for `list_runs`.
+    /// What `conversation()` answers with.
+    pub fn script_conversation(&self, lines: Vec<ConversationLine>) {
+        self.inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .conversation = lines;
     }
 
     /// Set the agent's run history, newest first, for `list_runs`.
@@ -488,6 +500,19 @@ impl CursorAgents for FakeCursor {
             .lock()
             .expect("fake cursor poisoned")
             .run_listings
+            .clone())
+    }
+
+    async fn conversation(
+        &self,
+        agent: &CursorAgentId,
+    ) -> Result<Vec<ConversationLine>, rootcause::Report> {
+        self.record(CursorCall::Conversation(agent.clone()));
+        Ok(self
+            .inner
+            .lock()
+            .expect("fake cursor poisoned")
+            .conversation
             .clone())
     }
 }

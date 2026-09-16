@@ -6,6 +6,7 @@ import { createMemo, createSignal, For, Show } from 'solid-js';
 export function CompanyContactsSection(props: {
   company?: CrmCompanyEntity;
   contacts?: CompanyContact[];
+  onOpenContact?: (contact: CompanyContact) => void;
 }) {
   const contacts = () => props.contacts ?? [];
   const { openWithSplit } = useSplitLayout();
@@ -56,15 +57,19 @@ export function CompanyContactsSection(props: {
                 {(contact) => (
                   <button
                     type="button"
-                    onClick={(event) =>
+                    onClick={(event) => {
+                      if (props.onOpenContact && !event.shiftKey) {
+                        props.onOpenContact(contact);
+                        return;
+                      }
                       openWithSplit(
                         {
                           type: 'contact',
                           id: contact.id,
                         },
                         { activate: true, preferNewSplit: event.shiftKey }
-                      )
-                    }
+                      );
+                    }}
                     class="flex min-w-0 flex-col gap-0.5 rounded-md px-1 py-0.5 text-left hover:bg-ink-muted/[0.06]"
                   >
                     <span class="truncate text-sm">

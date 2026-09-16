@@ -1,5 +1,5 @@
-import ShareFat from '@icon/wide-share.svg';
 import DownloadSimple from '@phosphor/download-simple.svg';
+import ShareFat from '@phosphor/share.svg';
 import { Button } from '@ui';
 
 export function UnknownContent(props: {

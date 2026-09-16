@@ -14,13 +14,17 @@ import { ContactSharingSection } from './ContactSharingSection';
  * company block: middle content constrained to a centered column, with
  * additional info in the right-hand SidePanel.
  */
-export function Contact(props: { contactId: string }) {
+export function Contact(props: {
+  contactId: string;
+  headerToggle?: boolean;
+  onOpenCompany?: (companyId: string) => boolean;
+}) {
   const contactQuery = useContactQuery(() => props.contactId);
   const contact = () => contactQuery.data;
   const isTeamAdmin = useIsTeamAdmin();
 
   return (
-    <SidePanel.Layout>
+    <SidePanel.Layout headerToggle={props.headerToggle}>
       <div class="flex h-full flex-col overflow-y-auto scrollbar-hidden">
         <div class="mx-auto flex w-full max-w-3xl min-w-0 grow flex-col gap-6 px-6 pt-12 pb-12">
           <ContactHeader contact={contact()} />
@@ -35,7 +39,10 @@ export function Contact(props: { contactId: string }) {
         order={10}
         defaultOpen
       >
-        <ContactMetadataSection contact={contact()} />
+        <ContactMetadataSection
+          contact={contact()}
+          onOpenCompany={props.onOpenCompany}
+        />
       </SidePanel.Section>
       {/* Sharing is admin-only; hide the whole section for non-admins
           rather than rendering it empty. */}

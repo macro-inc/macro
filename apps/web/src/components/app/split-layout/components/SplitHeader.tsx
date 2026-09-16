@@ -20,8 +20,6 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type EntityDragEvent, isEntityDragEvent } from '@entity';
-import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
-import SplitIcon from '@icon/wide-newSplit.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
@@ -31,14 +29,15 @@ import ExpandIcon from '@phosphor/arrows-out.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import CaretLeft from '@phosphor/caret-left.svg';
 import CaretUp from '@phosphor/caret-up.svg';
+import SplitIcon from '@phosphor/columns.svg';
 import CopyIcon from '@phosphor/copy.svg';
+import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import CloseIcon from '@phosphor/x.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { Button, cn } from '@ui';
 import {
   createMemo,
-  createSignal,
   type ParentProps,
   type Setter,
   Show,
@@ -140,7 +139,6 @@ function SidebarExpandButton() {
   const panel = useContext(SplitPanelContext);
   const layout = useContext(SplitLayoutContext);
   const sidebar = useSidebarCollapse();
-  const [hovering, setHovering] = createSignal(false);
 
   const isLeftmostSplit = () =>
     layout?.manager.splits()[0]?.id === panel?.handle.id;
@@ -165,13 +163,8 @@ function SidebarExpandButton() {
         disabled={!visible()}
         tabindex={visible() ? undefined : -1}
         onClick={() => sidebar.expand()}
-        onMouseEnter={() => setHovering(true)}
-        onMouseLeave={() => setHovering(false)}
       >
-        <AnimatedSquareSidebarIcon
-          class="size-4"
-          triggerAnimation={hovering()}
-        />
+        <SidebarIcon class="size-4" />
       </Button>
     </div>
   );

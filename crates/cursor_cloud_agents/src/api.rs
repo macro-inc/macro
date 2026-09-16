@@ -22,13 +22,14 @@ pub mod wire;
 
 use crate::api::record::SseRecording;
 use crate::api::wire::{
-    AgentSummary, ArchiveAgentResponse, CreateAgentRequest, CreateAgentResponse, CreateRunRequest,
-    CreateRunResponse, ListAgentsResponse, ListModelsResponse, ListRunsResponse,
-    McpServerSelection, MeResponse, ModelSelection, PromptBody, RepoSelection,
+    AgentSummary, ArchiveAgentResponse, ConversationResponse, CreateAgentRequest,
+    CreateAgentResponse, CreateRunRequest, CreateRunResponse, ListAgentsResponse,
+    ListModelsResponse, ListRunsResponse, McpServerSelection, MeResponse, ModelSelection,
+    PromptBody, RepoSelection,
 };
 use crate::domain::model::{
-    CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, ModelParam, ModelVariant,
-    RepoUrl, RunListing,
+    ConversationLine, ConversationSpeaker, CursorAgentId, CursorModel, CursorRunId, McpServer,
+    ModelChoice, ModelParam, ModelVariant, RepoUrl, RunListing,
 };
 use crate::domain::ports::{ConnectedStream, CursorAgents, RunStream, StreamConnectError};
 use futures::{Stream, StreamExt as _};
@@ -538,6 +539,33 @@ impl CursorAgents for CursorClient {
             cursor = Some(next);
         }
         Ok(listings)
+    }
+
+    /// Version zero on purpose: v1 exposes no conversation endpoint, and this
+    /// one answers for the agents v1 created.
+    #[tracing::instrument(skip(self), err)]
+    async fn conversation(
+        &self,
+        agent: &CursorAgentId,
+    ) -> Result<Vec<ConversationLine>, rootcause::Report> {
+        let reply: ConversationResponse = self
+            .get_json(&format!("/v0/agents/{agent}/conversation"))
+            .await?;
+        Ok(reply
+            .messages
+            .into_iter()
+            .filter_map(|message| {
+                let speaker = match message.kind.as_str() {
+                    "user_message" => ConversationSpeaker::User,
+                    "assistant_message" => ConversationSpeaker::Agent,
+                    _ => return None,
+                };
+                Some(ConversationLine {
+                    speaker,
+                    text: message.text?,
+                })
+            })
+            .collect())
     }
 }
 
