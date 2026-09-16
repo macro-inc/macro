@@ -330,8 +330,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   agent: {
     icon: Sparkle,
     boldIcon: SparkleBold,
-    foreground: 'text-default',
-    background: 'bg-default/20',
+    foreground: 'text-chat',
+    background: 'bg-chat/20',
     prettyName: 'Agent',
   },
   task: {

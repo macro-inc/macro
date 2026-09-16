@@ -15,6 +15,13 @@ vi.mock('@core/constant/allBlocks', () => ({
 }));
 
 describe('EntityIcon weight', () => {
+  it('uses the chat color treatment for agents', () => {
+    expect(getIconConfig('agent')).toMatchObject({
+      foreground: 'text-chat',
+      background: 'bg-chat/20',
+    });
+  });
+
   it('selects the requested weight from the icon config', () => {
     expect(getIconConfig('md', 'bold').icon).toBe(getIconConfig('md').boldIcon);
     expect(getIconConfig('md').icon).not.toBe(getIconConfig('md').boldIcon);
