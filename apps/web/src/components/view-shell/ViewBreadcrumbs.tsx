@@ -2,6 +2,7 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import { cn } from '@ui';
 import {
   type Accessor,
+  children,
   createContext,
   createMemo,
   createSignal,
@@ -16,7 +17,7 @@ import {
 } from 'solid-js';
 
 type RegisteredBreadcrumb = {
-  id: string;
+  value: Accessor<string>;
   order: Accessor<number | undefined>;
   sequence: number;
   render: () => JSX.Element;
@@ -24,6 +25,8 @@ type RegisteredBreadcrumb = {
 
 type ViewBreadcrumbsContextValue = {
   entries: Accessor<RegisteredBreadcrumb[]>;
+  value: Accessor<string>;
+  onChange: (value: string) => void;
   register: (entry: Omit<RegisteredBreadcrumb, 'sequence'>) => () => void;
 };
 
@@ -39,7 +42,10 @@ function useViewBreadcrumbsContext() {
   return context;
 }
 
-export type ViewBreadcrumbsRootProps = ParentProps;
+export type ViewBreadcrumbsRootProps = ParentProps<{
+  value: string;
+  onChange: (value: string) => void;
+}>;
 
 /** Owns the ordered registration context for one breadcrumb path. */
 function Root(props: ViewBreadcrumbsRootProps) {
@@ -49,7 +55,7 @@ function Root(props: ViewBreadcrumbsRootProps) {
   const register: ViewBreadcrumbsContextValue['register'] = (entry) => {
     const registered = { ...entry, sequence: sequence++ };
     setEntries((current) => [
-      ...current.filter((item) => item.id !== entry.id),
+      ...current.filter((item) => item.value() !== entry.value()),
       registered,
     ]);
 
@@ -59,22 +65,36 @@ function Root(props: ViewBreadcrumbsRootProps) {
   };
 
   return (
-    <ViewBreadcrumbsContext.Provider value={{ entries, register }}>
+    <ViewBreadcrumbsContext.Provider
+      value={{
+        entries,
+        value: () => props.value,
+        onChange: (value) => props.onChange(value),
+        register,
+      }}
+    >
       {props.children}
     </ViewBreadcrumbsContext.Provider>
   );
 }
 
-export type ViewBreadcrumbsButtonProps =
-  JSX.ButtonHTMLAttributes<HTMLButtonElement> & {
-    current?: boolean;
-  };
+export type ViewBreadcrumbsItemState = {
+  isActive: Accessor<boolean>;
+  onSelect: () => void;
+};
+
+export type ViewBreadcrumbsButtonProps = Omit<
+  JSX.ButtonHTMLAttributes<HTMLButtonElement>,
+  'aria-current'
+> & {
+  isActive?: boolean;
+};
 
 function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
   const [local, rest] = splitProps(props, [
     'children',
     'class',
-    'current',
+    'isActive',
     'type',
   ]);
 
@@ -82,10 +102,10 @@ function BreadcrumbButton(props: ViewBreadcrumbsButtonProps) {
     <button
       {...rest}
       type={local.type ?? 'button'}
-      aria-current={local.current ? 'page' : undefined}
+      aria-current={local.isActive ? 'page' : undefined}
       class={cn(
         'flex h-7 min-w-0 items-center px-1 font-semibold text-sm tracking-[-0.03em] outline-none transition-colors focus-visible:outline-2 focus-visible:outline-accent motion-reduce:transition-none',
-        local.current
+        local.isActive
           ? 'shrink text-ink'
           : 'text-ink-muted hover:text-ink focus-visible:text-ink',
         local.class
@@ -110,10 +130,11 @@ function Separator(props: ViewBreadcrumbsSeparatorProps) {
   );
 }
 
-export type ViewBreadcrumbsItemProps = ParentProps<{
-  id: string;
+export type ViewBreadcrumbsItemProps = {
+  value: string;
   order?: number;
-}>;
+  children: JSX.Element | ((state: ViewBreadcrumbsItemState) => JSX.Element);
+};
 
 /**
  * Registers an arbitrary breadcrumb segment with the nearest Root and removes
@@ -121,13 +142,21 @@ export type ViewBreadcrumbsItemProps = ParentProps<{
  */
 function Item(props: ViewBreadcrumbsItemProps) {
   const context = useViewBreadcrumbsContext();
+  const state: ViewBreadcrumbsItemState = {
+    isActive: () => context.value() === props.value,
+    onSelect: () => context.onChange(props.value),
+  };
+  const resolvedChildren = children(() => {
+    const child = props.children;
+    return <>{typeof child === 'function' ? child(state) : child}</>;
+  });
   let unregister: (() => void) | undefined;
 
   onMount(() => {
     unregister = context.register({
-      id: props.id,
+      value: () => props.value,
       order: () => props.order,
-      render: () => props.children,
+      render: resolvedChildren,
     });
   });
   onCleanup(() => unregister?.());

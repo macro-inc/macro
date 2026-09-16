@@ -50,15 +50,20 @@ import type { TaskDetailTarget } from '../types';
 const TASK_BREADCRUMB_SKELETON_DELAY_MS = 150;
 
 function TaskViewBreadcrumbItem() {
-  const { state, closeTask } = useTasksView();
+  const { state } = useTasksView();
   const tabName = () =>
     TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
 
   return (
-    <ViewBreadcrumbs.Item id="tasks-view" order={0}>
-      <ViewBreadcrumbs.Button onClick={closeTask}>
-        <span class="truncate">{tabName()}</span>
-      </ViewBreadcrumbs.Button>
+    <ViewBreadcrumbs.Item value="tasks-view" order={0}>
+      {(item) => (
+        <ViewBreadcrumbs.Button
+          isActive={item.isActive()}
+          onClick={item.onSelect}
+        >
+          <span class="truncate">{tabName()}</span>
+        </ViewBreadcrumbs.Button>
+      )}
     </ViewBreadcrumbs.Item>
   );
 }
@@ -101,26 +106,35 @@ function TaskBreadcrumbItem(props: {
   });
 
   return (
-    <ViewBreadcrumbs.Item id={`task:${props.documentId}`} order={1}>
-      <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
-        <ViewBreadcrumbs.Button current class="gap-1.5" onClick={focusTask}>
-          <EntityIcon targetType="task" size="xs" class="shrink-0" />
-          <span class="truncate">{taskName()}</span>
-        </ViewBreadcrumbs.Button>
-        <div class="shrink-0">
-          <SplitFileMenu
-            id={props.documentId}
-            itemType="document"
-            name={taskName()}
-            ops={fileOperations}
-            tools={menuTools}
-            entityKind="task"
-            permissions={menuPermissions()}
-            onDuplicate={(id) => openTask({ id, fallbackName: taskName() })}
-            onDelete={closeTask}
-          />
+    <ViewBreadcrumbs.Item value={`task:${props.documentId}`} order={1}>
+      {(item) => (
+        <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
+          <ViewBreadcrumbs.Button
+            class="gap-1.5"
+            isActive={item.isActive()}
+            onClick={() => {
+              item.onSelect();
+              focusTask();
+            }}
+          >
+            <EntityIcon targetType="task" size="xs" class="shrink-0" />
+            <span class="truncate">{taskName()}</span>
+          </ViewBreadcrumbs.Button>
+          <div class="shrink-0">
+            <SplitFileMenu
+              id={props.documentId}
+              itemType="document"
+              name={taskName()}
+              ops={fileOperations}
+              tools={menuTools}
+              entityKind="task"
+              permissions={menuPermissions()}
+              onDuplicate={(id) => openTask({ id, fallbackName: taskName() })}
+              onDelete={closeTask}
+            />
+          </div>
         </div>
-      </div>
+      )}
     </ViewBreadcrumbs.Item>
   );
 }
@@ -262,6 +276,7 @@ function TaskDetailDocument(props: {
 }
 
 export function TaskDetail(props: { task: TaskDetailTarget }) {
+  const { closeTask } = useTasksView();
   const [document, { refetch }] = createResource(
     () => props.task.id,
     loadTaskDocument
@@ -276,7 +291,12 @@ export function TaskDetail(props: { task: TaskDetailTarget }) {
         close: () => setShareOpen(false),
       }}
     >
-      <ViewBreadcrumbs.Root>
+      <ViewBreadcrumbs.Root
+        value={`task:${props.task.id}`}
+        onChange={(value) => {
+          if (value === 'tasks-view') closeTask();
+        }}
+      >
         <TaskViewBreadcrumbItem />
         <SidePanel.Root>
           <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
