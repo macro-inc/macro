@@ -92,6 +92,51 @@ pub trait CursorAgents: Sync {
     ) -> impl Future<Output = Result<Vec<RunListing>, rootcause::Report>> + Send;
 }
 
+/// One connected run stream, with what the provider said about resuming it.
+pub struct ConnectedStream<Records> {
+    /// Complete native records, captured before decoding or translation.
+    pub records: Records,
+    /// The provider's `X-Cursor-Stream-Retention-Seconds`, when it sent one.
+    ///
+    /// How long a dropped stream stays resumable. Not enforced here — the
+    /// provider answers an expired resume with
+    /// [`StreamConnectError::Expired`] — but worth logging, because a run
+    /// whose tool call outlives the window can never be resumed and the
+    /// number is the only warning of that.
+    pub retention_seconds: Option<u64>,
+}
+
+/// Why one connect did not produce a stream.
+///
+/// The domain acts differently on each: an unavailable stream is retried, an
+/// invalid resume position is retried without one, and an expired stream is
+/// gone for good and leaves polling as the only way to learn the outcome.
+#[derive(Debug)]
+pub enum StreamConnectError {
+    /// `stream_unavailable`: the stream is not there (yet). Carries the
+    /// provider's message.
+    Unavailable(String),
+    /// `invalid_last_event_id`: the resume position is not this run's.
+    InvalidResumePosition(String),
+    /// `stream_expired`: the retention window closed behind us.
+    Expired(String),
+    /// Every other failure.
+    Other(rootcause::Report),
+}
+
+impl std::fmt::Display for StreamConnectError {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unavailable(message) => write!(formatter, "Cursor stream unavailable: {message}"),
+            Self::InvalidResumePosition(message) => {
+                write!(formatter, "Cursor rejected the resume position: {message}")
+            }
+            Self::Expired(message) => write!(formatter, "Cursor stream expired: {message}"),
+            Self::Other(report) => write!(formatter, "{report}"),
+        }
+    }
+}
+
 /// Observe a run as a stream of native SSE records.
 ///
 /// The stream ends when the server closes it — normally just after a
@@ -99,15 +144,23 @@ pub trait CursorAgents: Sync {
 /// [`CursorEvent::Result`](super::event::CursorEvent::Result) must treat the run's outcome as unknown rather
 /// than successful.
 pub trait RunStream: Sync {
-    /// Complete native records, captured before decoding or translation.
+    /// Connect a run's stream, optionally resuming after an event id.
+    ///
+    /// `resume_from` is an id observed on an earlier record of this same run,
+    /// passed back verbatim: the provider's ids are opaque and a consumer that
+    /// parses or invents one gets [`StreamConnectError::InvalidResumePosition`].
+    /// `None` connects from the beginning of what the provider still retains.
     fn raw_stream(
         &self,
         agent: &CursorAgentId,
         run: &CursorRunId,
+        resume_from: Option<&str>,
     ) -> impl Future<
         Output = Result<
-            impl Stream<Item = Result<super::journal::NativeRecord, rootcause::Report>> + Send,
-            rootcause::Report,
+            ConnectedStream<
+                impl Stream<Item = Result<super::journal::NativeRecord, rootcause::Report>> + Send,
+            >,
+            StreamConnectError,
         >,
     > + Send;
 }
