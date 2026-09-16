@@ -14,6 +14,7 @@ const getGraphqlSoupClientMock = vi.hoisted(() => vi.fn());
 const getGraphqlSoupCacheHostMock = vi.hoisted(() => vi.fn());
 const entityFilterMock = vi.hoisted(() => vi.fn());
 const readRecordsByKeysMock = vi.hoisted(() => vi.fn());
+const useInstructionsMdIdQueryMock = vi.hoisted(() => vi.fn());
 const REVISION_0 = '0';
 const REVISION_1 = '1';
 const REVISION_2 = '2';
@@ -40,7 +41,7 @@ vi.mock('@macro-inc/observability', () => ({
 }));
 
 vi.mock('@queries/storage/instructions-md', () => ({
-  useInstructionsMdIdQuery: vi.fn(() => ({})),
+  useInstructionsMdIdQuery: useInstructionsMdIdQueryMock,
 }));
 
 vi.mock('@app/lib/graphql-cache', () => ({
@@ -147,6 +148,7 @@ function makeFakeClient(): {
 describe('createGraphqlSoupAstItemsQuery', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    useInstructionsMdIdQueryMock.mockReturnValue({ isSuccess: false });
     mapSoupPageToEntityListMock.mockImplementation((page) => page.items);
     getGraphqlSoupCacheHostMock.mockReturnValue(undefined);
     makeGraphqlSoupInputMock.mockReturnValue({
@@ -238,6 +240,84 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       expect(query.data()?.entities).toBe(entities);
       expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
       expect(mapSoupPageToEntityListMock).toHaveBeenCalledTimes(1);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('reprojects cached pages when the instructions document resolves without reading pending data', () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const [instructions, setInstructions] = createSignal<
+      { isSuccess: false } | { isSuccess: true; data: string | null }
+    >({ isSuccess: false });
+    const [enabled, setEnabled] = createSignal(true);
+    const readInstructionsData = vi.fn(() => {
+      const result = instructions();
+      if (!result.isSuccess) throw new Error('Pending data read');
+      return result.data;
+    });
+    const instructionsQuery = {
+      get isSuccess() {
+        return instructions().isSuccess;
+      },
+      get data() {
+        return readInstructionsData();
+      },
+    };
+    useInstructionsMdIdQueryMock.mockReturnValue(instructionsQuery);
+    mapSoupPageToEntityListMock.mockImplementation((page) =>
+      page.items.filter(
+        (item: { id: string }) =>
+          !instructionsQuery.isSuccess || item.id !== instructionsQuery.data
+      )
+    );
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }),
+        () => ({ enabled: enabled() })
+      ),
+    }));
+    const ids = () => query.data()?.entities.map((entity) => entity.id);
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [
+            { id: 'visible', updatedAt: '2026-09-10T00:00:00Z' },
+            { id: 'instructions', updatedAt: '2026-09-08T00:00:00Z' },
+          ],
+          next_cursor: 'next-page',
+        })
+      );
+      expect(ids()).toEqual(['visible', 'instructions']);
+      expect(readInstructionsData).not.toHaveBeenCalled();
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(1);
+
+      setInstructions({ isSuccess: true, data: 'instructions' });
+      expect(ids()).toEqual(['visible']);
+      expect(query.data()?.oldestFetchedTimestamp).toBe(
+        Date.parse('2026-09-08T00:00:00Z')
+      );
+      expect(query.hasNextPage()).toBe(true);
+      expect(fake.executions).toHaveLength(1);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(2);
+
+      // An identical id and activity-only changes must keep the cached selector.
+      setInstructions({ isSuccess: true, data: 'instructions' });
+      setEnabled(false);
+      setEnabled(true);
+      query.resetToInitialPage();
+      expect(ids()).toEqual(['visible']);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(2);
+
+      setInstructions({ isSuccess: true, data: 'visible' });
+      expect(ids()).toEqual(['instructions']);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(3);
+
+      setInstructions({ isSuccess: true, data: null });
+      expect(ids()).toEqual(['visible', 'instructions']);
+      expect(mapGraphqlSoupPageMock).toHaveBeenCalledTimes(4);
     } finally {
       dispose();
     }

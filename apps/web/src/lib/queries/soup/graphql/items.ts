@@ -449,7 +449,13 @@ export function createGraphqlSoupAstItemsQuery(
   const projectionForeignEntities = createMemo(
     () => options().showSupportedForeignEntities
   );
+  const projectionInstructionsId = createMemo(() =>
+    instructionsIdQuery.isSuccess ? instructionsIdQuery.data : undefined
+  );
   const selectPages = createMemo(() => {
+    // The mapper reads this query inside the untracked observer callback.
+    // Track its resolved id here so cached pages reselect when it changes.
+    projectionInstructionsId();
     const sortMethod = projectionSortMethod();
     const showSupportedForeignEntities = projectionForeignEntities();
     return ({
