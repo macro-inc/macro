@@ -17,11 +17,11 @@ fn identity() -> SessionIdentity {
         bot_id: BotId::TEST_A,
         bot_name: "Macro Coder".to_owned(),
         owner_id: owner(),
-        origin: Some(ThreadOrigin {
-            channel_id: Uuid::from_u128(1),
-            thread_id: Uuid::from_u128(2),
-            originating_message_id: Uuid::from_u128(3),
-        }),
+        origin: Some(ThreadOrigin::new(
+            messages::domain::models::MessageParent::Channel(Uuid::from_u128(1)),
+            Uuid::from_u128(2),
+            Uuid::from_u128(3),
+        )),
         audience: vec![owner()],
     }
 }

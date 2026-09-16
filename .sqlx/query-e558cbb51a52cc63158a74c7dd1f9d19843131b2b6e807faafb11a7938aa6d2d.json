@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, sandbox_size, instructions,\n                acp_session_id, status, status_event_name, egress_token_hash,\n                mcp_scope, mcp_servers\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)\n            RETURNING\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                -- A row being created cannot have an external identity yet.\n                NULL::TEXT AS \"external_provider?\", NULL::TEXT AS \"external_id?\",\n                NULL::TEXT AS \"external_name?\", NULL::TEXT AS \"external_url?\",\n                NULL::TEXT AS \"external_last_run_id?\"\n            ",
+  "query": "\n            INSERT INTO agent_session (\n                id, owner_id, thread_id, originating_message_id, bot_id, model,\n                harness, repo_url, workspace, sandbox_size, instructions,\n                acp_session_id, status, status_event_name, egress_token_hash,\n                mcp_scope, mcp_servers\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)\n            RETURNING\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, created_at, modified_at,\n                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)\n                 FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_parent?: Json<MessageParent>\",\n                -- A row being created cannot have an external identity yet.\n                NULL::TEXT AS \"external_provider?\", NULL::TEXT AS \"external_id?\",\n                NULL::TEXT AS \"external_name?\", NULL::TEXT AS \"external_url?\",\n                NULL::TEXT AS \"external_last_run_id?\"\n            ",
   "describe": {
     "columns": [
       {
@@ -105,8 +105,8 @@
       },
       {
         "ordinal": 20,
-        "name": "thread_channel_id?",
-        "type_info": "Uuid"
+        "name": "thread_parent?: Json<MessageParent>",
+        "type_info": "Jsonb"
       },
       {
         "ordinal": 21,
@@ -184,5 +184,5 @@
       null
     ]
   },
-  "hash": "96a95fcf9297f63118798a7ec8c36fdfdb9c81466f30cbe4da25acb3a51f0d68"
+  "hash": "e558cbb51a52cc63158a74c7dd1f9d19843131b2b6e807faafb11a7938aa6d2d"
 }

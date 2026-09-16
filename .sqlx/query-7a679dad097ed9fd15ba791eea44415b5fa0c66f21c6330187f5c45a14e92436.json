@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_channel_id?\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\",\n                ext.last_run_id AS \"external_last_run_id?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE thread_id = $1\n            ORDER BY agent_session.created_at DESC\n            ",
+  "query": "\n            SELECT\n                id, name, owner_id, thread_id, originating_message_id, bot_id,\n                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,\n                mcp_scope, mcp_servers, acp_session_id, status,\n                status_event_name, agent_session.created_at, modified_at,\n                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)\n                 FROM comms_messages WHERE id = agent_session.thread_id)\n                    AS \"thread_parent?: Json<MessageParent>\",\n                ext.provider AS \"external_provider?\", ext.external_id AS \"external_id?\",\n                ext.external_name AS \"external_name?\", ext.external_url AS \"external_url?\",\n                ext.last_run_id AS \"external_last_run_id?\"\n            FROM agent_session\n            LEFT JOIN external_agent_session AS ext ON ext.agent_session_id = agent_session.id\n            WHERE thread_id = $1\n            ORDER BY agent_session.created_at DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -105,8 +105,8 @@
       },
       {
         "ordinal": 20,
-        "name": "thread_channel_id?",
-        "type_info": "Uuid"
+        "name": "thread_parent?: Json<MessageParent>",
+        "type_info": "Jsonb"
       },
       {
         "ordinal": 21,
@@ -168,5 +168,5 @@
       true
     ]
   },
-  "hash": "fe12b72ea6b29ba12c55fe64823261dfb43bf5a44ccb54f42c3e9eed226362ad"
+  "hash": "7a679dad097ed9fd15ba791eea44415b5fa0c66f21c6330187f5c45a14e92436"
 }

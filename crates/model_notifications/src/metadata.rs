@@ -1625,6 +1625,18 @@ const AGENT_EXCERPT_MAX_CHARS: usize = 280;
 /// The session an agent-session notification is about, and where its magic
 /// chip lives when it was opened from a thread.
 ///
+/// The conversation an agent session was opened from: a channel or a
+/// document discussion. Spelled like the message API's parent so a client can
+/// route to either surface.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+pub struct AgentSessionOriginParent {
+    /// `channel` or `document`.
+    #[serde(rename = "type")]
+    pub kind: String,
+    /// The channel or document id.
+    pub id: String,
+}
+
 /// Flattened into each agent-session kind so the wire keeps these keys at the
 /// top level of the metadata, the way [`CommonChannelMetadata`] does.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
@@ -1642,7 +1654,11 @@ pub struct AgentSessionNotificationRef {
     /// The bot's display name; agent notifications have no user sender, so
     /// this is who they read as being from.
     pub bot_name: String,
-    /// The channel the session was opened from, when it was.
+    /// The channel or document the session was opened from, when it was.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<AgentSessionOriginParent>,
+    /// The channel the session was opened from, when it was opened from a
+    /// channel thread.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub channel_id: Option<Uuid>,
     /// The thread the session was opened from, when it was.
