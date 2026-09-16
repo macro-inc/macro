@@ -224,10 +224,6 @@ export function DriveLayout(props: {
                   <SplitPanel.CloseButton />
                   <ViewSidebar.Title>Drive</ViewSidebar.Title>
                 </div>
-                <SplitPanel.ControlGroup>
-                  <SplitPanel.BackButton />
-                  <SplitPanel.ForwardButton />
-                </SplitPanel.ControlGroup>
               </ViewSidebar.Header>
               <ViewSidebar.Content class="flex flex-col gap-6">
                 <props.createMenu />
@@ -289,10 +285,6 @@ export function DriveLayout(props: {
             <ViewShell.Header>
               <div class="flex min-w-0 flex-col gap-3">
                 <div class="hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
-                  <SplitPanel.ControlGroup>
-                    <SplitPanel.BackButton />
-                    <SplitPanel.ForwardButton />
-                  </SplitPanel.ControlGroup>
                   <Dropdown
                     open={navigationOpen()}
                     onOpenChange={setNavigationOpen}
@@ -306,10 +298,10 @@ export function DriveLayout(props: {
                       <span class="truncate">{title()}</span>
                       <CaretDownIcon class="size-3 shrink-0" />
                     </Dropdown.Trigger>
-                    <Dropdown.Content class="max-h-[70vh] w-72 overflow-auto rounded-2xl p-3">
-                      <div class="flex flex-col gap-5">
+                    <Dropdown.Content class="max-h-[70vh] w-72 overflow-auto rounded-2xl">
+                      <Dropdown.Group class="gap-5 p-3">
                         <SidebarContent />
-                      </div>
+                      </Dropdown.Group>
                     </Dropdown.Content>
                   </Dropdown>
                   <div class="ml-auto shrink-0">
