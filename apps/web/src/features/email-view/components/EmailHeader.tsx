@@ -29,7 +29,7 @@ export function EmailTopBar() {
   return (
     <ViewShell.TopBar class="px-3">
       <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
-      <h1 class="min-w-0 truncate px-1 text-sm font-semibold tracking-[-0.03em] text-ink">
+      <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
         <span class="@max-[720px]/view-shell:hidden">{tabTitle()}</span>
         <span class="hidden @max-[720px]/view-shell:inline">Email</span>
       </h1>
