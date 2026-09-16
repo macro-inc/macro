@@ -8,7 +8,7 @@ import {
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { useListNavigationHotkeys } from '@app/components/entity-detail/use-list-navigation-hotkeys';
 import { useListDetailNavigation } from '@app/components/list';
-import { ViewBreadcrumbs } from '@app/components/view-shell';
+import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -77,7 +77,7 @@ function TaskDetailTopBar(props: {
   const panel = useSplitPanelOrThrow();
 
   return (
-    <div class="flex h-12 min-w-0 shrink-0 items-center gap-1 border-edge border-b px-3">
+    <ViewShell.TopBar class="px-3 touch:flex">
       <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
       <ViewBreadcrumbs.Outlet
         aria-label="Task location"
@@ -93,7 +93,7 @@ function TaskDetailTopBar(props: {
         </Show>
         <SidePanel.Toggle />
       </div>
-    </div>
+    </ViewShell.TopBar>
   );
 }
 
