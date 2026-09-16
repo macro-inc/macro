@@ -252,7 +252,7 @@ tags, updated time. Clicking a row opens the doc.
 Shared always excludes files owned by you. Selecting **Created by → Me** therefore
 returns no files; selecting Me together with another creator returns only that
 other creator's shared files. Clearing the creator selection restores all Shared
-results. This applies to restored filters, search, and flat/grouped requests—not
+results. This applies to restored filters and flat/grouped list requests—not
 just client-side row filtering.
 
 With `enable-new-app-views` enabled, Files opens **Drive** using the same
