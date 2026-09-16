@@ -253,7 +253,9 @@ Shared always excludes files owned by you. Selecting **Created by → Me** there
 returns no files; selecting Me together with another creator returns only that
 other creator's shared files. Clearing the creator selection restores all Shared
 results. This applies to restored filters and flat/grouped list requests—not
-just client-side row filtering.
+just client-side row filtering. Cached inserts enforce the same rule before a
+refetch, including expanded groups and inactive cached Shared queries. Until
+viewer identity is available, document inserts into Shared are rejected.
 
 With `enable-new-app-views` enabled, Files opens **Drive** using the same
 shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,

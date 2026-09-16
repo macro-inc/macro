@@ -2,14 +2,18 @@ import {
   makeGraphqlGroupedSoupInput,
   makeGraphqlSoupInput,
 } from '@queries/soup/graphql/ast';
-import { describe, expect, it } from 'vitest';
+import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem';
+import { describe, expect, it, vi } from 'vitest';
 import {
   compileToAst,
   defineQueryFilters,
   queryStateFrom,
 } from '../filters/filter-store/compile';
 import { createQueryStore } from '../filters/filter-store/query-store';
-import { applyDocumentTabScope } from './document-tab-scope';
+import {
+  applyDocumentTabScope,
+  withDocumentTabItemScope,
+} from './document-tab-scope';
 
 const ME = 'macro|me@example.com';
 const OTHER = 'macro|other@example.com';
@@ -25,6 +29,48 @@ function sharedStore() {
 function sharedBody(store: ReturnType<typeof sharedStore>) {
   return compileToAst(applyDocumentTabScope(store.state, 'shared', ME));
 }
+
+describe('Shared Files cache admission scope', () => {
+  const document = (ownerId: string) =>
+    ({ tag: 'document', data: { ownerId } }) as SoupApiItem;
+
+  it('keeps cached query scope fixed after tab or viewer changes', () => {
+    let tab = 'shared';
+    let viewer = ME;
+    const shared = withDocumentTabItemScope(tab, viewer, () => true);
+    tab = 'owned';
+    viewer = OTHER;
+    expect(shared(document(ME))).toBe(false);
+    expect(shared(document(OTHER))).toBe(true);
+    expect(
+      withDocumentTabItemScope(tab, viewer, () => true)(document(ME))
+    ).toBe(true);
+  });
+
+  it('does not replace the downstream membership filter or filter non-document ownership', () => {
+    const downstream = vi.fn(() => false);
+    const filter = withDocumentTabItemScope('shared', ME, downstream);
+    const otherDocument = document(OTHER);
+    expect(filter(otherDocument)).toBe(false);
+    expect(downstream).toHaveBeenCalledWith(otherDocument);
+    downstream.mockReturnValue(true);
+    const project = { tag: 'project', data: { ownerId: ME } } as SoupApiItem;
+    expect(filter(project)).toBe(true);
+    expect(downstream).toHaveBeenCalledWith(project);
+    expect(
+      withDocumentTabItemScope('shared', undefined, downstream)(project)
+    ).toBe(true);
+  });
+
+  it('leaves admission for other tabs and non-Files queries unchanged', () => {
+    const downstream = vi.fn(() => true);
+    for (const tab of ['owned', 'attachments', 'folders', 'all', undefined]) {
+      expect(withDocumentTabItemScope(tab, undefined, downstream)).toBe(
+        downstream
+      );
+    }
+  });
+});
 
 describe('Shared Files request scope', () => {
   it('ANDs Created by me with non-ownership in REST and flat/grouped GraphQL requests', () => {
