@@ -1132,6 +1132,45 @@ export type ApprovePairingRequest = {
 };
 
 /**
+ * Status written onto one assign result.
+ */
+export type AssignTaskStatus = 'assigned' | 'moved' | 'notATask' | 'notFound' | 'skippedNoPermission';
+
+/**
+ * Assign-tasks HTTP body.
+ */
+export type AssignTasksRequest = {
+    /**
+     * Task ids to assign, in request order.
+     */
+    taskIds: Array<string>;
+};
+
+/**
+ * Assign-tasks HTTP response.
+ */
+export type AssignTasksResponse = {
+    /**
+     * Outcomes in request order after dedupe.
+     */
+    results: Array<AssignTasksResult>;
+};
+
+/**
+ * Per-task outcome of an assign call.
+ */
+export type AssignTasksResult = {
+    /**
+     * What happened to the task.
+     */
+    status: AssignTaskStatus;
+    /**
+     * Task id this outcome describes.
+     */
+    taskId: string;
+};
+
+/**
  * RSVP state for an attendee.
  */
 export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
@@ -3360,6 +3399,28 @@ export type CreateEntityMentionResponse = {
      * User who recorded the mention.
      */
     user_id?: string | null;
+};
+
+/**
+ * Create-initiative HTTP body.
+ */
+export type CreateInitiativeRequest = {
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Optional member user ids. Invalid ids fail at the service boundary.
+     */
+    memberIds?: Array<string> | null;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * When true, share with the owner's team at create time.
+     */
+    shareWithTeam?: boolean | null;
 };
 
 export type CreateInstructionsDocumentResponse = {
@@ -6277,6 +6338,89 @@ export type InFlightTurnSummary = {
      * Position in the session's log.
      */
     turn: number;
+};
+
+/**
+ * Full initiative returned to a caller, including members, tasks, and share state.
+ */
+export type InitiativeDetail = {
+    /**
+     * When the initiative was created.
+     */
+    createdAt: string;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Opaque identifier.
+     */
+    id: InitiativeId;
+    /**
+     * Member user ids. The owner is never stored here.
+     */
+    memberIds: Array<MacroUserIdStr>;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Owner of the initiative.
+     */
+    ownerId: MacroUserIdStr;
+    /**
+     * Current share permission.
+     */
+    sharePermission: SharePermissionV2;
+    /**
+     * Task ids currently assigned to the initiative.
+     */
+    taskIds: Array<string>;
+    /**
+     * When the initiative was last updated.
+     */
+    updatedAt: string;
+    /**
+     * Caller's access level on this initiative.
+     */
+    userAccessLevel: AccessLevel;
+};
+
+/**
+ * Opaque identifier for an initiative. Minted as UUIDv7 in application code.
+ */
+export type InitiativeId = string;
+
+/**
+ * Accessible-initiative list.
+ */
+export type InitiativeList = {
+    /**
+     * Initiatives the caller can view.
+     */
+    initiatives: Array<InitiativeSummary>;
+};
+
+/**
+ * List-row view of an initiative.
+ */
+export type InitiativeSummary = {
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Opaque identifier.
+     */
+    id: InitiativeId;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * When the initiative was last updated.
+     */
+    updatedAt: string;
 };
 
 /**
@@ -9338,6 +9482,26 @@ export type UpdateCrmTeamSettingsRequest = {
      * Replacement team-views array (whole-blob, last write wins).
      */
     team_views?: unknown;
+};
+
+/**
+ * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
+ * present is a full replace.
+ */
+export type UpdateInitiativeRequest = {
+    /**
+     * Replacement description. `Some("")` clears it after trim.
+     */
+    description?: string | null;
+    /**
+     * Full replacement member list when present.
+     */
+    memberIds?: Array<string> | null;
+    /**
+     * Replacement name.
+     */
+    name?: string | null;
+    sharePermission?: null | UpdateSharePermissionRequestV2;
 };
 
 export type UpdateOperation = 'add' | 'remove' | 'replace';
@@ -13724,6 +13888,217 @@ export type UpsertHistoryHandlerResponses = {
 };
 
 export type UpsertHistoryHandlerResponse = UpsertHistoryHandlerResponses[keyof UpsertHistoryHandlerResponses];
+
+export type ListInitiativesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/initiatives';
+};
+
+export type ListInitiativesErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListInitiativesError = ListInitiativesErrors[keyof ListInitiativesErrors];
+
+export type ListInitiativesResponses = {
+    200: InitiativeList;
+};
+
+export type ListInitiativesResponse = ListInitiativesResponses[keyof ListInitiativesResponses];
+
+export type CreateInitiativeData = {
+    body: CreateInitiativeRequest;
+    path?: never;
+    query?: never;
+    url: '/initiatives';
+};
+
+export type CreateInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    409: ErrorResponse;
+    /**
+     * Name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateInitiativeError = CreateInitiativeErrors[keyof CreateInitiativeErrors];
+
+export type CreateInitiativeResponses = {
+    200: InitiativeDetail;
+};
+
+export type CreateInitiativeResponse = CreateInitiativeResponses[keyof CreateInitiativeResponses];
+
+export type DeleteInitiativeData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}';
+};
+
+export type DeleteInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteInitiativeError = DeleteInitiativeErrors[keyof DeleteInitiativeErrors];
+
+export type DeleteInitiativeResponses = {
+    200: GenericSuccessResponse;
+};
+
+export type DeleteInitiativeResponse = DeleteInitiativeResponses[keyof DeleteInitiativeResponses];
+
+export type GetInitiativeData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}';
+};
+
+export type GetInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetInitiativeError = GetInitiativeErrors[keyof GetInitiativeErrors];
+
+export type GetInitiativeResponses = {
+    200: InitiativeDetail;
+};
+
+export type GetInitiativeResponse = GetInitiativeResponses[keyof GetInitiativeResponses];
+
+export type UpdateInitiativeData = {
+    body: UpdateInitiativeRequest;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}';
+};
+
+export type UpdateInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    /**
+     * Name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateInitiativeError = UpdateInitiativeErrors[keyof UpdateInitiativeErrors];
+
+export type UpdateInitiativeResponses = {
+    200: InitiativeDetail;
+};
+
+export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
+
+export type AssignInitiativeTasksData = {
+    body: AssignTasksRequest;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/tasks';
+};
+
+export type AssignInitiativeTasksErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AssignInitiativeTasksError = AssignInitiativeTasksErrors[keyof AssignInitiativeTasksErrors];
+
+export type AssignInitiativeTasksResponses = {
+    200: AssignTasksResponse;
+};
+
+export type AssignInitiativeTasksResponse = AssignInitiativeTasksResponses[keyof AssignInitiativeTasksResponses];
+
+export type UnassignInitiativeTaskData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+        /**
+         * Task identifier.
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/tasks/{task_id}';
+};
+
+export type UnassignInitiativeTaskErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnassignInitiativeTaskError = UnassignInitiativeTaskErrors[keyof UnassignInitiativeTaskErrors];
+
+export type UnassignInitiativeTaskResponses = {
+    200: GenericSuccessResponse;
+};
+
+export type UnassignInitiativeTaskResponse = UnassignInitiativeTaskResponses[keyof UnassignInitiativeTaskResponses];
 
 export type GetInstructionsHandlerData = {
     body?: never;
