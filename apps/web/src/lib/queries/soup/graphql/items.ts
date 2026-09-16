@@ -128,7 +128,7 @@ export function createGraphqlSoupAstItemsQuery(
   const isSupported = () => firstPageInput() !== undefined;
   type ServerProjection = {
     data: SoupAstItemsData;
-    records: GraphqlSoupItem[];
+    records: Accessor<GraphqlSoupItem[]>;
   };
   type LocalProjection = {
     input: GraphqlSoupInput;
@@ -466,8 +466,12 @@ export function createGraphqlSoupAstItemsQuery(
           showSupportedForeignEntities,
         })
       );
+      const records = pages.flatMap((page) => page.user.soup.items);
       return {
-        records: pages.flatMap((page) => page.user.soup.items),
+        // Raw wire records are reconciliation evidence, not reactive UI state.
+        // Publish them atomically without walking their entire notification
+        // payload again. Mapped entities retain deep reactivity and identity.
+        records: () => records,
         data: { entities, groups: undefined, oldestFetchedTimestamp },
       };
     };
@@ -516,12 +520,11 @@ export function createGraphqlSoupAstItemsQuery(
     };
   });
 
-  // Snapshot the reactive normalized rows: their object identities may remain
-  // stable across writes, but baseline membership/sort evidence must not mutate
-  // beneath an in-flight reconciliation.
+  // Capture membership/sort evidence for each published projection, so a later
+  // cache revision cannot change the baseline of an in-flight reconciliation.
   const serverRecords = createMemo(() =>
     baselineGeneration() === cacheGeneration
-      ? (query.data?.records ?? []).map((record) => ({ ...record }))
+      ? (query.data?.records() ?? []).map((record) => ({ ...record }))
       : []
   );
 

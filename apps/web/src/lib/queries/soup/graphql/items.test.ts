@@ -243,6 +243,78 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     }
   });
 
+  it('keeps raw wire payloads outside deep store reconciliation', () => {
+    mapSoupPageToEntityListMock.mockImplementation((page) =>
+      page.items.map((item: { id: string }) => ({ id: item.id }))
+    );
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const { query, dispose } = createRoot((dispose) => ({
+      dispose,
+      query: createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }),
+        () => ({ enabled: true })
+      ),
+    }));
+    const metadata = { content: { message: 'large immutable payload' } };
+    const descriptors = vi.spyOn(Object, 'getOwnPropertyDescriptors');
+    try {
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ id: 'document', metadata }],
+          next_cursor: null,
+        })
+      );
+
+      expect(query.data()?.entities[0]?.id).toBe('document');
+      expect(descriptors).not.toHaveBeenCalledWith(metadata);
+      expect(descriptors).not.toHaveBeenCalledWith(metadata.content);
+    } finally {
+      descriptors.mockRestore();
+      dispose();
+    }
+  });
+
+  it('updates mapped entities reactively without mutating raw wire records', () => {
+    mapSoupPageToEntityListMock.mockImplementation((page) =>
+      page.items.map((item: object) => ({ ...item }))
+    );
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    const names: Array<string | undefined> = [];
+    const { query, dispose } = createRoot((dispose) => {
+      const query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: { sort_method: 'updated_at' }, body: {} }),
+        () => ({ enabled: true })
+      );
+      createComputed(() => names.push(query.data()?.entities[0]?.name));
+      return { query, dispose };
+    });
+    try {
+      const firstPage = graphqlSoupPage({
+        items: [{ id: 'document', name: 'before' }],
+        next_cursor: null,
+      });
+      fake.executions[0].next(firstPage);
+      const previousEntity = query.data()?.entities[0];
+      fake.executions[0].next(
+        graphqlSoupPage({
+          items: [{ id: 'document', name: 'after' }],
+          next_cursor: null,
+        })
+      );
+
+      expect(query.data()?.entities[0]?.name).toBe('after');
+      expect(names).toContain('before');
+      expect(names.at(-1)).toBe('after');
+      expect(query.data()?.entities[0]).toBe(previousEntity);
+      expect(firstPage.user.soup.items[0]).toMatchObject({ name: 'before' });
+      expect(fake.executions).toHaveLength(1);
+    } finally {
+      dispose();
+    }
+  });
+
   it('reprojects retained pages when projection inputs change', () => {
     const fake = makeFakeClient();
     getGraphqlSoupClientMock.mockReturnValue(fake.client);
