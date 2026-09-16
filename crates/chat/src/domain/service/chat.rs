@@ -8,20 +8,27 @@ use crate::domain::{
         ChatCopiedMetadata, ChatCreatedMetadata, ChatDeletedMetadata, ChatMacroEvent,
         ChatPermanentlyDeletedMetadata, ChatRestoredMetadata, ChatUpdatedMetadata,
     },
-    models::{ChatErr, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs, Result},
+    models::{
+        ChatErr, CopyChatArgs, CreateChatArgs, GetChatResponse, PatchChatArgs, PatchChatRepoArgs,
+        Result,
+    },
     ports::{ChatRepo, ChatService},
 };
 use agent::types::{AssistantMessagePart, ChatMessageContent};
 use ai_toolset::{AsyncToolCollection, RequestContext, tool_object::UserToolResponse};
 use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission,
-    OwnerAccessLevel, ViewAccessLevel,
+    AccessError, AccessLevel, EditAccessLevel, EntityAccessAuth, EntityAccessReceipt,
+    EntityPermission, OwnerAccessLevel, ViewAccessLevel,
 };
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use models_permissions::share_permission::SharePermissionV2;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
+    authorize_team_share,
+};
 use std::sync::Arc;
 use unicode_segmentation::UnicodeSegmentation;
 
@@ -109,6 +116,41 @@ where
         drop(self.event_broker.send_event(event).inspect_err(|error| {
             tracing::error!(error = ?error, "failed to schedule chat event");
         }));
+    }
+
+    /// Authorize an explicit team-share change against the persisted owner.
+    ///
+    /// Returns `Ok(None)` without loading anything when the request omits the
+    /// team level, so ordinary renames and moves never take the team-share
+    /// guard. Effective Owner access (for example via a project) is not enough:
+    /// only the chat's actual owner may share it with their team.
+    async fn authorize_chat_team_share(
+        &self,
+        receipt: &EntityAccessReceipt<OwnerAccessLevel>,
+        request: TeamShareRequest,
+    ) -> Result<Option<AuthorizedTeamShareCommand>> {
+        if request == TeamShareRequest::default() {
+            return Ok(None);
+        }
+        let facts = self
+            .repo
+            .get_team_share_facts(&receipt.entity().entity_id)
+            .await?;
+        authorize_team_share(
+            receipt.acting_user_id(),
+            &facts,
+            request,
+            TeamShareLevel::Edit,
+        )
+        .map_err(|error| match error {
+            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                ChatErr::Access(AccessError::Unauthorized)
+            }
+            TeamSharePolicyError::InvalidRevision => ChatErr::Conflict(error.to_string()),
+            TeamSharePolicyError::MissingTeam
+            | TeamSharePolicyError::InvalidLevel
+            | TeamSharePolicyError::ContradictoryInputs => ChatErr::BadRequest(error.to_string()),
+        })
     }
 }
 
@@ -352,6 +394,21 @@ where
         let user_id = entity_access_receipt.get_authenticated_user()?;
         let chat_id = &entity_access_receipt.entity().entity_id;
 
+        // Team sharing is authorized against the persisted owner before any
+        // write; a rejected request returns here and publishes nothing.
+        let team_share = self
+            .authorize_chat_team_share(
+                &entity_access_receipt,
+                TeamShareRequest {
+                    access_level: args
+                        .share_permission
+                        .as_ref()
+                        .and_then(|p| p.team_share_access_level),
+                    legacy_enabled: None,
+                },
+            )
+            .await?;
+
         let old_project_id = self
             .repo
             .get_metadata(chat_id)
@@ -364,7 +421,18 @@ where
         let name = args.name.clone();
         let share_permission_updated = args.share_permission.is_some();
 
-        self.repo.patch(user_id.to_owned(), chat_id, args).await?;
+        self.repo
+            .patch(
+                user_id.to_owned(),
+                chat_id,
+                PatchChatRepoArgs {
+                    name: args.name,
+                    project_id: args.project_id,
+                    share_permission: args.share_permission,
+                    team_share,
+                },
+            )
+            .await?;
 
         // Remove from old project (only if the project is actually changing)
         if project_changing

@@ -96,9 +96,11 @@ import {
   buildTeamSharePayload,
   getLinkShareScope,
   getLinkShareScopeCopy,
+  getShareItemNoun,
   getShareStatus,
   getTeamShareScope,
   getTeamShareScopeCopy,
+  isTeamShareSupportedForItem,
   LINK_SHARE_SCOPE_OPTIONS,
   type LinkSharePayload,
   type LinkShareScope,
@@ -288,10 +290,15 @@ interface LinkSharingControlsProps {
   setLinkShareScope: (scope: LinkShareScope) => void;
   setLinkShareAccessLevel: (accessLevel: AccessLevel | null) => void;
   copyLink: () => void;
-  teamShare?: {
-    accessLevel: AccessLevel | null | undefined;
-    setAccessLevel: (scope: TeamShareScope) => void;
-  };
+  teamShare?: TeamShareControls;
+}
+
+/** Owner-only explicit team sharing, present only for entity types that support it. */
+interface TeamShareControls {
+  accessLevel: AccessLevel | null | undefined;
+  setAccessLevel: (scope: TeamShareScope) => void;
+  /** Noun for the copy, e.g. "document" or "chat". */
+  itemNoun: string;
 }
 
 function LinkSharingControls(props: LinkSharingControlsProps) {
@@ -300,6 +307,7 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
   const shareStatus = () =>
     getShareStatus(props.linkShare, props.hasExplicitShares);
   const teamShareScope = () => getTeamShareScope(props.teamShare?.accessLevel);
+  const teamShareNoun = () => props.teamShare?.itemNoun ?? 'item';
 
   return (
     <div class="flex flex-col gap-3 p-4 text-sm text-ink">
@@ -351,7 +359,7 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
           <div class="flex flex-col gap-1">
             <span class="font-medium">Team access</span>
             <p class="text-sm text-ink-muted">
-              Share this document directly with the owner's team.
+              Share this {teamShareNoun()} directly with the owner's team.
             </p>
           </div>
           <Dropdown>
@@ -365,6 +373,7 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
             </Dropdown.Trigger>
             <Dropdown.Content portalScope="local">
               <Dropdown.RadioGroup
+                aria-label="Team access level"
                 value={teamShareScope()}
                 onChange={(value) =>
                   props.teamShare?.setAccessLevel(value as TeamShareScope)
@@ -639,6 +648,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                   ? {
                       accessLevel: props.teamShareAccessLevel,
                       setAccessLevel: props.setTeamShareAccessLevel,
+                      itemNoun: getShareItemNoun(props.itemType),
                     }
                   : undefined
               }
@@ -959,14 +969,23 @@ export function ShareModal(props: ShareModalProps) {
 
   const updateTeamSharePermissions = createCallback(
     async (sharePermission: TeamSharePayload) => {
-      if (props.itemType !== 'document') {
+      if (!isTeamShareSupportedForItem(props.itemType)) {
         return;
       }
+      const itemNoun = getShareItemNoun(props.itemType);
 
-      const result = await storageServiceClient.editDocument({
-        sharePermission,
-        documentId: props.id,
-      });
+      // Both endpoints accept the same `sharePermission.teamShareAccessLevel`
+      // patch; the backend authorizes it against the persisted owner.
+      const result =
+        props.itemType === 'chat'
+          ? await cognitionApiServiceClient.updateChatPermissions({
+              sharePermission,
+              chat_id: props.id,
+            })
+          : await storageServiceClient.editDocument({
+              sharePermission,
+              documentId: props.id,
+            });
       if (result.isErr()) {
         toast.alert('Failed to change team access', {
           subtext: 'Please try again',
@@ -978,12 +997,12 @@ export function ShareModal(props: ShareModalProps) {
       refetch();
       const scope = getTeamShareScope(sharePermission.teamShareAccessLevel);
       if (scope === 'NONE') {
-        toast.success('Removed team access for this document');
+        toast.success(`Removed team access for this ${itemNoun}`);
         return;
       }
 
       toast.success('Updated team access', {
-        subtext: `The owner's team can ${getTeamShareScopeCopy(scope).toLowerCase()} this document`,
+        subtext: `The owner's team can ${getTeamShareScopeCopy(scope).toLowerCase()} this ${itemNoun}`,
       });
       analytics.track('share_entity', {
         entityType: props.itemType,
@@ -998,14 +1017,15 @@ export function ShareModal(props: ShareModalProps) {
     return updateTeamSharePermissions(buildTeamSharePayload(scope));
   });
 
-  const teamShareControls = () =>
-    props.itemType === 'document' &&
+  const teamShareControls = (): TeamShareControls | undefined =>
+    isTeamShareSupportedForItem(props.itemType) &&
     props.userPermissions === Permissions.OWNER &&
     currentTeamQuery.isSuccess &&
     currentTeamQuery.data
       ? {
           accessLevel: teamShareAccessLevel(),
           setAccessLevel: setTeamShareAccessLevel,
+          itemNoun: getShareItemNoun(props.itemType),
         }
       : undefined;
 

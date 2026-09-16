@@ -157,9 +157,9 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   oldest fetched entry (usually `created this`) pinned last; the toggle flips to `Show less`
   once expanded.
 - Header: `Share`, `Copy Share Link`, overflow menu — use `Share` to inspect or change the
-  doc's visibility/permissions. Documents also have a `Team access` dropdown (None / View /
-  Comment / Edit) for sharing directly with the owner's team. That is independent of the
-  team-scoped link control.
+  doc's visibility/permissions. Documents and AI chats also have a `Team access` dropdown
+  (None / View / Comment / Edit) for sharing directly with the owner's team. That is
+  independent of the team-scoped link control.
 
 ## Known failure: "expected instance of LoroDoc"
 

@@ -113,6 +113,24 @@ Leaving Macro selected uses the backend's in-memory default in every
 environment, including production; it does not provision a Daytona container.
 Explicit coding-agent selections still use their configured runtimes.
 
+## Sharing a chat
+
+A standalone chat (`/app/chat/<uuid>`) has **Share** and **Copy Share Link** in
+the desktop header; the same **Share** action is on entity list menus and the
+entity sharing shortcut. It opens the same Share dialog (mobile: drawer) as
+documents:
+
+- People/channels: pick recipients and an access level and send the chat with
+  an optional message.
+- Link sharing: None / Public / Team link plus an access level.
+- **Team access** (owner only, and only when the owner belongs to a team): a
+  dropdown with None / View / Comment / Edit that shares the chat directly with
+  the owner's whole team. Teammates then open the chat with that level and see
+  it under Shared; setting it back to None revokes that access. This is
+  independent of the team-scoped link control. Only the chat's actual owner can
+  change it; someone with inherited owner access gets a "Failed to change team
+  access" toast.
+
 ## Start a doc-scoped chat
 
 Open a doc → side panel `Actions` → `Ask Macro`. Opens a chat pane with the document already
