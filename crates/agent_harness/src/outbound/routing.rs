@@ -28,37 +28,45 @@ mod test;
 
 /// Dispatches each session to the provider its bot is served by.
 #[derive(Clone)]
-pub struct RoutedContainerManager<Sandbox, Cursor, Sessions> {
+pub struct RoutedContainerManager<Sandbox, Cursor, Codex, Sessions> {
     sandbox: Sandbox,
     cursor: Cursor,
+    codex: Codex,
     sessions: Sessions,
 }
 
-impl<Sandbox, Cursor, Sessions> RoutedContainerManager<Sandbox, Cursor, Sessions> {
+impl<Sandbox, Cursor, Codex, Sessions> RoutedContainerManager<Sandbox, Cursor, Codex, Sessions> {
     /// Wire the router over its providers.
-    pub fn new(sandbox: Sandbox, cursor: Cursor, sessions: Sessions) -> Self {
+    pub fn new(sandbox: Sandbox, cursor: Cursor, codex: Codex, sessions: Sessions) -> Self {
         Self {
             sandbox,
             cursor,
+            codex,
             sessions,
         }
     }
 }
 
-impl<Sandbox, Cursor, Sessions> ContainerManager
-    for RoutedContainerManager<Sandbox, Cursor, Sessions>
+impl<Sandbox, Cursor, Codex, Sessions> ContainerManager
+    for RoutedContainerManager<Sandbox, Cursor, Codex, Sessions>
 where
     Sandbox: ContainerManager,
     Cursor: ContainerManager,
+    Codex: ContainerManager,
     Sessions: AgentSessionRepo + Clone,
 {
-    type Transport = RoutedTransport<Sandbox::Transport, Cursor::Transport>;
+    type Transport = RoutedTransport<Sandbox::Transport, Cursor::Transport, Codex::Transport>;
 
     async fn spawn(
         &self,
         command: SpawnContainer,
     ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         match command.kind {
+            AgentKind::CodexCloud => Ok(self
+                .codex
+                .spawn(command)
+                .await?
+                .map_transport(RoutedTransport::Codex)),
             AgentKind::Cursor => Ok(self
                 .cursor
                 .spawn(command)
@@ -79,6 +87,11 @@ where
     ) -> Result<agent_session::domain::connection::RuntimeAttachment<Self::Transport>> {
         let row = self.sessions.get(session).await?;
         match AgentKind::for_session(row.bot_id, &row.harness) {
+            AgentKind::CodexCloud => Ok(self
+                .codex
+                .resume(session)
+                .await?
+                .map_transport(RoutedTransport::Codex)),
             AgentKind::Cursor => Ok(self
                 .cursor
                 .resume(session)
@@ -96,6 +109,7 @@ where
     async fn session_token(&self, session: AgentSessionId) -> Result<Option<String>> {
         let row = self.sessions.get(session).await?;
         match AgentKind::for_session(row.bot_id, &row.harness) {
+            AgentKind::CodexCloud => self.codex.session_token(session).await,
             AgentKind::Cursor => self.cursor.session_token(session).await,
             AgentKind::SandboxedCoder | AgentKind::InMemory => {
                 self.sandbox.session_token(session).await
@@ -107,6 +121,7 @@ where
     async fn teardown(&self, session: AgentSessionId) -> Result<()> {
         let row = self.sessions.get(session).await?;
         match AgentKind::for_session(row.bot_id, &row.harness) {
+            AgentKind::CodexCloud => self.codex.teardown(session).await,
             AgentKind::Cursor => self.cursor.teardown(session).await,
             AgentKind::SandboxedCoder | AgentKind::InMemory => self.sandbox.teardown(session).await,
             AgentKind::External => Err(external_is_unroutable()),
@@ -124,6 +139,9 @@ where
         let row = self.sessions.get(session).await?;
         match AgentKind::for_session(row.bot_id, &row.harness) {
             AgentKind::SandboxedCoder => self.sandbox.resize(session, size).await,
+            AgentKind::CodexCloud => Err(HarnessError::Container(
+                "a codex session has no sandbox to resize".to_owned(),
+            )),
             AgentKind::Cursor => Err(HarnessError::Container(
                 "a cursor session has no sandbox to resize".to_owned(),
             )),
@@ -144,37 +162,44 @@ fn external_is_unroutable() -> HarnessError {
 }
 
 /// A transport that is one provider's or the other's, decided per session.
-pub enum RoutedTransport<Sandbox, Cursor> {
+pub enum RoutedTransport<Sandbox, Cursor, Codex> {
     /// A sandbox-provider transport.
     Sandbox(Sandbox),
     /// A Cursor-provider transport.
     Cursor(Cursor),
+    /// A Codex cloud provider transport half.
+    Codex(Codex),
 }
 
 /// The sending half of a [`RoutedTransport`].
-pub enum RoutedSender<Sandbox, Cursor> {
+pub enum RoutedSender<Sandbox, Cursor, Codex> {
     /// A sandbox-provider sender.
     Sandbox(Sandbox),
     /// A Cursor-provider sender.
     Cursor(Cursor),
+    /// A Codex cloud provider transport half.
+    Codex(Codex),
 }
 
 /// The receiving half of a [`RoutedTransport`].
-pub enum RoutedReceiver<Sandbox, Cursor> {
+pub enum RoutedReceiver<Sandbox, Cursor, Codex> {
     /// A sandbox-provider receiver.
     Sandbox(Sandbox),
     /// A Cursor-provider receiver.
     Cursor(Cursor),
+    /// A Codex cloud provider transport half.
+    Codex(Codex),
 }
 
-impl<Sandbox, Cursor> Transport<ToRuntimeMessage, ToServerMessage>
-    for RoutedTransport<Sandbox, Cursor>
+impl<Sandbox, Cursor, Codex> Transport<ToRuntimeMessage, ToServerMessage>
+    for RoutedTransport<Sandbox, Cursor, Codex>
 where
     Sandbox: Transport<ToRuntimeMessage, ToServerMessage>,
     Cursor: Transport<ToRuntimeMessage, ToServerMessage>,
+    Codex: Transport<ToRuntimeMessage, ToServerMessage>,
 {
-    type Sender = RoutedSender<Sandbox::Sender, Cursor::Sender>;
-    type Receiver = RoutedReceiver<Sandbox::Receiver, Cursor::Receiver>;
+    type Sender = RoutedSender<Sandbox::Sender, Cursor::Sender, Codex::Sender>;
+    type Receiver = RoutedReceiver<Sandbox::Receiver, Cursor::Receiver, Codex::Receiver>;
 
     fn split(self) -> (Self::Sender, Self::Receiver) {
         match self {
@@ -184,6 +209,10 @@ where
                     RoutedSender::Sandbox(sender),
                     RoutedReceiver::Sandbox(receiver),
                 )
+            }
+            Self::Codex(transport) => {
+                let (sender, receiver) = transport.split();
+                (RoutedSender::Codex(sender), RoutedReceiver::Codex(receiver))
             }
             Self::Cursor(transport) => {
                 let (sender, receiver) = transport.split();
@@ -196,28 +225,34 @@ where
     }
 }
 
-impl<Sandbox, Cursor> TransportSender<ToRuntimeMessage> for RoutedSender<Sandbox, Cursor>
+impl<Sandbox, Cursor, Codex> TransportSender<ToRuntimeMessage>
+    for RoutedSender<Sandbox, Cursor, Codex>
 where
     Sandbox: TransportSender<ToRuntimeMessage>,
     Cursor: TransportSender<ToRuntimeMessage>,
+    Codex: TransportSender<ToRuntimeMessage>,
 {
     async fn send(&self, message: ToRuntimeMessage) -> std::result::Result<(), TransportError> {
         match self {
             Self::Sandbox(sender) => sender.send(message).await,
             Self::Cursor(sender) => sender.send(message).await,
+            Self::Codex(sender) => sender.send(message).await,
         }
     }
 }
 
-impl<Sandbox, Cursor> TransportReceiver<ToServerMessage> for RoutedReceiver<Sandbox, Cursor>
+impl<Sandbox, Cursor, Codex> TransportReceiver<ToServerMessage>
+    for RoutedReceiver<Sandbox, Cursor, Codex>
 where
     Sandbox: TransportReceiver<ToServerMessage>,
     Cursor: TransportReceiver<ToServerMessage>,
+    Codex: TransportReceiver<ToServerMessage>,
 {
     async fn recv(&mut self) -> std::result::Result<Option<ToServerMessage>, TransportError> {
         match self {
             Self::Sandbox(receiver) => receiver.recv().await,
             Self::Cursor(receiver) => receiver.recv().await,
+            Self::Codex(receiver) => receiver.recv().await,
         }
     }
 }

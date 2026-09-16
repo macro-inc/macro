@@ -250,12 +250,15 @@ dependencies = [
  "agent_trigger",
  "ai_usage",
  "anyhow",
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "bot_id",
  "channel_sender",
  "channels",
  "chrono",
+ "codex_cloud_agents",
+ "codex_connection",
  "cursor_api_key",
  "cursor_cloud_agents",
  "dashmap",
@@ -294,6 +297,7 @@ dependencies = [
  "tracing-opentelemetry",
  "url",
  "utoipa",
+ "uuid",
  "workspace-hack",
 ]
 
@@ -321,6 +325,8 @@ dependencies = [
  "bot_id",
  "bots",
  "channels",
+ "codex_cloud_agents",
+ "codex_connection",
  "connection_gateway_client",
  "contacts",
  "cursor_api_key",
@@ -1598,6 +1604,8 @@ dependencies = [
  "calendar_events",
  "channels",
  "chrono",
+ "codex_cloud_agents",
+ "codex_connection",
  "comms_db_client",
  "connection_gateway_client",
  "contacts",
@@ -3651,6 +3659,55 @@ dependencies = [
 ]
 
 [[package]]
+name = "codex_cloud_agents"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol",
+ "agent_fold",
+ "agent_runtime_protocol",
+ "agent_session",
+ "axum",
+ "base64 0.22.1",
+ "clap",
+ "futures",
+ "insta",
+ "lazy-regex",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "tempfile",
+ "tokio",
+ "tokio-util",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
+name = "codex_connection"
+version = "0.1.0"
+dependencies = [
+ "aes-gcm",
+ "async-trait",
+ "aws-sdk-kms",
+ "chrono",
+ "codex_cloud_agents",
+ "macro_db_migrator",
+ "macro_user_id",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
+]
+
+[[package]]
 name = "coding_agent_worker"
 version = "0.1.0"
 dependencies = [
@@ -5522,6 +5579,7 @@ dependencies = [
  "entity_access_db_utils",
  "entity_access_management",
  "entity_mutation",
+ "entity_registry_db_utils",
  "foreign_entity",
  "futures",
  "hex",
@@ -5546,6 +5604,7 @@ dependencies = [
  "model-entity",
  "model-error-response",
  "model_file_type",
+ "model_owner",
  "model_user",
  "models_permissions",
  "models_properties",
@@ -8718,17 +8777,23 @@ dependencies = [
 name = "initiative"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "chrono",
  "entity_access",
+ "entity_access_db_utils",
  "macro_authorization",
+ "macro_db_migrator",
  "macro_user_id",
+ "macro_uuid",
  "mockall",
+ "model-entity",
  "model-error-response",
  "models_permissions",
  "rootcause",
  "serde",
  "serde_json",
+ "share_permission_db_utils",
  "sqlx",
  "thiserror 2.0.18",
  "tokio",
@@ -12958,6 +13023,7 @@ dependencies = [
  "entity_access_db_utils",
  "entity_access_management",
  "entity_mutation",
+ "entity_registry_db_utils",
  "futures",
  "hex",
  "http-body-util",
@@ -12975,6 +13041,7 @@ dependencies = [
  "model",
  "model-entity",
  "model-error-response",
+ "model_owner",
  "model_user",
  "models_bulk_upload",
  "models_permissions",
@@ -19008,6 +19075,7 @@ dependencies = [
  "hyper-util",
  "idna",
  "indexmap 2.14.0",
+ "insta",
  "ipnet",
  "itertools 0.13.0",
  "lazy_static",

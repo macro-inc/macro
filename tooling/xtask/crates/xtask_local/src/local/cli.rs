@@ -121,6 +121,10 @@ pub struct RunArgs {
     /// Stream subprocess output and show per-step timings.
     #[arg(long, short)]
     pub verbose: bool,
+    /// Neither restore from nor save an init snapshot — always run the full
+    /// DB migrate / FusionAuth kickstart / index creation.
+    #[arg(long)]
+    pub no_snapshot: bool,
     /// Which local OTLP collector to start and wire services to. Defaults to
     /// the LGTM stack (Grafana/Tempo/Loki); pass `off` to run without tracing
     /// — see `docker/docker-compose.yml` for what each backend does.

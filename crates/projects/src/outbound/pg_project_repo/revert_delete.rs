@@ -33,8 +33,6 @@ pub(super) async fn revert_delete_project(
         .map(|row| row.user_id.clone())
         .collect::<Vec<_>>();
 
-    // Child reads deliberately remain inside this transaction so restoration
-    // observes one consistent subtree rather than the legacy read-skew window.
     let documents = sqlx::query!(
         r#"
         SELECT id, owner FROM "Document"
@@ -70,6 +68,13 @@ pub(super) async fn revert_delete_project(
     restore_items(transaction, "chat", &chat_ids, &chat_owner_ids).await?;
     restore_items(transaction, "document", &document_ids, &document_owner_ids).await?;
     restore_items(transaction, "project", &project_ids, &project_owner_ids).await?;
+    let restored_ids = project_ids
+        .iter()
+        .chain(&document_ids)
+        .chain(&chat_ids)
+        .cloned()
+        .collect::<Vec<_>>();
+    clear_registered_entities(transaction, &restored_ids).await?;
 
     if let Some(parent_id) = previous_parent_id {
         let parent_is_deleted = sqlx::query_scalar!(
@@ -143,5 +148,20 @@ async fn restore_items(
     )
     .execute(transaction.as_mut())
     .await?;
+    Ok(())
+}
+
+async fn clear_registered_entities(
+    transaction: &mut Transaction<'_, Postgres>,
+    ids: &[String],
+) -> Result<(), sqlx::Error> {
+    for id in ids {
+        let uuid = id
+            .parse()
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?;
+        entity_registry_db_utils::clear_deleted(transaction, uuid)
+            .await
+            .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
+    }
     Ok(())
 }

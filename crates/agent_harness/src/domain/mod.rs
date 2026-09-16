@@ -16,3 +16,6 @@ pub mod sandbox;
 pub mod service;
 /// Policy for turning broker trigger events into harness work.
 pub mod trigger_router;
+
+/// Per-owner hosted Codex runtime authorization.
+pub mod codex;

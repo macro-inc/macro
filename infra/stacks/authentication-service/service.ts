@@ -14,6 +14,7 @@ import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  CODEX_OAUTH_KMS_ALIAS,
   DopplerEcsEnvironment,
   getGatewayAlb,
   GatewayService,
@@ -35,6 +36,7 @@ const MICROSOFT_TOKEN_KMS_ACTIONS = ['kms:GenerateDataKey', 'kms:Decrypt'];
 // nothing here needs Decrypt.
 const CURSOR_API_KEY_KMS_WRITE_ACTIONS = ['kms:Encrypt'];
 const CURSOR_API_KEY_KMS_READ_ACTIONS = ['kms:Decrypt'];
+const CODEX_OAUTH_KMS_ACTIONS = ['kms:GenerateDataKey', 'kms:Decrypt'];
 
 export const SERVICE_DOMAIN_NAME = `auth-service${
   stack === 'prod' ? '' : `-${stack}`
@@ -79,6 +81,8 @@ export class AuthenticationService extends pulumi.ComponentResource {
    * needs it to grant itself Decrypt, and the service reads it as
    * `CURSOR_API_KEY_KMS_KEY_ID`. */
   public cursorApiKeyKmsKeyArn: pulumi.Output<string>;
+  /** Dedicated envelope-encryption key for ChatGPT account connections. */
+  public codexOauthKmsKeyArn: pulumi.Output<string>;
 
   constructor(
     name: string,
@@ -356,6 +360,63 @@ export class AuthenticationService extends pulumi.ComponentResource {
     // what the service reads as CURSOR_API_KEY_KMS_KEY_ID.
     this.cursorApiKeyKmsKeyArn = cursorApiKeyKmsKey.arn;
 
+    // Both services refresh OAuth credentials, so both need envelope read/write.
+    // Direct role grants keep the harness independent of this stack's outputs.
+    const codexOauthKmsKey = new aws.kms.Key(
+      `${BASE_NAME}-codex-oauth-key`,
+      {
+        description: `ChatGPT OAuth connection encryption key for ${stack}`,
+        deletionWindowInDays: cursorApiKeyKmsDeletionWindowInDays,
+        enableKeyRotation: true,
+        policy: aws.iam.getPolicyDocumentOutput({
+          statements: [
+            {
+              sid: 'AllowAccountKeyAdministration',
+              effect: 'Allow',
+              principals: [{ type: 'AWS', identifiers: [accountRootArn] }],
+              actions: [
+                'kms:CancelKeyDeletion',
+                'kms:Create*',
+                'kms:Delete*',
+                'kms:Describe*',
+                'kms:Disable*',
+                'kms:Enable*',
+                'kms:Get*',
+                'kms:List*',
+                'kms:Put*',
+                'kms:Revoke*',
+                'kms:ScheduleKeyDeletion',
+                'kms:TagResource',
+                'kms:UntagResource',
+                'kms:Update*',
+              ],
+              resources: ['*'],
+            },
+            {
+              sid: 'AllowCodexConnectionEnvelopeEncryption',
+              effect: 'Allow',
+              principals: [
+                {
+                  type: 'AWS',
+                  identifiers: [this.role.arn, ...cursorApiKeyReaderRoleArns],
+                },
+              ],
+              actions: CODEX_OAUTH_KMS_ACTIONS,
+              resources: ['*'],
+            },
+          ],
+        }).json,
+        tags: this.tags,
+      },
+      { parent: this, protect: stack === 'prod' }
+    );
+    new aws.kms.Alias(
+      `${BASE_NAME}-codex-oauth-key-alias`,
+      { name: CODEX_OAUTH_KMS_ALIAS, targetKeyId: codexOauthKmsKey.keyId },
+      { parent: this }
+    );
+    this.codexOauthKmsKeyArn = codexOauthKmsKey.arn;
+
     // ecr image
     const image = new EcrImage(
       `${BASE_NAME}-ecr-image-${stack}`,
@@ -477,6 +538,10 @@ export class AuthenticationService extends pulumi.ComponentResource {
                 {
                   name: 'CURSOR_API_KEY_KMS_KEY_ID',
                   value: cursorApiKeyKmsKey.arn,
+                },
+                {
+                  name: 'CODEX_OAUTH_KMS_KEY_ID',
+                  value: codexOauthKmsKey.arn,
                 },
                 ...(containerEnvVars ?? []),
               ],

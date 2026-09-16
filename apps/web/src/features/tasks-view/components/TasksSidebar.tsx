@@ -56,7 +56,7 @@ export function TasksNavigation(props: { onNavigate?: () => void }) {
 
 function FavoriteRow(props: {
   favorite: Favorite;
-  onOpen: (favorite: Favorite, event: MouseEvent) => void;
+  onOpen: (favorite: Favorite, name: string, event: MouseEvent) => void;
 }) {
   const name = useFavoriteDisplayName(props.favorite);
 
@@ -64,7 +64,7 @@ function FavoriteRow(props: {
     <FavoriteContextMenu favorite={props.favorite} triggerClass="block">
       <ViewSidebar.Item
         title={name()}
-        onClick={(event) => props.onOpen(props.favorite, event)}
+        onClick={(event) => props.onOpen(props.favorite, name(), event)}
       >
         <ViewSidebar.Icon>
           <FavoriteIcon favorite={props.favorite} class="size-4" />
@@ -81,6 +81,7 @@ function TaskFavorites(props: {
 }) {
   const data = useFavoritesData();
   const layout = useSplitLayout();
+  const { openTask } = useTasksView();
   const favorites = createMemo(() =>
     (data()?.favorites ?? [])
       .filter(
@@ -90,10 +91,23 @@ function TaskFavorites(props: {
       )
       .sort((left, right) => left.sortOrder - right.sortOrder)
   );
-  const openFavorite = (favorite: Favorite, event: MouseEvent) => {
-    layout.openWithSplit(favoriteSplitContent(favorite), {
-      referredFrom: 'sidebar',
-      preferNewSplit: event.shiftKey,
+  const openFavorite = (
+    favorite: Favorite,
+    fallbackName: string,
+    event: MouseEvent
+  ) => {
+    if (event.shiftKey) {
+      layout.openWithSplit(favoriteSplitContent(favorite), {
+        referredFrom: 'sidebar',
+        preferNewSplit: true,
+      });
+
+      return;
+    }
+
+    openTask({
+      id: favorite.entityId,
+      fallbackName,
     });
   };
 

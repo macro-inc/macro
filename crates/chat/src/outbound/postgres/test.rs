@@ -14,7 +14,7 @@ use sqlx::postgres::PgRow;
 use sqlx::{Pool, Postgres, Row};
 
 use super::PgChatRepo;
-use crate::domain::models::{ChatErr, CopyChatArgs, CreateChatArgs, PatchChatArgs};
+use crate::domain::models::{ChatErr, CopyChatArgs, CreateChatArgs, PatchChatRepoArgs};
 use crate::domain::ports::ChatRepo;
 
 /// The no-team default permission for a chat — the repo persists whatever the
@@ -84,10 +84,11 @@ async fn patch_share_permission(
     repo.patch(
         user_id,
         chat_id,
-        PatchChatArgs {
+        PatchChatRepoArgs {
             name: None,
             project_id: None,
             share_permission: Some(share_permission),
+            team_share: None,
         },
     )
     .await
@@ -922,10 +923,11 @@ async fn patch_chat_updates_name(pool: Pool<Postgres>) {
     repo.patch(
         patch_user_id,
         &chat_id,
-        PatchChatArgs {
+        PatchChatRepoArgs {
             name: Some("Renamed".to_string()),
             project_id: None,
             share_permission: None,
+            team_share: None,
         },
     )
     .await
@@ -963,10 +965,11 @@ async fn patch_chat_updates_project(pool: Pool<Postgres>) {
     repo.patch(
         patch_user_id,
         &chat_id,
-        PatchChatArgs {
+        PatchChatRepoArgs {
             name: None,
             project_id: Some("project-123".to_string()),
             share_permission: None,
+            team_share: None,
         },
     )
     .await
@@ -1012,10 +1015,11 @@ async fn patch_chat_clears_project(pool: Pool<Postgres>) {
     repo.patch(
         patch_user_id,
         &chat_id,
-        PatchChatArgs {
+        PatchChatRepoArgs {
             name: None,
             project_id: Some("".to_string()),
             share_permission: None,
+            team_share: None,
         },
     )
     .await

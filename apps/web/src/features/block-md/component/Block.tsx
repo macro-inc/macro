@@ -100,15 +100,16 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
       | undefined;
     return value?.__block === 'md' ? value : undefined;
   };
+  const source = blockSourceSignal.get;
   const documentSource = (): MarkdownDocumentSource => {
     const loaded = data();
     if (!loaded) return { type: 'loading' };
 
-    const source = blockSourceSignal.get();
-    if (source?.type === 'sync-service' && loaded.syncSource) {
+    const loadedSource = source();
+    if (loadedSource?.type === 'sync-service' && loaded.syncSource) {
       return { type: 'sync', source: loaded.syncSource };
     }
-    if (source?.type === 'dss' && loaded.dssFile) {
+    if (loadedSource?.type === 'dss' && loaded.dssFile) {
       return { type: 'dss', file: loaded.dssFile };
     }
 

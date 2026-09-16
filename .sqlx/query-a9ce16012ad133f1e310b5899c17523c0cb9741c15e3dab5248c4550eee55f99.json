@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO codex_cloud_sessions (agent_session_id, acp_session_id, state) VALUES ($1, $2, $3) ON CONFLICT (agent_session_id) DO UPDATE SET state = EXCLUDED.state",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a9ce16012ad133f1e310b5899c17523c0cb9741c15e3dab5248c4550eee55f99"
+}

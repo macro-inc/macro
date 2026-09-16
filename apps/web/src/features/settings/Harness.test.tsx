@@ -1,3 +1,8 @@
+const codexAccess = vi.hoisted(() => ({ enabled: true }));
+vi.mock('@core/codex/flag', () => ({
+  useCodexAgentsAccess: () => () => codexAccess.enabled,
+}));
+
 /**
  * @vitest-environment jsdom
  */
@@ -19,6 +24,10 @@ import {
 import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
+
+vi.mock('./codex/views/CodexHarness', () => ({
+  CodexHarness: () => <div data-testid="codex-harness" />,
+}));
 
 const mocks = vi.hoisted(() => ({
   status: {
@@ -157,6 +166,7 @@ beforeAll(() => {
 });
 
 beforeEach(() => {
+  codexAccess.enabled = true;
   vi.clearAllMocks();
   mocks.status.data = {
     registered: false,
@@ -183,6 +193,15 @@ beforeEach(() => {
 });
 
 describe('Harness', () => {
+  it.each([false, true])(
+    'gates Codex settings on rollout access %s',
+    (enabled) => {
+      codexAccess.enabled = enabled;
+      render(() => <Harness />);
+      expect(screen.queryByTestId('codex-harness') !== null).toBe(enabled);
+    }
+  );
+
   it.each(['success', 'error'] as const)(
     'keeps settings visible while Cursor models load and after %s',
     async (outcome) => {

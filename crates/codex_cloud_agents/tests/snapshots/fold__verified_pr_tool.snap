@@ -1,0 +1,54 @@
+---
+source: crates/codex_cloud_agents/tests/fold.rs
+expression: messages
+---
+[
+  {
+    "turn": 0,
+    "author": {
+      "kind": "user",
+      "userId": null
+    },
+    "requestId": null,
+    "parts": [
+      {
+        "kind": "text",
+        "text": "Inspect repository"
+      }
+    ],
+    "stop": null
+  },
+  {
+    "turn": 0,
+    "author": {
+      "kind": "agent"
+    },
+    "requestId": null,
+    "parts": [
+      {
+        "kind": "text",
+        "text": "Answer for turn-1"
+      },
+      {
+        "kind": "tool_use",
+        "id": "codex-pr:turn-1:https://github.com/org/repo/pull/42",
+        "name": {
+          "kind": "native",
+          "name": "Found pull request"
+        },
+        "status": "completed",
+        "detail": {
+          "kind": "other",
+          "acpKind": "other",
+          "output": "[View pull request](https://github.com/org/repo/pull/42)",
+          "input": {
+            "url": "https://github.com/org/repo/pull/42"
+          }
+        }
+      }
+    ],
+    "stop": {
+      "kind": "end_turn"
+    }
+  }
+]

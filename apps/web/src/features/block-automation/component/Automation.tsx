@@ -1,6 +1,6 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
-import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
+import { BlockSplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { SplitTitleFileMenu } from '@components/app/split-layout/components/SplitLabel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -321,7 +321,7 @@ export function Automation() {
             </HeaderIsland>
           </SplitHeaderLeft>
           <SplitTitleFileMenu>
-            <SplitFileMenu
+            <BlockSplitFileMenu
               id={scheduleId}
               itemType="automation"
               name={d().name || blockNameToDefaultFile('automation')}

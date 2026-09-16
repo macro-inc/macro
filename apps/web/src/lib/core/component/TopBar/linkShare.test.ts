@@ -5,11 +5,37 @@ import {
   buildTeamSharePayload,
   getLinkShareScope,
   getLinkShareScopeCopy,
+  getShareItemNoun,
   getShareStatus,
   getTeamShareScope,
+  isTeamShareSupportedForItem,
   LINK_SHARE_SCOPE_OPTIONS,
   TEAM_SHARE_SCOPE_OPTIONS,
 } from './linkShare';
+
+describe('isTeamShareSupportedForItem', () => {
+  it.each(['document', 'chat'] as const)('supports %s', (itemType) => {
+    expect(isTeamShareSupportedForItem(itemType)).toBe(true);
+  });
+
+  it.each(['project', 'email', 'agent_session', 'call'] as const)(
+    'does not offer team access for %s',
+    (itemType) => {
+      expect(isTeamShareSupportedForItem(itemType)).toBe(false);
+    }
+  );
+});
+
+describe('getShareItemNoun', () => {
+  it.each([
+    ['document', 'document'],
+    ['chat', 'chat'],
+    ['email', 'email thread'],
+    ['agent_session', 'agent session'],
+  ] as const)('names %s as "%s"', (itemType, noun) => {
+    expect(getShareItemNoun(itemType)).toBe(noun);
+  });
+});
 
 describe('getLinkShareScope', () => {
   it.each([null, undefined])('maps %s to NONE', (linkShare) => {
