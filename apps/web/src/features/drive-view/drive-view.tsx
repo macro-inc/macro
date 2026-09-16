@@ -9,6 +9,7 @@ import {
   ListFilterDropdown,
   useViewControlHotkeys,
   useViewTabHotkeys,
+  ViewBreadcrumbs,
   ViewSidebar,
 } from '@app/components/view-shell';
 import {
@@ -55,7 +56,9 @@ import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Dropdown, EmptyStatePanel } from '@ui';
 import { createMemo, For, onCleanup, Show, Suspense } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { DriveLocationBreadcrumbItems } from './components/DriveBreadcrumbs';
 import { DriveDetailView } from './components/DriveDetailView';
+import { driveLocationBreadcrumbs } from './core/breadcrumbs';
 import { driveLocationLabel } from './core/location-label';
 import {
   DRIVE_TABS,
@@ -72,6 +75,15 @@ export type DriveViewProps = {
   initialFilters?: Query;
   initialClientFilters?: SetPredicatesInput<string>;
 };
+
+function shouldOpenInline(event?: KeyboardEvent | MouseEvent) {
+  return !(
+    event?.shiftKey ||
+    event?.metaKey ||
+    event?.ctrlKey ||
+    event?.altKey
+  );
+}
 
 function favoriteDetailTarget(
   favorite: Favorite,
@@ -150,7 +162,6 @@ function DriveViewContent(props: DriveViewProps) {
     const location = state().location;
     return location.kind === 'folder' ? (location.id ?? undefined) : undefined;
   };
-  const rootName = () => driveLocationLabel(state().location, folders());
   const isRecent = () => {
     const location = state().location;
     return location.kind === 'tab' && location.tab === 'recent';
@@ -181,6 +192,9 @@ function DriveViewContent(props: DriveViewProps) {
   });
   const selectTab = (tab: DriveTab) => navigate({ kind: 'tab', tab });
   const selectFolder = (id: string | null) => navigate({ kind: 'folder', id });
+  const locationBreadcrumbs = createMemo(() =>
+    driveLocationBreadcrumbs(state().location, folders())
+  );
 
   const initial = driveQuery(state(), userId());
   view.initialize({
@@ -353,9 +367,10 @@ function DriveViewContent(props: DriveViewProps) {
               const target = favoriteDetailTarget(item, name);
               if (item.entityType === 'project' && !event.shiftKey)
                 selectFolder(item.entityId);
-              else if (target && navigationStack.navigate(target, { event }))
+              else if (target && shouldOpenInline(event)) {
+                navigationStack.reset(target);
                 return;
-              else
+              } else
                 layout.openWithSplit(favoriteSplitContent(item), {
                   referredFrom: 'sidebar',
                   preferNewSplit: event.shiftKey,
@@ -371,94 +386,129 @@ function DriveViewContent(props: DriveViewProps) {
   );
 
   return (
-    <DriveLayout
-      state={state()}
-      folders={folders()}
-      foldersLoading={projects.isPending}
-      foldersError={projects.isError}
-      onRetryFolders={() => void projects.refetch()}
-      search={view.searchText()}
-      onSearch={view.setSearchText}
-      searchRef={(element) => {
-        searchInput = element;
+    <ViewBreadcrumbs.Root
+      value={
+        navigationStack.active()?.value ?? locationBreadcrumbs().at(-1)!.value
+      }
+      onChange={(value) => {
+        const breadcrumb = locationBreadcrumbs().find(
+          (entry) => entry.value === value
+        );
+        if (!breadcrumb) {
+          navigationStack.popTo(value);
+          return;
+        }
+
+        const current = state().location;
+        const location = breadcrumb.location;
+        const isCurrent =
+          (current.kind === 'tab' &&
+            location.kind === 'tab' &&
+            current.tab === location.tab) ||
+          (current.kind === 'folder' &&
+            location.kind === 'folder' &&
+            current.id === location.id);
+        if (isCurrent) {
+          navigationStack.clear();
+          return;
+        }
+        navigate(location);
       }}
-      onTab={selectTab}
-      onFolder={selectFolder}
-      filterMenu={FilterMenu}
-      onSort={(sort) => {
-        setState((current) => ({ ...current, sort }));
-        view.soup.sort.setAll([sort]);
-      }}
-      onToggleFolder={(id) =>
-        setState((current) => ({
-          ...current,
-          expandedFolderIds: current.expandedFolderIds.includes(id)
-            ? current.expandedFolderIds.filter((value) => value !== id)
-            : [...current.expandedFolderIds, id],
-        }))
-      }
-      onFavoritesOpen={(favoritesOpen) =>
-        setState((current) => ({ ...current, favoritesOpen }))
-      }
-      onRootOpen={(rootOpen) =>
-        setState((current) => ({ ...current, rootOpen }))
-      }
-      createMenu={CreateMenu}
-      favorites={Favorites}
-      detail={
-        navigationStack.active() ? (
-          <DriveDetailView rootName={rootName()} />
-        ) : undefined
-      }
     >
-      <Suspense
-        fallback={
-          <div class="grid size-full place-items-center text-ink-muted">
-            <SpinnerIcon
-              aria-label="Loading files"
-              class="size-5 animate-spin"
+      <DriveLocationBreadcrumbItems entries={locationBreadcrumbs()} />
+      <DriveLayout
+        state={state()}
+        folders={folders()}
+        foldersLoading={projects.isPending}
+        foldersError={projects.isError}
+        onRetryFolders={() => void projects.refetch()}
+        search={view.searchText()}
+        onSearch={view.setSearchText}
+        searchRef={(element) => {
+          searchInput = element;
+        }}
+        onTab={selectTab}
+        onFolder={selectFolder}
+        filterMenu={FilterMenu}
+        onSort={(sort) => {
+          setState((current) => ({ ...current, sort }));
+          view.soup.sort.setAll([sort]);
+        }}
+        onToggleFolder={(id) =>
+          setState((current) => ({
+            ...current,
+            expandedFolderIds: current.expandedFolderIds.includes(id)
+              ? current.expandedFolderIds.filter((value) => value !== id)
+              : [...current.expandedFolderIds, id],
+          }))
+        }
+        onFavoritesOpen={(favoritesOpen) =>
+          setState((current) => ({ ...current, favoritesOpen }))
+        }
+        onRootOpen={(rootOpen) =>
+          setState((current) => ({ ...current, rootOpen }))
+        }
+        createMenu={CreateMenu}
+        favorites={Favorites}
+        detail={
+          navigationStack.active() ? (
+            <DriveDetailView
+              breadcrumbOrderOffset={locationBreadcrumbs().length}
             />
-          </div>
+          ) : undefined
         }
       >
-        <SoupViewList
-          emptyState={
-            projectId() && state().scope === 'default'
-              ? () => (
-                  <EmptyStatePanel
-                    centered
-                    graphic={EmptyStateFolderGraphic}
-                    title="This folder is empty"
-                    description="Create something new or drop files here to add them to this folder."
-                    primaryAction={{
-                      label: 'Back to Drive',
-                      icon: ArrowLeftIcon,
-                      onClick: () => selectFolder(null),
-                    }}
-                  />
-                )
-              : undefined
+        <Suspense
+          fallback={
+            <div class="grid size-full place-items-center text-ink-muted">
+              <SpinnerIcon
+                aria-label="Loading files"
+                class="size-5 animate-spin"
+              />
+            </div>
           }
-          onOpenProject={selectFolder}
-          onOpenEntity={(entity, event) => {
-            if (entity.type !== 'document') return false;
+        >
+          <SoupViewList
+            emptyState={
+              projectId() && state().scope === 'default'
+                ? () => (
+                    <EmptyStatePanel
+                      centered
+                      graphic={EmptyStateFolderGraphic}
+                      title="This folder is empty"
+                      description="Create something new or drop files here to add them to this folder."
+                      primaryAction={{
+                        label: 'Back to Drive',
+                        icon: ArrowLeftIcon,
+                        onClick: () => selectFolder(null),
+                      }}
+                    />
+                  )
+                : undefined
+            }
+            onOpenProject={selectFolder}
+            onOpenEntity={(entity, event) => {
+              if (entity.type !== 'document') return false;
 
-            const target = entityDetailTarget.document({
-              id: entity.id,
-              fileType: entity.fileType,
-              subType: entity.subType,
-              fallbackName: entity.name,
-            });
-            if (!entityDetailBlockType(target)) return false;
-            return navigationStack.navigate(target, { event });
-          }}
-          uploadProjectId={projectId()}
-          disableTabHotkeys
-          navigationKey={JSON.stringify([state().location, state().scope])}
-          timestamp={isRecent() ? (entity) => entity.touchedAt : undefined}
-        />
-      </Suspense>
-    </DriveLayout>
+              const target = entityDetailTarget.document({
+                id: entity.id,
+                fileType: entity.fileType,
+                subType: entity.subType,
+                fallbackName: entity.name,
+              });
+              if (!entityDetailBlockType(target)) return false;
+              if (!shouldOpenInline(event)) return false;
+              navigationStack.reset(target);
+              return true;
+            }}
+            uploadProjectId={projectId()}
+            disableTabHotkeys
+            navigationKey={JSON.stringify([state().location, state().scope])}
+            timestamp={isRecent() ? (entity) => entity.touchedAt : undefined}
+          />
+        </Suspense>
+      </DriveLayout>
+    </ViewBreadcrumbs.Root>
   );
 }
 
@@ -466,15 +516,7 @@ function DriveViewContent(props: DriveViewProps) {
 export function DriveView(props: DriveViewProps) {
   return (
     <EntityDetailNavigationStack.Root
-      shouldNavigate={(_target, options) => {
-        const event = options?.event;
-        return !(
-          event?.shiftKey ||
-          event?.metaKey ||
-          event?.ctrlKey ||
-          event?.altKey
-        );
-      }}
+      shouldNavigate={(_target, options) => shouldOpenInline(options?.event)}
     >
       <DriveViewContent {...props} />
     </EntityDetailNavigationStack.Root>

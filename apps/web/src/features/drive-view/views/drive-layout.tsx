@@ -10,14 +10,11 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import FolderIcon from '@phosphor/folder.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { Button, Dropdown } from '@ui';
-import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
+import { createMemo, createSignal, type JSX, Show } from 'solid-js';
+import { DriveBreadcrumbsOutlet } from '../components/DriveBreadcrumbs';
 import { DriveNavigation } from '../components/drive-navigation';
 import { FolderTree } from '../components/folder-tree';
-import {
-  buildFolderTree,
-  filterFolderTree,
-  folderAncestors,
-} from '../core/folder-tree';
+import { buildFolderTree, filterFolderTree } from '../core/folder-tree';
 import { driveLocationLabel } from '../core/location-label';
 import type {
   DriveFolder,
@@ -58,10 +55,6 @@ export function DriveLayout(props: {
     props.state.location.kind === 'folder'
       ? props.state.location.id
       : undefined;
-  const breadcrumbs = createMemo(() => {
-    const id = selectedFolder();
-    return id ? folderAncestors(props.folders, id) : [];
-  });
   const title = () => driveLocationLabel(props.state.location, props.folders);
 
   const SidebarContent = () => (
@@ -217,50 +210,10 @@ export function DriveLayout(props: {
                     <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
                       Drive
                     </h1>
-                    <Show
-                      when={props.state.location.kind === 'folder'}
-                      fallback={
-                        <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:hidden">
-                          {title()}
-                        </h1>
-                      }
-                    >
-                      <span
-                        role="navigation"
-                        aria-label="Folder breadcrumbs"
-                        class="inline-flex max-w-full items-center gap-1 overflow-x-auto align-middle @max-[720px]/view-shell:hidden"
-                      >
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          class="text-sm font-semibold tracking-[-0.03em] text-ink"
-                          onClick={() => props.onFolder(null)}
-                        >
-                          Drive
-                        </Button>
-                        <For each={breadcrumbs()}>
-                          {(folder) => (
-                            <>
-                              <span
-                                aria-hidden="true"
-                                class="shrink-0 text-ink-extra-muted"
-                              >
-                                /
-                              </span>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                class="max-w-48 shrink-0 truncate rounded-md px-1.5 text-sm font-semibold tracking-[-0.03em] text-ink"
-                                title={folder.name}
-                                onClick={() => props.onFolder(folder.id)}
-                              >
-                                {folder.name}
-                              </Button>
-                            </>
-                          )}
-                        </For>
-                      </span>
-                    </Show>
+                    <DriveBreadcrumbsOutlet
+                      aria-label="Drive location"
+                      class="@max-[720px]/view-shell:hidden"
+                    />
                   </ViewShell.TopBar>
                   <ViewShell.Header>
                     <div class="flex min-w-0 flex-col gap-3">

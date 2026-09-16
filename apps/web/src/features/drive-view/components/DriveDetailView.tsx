@@ -11,7 +11,6 @@ import {
   entityDetailTarget,
   useEntityDetailNavigationStack,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
-import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import type { MarkdownDocumentKind } from '@block-md/types';
 import { SidePanel } from '@components/app/side-panel';
@@ -32,37 +31,20 @@ import {
   MarkdownDetail,
   MarkdownDetailBodyState,
 } from '../views/MarkdownDetail';
+import { DriveBreadcrumbsOutlet } from './DriveBreadcrumbs';
 import { FileDetailBreadcrumbItem } from './FileDetailBreadcrumbItem';
 
-const DRIVE_VIEW_BREADCRUMB = 'drive-view';
-
-function DriveViewBreadcrumbItem(props: { name: string }) {
-  return (
-    <ViewBreadcrumbs.Item
-      value={DRIVE_VIEW_BREADCRUMB}
-      metadata={{ type: 'drive' }}
-      order={0}
-    >
-      {(item) => (
-        <ViewBreadcrumbs.Button
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-        >
-          <span class="truncate">{props.name}</span>
-        </ViewBreadcrumbs.Button>
-      )}
-    </ViewBreadcrumbs.Item>
-  );
-}
-
-function DriveDetailAncestorBreadcrumbs() {
+function DriveDetailAncestorBreadcrumbs(props: { orderOffset: number }) {
   const navigationStack = useEntityDetailNavigationStack();
   const ancestors = () => navigationStack.entries.slice(0, -1);
 
   return (
     <For each={ancestors()}>
       {(entry, index) => (
-        <EntityDetailBreadcrumbItem entry={entry} order={index() + 1} />
+        <EntityDetailBreadcrumbItem
+          entry={entry}
+          order={props.orderOffset + index()}
+        />
       )}
     </For>
   );
@@ -89,7 +71,7 @@ function DriveDetailTopBar() {
 
   return (
     <div class="flex h-12 min-w-0 shrink-0 items-center gap-1 border-edge border-b px-3">
-      <ViewBreadcrumbs.Outlet
+      <DriveBreadcrumbsOutlet
         aria-label="File location"
         fallback={<EntityDetailBreadcrumbSkeleton />}
       />
@@ -207,8 +189,7 @@ function StackEntityDetail(props: {
   );
 }
 
-export function DriveDetailView(props: { rootName: string }) {
-  const navigationStack = useEntityDetailNavigationStack();
+export function DriveDetailView(props: { breadcrumbOrderOffset: number }) {
   const [shareOpen, setShareOpen] = createSignal(false);
 
   return (
@@ -219,46 +200,38 @@ export function DriveDetailView(props: { rootName: string }) {
         close: () => setShareOpen(false),
       }}
     >
-      <ViewBreadcrumbs.Root
-        value={navigationStack.active()?.value ?? DRIVE_VIEW_BREADCRUMB}
-        onChange={(value) => {
-          if (value === DRIVE_VIEW_BREADCRUMB) {
-            navigationStack.clear();
-            return;
-          }
-          navigationStack.popTo(value);
-        }}
-      >
-        <DriveViewBreadcrumbItem name={props.rootName} />
-        <DriveDetailAncestorBreadcrumbs />
-        <SidePanel.Root>
-          <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-            <DriveDetailTopBar />
-            <div class="relative min-h-0 min-w-0 flex-1">
-              <EntityDetailNavigationStack.Outlet>
-                {(entry, state) => (
-                  <ErrorBoundary
-                    fallback={(error, reset) => (
-                      <MarkdownDetailBodyState
-                        error={error}
-                        actionLabel="Reset"
-                        onAction={reset}
-                      />
-                    )}
-                  >
-                    <StackEntityDetail
-                      entry={entry}
-                      order={state.entries.length}
-                      shareOpen={shareOpen()}
-                      onShareOpenChange={setShareOpen}
+      <DriveDetailAncestorBreadcrumbs
+        orderOffset={props.breadcrumbOrderOffset}
+      />
+      <SidePanel.Root>
+        <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
+          <DriveDetailTopBar />
+          <div class="relative min-h-0 min-w-0 flex-1">
+            <EntityDetailNavigationStack.Outlet>
+              {(entry, state) => (
+                <ErrorBoundary
+                  fallback={(error, reset) => (
+                    <MarkdownDetailBodyState
+                      error={error}
+                      actionLabel="Reset"
+                      onAction={reset}
                     />
-                  </ErrorBoundary>
-                )}
-              </EntityDetailNavigationStack.Outlet>
-            </div>
+                  )}
+                >
+                  <StackEntityDetail
+                    entry={entry}
+                    order={
+                      props.breadcrumbOrderOffset + state.entries.length - 1
+                    }
+                    shareOpen={shareOpen()}
+                    onShareOpenChange={setShareOpen}
+                  />
+                </ErrorBoundary>
+              )}
+            </EntityDetailNavigationStack.Outlet>
           </div>
-        </SidePanel.Root>
-      </ViewBreadcrumbs.Root>
+        </div>
+      </SidePanel.Root>
     </ShareDialogContext.Provider>
   );
 }

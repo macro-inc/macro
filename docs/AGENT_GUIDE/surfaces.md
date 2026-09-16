@@ -386,10 +386,13 @@ label's font weight matches the file title. The link
 restores the originating Drive view.
 The `Drive` folder row opens the folder overview. Click a folder name to browse
 its contents in the main pane; its separate expand/collapse button reveals child
-folders without navigating. Folder breadcrumbs in the top bar use `/` separators
-and navigate to ancestors. Empty folders show `This folder is empty` and a
-`Back to Drive` action that returns to the folder overview. Folder
-search retains matching descendants' ancestors and reveals their branches.
+folders without navigating. The top bar keeps the full folder and file detail
+path in one breadcrumb trail. Folder containment uses `/` separators, while the
+transition to a file detail and nested detail navigation use the default `>`
+separator. Choosing a folder breadcrumb returns to that folder and clears newer
+file details. Empty folders show `This folder is empty` and a `Back to Drive`
+action that returns to the folder overview. Folder search retains matching
+descendants' ancestors and reveals their branches.
 
 `Search Drive` searches the current tab or folder. The **Filter** menu reuses the
 legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**
@@ -400,12 +403,14 @@ Recent uses the viewer's own interaction order and does not offer a sort overrid
 The New menu and drag/drop uploads target the selected folder. File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,
 while Markdown, code/CSV, image, video, and unrecognized file clicks and Enter
-replace the list with a breadcrumbed detail. Choose the Drive breadcrumb to return
-to the list; choosing an ancestor file drops newer detail entries. Modified clicks
-and file types without a dedicated detail, including PDF and canvas, retain existing
+replace the list with a breadcrumbed detail. Choose the current location
+breadcrumb to return to the list; choosing an ancestor file drops newer detail
+entries. Opening a list row or sidebar favorite starts a new detail path; only
+navigation originating inside a detail appends to that path. Modified clicks and
+file types without a dedicated detail, including PDF and canvas, retain existing
 split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
-and folders. Navigation state and expanded folders are restored when returning from
-an opened file.
+and folders. Navigation state and expanded folders are restored when returning
+from an opened file.
 
 ## Calendar — `/app/calendar/view`
 
