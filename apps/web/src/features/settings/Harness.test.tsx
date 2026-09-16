@@ -29,18 +29,29 @@ vi.mock('./codex/views/CodexHarness', () => ({
   CodexHarness: () => <div data-testid="codex-harness" />,
 }));
 
+const claudeFlag = vi.hoisted(() => ({ enabled: true, source: vi.fn() }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: (flag: { key: string }) => {
+    expect(flag.key).toBe('claude-cloud');
+    return () => ({ enabled: claudeFlag.enabled });
+  },
+}));
+
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'macro|demo@example.com',
 }));
 vi.mock('@queries/claude-auth/connection', () => ({
-  useClaudeConnectionSource: () => ({
-    status: () => ({ enabled: true, connected: false, ephemeral: true }),
-    failed: () => false,
-    begin: vi.fn(),
-    complete: vi.fn(),
-    disconnect: vi.fn(),
-    refresh: vi.fn(),
-  }),
+  useClaudeConnectionSource: () => {
+    claudeFlag.source();
+    return {
+      status: () => ({ enabled: true, connected: false, ephemeral: true }),
+      failed: () => false,
+      begin: vi.fn(),
+      complete: vi.fn(),
+      disconnect: vi.fn(),
+      refresh: vi.fn(),
+    };
+  },
 }));
 
 const mocks = vi.hoisted(() => ({
@@ -215,6 +226,21 @@ describe('Harness', () => {
       expect(screen.queryByTestId('codex-harness') !== null).toBe(enabled);
     }
   );
+
+  it('does not mount Claude connection or fetch its status when the flag is off', () => {
+    claudeFlag.enabled = false;
+    claudeFlag.source.mockClear();
+    try {
+      render(() => <Harness />);
+      expect(
+        screen.queryByRole('region', { name: 'Claude Cloud connection' })
+      ).toBeNull();
+      expect(claudeFlag.source).not.toHaveBeenCalled();
+      expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
+    } finally {
+      claudeFlag.enabled = true;
+    }
+  });
 
   it.each(['success', 'error'] as const)(
     'keeps settings visible while Cursor models load and after %s',

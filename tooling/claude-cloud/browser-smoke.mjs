@@ -25,8 +25,55 @@ try {
     .fill('claude-ui-demo@example.com');
   await page.getByRole('button', { name: 'Continue', exact: true }).click();
   await page.waitForURL(/\/app\/(component|settings)/, { timeout: 60000 });
+  // Vite-only local smoke: simulate the local env override in this browser.
+  // Local dev intentionally does not initialize PostHog. Keep the real flag
+  // definition/readers, and never alter the running server's environment.
+  let claudeEnabled = false;
+  await page.route(
+    '**/src/lib/core/constant/featureFlags.ts*',
+    async (route) => {
+      const response = await route.fetch();
+      const body = await response.text();
+      const definition = 'export const claudeCloud = defineFlag({';
+      if (!body.includes(definition))
+        throw new Error('Claude flag definition not found');
+      await route.fulfill({
+        response,
+        body: body.replace(
+          definition,
+          `import.meta.env.VITE_CLAUDE_CLOUD = '${claudeEnabled}';\n${definition}`
+        ),
+      });
+    }
+  );
+  const claudeRequests = [];
+  page.on('request', (request) => {
+    if (!['fetch', 'xhr'].includes(request.resourceType())) return;
+    if (
+      request.url().includes('/claude-auth/') ||
+      (request.url().includes('/models') &&
+        request.postData()?.includes('claude-cloud'))
+    )
+      claudeRequests.push(request.url());
+  });
   await page.goto(`${origin}/app/settings/harness`);
+  await page.getByRole('heading', { name: 'Cursor', exact: true }).waitFor();
   const card = page.getByRole('region', { name: 'Claude Cloud connection' });
+  if (await card.count())
+    throw new Error('Claude connection visible with flag off');
+  await page.goto(`${origin}/app/settings/agents?createAgent=true`);
+  await page.getByRole('dialog').waitFor();
+  if (await page.getByRole('option', { name: 'Claude Cloud (demo)' }).count())
+    throw new Error('Claude harness visible with flag off');
+  if (claudeRequests.length)
+    throw new Error('Claude data fetched with flag off');
+  console.log(
+    'PASS: flag off hides onboarding and harness selection without Claude requests.'
+  );
+  await page.goto(`${origin}/app/settings/harness`);
+  await page.getByRole('heading', { name: 'Cursor', exact: true }).waitFor();
+  claudeEnabled = true;
+  await page.reload();
   await card.waitFor({ timeout: 60000 });
   console.log('PASS: Claude connection card is visible before authorization.');
   await card.getByLabel('Anthropic').waitFor();
@@ -150,13 +197,11 @@ try {
       body: JSON.stringify(body),
     });
   });
-  await page
-    .context()
-    .route('https://claude.ai/**', (route) =>
-      route.fulfill({
-        body: 'Claude link target intercepted by local smoke test',
-      })
-    );
+  await page.context().route('https://claude.ai/**', (route) =>
+    route.fulfill({
+      body: 'Claude link target intercepted by local smoke test',
+    })
+  );
   await page.goto(`${origin}/app/agent/${fixtureId}`);
   const openClaude = page.getByRole('button', {
     name: 'Open in Claude',

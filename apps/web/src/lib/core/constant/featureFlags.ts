@@ -126,6 +126,13 @@ export const PROD_MODE_ENV = import.meta.env.MODE === 'production';
 
 const onInDev = DEV_MODE_ENV || undefined;
 
+// Claude Cloud demo onboarding and harness/model discovery. Off until PostHog
+// enables it, including in dev; override locally with VITE_CLAUDE_CLOUD.
+export const claudeCloud = defineFlag({
+  key: 'claude-cloud',
+  env: 'CLAUDE_CLOUD',
+});
+
 export const ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE = defineFlag({
   env: 'ENABLE_PDF_MODIFICATION_DATA_AUTOSAVE',
   default: true,

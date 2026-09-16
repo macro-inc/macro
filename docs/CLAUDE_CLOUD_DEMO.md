@@ -4,6 +4,13 @@
 
 ## Connect in the local UI (recommended)
 
+The frontend entry points require the PostHog flag **`claude-cloud`**. It is
+off by default everywhere (including dev); for a local demo, set
+`VITE_CLAUDE_CLOUD=true` when starting/building the frontend. With the flag off,
+the connection card never mounts and agent settings neither offer Claude Cloud
+nor request its model catalog. This is a UI rollout flag, not a backend
+authorization boundary or a kill switch for existing agents/sessions.
+
 Rebuild the local backend from this workspace (`r` in the running `just run_local`
 terminal) and refresh the browser. In **Settings → Harness**, the
 **Claude Cloud (demo)** row has the Anthropic logo and appears above Cursor,
@@ -22,7 +29,7 @@ The Macro user comes from authenticated request identity, never an email field.
 Attempts expire after ten minutes, are one-use, and are canceled on disconnect.
 Starting again invalidates the prior attempt. A failed exchange requires starting again.
 
-**No credential file, container mount, or environment variable is needed locally.**
+**No credential file, container mount, or credential environment variable is needed locally.**
 With `ENVIRONMENT=local`, grants are stored in MacroDB's `claude_oauth_grants`
 table. The serialized grant is KMS-encrypted, bound to its exact Macro owner and
 the `claude-cloud-oauth` purpose. The local stack's existing Cursor KMS key is

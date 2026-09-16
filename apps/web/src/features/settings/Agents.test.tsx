@@ -22,6 +22,14 @@ import { createStore } from 'solid-js/store';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Agents } from './Agents';
 
+const claudeFlag = vi.hoisted(() => ({ enabled: true }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: (flag: { key: string }) => {
+    expect(flag.key).toBe('claude-cloud');
+    return () => ({ enabled: claudeFlag.enabled });
+  },
+}));
+
 vi.mock('@queries/claude-auth/connection', () => ({
   useClaudeConnectionSource: () => ({
     status: () => ({ enabled: true, connected: false, ephemeral: true }),
@@ -302,6 +310,30 @@ const MACROD_HARNESS = {
 };
 
 describe('Agents', () => {
+  it.each([false, true])(
+    'gates Claude harness selection and discovery when enabled=%s',
+    (enabled) => {
+      claudeFlag.enabled = enabled;
+      modelMocks.queries['claude-cloud:'] = successfulModels([
+        { id: 'claude-default', name: 'Subscription default' },
+      ]);
+      try {
+        render(() => <Agents />);
+        fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+        const option = screen.queryByRole('option', {
+          name: 'Claude Cloud (demo)',
+        });
+        expect(Boolean(option)).toBe(enabled);
+        const targets = vi.mocked(useAgentModelsQueries).mock.lastCall?.[0]();
+        expect(
+          targets?.some((target) => target.harness === 'claude-cloud')
+        ).toBe(enabled);
+      } finally {
+        claudeFlag.enabled = true;
+      }
+    }
+  );
+
   it('opens the new-agent form from a link and clears the action on cancel', () => {
     updateSearchParams({ createAgent: 'true' });
     render(() => <Agents />);

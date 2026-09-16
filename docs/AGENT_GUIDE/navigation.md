@@ -245,7 +245,8 @@ Settings → Agents and Settings → Harness render while their requests are pen
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
 
-Claude Cloud connection setup is in Settings → Harness, above Cursor, with the
+With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
+Settings → Harness, above Cursor, with the
 Anthropic logo. Settings → Agents selects an agent's harness but does not host
 Claude's connection form. Claude's model picker uses provider-reported IDs,
 names, descriptions, and order. Settings discovers from recent account sessions;
