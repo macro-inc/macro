@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE comms_message_threads s SET deleted_at = now(), updated_at = now()\n           FROM migrated_comment_thread_id tm\n           WHERE tm.root_id = s.root_id AND tm.document_id = ANY($1) AND s.deleted_at IS NULL\n             AND NOT EXISTS (SELECT 1 FROM \"Thread\" t WHERE t.id = tm.thread_id)\n           RETURNING s.root_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "root_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "99086fa5c096f71daeb129691382932436bf3ce8a810b8a868655f399e0fc3f5"
+}

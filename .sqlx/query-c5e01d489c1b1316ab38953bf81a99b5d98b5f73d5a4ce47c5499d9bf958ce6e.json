@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_message_threads (\n               root_id, parent_entity_type, parent_entity_id, user_id, resolved, anchor,\n               import_metadata, created_at, updated_at, deleted_at\n           )\n           SELECT tm.root_id, 'document', t.\"documentId\", t.owner, t.resolved,\n               CASE\n                   WHEN pa.uuid IS NOT NULL\n                       THEN jsonb_build_object('type', 'pdf_placeable', 'anchor_id', pa.uuid)\n                   WHEN ph.uuid IS NOT NULL\n                       THEN jsonb_build_object('type', 'pdf_highlight', 'anchor_id', ph.uuid)\n                   WHEN t.metadata->>'markId' ~ $3\n                       THEN jsonb_build_object('type', 'markdown', 'mark_id', (t.metadata->>'markId')::uuid)\n               END,\n               t.metadata, t.\"createdAt\" AT TIME ZONE 'UTC', t.\"updatedAt\" AT TIME ZONE 'UTC',\n               CASE\n                   WHEN t.\"deletedAt\" IS NOT NULL THEN t.\"deletedAt\" AT TIME ZONE 'UTC'\n                   WHEN NOT EXISTS (SELECT 1 FROM \"Comment\" c WHERE c.\"threadId\" = t.id)\n                       THEN t.\"updatedAt\" AT TIME ZONE 'UTC'\n               END\n           FROM \"Thread\" t\n           JOIN migrated_comment_thread_id tm ON tm.thread_id = t.id\n           LEFT JOIN LATERAL (\n               SELECT a.uuid FROM \"PdfPlaceableCommentAnchor\" a\n               WHERE a.\"threadId\" = t.id AND NOT a.\"wasDeleted\"\n               ORDER BY a.uuid LIMIT 1\n           ) pa ON true\n           LEFT JOIN LATERAL (\n               SELECT a.uuid FROM \"PdfHighlightAnchor\" a\n               WHERE a.\"threadId\" = t.id AND a.\"deletedAt\" IS NULL\n               ORDER BY a.uuid LIMIT 1\n           ) ph ON true\n           WHERE t.\"documentId\" = ANY($1)\n           ON CONFLICT (root_id) DO UPDATE SET\n               user_id = EXCLUDED.user_id,\n               resolved = EXCLUDED.resolved,\n               anchor = EXCLUDED.anchor,\n               import_metadata = EXCLUDED.import_metadata,\n               created_at = EXCLUDED.created_at,\n               updated_at = EXCLUDED.updated_at,\n               deleted_at = EXCLUDED.deleted_at\n           WHERE (comms_message_threads.root_id = ANY($2)\n                  OR comms_message_threads.updated_at <= EXCLUDED.updated_at)\n             AND (comms_message_threads.user_id, comms_message_threads.resolved,\n                  comms_message_threads.anchor, comms_message_threads.import_metadata,\n                  comms_message_threads.created_at, comms_message_threads.updated_at,\n                  comms_message_threads.deleted_at)\n                 IS DISTINCT FROM\n                 (EXCLUDED.user_id, EXCLUDED.resolved, EXCLUDED.anchor, EXCLUDED.import_metadata,\n                  EXCLUDED.created_at, EXCLUDED.updated_at, EXCLUDED.deleted_at)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c5e01d489c1b1316ab38953bf81a99b5d98b5f73d5a4ce47c5499d9bf958ce6e"
+}

@@ -10134,7 +10134,17 @@ dependencies = [
 name = "macro_db_migrator"
 version = "0.1.0"
 dependencies = [
+ "chrono",
+ "clap",
+ "database_env_vars",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_uuid",
+ "rootcause",
+ "serde_json",
  "sqlx",
+ "tokio",
+ "tracing",
  "workspace-hack",
 ]
 
