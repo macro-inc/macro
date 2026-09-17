@@ -24,9 +24,9 @@ export function SidebarCreateHeader(props: {
           {props.actions}
         </ViewSidebar.Header>
       </Show>
-      <div class="min-w-0 px-2 pt-2 touch:pt-[calc(var(--safe-top,0px)+0.5rem)]">
+      <ViewSidebar.Primary>
         <SidebarCreateButton label={props.label} onCreate={props.onCreate} />
-      </div>
+      </ViewSidebar.Primary>
     </header>
   );
 }
@@ -42,12 +42,9 @@ export function SidebarCreateButton(props: {
         props.onCreate();
       })}
     >
-      <span
-        aria-hidden="true"
-        class="flex size-5 shrink-0 items-center justify-center"
-      >
+      <ViewSidebar.Icon>
         <PlusIcon class="size-4" />
-      </span>
+      </ViewSidebar.Icon>
       <span class="truncate">{props.label}</span>
     </ViewSidebar.Action>
   );

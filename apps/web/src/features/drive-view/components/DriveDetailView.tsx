@@ -16,7 +16,6 @@ import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetail
 import type { MarkdownDocumentKind } from '@block-md/types';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
 import {
   ShareDialogContext,
   ShareTrigger,
@@ -73,7 +72,6 @@ function DriveDetailTopBar() {
 
   return (
     <ViewShell.TopBar class="touch:flex">
-      <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
       <DriveBreadcrumbsOutlet
         aria-label="File location"
         fallback={<EntityDetailBreadcrumbSkeleton />}

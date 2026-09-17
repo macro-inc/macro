@@ -1,6 +1,6 @@
 import { Collapsible, useCollapsibleContext } from '@kobalte/core/collapsible';
 import CaretDownIcon from '@phosphor/caret-down.svg';
-import { Button, type ButtonProps, cn } from '@ui';
+import { cn } from '@ui';
 import {
   type ComponentProps,
   type JSX,
@@ -9,6 +9,7 @@ import {
   splitProps,
 } from 'solid-js';
 import { CollapseTransition } from './CollapseTransition';
+import { ViewSidebar } from './ViewSidebar';
 
 export type CollapsibleSectionRootProps = Omit<
   ComponentProps<typeof Collapsible>,
@@ -36,24 +37,12 @@ function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex h-8 min-w-0 shrink-0 items-center gap-1 pr-1',
+        'flex h-(--sidebar-row-height) min-w-0 shrink-0 items-center gap-1 pr-(--sidebar-action-inset)',
         local.class
       )}
     >
       {local.children}
     </div>
-  );
-}
-
-function Action(props: ButtonProps) {
-  const [local, rest] = splitProps(props, ['class']);
-  return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      {...rest}
-      class={cn('size-7 shrink-0 rounded-lg', local.class)}
-    />
   );
 }
 
@@ -63,7 +52,7 @@ function Trigger(props: ComponentProps<typeof Collapsible.Trigger>) {
     <Collapsible.Trigger
       {...rest}
       class={cn(
-        'flex h-8 w-full min-w-0 items-center gap-1 rounded-lg px-2 py-1 text-left text-xs leading-5 font-medium text-ink-muted outline-none transition-colors group-hover/sidebar-section:text-ink focus-visible:outline-2 focus-visible:outline-accent',
+        'flex h-(--sidebar-row-height) w-full min-w-0 items-center gap-1 rounded-lg px-(--sidebar-item-inset) py-1 text-left text-xs leading-5 font-medium text-ink-muted outline-none transition-colors group-hover/sidebar-section:text-ink focus-visible:outline-2 focus-visible:outline-accent',
         local.class
       )}
     >
@@ -95,7 +84,10 @@ function Content(props: ComponentProps<typeof Collapsible.Content>) {
   const context = useCollapsibleContext();
   return (
     <CollapseTransition open={context.isOpen()}>
-      <Collapsible.Content {...rest} class={cn('min-w-0 pt-1', local.class)}>
+      <Collapsible.Content
+        {...rest}
+        class={cn('min-w-0 pt-(--sidebar-section-content-gap)', local.class)}
+      >
         {/* Content queries must not detach the section header or its neighbors. */}
         <Suspense>{local.children}</Suspense>
       </Collapsible.Content>
@@ -106,7 +98,7 @@ function Content(props: ComponentProps<typeof Collapsible.Content>) {
 export const CollapsibleSection = Object.assign(Root, {
   Root,
   Header,
-  Action,
+  Action: ViewSidebar.Control,
   Trigger,
   Indicator,
   Content,

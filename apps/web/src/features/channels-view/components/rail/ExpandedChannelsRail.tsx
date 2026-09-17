@@ -15,15 +15,7 @@ import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SortIcon from '@phosphor/sort-ascending.svg';
 import XIcon from '@phosphor/x.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import {
-  Button,
-  cn,
-  Dropdown,
-  EmptyStatePanel,
-  Hotkey,
-  Tabs,
-  Tooltip,
-} from '@ui';
+import { cn, Dropdown, EmptyStatePanel, Hotkey, Tabs, Tooltip } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -130,9 +122,7 @@ function ChannelSortDropdown(props: { group: ChannelsGroup; label: string }) {
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
-        variant="ghost"
-        size="icon-sm"
-        class="size-7 rounded-lg"
+        as={ViewSidebar.Control}
         label={`Sort ${props.label.toLowerCase()}`}
       >
         <SortIcon class="size-3.5" />
@@ -327,40 +317,37 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
   };
 
   return (
-    <div class="flex shrink-0 flex-col gap-3">
+    <div class="flex shrink-0 flex-col">
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
           <SplitPanel.CloseButton />
           <ViewSidebar.Title>Chat</ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>
-      <div class="flex items-center justify-between gap-2 px-4">
-        <Tabs
-          aria-label="Chat sidebar views"
-          list={CHANNEL_TABS}
-          value={rail.tab()}
-          onChange={selectTab}
-        />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          label={
-            props.search.isOpen() ? 'Close search' : 'Search conversations'
-          }
-          aria-pressed={props.search.isOpen()}
-          class={cn(
-            'size-7 rounded-lg',
-            props.search.isOpen() && 'bg-active text-ink'
-          )}
-          onClick={() =>
-            props.search.isOpen() ? props.search.close() : props.search.open()
-          }
-        >
-          <MagnifyingGlassIcon class="size-3.5" />
-        </Button>
-      </div>
+      <ViewSidebar.Primary>
+        <ViewSidebar.Toolbar>
+          <Tabs
+            aria-label="Chat sidebar views"
+            list={CHANNEL_TABS}
+            value={rail.tab()}
+            onChange={selectTab}
+          />
+          <ViewSidebar.Control
+            label={
+              props.search.isOpen() ? 'Close search' : 'Search conversations'
+            }
+            aria-pressed={props.search.isOpen()}
+            class={cn(props.search.isOpen() && 'bg-active text-ink')}
+            onClick={() =>
+              props.search.isOpen() ? props.search.close() : props.search.open()
+            }
+          >
+            <MagnifyingGlassIcon class="size-3.5" />
+          </ViewSidebar.Control>
+        </ViewSidebar.Toolbar>
+      </ViewSidebar.Primary>
       <Show when={props.search.isOpen()}>
-        <div class="px-4">
+        <div class="px-(--sidebar-content-inset) pt-(--sidebar-gutter)">
           <SearchBar
             ref={props.search.registerInput}
             label="Search channels and direct messages"
@@ -411,7 +398,7 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
             ref={pagination.registerVirtualizer}
             data={props.search.results()}
             scrollRef={scrollRoot()}
-            itemSize={rail.tab() === 'recents' ? CONVERSATION_CARD_HEIGHT : 42}
+            itemSize={rail.tab() === 'recents' ? CONVERSATION_CARD_HEIGHT : 34}
             bufferSize={360}
             keepMounted={focusedIndex() >= 0 ? [focusedIndex()] : undefined}
             onScroll={pagination.loadMoreNearEnd}
@@ -518,7 +505,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
             </span>
           </Show>
         </button>
-        <div data-section-action="" class="flex items-center gap-0.5 pr-1">
+        <div data-section-action="" class="flex items-center gap-0.5">
           <ChannelSortDropdown
             group={props.config.group}
             label={props.config.label}

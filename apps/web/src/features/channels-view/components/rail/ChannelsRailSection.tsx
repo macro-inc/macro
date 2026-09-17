@@ -1,4 +1,7 @@
-import { CollapsibleSection as WorkspaceSection } from '@app/components/view-shell';
+import {
+  ViewSidebar,
+  CollapsibleSection as WorkspaceSection,
+} from '@app/components/view-shell';
 import { CollapseTransition } from '@app/components/view-shell/CollapseTransition';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
@@ -100,7 +103,7 @@ function CollapsibleSectionRoot(props: {
       <section
         ref={sectionRef}
         class={cn(
-          'group/sidebar-section flex min-h-0 flex-col gap-1',
+          'group/sidebar-section flex min-h-0 flex-col gap-(--sidebar-section-content-gap)',
           props.open && props.fillAvailable && 'flex-1',
           props.open && !props.fillAvailable && 'shrink',
           !props.open && 'shrink-0',
@@ -150,7 +153,7 @@ function CollapsibleSectionContent(props: {
     <CollapseTransition
       open={props.open}
       container={container}
-      collapsedHeight={32}
+      collapsedSize={32}
     >
       <SectionScrollArea
         contentRef={props.contentRef}
@@ -195,14 +198,15 @@ export function RailListLoadingMore(props: {
             class={cn(
               'flex items-center',
               props.variant === 'slim' && 'h-10 justify-center',
-              props.variant === 'channel' && 'h-10 gap-2 px-2',
+              props.variant === 'channel' &&
+                'h-(--sidebar-row-height) gap-(--sidebar-label-gap) px-(--sidebar-item-inset) touch:h-11',
               props.variant === 'recent' && 'h-20 items-start gap-3 px-2 py-2'
             )}
           >
             <div
               class={cn(
                 'skeleton-shimmer shrink-0 rounded-full bg-skeleton',
-                props.variant === 'channel' && 'size-6',
+                props.variant === 'channel' && 'size-5',
                 props.variant !== 'channel' && 'size-8'
               )}
             />
@@ -250,14 +254,9 @@ export function CreateRailAction(props: {
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      class="flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
-      aria-label={props.label}
-      onClick={props.onClick}
-    >
+    <ViewSidebar.Control label={props.label} onClick={props.onClick}>
       <PlusIcon class="size-3.5" />
-    </button>
+    </ViewSidebar.Control>
   );
 }
 

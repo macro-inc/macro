@@ -8,7 +8,8 @@ const COLLAPSE_DURATION = 140;
 export function CollapseTransition(props: {
   open: boolean;
   container?: () => HTMLElement | undefined;
-  collapsedHeight?: number;
+  axis?: 'height' | 'width';
+  collapsedSize?: number;
   children: JSX.Element;
 }) {
   const content = children(() => (
@@ -19,16 +20,34 @@ export function CollapseTransition(props: {
     return element instanceof HTMLElement ? element : undefined;
   };
   const container = () => props.container?.() ?? contentElement();
-  let measuredHeight: number | undefined;
+  const axis = () => props.axis ?? 'height';
+  const dimensionProperties = () =>
+    axis() === 'height'
+      ? ({
+          min: 'minHeight',
+          max: 'maxHeight',
+          start: 'paddingTop',
+          end: 'paddingBottom',
+        } as const)
+      : ({
+          min: 'minWidth',
+          max: 'maxWidth',
+          start: 'paddingLeft',
+          end: 'paddingRight',
+        } as const);
+  const sizeOf = (element: HTMLElement) =>
+    element.getBoundingClientRect()[axis()];
+  let measuredSize: number | undefined;
   let running:
     | { target: HTMLElement; content: HTMLElement; finish: () => void }
     | undefined;
 
   createResizeObserver(container, (_rect, element) => {
-    if (!running) measuredHeight = element.getBoundingClientRect().height;
+    if (!running) measuredSize = sizeOf(element);
   });
   onMount(() => {
-    measuredHeight = container()?.getBoundingClientRect().height;
+    const element = container();
+    if (element) measuredSize = sizeOf(element);
   });
   onCleanup(() => running?.finish());
 
@@ -36,24 +55,28 @@ export function CollapseTransition(props: {
     if (!(element instanceof HTMLElement)) return done();
 
     const target = props.container?.() ?? element;
-    const collapsedHeight = props.collapsedHeight ?? 0;
+    const collapsedSize = props.collapsedSize ?? 0;
     const fromOpacity = running
       ? getComputedStyle(running.content).opacity
       : opening
         ? '0'
         : '1';
     const from = running
-      ? running.target.getBoundingClientRect().height
+      ? sizeOf(running.target)
       : opening
-        ? collapsedHeight
-        : (measuredHeight ?? target.getBoundingClientRect().height);
+        ? collapsedSize
+        : (measuredSize ?? sizeOf(target));
     running?.finish();
-    const to = opening
-      ? target.getBoundingClientRect().height
-      : collapsedHeight;
+    const to = opening ? sizeOf(target) : collapsedSize;
     const style = getComputedStyle(target);
-    const paddingTop = style.paddingTop;
-    const paddingBottom = style.paddingBottom;
+    const {
+      min,
+      max,
+      start: paddingStart,
+      end: paddingEnd,
+    } = dimensionProperties();
+    const startPadding = style[paddingStart];
+    const endPadding = style[paddingEnd];
 
     element.inert = !opening;
     if (
@@ -64,14 +87,14 @@ export function CollapseTransition(props: {
       return;
     }
 
-    // Freeze flex allocation only while height is animated; restore natural sizing
+    // Freeze flex allocation only while size is animated; restore natural sizing
     // afterward so async rows, scrolling, and viewport resizes remain unrestricted.
     const sizing = {
       flexGrow: '0',
       flexShrink: '0',
       flexBasis: 'auto',
-      minHeight: '0',
-      maxHeight: 'none',
+      [min]: '0',
+      [max]: 'none',
       boxSizing: 'border-box',
       overflow: 'clip',
     };
@@ -80,19 +103,19 @@ export function CollapseTransition(props: {
       easing: 'ease-out',
       fill: 'both',
     };
-    const height = target.animate(
+    const size = target.animate(
       [
         {
           ...sizing,
-          height: `${from}px`,
-          paddingTop: opening ? '0' : paddingTop,
-          paddingBottom: opening ? '0' : paddingBottom,
+          [axis()]: `${from}px`,
+          [paddingStart]: opening ? '0' : startPadding,
+          [paddingEnd]: opening ? '0' : endPadding,
         },
         {
           ...sizing,
-          height: `${to}px`,
-          paddingTop: opening ? paddingTop : '0',
-          paddingBottom: opening ? paddingBottom : '0',
+          [axis()]: `${to}px`,
+          [paddingStart]: opening ? startPadding : '0',
+          [paddingEnd]: opening ? endPadding : '0',
         },
       ],
       options
@@ -104,13 +127,13 @@ export function CollapseTransition(props: {
     const finish = () => {
       if (running?.finish !== finish) return;
       running = undefined;
-      measuredHeight = to;
+      measuredSize = to;
       done();
-      height.cancel();
+      size.cancel();
       opacity.cancel();
     };
     running = { target, content: element, finish };
-    height.onfinish = finish;
+    size.onfinish = finish;
   }
 
   return (

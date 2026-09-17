@@ -1,4 +1,7 @@
 export const TOKENS = {
+  workspace: {
+    toggleNavigation: 'workspace.toggleNavigation',
+  },
   // soup
   soup: {
     openSearch: 'soup.openSearch',

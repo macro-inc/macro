@@ -6,6 +6,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { SplitPanel } from '@components/app/split-panel';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import FolderIcon from '@phosphor/folder.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
@@ -197,9 +198,9 @@ export function DriveLayout(props: {
                   <ViewSidebar.Title>Drive</ViewSidebar.Title>
                 </div>
               </ViewSidebar.Header>
-              <div class="px-2 pt-2">
+              <ViewSidebar.Primary>
                 <props.createMenu />
-              </div>
+              </ViewSidebar.Primary>
               <ViewSidebar.Content>
                 <SidebarContent />
               </ViewSidebar.Content>
@@ -211,7 +212,6 @@ export function DriveLayout(props: {
               fallback={
                 <>
                   <ViewShell.TopBar class="touch:flex">
-                    <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
                     <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
                       Drive
                     </h1>
@@ -223,28 +223,37 @@ export function DriveLayout(props: {
                   <ViewShell.Header>
                     <div class="flex min-w-0 flex-col gap-3">
                       <div class="hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
-                        <Dropdown
-                          open={navigationOpen()}
-                          onOpenChange={setNavigationOpen}
-                          placement="bottom-start"
+                        <Show
+                          when={isTouchDevice()}
+                          fallback={
+                            <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
+                              {title()}
+                            </h1>
+                          }
                         >
-                          <h1 class="min-w-0">
-                            <Dropdown.Trigger
-                              variant="ghost"
-                              size="sm"
-                              class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
-                              aria-label={`Select Drive view: ${title()}`}
-                            >
-                              <span class="truncate">{title()}</span>
-                              <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
-                            </Dropdown.Trigger>
-                          </h1>
-                          <Dropdown.Content class="max-h-[70vh] w-72 overflow-auto rounded-2xl">
-                            <Dropdown.Group class="gap-5 p-3">
-                              <SidebarContent />
-                            </Dropdown.Group>
-                          </Dropdown.Content>
-                        </Dropdown>
+                          <Dropdown
+                            open={navigationOpen()}
+                            onOpenChange={setNavigationOpen}
+                            placement="bottom-start"
+                          >
+                            <h1 class="min-w-0">
+                              <Dropdown.Trigger
+                                variant="ghost"
+                                size="sm"
+                                class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
+                                aria-label={`Select Drive view: ${title()}`}
+                              >
+                                <span class="truncate">{title()}</span>
+                                <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
+                              </Dropdown.Trigger>
+                            </h1>
+                            <Dropdown.Content class="max-h-[70vh] w-72 overflow-auto rounded-2xl">
+                              <Dropdown.Group class="gap-5 p-3">
+                                <SidebarContent />
+                              </Dropdown.Group>
+                            </Dropdown.Content>
+                          </Dropdown>
+                        </Show>
                         <div class="ml-auto shrink-0">
                           <props.createMenu />
                         </div>

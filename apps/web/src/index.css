@@ -67,6 +67,24 @@
   --app-border-width: 0.5px;
   --app-ring-width: 0.5px;
 
+  /* Workspace sidebar geometry. Both icon rails are 26px from the edge.
+     Controls align by their centers, independent of glyph or button size. */
+  --sidebar-gutter: 0.5rem;
+  --sidebar-item-inset: 0.5rem;
+  --sidebar-icon-slot: 1.25rem;
+  --sidebar-icon-size: 1rem;
+  --sidebar-control-size: 1.5rem;
+  --sidebar-row-height: 2rem;
+  --sidebar-row-gap: 0.125rem;
+  --sidebar-label-gap: 0.375rem;
+  --sidebar-section-gap: 1.5rem;
+  --sidebar-section-content-gap: 0.25rem;
+  --sidebar-content-inset: calc(var(--sidebar-gutter) + var(--sidebar-item-inset));
+  --sidebar-local-rail: calc(var(--sidebar-item-inset) + var(--sidebar-icon-slot) / 2);
+  --sidebar-control-overhang: calc((var(--sidebar-icon-slot) - var(--sidebar-control-size)) / 2);
+  --sidebar-action-inset: calc(var(--sidebar-item-inset) + var(--sidebar-control-overhang));
+  --sidebar-header-action-inset: calc(var(--sidebar-gutter) + var(--sidebar-action-inset));
+
   /* mobile safe areas */
   --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
   --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
@@ -537,6 +555,7 @@ body.tauri-ios {
 
 /* Restore native feedback suppressed by Tailwind's reset; glass opts out below. */
 html[data-touch-device='true'] {
+  --sidebar-control-size: 2.25rem;
   -webkit-tap-highlight-color: initial;
 }
 

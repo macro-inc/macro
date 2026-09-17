@@ -1,10 +1,6 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import {
-  navigateToSidebarView,
-  registerSidebarHotkeys,
-  type SidebarState,
-} from '@components/app/app-sidebar/sidebar';
+import { navigateToSidebarView } from '@components/app/app-sidebar/sidebar';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { hotkeyScopeNeutralAttribute } from '@core/dom-selectors';
 import { useActiveCallsQuery } from '@queries/call/call';
@@ -17,23 +13,18 @@ import { useSidebarUnread } from './queries/use-sidebar-unread';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
 
-export type SidebarRailProps = {
-  sidebarState?: SidebarState;
-  onOpenChange: (open: boolean) => void;
-};
-
 /**
  * The rebuilt app sidebar, behind `enable-new-app-views`: a single always-narrow
  * column of 36px icon buttons, labels in tooltips.
  *
- * Always narrow by design — there is no slim mode and no hover-peek overlay, so
- * `cmd+.` hides the rail outright rather than collapsing it. The `g`-prefixed
+ * Always narrow by design — there is no slim mode or hover-peek overlay.
+ * `cmd+.` toggles navigation in the active workspace. The `g`-prefixed
  * nav shortcuts are unaffected: `GoToHotkeys` is mounted from `Layout` and does
  * not depend on which sidebar renders. There is no room for the leader-key
  * hints the old sidebar paints on its rows, so each button's tooltip carries
  * its shortcut instead.
  */
-export const SidebarRail = (props: SidebarRailProps) => {
+export const SidebarRail = () => {
   const gates = useNavItemGates();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
@@ -42,15 +33,6 @@ export const SidebarRail = (props: SidebarRailProps) => {
   // Keep the rail mounted while the shared call query loads.
   const hasActiveCall = () =>
     !activeCallsQuery.isPending && (activeCallsQuery.data?.length ?? 0) > 0;
-
-  const isExpanded = () => (props.sidebarState ?? 'expanded') === 'expanded';
-
-  // `cmd+.` lives on the rendered sidebar, so the rail has to register it too
-  // or the shortcut goes dead whenever this replaces `AppSidebar`.
-  registerSidebarHotkeys({
-    isSlim: () => !isExpanded(),
-    onOpenChange: props.onOpenChange,
-  });
 
   const _openHome = (event: MouseEvent) => {
     if (event.button !== 0) return;

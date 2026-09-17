@@ -1,5 +1,5 @@
 import CaretDownIcon from '@phosphor/caret-down.svg';
-import { Button, cn } from '@ui';
+import { Button, type ButtonProps, cn } from '@ui';
 import type { JSX } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -28,7 +28,7 @@ function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge-muted px-4 py-3',
+        'flex h-12 min-w-0 shrink-0 items-center justify-between gap-3 border-b border-edge-muted py-3 pl-(--sidebar-content-inset) pr-(--sidebar-header-action-inset) [&_[data-split-panel-close]]:ml-(--sidebar-control-overhang)',
         local.class
       )}
       data-view-sidebar-header=""
@@ -51,13 +51,61 @@ function Title(props: JSX.HTMLAttributes<HTMLHeadingElement>) {
   );
 }
 
+/** The shared inset between the title bar and a create action or toolbar. */
+function Primary(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+  return (
+    <div
+      {...rest}
+      class={cn(
+        'min-w-0 px-(--sidebar-gutter) pt-(--sidebar-gutter) touch:pt-[calc(var(--safe-top,0px)+var(--sidebar-gutter))]',
+        local.class
+      )}
+    >
+      {local.children}
+    </div>
+  );
+}
+
+/** A row of controls whose last button sits on the right icon rail. */
+function Toolbar(props: JSX.HTMLAttributes<HTMLDivElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+  return (
+    <div
+      {...rest}
+      class={cn(
+        'flex h-(--sidebar-row-height) min-w-0 items-center justify-between gap-2 pl-(--sidebar-item-inset) pr-(--sidebar-action-inset)',
+        local.class
+      )}
+    >
+      {local.children}
+    </div>
+  );
+}
+
+function Control(props: ButtonProps) {
+  const [local, rest] = splitProps(props, ['class']);
+  return (
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      {...rest}
+      class={cn(
+        'size-(--sidebar-control-size) shrink-0 rounded-lg',
+        local.class
+      )}
+      data-view-sidebar-control=""
+    />
+  );
+}
+
 function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   return (
     <div
       {...rest}
       class={cn(
-        'flex min-h-0 min-w-0 flex-1 flex-col gap-6 overflow-auto px-2 py-4',
+        'flex min-h-0 min-w-0 flex-1 flex-col gap-(--sidebar-section-gap) overflow-auto px-(--sidebar-gutter) py-(--sidebar-content-inset)',
         local.class
       )}
       data-view-sidebar-content=""
@@ -72,7 +120,10 @@ function Nav(props: JSX.HTMLAttributes<HTMLElement>) {
   return (
     <nav
       {...rest}
-      class={cn('flex min-w-0 shrink-0 flex-col gap-0.5', local.class)}
+      class={cn(
+        'flex min-w-0 shrink-0 flex-col gap-(--sidebar-row-gap)',
+        local.class
+      )}
     >
       {local.children}
     </nav>
@@ -104,7 +155,7 @@ function Item(
       type={local.type ?? 'button'}
       aria-current={ariaCurrent()}
       class={cn(
-        'flex h-9 w-full min-w-0 shrink-0 items-center justify-start gap-2.5 rounded-lg border-0 px-2 py-0 text-left text-sm leading-5 font-normal transition-none touch:h-11',
+        'flex h-(--sidebar-row-height) w-full min-w-0 shrink-0 items-center justify-start gap-(--sidebar-label-gap) rounded-lg border-0 px-(--sidebar-item-inset) py-0 text-left text-sm leading-5 font-normal transition-none touch:h-11',
         'outline-none focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-50',
         local.active
           ? 'bg-active text-ink'
@@ -121,10 +172,29 @@ function Icon(props: JSX.HTMLAttributes<HTMLSpanElement>) {
     <span
       {...rest}
       aria-hidden="true"
+      data-view-sidebar-icon=""
       class={cn(
-        'flex size-5 shrink-0 items-center justify-center',
+        'flex size-(--sidebar-icon-slot) shrink-0 items-center justify-center [&>svg]:size-(--sidebar-icon-size)',
         local.class
       )}
+    >
+      {local.children}
+    </span>
+  );
+}
+
+/** Non-interactive trailing glyphs use the same rail as trailing buttons. */
+function Trailing(props: JSX.HTMLAttributes<HTMLSpanElement>) {
+  const [local, rest] = splitProps(props, ['children', 'class']);
+  return (
+    <span
+      {...rest}
+      aria-hidden="true"
+      class={cn(
+        'ml-auto flex size-(--sidebar-icon-slot) shrink-0 items-center justify-center',
+        local.class
+      )}
+      data-view-sidebar-trailing=""
     >
       {local.children}
     </span>
@@ -151,11 +221,8 @@ function TreeItem(props: {
         {props.children}
       </Item>
       <Show when={props.expanded !== undefined}>
-        <span class="absolute right-1 top-1/2 flex -translate-y-1/2">
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            class="size-7 rounded-md"
+        <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
+          <Control
             label={`${props.expanded ? 'Collapse' : 'Expand'} ${props.label}`}
             aria-expanded={props.expanded}
             onClick={props.onToggle}
@@ -166,7 +233,7 @@ function TreeItem(props: {
                 props.expanded && 'rotate-0'
               )}
             />
-          </Button>
+          </Control>
         </span>
       </Show>
     </div>
@@ -183,7 +250,7 @@ function Branch(
       <div
         {...rest}
         class={cn(
-          'relative min-w-0 pl-5 before:pointer-events-none before:absolute before:inset-y-0 before:left-4.5 before:w-px before:-translate-x-1/2 before:bg-edge-muted',
+          'relative min-w-0 pl-(--sidebar-icon-slot) before:pointer-events-none before:absolute before:inset-y-0 before:left-(--sidebar-local-rail) before:w-px before:-translate-x-1/2 before:bg-edge-muted',
           local.class
         )}
         data-view-sidebar-branch=""
@@ -202,7 +269,7 @@ function Action(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
       type="button"
       {...rest}
       class={cn(
-        'flex h-9 w-full min-w-0 shrink-0 items-center gap-2.5 rounded-lg bg-hover px-2 text-left text-sm leading-5 font-medium text-ink hover:bg-active focus-visible:outline-2 focus-visible:outline-accent touch:h-11',
+        'flex h-(--sidebar-row-height) w-full min-w-0 shrink-0 items-center gap-(--sidebar-label-gap) rounded-lg bg-hover px-(--sidebar-item-inset) text-left text-sm leading-5 font-medium text-ink hover:bg-active focus-visible:outline-2 focus-visible:outline-accent touch:h-11',
         local.class
       )}
     >
@@ -216,7 +283,10 @@ function Footer(props: JSX.HTMLAttributes<HTMLDivElement>) {
   return (
     <div
       {...rest}
-      class={cn('shrink-0 border-t border-edge-muted px-2 py-3', local.class)}
+      class={cn(
+        'shrink-0 border-t border-edge-muted px-(--sidebar-gutter) py-3',
+        local.class
+      )}
     >
       {local.children}
     </div>
@@ -227,10 +297,14 @@ export const ViewSidebar = Object.assign(Root, {
   Root,
   Header,
   Title,
+  Primary,
+  Toolbar,
+  Control,
   Content,
   Nav,
   Item,
   Icon,
+  Trailing,
   TreeItem,
   Branch,
   Action,

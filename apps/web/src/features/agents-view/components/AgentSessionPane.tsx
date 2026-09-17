@@ -1,4 +1,4 @@
-import { ViewSidebarToggle } from '@app/components/view-shell/ViewShell';
+import { ViewShell } from '@app/components/view-shell/ViewShell';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
@@ -19,15 +19,14 @@ function AgentSessionContent() {
 
   return (
     <>
-      <header class="flex h-12 shrink-0 items-center justify-between gap-3 border-b border-edge px-4">
-        <ViewSidebarToggle action="expand" />
+      <ViewShell.TopBar class="justify-between touch:flex">
         <h2 class="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
           {metadata()?.title ?? session()?.name ?? 'New Chat'}
         </h2>
         <Show when={session()?.pullRequestUrl}>
           {(url) => <AgentPullRequestChip url={url()} />}
         </Show>
-      </header>
+      </ViewShell.TopBar>
       <Show
         when={!loadFailed()}
         fallback={

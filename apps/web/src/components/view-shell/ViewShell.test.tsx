@@ -1,4 +1,10 @@
 import {
+  SplitPanelContext,
+  type SplitPanelContextType,
+} from '@components/app/split-layout/context';
+import { SplitPanel } from '@components/app/split-panel';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import {
   cleanup,
   fireEvent,
   render,
@@ -12,7 +18,10 @@ import { ViewSidebar } from './ViewSidebar';
 
 const measurement = vi.hoisted(() => ({ width: (): number => 1200 }));
 
+vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
+
 vi.mock('@solid-primitives/resize-observer', () => ({
+  createResizeObserver: () => {},
   createElementSize: () => ({
     get width() {
       return measurement.width();
@@ -23,12 +32,14 @@ vi.mock('@solid-primitives/resize-observer', () => ({
 
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
+  ...(await import('../ui/utils/press')),
   Button: (
     props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
   ) => (
     <button
       aria-label={props.label}
       aria-expanded={props['aria-expanded']}
+      onMouseDown={props.onMouseDown}
       onClick={props.onClick}
     >
       {props.children}
@@ -37,6 +48,7 @@ vi.mock('@ui', async () => ({
 }));
 
 beforeEach(() => {
+  vi.mocked(registerHotkey).mockClear();
   const values = new Map<string, string>();
   vi.stubGlobal('localStorage', {
     getItem: (key: string) => values.get(key) ?? null,
@@ -44,6 +56,61 @@ beforeEach(() => {
     removeItem: (key: string) => values.delete(key),
   });
   measurement.width = () => 1000;
+});
+
+it('routes Cmd+. to the active split, including while a draft has focus', () => {
+  const [active, setActive] = createSignal('left');
+  function Split(props: { id: string }) {
+    // The shell only consumes the split's hotkey scope and active state.
+    const panel = {
+      splitHotkeyScope: props.id,
+      isPanelActive: () => active() === props.id,
+    } as SplitPanelContextType;
+    return (
+      <SplitPanelContext.Provider value={panel}>
+        <section aria-label={props.id}>
+          <Workspace app="tasks" />
+        </section>
+      </SplitPanelContext.Provider>
+    );
+  }
+  render(() => (
+    <>
+      <Split id="left" />
+      <Split id="right" />
+    </>
+  ));
+  const left = within(screen.getByRole('region', { name: 'left' }));
+  const right = within(screen.getByRole('region', { name: 'right' }));
+  const commands = vi
+    .mocked(registerHotkey)
+    .mock.calls.map(([command]) => command);
+  const toggleActive = () => {
+    const command = commands.find((command) => command.condition?.());
+    expect(command?.hotkey).toBe('cmd+.');
+    expect(command?.runWithInputFocused).toBe(true);
+    expect(command?.keyDownHandler()).toBe(true);
+  };
+
+  left.getByRole('textbox').focus();
+  fireEvent.input(left.getByRole('textbox'), {
+    target: { value: 'Unsent draft' },
+  });
+  toggleActive();
+  expect(left.getByRole('button', { name: 'Show navigation' })).toBeTruthy();
+  expect(right.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+  expect(document.activeElement).toBe(left.getByRole('textbox'));
+  toggleActive();
+  expect(left.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+
+  setActive('right');
+  right.getByRole('textbox').focus();
+  toggleActive();
+  expect(right.getByRole('button', { name: 'Show navigation' })).toBeTruthy();
+  expect(left.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+  expect((left.getByRole('textbox') as HTMLInputElement).value).toBe(
+    'Unsent draft'
+  );
 });
 afterEach(() => {
   cleanup();
@@ -218,6 +285,7 @@ function Workspace(props: { app: string; mounted?: () => void }) {
       <ViewShell.Root asidePreferenceKey={props.app}>
         <ViewShell.Aside>
           <ViewSidebar.Header>
+            <SplitPanel.CloseButton />
             <ViewSidebar.Title>{props.app}</ViewSidebar.Title>
           </ViewSidebar.Header>
         </ViewShell.Aside>
@@ -231,6 +299,60 @@ function Workspace(props: { app: string; mounted?: () => void }) {
     </section>
   );
 }
+
+it('keeps close with the collapsed navigation controls in its owning split', () => {
+  const closeEmail = vi.fn();
+  const closeTasks = vi.fn();
+  const [canClose, setCanClose] = createSignal(true);
+  const controller = (close: () => void) => ({
+    canClose,
+    close,
+    canGoBack: () => false,
+    goBack: vi.fn(),
+    canGoForward: () => false,
+    goForward: vi.fn(),
+  });
+  render(() => (
+    <>
+      <SplitPanel.Root controller={controller(closeEmail)}>
+        <Workspace app="email" />
+      </SplitPanel.Root>
+      <SplitPanel.Root controller={controller(closeTasks)}>
+        <Workspace app="tasks" />
+      </SplitPanel.Root>
+    </>
+  ));
+  const email = within(screen.getByRole('region', { name: 'email' }));
+  const tasks = within(screen.getByRole('region', { name: 'tasks' }));
+  expect(
+    email
+      .getByRole('button', { name: 'Close' })
+      .closest('[data-view-sidebar-header]')
+  ).not.toBeNull();
+
+  fireEvent.click(email.getByRole('button', { name: 'Hide navigation' }));
+  const close = email.getByRole('button', { name: 'Close' });
+  expect(close.closest('[data-split-panel-control-group]')).toBe(
+    email
+      .getByRole('button', { name: 'Show navigation' })
+      .closest('[data-split-panel-control-group]')
+  );
+  fireEvent.click(close);
+  expect(closeEmail).toHaveBeenCalledOnce();
+  expect(closeTasks).not.toHaveBeenCalled();
+  expect(tasks.getByRole('button', { name: 'Hide navigation' })).toBeTruthy();
+
+  fireEvent.click(email.getByRole('button', { name: 'Show navigation' }));
+  expect(
+    email
+      .getByRole('button', { name: 'Close' })
+      .closest('[data-view-sidebar-header]')
+  ).not.toBeNull();
+  setCanClose(false);
+  fireEvent.click(email.getByRole('button', { name: 'Hide navigation' }));
+  expect(email.queryByRole('button', { name: 'Close' })).toBeNull();
+  expect(email.getByRole('button', { name: 'Show navigation' })).toBeTruthy();
+});
 
 it('hides only the owning split and keeps the current item mounted', () => {
   const mounted = vi.fn();

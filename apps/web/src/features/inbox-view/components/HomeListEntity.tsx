@@ -1,3 +1,4 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { Entity, MaybeEntityRow } from '@entity';
@@ -21,18 +22,15 @@ export function HomeListEntity(props: HomeListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
 
   return (
-    <div class="soup-list-entity relative mx-1.5 my-0.5">
+    <div class="soup-list-entity relative mx-(--sidebar-gutter) my-(--sidebar-row-gap)">
       <MaybeEntityRow
         entityId={props.occurrenceKey}
         config={props.entityRowConfig}
       >
-        <div
-          class={cn(
-            'group/home-item relative flex h-8 min-w-0 items-center gap-2 rounded-xl px-2.5 text-left text-sm outline-none touch:h-11',
-            props.checked || props.highlighted
-              ? 'bg-active text-ink'
-              : 'text-ink-muted hover:bg-hover hover:text-ink'
-          )}
+        <ViewSidebar.Item
+          as="div"
+          class="group/home-item relative"
+          active={props.checked || props.highlighted}
           {...pressHandlers((event) => {
             event.preventDefault();
             props.onClick?.(event);
@@ -43,9 +41,9 @@ export function HomeListEntity(props: HomeListEntityProps) {
             when={threadEntity()}
             fallback={<HomeEntityIcon entity={props.entity} />}
           >
-            <span class="flex size-5 shrink-0 items-center justify-center">
+            <ViewSidebar.Icon>
               <ArrowBendUpLeftIcon class="size-4" />
-            </span>
+            </ViewSidebar.Icon>
           </Show>
           <span
             class={cn(
@@ -87,7 +85,7 @@ export function HomeListEntity(props: HomeListEntityProps) {
               class="size-1.5 shrink-0 rounded-full bg-accent"
             />
           </Show>
-        </div>
+        </ViewSidebar.Item>
       </MaybeEntityRow>
     </div>
   );

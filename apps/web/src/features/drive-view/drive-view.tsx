@@ -315,7 +315,9 @@ function DriveViewContent(props: DriveViewProps) {
           <PlusIcon class="size-4" />
         </ViewSidebar.Icon>
         <span class="truncate">New</span>
-        <CaretDownIcon class="ml-auto size-3 shrink-0" />
+        <ViewSidebar.Trailing>
+          <CaretDownIcon class="size-3 shrink-0" />
+        </ViewSidebar.Trailing>
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-48">
         <Dropdown.Group>

@@ -12,7 +12,7 @@ export function TagTree(props: {
   onSelect: (id: string) => void;
 }) {
   return (
-    <ul class="flex min-w-0 flex-col gap-0.5">
+    <ul class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
       <For each={props.nodes}>
         {(node) => {
           const open = () => props.isExpanded(node);

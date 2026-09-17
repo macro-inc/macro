@@ -113,3 +113,20 @@ it('skips motion and removes content immediately with reduced motion', () => {
   expect(view.queryByText('Section rows')).toBeNull();
   expect(animations).toHaveLength(0);
 });
+
+it('animates width for a navigation overlay while retaining it until exit completes', () => {
+  const [open, setOpen] = createSignal(true);
+  const view = render(() => (
+    <CollapseTransition open={open()} axis="width">
+      <div>Navigation overlay</div>
+    </CollapseTransition>
+  ));
+  setOpen(false);
+  expect(view.getByText('Navigation overlay').isConnected).toBe(true);
+  expect(animations[0].frames.map((frame) => frame.width)).toEqual([
+    '200px',
+    '0px',
+  ]);
+  animations[0].onfinish?.();
+  expect(view.queryByText('Navigation overlay')).toBeNull();
+});

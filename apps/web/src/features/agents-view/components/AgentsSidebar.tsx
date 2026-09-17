@@ -353,7 +353,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           open={recentChatsOpen()}
           onOpenChange={setRecentChatsOpen}
           class={cn(
-            'flex min-h-0 flex-col gap-1',
+            'flex min-h-0 flex-col',
             recentChatsOpen() ? 'flex-1' : 'shrink-0'
           )}
         >
