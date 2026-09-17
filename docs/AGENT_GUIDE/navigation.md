@@ -339,6 +339,10 @@ Home does not bind Delete or Backspace to deleting list items. These keys remain
 available to the open editor (for example, clearing a selected spreadsheet range).
 Use the item menu to delete an item from Home.
 
+`C A` (Create → Agent) opens the Agents new-conversation page and focuses its
+message input; `C Shift+A` requests a new split. It does not open a modal or
+create a session before the user sends. Repeating it focuses the existing draft.
+
 ### Content already open
 
 Entity content can be open in only one split or inline preview/detail view at a

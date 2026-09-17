@@ -152,30 +152,16 @@ composer with placeholder **`Ask AI, @mention anything`**. Click it, `type_text`
 press Enter — the app creates a chat and navigates to `/app/chat/<uuid>`. Alternatively,
 when `enable-chat-v3-agents` is on (default in dev;
 `VITE_ENABLE_CHAT_V3_AGENTS` overrides), `Create` → `Agent`, or keyboard `c`
-then `a`, opens the **Start a session** composer popover. A centered title sits
-above two rounded boxes of equal width: a shallow agent strip and a prompt box
-about twice its height, separated by a small gap. The picker has
-compact choices in a horizontally scrolling `radiogroup` (`aria-label="Agent"`,
-`aria-orientation="horizontal"`, `role="radio"`, `aria-checked`). All agents are
-available by scrolling sideways, with recent successful choices first.
-An accent **Create agent** button stays fixed to the right of the strip.
-It closes the session composer and opens the new-agent form at
-`/app/settings/agents?createAgent=true`; it does not create a session.
-Recents are remembered per user on this device. With no history, **Macro**
-`@macro` (the default), **Cursor** `@cursor`, and **Codex** `@codex` lead, followed by saved agents
-the caller can start: their own, team-shared personas, and selected-channel
-personas they can `@` mention.
-Without a connected Cursor API key, Cursor is a **Connect Cursor** button:
-clicking it closes the composer and opens Settings → Harness without creating
-a session. It is keyboard-accessible; arrow navigation focuses it without
-activating it. Connected Cursor remains a selectable agent. Setup navigation
-is disabled while a session is being created or its setup is being retried.
-Codex composer choices and its Settings → Harness section require both
-`enable-chat-v3-agents` and `enable-codex-agents`.
-Codex shows **Set up Codex** until ChatGPT is connected and a cloud environment
-is saved in Settings → Harness. New sessions use the saved environment and
-always start from `main`. The composer hides model overrides for
-Codex because this harness does not expose model selection. Codex assistant
+then `a`, opens `/app/component/agents` with the new-conversation input focused
+and ready to type. No session is created until you send a prompt. If Agents is
+already open on its roster, the shortcut returns it to the composer; if its
+composer already has a draft, that draft stays intact. `C Shift+A` requests a
+new split using the standard split-navigation behavior. The shared agent/model
+selector and coding repository controls are described above.
+
+## Codex session output
+
+Codex assistant
 text appears when the provider supplies a completed message or final snapshot.
 Incomplete text fragments are withheld; tool activity and thinking still update
 during the turn. Verified Codex PR associations appear as a completed **Found
@@ -184,60 +170,7 @@ PR chip. This reports an existing PR; it does not publish one. Opening a detache
 session reads saved history; sending a message reattaches the runtime.
 Codex file citations render as inline code with the path and
 line range, such as `.gitkeep:1` or `src/main.rs:2-12`; they do not link to a local
-file or a guessed remote revision. A recorded two-turn Codex conversation is
-covered by ACP/fold snapshots and checked with the production Markdown renderer. Setup navigation,
-selection, and the create/prompt payloads were verified in Chromium with mocked
-app navigation and backend state; no remote session was created by that check.
-Each row shows its `@handle` beneath the name. There are no coding tags;
-default models appear only in the prompt's model selector.
-There is no search field or browse/expand control. Left/Right change the selected
-agent and scroll it into view; Home/End jump to the first/last available agent.
-Unavailable agents without a connection action are skipped.
-
-The prompt box uses the agent session composer's surface, regular message text,
-and arrow send button, with a three-line editing area. It names the
-current selection:
-`What would you like Macro to work on?` becomes
-`What would you like Cursor to work on?` when Cursor is selected. Its aria-label
-is `Task for the agent`. Autofocus lands on that prompt so you can type
-immediately; skip it on touch so the keyboard does not jump up unsolicited.
-The prompt and agent strip share the same surface layer and background.
-A centered caption below the prompt describes the selected runtime: Macro
-shows “Starts quickly and runs in-memory. Great for workspace tasks”; Cursor
-shows “Bring in Cursor for some heavier coding work”. Local-connector agents
-are still excluded from creation by this modal's managed-session endpoint.
-The **Model override** selector (`aria-label="Model override"`) sits inside the
-prompt box at the bottom left. It
-shows `default (<model name>)` when using the agent's configured default and
-the model name alone when overridden. It has no model icon. Saved-agent defaults
-come from their configuration; built-in defaults are loaded from model discovery.
-While a default is unknown, the selector reads `default`. Changing agent resets
-the override. Tab order is selected agent row (and any connection action) →
-**Create agent** → prompt → model → **Start session**.
-Escape in the prompt first blurs to the dialog; a second Escape closes it.
-The prompt footer’s start control is a **Live / Background** dropdown
-(`aria-label="Session start mode"`) to the left of the circular send button.
-**Live** (default) opens the new session; **Background** closes the composer
-and shows a bottom-right toast **Session started in background** with an
-**Open session** action. The send button starts the selected mode. The
-dropdown lists both options; **Background** shows `Cmd` / `Ctrl`. The choice
-persists per user in localStorage.
-Holding `Cmd`/`Ctrl` previews Background on the dropdown and send button only
-while Live is selected; releasing restores Live. If Background is already
-selected, the modifier does nothing.
-`Enter` starts the selected mode (`Shift+Enter` still inserts a newline).
-`Cmd`/`Ctrl+Enter` starts in the background when Live is selected.
-The send button shows a spinner and is labelled **Starting…**
-while the server creates the session, applies the model override, and accepts the
-first prompt. Live mode then closes
-and opens the real `/app/agent/<uuid>` URL. It never navigates to a temporary
-`pending-…` URL. Creation failures keep the prompt in the modal and show **Retry**.
-If model setup or prompt delivery fails after creation, **Retry** reuses that
-session, and **Open session** opens it directly; agent and model selection stay
-locked to the session already created.
-Leaving Macro selected uses the backend's in-memory default in every
-environment, including production; it does not provision a Daytona container.
-Explicit coding-agent selections still use their configured runtimes.
+file or a guessed remote revision.
 
 ## Starting from Home
 
