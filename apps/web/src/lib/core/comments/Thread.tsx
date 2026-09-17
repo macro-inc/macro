@@ -172,10 +172,13 @@ function MessageThreadBody(props: ThreadBodyProps) {
             onSend={async (snapshot) => {
               const { thread_id: _threadId, ...message } =
                 buildPostMessageSendPayload({ snapshot }).message;
-              await context.messageOperations?.createComment({
+              const created = await context.messageOperations?.createComment({
                 ...message,
                 threadId: DRAFT_THREAD_ID,
               });
+              // Throw on failure so the draft composer is not cleared and the
+              // comment can be retried (createComment resolves null, not rejects).
+              if (!created) throw new Error('Failed to post comment');
             }}
           />
         }

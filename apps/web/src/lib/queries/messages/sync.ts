@@ -123,34 +123,41 @@ export function handleMessageEvent(
     applyThreadState(parent, change.state);
     return;
   }
-  if (
-    consumeNonce(
-      change.type === 'reaction_changed'
-        ? MessageNonceKeys.REACTION
-        : MessageNonceKeys.MESSAGE,
-      event.nonce ?? ''
-    )
-  )
-    return;
+  const isRootPost = change.type === 'posted' && !change.message.thread_id;
+  const isOwnEcho = consumeNonce(
+    change.type === 'reaction_changed'
+      ? MessageNonceKeys.REACTION
+      : MessageNonceKeys.MESSAGE,
+    event.nonce ?? ''
+  );
+  // A root posted before the bottom page loaded cannot be inserted — the
+  // sender's own optimistic insert no-ops there too — so recover it with a
+  // fresh fetch once the page settles, even when the echo is the sender's own.
+  if (isRootPost && refetchTimelineAwaitingFirstPage(parent)) return;
+  if (isOwnEcho) return;
   applyMessage(change.message, change.type);
-  if (change.type === 'posted' && !change.message.thread_id) {
-    if (refetchTimelineAwaitingFirstPage(parent)) return;
-    if (parent.type === 'document') {
-      void loadDocumentRootState(parent, change.message.id);
-    }
+  if (isRootPost && parent.type === 'document') {
+    void loadDocumentRootState(parent, change.message.id);
   }
 }
 
 /**
  * A root posted before the bottom page's first fetch resolved cannot be
  * inserted, and a response the server already computed would overwrite it, so
- * that fetch runs again. Slices around a message never need it.
+ * that fetch runs again once it settles (invalidating a fetch still in flight
+ * only dedupes into it). Slices around a message never need it.
  */
 function refetchTimelineAwaitingFirstPage(parent: MessageParent): boolean {
   const queryKey = getMessageTimelineQueryKey(parent, null);
-  const timeline = queryClient.getQueryState<MessageTimelineData>(queryKey);
-  if (!timeline || timeline.data) return false;
-  void queryClient.invalidateQueries({ queryKey, exact: true });
+  const query = queryClient
+    .getQueryCache()
+    .find<MessageTimelineData>({ queryKey, exact: true });
+  if (!query || query.state.data) return false;
+  const refetch = () =>
+    queryClient.invalidateQueries({ queryKey, exact: true });
+  const inFlight = query.promise;
+  if (inFlight) void inFlight.catch(() => {}).finally(refetch);
+  else void refetch();
   return true;
 }
 

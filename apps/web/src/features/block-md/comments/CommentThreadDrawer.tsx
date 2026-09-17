@@ -104,7 +104,6 @@ function MessagePinnedReplyComposer(props: {
   root: Root;
   createComment: MessageCommentOperations['createComment'];
 }) {
-  let clear: (() => void) | undefined;
   const context = useContext(CommentsContext);
   const typing = usePostTypingUpdateMutation();
   const parent = () => ({ type: 'document' as const, id: context.documentId });
@@ -118,9 +117,6 @@ function MessagePinnedReplyComposer(props: {
           parent={parent()}
           input={{ mode: 'reply', placeholder: 'Reply...' }}
           autofocus={false}
-          onReady={(handle) => {
-            clear = handle.clear;
-          }}
           onStartTyping={() =>
             typing.mutate({
               parent: parent(),
@@ -142,8 +138,9 @@ function MessagePinnedReplyComposer(props: {
               ...message,
               threadId: props.root.threadId,
             });
-            // Keep the draft on failure so the user can retry.
-            if (created) clear?.();
+            // Throw on failure so the composer is not cleared and the draft
+            // survives for a retry (createComment resolves null, not rejects).
+            if (!created) throw new Error('Failed to post reply');
           }}
         />
       </div>

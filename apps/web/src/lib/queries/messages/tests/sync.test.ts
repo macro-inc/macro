@@ -410,10 +410,9 @@ describe.each(['channel', 'document'] as const)(
           notification_policy: 'Default',
         },
       });
-      expect(invalidate).toHaveBeenCalledWith({
-        queryKey: timelineKey(),
-        exact: true,
-      });
+      // The refetch waits for the in-flight page to settle rather than
+      // deduping into it, so nothing is invalidated yet.
+      expect(invalidate).not.toHaveBeenCalled();
       expect(mocks.thread).not.toHaveBeenCalled();
       resolveFetch({
         pageParams: [null],
@@ -422,6 +421,49 @@ describe.each(['channel', 'document'] as const)(
         ],
       });
       await fetching.catch(() => undefined);
+      await vi.waitFor(() =>
+        expect(invalidate).toHaveBeenCalledWith({
+          queryKey: timelineKey(),
+          exact: true,
+        })
+      );
+    });
+    it("recovers the sender's own root posted before the bottom page loads", async () => {
+      let resolveFetch: (data: MessageTimelineData) => void = () => {};
+      const fetching = testQueryClient.fetchQuery({
+        queryKey: timelineKey(),
+        queryFn: () =>
+          new Promise<MessageTimelineData>((resolve) => {
+            resolveFetch = resolve;
+          }),
+      });
+      registerNonce(MessageNonceKeys.MESSAGE, 'own-send');
+      const invalidate = vi.spyOn(testQueryClient, 'invalidateQueries');
+      handleMessageEvent({
+        parent,
+        actor: 'macro|a@example.com',
+        nonce: 'own-send',
+        change: {
+          type: 'posted',
+          message: message(parent, 'own-root'),
+          mentions: [],
+          notification_policy: 'Default',
+        },
+      });
+      // The sender's own optimistic insert no-oped while the page was loading,
+      // and the echo alone would be consumed by the nonce; the recovery fetch
+      // still runs once the page settles.
+      resolveFetch({
+        pageParams: [null],
+        pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+      });
+      await fetching.catch(() => undefined);
+      await vi.waitFor(() =>
+        expect(invalidate).toHaveBeenCalledWith({
+          queryKey: timelineKey(),
+          exact: true,
+        })
+      );
     });
     // An expanded thread whose first replies fetch is still in flight: the root
     // is in the timeline, but the thread's own query has not resolved yet.
