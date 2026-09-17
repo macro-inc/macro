@@ -438,11 +438,6 @@ from an opened file.
 Calendars default to Day on phones and Week on desktop. The selected view is
 remembered locally on each device.
 
-Primary-calendar event pills share the chat composer's surface: charcoal with a
-glass rim/shadow in dark mode, pale with a fine outline and soft shadows in light
-mode. Other calendars use subtle source-color tints of that surface; selection
-adds an accent outline. Month-view timed events keep their compact dots.
-
 Calendar event creation and editing open in a bottom sheet on touch devices,
 with scrollable content above the keyboard. Desktop retains the centered dialog.
 Dismissing a changed event still asks before discarding the draft.
