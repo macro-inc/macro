@@ -9,16 +9,16 @@ use axum::{
 };
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationRejection, MacroAuthorizationService,
-    MacroAuthorizationState, UserOrInternal, UserOrInternalAuthorization,
+    MacroAuthorizationState, UserOrInternal,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 
 use crate::domain::models::GtmInviteError;
 
-/// Branded authenticated principal that has already been proven to be Macro
-/// staff.
+/// Authenticated Macro staff principal for GTM invite staff endpoints.
 pub struct GtmMacroStaffExtractor<Auth> {
-    /// The authenticated principal, already checked as Macro staff.
-    pub authorization: UserOrInternalAuthorization,
+    /// The authenticated staff user's id.
+    pub macro_user_id: MacroUserIdStr<'static>,
     _auth: PhantomData<fn() -> Auth>,
 }
 
@@ -55,17 +55,13 @@ where
         let authorization =
             MacroAuthorizationExtractor::<Auth, UserOrInternal>::from_request_parts(parts, state)
                 .await?;
-        if !authorization
-            .authorization
-            .user
-            .macro_user_id
-            .is_macro_staff()
-        {
+        let macro_user_id = authorization.authorization.user.macro_user_id;
+        if !macro_user_id.is_macro_staff() {
             return Err(GtmMacroStaffRejection::NotStaff);
         }
 
         Ok(Self {
-            authorization: authorization.authorization,
+            macro_user_id,
             _auth: PhantomData,
         })
     }

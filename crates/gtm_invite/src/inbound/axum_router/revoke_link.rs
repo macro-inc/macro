@@ -33,10 +33,10 @@ use crate::domain::ports::GtmInviteService;
 #[tracing::instrument(skip_all, fields(link_id = %id), err)]
 pub async fn handler<T: GtmInviteService, R, Auth: MacroAuthorizationService>(
     State(state): State<GtmInviteRouterState<T, R, Auth>>,
-    authorization: GtmMacroStaffExtractor<Auth>,
+    staff: GtmMacroStaffExtractor<Auth>,
     Path(id): Path<Uuid>,
 ) -> Result<Json<GtmInviteLink>, GtmInviteError> {
-    let caller = &authorization.authorization.user.macro_user_id;
+    let caller = &staff.macro_user_id;
     let link = state.service.revoke_link(caller, id).await?;
     let free_months = state.service.config().free_months;
 
