@@ -13,7 +13,8 @@
    the user's inbox (locally: Mailpit).
 5. First login auto-creates the user, seeds onboarding content (a "Macro Support x <name>"
    channel, a "Macro how to guide" doc favorite, three sample tasks), and lands on
-   `/app/component/inbox`.
+   `/app/component/inbox`. The starter documents share a personal `docs` tag; the
+   guide's `#` example is an inline mention of that same tag.
 
 ## Mailpit (local email)
 

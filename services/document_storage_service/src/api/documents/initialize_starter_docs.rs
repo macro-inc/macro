@@ -184,8 +184,18 @@ pub async fn handler(
         .collect();
     let guide_id = starter_doc_id(user_id, HOW_TO_GUIDE_NAME).to_string();
 
+    // Resolve the tag before creating documents so the inline example and
+    // document properties reference the same personal tag. Fail before creation
+    // if provisioning fails, allowing a retry to seed a working mention.
+    let (tag_definition_id, tag_option_id) = resolve_docs_tag(&state, user_id)
+        .await
+        .ok_or_else(|| internal_error("failed to resolve starter doc tag"))?;
     let fill = |template: &str| {
-        let mut filled = template.to_string();
+        let mut filled = template
+            .replace("DOCS_TAG_OPTION_ID", &tag_option_id.to_string())
+            .replace("DOCS_TAG_DEFINITION_ID", &tag_definition_id.to_string())
+            .replace("DOCS_TAG_LABEL", DOCS_TAG_LABEL)
+            .replace("DOCS_TAG_COLOR", DOCS_TAG_COLOR);
         for (task, id) in STARTER_TASKS.iter().zip(&task_ids) {
             filled = filled
                 .replace(task.id_placeholder, id)
@@ -304,11 +314,6 @@ pub async fn handler(
     // plus the personal "docs" tag. Best-effort like the mention backlinks
     // — a decoration failure on an existing document could never be retried
     // into success, so log and continue instead of failing the request.
-    let docs_tag = if created_now.is_empty() {
-        None
-    } else {
-        resolve_docs_tag(&state, user_id).await
-    };
     let organization_id = user_context
         .authorization
         .user
@@ -368,19 +373,17 @@ pub async fn handler(
                 });
         }
 
-        if let Some((tag_definition_id, tag_option_id)) = docs_tag {
-            let _ = state
-                .properties_service
-                .add_entity_property_option(&receipt, tag_definition_id, tag_option_id)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(
-                        error=?e,
-                        document_id=%document_id,
-                        "failed to tag starter doc"
-                    );
-                });
-        }
+        let _ = state
+            .properties_service
+            .add_entity_property_option(&receipt, tag_definition_id, tag_option_id)
+            .await
+            .inspect_err(|e| {
+                tracing::error!(
+                    error=?e,
+                    document_id=%document_id,
+                    "failed to tag starter doc"
+                );
+            });
     }
 
     // Runs on every call, not just document creation: `add_favorite` is an
