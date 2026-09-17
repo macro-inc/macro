@@ -1,3 +1,5 @@
+import { getEntityNotifications } from '@app/features/soup/entity-notifications';
+import type { EntityData } from '@entity/types/entity';
 import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import { createEffect, createMemo, createRoot, createSignal } from 'solid-js';
@@ -112,6 +114,91 @@ describe('createNotificationSource', () => {
       isLoading: false,
       refetch: vi.fn(),
     };
+  });
+
+  it.each(['array', 'accessor'] as const)(
+    'applies done and undo to GraphQL-attached notifications (%s) before server snapshots change',
+    (attachment) => {
+      mocks.graphqlEnabled = true;
+      mocks.graphqlCacheEnabled = true;
+      const row = notification(
+        `soup-attached-${attachment}`,
+        'document',
+        'task'
+      );
+      mocks.notificationsQuery = {
+        data: [row],
+        transport: 'graphql',
+        isFetching: false,
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      const entity = {
+        id: 'task',
+        type: 'document',
+        name: 'Task',
+        notifications: attachment === 'array' ? [row] : () => [row],
+      } as EntityData & {
+        notifications: UnifiedNotification[] | (() => UnifiedNotification[]);
+      };
+      const displayedState = () =>
+        getEntityNotifications(entity, source)[0].state;
+      try {
+        expect(displayedState()).toBe('unseen');
+        setDoneOverride([row.id], true);
+        expect(source.notifications()[0].state).toBe('done'); // control: the override is installed
+        expect(
+          displayedState(),
+          'GraphQL Soup must honor the same in-flight done override'
+        ).toBe('done');
+        setDoneOverride([row.id], false);
+        expect(source.notifications()[0].state).toBe('seen');
+        expect(
+          displayedState(),
+          'Undo must reopen the row without waiting for server data'
+        ).toBe('seen');
+        expect(row.state).toBe('unseen'); // never mutate the server snapshot
+      } finally {
+        setDoneOverride([row.id], undefined);
+        dispose();
+      }
+    }
+  );
+
+  it('undo reopens a GraphQL-attached notification whose cached server state is already done', () => {
+    mocks.graphqlEnabled = true;
+    mocks.graphqlCacheEnabled = true;
+    const row = {
+      ...notification('soup-undo-committed', 'document', 'task'),
+      state: 'done' as const,
+    };
+    mocks.notificationsQuery = {
+      data: [row],
+      transport: 'graphql',
+      isFetching: false,
+    };
+    const { source, dispose } = createRoot((dispose) => ({
+      source: createNotificationSource({} as ConnectionGatewayWebsocket),
+      dispose,
+    }));
+    const entity = {
+      id: 'task',
+      type: 'document',
+      name: 'Task',
+      notifications: [row],
+    } as EntityData & { notifications: UnifiedNotification[] };
+    try {
+      expect(getEntityNotifications(entity, source)[0].state).toBe('done');
+      setDoneOverride([row.id], false);
+      expect(source.notifications()[0].state).toBe('seen');
+      expect(getEntityNotifications(entity, source)[0].state).toBe('seen');
+      expect(row.state).toBe('done');
+    } finally {
+      setDoneOverride([row.id], undefined);
+      dispose();
+    }
   });
 
   it('keeps done through a late seen action, and reopens as seen across stale snapshots', async () => {

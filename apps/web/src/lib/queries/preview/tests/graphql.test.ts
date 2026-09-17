@@ -8,6 +8,7 @@ import type {
   ItemPreviewQueryVariables,
   ItemPreviewsQuery,
 } from '@service-storage/graphql/generated/graphql';
+import { parse, visit } from 'graphql';
 import { type Accessor, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -656,6 +657,50 @@ describe('GraphQL item previews', () => {
     });
   });
 
+  it.each(['document', 'chat', 'project'] as const)(
+    'optimistic %s rename writes the canonical name field consumed by Soup, not only displayName',
+    async (type) => {
+      const writes: Parameters<CacheHost['writeQuery']>[0][] = [];
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        disabled: false,
+        writeQuery: async (write: Parameters<CacheHost['writeQuery']>[0]) => {
+          writes.push(write);
+        },
+      });
+
+      await setGraphqlPreviewName(
+        { id: 'rename-target', type },
+        'Renamed',
+        'viewer'
+      );
+
+      expect(writes).toHaveLength(1);
+      const write = writes[0];
+      // Resolve aliases through the emitted document. Soup reads name via
+      // documentName/chatName/projectName; updating displayName alone only
+      // changes previews and leaves the list's normalized name field stale.
+      const nameResponseKeys = new Set<string>();
+      visit(parse(write.query), {
+        Field(node) {
+          if (node.name.value === 'name') {
+            nameResponseKeys.add(node.alias?.value ?? node.name.value);
+          }
+        },
+      });
+      const data = write.data as {
+        user: { soup: { items: Array<Record<string, unknown>> } };
+      };
+      const target = data.user.soup.items.find(
+        (item) => item.id === 'rename-target'
+      );
+      expect(target).toBeDefined();
+      expect(
+        [...nameResponseKeys].some((key) => target?.[key] === 'Renamed'),
+        'The optimistic write must update the canonical GraphQL name field'
+      ).toBe(true);
+    }
+  );
+
   it('writes optimistic patches and complete creation records to normalized cache', async () => {
     vi.useFakeTimers();
     const writeQuery = vi.fn(async () => undefined);
@@ -691,11 +736,11 @@ describe('GraphQL item previews', () => {
               id: 'user-1',
               soup: {
                 items: [
-                  {
+                  expect.objectContaining({
                     __typename: 'GraphqlSoupDocument',
                     id: 'doc-1',
                     displayName: 'Renamed',
-                  },
+                  }),
                 ],
               },
             },

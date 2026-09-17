@@ -7,6 +7,7 @@ import {
 import { err, ok } from 'neverthrow';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type { TaskEntity } from '../types/entity';
 
 const mocks = vi.hoisted(() => ({
   graphqlEnabled: vi.fn(() => true),
@@ -14,6 +15,8 @@ const mocks = vi.hoisted(() => ({
   deleteCall: vi.fn(),
   deleteReminder: vi.fn(),
   deleteSchedule: vi.fn(),
+  moveToFolder: vi.fn(),
+  copyItem: vi.fn(),
   removeSoup: vi.fn(),
   removeSearch: vi.fn(),
   rollbackSoup: vi.fn(),
@@ -23,8 +26,8 @@ const mocks = vi.hoisted(() => ({
 }));
 vi.mock('@core/component/FileList/itemOperations', () => ({
   deleteItem: mocks.deleteItem,
-  copyItem: vi.fn(),
-  moveToFolder: vi.fn(),
+  copyItem: mocks.copyItem,
+  moveToFolder: mocks.moveToFolder,
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { failure: mocks.failure },
@@ -44,6 +47,13 @@ vi.mock('@queries/agent-session/entity-mutations', () => ({
 vi.mock('@queries/soup/cache', () => ({
   removeSoupEntities: mocks.removeSoup,
   removeSearchEntities: mocks.removeSearch,
+  getSoupEntityById: vi.fn(),
+  optimisticUpdateSoupEntity: vi.fn(() => ({ rollback: vi.fn() })),
+  invalidateSoupEntity: vi.fn(),
+  invalidateSoupQueriesReferencing: vi.fn(),
+  removeSoupEntitiesFromQueriesReferencing: vi.fn(() => ({
+    rollback: vi.fn(),
+  })),
 }));
 vi.mock('@queries/soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: mocks.refresh,
@@ -69,7 +79,13 @@ import {
   usePendingGraphqlSoupDeleteIds,
 } from '@queries/soup/graphql/optimistic-deletions';
 import { BulkDeleteFailure } from './bulk-delete-result';
-import { createBulkDeleteDssItemsMutation } from './dss';
+import {
+  createBulkCopyDssEntityMutation,
+  createBulkDeleteDssItemsMutation,
+  createBulkMoveToProjectDssEntityMutation,
+  createBulkRemoveFromProjectDssEntityMutation,
+  createMoveToProjectDssEntityMutation,
+} from './dss';
 
 let client: QueryClient;
 let dispose: (() => void) | undefined;
@@ -115,6 +131,8 @@ beforeEach(() => {
   mocks.removeSearch.mockReturnValue({ rollback: mocks.rollbackSearch });
   mocks.refresh.mockResolvedValue(undefined);
   mocks.deleteItem.mockResolvedValue(true);
+  mocks.moveToFolder.mockResolvedValue(true);
+  mocks.copyItem.mockResolvedValue('copied-task');
   onlineManager.setOnline(true);
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
 });
@@ -149,6 +167,116 @@ function cacheRows(
   });
   return () => [...rows].sort();
 }
+
+function mountMutation<T>(factory: () => T): T {
+  let mutation!: T;
+  function Probe() {
+    mutation = factory();
+    return null;
+  }
+  dispose = render(
+    () => (
+      <QueryClientProvider client={client}>
+        <Probe />
+      </QueryClientProvider>
+    ),
+    document.body
+  );
+  return mutation;
+}
+
+const folderTask: TaskEntity = {
+  id: 'task',
+  type: 'document',
+  name: 'Task',
+  ownerId: 'viewer',
+  fileType: 'md',
+  subType: { type: 'task' },
+  projectId: 'source',
+};
+
+// These writes still use REST transport even when Soup readers use GraphQL.
+// Their successful completion must revalidate GraphQL membership too; marking
+// only TanStack soup keys stale cannot update a mounted urql list.
+describe('GraphQL Soup membership after list actions', () => {
+  it.each([true, false])(
+    'revalidates single folder moves only for GraphQL Soup (%s)',
+    async (graphql) => {
+      mocks.graphqlEnabled.mockReturnValue(graphql);
+      const mutation = mountMutation(createMoveToProjectDssEntityMutation);
+      await mutation.mutateAsync({
+        entity: folderTask,
+        project: { id: 'destination' },
+      });
+      expect(mocks.moveToFolder).toHaveBeenCalledWith({
+        itemType: 'document',
+        id: 'task',
+        folderId: 'destination',
+      });
+      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
+    }
+  );
+
+  it.each([true, false])(
+    'revalidates bulk folder moves only for GraphQL Soup (%s)',
+    async (graphql) => {
+      mocks.graphqlEnabled.mockReturnValue(graphql);
+      const mutation = mountMutation(createBulkMoveToProjectDssEntityMutation);
+      await mutation.mutateAsync({
+        entities: [folderTask],
+        project: { id: 'destination', name: 'Destination' },
+      });
+      expect(mocks.moveToFolder).toHaveBeenCalledWith({
+        itemType: 'document',
+        id: 'task',
+        folderId: 'destination',
+      });
+      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
+    }
+  );
+
+  it.each([true, false])(
+    'revalidates folder removal only for GraphQL Soup (%s)',
+    async (graphql) => {
+      mocks.graphqlEnabled.mockReturnValue(graphql);
+      const mutation = mountMutation(
+        createBulkRemoveFromProjectDssEntityMutation
+      );
+      await mutation.mutateAsync({
+        entities: [folderTask],
+      });
+      expect(mocks.moveToFolder).toHaveBeenCalledWith({
+        itemType: 'document',
+        id: 'task',
+        folderId: null,
+      });
+      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
+    }
+  );
+
+  it.each([true, false])(
+    'refreshes GraphQL Soup after duplicate returns its new id (%s)',
+    async (graphql) => {
+      mocks.graphqlEnabled.mockReturnValue(graphql);
+      const response = deferred<string>();
+      mocks.copyItem.mockReturnValue(response.promise);
+      const mutation = mountMutation(createBulkCopyDssEntityMutation);
+      const result = mutation.mutateAsync({
+        entities: [folderTask],
+        name: 'Task copy',
+      });
+      try {
+        await vi.waitFor(() => expect(mocks.copyItem).toHaveBeenCalledOnce());
+        // No optimistic placeholder is required when the new id is unknown.
+        expect(mocks.refresh).not.toHaveBeenCalled();
+      } finally {
+        response.resolve('copied-task');
+        await result;
+      }
+      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
+    }
+  );
+});
 
 describe('bulk delete GraphQL optimism', () => {
   it.each(['throw', 'false'] as const)(
