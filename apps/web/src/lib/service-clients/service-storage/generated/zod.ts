@@ -9487,7 +9487,7 @@ export const listInitiativesResponse = zod
             descriptionDocumentId: zod
               .uuid()
               .describe(
-                'Id of the markdown document that holds an initiative\'s description.\n\nThe documents side mints it as a UUID; `\"Document\".id` and\n`initiative.description_document_id` store it as TEXT, so it is parsed once at the\nadapter boundary and displayed back when bound in SQL.'
+                "Id of the markdown document that holds an initiative's description."
               ),
             id: zod
               .uuid()
@@ -9538,7 +9538,7 @@ export const createInitiativeResponse = zod
     descriptionDocumentId: zod
       .uuid()
       .describe(
-        'Id of the markdown document that holds an initiative\'s description.\n\nThe documents side mints it as a UUID; `\"Document\".id` and\n`initiative.description_document_id` store it as TEXT, so it is parsed once at the\nadapter boundary and displayed back when bound in SQL.'
+        "Id of the markdown document that holds an initiative's description."
       ),
     id: zod
       .uuid()
@@ -9620,7 +9620,7 @@ export const getInitiativeResponse = zod
     descriptionDocumentId: zod
       .uuid()
       .describe(
-        'Id of the markdown document that holds an initiative\'s description.\n\nThe documents side mints it as a UUID; `\"Document\".id` and\n`initiative.description_document_id` store it as TEXT, so it is parsed once at the\nadapter boundary and displayed back when bound in SQL.'
+        "Id of the markdown document that holds an initiative's description."
       ),
     id: zod
       .uuid()
@@ -9779,7 +9779,7 @@ export const updateInitiativeResponse = zod
     descriptionDocumentId: zod
       .uuid()
       .describe(
-        'Id of the markdown document that holds an initiative\'s description.\n\nThe documents side mints it as a UUID; `\"Document\".id` and\n`initiative.description_document_id` store it as TEXT, so it is parsed once at the\nadapter boundary and displayed back when bound in SQL.'
+        "Id of the markdown document that holds an initiative's description."
       ),
     id: zod
       .uuid()

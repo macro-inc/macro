@@ -7,9 +7,5 @@
 
 /**
  * Id of the markdown document that holds an initiative's description.
-
-The documents side mints it as a UUID; `"Document".id` and
-`initiative.description_document_id` store it as TEXT, so it is parsed once at the
-adapter boundary and displayed back when bound in SQL.
  */
 export type DescriptionDocumentId = string;
