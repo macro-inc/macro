@@ -5,11 +5,6 @@ import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/
 
 export const NO_LINK_SHARE = 'NONE' as const;
 
-/**
- * Entity types whose backend honors `sharePermission.teamShareAccessLevel`.
- * Documents: `PATCH /documents/{id}`. Chats: `PATCH /chats/{id}`.
- * Calls: `PATCH /call/record/{id}`, view only.
- */
 const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ItemType> = new Set<ItemType>([
   'document',
   'chat',
@@ -43,6 +38,8 @@ export const NO_TEAM_SHARE = 'NONE' as const;
 export type TeamShareLevel = Exclude<AccessLevel, 'owner'>;
 
 export type TeamShareScope = TeamShareLevel | typeof NO_TEAM_SHARE;
+
+export type CallTeamShareScope = typeof NO_TEAM_SHARE | 'view';
 
 export type TeamSharePayload = Required<
   Pick<UpdateSharePermissionRequestV2, 'teamShareAccessLevel'>
@@ -100,10 +97,12 @@ export const TEAM_SHARE_SCOPE_OPTIONS = (
   label: TEAM_SHARE_COPY[scope],
 }));
 
-/** Calls reject comment and edit team grants. */
-export const CALL_TEAM_SHARE_SCOPE_OPTIONS = TEAM_SHARE_SCOPE_OPTIONS.filter(
-  (option) => option.value === 'NONE' || option.value === 'view'
-);
+export const CALL_TEAM_SHARE_SCOPE_OPTIONS = (
+  ['NONE', 'view'] as const satisfies readonly CallTeamShareScope[]
+).map((scope) => ({
+  value: scope,
+  label: TEAM_SHARE_COPY[scope],
+}));
 
 export function teamShareScopeOptionsForItem(itemType: ItemType) {
   return itemType === 'call'

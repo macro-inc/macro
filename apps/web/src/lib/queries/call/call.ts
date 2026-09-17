@@ -171,11 +171,6 @@ export function isCallSharedWithTeam(record: CallRecord): boolean {
   return record.shareWithTeam;
 }
 
-/**
- * Share-modal view of a call record. Live calls only have the pending
- * `shareWithTeam` toggle; archived calls mirror that on
- * `teamShareAccessLevel` as `view`.
- */
 export function sharePermissionFromCallRecord(
   record: CallRecord
 ): SharePermissionV2 {

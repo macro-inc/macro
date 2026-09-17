@@ -316,7 +316,7 @@ interface TeamShareControls {
   setAccessLevel: (scope: TeamShareScope) => void;
   /** Noun for the copy, e.g. "document" or "chat". */
   itemNoun: string;
-  scopeOptions: typeof TEAM_SHARE_SCOPE_OPTIONS;
+  scopeOptions: ReadonlyArray<{ value: TeamShareScope; label: string }>;
 }
 
 function LinkSharingControls(props: LinkSharingControlsProps) {
