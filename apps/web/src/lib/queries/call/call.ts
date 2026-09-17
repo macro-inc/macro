@@ -5,6 +5,7 @@ import { queryClient } from '@queries/client';
 import { type CallRecord, callServiceClient } from '@service-call/client';
 import type { ActiveCallSummary } from '@service-storage/generated/schemas/activeCallSummary';
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
+import type { SharePermissionV2 } from '@service-storage/generated/schemas/sharePermissionV2';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
@@ -170,11 +171,39 @@ export function isCallSharedWithTeam(record: CallRecord): boolean {
   return record.shareWithTeam;
 }
 
+/**
+ * Share-modal view of a call record. Live calls only have the pending
+ * `shareWithTeam` toggle; archived calls mirror that on
+ * `teamShareAccessLevel` as `view`.
+ */
+export function sharePermissionFromCallRecord(
+  record: CallRecord
+): SharePermissionV2 {
+  return {
+    id: record.callId,
+    owner: record.createdBy,
+    teamShareAccessLevel: isCallSharedWithTeam(record) ? 'view' : null,
+  };
+}
+
+export function fetchCallSharePermission(callId: string) {
+  return callServiceClient
+    .getCallRecord(callId)
+    .then((result) => result.map(sharePermissionFromCallRecord));
+}
+
 /** The `sharePermission` patch that shares a call with the team, or revokes it. */
 export function buildCallTeamSharePayload(
   shared: boolean
 ): Pick<UpdateSharePermissionRequestV2, 'teamShareAccessLevel'> {
   return { teamShareAccessLevel: shared ? 'view' : null };
+}
+
+export function updateCallTeamShare(callId: string, shared: boolean) {
+  return callServiceClient.editCallRecord({
+    callId,
+    sharePermission: buildCallTeamSharePayload(shared),
+  });
 }
 
 function patchCachedCallTeamShare(
@@ -231,12 +260,7 @@ export function useSetCallRecordTeamShareMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: async (params: { callId: string; shared: boolean }) => {
-      await throwOnErr(() =>
-        callServiceClient.editCallRecord({
-          callId: params.callId,
-          sharePermission: buildCallTeamSharePayload(params.shared),
-        })
-      );
+      await throwOnErr(() => updateCallTeamShare(params.callId, params.shared));
       return params;
     },
     onSuccess({ callId, shared }) {

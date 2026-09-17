@@ -6,12 +6,14 @@ import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/
 export const NO_LINK_SHARE = 'NONE' as const;
 
 /**
- * Entity types whose backend honors `sharePermission.teamShareAccessLevel`
- * (documents via `PATCH /documents/{id}`, AI chats via `PATCH /chats/{id}`).
+ * Entity types whose backend honors `sharePermission.teamShareAccessLevel`.
+ * Documents: `PATCH /documents/{id}`. Chats: `PATCH /chats/{id}`.
+ * Calls: `PATCH /call/record/{id}`, view only.
  */
 const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ItemType> = new Set<ItemType>([
   'document',
   'chat',
+  'call',
 ]);
 
 export function isTeamShareSupportedForItem(itemType: ItemType): boolean {
@@ -97,6 +99,17 @@ export const TEAM_SHARE_SCOPE_OPTIONS = (
   value: scope,
   label: TEAM_SHARE_COPY[scope],
 }));
+
+/** Calls reject comment and edit team grants. */
+export const CALL_TEAM_SHARE_SCOPE_OPTIONS = TEAM_SHARE_SCOPE_OPTIONS.filter(
+  (option) => option.value === 'NONE' || option.value === 'view'
+);
+
+export function teamShareScopeOptionsForItem(itemType: ItemType) {
+  return itemType === 'call'
+    ? CALL_TEAM_SHARE_SCOPE_OPTIONS
+    : TEAM_SHARE_SCOPE_OPTIONS;
+}
 
 export function getLinkShareScope(
   linkShare: LinkShare | null | undefined

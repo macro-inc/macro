@@ -500,9 +500,10 @@ On phones, recorded call headers omit the **Call Again** action.
 
 ### Sharing a call
 
-A call's side panel has a `Sharing` section with one `Share with team` checkbox, and the in-call
-controls carry the same checkbox while a call is live. It is canonical team sharing (the same
-`Team access` model documents and AI chats use), fixed at **view**. While the call is **live**
+A call's **Share** dialog has a `Team access` control (None or View) for the same canonical
+team share. The side panel has a `Sharing` section with one `Share with team` checkbox, and the
+in-call controls carry the same checkbox while a call is live. It is canonical team sharing (the
+same `Team access` model documents and AI chats use), fixed at **view**. While the call is **live**
 the checkbox is a pending toggle (on by default) that any participant with edit access can flip;
 other participants see it update live. When the call ends it is applied: with the toggle on,
 everyone on the creator's team can open the recorded call, read the transcript and AI summary,
