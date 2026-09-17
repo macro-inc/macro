@@ -108,7 +108,8 @@ where
                     Some(task_branch_name.branch_name)
                 }
                 document_sub_type::DocumentSubType::Snippet
-                | document_sub_type::DocumentSubType::Skill => None,
+                | document_sub_type::DocumentSubType::Skill
+                | document_sub_type::DocumentSubType::InitiativeDescription => None,
             }
         } else {
             None

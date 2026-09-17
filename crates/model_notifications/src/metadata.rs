@@ -631,6 +631,7 @@ pub enum NotificationDocumentSubType {
     Task,
     Snippet,
     Skill,
+    InitiativeDescription,
 }
 
 /// Someone mentioned a document in a channel

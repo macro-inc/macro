@@ -2,8 +2,8 @@ use model_file_type::FileType;
 use serde_json::json;
 
 use super::{
-    LinkShare, SharePermissionV2, TeamLinkShareDefault, UpdateSharePermissionRequestV2,
-    access_level::AccessLevel,
+    LinkShare, LinkShareState, SharePermissionV2, TeamLinkShareDefault,
+    UpdateSharePermissionRequestV2, access_level::AccessLevel,
 };
 
 fn share(
@@ -163,6 +163,60 @@ fn resolved_permissions_never_have_a_level_without_a_scope() {
             }
         }
     }
+}
+
+#[test]
+fn link_share_state_round_trips_through_a_permission() {
+    for state in [
+        LinkShareState::Off,
+        LinkShareState::On {
+            scope: LinkShare::Public,
+            level: AccessLevel::View,
+        },
+        LinkShareState::On {
+            scope: LinkShare::Team,
+            level: AccessLevel::Edit,
+        },
+    ] {
+        let permission = SharePermissionV2::from_link_share_state(state);
+        assert_eq!(permission.link_share_state(), state);
+        assert_eq!(permission.team_share_access_level, None);
+        assert_eq!(
+            permission.link_share.is_some(),
+            state != LinkShareState::Off
+        );
+    }
+}
+
+#[test]
+fn from_link_share_state_ignores_entity_and_team_defaults() {
+    // An md document would default to PUBLIC/Edit; an exact state never consults that.
+    assert_eq!(
+        SharePermissionV2::from_link_share_state(LinkShareState::Off),
+        share(None, None)
+    );
+    assert_eq!(
+        SharePermissionV2::new_initiative_share_permission(TEAM_TEAM).link_share_state(),
+        LinkShareState::On {
+            scope: LinkShare::Team,
+            level: AccessLevel::View,
+        }
+    );
+}
+
+#[test]
+fn link_share_state_treats_a_scope_without_a_level_as_view() {
+    assert_eq!(
+        share(Some(LinkShare::Public), None).link_share_state(),
+        LinkShareState::On {
+            scope: LinkShare::Public,
+            level: AccessLevel::View,
+        }
+    );
+    assert_eq!(
+        share(None, Some(AccessLevel::Edit)).link_share_state(),
+        LinkShareState::Off
+    );
 }
 
 #[test]

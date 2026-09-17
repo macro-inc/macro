@@ -5,18 +5,24 @@ use entity_access::domain::models::{
 };
 use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
+use mockall::Sequence;
 use models_permissions::share_permission::access_level::AccessLevel as ShareAccessLevel;
 use models_permissions::share_permission::team_share::{TeamShareCreation, TeamShareFacts};
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use models_permissions::share_permission::{
+    LinkShare, LinkShareState, SharePermissionV2, TeamLinkShareDefault,
+    UpdateSharePermissionRequestV2,
+};
 
 use super::InitiativeServiceImpl;
 use crate::domain::models::{
-    AssignTaskStatus, AssignTasksResult, CreateInitiativeRequest, InitiativeBasic,
-    InitiativeDetail, InitiativeError, InitiativeId, InitiativeList, InitiativeSummary,
-    MAX_INITIATIVE_DESCRIPTION_GRAPHEMES, MAX_INITIATIVE_NAME_GRAPHEMES, MAX_TASKS_PER_ASSIGN,
-    TaskAssignment, UpdateInitiativeRequest,
+    AssignTaskStatus, AssignTasksResult, CreateInitiativeRequest, DescriptionDocumentId,
+    InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId, InitiativeList,
+    InitiativeSummary, LockstepTeamShareFacts, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES,
+    MAX_INITIATIVE_NAME_GRAPHEMES, MAX_TASKS_PER_ASSIGN, TaskAssignment, UpdateInitiativeRequest,
 };
-use crate::domain::ports::{InitiativeService, MockInitiativeRepo};
+use crate::domain::ports::{
+    InitiativeService, MockInitiativeDescriptionDocuments, MockInitiativeRepo,
+};
 
 const OWNER: &str = "macro|owner@macro.com";
 const MEMBER: &str = "macro|member@macro.com";
@@ -38,6 +44,10 @@ fn initiative_id() -> InitiativeId {
     InitiativeId::from_uuid(uuid::Uuid::from_u128(1))
 }
 
+fn description_document_id() -> DescriptionDocumentId {
+    DescriptionDocumentId::from_uuid(uuid::Uuid::from_u128(2))
+}
+
 fn share_permission() -> SharePermissionV2 {
     SharePermissionV2::new_initiative_share_permission(None)
 }
@@ -46,7 +56,7 @@ fn detail(member_ids: Vec<MacroUserIdStr<'static>>) -> InitiativeDetail {
     InitiativeDetail {
         id: initiative_id(),
         name: "Launch".to_string(),
-        description: None,
+        description_document_id: description_document_id(),
         owner_id: user(OWNER),
         member_ids,
         task_ids: Vec::new(),
@@ -89,8 +99,18 @@ fn owner_receipt() -> EntityAccessReceipt<OwnerAccessLevel> {
     receipt(OWNER, EntityType::Initiative, AccessLevel::Owner)
 }
 
-fn service(repo: MockInitiativeRepo) -> InitiativeServiceImpl<MockInitiativeRepo> {
-    InitiativeServiceImpl::new(repo)
+/// A service whose document port panics on any call.
+fn service(
+    repo: MockInitiativeRepo,
+) -> InitiativeServiceImpl<MockInitiativeRepo, MockInitiativeDescriptionDocuments> {
+    service_with_documents(repo, MockInitiativeDescriptionDocuments::new())
+}
+
+fn service_with_documents(
+    repo: MockInitiativeRepo,
+    documents: MockInitiativeDescriptionDocuments,
+) -> InitiativeServiceImpl<MockInitiativeRepo, MockInitiativeDescriptionDocuments> {
+    InitiativeServiceImpl::new(repo, documents)
 }
 
 fn share_update() -> UpdateSharePermissionRequestV2 {
@@ -102,13 +122,24 @@ fn share_update() -> UpdateSharePermissionRequestV2 {
     }
 }
 
-fn team_facts() -> TeamShareFacts {
+fn team_facts(entity_type: EntityType, entity_id: String, owner: &str) -> TeamShareFacts {
     TeamShareFacts {
-        entity: EntityType::Initiative.with_entity_string(initiative_id().to_string()),
-        owner: user(OWNER),
+        entity: entity_type.with_entity_string(entity_id),
+        owner: user(owner),
         owner_team_id: Some(uuid::Uuid::from_u128(7)),
         current: None,
         revision: 0,
+    }
+}
+
+fn lockstep_facts(description_owner: &str) -> LockstepTeamShareFacts {
+    LockstepTeamShareFacts {
+        initiative: team_facts(EntityType::Initiative, initiative_id().to_string(), OWNER),
+        description: team_facts(
+            EntityType::Document,
+            description_document_id().to_string(),
+            description_owner,
+        ),
     }
 }
 
@@ -145,9 +176,9 @@ async fn create_rejects_empty_and_too_long_names() {
 }
 
 #[tokio::test]
-async fn create_rejects_too_long_description() {
-    let repo = MockInitiativeRepo::new();
-    let result = service(repo)
+async fn create_rejects_too_long_description_before_creating_any_document() {
+    // No expectations on either port: a call to `create` on the document port would panic.
+    let result = service(MockInitiativeRepo::new())
         .create(
             &user(OWNER),
             CreateInitiativeRequest {
@@ -170,10 +201,15 @@ async fn create_drops_owner_from_members_and_shares_with_team() {
             *team_share == TeamShareCreation::Initiative
                 && args.member_ids == vec![user(MEMBER)]
                 && args.owner_id == user(OWNER)
+                && args.description_document_id == description_document_id()
         })
         .return_once(|_, _, _| Box::pin(async { Ok(detail(vec![user(MEMBER)])) }));
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    documents
+        .expect_create()
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
 
-    let created = service(repo)
+    let created = service_with_documents(repo, documents)
         .create(
             &user(OWNER),
             CreateInitiativeRequest {
@@ -186,6 +222,128 @@ async fn create_drops_owner_from_members_and_shares_with_team() {
         .await
         .expect("created");
     assert_eq!(created.member_ids, vec![user(MEMBER)]);
+    assert_eq!(created.description_document_id, description_document_id());
+}
+
+#[tokio::test]
+async fn create_asks_for_a_description_document_named_after_the_initiative() {
+    let mut sequence = Sequence::new();
+    let mut repo = MockInitiativeRepo::new();
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    repo.expect_get_team_default_link_share()
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    documents
+        .expect_create()
+        .withf(|document| {
+            document.owner == user(OWNER)
+                && document.name == "Launch"
+                && document.prefill_markdown == "# Goals"
+                && document.link_share == LinkShareState::Off
+        })
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+    repo.expect_create()
+        .withf(|args, share_permission, _| {
+            args.description_document_id == description_document_id()
+                && share_permission.link_share_state() == LinkShareState::Off
+        })
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
+
+    service_with_documents(repo, documents)
+        .create(
+            &user(OWNER),
+            CreateInitiativeRequest {
+                name: " Launch ".into(),
+                description: Some("  # Goals\n".into()),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("created");
+}
+
+#[tokio::test]
+async fn create_copies_the_initiative_link_share_onto_the_document() {
+    let expected = LinkShareState::On {
+        scope: LinkShare::Team,
+        level: ShareAccessLevel::View,
+    };
+    let mut repo = MockInitiativeRepo::new();
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    repo.expect_get_team_default_link_share()
+        .return_once(|_| Box::pin(async { Ok(Some(TeamLinkShareDefault(Some(LinkShare::Team)))) }));
+    documents
+        .expect_create()
+        .withf(move |document| {
+            document.link_share == expected && document.prefill_markdown.is_empty()
+        })
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+    repo.expect_create()
+        .withf(move |_, share_permission, _| share_permission.link_share_state() == expected)
+        .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
+
+    service_with_documents(repo, documents)
+        .create(
+            &user(OWNER),
+            CreateInitiativeRequest {
+                name: "Launch".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("created");
+}
+
+#[tokio::test]
+async fn failed_initiative_write_purges_the_document_and_returns_the_original_error() {
+    let mut sequence = Sequence::new();
+    let mut repo = MockInitiativeRepo::new();
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    repo.expect_get_team_default_link_share()
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    documents
+        .expect_create()
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+    repo.expect_create()
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_, _, _| {
+            Box::pin(async {
+                Err(InitiativeError::Conflict(
+                    "initiative already exists".into(),
+                ))
+            })
+        });
+    documents
+        .expect_purge()
+        .withf(|id| *id == description_document_id())
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_| {
+            Box::pin(async {
+                Err(InitiativeError::Internal(rootcause::report!(
+                    "purge failed"
+                )))
+            })
+        });
+
+    let result = service_with_documents(repo, documents)
+        .create(
+            &user(OWNER),
+            CreateInitiativeRequest {
+                name: "Launch".into(),
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(
+        matches!(result, Err(InitiativeError::Conflict(ref message)) if message == "initiative already exists")
+    );
 }
 
 #[tokio::test]
@@ -287,12 +445,23 @@ async fn update_rejects_bad_member_id() {
 }
 
 #[tokio::test]
-async fn owner_can_patch_share_permission() {
+async fn owner_patches_team_share_on_both_entities_from_one_snapshot() {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_get_team_share_facts()
-        .return_once(|_| Box::pin(async { Ok(team_facts()) }));
+        .withf(|id| *id == initiative_id())
+        .times(1)
+        .return_once(|_| Box::pin(async { Ok(lockstep_facts(OWNER)) }));
     repo.expect_update()
-        .withf(|args| args.team_share.is_some())
+        .withf(|args| {
+            let Some(team_share) = args.team_share.as_ref() else {
+                return false;
+            };
+            let facts = lockstep_facts(OWNER);
+            team_share.initiative.expected() == &facts.initiative
+                && team_share.description.expected() == &facts.description
+                && team_share.initiative.target().map(|grant| grant.level)
+                    == team_share.description.target().map(|grant| grant.level)
+        })
         .return_once(|_| Box::pin(async { Ok(detail(Vec::new())) }));
 
     service(repo)
@@ -305,6 +474,24 @@ async fn owner_can_patch_share_permission() {
         )
         .await
         .expect("updated");
+}
+
+#[tokio::test]
+async fn team_share_patch_conflicts_when_the_document_owner_drifted() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_get_team_share_facts()
+        .return_once(|_| Box::pin(async { Ok(lockstep_facts(OTHER)) }));
+
+    let result = service(repo)
+        .update(
+            owner_edit_receipt(),
+            UpdateInitiativeRequest {
+                share_permission: Some(share_update()),
+                ..Default::default()
+            },
+        )
+        .await;
+    assert!(matches!(result, Err(InitiativeError::Conflict(_))));
 }
 
 #[tokio::test]
@@ -401,7 +588,7 @@ async fn assign_dedupes_enforces_cap_and_preserves_order() {
 }
 
 #[tokio::test]
-async fn get_list_unassign_and_delete_call_the_repo() {
+async fn get_list_and_unassign_call_the_repo() {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_get_basic().return_once(|_| {
         Box::pin(async {
@@ -420,7 +607,7 @@ async fn get_list_unassign_and_delete_call_the_repo() {
                 initiatives: vec![InitiativeSummary {
                     id: initiative_id(),
                     name: "Launch".into(),
-                    description: None,
+                    description_document_id: description_document_id(),
                     updated_at: now(),
                 }],
             })
@@ -428,8 +615,6 @@ async fn get_list_unassign_and_delete_call_the_repo() {
     });
     repo.expect_unassign_task()
         .return_once(|_, _| Box::pin(async { Ok(()) }));
-    repo.expect_delete()
-        .return_once(|_| Box::pin(async { Ok(()) }));
 
     let svc = service(repo);
     svc.internal_get_basic(initiative_id())
@@ -440,5 +625,55 @@ async fn get_list_unassign_and_delete_call_the_repo() {
     svc.unassign_task(edit_receipt(), "task-1")
         .await
         .expect("unassign");
-    svc.delete(owner_receipt()).await.expect("delete");
+}
+
+#[tokio::test]
+async fn delete_purges_the_document_after_the_initiative_is_gone() {
+    let mut sequence = Sequence::new();
+    let mut repo = MockInitiativeRepo::new();
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    repo.expect_delete()
+        .withf(|id| *id == initiative_id())
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_| Box::pin(async { Ok(Some(description_document_id())) }));
+    documents
+        .expect_purge()
+        .withf(|id| *id == description_document_id())
+        .times(1)
+        .in_sequence(&mut sequence)
+        .return_once(|_| Box::pin(async { Ok(()) }));
+
+    service_with_documents(repo, documents)
+        .delete(owner_receipt())
+        .await
+        .expect("deleted");
+}
+
+#[tokio::test]
+async fn delete_skips_the_purge_for_a_row_without_a_document() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_delete()
+        .return_once(|_| Box::pin(async { Ok(None) }));
+
+    service(repo)
+        .delete(owner_receipt())
+        .await
+        .expect("deleted");
+}
+
+#[tokio::test]
+async fn delete_surfaces_a_failed_purge_after_the_initiative_is_gone() {
+    let mut repo = MockInitiativeRepo::new();
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    repo.expect_delete()
+        .return_once(|_| Box::pin(async { Ok(Some(description_document_id())) }));
+    documents.expect_purge().return_once(|_| {
+        Box::pin(async { Err(InitiativeError::Internal(rootcause::report!("sync down"))) })
+    });
+
+    let result = service_with_documents(repo, documents)
+        .delete(owner_receipt())
+        .await;
+    assert!(matches!(result, Err(InitiativeError::Internal(_))));
 }

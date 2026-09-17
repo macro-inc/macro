@@ -12,7 +12,8 @@ import type { CreateInitiativeRequestShareWithTeam } from './createInitiativeReq
  * Create-initiative HTTP body.
  */
 export interface CreateInitiativeRequest {
-  /** Optional description. */
+  /** Initial markdown for the description document. Not stored on the initiative; later
+edits happen in the document editor. */
   description?: CreateInitiativeRequestDescription;
   /** Optional member user ids. Invalid ids fail at the service boundary. */
   memberIds?: CreateInitiativeRequestMemberIds;

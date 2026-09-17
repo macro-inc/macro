@@ -181,6 +181,22 @@ export type SubType = {
   is_completed?: boolean;
 } | null;
 
+/**
+ * Narrow a wire sub type to the ones the app renders specially. The backend
+ * also tags documents the app has no dedicated block for, such as an
+ * initiative's description; those come through as `null` so the document
+ * renders as a plain document of its file type.
+ */
+export const toSubType = (
+  wire: { type: string; is_completed?: boolean } | null | undefined
+): SubType => {
+  if (wire == null) return null;
+  const { type } = wire;
+  return type === 'task' || type === 'snippet' || type === 'skill'
+    ? { type, is_completed: wire.is_completed }
+    : null;
+};
+
 export type BaseDocumentEntity = EntityBase & {
   type: 'document';
   fileType?: string;

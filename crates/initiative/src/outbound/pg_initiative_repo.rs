@@ -16,7 +16,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::channel_share_permission::ChannelSharePermission;
-use models_permissions::share_permission::team_share::{TeamShareCreation, TeamShareFacts};
+use models_permissions::share_permission::team_share::TeamShareCreation;
 use models_permissions::share_permission::{LinkShare, SharePermissionV2, TeamLinkShareDefault};
 use rootcause::prelude::*;
 use share_permission_db_utils::team_share::TeamShareError;
@@ -24,12 +24,16 @@ use sqlx::postgres::PgDatabaseError;
 use sqlx::{Executor, PgPool, Postgres};
 
 use crate::domain::models::{
-    AssignTasksResult, CreateInitiativeRepoArgs, InitiativeBasic, InitiativeDetail,
-    InitiativeError, InitiativeId, InitiativeList, UpdateInitiativeRepoArgs,
+    AssignTasksResult, CreateInitiativeRepoArgs, DescriptionDocumentId, InitiativeBasic,
+    InitiativeDetail, InitiativeError, InitiativeId, InitiativeList, LockstepTeamShareFacts,
+    UpdateInitiativeRepoArgs,
 };
 use crate::domain::ports::InitiativeRepo;
 
 const DETAIL_ACCESS_WITHOUT_ACTOR: AccessLevel = AccessLevel::View;
+
+/// Postgres' generated name for the `UNIQUE` on `initiative.description_document_id`.
+const DESCRIPTION_DOCUMENT_UNIQUE: &str = "initiative_description_document_id_key";
 
 /// PostgreSQL `InitiativeRepo`. One pool. One transaction per mutation.
 #[derive(Clone)]
@@ -91,8 +95,11 @@ impl InitiativeRepo for PgInitiativeRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn get_team_share_facts(&self, id: InitiativeId) -> Result<TeamShareFacts, Self::Err> {
-        share::get_team_share_facts(&self.pool, id).await
+    async fn get_team_share_facts(
+        &self,
+        id: InitiativeId,
+    ) -> Result<LockstepTeamShareFacts, Self::Err> {
+        share::get_lockstep_team_share_facts(&self.pool, id).await
     }
 
     #[tracing::instrument(err, skip(self))]
@@ -118,15 +125,55 @@ impl InitiativeRepo for PgInitiativeRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn delete(&self, id: InitiativeId) -> Result<(), Self::Err> {
+    async fn delete(&self, id: InitiativeId) -> Result<Option<DescriptionDocumentId>, Self::Err> {
         create::delete(&self.pool, id).await
+    }
+}
+
+/// Both entities every grant write targets. Built once per mutation and threaded through
+/// every helper, so no code path can grant on the initiative and forget the document.
+#[derive(Debug, Clone, Copy)]
+struct GrantTargets {
+    initiative: uuid::Uuid,
+    description: uuid::Uuid,
+}
+
+impl GrantTargets {
+    fn new(initiative: InitiativeId, description: DescriptionDocumentId) -> Self {
+        Self {
+            initiative: initiative.as_uuid(),
+            description: description.as_uuid(),
+        }
+    }
+
+    fn initiative_id(&self) -> uuid::Uuid {
+        self.initiative
+    }
+
+    fn description_id(&self) -> uuid::Uuid {
+        self.description
+    }
+
+    fn initiative_entity(&self) -> Entity<'static> {
+        EntityType::Initiative.with_entity_string(self.initiative.to_string())
+    }
+
+    fn description_entity(&self) -> Entity<'static> {
+        EntityType::Document.with_entity_string(self.description.to_string())
+    }
+
+    fn each(&self) -> [(uuid::Uuid, EntityType); 2] {
+        [
+            (self.initiative, EntityType::Initiative),
+            (self.description, EntityType::Document),
+        ]
     }
 }
 
 struct InitiativeRecord {
     id: uuid::Uuid,
     name: String,
-    description: String,
+    description_document_id: Option<String>,
     owner_user_id: String,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
@@ -154,7 +201,10 @@ impl InitiativeRecord {
         Ok(InitiativeDetail {
             id: InitiativeId::from_uuid(self.id),
             name: self.name,
-            description: description_from_db(self.description),
+            description_document_id: require_description_document_id(
+                self.id,
+                self.description_document_id,
+            )?,
             owner_id,
             member_ids: parse_members(self.member_ids)?,
             task_ids: self.task_ids,
@@ -166,17 +216,29 @@ impl InitiativeRecord {
     }
 }
 
-fn description_from_db(value: String) -> Option<String> {
-    let trimmed = value.trim();
-    if trimmed.is_empty() {
-        None
-    } else {
-        Some(trimmed.to_string())
-    }
+/// A NULL is a deploy-window artifact, not a valid state; failing loudly here keeps
+/// `description_document_id` non-optional for every caller instead of forever.
+fn require_description_document_id(
+    initiative: uuid::Uuid,
+    raw: Option<String>,
+) -> Result<DescriptionDocumentId, InitiativeError> {
+    let raw = raw.ok_or_else(|| {
+        InitiativeError::Internal(report!(
+            "initiative {initiative} has no description document; backfill required"
+        ))
+    })?;
+    parse_description_document_id(initiative, &raw)
 }
 
-fn description_to_db(value: Option<&str>) -> &str {
-    value.unwrap_or("")
+fn parse_description_document_id(
+    initiative: uuid::Uuid,
+    raw: &str,
+) -> Result<DescriptionDocumentId, InitiativeError> {
+    DescriptionDocumentId::from_str(raw).map_err(|error| {
+        InitiativeError::Internal(report!(
+            "initiative {initiative} has a non-UUID description document id {raw:?}: {error}"
+        ))
+    })
 }
 
 fn parse_owner(raw: &str) -> Result<MacroUserIdStr<'static>, InitiativeError> {
@@ -244,6 +306,13 @@ fn map_sqlx(error: AdapterError) -> InitiativeError {
 fn classify_sqlx(error: sqlx::Error) -> InitiativeError {
     if let Some(db) = error.as_database_error() {
         if db.is_unique_violation() {
+            // The service mints a fresh document per create, so a second initiative on the
+            // same document is a bug in this code path, not a request the caller can fix.
+            if db.constraint() == Some(DESCRIPTION_DOCUMENT_UNIQUE) {
+                return InitiativeError::Internal(report!(
+                    "description document already linked to another initiative: {error}"
+                ));
+            }
             return InitiativeError::Conflict("initiative already exists".to_string());
         }
         if is_initiative_member_fk(db) {
@@ -278,10 +347,6 @@ fn classify_team_share(
     }
 }
 
-fn entity_of(id: InitiativeId) -> Entity<'static> {
-    EntityType::Initiative.with_entity_string(id.as_uuid().to_string())
-}
-
 async fn load_record(
     executor: impl Executor<'_, Database = Postgres>,
     id: InitiativeId,
@@ -292,7 +357,7 @@ async fn load_record(
         SELECT
             i.id,
             i.name,
-            i.description,
+            i.description_document_id,
             i.owner_user_id,
             i.created_at,
             i.updated_at,
@@ -327,7 +392,7 @@ async fn load_record(
         GROUP BY
             i.id,
             i.name,
-            i.description,
+            i.description_document_id,
             i.owner_user_id,
             i.created_at,
             i.updated_at,
@@ -344,7 +409,7 @@ async fn load_record(
     Ok(row.map(|row| InitiativeRecord {
         id: row.id,
         name: row.name,
-        description: row.description,
+        description_document_id: row.description_document_id,
         owner_user_id: row.owner_user_id,
         created_at: row.created_at,
         updated_at: row.updated_at,

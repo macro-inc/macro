@@ -4,14 +4,35 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use models_permissions::share_permission::team_share::{TeamShareCreation, TeamShareFacts};
+use models_permissions::share_permission::team_share::TeamShareCreation;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 
 use crate::domain::models::{
     AssignTasksResponse, AssignTasksResult, CreateInitiativeRepoArgs, CreateInitiativeRequest,
-    InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId, InitiativeList,
-    TaskAssignment, UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
+    DescriptionDocumentId, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
+    InitiativeList, LockstepTeamShareFacts, NewDescriptionDocument, TaskAssignment,
+    UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
+
+/// Outbound port for the description document's lifecycle. The initiative domain's whole view
+/// of the documents domain: no read, rename, or thin delete.
+#[cfg_attr(test, mockall::automock)]
+pub trait InitiativeDescriptionDocuments: Send + Sync + 'static {
+    /// Create the `initiative_description` markdown document, editor-ready, owned by
+    /// `document.owner` with link share exactly `document.link_share`. Commits before returning.
+    fn create(
+        &self,
+        document: NewDescriptionDocument,
+    ) -> impl Future<Output = Result<DescriptionDocumentId, InitiativeError>> + Send;
+
+    /// Remove the document and everything that hangs off it: rows, grants, sync-service state,
+    /// mentions, and the events downstream consumers need to forget it. Purging an id that is
+    /// already gone succeeds, so a failed purge can be retried.
+    fn purge(
+        &self,
+        id: DescriptionDocumentId,
+    ) -> impl Future<Output = Result<(), InitiativeError>> + Send;
+}
 
 /// Outbound persistence port for initiatives.
 #[cfg_attr(test, mockall::automock(type Err = InitiativeError;))]
@@ -19,7 +40,8 @@ pub trait InitiativeRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<InitiativeError> + Send + std::fmt::Debug;
 
-    /// Persist a new initiative, its members, and initial share state.
+    /// Persist a new initiative, its members, and initial share state, mirroring the member
+    /// and team grants onto `args.description_document_id` in the same transaction.
     fn create(
         &self,
         args: CreateInitiativeRepoArgs,
@@ -45,17 +67,19 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         user_id: &MacroUserIdStr<'static>,
     ) -> impl Future<Output = Result<InitiativeList, Self::Err>> + Send;
 
-    /// Apply an update, including member add/remove sets and optional team share.
+    /// Apply an update, including member add/remove sets, share patch, and optional team
+    /// share, to the initiative and its description document in one transaction.
     fn update(
         &self,
         args: UpdateInitiativeRepoArgs,
     ) -> impl Future<Output = Result<InitiativeDetail, Self::Err>> + Send;
 
-    /// Load canonical team-share facts for an initiative.
+    /// Load canonical team-share facts for an initiative and its description document from
+    /// one guarded read.
     fn get_team_share_facts(
         &self,
         id: InitiativeId,
-    ) -> impl Future<Output = Result<TeamShareFacts, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<LockstepTeamShareFacts, Self::Err>> + Send;
 
     /// Load the owner's team default link-share preference, if any.
     fn get_team_default_link_share(
@@ -77,8 +101,13 @@ pub trait InitiativeRepo: Send + Sync + 'static {
         task_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// Delete the initiative and clean up related rows in one transaction.
-    fn delete(&self, id: InitiativeId) -> impl Future<Output = Result<(), Self::Err>> + Send;
+    /// Delete the initiative and clean up its own rows in one transaction, returning the
+    /// description document id for the caller to purge afterwards. `None` only for a row
+    /// written before the column existed.
+    fn delete(
+        &self,
+        id: InitiativeId,
+    ) -> impl Future<Output = Result<Option<DescriptionDocumentId>, Self::Err>> + Send;
 }
 
 /// Inbound service port: the initiative API used by drivers (HTTP).

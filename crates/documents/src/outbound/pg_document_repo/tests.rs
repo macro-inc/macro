@@ -13,6 +13,7 @@ use sqlx::{Pool, Postgres, Row};
 use crate::domain::models::{
     CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, EmailImportRepoOutcome,
     FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    InitialLinkShare,
 };
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
@@ -491,6 +492,7 @@ fn create_document_args(
         sub_type: is_task.then_some(document_sub_type::DocumentSubType::Task),
         skip_history: false,
         attribution: None,
+        initial_link_share: InitialLinkShare::EntityDefault,
     }
 }
 
@@ -2459,6 +2461,7 @@ fn import_email_document_args(
             sub_type: None,
             skip_history: true,
             attribution: None,
+            initial_link_share: InitialLinkShare::EntityDefault,
         },
     }
 }

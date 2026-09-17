@@ -38,6 +38,22 @@ pub struct SharePermissionV2 {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct TeamLinkShareDefault(pub Option<LinkShare>);
 
+/// A fully resolved link-share setting, so a scope without a level (or the reverse) cannot be
+/// copied from one entity onto another.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum LinkShareState {
+    /// Link sharing is disabled.
+    #[default]
+    Off,
+    /// Anyone matching `scope` who has the link gets `level`.
+    On {
+        /// Who the link admits.
+        scope: LinkShare,
+        /// What the link grants.
+        level: AccessLevel,
+    },
+}
+
 impl SharePermissionV2 {
     fn new(link_share: Option<LinkShare>, link_share_access_level: Option<AccessLevel>) -> Self {
         SharePermissionV2 {
@@ -47,6 +63,27 @@ impl SharePermissionV2 {
             team_share_access_level: None,
             owner: String::new(),
             channel_share_permissions: None,
+        }
+    }
+
+    /// The link share this permission carries. A stored scope without a level reads as `View`,
+    /// matching what the repositories write for that pair.
+    pub fn link_share_state(&self) -> LinkShareState {
+        match self.link_share {
+            Some(scope) => LinkShareState::On {
+                scope,
+                level: self.link_share_access_level.unwrap_or(AccessLevel::View),
+            },
+            None => LinkShareState::Off,
+        }
+    }
+
+    /// Exactly `state`, consulting neither the entity-type default nor the owner's team default.
+    /// For a document created alongside another entity whose link share is already resolved.
+    pub fn from_link_share_state(state: LinkShareState) -> Self {
+        match state {
+            LinkShareState::Off => Self::new(None, None),
+            LinkShareState::On { scope, level } => Self::new(Some(scope), Some(level)),
         }
     }
 

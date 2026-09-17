@@ -14,39 +14,48 @@ use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::{
-    AuthorizedTeamShareCommand, TeamShareCreation, TeamShareLevel, TeamSharePolicyError,
-    TeamShareRequest, authorize_team_share,
+    TeamShareCreation, TeamShareLevel, TeamSharePolicyError, TeamShareRequest, authorize_team_share,
 };
 use unicode_segmentation::UnicodeSegmentation;
 
 use crate::domain::models::{
     AssignTaskStatus, AssignTasksResponse, AssignTasksResult, CreateInitiativeRepoArgs,
     CreateInitiativeRequest, InitiativeBasic, InitiativeDetail, InitiativeError, InitiativeId,
-    InitiativeList, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES, MAX_INITIATIVE_NAME_GRAPHEMES,
-    MAX_TASKS_PER_ASSIGN, TaskAssignment, UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
+    InitiativeList, LockstepTeamShare, MAX_INITIATIVE_DESCRIPTION_GRAPHEMES,
+    MAX_INITIATIVE_NAME_GRAPHEMES, MAX_TASKS_PER_ASSIGN, NewDescriptionDocument, TaskAssignment,
+    UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
-use crate::domain::ports::{InitiativeRepo, InitiativeService};
+use crate::domain::ports::{InitiativeDescriptionDocuments, InitiativeRepo, InitiativeService};
 
-/// Concrete initiative service backed by an [`InitiativeRepo`].
+/// Concrete initiative service backed by an [`InitiativeRepo`] and the description document
+/// port.
 #[derive(Debug, Clone)]
-pub struct InitiativeServiceImpl<R> {
+pub struct InitiativeServiceImpl<R, D> {
     repo: R,
+    description_documents: D,
 }
 
-impl<R> InitiativeServiceImpl<R>
+impl<R, D> InitiativeServiceImpl<R, D>
 where
     R: InitiativeRepo,
+    D: InitiativeDescriptionDocuments,
 {
-    /// Create an initiative service backed by the provided repository.
-    pub fn new(repo: R) -> Self {
-        Self { repo }
+    /// Create an initiative service backed by the provided repository and document port.
+    pub fn new(repo: R, description_documents: D) -> Self {
+        Self {
+            repo,
+            description_documents,
+        }
     }
 
-    async fn authorize_initiative_team_share(
+    /// Authorize one team-share edit against both entities from a single snapshot of facts.
+    /// The description document is owned by the initiative owner, so a `NotOwner` on it means
+    /// the two have drifted apart rather than that the caller lacks authority.
+    async fn authorize_lockstep_team_share(
         &self,
         receipt: &EntityAccessReceipt<EditAccessLevel>,
         request: TeamShareRequest,
-    ) -> Result<Option<AuthorizedTeamShareCommand>, InitiativeError> {
+    ) -> Result<Option<LockstepTeamShare>, InitiativeError> {
         if request == TeamShareRequest::default() {
             return Ok(None);
         }
@@ -56,27 +65,39 @@ where
             .get_team_share_facts(id)
             .await
             .map_err(Into::into)?;
-        authorize_team_share(
-            receipt.acting_user_id(),
-            &facts,
-            request,
-            TeamShareLevel::Edit,
-        )
-        .map_err(|error| match error {
-            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
-                InitiativeError::Unauthorized
-            }
-            TeamSharePolicyError::InvalidRevision => InitiativeError::Conflict(error.to_string()),
-            _ => InitiativeError::BadRequest(error.to_string()),
-        })
+        let actor = receipt.acting_user_id();
+        let initiative =
+            authorize_team_share(actor, &facts.initiative, request, TeamShareLevel::Edit)
+                .map_err(team_share_error)?;
+        let description =
+            authorize_team_share(actor, &facts.description, request, TeamShareLevel::Edit)
+                .map_err(|error| match error {
+                    TeamSharePolicyError::NotOwner => InitiativeError::Conflict(
+                        "description document is not owned by the initiative owner".to_string(),
+                    ),
+                    other => team_share_error(other),
+                })?;
+        let (Some(initiative), Some(description)) = (initiative, description) else {
+            return Err(InitiativeError::Internal(rootcause::report!(
+                "team-share authorization produced no command for a supplied request"
+            )));
+        };
+        Ok(Some(LockstepTeamShare {
+            initiative,
+            description,
+        }))
     }
 }
 
-impl<R> InitiativeService for InitiativeServiceImpl<R>
+impl<R, D> InitiativeService for InitiativeServiceImpl<R, D>
 where
     R: InitiativeRepo,
     R::Err: Into<InitiativeError>,
+    D: InitiativeDescriptionDocuments,
 {
+    /// Two commits with compensation: the documents side commits the description document
+    /// first, then the initiative transaction links it and mirrors the grants. A failed
+    /// initiative write purges the document so nothing orphaned survives a `Err`.
     #[tracing::instrument(err, skip_all)]
     async fn create(
         &self,
@@ -84,7 +105,7 @@ where
         request: CreateInitiativeRequest,
     ) -> Result<InitiativeDetail, InitiativeError> {
         let name = normalize_name(&request.name)?;
-        let description = normalize_description(request.description)?;
+        let prefill_markdown = normalize_description(request.description)?;
         let owner_id = user_id.clone().into_owned();
         let member_ids = parse_member_ids(request.member_ids.unwrap_or_default(), &owner_id)?;
         let team_default = self
@@ -98,20 +119,50 @@ where
         } else {
             TeamShareCreation::Unshared
         };
-        self.repo
+
+        let description_document_id = self
+            .description_documents
+            .create(NewDescriptionDocument {
+                owner: owner_id.clone(),
+                name: name.clone(),
+                prefill_markdown,
+                link_share: share_permission.link_share_state(),
+            })
+            .await?;
+
+        let id = InitiativeId::generate();
+        let created = self
+            .repo
             .create(
                 CreateInitiativeRepoArgs {
-                    id: InitiativeId::generate(),
+                    id,
                     owner_id,
                     name,
-                    description,
+                    description_document_id,
                     member_ids,
                 },
                 share_permission,
                 team_share,
             )
-            .await
-            .map_err(Into::into)
+            .await;
+        match created {
+            Ok(detail) => Ok(detail),
+            Err(error) => {
+                if let Err(purge_error) = self
+                    .description_documents
+                    .purge(description_document_id)
+                    .await
+                {
+                    tracing::error!(
+                        error = ?purge_error,
+                        %description_document_id,
+                        %id,
+                        "description document orphaned after failed initiative create"
+                    );
+                }
+                Err(error.into())
+            }
+        }
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -159,10 +210,6 @@ where
         }
 
         let name = request.name.as_deref().map(normalize_name).transpose()?;
-        let description = match request.description {
-            None => None,
-            Some(value) => Some(normalize_description(Some(value))?),
-        };
 
         let id = initiative_id_from_receipt(&receipt)?;
         let (member_ids_added, member_ids_removed) = if let Some(member_ids) = request.member_ids {
@@ -179,7 +226,7 @@ where
         };
 
         let team_share = if let Some(share_permission) = request.share_permission.as_ref() {
-            self.authorize_initiative_team_share(
+            self.authorize_lockstep_team_share(
                 &receipt,
                 TeamShareRequest {
                     access_level: share_permission.team_share_access_level,
@@ -195,7 +242,6 @@ where
             .update(UpdateInitiativeRepoArgs {
                 id,
                 name,
-                description,
                 member_ids_added,
                 member_ids_removed,
                 share_permission: request.share_permission,
@@ -262,13 +308,42 @@ where
             .map_err(Into::into)
     }
 
+    /// Initiative rows first, document second. The FK's `ON DELETE SET NULL` means the other
+    /// order could leave an initiative with no description after a half-failure, which is
+    /// worse for readers than an orphaned document.
     #[tracing::instrument(err, skip_all)]
     async fn delete(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        self.repo.delete(id).await.map_err(Into::into)
+        let Some(description_document_id) = self.repo.delete(id).await.map_err(Into::into)? else {
+            return Ok(());
+        };
+        self.description_documents
+            .purge(description_document_id)
+            .await
+            .inspect_err(|_| {
+                tracing::error!(
+                    %description_document_id,
+                    %id,
+                    "description document orphaned after initiative delete"
+                );
+            })
+    }
+}
+
+fn team_share_error(error: TeamSharePolicyError) -> InitiativeError {
+    match error {
+        TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+            InitiativeError::Unauthorized
+        }
+        TeamSharePolicyError::InvalidRevision => InitiativeError::Conflict(error.to_string()),
+        TeamSharePolicyError::MissingTeam
+        | TeamSharePolicyError::InvalidLevel
+        | TeamSharePolicyError::ContradictoryInputs => {
+            InitiativeError::BadRequest(error.to_string())
+        }
     }
 }
 
@@ -305,20 +380,14 @@ fn normalize_name(name: &str) -> Result<String, InitiativeError> {
     Ok(name.to_string())
 }
 
-fn normalize_description(description: Option<String>) -> Result<Option<String>, InitiativeError> {
-    let Some(description) = description else {
-        return Ok(None);
-    };
-    let description = description.trim();
-    if description.is_empty() {
-        return Ok(None);
-    }
+fn normalize_description(description: Option<String>) -> Result<String, InitiativeError> {
+    let description = description.as_deref().unwrap_or_default().trim();
     if description.graphemes(true).count() > MAX_INITIATIVE_DESCRIPTION_GRAPHEMES {
         return Err(InitiativeError::BadRequest(format!(
             "description must be at most {MAX_INITIATIVE_DESCRIPTION_GRAPHEMES} graphemes"
         )));
     }
-    Ok(Some(description.to_string()))
+    Ok(description.to_string())
 }
 
 fn parse_member_ids(

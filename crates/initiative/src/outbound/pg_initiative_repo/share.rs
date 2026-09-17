@@ -1,16 +1,44 @@
 use entity_access_db_utils::EntityType;
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
-use models_permissions::share_permission::team_share::TeamShareFacts;
 use models_permissions::share_permission::{
     LinkShare, SharePermissionV2, TeamLinkShareDefault, UpdateSharePermissionRequestV2,
     access_level::AccessLevel,
 };
+use rootcause::prelude::*;
 use share_permission_db_utils::{InsertChannelSharePermissionResult, team_share};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{AdapterError, entity_of, map_sqlx};
-use crate::domain::models::{InitiativeError, InitiativeId};
+use super::{AdapterError, GrantTargets, map_sqlx, require_description_document_id};
+use crate::domain::models::{
+    DescriptionDocumentId, InitiativeError, InitiativeId, LockstepTeamShareFacts,
+};
+
+/// One `SharePermission` row plus the `entity_access` entity it governs. Built only from
+/// [`GrantTargets`] so the two halves cannot be mixed up.
+pub(super) struct ShareTarget<'a> {
+    entity_id: Uuid,
+    entity_type: EntityType,
+    share_permission_id: &'a str,
+}
+
+impl<'a> ShareTarget<'a> {
+    pub(super) fn initiative(targets: &GrantTargets, share_permission_id: &'a str) -> Self {
+        Self {
+            entity_id: targets.initiative_id(),
+            entity_type: EntityType::Initiative,
+            share_permission_id,
+        }
+    }
+
+    pub(super) fn description(targets: &GrantTargets, share_permission_id: &'a str) -> Self {
+        Self {
+            entity_id: targets.description_id(),
+            entity_type: EntityType::Document,
+            share_permission_id,
+        }
+    }
+}
 
 pub(super) async fn insert_share_permission(
     tx: &mut Transaction<'_, Postgres>,
@@ -55,25 +83,35 @@ pub(super) async fn insert_share_permission(
     Ok(row.id)
 }
 
-pub(super) async fn patch_share_permission(
+/// Every document the documents side creates has a permission row, so a miss is corruption.
+pub(super) async fn description_share_permission_id(
     tx: &mut Transaction<'_, Postgres>,
-    initiative_id: Uuid,
-    update: &UpdateSharePermissionRequestV2,
-) -> Result<(), InitiativeError> {
-    let share_permission_id = sqlx::query_scalar!(
+    id: DescriptionDocumentId,
+) -> Result<String, InitiativeError> {
+    sqlx::query_scalar!(
         r#"
-        SELECT share_permission_id
-        FROM initiative
-        WHERE id = $1
+        SELECT "sharePermissionId"
+        FROM "DocumentPermission"
+        WHERE "documentId" = $1
         "#,
-        initiative_id,
+        id.to_string(),
     )
     .fetch_optional(tx.as_mut())
     .await
     .map_err(AdapterError::Sqlx)
     .map_err(map_sqlx)?
-    .ok_or(InitiativeError::NotFound)?;
+    .ok_or_else(|| {
+        InitiativeError::Internal(report!("description document {id} has no share permission"))
+    })
+}
 
+/// Link columns, channel `entity_access` grants, and `ChannelSharePermission` rows for one
+/// target. Called once per target so both entities end identical.
+pub(super) async fn apply_share_patch(
+    tx: &mut Transaction<'_, Postgres>,
+    target: ShareTarget<'_>,
+    update: &UpdateSharePermissionRequestV2,
+) -> Result<(), InitiativeError> {
     let update_link_share = update.link_share.is_some();
     let link_share = update.link_share.flatten();
     let (update_link_share_access_level, link_share_access_level) = match update.link_share {
@@ -106,7 +144,7 @@ pub(super) async fn patch_share_permission(
             "updatedAt" = NOW()
         WHERE id = $1
         "#,
-        share_permission_id,
+        target.share_permission_id,
         update_link_share,
         link_share,
         update_link_share_access_level,
@@ -123,8 +161,8 @@ pub(super) async fn patch_share_permission(
 
     entity_access_db_utils::update_entity_access_channel_share_permissions(
         tx,
-        &initiative_id,
-        EntityType::Initiative,
+        &target.entity_id,
+        target.entity_type,
         channel_updates,
     )
     .await
@@ -136,7 +174,7 @@ pub(super) async fn patch_share_permission(
             UpdateOperation::Add => {
                 let insert = share_permission_db_utils::insert_channel_share_permission(
                     tx.as_mut(),
-                    &share_permission_id,
+                    target.share_permission_id,
                     &channel.channel_id,
                     channel.access_level.unwrap_or(AccessLevel::View),
                 )
@@ -146,7 +184,7 @@ pub(super) async fn patch_share_permission(
                 if insert == InsertChannelSharePermissionResult::AlreadyExists {
                     update_channel_share_access(
                         tx,
-                        &share_permission_id,
+                        target.share_permission_id,
                         &channel.channel_id,
                         channel.access_level.unwrap_or(AccessLevel::View),
                     )
@@ -159,7 +197,7 @@ pub(super) async fn patch_share_permission(
                     DELETE FROM "ChannelSharePermission"
                     WHERE share_permission_id = $1 AND channel_id = $2
                     "#,
-                    share_permission_id,
+                    target.share_permission_id,
                     channel.channel_id,
                 )
                 .execute(tx.as_mut())
@@ -170,7 +208,7 @@ pub(super) async fn patch_share_permission(
             UpdateOperation::Replace => {
                 let updated = update_channel_share_access(
                     tx,
-                    &share_permission_id,
+                    target.share_permission_id,
                     &channel.channel_id,
                     channel.access_level.unwrap_or(AccessLevel::View),
                 )
@@ -178,7 +216,7 @@ pub(super) async fn patch_share_permission(
                 if !updated {
                     share_permission_db_utils::insert_channel_share_permission(
                         tx.as_mut(),
-                        &share_permission_id,
+                        target.share_permission_id,
                         &channel.channel_id,
                         channel.access_level.unwrap_or(AccessLevel::View),
                     )
@@ -215,26 +253,49 @@ async fn update_channel_share_access(
     Ok(result.rows_affected() > 0)
 }
 
-pub(super) async fn get_team_share_facts(
+/// One guarded read for both entities, so the service authorizes them against one snapshot.
+pub(super) async fn get_lockstep_team_share_facts(
     pool: &PgPool,
     id: InitiativeId,
-) -> Result<TeamShareFacts, InitiativeError> {
-    let entity = entity_of(id);
-    let mut transaction = pool
+) -> Result<LockstepTeamShareFacts, InitiativeError> {
+    let mut tx = pool
         .begin()
         .await
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
-    let facts = team_share::load_facts(&mut transaction, &entity)
+    let description_document_id = sqlx::query_scalar!(
+        r#"
+        SELECT description_document_id
+        FROM initiative
+        WHERE id = $1
+        "#,
+        id.as_uuid(),
+    )
+    .fetch_optional(tx.as_mut())
+    .await
+    .map_err(AdapterError::Sqlx)
+    .map_err(map_sqlx)?
+    .ok_or(InitiativeError::NotFound)?;
+    let targets = GrantTargets::new(
+        id,
+        require_description_document_id(id.as_uuid(), description_document_id)?,
+    );
+    let initiative = team_share::load_facts(&mut tx, &targets.initiative_entity())
         .await
         .map_err(AdapterError::TeamShare)
         .map_err(map_sqlx)?;
-    transaction
-        .commit()
+    let description = team_share::load_facts(&mut tx, &targets.description_entity())
+        .await
+        .map_err(AdapterError::TeamShare)
+        .map_err(map_sqlx)?;
+    tx.commit()
         .await
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
-    Ok(facts)
+    Ok(LockstepTeamShareFacts {
+        initiative,
+        description,
+    })
 }
 
 pub(super) async fn get_team_default_link_share(

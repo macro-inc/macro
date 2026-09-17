@@ -6,6 +6,7 @@
  */
 
 /**
- * Optional description.
+ * Initial markdown for the description document. Not stored on the initiative; later
+edits happen in the document editor.
  */
 export type CreateInitiativeRequestDescription = string | null;

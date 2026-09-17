@@ -9,15 +9,19 @@ use std::str::FromStr;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_permissions::share_permission::access_level::AccessLevel;
-use models_permissions::share_permission::team_share::AuthorizedTeamShareCommand;
-use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts,
+};
+use models_permissions::share_permission::{
+    LinkShareState, SharePermissionV2, UpdateSharePermissionRequestV2,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
 /// Maximum initiative name length, counted in Unicode grapheme clusters.
 pub const MAX_INITIATIVE_NAME_GRAPHEMES: usize = 100;
 
-/// Maximum initiative description length, counted in Unicode grapheme clusters.
+/// Maximum length of the create-time description prefill, counted in Unicode grapheme clusters.
 pub const MAX_INITIATIVE_DESCRIPTION_GRAPHEMES: usize = 2_000;
 
 /// Maximum number of tasks accepted in one assign call.
@@ -60,24 +64,55 @@ impl FromStr for InitiativeId {
     }
 }
 
-/// Persisted initiative row without members, tasks, or share state.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// Id of the markdown document that holds an initiative's description.
+///
+/// The documents side mints it as a UUID; `"Document".id` and
+/// `initiative.description_document_id` store it as TEXT, so it is parsed once at the
+/// adapter boundary and displayed back when bound in SQL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
-#[serde(rename_all = "camelCase")]
-pub struct Initiative {
-    /// Opaque identifier.
-    pub id: InitiativeId,
-    /// Display name.
+#[serde(transparent)]
+pub struct DescriptionDocumentId(Uuid);
+
+impl DescriptionDocumentId {
+    /// Wrap an already-persisted id.
+    pub fn from_uuid(id: Uuid) -> Self {
+        Self(id)
+    }
+
+    /// The inner UUID.
+    pub fn as_uuid(&self) -> Uuid {
+        self.0
+    }
+}
+
+impl fmt::Display for DescriptionDocumentId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl FromStr for DescriptionDocumentId {
+    type Err = uuid::Error;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        Ok(Self(Uuid::parse_str(s)?))
+    }
+}
+
+/// The description document the service asks the documents side to create. Every field is
+/// already validated by the initiative domain.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct NewDescriptionDocument {
+    /// Document owner; the initiative owner, so both entities agree on who may team-share.
+    pub owner: MacroUserIdStr<'static>,
+    /// The initiative's name at create time. Renames are not mirrored.
     pub name: String,
-    /// Optional description.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    /// Owner of the initiative.
-    pub owner_id: MacroUserIdStr<'static>,
-    /// When the initiative was created.
-    pub created_at: DateTime<Utc>,
-    /// When the initiative was last updated.
-    pub updated_at: DateTime<Utc>,
+    /// Trimmed initial markdown; empty when the request had none.
+    pub prefill_markdown: String,
+    /// The initiative's resolved link share, applied verbatim so the markdown default
+    /// (PUBLIC/Edit) never exists for this document.
+    pub link_share: LinkShareState,
 }
 
 /// Minimal initiative identity used by access checks and internal lookups.
@@ -102,9 +137,8 @@ pub struct InitiativeSummary {
     pub id: InitiativeId,
     /// Display name.
     pub name: String,
-    /// Optional description.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    /// The markdown document holding the description; open it in the editor.
+    pub description_document_id: DescriptionDocumentId,
     /// When the initiative was last updated.
     pub updated_at: DateTime<Utc>,
 }
@@ -118,9 +152,8 @@ pub struct InitiativeDetail {
     pub id: InitiativeId,
     /// Display name.
     pub name: String,
-    /// Optional description.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
+    /// The markdown document holding the description; open it in the editor.
+    pub description_document_id: DescriptionDocumentId,
     /// Owner of the initiative.
     pub owner_id: MacroUserIdStr<'static>,
     /// Member user ids. The owner is never stored here.
@@ -144,7 +177,8 @@ pub struct InitiativeDetail {
 pub struct CreateInitiativeRequest {
     /// Display name.
     pub name: String,
-    /// Optional description.
+    /// Initial markdown for the description document. Not stored on the initiative; later
+    /// edits happen in the document editor.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// Optional member user ids. Invalid ids fail at the service boundary.
@@ -156,7 +190,7 @@ pub struct CreateInitiativeRequest {
 }
 
 /// Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
-/// present is a full replace.
+/// present is a full replace. The description is edited in its document, not here.
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -164,9 +198,6 @@ pub struct UpdateInitiativeRequest {
     /// Replacement name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-    /// Replacement description. `Some("")` clears it after trim.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
     /// Full replacement member list when present.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_ids: Option<Vec<String>>,
@@ -270,8 +301,8 @@ pub struct CreateInitiativeRepoArgs {
     pub owner_id: MacroUserIdStr<'static>,
     /// Validated name.
     pub name: String,
-    /// Validated description.
-    pub description: Option<String>,
+    /// The description document, already committed by the documents side.
+    pub description_document_id: DescriptionDocumentId,
     /// Member ids with the owner removed and duplicates dropped.
     pub member_ids: Vec<MacroUserIdStr<'static>>,
 }
@@ -283,16 +314,35 @@ pub struct UpdateInitiativeRepoArgs {
     pub id: InitiativeId,
     /// Replacement name when present.
     pub name: Option<String>,
-    /// Replacement description when present. `Some(None)` clears it.
-    pub description: Option<Option<String>>,
     /// Members to add when `member_ids` was present on the request.
     pub member_ids_added: Vec<MacroUserIdStr<'static>>,
     /// Members to remove when `member_ids` was present on the request.
     pub member_ids_removed: Vec<MacroUserIdStr<'static>>,
     /// Share permission patch when the owner sent one.
     pub share_permission: Option<UpdateSharePermissionRequestV2>,
-    /// Authorized team-share write, if any.
-    pub team_share: Option<AuthorizedTeamShareCommand>,
+    /// Authorized team-share writes for both entities, if any.
+    pub team_share: Option<LockstepTeamShare>,
+}
+
+/// Team-share commands for an initiative and its description document, authorized by the
+/// owner against one snapshot of facts. The repository applies both in one guarded
+/// transaction, so the document's team grant can never drift from the initiative's.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LockstepTeamShare {
+    /// Command whose expected facts name the initiative.
+    pub initiative: AuthorizedTeamShareCommand,
+    /// Command whose expected facts name the description document.
+    pub description: AuthorizedTeamShareCommand,
+}
+
+/// Team-share facts for an initiative and its description document, read in one guarded
+/// transaction so the service authorizes both against the same snapshot.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LockstepTeamShareFacts {
+    /// Facts for the initiative entity.
+    pub initiative: TeamShareFacts,
+    /// Facts for the description document entity.
+    pub description: TeamShareFacts,
 }
 
 /// Errors returned by the initiative service.

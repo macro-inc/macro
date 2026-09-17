@@ -1680,6 +1680,10 @@ enum GraphqlDocumentSubType {
 	The skill option.
 	"""
 	SKILL
+	"""
+	The initiative description option.
+	"""
+	INITIATIVE_DESCRIPTION
 }
 
 """
@@ -2970,6 +2974,16 @@ type GraphqlInboxReauthRequiredMetadata {
 }
 
 """
+represents the initiative description subtype fields
+"""
+type GraphqlInitiativeDescriptionSubType {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
 Metadata for a team invitation.
 """
 type GraphqlInviteToTeamMetadata {
@@ -3259,6 +3273,10 @@ enum GraphqlNotificationDocumentSubType {
 	Skill document.
 	"""
 	SKILL
+	"""
+	The description document of an initiative.
+	"""
+	INITIATIVE_DESCRIPTION
 }
 
 """
@@ -4716,7 +4734,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 """
 GraphQL representation of the soup document sub type.
 """
-union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType | GraphqlSkillSubType
+union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType | GraphqlSkillSubType | GraphqlInitiativeDescriptionSubType
 
 """
 GraphQL representation of the soup email attachment.

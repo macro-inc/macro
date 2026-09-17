@@ -5,6 +5,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::response::DocumentResponseMetadata;
 use model::document::{DocumentMetadata, FileType};
+use models_permissions::share_permission::LinkShareState;
 
 use super::response::DocumentResponse;
 use model::sync_service::SyncServiceVersionID;
@@ -306,6 +307,17 @@ pub struct CopyDocumentQueryParams {
     pub version_id: Option<i64>,
 }
 
+/// How a new document's link share is initialized.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum InitialLinkShare {
+    /// The entity-type default (md is PUBLIC/Edit), overridden only by the owner's team default.
+    #[default]
+    EntityDefault,
+    /// Exactly this state, already resolved by the caller. The document never carries the
+    /// entity-type default, not even between creation and a later update.
+    Exact(LinkShareState),
+}
+
 /// Arguments for creating a document in the repository.
 pub struct CreateDocumentRepoArgs {
     /// Optional user-provided document ID.
@@ -333,6 +345,9 @@ pub struct CreateDocumentRepoArgs {
     pub skip_history: bool,
     /// Explicit activity attribution. Unset uses [`Self::resolved_attribution`].
     pub attribution: Option<Attribution>,
+    /// Honored by [`super::ports::DocumentService::create_document`]. Copies and email imports
+    /// resolve their own permission and ignore it.
+    pub initial_link_share: InitialLinkShare,
 }
 
 impl CreateDocumentRepoArgs {
