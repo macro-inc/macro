@@ -321,7 +321,7 @@ describe('Agents', () => {
         render(() => <Agents />);
         fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
         const option = screen.queryByRole('option', {
-          name: 'Claude Cloud (demo)',
+          name: 'Claude Cloud',
         });
         expect(Boolean(option)).toBe(enabled);
         const targets = vi.mocked(useAgentModelsQueries).mock.lastCall?.[0]();

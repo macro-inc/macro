@@ -97,16 +97,16 @@ impl AccountCredentials {
     pub async fn resolve(&self, owner: &str) -> Result<Credentials> {
         let mut pending = self.pending.lock().await;
         let mut transaction = self.repository.lock(owner).await?;
-        if let Some((id, grant)) = pending.remove(owner) {
-            if transaction.state().refresh_id.as_ref() == Some(&id) {
-                transaction.state().grant = Some(grant.clone());
-                transaction.state().refresh_id = None;
-                if let Err(error) = transaction.commit().await {
-                    pending.insert(owner.to_owned(), (id, grant));
-                    return Err(error);
-                }
-                transaction = self.repository.lock(owner).await?;
+        if let Some((id, grant)) = pending.remove(owner)
+            && transaction.state().refresh_id.as_ref() == Some(&id)
+        {
+            transaction.state().grant = Some(grant.clone());
+            transaction.state().refresh_id = None;
+            if let Err(error) = transaction.commit().await {
+                pending.insert(owner.to_owned(), (id, grant));
+                return Err(error);
             }
+            transaction = self.repository.lock(owner).await?;
         }
         if transaction.state().refresh_id.is_some() {
             return Err(Error::Authorization);

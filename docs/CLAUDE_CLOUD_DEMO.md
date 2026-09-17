@@ -13,7 +13,7 @@ authorization boundary or a kill switch for existing agents/sessions.
 
 Deploy the backend and infrastructure from this workspace, or rebuild the local
 backend (`r` in `just run_local`), then refresh the browser. In **Settings → Harness**, the
-**Claude Cloud (demo)** row has the Anthropic logo and appears above Cursor,
+**Claude Cloud** row has the Anthropic logo and appears above Cursor,
 even before an account is connected. Connection setup is not in Settings → Agents:
 
 1. Click **Connect Claude** to open Claude sign-in in a new tab automatically.
@@ -21,7 +21,7 @@ even before an account is connected. Connection setup is not in Settings → Age
 2. Sign in and approve on Claude's own page. Macro never asks for your password.
 3. Copy the entire one-time `code#state` displayed by Claude, paste it into Macro,
    and click **Finish connecting**.
-4. Create/edit an agent and select **Claude Cloud (demo)** as its harness.
+4. Create/edit an agent and select **Claude Cloud** as its harness.
 
 This is Claude Code's manual authorization-code + PKCE flow, not an RFC 8628
 device-code grant. The registered callback stays on Claude's site, so this works
@@ -86,7 +86,7 @@ Claude's consent page and completing the one-time code exchange.
 ## Use in Macro
 
 1. Connect through the Claude row in Settings → Harness, then create or edit a private agent in Settings → Agents.
-2. Select **Claude Cloud (demo)**. It is offered only when model discovery confirms that your Macro identity has a configured connection.
+2. Select **Claude Cloud**. It is offered only when model discovery confirms that your Macro identity has a configured connection.
 3. Choose from Claude's reported model catalog. Settings reads up to five recent sessions through your connected account and uses the first available initialization catalog; an existing session uses its own latest catalog. IDs, names, descriptions, and ordering come from Claude, not a fixed list. With no catalog yet, only **Claude · subscription default** is offered, with an explanatory description. The first prompt requests initialization alongside the model and user message, and the picker updates when Claude reports its catalog. Subsequent catalogs replace old choices during polling and streaming without resetting your saved preference. This is last-reported availability, not a fresh entitlement guarantee. Selection saves the next-turn preference after event submission; it does not wait for an idle worker. Each prompt repeats that preference immediately before the user message in one ordered batch, including after a Macro restart. A worker rejection surfaces an error and requests interruption; this cannot guarantee zero inference before the rejection arrives.
 4. Start a session with that agent or mention it in a channel. Prompts, follow-ups, text streaming, tool cards, cancellation, and transcript load use Macro's existing session interface.
 5. In the session header, use **Open in Claude** (the external-link icon; in the toolbar overflow on narrow screens). Existing demo sessions get the link too.
