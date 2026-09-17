@@ -56,7 +56,7 @@ function ComposeFieldRow(props: {
   return (
     <div
       class={cn(
-        'flex gap-2 border-b border-edge-muted focus-within:border-accent',
+        'flex gap-2 border-b border-edge-muted focus-within:border-ink/20',
         ctx.isMobile() ? 'items-start py-1' : 'items-center py-3'
       )}
       classList={{ 'border-accent bg-accent/10': isDragOver() }}

@@ -31,7 +31,7 @@ export function ComposeSubject(props: {
   return (
     <div
       class={cn(
-        'w-full flex gap-2 border-b border-edge-muted focus-within:border-accent',
+        'w-full flex gap-2 border-b border-edge-muted focus-within:border-ink/20',
         ctx.isMobile() ? 'items-start py-2' : 'items-center py-3'
       )}
     >
