@@ -62,7 +62,7 @@ function messagePromptThreads(threads: MessageThread[]): PromptThread[] {
     comments: [thread.root, ...thread.replies]
       .filter((message) => message.content && !message.deleted_at)
       .map((message) => ({
-        author: message.imported_author?.name ?? message.sender_id,
+        author: message.imported_author?.name?.trim() || message.sender_id,
         createdAt: message.created_at,
         text: message.content,
       })),

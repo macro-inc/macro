@@ -500,7 +500,11 @@ export const MessageCommentsProvider: VoidComponent<{
     const targetThread = commentThreads.find(
       (thread) => thread.id === target.rootId()
     );
-    if (targetThread && !targetThread.state.anchor) {
+    // Anchor metadata not loaded yet (e.g. a freshly posted root): keep the
+    // one-shot target pending until it resolves rather than dropping the link.
+    if (targetThread && targetThread.state.anchor === undefined) return;
+    if (targetThread && targetThread.state.anchor === null) {
+      // Resolved as unanchored (a Discussion root): nothing to open in the margin.
       activeCommentThreadSignal.set(null);
       setHighlightedId(null);
       pendingTargetCommentId = undefined;

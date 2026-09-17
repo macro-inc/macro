@@ -21,6 +21,7 @@ import {
 import {
   findThreadIdInMessageTimeline,
   findThreadPreviewReplySnapshotInMessageTimeline,
+  findTopLevelMessageInMessageTimeline,
   findTopLevelMessageSnapshotInMessageTimeline,
   insertThreadReplyIntoMessageTimeline,
   insertTopLevelMessageIntoMessageTimeline,
@@ -107,12 +108,12 @@ export function insertMessageIntoTargetCaches(
     );
     // No cache entry means the thread's first replies fetch is likely in
     // flight and may have read before this reply, and a soft invalidate only
-    // refetches inactive copies. Re-apply once that fetch settles so an
-    // expanded thread keeps the reply instead of the pre-reply snapshot — from
-    // the timeline preview (the live mirror every op keeps current), not the
-    // captured payload, so a reply edited, deleted, rolled back, or re-keyed
-    // in the meantime is reflected; `insertThreadReply` ignores one the fetch
-    // already returned.
+    // refetches inactive copies. Once that fetch settles, merge the thread's
+    // current timeline preview into the fetched replies. The preview is the
+    // live mirror every op keeps current, so this reflects a reply edited,
+    // deleted, rolled back, or re-keyed (optimistic -> server id) in the
+    // meantime — matched by its current id, not the one captured here;
+    // `insertThreadReply` ignores replies the fetch already returned.
     if (!inserted) {
       const inFlight = queryClient.getQueryCache().find<MessageThread>({
         queryKey: getThreadRepliesQueryKey(parent, target.threadId),
@@ -122,14 +123,16 @@ export function insertMessageIntoTargetCaches(
         void inFlight
           .catch(() => {})
           .finally(() => {
-            const current = findThreadPreviewReplySnapshotInMessageTimeline(
+            const preview = findTopLevelMessageInMessageTimeline(
               parent,
-              target.threadId,
-              target.messageId
-            )?.reply;
-            if (current)
+              target.threadId
+            )?.thread.preview;
+            if (preview?.length)
               setThreadRepliesData(parent, target.threadId, (prev) =>
-                insertThreadReply(prev, current)
+                preview.reduce<EntityMessage[] | undefined>(
+                  (replies, reply) => insertThreadReply(replies, reply),
+                  prev
+                )
               );
           });
     }
