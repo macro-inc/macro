@@ -25,7 +25,7 @@ import { enableCrmLists } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { type EntityData, isCrmCompanyEntity } from '@entity';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
+import ListIcon from '@phosphor/list.svg';
 import { fetchCrmExportCompanies } from '@queries/crm/export';
 import { useCrmLists } from '@queries/crm/lists';
 import { useQuickAccessCrmCompaniesQuery } from '@queries/soup/quick-access-crm-companies';
@@ -63,7 +63,7 @@ function NavigationToggle(props: {
               label="Expand CRM sidebar"
               onClick={props.onExpand}
             >
-              <SidebarIcon class="size-4" />
+              <ListIcon class="size-4" />
             </Button>
           </Tooltip>
         }
@@ -75,7 +75,7 @@ function NavigationToggle(props: {
               size="icon-sm"
               aria-label="Show CRM navigation"
             >
-              <SidebarIcon class="size-4" />
+              <ListIcon class="size-4" />
             </Dropdown.Trigger>
           </Tooltip>
           <Dropdown.Content class="w-55 max-h-[80vh] overflow-auto p-0">

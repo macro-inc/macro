@@ -71,6 +71,7 @@ function TasksViewRoot() {
     <SplitPanel.Root>
       <SplitPanel.Body>
         <ViewShell.Root
+          asidePreferenceKey="tasks"
           resizable
           aside={{ preserveDuringResize: false }}
           main={{ preferredWidth: 640 }}

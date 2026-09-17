@@ -1,12 +1,20 @@
+import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
+import { Show } from 'solid-js';
 import { HomeRecommendedActions } from '../../home/components/home-recommended-actions';
 import { HomeChatInput } from '../../home/home-chat-input';
 
 /** Desktop Home's idle pane uses the single-line chat composer and send flow. */
 export function HomeChatStart() {
+  const shell = useViewShell();
   return (
     <ChatInputProvider>
+      <Show when={shell.aside.isCollapsed()}>
+        <ViewShell.TopBar>
+          <span class="text-sm font-semibold">Home</span>
+        </ViewShell.TopBar>
+      </Show>
       <DragDropWrapper class="relative size-full min-h-0 min-w-0 overflow-y-auto px-6">
         <div class="mx-auto grid h-full min-h-64 min-w-0 w-full max-w-180 grid-cols-1 grid-rows-[1fr_auto_1fr] pb-16">
           <h1 class="mb-6 min-h-0 min-w-0 self-end text-center text-2xl font-normal leading-[42px] text-ink">

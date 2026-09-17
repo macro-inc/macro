@@ -13,6 +13,11 @@
 
 ## Start a standalone chat
 
+While an answer streams, resolved mention pills should keep their names and
+icons instead of flashing back to loading placeholders. Check an answer with
+multiple mentions while more text arrives and when generation finishes, in both
+chat and agent sessions. A newly encountered mention may load once.
+
 On mobile, every screen has a single-line AI composer directly above the bottom
 dock. A labeled glass button beside it opens the current view's create action:
 **+ Email**, **+ Task**, **+ Document**, **+ Message**, or **+ Event**. Home’s

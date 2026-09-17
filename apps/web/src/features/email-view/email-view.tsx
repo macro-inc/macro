@@ -74,6 +74,7 @@ function EmailDesktopLayout(
 
   return (
     <ViewShell.Root
+      asidePreferenceKey="email"
       resizable
       aside={{ preserveDuringResize: false }}
       main={{ preferredWidth: 640 }}

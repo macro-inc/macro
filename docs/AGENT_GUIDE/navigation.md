@@ -28,6 +28,17 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 (`/app/<left>/<right>`). Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
 
+Desktop app navigation panels have **Hide navigation** at the right end of their
+48px title bar. It hides only that split's navigation; **Show navigation** (the
+hamburger) appears before the main header's title/breadcrumbs, including when a
+document, email, or conversation is open. Home's filter sits beside its label.
+Visibility is a sticky preference per app type (Home, Email, Chat, Tasks, Drive,
+Agents, Customers), independent of other apps and restored on reload. Narrow
+workspaces reopen navigation as an overlay; the backdrop closes it. Mobile keeps
+its existing navigation controls. Block detail panels (including Calendar) have
+**Hide side panel** in their own header and a hamburger **Show side panel** beside
+the main title when hidden, with separate preferences per block type.
+
 Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
 again to restore the split layout.

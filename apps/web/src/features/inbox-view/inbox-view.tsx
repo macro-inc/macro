@@ -76,6 +76,7 @@ function InboxViewRoot() {
               fallback={
                 <div class="size-full min-h-0 bg-panel">
                   <ViewShell.Root
+                    asidePreferenceKey="inbox"
                     aside={{
                       width: 256,
                       min: 224,
