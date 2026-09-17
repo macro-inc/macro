@@ -4,7 +4,6 @@ Preview script for digest.html — renders the Askama template with dummy data
 using Jinja2 (which has nearly identical syntax) and opens it in a browser.
 """
 
-import base64
 import re
 import sys
 import tempfile
@@ -106,12 +105,6 @@ def main() -> None:
         num_truncated=0,
         unsubscribe_url="https://example.com/unsubscribe",
     )
-    logo = Path(__file__).resolve().parents[2] / "apps/web/public/macro-email-logo.png"
-    html = html.replace(
-        "https://macro.com/app/macro-email-logo.png",
-        "data:image/png;base64," + base64.b64encode(logo.read_bytes()).decode("ascii"),
-    )
-
     # Write to a temp file that persists until the script exits
     with tempfile.NamedTemporaryFile(
         mode="w",

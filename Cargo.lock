@@ -15259,6 +15259,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "aws-sdk-sesv2",
+ "html-escape",
  "lettre",
  "macro_env_var",
  "mockall",
