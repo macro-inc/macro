@@ -69,8 +69,10 @@
   tab includes runtime setup. The create/edit dialog has sharing, name,
   `@tag`, runtime, default model, connections, channels, and instructions.
 - **Session**: the header has the sidebar reopen control, a linked PR status chip,
-  favorite, Share, Side panel, and a **Session menu** using the standard block
-  dropdown (Rename, Copy link, Add/remove favorite, and a separate Delete group)
+  favorite, Share, and Side panel. The top-left title uses the same provider icon,
+  saved-title precedence, and title menu as `/app/agent/<id>`; click the caret
+  beside the title for shared block actions such as Rename, Copy link, Favorite,
+  and Delete
   (Rename, Copy link, Delete). A metadata strip lists the agent, runtime,
   model, repository, and status. Chat and Code session inputs
   use the same growing, initially single-line input with the model selector on

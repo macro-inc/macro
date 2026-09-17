@@ -1,5 +1,6 @@
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
 import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
+import { agentSessionTitle } from '@app/features/block-agent/component/AgentSplitHeader';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import {
   AgentSessionProvider,
@@ -10,19 +11,25 @@ import {
   forgetPendingSession,
   pendingSession,
 } from '@app/features/block-agent/context/pending-session';
-import { makeCopyLinkAction } from '@app/features/next-soup/actions';
+import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
+import {
+  SplitTitleFileMenu,
+  StaticSplitLabel,
+} from '@components/app/split-layout/components/SplitLabel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { LoadErrorPanel } from '@core/component/EntityLoadGate';
 import { Permissions } from '@core/component/SharePermissions';
-import { toast } from '@core/component/Toast/Toast';
 import {
   ShareDialogContext,
   ShareModal,
 } from '@core/component/TopBar/ShareButton';
-import {
-  deleteAgentSession,
-  renameAgentSession,
-} from '@queries/agent-session/entity-mutations';
+import { useUserId } from '@core/context/user';
+import { openExternalUrl } from '@core/util/url';
+import type { AgentSessionEntity } from '@entity';
+import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import GitBranch from '@phosphor/git-branch.svg';
+import ShareIcon from '@phosphor/share.svg';
 import {
   type FavoritesFilter,
   useAddFavoriteMutation,
@@ -36,7 +43,6 @@ import { type RosterAgent, runtimeLabel } from '../core/roster';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
 import { modelLabel } from './model-label';
-import { ConfirmDialog, RenameDialog } from './SimpleDialogs';
 import { Topbar } from './Topbar';
 
 const FAVORITES_FILTER: FavoritesFilter = { entityType: ['agent_session'] };
@@ -63,11 +69,31 @@ function SessionContent(props: {
   const addFavorite = useAddFavoriteMutation();
   const removeFavorite = useRemoveFavoriteMutation();
   const [shareOpen, setShareOpen] = createSignal(false);
-  const [renaming, setRenaming] = createSignal(false);
-  const [deleting, setDeleting] = createSignal(false);
-  const [busy, setBusy] = createSignal(false);
+  const userId = useUserId();
 
-  const title = () => metadata()?.title ?? session()?.name ?? 'New chat';
+  const title = () => agentSessionTitle(session(), metadata()?.title);
+  const permissions = () =>
+    session()?.ownerId === userId()
+      ? Permissions.OWNER
+      : session()?.canEdit
+        ? Permissions.CAN_EDIT
+        : Permissions.CAN_VIEW;
+  const entity = (): AgentSessionEntity | undefined => {
+    const current = session();
+    const id = sessionId();
+    if (!current || !id) return;
+    return {
+      type: 'agent_session',
+      id,
+      name: title(),
+      ownerId: current.ownerId,
+      botId: current.botId,
+      status:
+        current.status.kind === 'event'
+          ? current.status.event
+          : current.status.kind,
+    };
+  };
   const isFavorite = () => {
     const id = sessionId();
     return (
@@ -95,44 +121,9 @@ function SessionContent(props: {
     if (isFavorite()) removeFavorite.mutate(args);
     else addFavorite.mutate(args);
   };
-  const copyLink = () => {
-    const id = sessionId();
-    if (id)
-      void makeCopyLinkAction().executeByBlock(
-        id,
-        props.mode === 'code' ? 'coders' : 'agents'
-      );
-  };
   const openInSplit = () => {
     const id = sessionId();
     if (id) openWithSplit({ type: 'agent', id }, { referredFrom: 'launcher' });
-  };
-  const rename = async (name: string) => {
-    const id = sessionId();
-    if (!id) return;
-    setBusy(true);
-    try {
-      await renameAgentSession(id, name);
-      setRenaming(false);
-    } catch {
-      toast.failure('Could not rename the session');
-    } finally {
-      setBusy(false);
-    }
-  };
-  const remove = async () => {
-    const id = sessionId();
-    if (!id) return;
-    setBusy(true);
-    try {
-      await deleteAgentSession(id);
-      setDeleting(false);
-      props.onDeleted();
-    } catch {
-      toast.failure('Could not delete the session');
-    } finally {
-      setBusy(false);
-    }
   };
 
   return (
@@ -145,14 +136,74 @@ function SessionContent(props: {
     >
       <Topbar
         title={title()}
+        titleContent={
+          <>
+            <StaticSplitLabel
+              label={title()}
+              icon={
+                <ProviderIcon
+                  model={metadata()?.model ?? session()?.model}
+                  class="size-4 shrink-0"
+                />
+              }
+            />
+            <Show when={entity()}>
+              {(current) => (
+                <SplitTitleFileMenu>
+                  <SplitFileMenu
+                    id={current().id}
+                    itemType="agent_session"
+                    entityKind="agent"
+                    name={title()}
+                    entity={current()}
+                    permissions={permissions()}
+                    onDelete={props.onDeleted}
+                    ops={[
+                      { op: 'rename' },
+                      { op: 'delete' },
+                      {
+                        label: 'Open repository',
+                        icon: GitBranch,
+                        action: () => {
+                          const url = session()?.repoUrl;
+                          if (url) openExternalUrl(url);
+                        },
+                      },
+                    ]}
+                    tools={[
+                      {
+                        label: () => {
+                          const provider = session()?.external?.provider;
+                          if (provider === 'claude-cloud')
+                            return 'Open in Claude';
+                          return provider
+                            ? `Open in ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`
+                            : 'Open externally';
+                        },
+                        icon: ArrowSquareOut,
+                        condition: () => Boolean(session()?.external?.url),
+                        action: () => {
+                          const url = session()?.external?.url;
+                          if (url) openExternalUrl(url);
+                        },
+                      },
+                      {
+                        label: 'Share',
+                        icon: ShareIcon,
+                        action: () => setShareOpen(true),
+                      },
+                    ]}
+                  />
+                </SplitTitleFileMenu>
+              )}
+            </Show>
+          </>
+        }
         session={{
           favorite: isFavorite(),
           onToggleFavorite: toggleFavorite,
           onShare: () => setShareOpen(true),
           onSidePanel: openInSplit,
-          onRename: () => setRenaming(true),
-          onCopyLink: copyLink,
-          onDelete: () => setDeleting(true),
         }}
       >
         <Show when={session()?.pullRequestUrl}>
@@ -234,32 +285,12 @@ function SessionContent(props: {
               owner={session()?.ownerId ?? ''}
               itemType="agent_session"
               blockAlias="agent"
-              userPermissions={Permissions.OWNER}
+              userPermissions={permissions()}
               isSharePermOpen={shareOpen()}
               setIsSharePermOpen={setShareOpen}
             />
           </Suspense>
         )}
-      </Show>
-      <Show when={renaming()}>
-        <RenameDialog
-          value={title()}
-          pending={busy()}
-          onRename={(name) => void rename(name)}
-          onClose={() => setRenaming(false)}
-        />
-      </Show>
-      <Show when={deleting()}>
-        <ConfirmDialog
-          title="Delete session?"
-          body="This removes the session and its transcript for everyone it was shared with. This cannot be undone."
-          confirmLabel="Delete session"
-          pendingLabel="Deleting…"
-          danger
-          pending={busy()}
-          onConfirm={() => void remove()}
-          onClose={() => setDeleting(false)}
-        />
       </Show>
     </ShareDialogContext.Provider>
   );

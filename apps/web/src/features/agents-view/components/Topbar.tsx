@@ -1,13 +1,8 @@
 import { ViewShell } from '@app/components/view-shell/ViewShell';
-import CopyIcon from '@phosphor/copy.svg';
-import DotsIcon from '@phosphor/dots-three.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
 import ShareIcon from '@phosphor/share.svg';
 import SidebarIcon from '@phosphor/sidebar.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import SparkleFillIcon from '@phosphor-fill/sparkle-fill.svg';
-import { Dropdown } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
 /** What the toolbar can do to the open session. */
@@ -16,9 +11,6 @@ export type SessionActions = {
   onToggleFavorite: () => void;
   onShare: () => void;
   onSidePanel: () => void;
-  onRename: () => void;
-  onCopyLink: () => void;
-  onDelete: () => void;
 };
 
 /**
@@ -27,14 +19,19 @@ export type SessionActions = {
  */
 export function Topbar(props: {
   title: string;
+  titleContent?: JSX.Element;
   session?: SessionActions;
   children?: JSX.Element;
 }) {
   return (
     <ViewShell.TopBar class="touch:flex">
-      <h1 class="min-w-0 flex-1 truncate text-sm font-semibold text-ink">
-        {props.title}
-      </h1>
+      <div class="flex min-w-0 flex-1 items-center">
+        {props.titleContent ?? (
+          <h1 class="min-w-0 truncate text-sm font-semibold text-ink">
+            {props.title}
+          </h1>
+        )}
+      </div>
       <div class="flex shrink-0 items-center gap-2">
         {props.children}
         <div class="bbar" role="toolbar" aria-label="Session actions">
@@ -76,54 +73,6 @@ export function Topbar(props: {
           >
             <SidebarIcon class="ph" />
           </button>
-          <span class="sep session-only" />
-          <Show when={props.session}>
-            {(session) => (
-              <Dropdown placement="bottom-end" gutter={8}>
-                <Dropdown.Trigger
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Session menu"
-                >
-                  <DotsIcon class="size-5" />
-                </Dropdown.Trigger>
-                <Dropdown.Content class="w-56 max-w-[calc(100vw-1rem)]">
-                  <Dropdown.Group>
-                    <Dropdown.Item closeOnSelect onSelect={session().onRename}>
-                      <PencilIcon class="size-4" />
-                      Rename
-                    </Dropdown.Item>
-                    <Dropdown.Item
-                      closeOnSelect
-                      onSelect={session().onCopyLink}
-                    >
-                      <CopyIcon class="size-4" />
-                      Copy link
-                    </Dropdown.Item>
-                    <Dropdown.Item
-                      closeOnSelect
-                      onSelect={session().onToggleFavorite}
-                    >
-                      <SparkleIcon class="size-4" />
-                      {session().favorite
-                        ? 'Remove from favorites'
-                        : 'Add to favorites'}
-                    </Dropdown.Item>
-                  </Dropdown.Group>
-                  <Dropdown.Group>
-                    <Dropdown.Item
-                      closeOnSelect
-                      class="text-failure"
-                      onSelect={session().onDelete}
-                    >
-                      <TrashIcon class="size-4" />
-                      Delete session
-                    </Dropdown.Item>
-                  </Dropdown.Group>
-                </Dropdown.Content>
-              </Dropdown>
-            )}
-          </Show>
         </div>
       </div>
     </ViewShell.TopBar>
