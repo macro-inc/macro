@@ -106,7 +106,7 @@ fn redeemed_link() -> InviteLink {
     }
 }
 
-/// A service that mirrors the staff gate and hands back canned links.
+/// A service that hands back canned links.
 struct FakeGtmInviteService {
     config: GtmInviteConfig,
     resolve: Result<InviteLink, GtmInviteError>,
@@ -135,14 +135,6 @@ impl FakeGtmInviteService {
     }
 }
 
-fn require_staff(user: &MacroUserIdStr<'_>) -> Result<(), GtmInviteError> {
-    if user.is_macro_staff() {
-        Ok(())
-    } else {
-        Err(GtmInviteError::Forbidden)
-    }
-}
-
 impl GtmInviteService for FakeGtmInviteService {
     fn config(&self) -> &GtmInviteConfig {
         &self.config
@@ -150,10 +142,9 @@ impl GtmInviteService for FakeGtmInviteService {
 
     async fn create_link(
         &self,
-        creator: &MacroUserIdStr<'_>,
+        _creator: &MacroUserIdStr<'_>,
         request: CreateInviteLink,
     ) -> Result<InviteLink, GtmInviteError> {
-        require_staff(creator)?;
         Ok(InviteLink {
             first_name: request.first_name,
             ..sample_link()
@@ -162,19 +153,17 @@ impl GtmInviteService for FakeGtmInviteService {
 
     async fn list_links(
         &self,
-        caller: &MacroUserIdStr<'_>,
+        _caller: &MacroUserIdStr<'_>,
         _only_mine: bool,
     ) -> Result<Vec<InviteLink>, GtmInviteError> {
-        require_staff(caller)?;
         Ok(vec![sample_link(), redeemed_link()])
     }
 
     async fn revoke_link(
         &self,
-        caller: &MacroUserIdStr<'_>,
+        _caller: &MacroUserIdStr<'_>,
         _id: Uuid,
     ) -> Result<InviteLink, GtmInviteError> {
-        require_staff(caller)?;
         Ok(InviteLink {
             revoked_at: Some(Utc::now()),
             ..sample_link()
