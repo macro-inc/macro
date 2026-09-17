@@ -3,6 +3,10 @@
  * has its own component under `parts/` (the chat block's handler-per-tool
  * split), user prompts get the chat block's bubble treatment, and the tail
  * thought shimmers while the turn is in flight.
+ *
+ * Whether the turn is in flight is the caller's to say (`state/live-turn`):
+ * a message's own `stop` reads several settled turns as live, and a
+ * transcript that let each message decide showed every one of them working.
  */
 
 import { messageSendMotion } from '@core/util/message-send-motion';
@@ -88,7 +92,10 @@ function ToolGroupPart(props: {
   const parts = () => props.message.parts.slice(props.start, props.end);
   const calls = () =>
     parts().filter((part): part is ToolUsePart => part.kind === 'tool_use');
-  const active = () => calls().some((call) => isToolActive(call.status));
+  // A call the log left running in a finished turn is over (see
+  // `settledToolStatus`), so a settled turn's run is never "Calling".
+  const active = () =>
+    props.inFlight && calls().some((call) => isToolActive(call.status));
 
   return (
     <Show when={calls().at(-1)}>
@@ -171,9 +178,12 @@ function UserMessage(props: { message: FoldedMessage }) {
   );
 }
 
-export function Message(props: { message: FoldedMessage }) {
-  const inFlight = () =>
-    props.message.author.kind === 'agent' && props.message.stop == null;
+export function Message(props: {
+  message: FoldedMessage;
+  /** This is the running turn's reply, by the session's one `working` truth. */
+  inFlight: boolean;
+}) {
+  const inFlight = () => props.inFlight;
   const failure = () =>
     props.message.stop?.kind === 'failed'
       ? props.message.stop.message

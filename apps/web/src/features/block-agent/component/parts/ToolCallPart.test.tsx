@@ -6,6 +6,7 @@ import type { MessagePart } from '@service-agent-fold/generated/types';
 import { render } from '@solidjs/testing-library';
 import type { JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+import type { ToolCallContext } from './shared';
 import { ToolCallPart } from './ToolCallPart';
 
 // The chat block's tool renderer is mocked to a marker: it transitively pulls
@@ -58,15 +59,21 @@ vi.mock('./TextPart', () => ({
 // ToolCard pulls in kobalte + svg sprites and PierreDiff pulls in the diff
 // engine — the layer under test here is the per-kind card components and the
 // dispatcher's routing/common-derivation, which render for real.
-vi.mock('../../ui', () => ({
+vi.mock('../../ui', async () => ({
+  ...(await import('../../ui/types')),
   ToolCard: (props: {
     title: JSX.Element;
     subtitle?: string;
     trailing?: JSX.Element;
+    status: string;
     muted?: boolean;
     children?: JSX.Element;
   }) => (
-    <div data-muted={String(props.muted ?? false)} data-testid="tool-card">
+    <div
+      data-muted={String(props.muted ?? false)}
+      data-status={props.status}
+      data-testid="tool-card"
+    >
       <span data-testid="title">{props.title}</span>
       <span data-testid="subtitle">{props.subtitle}</span>
       <span data-testid="trailing">{props.trailing}</span>
@@ -100,6 +107,14 @@ vi.mock('../../ui', () => ({
 }));
 
 type ToolUsePart = Extract<MessagePart, { kind: 'tool_use' }>;
+
+/** Where a part sits in a turn that is (or is not) still running. */
+const context = (inFlight: boolean): ToolCallContext => ({
+  sessionId: 'session',
+  messageId: 'session:0:agent',
+  partIndex: 0,
+  inFlight,
+});
 
 function toolUse(
   detail: ToolUsePart['detail'],
@@ -214,10 +229,22 @@ describe('ToolCallPart Macro tools', () => {
     );
 
   it('renders a known Macro tool with the chat component', () => {
-    const rendered = render(() => <ToolCallPart part={readContent()} />);
+    const rendered = render(() => (
+      <ToolCallPart part={readContent()} context={context(true)} />
+    ));
     expect(rendered.getByTestId('macro-tool').textContent).toBe('ReadContent');
     expect(rendered.getByTestId('macro-tool').dataset.complete).toBe('false');
     expect(rendered.queryByTestId('tool-card')).toBeNull();
+  });
+
+  it('does not leave a call the turn cut off streaming in the chat component', () => {
+    // The turn ended with this call still `running` in the log; it settles
+    // and, with no response to show, keeps the labelled card.
+    const rendered = render(() => (
+      <ToolCallPart part={readContent()} context={context(false)} />
+    ));
+    expect(rendered.queryByTestId('macro-tool')).toBeNull();
+    expect(rendered.getByTestId('tool-card').dataset.status).toBe('completed');
   });
 
   it('passes the unwrapped output as the chat response once complete', () => {
@@ -639,6 +666,71 @@ describe('ToolCallPart subagents', () => {
     expect(rendered.getByTestId('output').textContent).toBe(
       'Subagent failed: boom'
     );
+  });
+});
+
+describe('ToolCallPart settling', () => {
+  const running = () =>
+    toolUse(
+      { kind: 'terminal', command: 'cargo test', output: null, exitCode: null },
+      { name: 'Bash', status: 'running' }
+    );
+
+  it('keeps a running call active while its turn is live', () => {
+    const rendered = render(() => (
+      <ToolCallPart part={running()} context={context(true)} />
+    ));
+    expect(rendered.getByTestId('tool-card').dataset.status).toBe('running');
+  });
+
+  it('settles a running call once its turn is over, without calling it failed', () => {
+    const rendered = render(() => (
+      <ToolCallPart part={running()} context={context(false)} />
+    ));
+    expect(rendered.getByTestId('tool-card').dataset.status).toBe('completed');
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('false');
+    expect(rendered.getByTestId('trailing').textContent).toBe('');
+  });
+
+  it('settles a call with no turn to place it in', () => {
+    const rendered = render(() => <ToolCallPart part={running()} />);
+    expect(rendered.getByTestId('tool-card').dataset.status).toBe('completed');
+  });
+
+  it('settles a subagent and its nested children with the turn', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={toolUse(
+          {
+            kind: 'subagent',
+            title: 'Add 5+5 with Python',
+            agentType: 'general-purpose',
+            description: 'Add 5+5 with Python',
+            prompt: 'Run python and report the output.',
+            background: false,
+            children: [
+              toolUse(
+                {
+                  kind: 'terminal',
+                  command: 'python3 -c "print(5+5)"',
+                  output: null,
+                  exitCode: null,
+                },
+                { id: 'child', name: 'Bash', status: 'running' }
+              ),
+              { kind: 'thought', text: 'still weighing this' },
+            ],
+            result: null,
+          },
+          { name: 'Agent', status: 'running' }
+        )}
+        context={context(false)}
+      />
+    ));
+    expect(
+      rendered.getAllByTestId('tool-card').map((el) => el.dataset.status)
+    ).toEqual(['completed', 'completed']);
+    expect(rendered.getByTestId('thought').dataset.active).toBe('false');
   });
 });
 
