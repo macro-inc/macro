@@ -105,6 +105,9 @@ After dragging a view's inner sidebar divider (or using its arrow keys), resizin
 the containing split preserves the chosen sidebar width while space permits.
 Narrow splits may shrink or collapse the sidebar; widening restores its chosen
 width for the mounted view.
+Widening the sidebar while its split is constrained also reduces the main
+content's soft width preference, so the next split resize keeps that choice
+instead of snapping the sidebar back to its constrained width.
 
 Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,

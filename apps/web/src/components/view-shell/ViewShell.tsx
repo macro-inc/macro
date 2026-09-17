@@ -11,6 +11,7 @@ import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn } from '@ui';
 import {
   type Accessor,
+  batch,
   createContext,
   createSignal,
   createUniqueId,
@@ -317,19 +318,34 @@ function Aside(props: ViewShellAsideProps) {
   const [resizedWidth, setResizedWidth] = createSignal<{
     configuredWidth: number;
     width: number;
+    mainWidth?: number;
   }>();
-  const preferredWidth = () => {
-    const configuredWidth = ws.aside.layout().width;
+  const resizePreference = () => {
     const resized = resizedWidth();
-    return resized?.configuredWidth === configuredWidth
-      ? resized.width
-      : configuredWidth;
+    return resized?.configuredWidth === ws.aside.layout().width
+      ? resized
+      : undefined;
+  };
+  const preferredWidth = () => {
+    return resizePreference()?.width ?? ws.aside.layout().width;
   };
   const onWidthChangeEnd = (width: number) => {
-    // Automatic solves must preserve the user's choice, not the initial target.
-    // Keep it separate from constrained widths while the shell is narrow.
-    setResizedWidth({ configuredWidth: ws.aside.layout().width, width });
-    local.onWidthChangeEnd?.(width);
+    const shellWidth = ws.width();
+    // A drag also chooses how much space Main gives up. Keeping its old soft
+    // preference would immediately undo a drag made in a constrained shell.
+    const mainWidth =
+      shellWidth !== undefined && ws.detail.placement() !== 'inline'
+        ? shellWidth - RESIZE_GUTTER - width
+        : undefined;
+    batch(() => {
+      local.onWidthChangeEnd?.(width);
+      // A consumer may persist the width back into the layout in this callback.
+      setResizedWidth({
+        configuredWidth: ws.aside.layout().width,
+        width,
+        mainWidth,
+      });
+    });
   };
   const redistributionPreferredSize = () => {
     const layout = ws.aside.layout();
@@ -349,7 +365,13 @@ function Aside(props: ViewShellAsideProps) {
     const availableForAside =
       shellWidth -
       RESIZE_GUTTER -
-      Math.max(mainLayout.preferredWidth, mainLayout.min);
+      Math.max(
+        Math.min(
+          mainLayout.preferredWidth,
+          resizePreference()?.mainWidth ?? Infinity
+        ),
+        mainLayout.min
+      );
 
     return Math.min(width, Math.max(layout.min, availableForAside));
   };

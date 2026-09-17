@@ -10,7 +10,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ViewShell } from './ViewShell';
 import { ViewSidebar } from './ViewSidebar';
 
-const measurement = vi.hoisted(() => ({ width: () => 1200 }));
+const measurement = vi.hoisted(() => ({ width: (): number => 1200 }));
 
 vi.mock('@solid-primitives/resize-observer', () => ({
   createElementSize: () => ({
@@ -50,11 +50,13 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function setup(preserveDuringResize: boolean) {
+function setup(preserveDuringResize: boolean, persistWidth = false) {
   const [width, setWidth] = createSignal(1200);
   const [configuredWidth, setConfiguredWidth] = createSignal(256);
   measurement.width = width;
-  const onWidthChangeEnd = vi.fn();
+  const onWidthChangeEnd = vi.fn((width: number) => {
+    if (persistWidth) setConfiguredWidth(width);
+  });
   const view = render(() => (
     <ViewShell.Root
       resizable
@@ -101,6 +103,37 @@ function setup(preserveDuringResize: boolean) {
 }
 
 describe('ViewShell aside resize preference', () => {
+  it('keeps a pointer resize from the sidebar minimum stable as the split grows', () => {
+    const view = setup(false);
+    view.setWidth(800);
+    expect(view.asideWidth()).toBeCloseTo(224);
+    view.dragAside();
+    expect(view.asideWidth()).toBeCloseTo(264);
+    for (const width of [801, 850, 900, 1200]) {
+      view.setWidth(width);
+      expect(view.asideWidth()).toBeCloseTo(264);
+    }
+  });
+
+  it.each([false, true])(
+    'keeps a manual resize in a constrained split stable as the split grows (persist=%s)',
+    async (persistWidth) => {
+      const view = setup(false, persistWidth);
+      view.setWidth(890);
+      expect(view.asideWidth()).toBeCloseTo(249);
+      await view.growAside();
+      expect(view.asideWidth()).toBeCloseTo(269);
+      for (const width of [891, 900, 1000, 1200]) {
+        view.setWidth(width);
+        expect(view.asideWidth()).toBeCloseTo(269);
+      }
+      view.setWidth(880);
+      expect(view.asideWidth()).toBeCloseTo(259);
+      view.setWidth(1200);
+      expect(view.asideWidth()).toBeCloseTo(269);
+    }
+  );
+
   it('preserves the chosen width through manual collapse and narrow overlays', async () => {
     const view = setup(false);
     await view.growAside();
