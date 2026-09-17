@@ -159,6 +159,7 @@ export function CalendarGrid(props: CalendarGridProps) {
         props.emphasizedEventIds?.has(id)
       );
       const classNames = [
+        ...(event.calendar.isPrimary ? ['calendar-event-primary'] : []),
         ...(emphasized ? ['calendar-event-emphasized'] : []),
         ...(event.eventType === 'out_of_office'
           ? ['calendar-event-out-of-office']
@@ -292,6 +293,7 @@ export function CalendarGrid(props: CalendarGridProps) {
             }
           : undefined
       }
+      eventClassNames={() => ['dark-mode:glass-input']}
       eventDidMount={({ el, event, isMirror }) => {
         const eventId = calendarEventRenderId(event);
         const calendarEvent = eventByRenderId(eventId);

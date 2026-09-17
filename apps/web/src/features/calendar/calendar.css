@@ -443,9 +443,9 @@
 	width: 0.5rem;
 	height: 0.5rem;
 	flex: none;
-	border: 1px solid var(--event-calendar-color, var(--color-calendar));
+	border: 1px solid var(--calendar-event-marker, var(--event-calendar-color, var(--color-calendar)));
 	border-radius: 9999px;
-	background: var(--event-calendar-color, var(--color-calendar));
+	background: var(--calendar-event-marker, var(--event-calendar-color, var(--color-calendar)));
 }
 
 .calendar-view
@@ -465,7 +465,7 @@
 
 /* Unanswered and tentative invitations stay filled, with a softer tint. */
 .calendar-view .fc .fc-event:not(.fc-event-mirror):not(:has(.calendar-event-content-selected)):has(.calendar-event-content:is([data-response-status="tentative"], [data-response-status="needs_action"])) {
-	--fc-event-bg-color: color-mix(in oklch, var(--calendar-event-fill) 85%, white);
+	--fc-event-bg-color: var(--calendar-event-unanswered-fill, color-mix(in oklch, var(--calendar-event-fill) 85%, white));
 }
 
 .calendar-view
@@ -540,6 +540,81 @@
 	.calendar-event-response-dot {
 	border-color: currentColor;
 	background: currentColor;
+}
+
+/* Match the chat composer's surface and depth in both theme modes.
+   Other calendars keep only a trace of their source hue in the opaque fill. */
+html[data-theme-light] .calendar-view {
+	--calendar-event-hover-brightness: 1.1;
+	--calendar-event-marker-lightness: 0.65;
+
+	.fc .fc-event {
+		--calendar-event-fill: color-mix(in oklab, var(--color-composer) 92%, var(--event-calendar-color, var(--calendar-selection-color, var(--color-calendar))));
+		--calendar-event-ink: var(--color-composer-ink);
+		--calendar-event-marker: oklch(from var(--event-calendar-color, var(--color-calendar)) var(--calendar-event-marker-lightness) min(c, 0.045) h);
+		--calendar-event-unanswered-fill: color-mix(in oklab, var(--calendar-event-fill) 94%, var(--color-ink));
+		backdrop-filter: none;
+		--calendar-event-shadow: var(--glass-shadow);
+		box-shadow: var(--calendar-event-ring), var(--calendar-event-shadow);
+	}
+
+	.fc .calendar-event-primary {
+		--calendar-event-fill: var(--color-composer);
+		--calendar-event-marker: var(--color-ink-muted);
+	}
+
+	/* Keep month rows flat; all-day and out-of-office chips retain their depth. */
+	.fc .fc-daygrid-dot-event:not(.calendar-event-out-of-office) {
+		box-shadow: var(--calendar-event-ring);
+
+		&::after {
+			content: none;
+		}
+	}
+
+	.fc .fc-event:has(.calendar-event-content-selected) {
+		--fc-event-bg-color: var(--calendar-event-fill);
+		--fc-event-text-color: var(--calendar-event-ink);
+		--calendar-event-ring: 0 0 0 1px var(--color-accent);
+	}
+
+	.fc .fc-event:has(.calendar-event-content-selected) .calendar-event-content-selected {
+		background-color: transparent;
+		color: var(--calendar-event-ink);
+	}
+
+	/* Creation, drag, and resize previews stay in the same muted palette. */
+	.fc .fc-event-mirror,
+	.fc .calendar-multi-day-selection-preview-event {
+		background: var(--calendar-event-fill);
+		color: var(--calendar-event-ink);
+		box-shadow: 0 0 0 1px var(--color-ink-muted), var(--calendar-event-shadow);
+	}
+
+	.fc .fc-event-mirror .calendar-event-content,
+	.fc .calendar-event-selection-preview {
+		color: var(--calendar-event-ink);
+		filter: none;
+	}
+
+	@media (hover: hover) {
+		.fc .fc-event:hover:not(.fc-event-mirror):not(.calendar-multi-day-selection-preview-event):not(:has(.calendar-event-content-selected)) {
+			filter: brightness(var(--calendar-event-hover-brightness));
+		}
+	}
+}
+
+html[data-theme-light="true"] .calendar-view {
+	--calendar-event-hover-brightness: 0.97;
+	--calendar-event-marker-lightness: 0.5;
+
+	.fc .fc-event {
+		/* The light composer uses a fine outline and soft ambient shadows. */
+		--calendar-event-shadow: 0 0 0 0.9375px var(--color-drop-shadow),
+			0 1.875px 7.5px 0 var(--color-drop-shadow),
+			0 3.75px 75px 7.5px color-mix(in srgb, var(--color-drop-shadow) 60%, transparent);
+		border-width: 0;
+	}
 }
 
 .calendar-view .fc .fc-dayGridMonth-view .fc-daygrid-day-frame {
