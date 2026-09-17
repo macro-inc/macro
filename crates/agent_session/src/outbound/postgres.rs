@@ -814,22 +814,33 @@ impl AgentSessionRepo for PgAgentSessionRepo {
     }
 
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
-        let result = sqlx::query!(
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session set_name_if_default")?;
+        let modified_at = sqlx::query_scalar!(
             r#"
             UPDATE agent_session
             SET name = $2,
                 modified_at = NOW()
             WHERE id = $1
               AND name = $3
+            RETURNING modified_at
             "#,
             id.as_uuid(),
             name,
             crate::domain::model::DEFAULT_AGENT_SESSION_NAME,
         )
-        .execute(&self.pool)
+        .fetch_optional(&mut *transaction)
         .await
         .context("failed to persist generated agent session name")?;
-        Ok(result.rows_affected() == 1)
+        touch_entity_updated(&mut transaction, id, modified_at).await?;
+        transaction
+            .commit()
+            .await
+            .context("commit agent session set_name_if_default")?;
+        Ok(modified_at.is_some())
     }
 
     async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {
