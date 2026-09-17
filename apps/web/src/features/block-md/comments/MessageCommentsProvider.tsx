@@ -1,4 +1,3 @@
-import { useMarkdownDocument } from '../context/markdown-document-context';
 import {
   type CommentId,
   commentView,
@@ -41,6 +40,7 @@ import {
   type VoidComponent,
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
+import { useMarkdownDocument } from '../context/markdown-document-context';
 import { useDeleteNewComments } from './commentOperations';
 import type { Mark, ThreadStore } from './commentType';
 import { documentMessagesQuery } from './messageCommentsResource';
@@ -128,8 +128,13 @@ export const MessageCommentsProvider: VoidComponent<{
   const activeCommentThreadSignal = Object.assign(
     () => commentState.activeCommentThread,
     {
-      set: (v: ThreadId | null | ((prev: ThreadId | null) => ThreadId | null)) =>
-        (setCommentState as (...a: unknown[]) => void)('activeCommentThread', v),
+      set: (
+        v: ThreadId | null | ((prev: ThreadId | null) => ThreadId | null)
+      ) =>
+        (setCommentState as (...a: unknown[]) => void)(
+          'activeCommentThread',
+          v
+        ),
     }
   );
   const activeMarkIdsSignal = Object.assign(() => commentState.activeMarkIds, {

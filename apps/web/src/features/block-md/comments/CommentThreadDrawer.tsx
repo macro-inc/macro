@@ -24,10 +24,10 @@ import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/me
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
+import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { Button, cn } from '@ui';
 import { $setSelection } from 'lexical';
 import { createMemo, createSignal, Show, useContext } from 'solid-js';
-import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 
 /**

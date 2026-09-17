@@ -7,6 +7,7 @@ import {
   useDeleteComment,
   useUpdateComment,
 } from '@block-pdf/store/comments/commentOperations';
+import type { CommentId, ThreadId } from '@core/comments/commentType';
 import {
   baseCommentTheme,
   CommentsContext,
@@ -57,14 +58,14 @@ const useCommentsContext = (): CommentsContextType => {
   const deleteComment = useDeleteComment();
 
   const userId = useUserId();
-  const ownedComment = (id: number) => {
+  const ownedComment = (id: CommentId) => {
     const currentUserId = userId();
     return (
       currentUserId != null &&
       derived.commentMap()?.get(id)?.owner === currentUserId
     );
   };
-  const getCommentById = (id: number) => derived.commentMap()?.get(id);
+  const getCommentById = (id: CommentId) => derived.commentMap()?.get(id);
 
   const commentsContext: CommentsContextType = {
     setActiveThread,
@@ -99,7 +100,7 @@ function CommentsAndSuggestions(props: { pageNumber: number }) {
     signals.selectingCommentThread;
   const isSelectingThreadSelector = createSelector(selectedThreadId);
 
-  const commentTheme = (threadId: number | null) => {
+  const commentTheme = (threadId: ThreadId | null) => {
     const isSelecting = isSelectingThreadSelector(threadId);
     let theme = {
       ...baseCommentTheme,
@@ -111,7 +112,7 @@ function CommentsAndSuggestions(props: { pageNumber: number }) {
     return theme;
   };
 
-  const handleThreadMouseDown = (threadId: number) => (e: MouseEvent) => {
+  const handleThreadMouseDown = (threadId: ThreadId) => (e: MouseEvent) => {
     e.stopPropagation();
     setSelectedThreadId(threadId);
 

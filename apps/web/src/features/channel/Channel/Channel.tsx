@@ -50,6 +50,7 @@ import {
   useUpdateChannelsActivityMutation,
 } from '@queries/channel/activity';
 import { queryClient } from '@queries/client';
+import { queryReadyGate } from '@queries/gate';
 import {
   useDeleteMessageMutation,
   usePatchMessageMutation,
@@ -68,8 +69,6 @@ import {
   useMessageTimelineQuery,
 } from '@queries/messages/timeline';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
-import { queryClient } from '@queries/client';
-import { queryReadyGate } from '@queries/gate';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { useBeforeLeave } from '@solidjs/router';
 import {

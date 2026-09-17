@@ -1,5 +1,5 @@
 import type { Completion } from '@core/client/completion';
-import type { ThreadId } from '@core/comments/commentType';
+import type { CommentId, ThreadId } from '@core/comments/commentType';
 import type { ThreeColumnLayout } from '@core/util/threeColumnLayout';
 import type { GetDocumentResponseDataViewLocation } from '@service-storage/generated/schemas/getDocumentResponseDataViewLocation';
 import type { PDFDocumentProxy } from 'pdfjs-dist/types/src/display/api';
@@ -117,7 +117,7 @@ export function createPdfDocumentState(documentId: Accessor<string>) {
   const disableViewerTextSelection = createSignal(false);
   const disablePageViewClick = createSignal(false);
   const isSelectingViewerText = createSignal(false);
-  const selectingCommentThread = createSignal<number | null>(null);
+  const selectingCommentThread = createSignal<ThreadId | null>(null);
 
   const search = createSignal('');
   const isSearchOpen = createSignal(false);
@@ -254,7 +254,7 @@ export function createPdfDocumentState(documentId: Accessor<string>) {
     return result;
   });
   const commentMap = createMemo(() => {
-    const result = new Map<number, CommentStore[number]>();
+    const result = new Map<CommentId, CommentStore[number]>();
     for (const comment of comments[0]) result.set(comment.id, comment);
     return result;
   });

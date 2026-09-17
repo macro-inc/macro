@@ -28,11 +28,11 @@ import ShareIcon from '@phosphor/share.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
-import { AgentPullRequestChip } from './AgentPullRequestChip';
 import {
   ORIGIN_THREAD_DRAWER_ID,
   sessionOriginThread,
 } from '../context/origin-thread';
+import { AgentPullRequestChip } from './AgentPullRequestChip';
 import { harnessTitle } from './compose-agent-session-options';
 
 export { harnessTitle };

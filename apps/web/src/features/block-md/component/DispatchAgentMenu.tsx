@@ -2,6 +2,10 @@ import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/Mac
 import type { SplitFileMenuAction } from '@components/app/split-layout/context';
 import { editorStateAsMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { toast } from '@core/component/Toast/Toast';
+import {
+  enableUnifiedDocumentDiscussions,
+  isFeatureEnabled,
+} from '@core/constant/featureFlags';
 import { macroIdToEmail, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import ClaudeIcon from '@icon/wide-claude.svg';
@@ -14,10 +18,6 @@ import GitBranch from '@phosphor/git-branch.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
 import { storageServiceClient } from '@service-storage/client';
-import {
-  enableUnifiedDocumentDiscussions,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
 import {
   entityMessagesClient,

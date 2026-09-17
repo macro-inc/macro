@@ -1,3 +1,4 @@
+import type { CommentId, ThreadId } from '@core/comments/commentType';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type {
   Completion,
@@ -15,10 +16,8 @@ import type { LexicalEditor } from 'lexical';
 import { createSignal } from 'solid-js';
 import { createStore, type Store } from 'solid-js/store';
 import type {
-  CommentId,
   CommentStore,
   MarkStore,
-  ThreadId,
   ThreadStore,
 } from '../comments/commentType';
 import type { Diff } from '../types';

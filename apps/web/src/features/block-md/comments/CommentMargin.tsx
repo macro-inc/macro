@@ -1,3 +1,8 @@
+import {
+  type CommentId,
+  isDraftThreadId,
+  type ThreadId,
+} from '@core/comments/commentType';
 import { MinimizedThread } from '@core/comments/MinimizedThreads';
 import {
   CommentsContext,
@@ -5,11 +10,6 @@ import {
   noopCommentOperations,
   Thread,
 } from '@core/comments/Thread';
-import {
-  type CommentId,
-  isDraftThreadId,
-  type ThreadId,
-} from '@core/comments/commentType';
 import {
   enableUnifiedDocumentDiscussions,
   isFeatureEnabled,

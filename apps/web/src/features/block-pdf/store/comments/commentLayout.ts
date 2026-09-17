@@ -6,7 +6,8 @@ import type {
   Overflow,
   PdfRootLayout,
 } from '@block-pdf/type/comments';
-import { isRoot, type Root, type ThreadId } from '@core/comments/commentType';
+import type { ThreadId } from '@core/comments/commentType';
+import { isRoot, type Root } from '@core/comments/commentType';
 import { createMemo, createRenderEffect } from 'solid-js';
 import { reconcile } from 'solid-js/store';
 import { usePdfDocument } from '../../context/pdf-document-context';

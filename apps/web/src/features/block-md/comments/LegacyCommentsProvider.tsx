@@ -3,6 +3,7 @@ import {
   isRoot,
   type Reply,
   type Root,
+  type ThreadId,
 } from '@core/comments/commentType';
 import {
   isWrapperWithIds,
@@ -184,7 +185,7 @@ export const LegacyCommentsProvider: VoidComponent<{
       return;
     }
 
-    const threadIds: number[] = [];
+    const threadIds: ThreadId[] = [];
     for (const id of activeIds) {
       const mark = commentState.marks[id];
       if (!mark) continue;

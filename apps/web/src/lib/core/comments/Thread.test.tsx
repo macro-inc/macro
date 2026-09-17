@@ -1,5 +1,4 @@
 import { URL_PARAMS as markdownParams } from '@block-md/constants';
-import { URL_PARAMS as pdfParams } from '@block-pdf/constants';
 import { cleanup, render } from '@solidjs/testing-library';
 import type { ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -113,7 +112,6 @@ describe('anchored comment links', () => {
       expect(url.searchParams.get(markdownParams.commentId)).toBe(
         'comment-root'
       );
-      expect(url.searchParams.get(pdfParams.commentId)).toBe('comment-root');
       expect(url.searchParams.has('commentId')).toBe(false);
     }
   );

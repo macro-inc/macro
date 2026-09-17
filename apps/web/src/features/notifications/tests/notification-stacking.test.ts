@@ -167,7 +167,7 @@ describe('channel notification scoping', () => {
         8000,
         'other'
       ),
-      createDocCommentNotification('document-comment', 1, 2, 7000),
+      createDocCommentNotification('document-comment', '1', '2', 7000),
     ];
     for (let mask = 0; mask < 2 ** candidates.length; mask++) {
       const notifications = candidates.filter((_, i) => mask & (1 << i));
