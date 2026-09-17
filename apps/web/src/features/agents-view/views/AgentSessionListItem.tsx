@@ -1,5 +1,6 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
+import { AgentPullRequestIcon } from '@app/features/block-agent/component/AgentPullRequestChip';
+import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
 import type { AgentSessionEntity } from '@entity';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import CodeIcon from '@phosphor/code.svg';
@@ -9,10 +10,7 @@ import { useAgentsQuery } from '@queries/agents/agents';
 import { cn, pressHandlers } from '@ui';
 import { ErrorBoundary, Show, Suspense } from 'solid-js';
 import { kindForHarness, modeForKind, systemBotKind } from '../core/agent-kind';
-import {
-  conversationState,
-  conversationStateLabel,
-} from '../core/conversation-state';
+import { conversationState } from '../core/conversation-state';
 import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
 import { conversationTimestamp } from '../core/recent-conversations';
@@ -22,7 +20,6 @@ type Props = {
   active?: boolean;
   unread?: boolean;
   mode?: AgentsMode;
-  handle?: string;
   onOpen?: (event: MouseEvent) => void;
 };
 
@@ -51,17 +48,13 @@ function SessionListItem(props: Props) {
       ? modeForKind(kindForHarness(harness))
       : (props.mode ?? modeForKind(systemBotKind(botId()) ?? 'agent'));
   };
-  const label = () => {
-    const handle = props.handle ?? agent()?.bot.handle;
-    if (handle) return `@${handle.replace(/^@/, '')}`;
-    return (
-      (session()?.harness === 'cursor' ? '@cursor' : undefined) ??
-      props.entity.bot?.name
-    );
-  };
   const title = () => props.entity.name || session()?.name || 'Untitled chat';
   const state = () => conversationState(props.entity.status);
-  const pullRequestUrl = () => session()?.pullRequestUrl;
+  const pullRequest = () => parseGithubPrUrl(session()?.pullRequestUrl ?? '');
+  const pullRequestUrl = () => {
+    const pr = pullRequest();
+    return pr ? prHtmlUrl(pr) : undefined;
+  };
 
   return (
     <ViewSidebar.Item
@@ -69,7 +62,7 @@ function SessionListItem(props: Props) {
       active={props.active}
       class={cn(
         'relative',
-        mode() === 'code' && 'h-auto min-h-12 items-start py-1.5 touch:h-auto'
+        pullRequest() && 'h-auto min-h-12 items-start py-1.5 touch:h-auto'
       )}
       data-agent-session-row={props.entity.id}
       data-kind={mode()}
@@ -87,7 +80,15 @@ function SessionListItem(props: Props) {
           when={state() === 'starting'}
           fallback={
             <Show when={mode() === 'code'} fallback={<ChatIcon />}>
-              <CodeIcon />
+              <Show when={pullRequestUrl()} fallback={<CodeIcon />}>
+                {(url) => (
+                  <ErrorBoundary fallback={<CodeIcon />}>
+                    <Suspense fallback={<CodeIcon />}>
+                      <AgentPullRequestIcon url={url()} />
+                    </Suspense>
+                  </ErrorBoundary>
+                )}
+              </Show>
             </Show>
           }
         >
@@ -107,27 +108,18 @@ function SessionListItem(props: Props) {
             />
           </Show>
         </span>
-        <Show when={mode() === 'code'}>
-          <span class="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 text-xs leading-4 text-ink-extra-muted">
-            <Show when={label()}>
-              {(name) => <span class="max-w-full truncate">{name()}</span>}
-            </Show>
-            <Show when={label()}>
-              <span>·</span>
-            </Show>
-            <span>{conversationStateLabel(state())}</span>
-            <Show when={pullRequestUrl()}>
-              {(url) => (
-                <span class="pointer-events-auto min-w-0">
-                  <ErrorBoundary fallback={null}>
-                    <Suspense>
-                      <AgentPullRequestChip url={url()} />
-                    </Suspense>
-                  </ErrorBoundary>
-                </span>
-              )}
-            </Show>
-          </span>
+        <Show when={pullRequest()}>
+          {(pr) => (
+            <a
+              href={prHtmlUrl(pr())}
+              target="_blank"
+              rel="noreferrer"
+              class="pointer-events-auto block truncate text-xs leading-4 text-ink-extra-muted hover:text-ink hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+              onClick={(event) => event.stopPropagation()}
+            >
+              View PR #{pr().number} in GitHub
+            </a>
+          )}
         </Show>
       </span>
     </ViewSidebar.Item>

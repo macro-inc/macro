@@ -6,7 +6,7 @@
  */
 
 import { createRoot } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const create = vi.hoisted(() => ({
   resolve: undefined as ((id: string) => void) | undefined,
@@ -21,7 +21,16 @@ vi.mock('@service-agent-harness/client', () => ({
         new Promise((resolve) => {
           create.resolve = (id: string) =>
             resolve({ isErr: () => false, value: { session: { id } } });
-          create.reject = () => resolve({ isErr: () => true });
+          create.reject = () =>
+            resolve({
+              isErr: () => true,
+              error: [
+                {
+                  code: 'HTTP_ERROR',
+                  message: 'Connect GitHub to use this repository.',
+                },
+              ],
+            });
         })
     ),
     control: create.control,
@@ -36,6 +45,8 @@ const { resolveSessionId } = await import('./resolve-session-id');
 
 /** Let the mocked create's `.then` run. */
 const flush = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+beforeEach(() => create.control.mockReset());
 
 describe('a block id that is already a session', () => {
   it('resolves to itself, never pending', () => {
@@ -75,6 +86,8 @@ describe('a placeholder', () => {
       await flush();
 
       expect(resolved.failed()).toBe(true);
+      expect(resolved.pending()).toBe(false);
+      expect(resolved.error()).toBe('Connect GitHub to use this repository.');
       expect(resolved.sessionId()).toBeUndefined();
       dispose();
     });
@@ -108,6 +121,42 @@ describe('a placeholder', () => {
         ['session-10', { type: 'prompt', prompt: 'Fix the tests' }],
       ]);
       expect(resolved.sessionId()).toBe('session-10');
+      dispose();
+    });
+  });
+
+  it('shows a model failure without sending the prompt on the wrong model', async () => {
+    create.control.mockResolvedValue({
+      isErr: () => true,
+      error: [{ code: 'HTTP_ERROR', message: 'Model is unavailable.' }],
+    });
+    const placeholder = startPendingSession({
+      modelOverride: 'missing',
+      prompt: 'Hello',
+    });
+    await createRoot(async (dispose) => {
+      const resolved = resolveSessionId(() => placeholder);
+      create.resolve?.('session-model-error');
+      await flush();
+      expect(resolved.error()).toBe('Model is unavailable.');
+      expect(resolved.pending()).toBe(false);
+      expect(create.control).toHaveBeenCalledTimes(1);
+      dispose();
+    });
+  });
+
+  it('shows the first prompt failure', async () => {
+    create.control.mockResolvedValue({
+      isErr: () => true,
+      error: [{ code: 'HTTP_ERROR', message: 'Runtime is disconnected.' }],
+    });
+    const placeholder = startPendingSession({ prompt: 'Hello' });
+    await createRoot(async (dispose) => {
+      const resolved = resolveSessionId(() => placeholder);
+      create.resolve?.('session-prompt-error');
+      await flush();
+      expect(resolved.error()).toBe('Runtime is disconnected.');
+      expect(resolved.pending()).toBe(false);
       dispose();
     });
   });

@@ -4,6 +4,7 @@ import {
   CURSOR_BOT_NAME,
 } from '@core/constant/cursorAgent';
 import {
+  isMacroAgentId,
   MACRO_AGENT_HANDLE,
   MACRO_AGENT_NAME,
 } from '@core/constant/macroAgent';
@@ -119,18 +120,10 @@ function runtimeConnected(
         false
       );
     default:
-      return false;
+      // Cloud runtimes have no paired-machine connection; the service owns
+      // their availability and reports setup errors when they are used.
+      return true;
   }
-}
-
-/**
- * Supported runtimes for starting sessions from the composer. Paired runtimes
- * remain in the roster for existing sessions, but start from channel mentions.
- */
-function startableFromComposer(harness: string): boolean {
-  return (
-    harness === 'in-memory' || harness === 'macro-inmem' || harness === 'cursor'
-  );
 }
 
 function persistedAgent(
@@ -139,7 +132,6 @@ function persistedAgent(
 ): RosterAgent {
   const harnessId = agent.harness_id ?? undefined;
   const connected = runtimeConnected(agent.harness, harnessId, input);
-  const startable = startableFromComposer(agent.harness);
   return {
     id: agent.bot.id,
     botId: agent.bot.id,
@@ -164,13 +156,14 @@ function persistedAgent(
       agent.harness === 'cursor' && input.cursorNeedsConnection
         ? 'Connect Cursor'
         : undefined,
-    unavailableReason: startable
-      ? agent.harness === 'cursor' && !connected
-        ? 'Connect Cursor to start it'
-        : undefined
-      : connected
-        ? 'Runs on its own machine · start it from a channel mention'
-        : 'Its runtime is disconnected',
+    unavailableReason:
+      agent.harness === 'macrod'
+        ? connected
+          ? 'Runs on its own machine · start it from a channel mention'
+          : 'Its runtime is disconnected'
+        : agent.harness === 'cursor' && !connected
+          ? 'Connect Cursor to start it'
+          : undefined,
     persisted: agent,
   };
 }
@@ -212,11 +205,14 @@ export function buildAgentRoster(input: RosterInput): RosterAgent[] {
   ];
 }
 
-/** Both chat and coding agents supported by the new-conversation composer. */
-export function rosterForComposer(
+/** Every agent belongs in the picker; Macro is represented by model choices. */
+export function rosterForAgentPicker(
   roster: readonly RosterAgent[]
 ): RosterAgent[] {
-  return roster.filter((agent) => startableFromComposer(agent.harness));
+  return roster.filter(
+    (agent) =>
+      agent.id !== MACRO_PERSONA_ID && !isMacroAgentId(agent.botId ?? agent.id)
+  );
 }
 
 /**

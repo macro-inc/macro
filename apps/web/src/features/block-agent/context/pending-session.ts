@@ -32,6 +32,8 @@ export type PendingSession = {
   sessionId: Accessor<string | undefined>;
   /** The create failed — this block has nothing to become. */
   failed: Accessor<boolean>;
+  /** The startup error returned by the service. */
+  error: Accessor<string | undefined>;
 };
 
 const pending = new Map<string, PendingSession>();
@@ -68,8 +70,12 @@ export function startPendingSession(
 ): string {
   const placeholder = `${PLACEHOLDER_PREFIX}${crypto.randomUUID()}`;
   const [sessionId, setSessionId] = createSignal<string>();
-  const [failed, setFailed] = createSignal(false);
-  pending.set(placeholder, { sessionId, failed });
+  const [error, setError] = createSignal<string>();
+  pending.set(placeholder, {
+    sessionId,
+    failed: () => error() !== undefined,
+    error,
+  });
 
   void agentHarnessServiceClient
     .create({
@@ -80,7 +86,10 @@ export function startPendingSession(
     } satisfies CreateAgentSessionRequest)
     .then(async (result) => {
       if (result.isErr()) {
-        setFailed(true);
+        setError(
+          result.error.map((error) => error.message).join(' ') ||
+            'The agent session could not be created.'
+        );
         return;
       }
       const id = result.value.session.id;
@@ -90,7 +99,10 @@ export function startPendingSession(
           model: options.modelOverride,
         });
         if (changed.isErr()) {
-          setFailed(true);
+          setError(
+            changed.error.map((error) => error.message).join(' ') ||
+              'The selected model could not be applied.'
+          );
           return;
         }
       }
@@ -101,14 +113,21 @@ export function startPendingSession(
           prompt,
         });
         if (delivered.isErr()) {
-          setFailed(true);
+          setError(
+            delivered.error.map((error) => error.message).join(' ') ||
+              'The first message could not be sent.'
+          );
           return;
         }
         markMessageSent(`agent:${id}:${delivered.value.actionId}`);
       }
       setSessionId(id);
     })
-    .catch(() => setFailed(true));
+    .catch(() =>
+      setError(
+        'Could not reach the agent service. Check your connection and try again.'
+      )
+    );
 
   return placeholder;
 }

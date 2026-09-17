@@ -29,11 +29,7 @@ vi.mock('@queries/agents/agents', () => ({
   useAgentsQuery: () => ({ isSuccess: true, data: [] }),
 }));
 vi.mock('@app/features/block-agent/component/AgentPullRequestChip', () => ({
-  AgentPullRequestChip: (props: { url: string }) => (
-    <a href={props.url} onClick={(event) => event.preventDefault()}>
-      #42 Open
-    </a>
-  ),
+  AgentPullRequestIcon: () => <svg data-pr-icon />,
 }));
 vi.mock('@entity', () => ({
   Entity: { Title: () => 'Recent chat', Timestamp: () => 'now' },
@@ -103,7 +99,6 @@ describe('mixed Agents sidebar', () => {
         error={false}
         hasNextPage={false}
         loadingNextPage={false}
-        handleForBot={() => undefined}
         onNewConversation={create}
         onSearchChange={vi.fn()}
         onOpenConversation={open}
@@ -157,7 +152,6 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
           error={false}
           hasNextPage={false}
           loadingNextPage={false}
-          handleForBot={() => undefined}
           onNewConversation={vi.fn()}
           onSearchChange={vi.fn()}
           onOpenConversation={open}
@@ -177,15 +171,17 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
       harness: 'cursor',
       pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
     });
-    const pr = screen.getByRole('link', { name: '#42 Open' });
+    const pr = screen.getByRole('link', { name: 'View PR #42 in GitHub' });
     expect(pr.getAttribute('href')).toBe(
       'https://github.com/macro-inc/macro/pull/42'
     );
     expect(pr.closest('button')).toBeNull();
     expect(view.container.querySelector('[data-kind="code"]')).toBeTruthy();
-    expect(view.container.querySelector('[data-coding-icon]')).toBeTruthy();
-    expect(screen.getByText('@cursor')).toBeTruthy();
-    expect(screen.getByText('Ready')).toBeTruthy();
+    expect(view.container.querySelector('[data-pr-icon]')).toBeTruthy();
+    expect(view.container.querySelector('[data-coding-icon]')).toBeNull();
+    expect(screen.queryByText('@cursor')).toBeNull();
+    expect(screen.queryByText('Ready')).toBeNull();
+    expect(pr.getAttribute('target')).toBe('_blank');
     fireEvent.mouseDown(pr, { button: 0, detail: 1 });
     fireEvent.click(pr);
     expect(open).not.toHaveBeenCalled();

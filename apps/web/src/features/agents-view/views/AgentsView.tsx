@@ -150,10 +150,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     conversationMode(conversation, (botId) =>
       kindForBot(botId, rosterSource.roster())
     );
-  const handleForBot = (botId: string | undefined) =>
-    botId
-      ? rosterSource.roster().find((agent) => agent.botId === botId)?.handle
-      : undefined;
 
   onMount(() => panel.handle.setDisplayName('Agents'));
 
@@ -315,7 +311,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                   error={query.isLoadingError}
                   hasNextPage={Boolean(query.hasNextPage)}
                   loadingNextPage={query.isFetchingNextPage}
-                  handleForBot={handleForBot}
                   onNewConversation={showComposer}
                   onSearchChange={setSearch}
                   onOpenConversation={(conversation, event) =>
