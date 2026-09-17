@@ -196,3 +196,19 @@ cargo run -p claude_cloud_agents --example smoke -- \
 ```
 
 Omitting `--session` creates a new cloud conversation. Do not automatically rerun a failed create; inspect the account first. The runner prints only the session identity and outcome, not tokens or private transcript contents.
+
+## MCP gateway networking
+
+Before creating a Claude cloud conversation, the shared Claude harness lifecycle
+allows the deployment’s `AgentHarnessEgressUrl` hostname in the connected owner's
+selected environment. Limited networking keeps its existing allowed hosts,
+package access, and connector settings; only the exact gateway hostname is
+added. Unrestricted environments need no update. Disabled or unrecognized
+network policies fail before session creation with an environment setup error.
+An environment update failure can be retried without creating duplicate sessions.
+
+Claude captures networking when it creates a container. Start a new Macro agent
+session after fixing an environment; existing containers keep their old policy.
+The earlier MCP HTTP 403 failure was reproduced with an empty allowlist despite
+`allow_mcp_servers: true`: adding `dev-gateway.macro.com` let a fresh Claude
+session connect `macro`, `macro_internal`, and `linear` and complete a prompt.

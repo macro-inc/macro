@@ -4,6 +4,11 @@ use serde::{Deserialize, Serialize};
 /// The deliberately bounded failures exposed to Macro. Never includes HTTP bodies.
 #[derive(Debug, thiserror::Error)]
 pub enum Error {
+    /// The cloud environment cannot safely allow the deployment's MCP gateway.
+    #[error(
+        "Claude's environment cannot reach Macro's MCP gateway. Check its network settings in Claude Code on the web, then start a new session."
+    )]
+    EnvironmentNetwork,
     /// MCP setup failed or the worker did not acknowledge it before prompting.
     #[error(
         "Claude could not connect the session's MCP servers; check the harness connection and retry"
