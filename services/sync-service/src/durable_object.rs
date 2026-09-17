@@ -47,6 +47,7 @@ pub mod status_codes {
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 
 mod spreadsheet_api;
+mod spreadsheet_effects;
 
 mod path {
     pub const CONNECT: &str = "connect";

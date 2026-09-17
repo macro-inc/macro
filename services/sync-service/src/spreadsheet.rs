@@ -25,6 +25,10 @@ pub enum SpreadsheetError {
     Invalid(&'static str),
     #[error("The spreadsheet update could not be persisted.")]
     Persistence,
+    #[error(
+        "The spreadsheet was saved, but its update notifications could not be completed. Read the workbook before retrying."
+    )]
+    Notification,
 }
 
 /// Capability minted only after the adapter verifies a document permission JWT.
@@ -87,9 +91,19 @@ pub trait SpreadsheetUpdatePort {
     async fn apply_and_persist(&self, update: &[u8]) -> Result<(), SpreadsheetError>;
 }
 
+/// Side effects after a durable write; the use case owns their order and whether
+/// a newly applied edit needs document publication. Implementations own only the
+/// notification transport and scheduling mechanisms.
+pub trait SpreadsheetUpdateEffects {
+    fn broadcast(&self, update: &[u8]) -> Result<(), SpreadsheetError>;
+    fn publish_changed_document(&self) -> Result<(), SpreadsheetError>;
+    async fn keep_alive(&self) -> Result<(), SpreadsheetError>;
+}
+
 pub async fn update(
     access: &SpreadsheetAccess,
     port: &impl SpreadsheetUpdatePort,
+    effects: &impl SpreadsheetUpdateEffects,
     expected_revision: &[u8],
     update: &[u8],
 ) -> Result<PreparedUpdate, SpreadsheetError> {
@@ -97,6 +111,11 @@ pub async fn update(
     // Persist retries too: a prior request may have applied in memory but lost
     // its storage write or response. Duplicate Loro imports are idempotent.
     port.apply_and_persist(&prepared.update).await?;
+    effects.broadcast(&prepared.update)?;
+    if prepared.applied {
+        effects.publish_changed_document()?;
+    }
+    effects.keep_alive().await?;
     Ok(prepared)
 }
 

@@ -149,6 +149,7 @@ describe('spreadsheet store', () => {
       focus: 'B2',
       sheetId: id,
     });
+    expect(selections.at(-1)).toEqual(alice.selection());
     expect(alice.cells().A1.value).toBe('budget');
     expect(alice.layout().columnWidths[0]).toBe(300);
     const version = doc.version().toJSON();
@@ -157,6 +158,54 @@ describe('spreadsheet store', () => {
     dispose();
     doc.free();
   });
+
+  it.each(['switch', 'delete'] as const)(
+    'publishes the restored cursor on sheet %s and cancels pending old-sheet presence',
+    async (action) => {
+      vi.useFakeTimers();
+      const doc = new LoroDoc();
+      const publish = vi.fn();
+      let dispose = () => {};
+      try {
+        const store = createRoot((cleanup) => {
+          dispose = cleanup;
+          return createSpreadsheetStore({
+            canEdit: () => true,
+            source: {
+              doc: () => doc,
+              ready: () => true,
+              error: () => undefined,
+              status: () => 'local',
+              peers: () => [],
+              setSelection: publish,
+            },
+          });
+        });
+        await Promise.resolve();
+        store.setSelection({ anchor: 'C3', focus: 'E5' });
+        const restored = store.selection();
+        const other = store.addSheet('Other')!;
+        store.setSelection({ anchor: 'A1', focus: 'A1' });
+        store.setSelection({ anchor: 'A1', focus: 'B2' });
+        if (action === 'switch') store.setActiveSheet(DEFAULT_SHEET_ID);
+        else {
+          deleteSpreadsheetSheet(doc, other);
+          await Promise.resolve();
+        }
+        expect(store.activeSheetId()).toBe(DEFAULT_SHEET_ID);
+        expect(store.selection()).toEqual(restored);
+        expect(publish).toHaveBeenLastCalledWith(restored);
+        const calls = publish.mock.calls.length;
+        await vi.advanceTimersByTimeAsync(200);
+        expect(publish).toHaveBeenCalledTimes(calls);
+        expect(publish).toHaveBeenLastCalledWith(restored);
+      } finally {
+        dispose();
+        doc.free();
+        vi.useRealTimers();
+      }
+    }
+  );
 
   it('filters remote cursors by sheet and treats legacy presence as Sheet1', async () => {
     const doc = new LoroDoc();

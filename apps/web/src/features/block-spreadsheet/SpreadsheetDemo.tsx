@@ -2,7 +2,6 @@ import {
   ChatWithAgentIcon,
   openChatWithAgent,
 } from '@app/features/chat/ChatWithAgentButton';
-import { SplitFileActionsMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
@@ -14,7 +13,6 @@ import {
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { downloadFile } from '@filesystem/download';
-import IconRename from '@phosphor/pencil-line.svg';
 import IconShared from '@phosphor/share.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal } from 'solid-js';
@@ -26,6 +24,7 @@ import { createLocalSpreadsheetSource } from './primitives/create-local-spreadsh
 import { createSpreadsheetStore } from './primitives/create-spreadsheet-store';
 import { createSpreadsheetDocument } from './queries/create-spreadsheet';
 import { saveSpreadsheetDraft } from './queries/save-spreadsheet-draft';
+import { SpreadsheetDraftMenu } from './views/SpreadsheetDraftMenu';
 import { SpreadsheetEditor } from './views/SpreadsheetEditor';
 
 const sample: SpreadsheetCells = {
@@ -126,40 +125,19 @@ export default function SpreadsheetDemo() {
         />
       </SplitHeaderLeft>
       <SplitTitleFileMenu>
-        <SplitFileActionsMenu
+        <SpreadsheetDraftMenu
           open={menuOpen()}
           onOpenChange={setMenuOpen}
-          groups={{
-            entity: [],
-            sender: [],
-            sharing: [
-              {
-                label: 'Share',
-                icon: IconShared,
-                action: () => void actions.share(),
-              },
-            ],
-            macro: [
-              {
-                label: 'Ask Macro',
-                icon: ChatWithAgentIcon,
-                action: () => void actions.ask(),
-              },
-            ],
-            file: canRename()
-              ? [
-                  {
-                    label: 'Rename',
-                    icon: IconRename,
-                    action: () => {
-                      // Let the menu restore focus before the dialog claims it.
-                      requestAnimationFrame(() => setRenameDraft(name()));
-                    },
-                  },
-                ]
-              : [],
-            delete: [],
-          }}
+          onAsk={() => void actions.ask()}
+          onShare={() => void actions.share()}
+          onRename={
+            canRename()
+              ? () => {
+                  // Let the menu restore focus before the dialog claims it.
+                  requestAnimationFrame(() => setRenameDraft(name()));
+                }
+              : undefined
+          }
         />
       </SplitTitleFileMenu>
       <SplitHeaderRight>

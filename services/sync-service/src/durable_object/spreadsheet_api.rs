@@ -1,9 +1,9 @@
 //! HTTP adapter for the native spreadsheet snapshot/update service.
 use base64::{Engine, engine::general_purpose::STANDARD};
-use bebop::SubRecord;
 use futures::StreamExt;
 use serde::{Deserialize, Serialize};
 
+use super::spreadsheet_effects::WorkerSpreadsheetEffects;
 use super::*;
 use crate::{
     spreadsheet::{self, MAX_BINARY_BYTES, MAX_REVISION_BYTES, SpreadsheetError},
@@ -39,6 +39,7 @@ fn error_response(error: SpreadsheetError) -> Result<Response> {
         SpreadsheetError::TooLarge => 413,
         SpreadsheetError::Invalid(_) => 400,
         SpreadsheetError::Persistence => 503,
+        SpreadsheetError::Notification => 500,
     };
     Ok(
         Response::from_json(&serde_json::json!({ "error": error.to_string() }))?
@@ -132,38 +133,19 @@ impl DocumentSyncSession {
             storage: &storage,
             attribution: attribution.as_ref(),
         };
+        let effects = WorkerSpreadsheetEffects {
+            session: self,
+            document_state: &state,
+            document_id,
+            attribution: attribution.as_ref(),
+        };
         // The service synchronously compares + validates + imports before its
         // first storage await, just like a websocket update in this isolate.
-        let prepared = match spreadsheet::update(&access, &port, &revision, &update).await {
+        let prepared = match spreadsheet::update(&access, &port, &effects, &revision, &update).await
+        {
             Ok(prepared) => prepared,
             Err(error) => return error_response(error),
         };
-        let message = crate::generated::schema::FromRemote::RemoteUpdate {
-            update: bebop::SliceWrapper::Raw(&prepared.update),
-        };
-        let mut message_bytes = Vec::with_capacity(message.serialized_size());
-        message
-            .serialize(&mut message_bytes)
-            .context("Failed to serialize spreadsheet update")?;
-        for socket in self.get_websockets() {
-            if let Err(error) = socket.send_with_bytes(&message_bytes) {
-                warn!(error = ?error, "failed to broadcast spreadsheet update; continuing");
-            }
-        }
-        if prepared.applied {
-            let attribution = claims.actor.map(|actor| EditAttribution {
-                actor,
-                on_behalf_of: claims.user_id,
-            });
-            let snapshot = state.export_shallow_snapshot()?;
-            let env = self.env.clone();
-            let document_id = document_id.to_owned();
-            self.state.wait_until(async move {
-                report_new_doc_state(&document_id, &snapshot, false, &env, attribution).await;
-                report_interaction(&document_id, &env, InteractionReason::Edited).await;
-            });
-        }
-        bump_alarm(&self.state).await?;
         Response::from_json(&UpdateResponse {
             revision: STANDARD.encode(prepared.revision),
             applied: prepared.applied,

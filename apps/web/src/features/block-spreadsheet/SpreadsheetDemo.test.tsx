@@ -1,4 +1,3 @@
-import type { SplitFileMenuActionGroups } from '@components/app/split-layout/context';
 import {
   cleanup,
   fireEvent,
@@ -6,7 +5,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { For, type JSX, type ParentProps, Show } from 'solid-js';
+import type { JSX, ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SpreadsheetStore } from './primitives/create-spreadsheet-store';
 
@@ -17,9 +16,15 @@ const mocks = vi.hoisted(() => ({
   replace: vi.fn(),
   failure: vi.fn(),
   download: vi.fn(),
+  menuTrigger: vi.fn(),
+  menuActions: vi.fn(),
 }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
-  useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
+  useSplitPanelOrThrow: () => ({
+    handle: { replace: mocks.replace },
+    setTitleFileMenuTrigger: mocks.menuTrigger,
+    setTitleFileMenuActions: mocks.menuActions,
+  }),
 }));
 vi.mock('@components/app/split-layout/components/SplitHeader', () => ({
   SplitHeaderLeft: (props: ParentProps) => props.children,
@@ -29,35 +34,7 @@ vi.mock('@components/app/split-layout/components/SplitLabel', () => ({
   StaticSplitLabel: (props: { label: string }) => <span>{props.label}</span>,
   SplitTitleFileMenu: (props: ParentProps) => props.children,
 }));
-vi.mock('@components/app/split-layout/components/SplitFileMenu', () => ({
-  SplitFileActionsMenu: (props: {
-    open: boolean;
-    onOpenChange: (open: boolean) => void;
-    groups: SplitFileMenuActionGroups;
-  }) => (
-    <>
-      <button type="button" onClick={() => props.onOpenChange(!props.open)}>
-        File actions
-      </button>
-      <Show when={props.open}>
-        <For each={Object.values(props.groups).flat()}>
-          {(action) => (
-            <button
-              type="button"
-              role="menuitem"
-              onClick={() => {
-                action.action?.();
-                props.onOpenChange(false);
-              }}
-            >
-              {action.label}
-            </button>
-          )}
-        </For>
-      </Show>
-    </>
-  ),
-}));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@app/features/chat/ChatWithAgentButton', () => ({
   ChatWithAgentIcon: () => null,
@@ -75,6 +52,7 @@ vi.mock('./queries/save-spreadsheet-draft', () => ({
 }));
 vi.mock('@ui', async () => ({
   Dialog: (await import('@ui/components/Dialog')).Dialog,
+  Dropdown: (await import('@ui/components/Dropdown')).Dropdown,
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
       type={props.type ?? 'button'}
@@ -174,13 +152,32 @@ describe('Ask Macro in the spreadsheet demo', () => {
 });
 
 describe('Spreadsheet draft title menu', () => {
+  it('registers title actions and removes them when the draft closes', () => {
+    const view = render(() => <SpreadsheetDemo />);
+    expect(mocks.menuTrigger).toHaveBeenCalledWith(expect.any(Function));
+    expect(mocks.menuActions).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        macro: [expect.objectContaining({ label: 'Ask Macro' })],
+        sharing: [expect.objectContaining({ label: 'Share' })],
+        file: [expect.objectContaining({ label: 'Rename' })],
+      })
+    );
+    view.unmount();
+    expect(mocks.menuTrigger).toHaveBeenLastCalledWith(undefined);
+    expect(mocks.menuActions).toHaveBeenLastCalledWith(undefined);
+  });
+
   it('renames the title, exported file, saved document, and chat attachment together', async () => {
     render(() => <SpreadsheetDemo />);
-    fireEvent.click(screen.getByRole('button', { name: 'File actions' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'File actions' }), {
+      key: 'Enter',
+    });
     expect(
       screen.getAllByRole('menuitem').map((item) => item.textContent)
-    ).toEqual(['Share', 'Ask Macro', 'Rename']);
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Rename' }));
+    ).toEqual(['Ask Macro', 'Share', 'Rename']);
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Rename' }), {
+      key: 'Enter',
+    });
     const input = await screen.findByRole('textbox', {
       name: 'Spreadsheet name',
     });
@@ -193,8 +190,12 @@ describe('Spreadsheet draft title menu', () => {
       expect.any(Blob),
       'Quarterly plan.csv'
     );
-    fireEvent.click(screen.getByRole('button', { name: 'File actions' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Ask Macro' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'File actions' }), {
+      key: 'Enter',
+    });
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Ask Macro' }), {
+      key: 'Enter',
+    });
     await waitFor(() => expect(mocks.chat).toHaveBeenCalledOnce());
     expect(mocks.create).toHaveBeenCalledWith({
       title: 'Quarterly plan',
@@ -205,10 +206,14 @@ describe('Spreadsheet draft title menu', () => {
     );
   });
 
-  it('saves from the shared title menu and opens document sharing', async () => {
+  it('saves from the draft title menu and opens document sharing', async () => {
     render(() => <SpreadsheetDemo />);
-    fireEvent.click(screen.getByRole('button', { name: 'File actions' }));
-    fireEvent.click(screen.getByRole('menuitem', { name: 'Share' }));
+    fireEvent.keyDown(screen.getByRole('button', { name: 'File actions' }), {
+      key: 'Enter',
+    });
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Share' }), {
+      key: 'Enter',
+    });
     await waitFor(() => expect(mocks.replace).toHaveBeenCalledOnce());
     expect(mocks.replace).toHaveBeenCalledWith({
       next: {

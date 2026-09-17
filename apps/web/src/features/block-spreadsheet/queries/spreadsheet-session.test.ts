@@ -56,6 +56,118 @@ function fakeLiveSource() {
 }
 
 describe('spreadsheet session', () => {
+  it('reopens from the WAL without writing a stale teardown snapshot', async () => {
+    const remote = new LoroDoc();
+    writeSpreadsheetCells(remote, { A1: { value: 'base' } });
+    const persistence = memoryPersistence();
+    const save = vi.spyOn(persistence.snapshots, 'save');
+    const firstTransport = fakeLiveSource();
+    let closeFirst = () => {};
+    const first = createRoot((dispose) => {
+      closeFirst = dispose;
+      return createSpreadsheetSession(
+        {
+          documentId: firstTransport.live.documentId,
+          canEdit: () => true,
+          syncSource: firstTransport.live,
+          doInitialSync: () =>
+            okAsync({
+              snapshot: remote.export({ mode: 'snapshot' }),
+              awareness: new Uint8Array(),
+            }),
+        },
+        persistence
+      );
+    });
+    await vi.waitFor(() => expect(first.ready()).toBe(true));
+    writeSpreadsheetCells(first.doc()!, { B1: { value: 'unsent local edit' } });
+    await vi.waitFor(async () =>
+      expect(await persistence.wal.getAll()).toHaveLength(1)
+    );
+    closeFirst();
+    const secondTransport = fakeLiveSource();
+    let closeSecond = () => {};
+    const second = createRoot((dispose) => {
+      closeSecond = dispose;
+      return createSpreadsheetSession(
+        {
+          documentId: firstTransport.live.documentId,
+          canEdit: () => true,
+          syncSource: secondTransport.live,
+          doInitialSync: () => errAsync({ type: 'timeout', duration: 10_000 }),
+        },
+        persistence
+      );
+    });
+    await vi.waitFor(() => expect(second.ready()).toBe(true));
+    expect(readSpreadsheetCells(second.doc()!).B1.value).toBe(
+      'unsent local edit'
+    );
+    expect(save).toHaveBeenCalledTimes(2); // Only each session's recovery base.
+    closeSecond();
+    remote.free();
+  });
+
+  it('waits for an in-flight snapshot before a replacement session loads its cache', async () => {
+    const remote = new LoroDoc();
+    writeSpreadsheetCells(remote, { A1: { value: 'base' } });
+    const persistence = memoryPersistence();
+    const originalSave = persistence.snapshots.save;
+    let finishWrite = () => {};
+    const save = vi.spyOn(persistence.snapshots, 'save').mockImplementationOnce(
+      (snapshot) =>
+        new Promise<void>((resolve) => {
+          finishWrite = () => {
+            void originalSave(snapshot).then(resolve);
+          };
+        })
+    );
+    const load = vi.spyOn(persistence.snapshots, 'load');
+    const transport = fakeLiveSource();
+    let closeFirst = () => {};
+    const first = createRoot((dispose) => {
+      closeFirst = dispose;
+      return createSpreadsheetSession(
+        {
+          documentId: transport.live.documentId,
+          canEdit: () => true,
+          syncSource: transport.live,
+          doInitialSync: () =>
+            okAsync({
+              snapshot: remote.export({ mode: 'snapshot' }),
+              awareness: new Uint8Array(),
+            }),
+        },
+        persistence
+      );
+    });
+    await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+    closeFirst();
+    let closeSecond = () => {};
+    const second = createRoot((dispose) => {
+      closeSecond = dispose;
+      return createSpreadsheetSession(
+        {
+          documentId: transport.live.documentId,
+          canEdit: () => true,
+          syncSource: fakeLiveSource().live,
+          doInitialSync: () => errAsync({ type: 'timeout', duration: 10_000 }),
+        },
+        persistence
+      );
+    });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(load).toHaveBeenCalledOnce();
+    expect(second.ready()).toBe(false);
+    finishWrite();
+    await vi.waitFor(() => expect(second.ready()).toBe(true));
+    expect(first.ready()).toBe(false);
+    expect(readSpreadsheetCells(second.doc()!).A1.value).toBe('base');
+    expect(save).toHaveBeenCalledTimes(2);
+    closeSecond();
+    remote.free();
+  });
+
   it('does not accept edits when the initial recovery snapshot cannot be saved', async () => {
     const remote = new LoroDoc();
     const transport = fakeLiveSource();

@@ -42,6 +42,30 @@ export type SpreadsheetSessionOptions = {
   doInitialSync: () => ResultAsync<InitialSync, TimeoutError>;
 };
 
+// Snapshot stores for successive mounts share one IndexedDB key. Finish an
+// already-started write before a new mount reads; never let a disposed session
+// start another write after its replacement has hydrated.
+const snapshotOperations = new Map<string, Promise<void>>();
+
+function serializeSnapshotOperation<T>(
+  documentId: string,
+  operation: () => Promise<T>
+): Promise<T> {
+  const pending = (
+    snapshotOperations.get(documentId) ?? Promise.resolve()
+  ).then(operation);
+  const settled = pending.then(
+    () => {},
+    () => {}
+  );
+  snapshotOperations.set(documentId, settled);
+  void settled.then(() => {
+    if (snapshotOperations.get(documentId) === settled)
+      snapshotOperations.delete(documentId);
+  });
+  return pending;
+}
+
 /** The same Loro, local snapshot, WAL and live transport used by markdown. */
 export function createSpreadsheetSession(
   options: SpreadsheetSessionOptions,
@@ -54,7 +78,7 @@ export function createSpreadsheetSession(
   const manager = new LoroManager(SPREADSHEET_LORO_SCHEMA, {
     documentId: options.documentId,
   });
-  const snapshots =
+  const snapshotStore =
     persistence?.snapshots ??
     new IDBSnapshotStore<Uint8Array>(LORO_SNAPSHOT_DB_NAME, options.documentId);
   const walStore =
@@ -69,6 +93,24 @@ export function createSpreadsheetSession(
   const [ready, setReady] = createSignal(false);
   const [error, setError] = createSignal<string>();
   let disposed = false;
+  const snapshots: SnapshotStore<Uint8Array> = {
+    load: () =>
+      serializeSnapshotOperation(options.documentId, () =>
+        disposed ? Promise.resolve(null) : snapshotStore.load()
+      ),
+    save: (snapshot) =>
+      serializeSnapshotOperation(options.documentId, () => {
+        // Reject rather than report success: the engine must not prune WAL entries
+        // when this session no longer owns a snapshot write.
+        if (disposed)
+          throw new Error('Spreadsheet session closed before snapshot save.');
+        return snapshotStore.save(snapshot);
+      }),
+    delete: () =>
+      serializeSnapshotOperation(options.documentId, () =>
+        disposed ? Promise.resolve() : snapshotStore.delete()
+      ),
+  };
 
   async function preparePersistence(): Promise<boolean> {
     try {
@@ -151,7 +193,7 @@ export function createSpreadsheetSession(
     }
     // Persist the base before accepting edits so a crash can always replay
     // WAL entries against a valid snapshot on the next load.
-    if (!(await persistenceReady)) return;
+    if (!(await persistenceReady) || disposed) return;
     if (!(await saveSnapshot())) {
       if (!disposed)
         setError(
@@ -248,7 +290,8 @@ export function createSpreadsheetSession(
   async function disposeSession(): Promise<void> {
     await initialization;
     await recovery;
-    await saveSnapshot();
+    // Local changes already enter the WAL. A final full snapshot captured by
+    // this old session could overwrite the next session's newer recovery state.
     manager.dispose();
   }
 

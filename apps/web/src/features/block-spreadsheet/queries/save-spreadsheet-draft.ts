@@ -23,11 +23,11 @@ export async function saveSpreadsheetDraft(
         const initial = await doInitialSync();
         if (initial.isErr())
           throw new Error('Could not connect to spreadsheet.');
-        const { peerId, update } = spreadsheetDraftUpdate(
+        const { peerIds, update } = spreadsheetDraftUpdate(
           snapshot,
           initial.value.snapshot
         );
-        source.registerPeerId(peerId);
+        for (const peerId of peerIds) source.registerPeerId(peerId);
         if (!(await source.pushUpdate([update]))) {
           throw new Error('Spreadsheet save was not acknowledged.');
         }

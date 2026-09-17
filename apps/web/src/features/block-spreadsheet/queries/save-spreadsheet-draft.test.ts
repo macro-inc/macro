@@ -50,6 +50,7 @@ describe('saving a local spreadsheet before sharing', () => {
         for (const update of updates) server.import(update);
         return true;
       }),
+      registerPeerId: vi.fn(),
       cleanup: vi.fn(),
     };
     const doInitialSync = vi.fn(() =>
@@ -85,6 +86,10 @@ describe('saving a local spreadsheet before sharing', () => {
     }
     const observed = observeSave();
     await vi.waitFor(() => expect(source.pushUpdate).toHaveBeenCalledOnce());
+    expect(source.registerPeerId).toHaveBeenCalledExactlyOnceWith(draft.peerId);
+    expect(source.registerPeerId.mock.invocationCallOrder[0]).toBeLessThan(
+      source.pushUpdate.mock.invocationCallOrder[0]
+    );
     expect(saved).toBe(false);
     expect(source.cleanup).not.toHaveBeenCalled();
     acknowledge(true);
@@ -106,13 +111,14 @@ describe('saving a local spreadsheet before sharing', () => {
     ).rejects.toThrow('not acknowledged');
     expect(first.source.cleanup).toHaveBeenCalledOnce();
     writeSpreadsheetCells(draft, { A1: null, B2: { value: '123' } });
-    connect();
+    const retry = connect();
     await saveSpreadsheetDraft(
       'saved-sheet',
       draft.export({ mode: 'snapshot' })
     );
     expect(readSpreadsheetCells(server)).toEqual(readSpreadsheetCells(draft));
     expect(readSpreadsheetLayout(server).rowCount).toBe(300);
+    expect(retry.source.registerPeerId).not.toHaveBeenCalled();
   });
 
   it('does not write when the initial connection fails', async () => {

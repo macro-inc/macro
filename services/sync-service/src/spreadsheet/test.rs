@@ -1,4 +1,5 @@
 use super::*;
+use std::cell::{Cell, RefCell};
 
 fn document() -> LoroDoc {
     let doc = LoroDoc::new();
@@ -143,4 +144,115 @@ fn rejects_nested_containers_even_when_their_deep_value_looks_scalar() {
         prepare_update(&access(), &doc, &doc.oplog_vv().encode(), &update),
         Err(SpreadsheetError::Invalid(_))
     ));
+}
+
+struct UpdateHarness {
+    doc: LoroDoc,
+    calls: RefCell<Vec<&'static str>>,
+    fail_persist: bool,
+    fail_publish: Cell<bool>,
+}
+
+impl UpdateHarness {
+    fn new() -> Self {
+        Self {
+            doc: document(),
+            calls: RefCell::new(Vec::new()),
+            fail_persist: false,
+            fail_publish: Cell::new(false),
+        }
+    }
+}
+
+impl SpreadsheetUpdatePort for UpdateHarness {
+    fn document(&self) -> &LoroDoc {
+        &self.doc
+    }
+
+    async fn apply_and_persist(&self, update: &[u8]) -> Result<(), SpreadsheetError> {
+        self.calls.borrow_mut().push("persist");
+        self.doc.import(update).unwrap();
+        if self.fail_persist {
+            return Err(SpreadsheetError::Persistence);
+        }
+        Ok(())
+    }
+}
+
+impl SpreadsheetUpdateEffects for UpdateHarness {
+    fn broadcast(&self, update: &[u8]) -> Result<(), SpreadsheetError> {
+        self.calls.borrow_mut().push("broadcast");
+        let preview = self.doc.fork();
+        preview.import(update).unwrap();
+        assert_eq!(preview.oplog_vv(), self.doc.oplog_vv());
+        Ok(())
+    }
+
+    fn publish_changed_document(&self) -> Result<(), SpreadsheetError> {
+        self.calls.borrow_mut().push("publish");
+        if self.fail_publish.get() {
+            return Err(SpreadsheetError::Notification);
+        }
+        Ok(())
+    }
+
+    async fn keep_alive(&self) -> Result<(), SpreadsheetError> {
+        self.calls.borrow_mut().push("keep_alive");
+        Ok(())
+    }
+}
+
+#[test]
+fn update_use_case_persists_before_broadcast_and_publishes_new_edits() {
+    let port = UpdateHarness::new();
+    let revision = port.doc.oplog_vv().encode();
+    let delta = delta(&port.doc, "spreadsheetValues", "A1", "42");
+    let prepared =
+        futures::executor::block_on(update(&access(), &port, &port, &revision, &delta)).unwrap();
+    assert!(prepared.applied);
+    assert_eq!(
+        *port.calls.borrow(),
+        ["persist", "broadcast", "publish", "keep_alive"]
+    );
+
+    port.calls.borrow_mut().clear();
+    let retried =
+        futures::executor::block_on(update(&access(), &port, &port, &revision, &delta)).unwrap();
+    assert!(!retried.applied);
+    assert_eq!(*port.calls.borrow(), ["persist", "broadcast", "keep_alive"]);
+}
+
+#[test]
+fn rejected_or_unpersisted_update_never_notifies() {
+    let mut port = UpdateHarness::new();
+    let revision = port.doc.oplog_vv().encode();
+    let delta = delta(&port.doc, "spreadsheetValues", "A1", "42");
+    let viewer = SpreadsheetAccess::authorize("doc", "doc", false).unwrap();
+    let result = futures::executor::block_on(update(&viewer, &port, &port, &revision, &delta));
+    assert!(matches!(result, Err(SpreadsheetError::Forbidden)));
+    assert!(port.calls.borrow().is_empty());
+
+    port.fail_persist = true;
+    let result = futures::executor::block_on(update(&access(), &port, &port, &revision, &delta));
+    assert!(matches!(result, Err(SpreadsheetError::Persistence)));
+    assert_eq!(*port.calls.borrow(), ["persist"]);
+}
+
+#[test]
+fn notification_failure_preserves_durable_update_and_allows_idempotent_retry() {
+    let port = UpdateHarness::new();
+    let revision = port.doc.oplog_vv().encode();
+    let delta = delta(&port.doc, "spreadsheetValues", "A1", "42");
+    port.fail_publish.set(true);
+    let result = futures::executor::block_on(update(&access(), &port, &port, &revision, &delta));
+    assert!(matches!(result, Err(SpreadsheetError::Notification)));
+    assert_eq!(*port.calls.borrow(), ["persist", "broadcast", "publish"]);
+    assert!(port.doc.get_map("spreadsheetValues").get("A1").is_some());
+
+    port.calls.borrow_mut().clear();
+    port.fail_publish.set(false);
+    let retried =
+        futures::executor::block_on(update(&access(), &port, &port, &revision, &delta)).unwrap();
+    assert!(!retried.applied);
+    assert_eq!(*port.calls.borrow(), ["persist", "broadcast", "keep_alive"]);
 }

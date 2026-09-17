@@ -145,9 +145,11 @@ Edits save through the collaborative document connection. Verify collaboration
 with the same document open for two users: edit different cells, then the same
 cell, and confirm both views converge. Also edit A1 on different sheets and confirm
 they remain independent. Remote selections have a tinted range outline, an active-cell border, and a name label in the same collaborator color. The footer repeats their names/colors. Idle connected selections stay visible; disconnected peers expire. Cursors should only appear for peers on the active sheet;
-switching a local tab must not move another user's tab. A remote sheet deletion
+switching a local tab must not move another user's tab. Switching back should
+immediately restore the remembered cursor for collaborators, without another cell click. A remote sheet deletion
 must cancel any draft on that sheet instead of committing it into the fallback sheet. Undo should reverse only the local
-user's edit. Reload to check persistence; viewers must be able to select and
+user's edit. Close and immediately reopen after editing (including while offline)
+to check local recovery; reload to check server persistence. Viewers must be able to select and
 copy cells without editing them.
 If another user subsequently changes the same cell property or layout value,
 undo/redo keeps that newer work and reports a conflict without consuming the

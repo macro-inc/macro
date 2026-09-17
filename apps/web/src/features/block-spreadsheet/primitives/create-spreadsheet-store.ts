@@ -65,10 +65,7 @@ export function createSpreadsheetStore(options: {
       batch(() => {
         setWorkbook(next);
         if (!next.some((sheet) => sheet.id === activeSheetId())) {
-          setActiveSheetId(next[0].id);
-          setLocalSelection(selections.get(next[0].id));
-          publishSelection.clear();
-          options.source.setSelection(undefined);
+          setActiveSheet(next[0].id);
         }
       });
     }
@@ -100,10 +97,12 @@ export function createSpreadsheetStore(options: {
 
   function setActiveSheet(id: string) {
     if (!workbook().some((sheet) => sheet.id === id)) return;
-    setActiveSheetId(id);
-    setLocalSelection(selections.get(id));
     publishSelection.clear();
-    options.source.setSelection(undefined);
+    batch(() => {
+      setActiveSheetId(id);
+      setLocalSelection(selections.get(id));
+      options.source.setSelection(selections.get(id));
+    });
   }
 
   function importSheets(inputs: SpreadsheetSheetInput[], replace: boolean) {

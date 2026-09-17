@@ -96,14 +96,14 @@ function SpreadsheetBlockContent() {
             },
           ]}
         />
-        <Show when={data()} keyed>
-          {(loaded) => {
+        <Show when={data()?.syncSource} keyed>
+          {(syncSource) => {
             const source = createSpreadsheetSession({
               documentId,
               userId: userId(),
               canEdit,
-              syncSource: loaded.syncSource,
-              doInitialSync: loaded.doInitialSync,
+              syncSource,
+              doInitialSync: data()!.doInitialSync,
             });
             const store = createSpreadsheetStore({
               source: {
