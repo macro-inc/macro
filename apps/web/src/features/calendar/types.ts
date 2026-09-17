@@ -192,6 +192,13 @@ export function isCalendarEventVisible(
   return sourceIds.some(isSourceVisible);
 }
 
+/** Whether the event repeats: it carries recurrence rules or is an instance of a series. */
+export function isRecurringCalendarEvent(
+  event: Pick<CalendarEvent, 'recurrenceLines' | 'recurrenceId'>
+) {
+  return event.recurrenceLines.length > 0 || event.recurrenceId !== undefined;
+}
+
 /** Calendar whose defaults the event's reminders resolve against. */
 export function reminderCalendarIdOf(
   event: Pick<CalendarEvent, 'reminderCalendarId' | 'calendarId'>
