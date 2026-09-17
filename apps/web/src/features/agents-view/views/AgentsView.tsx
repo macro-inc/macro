@@ -129,6 +129,7 @@ function AgentsWorkspace() {
     <SplitPanel.Root>
       <SplitPanel.Body>
         <ViewShell.Root
+          asidePreferenceKey="agents"
           class="bg-panel"
           resizable
           aside={{

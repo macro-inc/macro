@@ -33,6 +33,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
+import { ViewSidebarToggle } from '../view-shell/ViewShell';
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
@@ -269,6 +270,7 @@ function PreviewPanelContent(
         ref={headerCollapseController.setRow}
         class="relative flex h-12 w-full shrink-0 items-center justify-between border-b border-edge-muted px-2 not-touch:pl-[13px]"
       >
+        <ViewSidebarToggle action="expand" />
         <Show when={props.headerLeading}>
           <div class="flex shrink-0 items-center">{props.headerLeading}</div>
         </Show>

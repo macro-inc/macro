@@ -187,6 +187,7 @@ export function DriveLayout(props: {
     <SplitPanel.Root>
       <SplitPanel.Body>
         <ViewShell.Root
+          asidePreferenceKey="documents"
           resizable
           aside={{ preserveDuringResize: false }}
           main={{ preferredWidth: 640 }}

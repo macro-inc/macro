@@ -58,7 +58,6 @@ import {
   RailListError,
   RailListLoading,
   RailListLoadingMore,
-  RailModeButton,
 } from './ChannelsRailSection';
 import {
   useChannelRailFavoriteItemState,
@@ -347,9 +346,6 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
           <SplitPanel.CloseButton />
           <ViewSidebar.Title>Chat</ViewSidebar.Title>
         </div>
-        <SplitPanel.ControlGroup>
-          <RailModeButton expanded onToggle={() => rail.setMode('slim')} />
-        </SplitPanel.ControlGroup>
       </ViewSidebar.Header>
       <div class="flex items-center justify-between gap-2 px-4">
         <Tabs
