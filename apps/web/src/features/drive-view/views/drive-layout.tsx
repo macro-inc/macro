@@ -194,7 +194,7 @@ export function DriveLayout(props: {
             <ViewSidebar.Root aria-label="Drive navigation">
               <ViewSidebar.Header>
                 <div class="flex min-w-0 items-center gap-1">
-                  <SplitPanel.CloseButton />
+                  <ViewSidebar.CloseButton />
                   <ViewSidebar.Title>Drive</ViewSidebar.Title>
                 </div>
               </ViewSidebar.Header>

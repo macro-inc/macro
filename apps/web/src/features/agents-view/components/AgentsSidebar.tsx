@@ -16,7 +16,6 @@ import { SoupEntityContextMenu } from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import EmptyStateAiGraphic from '@design/empty-state-ai.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
@@ -323,7 +322,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     <ViewSidebar.Root aria-label="Agents navigation">
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
-          <SplitPanel.CloseButton />
+          <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Agents</ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>

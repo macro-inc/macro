@@ -1,4 +1,3 @@
-import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import PlusIcon from '@phosphor/plus.svg';
 import { pressHandlers } from '@ui';
@@ -17,7 +16,7 @@ export function SidebarCreateHeader(props: {
       <Show when={!isTouchDevice()}>
         <ViewSidebar.Header>
           <div class="flex min-w-0 items-center gap-1">
-            <SplitPanel.CloseButton class="shrink-0" />
+            <ViewSidebar.CloseButton class="shrink-0" />
             <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
             {props.titleActions}
           </div>

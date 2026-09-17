@@ -4,7 +4,7 @@ import type { JSX } from 'solid-js';
 import { Show, splitProps } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { CollapseTransition } from './CollapseTransition';
-import { ViewSidebarToggle } from './ViewShell';
+import { ViewSidebarCloseButton, ViewSidebarToggle } from './ViewShell';
 
 function Root(props: JSX.HTMLAttributes<HTMLElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
@@ -296,6 +296,7 @@ function Footer(props: JSX.HTMLAttributes<HTMLDivElement>) {
 export const ViewSidebar = Object.assign(Root, {
   Root,
   Header,
+  CloseButton: ViewSidebarCloseButton,
   Title,
   Primary,
   Toolbar,

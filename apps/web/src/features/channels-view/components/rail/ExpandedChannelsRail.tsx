@@ -4,7 +4,6 @@ import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
@@ -320,7 +319,7 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
     <div class="flex shrink-0 flex-col">
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
-          <SplitPanel.CloseButton />
+          <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Chat</ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>

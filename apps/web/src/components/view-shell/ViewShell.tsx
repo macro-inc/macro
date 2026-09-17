@@ -16,6 +16,7 @@ import { Button, cn } from '@ui';
 import {
   type Accessor,
   batch,
+  type ComponentProps,
   createContext,
   createSignal,
   createUniqueId,
@@ -473,6 +474,18 @@ function Aside(props: ViewShellAsideProps) {
         </div>
       </CollapseTransition>
     </>
+  );
+}
+
+/** A navigation overlay must not offer an action that closes its owning split. */
+export function ViewSidebarCloseButton(
+  props: ComponentProps<typeof SplitPanel.CloseButton>
+) {
+  const ws = useContext(ViewShellContext);
+  return (
+    <Show when={!ws?.aside.isOverlay()}>
+      <SplitPanel.CloseButton {...props} />
+    </Show>
   );
 }
 
