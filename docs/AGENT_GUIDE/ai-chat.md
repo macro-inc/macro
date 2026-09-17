@@ -210,6 +210,18 @@ Leaving Macro selected uses the backend's in-memory default in every
 environment, including production; it does not provision a Daytona container.
 Explicit coding-agent selections still use their configured runtimes.
 
+## Starting from Home
+
+Home's composer follows `enable-chat-v3-agents`: with the flag off it creates a
+legacy chat; with it on it creates a Macro agent session, applies the selected
+model, sends the prompt, and opens `/app/agent/<uuid>`. Cmd/Ctrl+Enter starts it
+in the background and offers **Open session** in the confirmation toast.
+Home suggestions, inline mentions, and attached documents/projects carry through
+as prompt context. Standalone image uploads are not yet supported by the agent
+prompt API; attempting one keeps the draft and shows an error.
+If creation or sending fails, the draft and attachments are restored. Retrying
+model setup or prompt delivery reuses the session already created.
+
 ## Sharing a chat
 
 A standalone chat (`/app/chat/<uuid>`) has **Share** and **Copy Share Link** in
