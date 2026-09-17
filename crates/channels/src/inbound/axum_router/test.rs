@@ -2847,6 +2847,7 @@ async fn picture_endpoint_requires_channel_admin_and_passes_the_verified_channel
         let mut access = TestAccessService::allow();
         access.channel_role = role;
         let app = channels_router(ChannelsRouterState::new(
+            Arc::new(RecordingMutationService::default()),
             service,
             access,
             authorization_state(),

@@ -1132,6 +1132,45 @@ export type ApprovePairingRequest = {
 };
 
 /**
+ * Status written onto one assign result.
+ */
+export type AssignTaskStatus = 'assigned' | 'moved' | 'notATask' | 'notFound' | 'skippedNoPermission';
+
+/**
+ * Assign-tasks HTTP body.
+ */
+export type AssignTasksRequest = {
+    /**
+     * Task ids to assign, in request order.
+     */
+    taskIds: Array<string>;
+};
+
+/**
+ * Assign-tasks HTTP response.
+ */
+export type AssignTasksResponse = {
+    /**
+     * Outcomes in request order after dedupe.
+     */
+    results: Array<AssignTasksResult>;
+};
+
+/**
+ * Per-task outcome of an assign call.
+ */
+export type AssignTasksResult = {
+    /**
+     * What happened to the task.
+     */
+    status: AssignTaskStatus;
+    /**
+     * Task id this outcome describes.
+     */
+    taskId: string;
+};
+
+/**
  * Attachment changes interpreted by the common command boundary.
  */
 export type AttachmentChange = {
@@ -1950,7 +1989,9 @@ export type CallRecord = {
      */
     roomName: string;
     /**
-     * Whether the call is shared with the creator's team.
+     * Whether the call is shared with the creator's team. While the call is
+     * live this is the pending toggle applied at archive; afterwards it
+     * mirrors `team_share_access_level`.
      */
     shareWithTeam: boolean;
     /**
@@ -1963,6 +2004,7 @@ export type CallRecord = {
      * once summarization has run; active calls always return `None`.
      */
     summary?: string | null;
+    teamShareAccessLevel?: null | AccessLevel;
     /**
      * Transcript segments ordered by `sequence_num`.
      */
@@ -2633,6 +2675,10 @@ export type ChannelPreviewData = {
      * Channel type.
      */
     channel_type: ChannelType;
+    /**
+     * Static image file used as the channel's profile picture, when accessible.
+     */
+    profile_picture_id?: string | null;
 };
 
 export type ChannelSender = string;
@@ -3416,6 +3462,28 @@ export type CreateEntityMentionResponse = {
      * User who recorded the mention.
      */
     user_id?: string | null;
+};
+
+/**
+ * Create-initiative HTTP body.
+ */
+export type CreateInitiativeRequest = {
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Optional member user ids. Invalid ids fail at the service boundary.
+     */
+    memberIds?: Array<string> | null;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * When true, share with the owner's team at create time.
+     */
+    shareWithTeam?: boolean | null;
 };
 
 export type CreateInstructionsDocumentResponse = {
@@ -4900,7 +4968,7 @@ export type EditAnchorResponse = Anchor & {
 };
 
 /**
- * Edit call request
+ * Edit call request, as supplied by inbound callers.
  */
 export type EditCallRecordRequest = {
     /**
@@ -4913,8 +4981,9 @@ export type EditCallRecordRequest = {
     customName?: string | null;
     sharePermission?: null | UpdateSharePermissionRequestV2;
     /**
-     * If `Some(true)`, grant the creator's team View access on the call.
-     * If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
+     * Deprecated alias for `sharePermission.teamShareAccessLevel`:
+     * `Some(true)` behaves like `"view"`, `Some(false)` like `null`, and
+     * `None` is a no-op. Supplying both with disagreeing values is rejected.
      * The team is resolved from the call's `created_by`, not the acting user.
      */
     shareWithTeam?: boolean | null;
@@ -6348,6 +6417,89 @@ export type InFlightTurnSummary = {
      * Position in the session's log.
      */
     turn: number;
+};
+
+/**
+ * Full initiative returned to a caller, including members, tasks, and share state.
+ */
+export type InitiativeDetail = {
+    /**
+     * When the initiative was created.
+     */
+    createdAt: string;
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Opaque identifier.
+     */
+    id: InitiativeId;
+    /**
+     * Member user ids. The owner is never stored here.
+     */
+    memberIds: Array<MacroUserIdStr>;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * Owner of the initiative.
+     */
+    ownerId: MacroUserIdStr;
+    /**
+     * Current share permission.
+     */
+    sharePermission: SharePermissionV2;
+    /**
+     * Task ids currently assigned to the initiative.
+     */
+    taskIds: Array<string>;
+    /**
+     * When the initiative was last updated.
+     */
+    updatedAt: string;
+    /**
+     * Caller's access level on this initiative.
+     */
+    userAccessLevel: AccessLevel;
+};
+
+/**
+ * Opaque identifier for an initiative. Minted as UUIDv7 in application code.
+ */
+export type InitiativeId = string;
+
+/**
+ * Accessible-initiative list.
+ */
+export type InitiativeList = {
+    /**
+     * Initiatives the caller can view.
+     */
+    initiatives: Array<InitiativeSummary>;
+};
+
+/**
+ * List-row view of an initiative.
+ */
+export type InitiativeSummary = {
+    /**
+     * Optional description.
+     */
+    description?: string | null;
+    /**
+     * Opaque identifier.
+     */
+    id: InitiativeId;
+    /**
+     * Display name.
+     */
+    name: string;
+    /**
+     * When the initiative was last updated.
+     */
+    updatedAt: string;
 };
 
 /**
@@ -8092,6 +8244,16 @@ export type SessionStoppedMetadata = {
      */
     reason: string;
     turn_in_flight?: null | InFlightTurnSummary;
+};
+
+/**
+ * Replace a channel's picture, or remove it by sending a null file id.
+ */
+export type SetChannelPictureRequest = {
+    /**
+     * Static image file id; null restores the default channel icon.
+     */
+    profile_picture_id?: string | null;
 };
 
 /**
@@ -9992,6 +10154,26 @@ export type UpdateCrmTeamSettingsRequest = {
     team_views?: unknown;
 };
 
+/**
+ * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
+ * present is a full replace.
+ */
+export type UpdateInitiativeRequest = {
+    /**
+     * Replacement description. `Some("")` clears it after trim.
+     */
+    description?: string | null;
+    /**
+     * Full replacement member list when present.
+     */
+    memberIds?: Array<string> | null;
+    /**
+     * Replacement name.
+     */
+    name?: string | null;
+    sharePermission?: null | UpdateSharePermissionRequestV2;
+};
+
 export type UpdateOperation = 'add' | 'remove' | 'replace';
 
 /**
@@ -10971,8 +11153,20 @@ export type EditCallRecordData = {
 };
 
 export type EditCallRecordErrors = {
+    /**
+     * Invalid team-share level, contradictory inputs, or the creator has no team
+     */
+    400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * Team sharing of an archived call may only be changed by its creator
+     */
+    403: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * Team-sharing facts changed, or the call was archived mid-request; reload and retry
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -11002,6 +11196,10 @@ export type ToggleShareWithTeamData = {
 export type ToggleShareWithTeamErrors = {
     401: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * The call is no longer active
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -11009,7 +11207,7 @@ export type ToggleShareWithTeamError = ToggleShareWithTeamErrors[keyof ToggleSha
 
 export type ToggleShareWithTeamResponses = {
     /**
-     * New value of share_with_team after toggle
+     * New value of the share-with-team toggle
      */
     200: boolean;
 };
@@ -12083,6 +12281,37 @@ export type AddParticipantsError = AddParticipantsErrors[keyof AddParticipantsEr
 export type AddParticipantsResponses = {
     200: unknown;
 };
+
+export type SetChannelPictureData = {
+    body: SetChannelPictureRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/profile_picture';
+};
+
+export type SetChannelPictureErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelPictureError = SetChannelPictureErrors[keyof SetChannelPictureErrors];
+
+export type SetChannelPictureResponses = {
+    /**
+     * Picture updated
+     */
+    204: void;
+};
+
+export type SetChannelPictureResponse = SetChannelPictureResponses[keyof SetChannelPictureResponses];
 
 export type PostReactionData = {
     body: PostReactionRequest;
@@ -14376,6 +14605,217 @@ export type UpsertHistoryHandlerResponses = {
 };
 
 export type UpsertHistoryHandlerResponse = UpsertHistoryHandlerResponses[keyof UpsertHistoryHandlerResponses];
+
+export type ListInitiativesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/initiatives';
+};
+
+export type ListInitiativesErrors = {
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListInitiativesError = ListInitiativesErrors[keyof ListInitiativesErrors];
+
+export type ListInitiativesResponses = {
+    200: InitiativeList;
+};
+
+export type ListInitiativesResponse = ListInitiativesResponses[keyof ListInitiativesResponses];
+
+export type CreateInitiativeData = {
+    body: CreateInitiativeRequest;
+    path?: never;
+    query?: never;
+    url: '/initiatives';
+};
+
+export type CreateInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    409: ErrorResponse;
+    /**
+     * Name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateInitiativeError = CreateInitiativeErrors[keyof CreateInitiativeErrors];
+
+export type CreateInitiativeResponses = {
+    200: InitiativeDetail;
+};
+
+export type CreateInitiativeResponse = CreateInitiativeResponses[keyof CreateInitiativeResponses];
+
+export type DeleteInitiativeData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}';
+};
+
+export type DeleteInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteInitiativeError = DeleteInitiativeErrors[keyof DeleteInitiativeErrors];
+
+export type DeleteInitiativeResponses = {
+    200: GenericSuccessResponse;
+};
+
+export type DeleteInitiativeResponse = DeleteInitiativeResponses[keyof DeleteInitiativeResponses];
+
+export type GetInitiativeData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}';
+};
+
+export type GetInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetInitiativeError = GetInitiativeErrors[keyof GetInitiativeErrors];
+
+export type GetInitiativeResponses = {
+    200: InitiativeDetail;
+};
+
+export type GetInitiativeResponse = GetInitiativeResponses[keyof GetInitiativeResponses];
+
+export type UpdateInitiativeData = {
+    body: UpdateInitiativeRequest;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}';
+};
+
+export type UpdateInitiativeErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    /**
+     * Name exceeds the maximum length
+     */
+    422: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UpdateInitiativeError = UpdateInitiativeErrors[keyof UpdateInitiativeErrors];
+
+export type UpdateInitiativeResponses = {
+    200: InitiativeDetail;
+};
+
+export type UpdateInitiativeResponse = UpdateInitiativeResponses[keyof UpdateInitiativeResponses];
+
+export type AssignInitiativeTasksData = {
+    body: AssignTasksRequest;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/tasks';
+};
+
+export type AssignInitiativeTasksErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AssignInitiativeTasksError = AssignInitiativeTasksErrors[keyof AssignInitiativeTasksErrors];
+
+export type AssignInitiativeTasksResponses = {
+    200: AssignTasksResponse;
+};
+
+export type AssignInitiativeTasksResponse = AssignInitiativeTasksResponses[keyof AssignInitiativeTasksResponses];
+
+export type UnassignInitiativeTaskData = {
+    body?: never;
+    path: {
+        /**
+         * Initiative identifier.
+         */
+        initiative_id: string;
+        /**
+         * Task identifier.
+         */
+        task_id: string;
+    };
+    query?: never;
+    url: '/initiatives/{initiative_id}/tasks/{task_id}';
+};
+
+export type UnassignInitiativeTaskErrors = {
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type UnassignInitiativeTaskError = UnassignInitiativeTaskErrors[keyof UnassignInitiativeTaskErrors];
+
+export type UnassignInitiativeTaskResponses = {
+    200: GenericSuccessResponse;
+};
+
+export type UnassignInitiativeTaskResponse = UnassignInitiativeTaskResponses[keyof UnassignInitiativeTaskResponses];
 
 export type GetInstructionsHandlerData = {
     body?: never;
