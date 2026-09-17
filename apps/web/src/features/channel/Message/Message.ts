@@ -7,6 +7,7 @@ import { EditedIndicator } from './EditedIndicator';
 import { FromPill } from './FromPill';
 import { HoverActions } from './HoverActions';
 import { Layout } from './Layout';
+import { LinkPreviews } from './LinkPreviews';
 import { MediaPreview } from './MediaPreview';
 import { MessageFlag } from './MessageFlag';
 import { NewDivider } from './NewDivider';
@@ -27,6 +28,7 @@ export const Message = {
   SenderIcon,
   Timestamp,
   Content,
+  LinkPreviews,
   Attachments,
   DateDivider,
   NewDivider,
