@@ -8,7 +8,7 @@
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/component/inbox` | Home (notifications + recent activity) |
+| `/app/component/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/component/mail` | Email client |
 | `/app/component/channels` | Channels list |
 | `/app/component/documents` | Files (documents list) |
@@ -143,7 +143,7 @@ changes roll back rather than becoming committed local favorites.
 
 ## Create menu
 
-On mobile, the bottom dock fits fixed-width buttons in this order: Home,
+On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
 Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
 dock and search scope pills only when the calendar UI flag is enabled.
 Resizing the screen moves views between the dock
@@ -182,7 +182,7 @@ company-creation sheet.
 
 The labeled glass button one row above Search opens the current page's creation
 flow directly: **+ Task** on Tasks, **+ Email** on Email, **+ Message** on Channels,
-**+ Document** on Files, and **+ Event** on Calendar. On Home/Notifications,
+**+ Document** on Files, and **+ Event** on Calendar. On Notifications,
 **+ New** opens a blurred backdrop and a stack of glass actions: Email, Message,
 Document, Event, Task, More. Event follows the calendar UI flag; unavailable
 launcher actions are omitted. The plus rotates into an X; tap it or the backdrop,

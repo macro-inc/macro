@@ -243,7 +243,7 @@ function LegacyInboxView() {
   const preset = getViewPreset('inbox');
   return (
     <SoupView
-      viewName="Home"
+      viewName={isTouchDevice() ? 'Notifications' : 'Home'}
       initialFilters={preset?.filters}
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
@@ -254,10 +254,15 @@ function LegacyInboxView() {
 
 function RegisteredInboxView() {
   usePageViewTracking('inbox');
-  const newAppViews = useNewAppViews();
+  const newAppViews = useNewAppViews({
+    enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
+  });
   return (
     <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
-      <Show when={newAppViews.enabled()} fallback={<LegacyInboxView />}>
+      <Show
+        when={newAppViews.enabled() && !isTouchDevice()}
+        fallback={<LegacyInboxView />}
+      >
         <InboxView />
       </Show>
     </Show>
