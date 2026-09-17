@@ -11,6 +11,8 @@ use predicate_index::{
 use serde_json::{Value, json};
 use soup_filter_projection::{SoupCacheProjectionSupplement, encode_cache_projection_supplement};
 
+mod large;
+
 const D: &str = "00000000-0000-0000-0000-000000000001";
 const A: &str = "00000000-0000-0000-0000-000000000011";
 const B: &str = "00000000-0000-0000-0000-000000000012";
