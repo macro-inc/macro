@@ -5319,11 +5319,31 @@ dependencies = [
 name = "dictation"
 version = "0.1.0"
 dependencies = [
+ "async-openai",
+ "axum",
+ "axum-extra",
+ "backoff",
+ "bytes",
+ "http-body-util",
+ "infer 0.19.0",
+ "macro_authorization",
+ "macro_env_var",
+ "macro_user_id",
+ "model-error-response",
+ "model_user",
+ "rate_limit",
  "reqwest 0.13.4",
+ "rootcause",
  "serde",
+ "serde_json",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
+ "utoipa",
+ "uuid",
+ "wiremock",
+ "workspace-hack",
 ]
 
 [[package]]
@@ -19343,6 +19363,7 @@ dependencies = [
  "ahash",
  "aho-corasick",
  "anyhow",
+ "async-openai",
  "aws-config",
  "aws-credential-types",
  "aws-runtime",

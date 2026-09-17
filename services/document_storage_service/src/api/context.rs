@@ -565,10 +565,16 @@ pub(crate) type DssSseStreamService =
 pub(crate) type DssSseStreamState =
     WebhookStreamRouterState<DssSseStreamService, AuthorizationService>;
 
+/// Type alias for the dictation router state; shares the webhook Redis limiter.
+pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRouterState<
+    dictation::domain::DictationServiceImpl<dictation::outbound::WhisperTranscriber>,
+    DssWebhookRateLimiter,
+    AuthorizationService,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
-    pub dictation_service:
-        Arc<dictation::domain::DictationService<dictation::outbound::WhisperClient>>,
+    pub dictation_state: DssDictationState,
     pub db: PgPool,
     pub readonly_db: ReadOnlyPool,
     pub redis_client: Arc<Redis>,

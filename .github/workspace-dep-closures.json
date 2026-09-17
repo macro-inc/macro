@@ -3218,6 +3218,24 @@
       "crates/workspace-hack",
       "services/deleted_item_poller"
     ],
+    "dictation": [
+      "crates/bot_id",
+      "crates/bot_token",
+      "crates/cowlike",
+      "crates/dictation",
+      "crates/harness_id",
+      "crates/harness_token",
+      "crates/macro_auth",
+      "crates/macro_authorization",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/model-error-response",
+      "crates/model_user",
+      "crates/rate_limit",
+      "crates/remote_env_var",
+      "crates/workspace-hack"
+    ],
     "document_cognition_service": [
       "crates/activity",
       "crates/agent",
@@ -3407,6 +3425,7 @@
       "crates/cowlike",
       "crates/crm",
       "crates/database_env_vars",
+      "crates/dictation",
       "crates/document_sub_type",
       "crates/documents",
       "crates/dynamodb_client",

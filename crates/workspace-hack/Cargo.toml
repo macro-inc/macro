@@ -19,6 +19,7 @@ aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
+async-openai = { version = "0.36", features = ["audio", "byot", "chat-completion", "completions", "embedding"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
@@ -152,6 +153,7 @@ aes-gcm = { version = "0.10", features = ["zeroize"] }
 ahash = { version = "0.8" }
 aho-corasick = { version = "1" }
 anyhow = { version = "1" }
+async-openai = { version = "0.36", features = ["audio", "byot", "chat-completion", "completions", "embedding"] }
 aws-config = { version = "1", features = ["behavior-version-latest"] }
 aws-credential-types = { version = "1", default-features = false, features = ["hardcoded-credentials", "test-util"] }
 aws-runtime = { version = "1", default-features = false, features = ["event-stream", "http-02x", "http-1x", "sigv4a"] }
