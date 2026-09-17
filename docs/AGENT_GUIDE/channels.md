@@ -247,7 +247,10 @@ a channel cached away from its latest page, and a delta longer than one page use
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
 **Show navigation** (the hamburger) immediately before the conversation title,
 or in the Chat header when no conversation is selected. Chat remembers this
-choice independently of other apps and restores it after reload.
+choice independently of other workspaces and restores it after reload. Chat uses
+the shared 256px default sidebar width and resize limits. In splits narrower than
+720px, navigation collapses; the hamburger or `Cmd+.` opens it as a slide-over
+with the same full sidebar contents. There is no separate skinny sidebar mode.
 
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section above the independently paginated `Channels` and
@@ -273,10 +276,6 @@ exist in the DOM.
 Channels and DMs each have a sort action before their create action. They can be
 sorted by last viewed, last updated, or date created, and each choice persists
 independently as a user preference.
-In slim mode, Favorites remains a separate collapsible section, while Channels
-and DMs render in one continuous list without section headings. The gear action
-in the footer controls whether each group appears and exposes the same
-independently persisted sort choices.
 Compact channel and DM rows in All have the same height. Section headings place
 their caret immediately after the title and reveal it on hover or while the
 section is collapsed; hovering only undims the heading text, while

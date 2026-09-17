@@ -44,7 +44,10 @@ function Title(props: JSX.HTMLAttributes<HTMLHeadingElement>) {
   return (
     <h1
       {...rest}
-      class={cn('min-w-0 truncate text-sm font-semibold text-ink', local.class)}
+      class={cn(
+        'min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink',
+        local.class
+      )}
     >
       {local.children}
     </h1>

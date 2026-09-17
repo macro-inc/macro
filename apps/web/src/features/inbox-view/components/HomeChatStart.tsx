@@ -1,5 +1,13 @@
+<<<<<<< Updated upstream
 import { useViewShell, ViewShell } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+=======
+import {
+  useViewShell,
+  ViewShell,
+  ViewSidebar,
+} from '@app/components/view-shell';
+>>>>>>> Stashed changes
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
@@ -13,9 +21,9 @@ export function HomeChatStart() {
   const agents = useFeatureFlag(enableChatV3Agents);
   return (
     <ChatInputProvider>
-      <Show when={shell.aside.isCollapsed()}>
+      <Show when={shell.aside.isCollapsed() || shell.aside.isOverlay()}>
         <ViewShell.TopBar>
-          <span class="text-sm font-semibold">Home</span>
+          <ViewSidebar.Title>Home</ViewSidebar.Title>
         </ViewShell.TopBar>
       </Show>
       <DragDropWrapper class="relative size-full min-h-0 min-w-0 overflow-y-auto px-6">

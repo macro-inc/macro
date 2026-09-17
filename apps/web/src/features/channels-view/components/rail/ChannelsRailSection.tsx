@@ -6,7 +6,6 @@ import { CollapseTransition } from '@app/components/view-shell/CollapseTransitio
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
 import {
@@ -186,9 +185,7 @@ export function RailListLoading() {
   );
 }
 
-export function RailListLoadingMore(props: {
-  variant: 'channel' | 'recent' | 'slim';
-}) {
+export function RailListLoadingMore(props: { variant: 'channel' | 'recent' }) {
   return (
     <div role="status" aria-label="Loading more conversations">
       <For each={LOADING_SKELETON_ROWS}>
@@ -197,7 +194,6 @@ export function RailListLoadingMore(props: {
             aria-hidden="true"
             class={cn(
               'flex items-center',
-              props.variant === 'slim' && 'h-10 justify-center',
               props.variant === 'channel' &&
                 'h-(--sidebar-row-height) gap-(--sidebar-label-gap) px-(--sidebar-item-inset) touch:h-11',
               props.variant === 'recent' && 'h-20 items-start gap-3 px-2 py-2'
@@ -210,19 +206,17 @@ export function RailListLoadingMore(props: {
                 props.variant !== 'channel' && 'size-8'
               )}
             />
-            <Show when={props.variant !== 'slim'}>
-              <div class="flex min-w-0 flex-1 flex-col gap-2">
-                <div
-                  class={cn(
-                    'skeleton-shimmer h-2.5 rounded-full bg-skeleton',
-                    row % 2 === 0 ? 'w-1/2' : 'w-2/3'
-                  )}
-                />
-                <Show when={props.variant === 'recent'}>
-                  <div class="skeleton-shimmer h-2 w-4/5 rounded-full bg-skeleton" />
-                </Show>
-              </div>
-            </Show>
+            <div class="flex min-w-0 flex-1 flex-col gap-2">
+              <div
+                class={cn(
+                  'skeleton-shimmer h-2.5 rounded-full bg-skeleton',
+                  row % 2 === 0 ? 'w-1/2' : 'w-2/3'
+                )}
+              />
+              <Show when={props.variant === 'recent'}>
+                <div class="skeleton-shimmer h-2 w-4/5 rounded-full bg-skeleton" />
+              </Show>
+            </div>
           </div>
         )}
       </For>
@@ -257,22 +251,5 @@ export function CreateRailAction(props: {
     <ViewSidebar.Control label={props.label} onClick={props.onClick}>
       <PlusIcon class="size-3.5" />
     </ViewSidebar.Control>
-  );
-}
-
-export function RailModeButton(props: {
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      label={props.expanded ? 'Collapse chat rail' : 'Expand chat rail'}
-      tooltipPlacement={props.expanded ? 'bottom' : 'right'}
-      onClick={props.onToggle}
-    >
-      <SidebarIcon class="size-4" />
-    </Button>
   );
 }

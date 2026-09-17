@@ -127,7 +127,13 @@ are isolated from the input. If generation stalls for 45 seconds, the shimmer
 is replaced with a retry action; a late result still appears automatically.
 Generation status updates do not extend that deadline. Retry starts a fresh
 45-second wait. Shift+Enter adds a line. Selecting a Home row replaces
-the composer with its preview. Mobile continues to show the activity list alone.
+the composer with its preview. Home uses the shared 256px sidebar and collapses
+navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
+slide-over. Activating a row or **New chat** closes that overlay to show content;
+arrow-key browsing keeps it open. Preview headers start with **Home >**. Clicking
+**Home** clears the preview and returns to the starting pane without changing
+sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
+show the activity list alone.
 
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
 Desktop AI chats, agents, and channel composers share Home's rounded composer

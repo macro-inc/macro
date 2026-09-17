@@ -88,6 +88,7 @@ type InboxListActivationMetadata = {
 type InboxListProps = {
   previewEntity: EntityData | undefined;
   onPreviewEntityChange: (entity: EntityData | undefined) => void;
+  onPreviewActivate?: () => void;
 };
 
 /** Compact notification list used by the Notifications workspace. */
@@ -159,6 +160,7 @@ export function InboxList(props: InboxListProps) {
     if (!isTouchDevice() && !newSplit) {
       markEntitySeen(sourceRow.entity);
       showPreview(sourceRow.entity);
+      props.onPreviewActivate?.();
       return;
     }
 

@@ -122,6 +122,8 @@ function ChannelSortDropdown(props: { group: ChannelsGroup; label: string }) {
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
         as={ViewSidebar.Control}
+        variant="ghost"
+        size="icon-sm"
         label={`Sort ${props.label.toLowerCase()}`}
       >
         <SortIcon class="size-3.5" />

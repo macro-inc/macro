@@ -33,7 +33,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { match, P } from 'ts-pattern';
-import { ViewNavigationControls } from '../view-shell/ViewShell';
+import { ViewShell } from '../view-shell/ViewShell';
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
@@ -287,11 +287,10 @@ function PreviewPanelContent(
       onPointerDown={() => setInteractedWith(true)}
       tabIndex={-1}
     >
-      <div
+      <ViewShell.TopBar
         ref={headerCollapseController.setRow}
-        class="relative flex h-12 w-full shrink-0 items-center justify-between border-b border-edge-muted px-2 not-touch:pl-[13px]"
+        class="relative w-full py-0 touch:flex"
       >
-        <ViewNavigationControls />
         <Show when={props.headerLeading}>
           <div class="flex shrink-0 items-center">{props.headerLeading}</div>
         </Show>
@@ -299,7 +298,11 @@ function PreviewPanelContent(
           controller={headerCollapseController}
           truncateAsLastResort
           class="relative h-full min-w-0 shrink overflow-hidden"
-          contentClass="flex h-full items-center gap-1"
+          contentClass={
+            props.headerLeading
+              ? 'flex h-full items-center gap-1 pl-0.5'
+              : 'flex h-full items-center gap-1'
+          }
           contentRef={(element) => {
             scopedLayoutRefs.headerLeft = element;
           }}
@@ -310,7 +313,7 @@ function PreviewPanelContent(
             scopedLayoutRefs.headerRight = ref;
           }}
         />
-      </div>
+      </ViewShell.TopBar>
       <div
         ref={toolbarCollapseController.setRow}
         class="relative flex min-h-0 w-full shrink-0 items-center justify-between px-2"
