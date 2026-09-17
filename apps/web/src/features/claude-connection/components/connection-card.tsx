@@ -49,7 +49,7 @@ export function ConnectionCard(props: ConnectionCardProps) {
             when={props.status?.enabled}
             fallback={
               <p class="text-xs text-ink-muted">
-                Browser connection is enabled only in the local demo backend.
+                Claude sign-in is not configured on this deployment.
               </p>
             }
           >

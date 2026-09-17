@@ -61,7 +61,7 @@ it('shows disabled and failed states instead of silently disappearing', () => {
     />
   ));
   expect(
-    screen.getByText(/enabled only in the local demo backend/)
+    screen.getByText(/sign-in is not configured on this deployment/)
   ).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Connect Claude' })).toBeNull();
   cleanup();

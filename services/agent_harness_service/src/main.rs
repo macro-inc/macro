@@ -204,37 +204,21 @@ async fn run() -> anyhow::Result<()> {
         .await
         .context("failed to connect to macrodb")?;
 
-    // Local-only demo: reuse the local Cursor KMS key, but cryptographically
-    // separate Claude grants by purpose and owner. Never enables hosted writes.
-    let claude_credentials = if matches!(config.environment, Environment::Local) {
-        Some(
-            claude_cloud_agents::domain::credentials::AccountCredentials::new(
-                Arc::new(
-                    claude_cloud_agents::outbound::postgres::PgClaudeGrants::new(
-                        pool.clone(),
-                        AwsKmsCiphertexts::new(
-                            aws_sdk_kms::Client::new(&aws_config),
-                            "alias/macro-local-cursor-api-key".into(),
-                        ),
-                    ),
+    // The same encrypted connection store serves browser consent and runtime
+    // credentials in every deployment. Only the KMS key configuration varies.
+    let claude_refresh =
+        Arc::new(claude_cloud_agents::outbound::credentials::ClaudeRefresh::new()?);
+    let claude_credentials = config.claude_oauth_kms_key_id().map(|key| {
+        claude_cloud_agents::domain::credentials::AccountCredentials::new(
+            Arc::new(
+                claude_cloud_agents::outbound::postgres::PgClaudeGrants::new(
+                    pool.clone(),
+                    AwsKmsCiphertexts::new(aws_sdk_kms::Client::new(&aws_config), key),
                 ),
-                Arc::new(claude_cloud_agents::outbound::credentials::ClaudeRefresh::new()?),
             ),
+            claude_refresh.clone(),
         )
-    } else if !config.claude_cloud_credentials_path.is_empty() {
-        anyhow::ensure!(
-            !matches!(config.environment, Environment::Production),
-            "Claude Cloud demo credentials are forbidden in production"
-        );
-        Some(
-            claude_cloud_agents::outbound::credentials::FileCredentials::open(
-                std::path::PathBuf::from(&config.claude_cloud_credentials_path),
-            )
-            .await?,
-        )
-    } else {
-        None
-    };
+    });
 
     // Built before the sessions rather than beside the other channel plumbing
     // below: this service owns the live actors, so it is where a session's
@@ -859,11 +843,7 @@ async fn run() -> anyhow::Result<()> {
         claude_cloud_agents::inbound::auth::ClaudeAuthState::new(
             Arc::new(claude_cloud_agents::domain::auth::AuthService::new(
                 claude_cloud_agents::outbound::oauth::ClaudeOAuth::new()?,
-                if matches!(config.environment, Environment::Local) {
-                    claude_credentials
-                } else {
-                    None
-                },
+                claude_credentials,
                 false,
             )),
             MacroAuthorizationState::new(Arc::new(authorization_service.clone())),

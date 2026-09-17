@@ -1,7 +1,7 @@
 //! Legacy private-file and memory adapters for standalone smoke tests.
 pub use crate::domain::credentials::AccountCredentials;
 use crate::domain::{
-    credentials::{GrantRepository, RefreshGrant},
+    credentials::{ConnectionState, GrantRepository, GrantTransaction, RefreshGrant},
     model::{Credentials, Error, Result, Secret},
 };
 use serde::{Deserialize, Serialize};
@@ -22,10 +22,12 @@ pub type FileCredentials = AccountCredentials;
 #[derive(Default, Serialize, Deserialize)]
 struct FileData {
     users: BTreeMap<String, Credentials>,
+    #[serde(default)]
+    connections: BTreeMap<String, ConnectionState>,
 }
 struct FileRepository {
     path: Option<PathBuf>,
-    data: Mutex<FileData>,
+    data: Arc<Mutex<FileData>>,
 }
 
 impl AccountCredentials {
@@ -34,7 +36,7 @@ impl AccountCredentials {
         Ok(Self::new(
             Arc::new(FileRepository {
                 path: None,
-                data: Mutex::default(),
+                data: Arc::default(),
             }),
             Arc::new(ClaudeRefresh::new()?),
         ))
@@ -52,10 +54,16 @@ impl AccountCredentials {
             return Err(Error::Credentials);
         }
         let data: FileData = serde_json::from_slice(&bytes).map_err(|_| Error::Credentials)?;
-        for (owner, grant) in &data.users {
+        for owner in data.users.keys().chain(data.connections.keys()) {
             if owner.trim() != owner || !owner.starts_with("macro|") || owner.contains('\0') {
                 return Err(Error::Credentials);
             }
+        }
+        for grant in data.users.values().chain(
+            data.connections
+                .values()
+                .filter_map(|state| state.grant.as_ref()),
+        ) {
             uuid::Uuid::parse_str(&grant.organization_id).map_err(|_| Error::Credentials)?;
             if !grant.environment_id.starts_with("env_")
                 || !grant
@@ -69,7 +77,7 @@ impl AccountCredentials {
         Ok(Self::new(
             Arc::new(FileRepository {
                 path: Some(path),
-                data: Mutex::new(data),
+                data: Arc::new(Mutex::new(data)),
             }),
             Arc::new(ClaudeRefresh::new()?),
         ))
@@ -77,8 +85,8 @@ impl AccountCredentials {
 }
 
 impl FileRepository {
-    async fn persist(&self, data: &FileData) -> Result<()> {
-        let Some(path) = &self.path else {
+    async fn persist(path: &Option<PathBuf>, data: &FileData) -> Result<()> {
+        let Some(path) = path else {
             return Ok(());
         };
         let bytes =
@@ -98,33 +106,57 @@ impl FileRepository {
             .map_err(|_| Error::Credentials)
     }
 }
+struct FileTransaction {
+    data: tokio::sync::OwnedMutexGuard<FileData>,
+    path: Option<PathBuf>,
+    owner: String,
+    state: ConnectionState,
+}
 #[async_trait::async_trait]
 impl GrantRepository for FileRepository {
-    async fn get(&self, owner: &str) -> Result<Option<Credentials>> {
-        Ok(self.data.lock().await.users.get(owner).cloned())
+    async fn lock(&self, owner: &str) -> Result<Box<dyn GrantTransaction>> {
+        let data = self.data.clone().lock_owned().await;
+        let state = data
+            .connections
+            .get(owner)
+            .cloned()
+            .unwrap_or_else(|| ConnectionState {
+                grant: data.users.get(owner).cloned(),
+                ..Default::default()
+            });
+        Ok(Box::new(FileTransaction {
+            data,
+            path: self.path.clone(),
+            owner: owner.to_owned(),
+            state,
+        }))
     }
-    async fn put(&self, owner: &str, grant: &Credentials) -> Result<()> {
-        let mut data = self.data.lock().await;
-        let previous = data.users.insert(owner.to_owned(), grant.clone());
-        if let Err(error) = self.persist(&data).await {
+}
+#[async_trait::async_trait]
+impl GrantTransaction for FileTransaction {
+    fn state(&mut self) -> &mut ConnectionState {
+        &mut self.state
+    }
+    async fn commit(self: Box<Self>) -> Result<()> {
+        let Self {
+            mut data,
+            path,
+            owner,
+            state,
+        } = *self;
+        let previous = data.connections.insert(owner.clone(), state);
+        let legacy = data.users.remove(&owner);
+        if let Err(error) = FileRepository::persist(&path, &data).await {
             match previous {
                 Some(value) => {
-                    data.users.insert(owner.to_owned(), value);
+                    data.connections.insert(owner.clone(), value);
                 }
                 None => {
-                    data.users.remove(owner);
+                    data.connections.remove(&owner);
                 }
             }
-            return Err(error);
-        }
-        Ok(())
-    }
-    async fn delete(&self, owner: &str) -> Result<()> {
-        let mut data = self.data.lock().await;
-        let previous = data.users.remove(owner);
-        if let Err(error) = self.persist(&data).await {
-            if let Some(value) = previous {
-                data.users.insert(owner.to_owned(), value);
+            if let Some(value) = legacy {
+                data.users.insert(owner, value);
             }
             return Err(error);
         }

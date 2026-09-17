@@ -1,19 +1,23 @@
 use super::*;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
+use super::super::credentials::{GrantRepository, test_support::MemoryRepository};
+use std::sync::Arc;
+
 #[derive(Clone, Default)]
-struct Store(Arc<Mutex<HashMap<String, Credentials>>>);
+struct Store(Arc<MemoryRepository>);
 impl ConnectionStore for Store {
+    async fn lock(&self, owner: &str) -> Result<Box<dyn GrantTransaction>, Error> {
+        self.0.lock(owner).await
+    }
     async fn connected(&self, owner: &str) -> bool {
-        self.0.lock().await.contains_key(owner)
+        self.0.get(owner).await.unwrap().is_some()
     }
     async fn save(&self, owner: &str, c: Credentials) -> Result<(), Error> {
-        self.0.lock().await.insert(owner.into(), c);
-        Ok(())
+        self.0.put(owner, &c).await
     }
     async fn remove(&self, owner: &str) -> Result<(), Error> {
-        self.0.lock().await.remove(owner);
-        Ok(())
+        self.0.delete(owner).await
     }
 }
 #[derive(Default)]
@@ -94,13 +98,9 @@ async fn expiry_replacement_and_rate_limit() {
     let service = AuthService::new(Provider::default(), Some(Store::default()), true);
     let old = service.begin("alice").await.unwrap();
     assert!(matches!(service.begin("alice").await, Err(AuthError::Busy)));
-    service
-        .attempts
-        .lock()
-        .await
-        .get_mut("alice")
-        .unwrap()
-        .started -= LOGIN_TTL;
+    let mut transaction = service.store.as_ref().unwrap().lock("alice").await.unwrap();
+    transaction.state().attempt.as_mut().unwrap().started -= LOGIN_TTL.as_secs();
+    transaction.commit().await.unwrap();
     assert!(matches!(
         service.complete("alice", &old.attempt_id, code(&old)).await,
         Err(AuthError::InvalidAttempt)
@@ -184,4 +184,27 @@ async fn disconnect_during_exchange_cannot_reconnect() {
         Err(AuthError::InvalidAttempt)
     ));
     assert!(!service.status("alice").await.connected);
+}
+
+#[tokio::test]
+async fn consent_survives_replica_changes_and_restart() {
+    let store = Store::default();
+    let first = AuthService::new(Provider::default(), Some(store.clone()), false);
+    let login = first.begin("alice").await.unwrap();
+    drop(first);
+    let second = AuthService::new(Provider::default(), Some(store.clone()), false);
+    second
+        .complete("alice", &login.attempt_id, code(&login))
+        .await
+        .unwrap();
+    let third = AuthService::new(Provider::default(), Some(store), false);
+    assert!(third.status("alice").await.connected);
+    assert!(matches!(
+        third
+            .complete("alice", &login.attempt_id, code(&login))
+            .await,
+        Err(AuthError::InvalidAttempt)
+    ));
+    third.disconnect("alice").await.unwrap();
+    assert!(!second.status("alice").await.connected);
 }

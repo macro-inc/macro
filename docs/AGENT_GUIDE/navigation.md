@@ -250,6 +250,11 @@ Settings → Harness, above Cursor, with the
 Anthropic logo. Settings → Agents selects an agent's harness but does not host
 Claude's connection form. **Connect Claude** starts authorization and opens sign-in
 on the first click; a fallback link remains if the browser blocks the tab.
+Approve on Claude's page, copy the complete `code#state`, then use **Finish
+connecting**. Hosted and local deployments use the same flow. Grants and pending
+sign-in attempts are encrypted in MacroDB and survive restarts or replica changes.
+If the card says sign-in is not configured, the deployment is missing its Claude
+OAuth KMS key; changing the frontend flag cannot fix that backend configuration.
 Claude's model picker uses provider-reported IDs,
 names, descriptions, and order. Settings discovers from recent account sessions;
 session catalogs update through replay, polling, and streaming. Before any catalog
