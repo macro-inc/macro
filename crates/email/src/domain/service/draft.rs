@@ -53,7 +53,25 @@ where
         let draft = self
             .create_draft_impl(&link, &accessible_inboxes, input)
             .await?;
-        Ok(SavedUserDraft { draft, link })
+        let message_ids = [draft.db_id];
+        let (mut attachments, mut attachments_draft, mut attachments_forwarded) = tokio::try_join!(
+            self.email_repo.attachments_by_message_ids(&message_ids),
+            self.email_repo
+                .draft_attachments_by_message_ids(&message_ids),
+            self.email_repo
+                .forwarded_attachments_by_message_ids(&message_ids),
+        )
+        .map_err(anyhow::Error::from)?;
+
+        Ok(SavedUserDraft {
+            attachments: attachments.remove(&draft.db_id).unwrap_or_default(),
+            attachments_draft: attachments_draft.remove(&draft.db_id).unwrap_or_default(),
+            attachments_forwarded: attachments_forwarded
+                .remove(&draft.db_id)
+                .unwrap_or_default(),
+            draft,
+            link,
+        })
     }
 
     /// Resolve the user-scoped save's client handles into server IDs.

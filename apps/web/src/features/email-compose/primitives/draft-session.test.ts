@@ -36,6 +36,7 @@ describe('reduceDraftSession', () => {
       kind: 'handle',
       draftId: 'h-1',
       threadId: 'th-1',
+      queued: false,
     });
     const minted = { type: 'minted', draftId: 'h-2' } as const;
     expect(reduceDraftSession(handle, minted)).toBe(handle);
@@ -69,8 +70,13 @@ describe('reduceDraftSession', () => {
         type: 'saved',
         epoch: handle.epoch,
         identity: { draftId: 'h-1', persistence: 'queued' },
-      }).identity.kind
-    ).toBe('handle');
+      }).identity
+    ).toEqual({
+      kind: 'handle',
+      draftId: 'h-1',
+      threadId: 'th-1',
+      queued: true,
+    });
     expect(
       reduceDraftSession(seeded, {
         type: 'saved',

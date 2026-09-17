@@ -1,4 +1,5 @@
 import { createSignal } from 'solid-js';
+import { match } from 'ts-pattern';
 import type {
   DraftPersistFailureCode,
   PersistedEmailIdentity,
@@ -7,14 +8,14 @@ import type {
 /**
  * What the composer knows about its draft's server row.
  *
- * `handle`: ids the composer minted; a save under them was queued (or is in
- * flight) and the server may not know them yet. `server`: ids a committed
- * save (or a fetched draft) confirmed, so REST-only actions — send,
+ * `handle`: ids the composer minted; `queued` records whether a save under
+ * them was durably queued. The server may not know them yet. `server`: ids a
+ * committed save (or a fetched draft) confirmed, so REST-only actions — send,
  * schedule, attachment uploads — can resolve them.
  */
 export type DraftIdentity =
   | { kind: 'none' }
-  | { kind: 'handle'; draftId: string; threadId?: string }
+  | { kind: 'handle'; draftId: string; threadId?: string; queued: boolean }
   | { kind: 'server'; draftId: string; threadId?: string };
 
 /**
@@ -79,8 +80,9 @@ export function reduceDraftSession(
   state: DraftSessionState,
   event: DraftSessionEvent
 ): DraftSessionState {
-  switch (event.type) {
-    case 'seeded':
+  return match(event)
+    .returnType<DraftSessionState>()
+    .with({ type: 'seeded' }, (event) => {
       return {
         ...state,
         identity: event.draftId
@@ -92,7 +94,8 @@ export function reduceDraftSession(
           : { kind: 'none' },
         policy: { kind: 'autosaving' },
       };
-    case 'minted':
+    })
+    .with({ type: 'minted' }, (event) => {
       if (state.identity.kind !== 'none') return state;
       return {
         ...state,
@@ -100,9 +103,11 @@ export function reduceDraftSession(
           kind: 'handle',
           draftId: event.draftId,
           threadId: event.threadId,
+          queued: false,
         },
       };
-    case 'saved': {
+    })
+    .with({ type: 'saved' }, (event) => {
       if (event.epoch !== state.epoch) return state;
       const draftId = event.identity.draftId ?? currentDraftId(state);
       if (!draftId) return state;
@@ -112,11 +117,14 @@ export function reduceDraftSession(
         // confirmed them. A server id stays a server id.
         return state.identity.kind === 'server'
           ? state
-          : { ...state, identity: { kind: 'handle', draftId, threadId } };
+          : {
+              ...state,
+              identity: { kind: 'handle', draftId, threadId, queued: true },
+            };
       }
       return { ...state, identity: { kind: 'server', draftId, threadId } };
-    }
-    case 'rejected':
+    })
+    .with({ type: 'rejected' }, (event) => {
       if (event.epoch !== state.epoch) return state;
       if (event.code === 'DRAFT_ALREADY_SENT') {
         // Sent from another device: the server outcome supersedes the
@@ -124,12 +132,13 @@ export function reduceDraftSession(
         return { ...FRESH, epoch: state.epoch + 1 };
       }
       return { ...state, policy: { kind: 'latched', code: event.code } };
-    case 'emptied':
-    case 'reset':
+    })
+    .with({ type: 'emptied' }, { type: 'reset' }, () => {
       // A fresh draft: nothing in flight belongs to it, and a rejection
       // latched against the previous content must not keep it from saving.
       return { ...FRESH, epoch: state.epoch + 1 };
-  }
+    })
+    .exhaustive();
 }
 
 function currentDraftId(state: DraftSessionState) {

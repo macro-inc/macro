@@ -3,6 +3,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use serde_json::Value as JsonValue;
 use uuid::Uuid;
 
+use super::attachment::{AttachmentDraft, AttachmentForwarded, MessageAttachment};
 use super::contact::{ContactInfo, RecipientType};
 use super::link::Link;
 
@@ -135,12 +136,20 @@ pub struct SimpleMessageInfo {
 /// A draft saved on behalf of a user, paired with the sending inbox the save
 /// resolved into — transports that build a message representation of the
 /// draft (the GraphQL payload) need the inbox's address for the sender.
+/// All attachment collections have been loaded successfully; a failed load
+/// returns an error instead of an incomplete saved draft.
 #[derive(Clone)]
 pub struct SavedUserDraft {
     /// The created or updated draft.
     pub draft: CreatedDraft,
     /// The inbox the draft was saved into.
     pub link: Link,
+    /// Persisted provider attachments, loaded after saving.
+    pub attachments: Vec<MessageAttachment>,
+    /// Persisted uploaded draft attachments, loaded after saving.
+    pub attachments_draft: Vec<AttachmentDraft>,
+    /// Persisted forwarded attachments, loaded after saving.
+    pub attachments_forwarded: Vec<AttachmentForwarded>,
 }
 
 /// What an applied guarded draft delete removed beyond the draft row.

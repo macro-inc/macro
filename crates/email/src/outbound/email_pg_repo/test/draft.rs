@@ -752,7 +752,6 @@ async fn test_insert_draft_message_with_scheduled_send(pool: Pool<Postgres>) -> 
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
-#[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
 
@@ -760,6 +759,12 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
     let thread_db_id = Uuid::parse_str("11111111-1111-1111-1111-111111111111")?;
     // Re-use the existing draft message ID (msg2)
     let message_db_id = Uuid::parse_str("ee000002-0000-0000-0000-000000000002")?;
+    sqlx::query!(
+        "UPDATE email_messages SET has_attachments = true WHERE id = $1",
+        message_db_id
+    )
+    .execute(&pool)
+    .await?;
     let thread_before = repo
         .thread_by_id(thread_db_id)
         .await?
@@ -796,18 +801,18 @@ async fn test_insert_draft_message_upsert_existing(pool: Pool<Postgres>) -> anyh
         .await?;
 
     // Verify the message was updated (not duplicated)
-    let row = sqlx::query("SELECT subject, body_text FROM email_messages WHERE id = $1")
-        .bind(message_db_id)
-        .fetch_one(&pool)
-        .await?;
+    let row = sqlx::query!(
+        "SELECT subject, body_text, has_attachments FROM email_messages WHERE id = $1",
+        message_db_id
+    )
+    .fetch_one(&pool)
+    .await?;
 
-    assert_eq!(
-        row.get::<Option<String>, _>("subject").as_deref(),
-        Some("Updated draft subject")
-    );
-    assert_eq!(
-        row.get::<Option<String>, _>("body_text").as_deref(),
-        Some("Updated body")
+    assert_eq!(row.subject.as_deref(), Some("Updated draft subject"));
+    assert_eq!(row.body_text.as_deref(), Some("Updated body"));
+    assert!(
+        row.has_attachments,
+        "editing a draft must preserve its attachment flag"
     );
 
     let thread_after = repo

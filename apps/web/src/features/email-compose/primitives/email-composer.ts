@@ -548,10 +548,14 @@ export function createEmailComposer(props: EmailComposerOptions) {
       // and reset the composer; the recipients captured above would
       // otherwise go out on an empty message.
       if (session.isStale(epochBeforeSave)) return;
-      // A queued pre-send save left client handles the REST send cannot
-      // resolve (offline detection missed, or a first save still holds the
-      // queue head). Ask for a retry while the content is still here.
-      if (session.identity().kind === 'handle') {
+      // A failed REST save leaves unused handles and can still send without
+      // a draft ID. A queued save must first confirm its server ID, and a
+      // deterministic rejection must not fall through to a fresh send.
+      const identity = session.identity();
+      if (
+        identity.kind === 'handle' &&
+        (identity.queued || !session.autosaveAllowed())
+      ) {
         props.notices.feedback.failure('Failed to send email', {
           subtext: 'Draft still syncing, try again',
         });
@@ -574,12 +578,12 @@ export function createEmailComposer(props: EmailComposerOptions) {
       // Scheduling may have started while the draft save was pending.
       if (scheduling() || form.sendTime()) return;
 
+      const draftId = identity.kind === 'server' ? identity.draftId : undefined;
       // Snapshot editor state before watermark so undo-send can restore it
       if (currentEditor) {
         const snapshotHtml = currentEditor.read(() =>
           $generateHtmlFromNodes(currentEditor)
         );
-        const draftId = currentDraftId();
         if (draftId) {
           composeUndo.remember({
             inboxId: currentLink.id,
@@ -625,7 +629,7 @@ export function createEmailComposer(props: EmailComposerOptions) {
             body_text: prepared.bodyText,
             body_html: prepared.bodyHtml,
             body_macro: bodyMacro,
-            db_id: currentDraftId(),
+            db_id: draftId,
             // Backend includes the signature by default for new emails; only signal
             // an explicit dismiss. Omitting it falls through to the backend default.
             include_signature: includeSignature() ? undefined : false,

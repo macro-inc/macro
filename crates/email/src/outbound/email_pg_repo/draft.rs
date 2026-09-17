@@ -136,7 +136,6 @@ pub(crate) async fn upsert_draft(
             subject = EXCLUDED.subject,
             from_contact_id = EXCLUDED.from_contact_id,
             sent_at = EXCLUDED.sent_at,
-            has_attachments = EXCLUDED.has_attachments,
             is_read = EXCLUDED.is_read,
             is_starred = EXCLUDED.is_starred,
             is_sent = EXCLUDED.is_sent,

@@ -199,29 +199,145 @@ describe('draft session: reply composer', () => {
 });
 
 describe('draft session: compose composer', () => {
-  it('refuses to send while a local attachment has no record', async () => {
-    const context = createComposeContext();
-    const file = new File(['bytes'], 'notes.txt');
-    vi.mocked(context.attachmentStorage.uploadAttachments).mockImplementation(
-      async (input) => {
-        input.onAttachmentUploadFailed?.(file);
-        throw new Error('Upload failed');
+  it.each(['pre-send', 'autosave'])(
+    'sends without a draft ID after a failed first %s save',
+    async (firstSave) => {
+      const context = createComposeContext();
+      vi.mocked(context.drafts.saveDraft).mockRejectedValue(
+        new Error('Draft save unavailable')
+      );
+      const root = mountEmailComposer(context);
+      try {
+        root.edit('Send even when draft saving fails');
+        if (firstSave === 'autosave') {
+          await vi.advanceTimersByTimeAsync(600);
+        }
+        root.state.context.onSend();
+        await vi.advanceTimersByTimeAsync(0);
+
+        expect(savedInputs(context)[0].clientHandles?.draftId).toBeTruthy();
+        expect(context.delivery.sendMessage).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            message: expect.objectContaining({
+              db_id: undefined,
+              subject: 'Review',
+              body_text: expect.stringContaining(
+                'Send even when draft saving fails'
+              ),
+            }),
+          })
+        );
+        expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+      } finally {
+        root.dispose();
       }
-    );
+    }
+  );
+
+  it('keeps queued drafts blocked after a later save fails until the server confirms an ID', async () => {
+    const context = createComposeContext();
+    vi.mocked(context.drafts.saveDraft)
+      .mockImplementationOnce(async (input) => queued(input))
+      .mockRejectedValueOnce(new Error('Draft save unavailable'))
+      .mockImplementationOnce(async () => committed('server-compose'));
     const root = mountEmailComposer(context);
     try {
-      root.edit('With an attachment');
-      await root.state.context.onAddAttachments([{ type: 'local', file }]);
+      root.edit('Wait for the queued draft');
+      for (let attempt = 0; attempt < 2; attempt++) {
+        root.state.context.onSend();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+        expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+          'Failed to send email',
+          { subtext: 'Draft still syncing, try again' }
+        );
+      }
+      root.state.context.onSend();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.delivery.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          message: expect.objectContaining({ db_id: 'server-compose' }),
+        })
+      );
+      const [first, second, third] = savedInputs(context);
+      expect(second.clientHandles).toEqual(first.clientHandles);
+      expect(third.clientHandles).toEqual(first.clientHandles);
+    } finally {
+      root.dispose();
+    }
+  });
+
+  it('reuses a confirmed draft ID when its pre-send save fails', async () => {
+    const context = createComposeContext();
+    vi.mocked(context.drafts.saveDraft)
+      .mockResolvedValueOnce(committed('existing-draft'))
+      .mockRejectedValueOnce(new Error('Draft save unavailable'));
+    const root = mountEmailComposer(context);
+    try {
+      root.edit('Already saved');
       await vi.advanceTimersByTimeAsync(600);
       root.state.context.onSend();
-      await vi.advanceTimersByTimeAsync(10);
-      expect(context.delivery.sendMessage).not.toHaveBeenCalled();
-      expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
-        'Failed to send email',
-        { subtext: 'Attachment not uploaded' }
+      await vi.advanceTimersByTimeAsync(0);
+      expect(context.delivery.sendMessage).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          message: expect.objectContaining({ db_id: 'existing-draft' }),
+        })
       );
     } finally {
       root.dispose();
     }
   });
+
+  it.each(['INVALID', 'DRAFT_ALREADY_SENT'] as const)(
+    'does not send a new draft rejected with %s',
+    async (code) => {
+      const context = createComposeContext();
+      vi.mocked(context.drafts.saveDraft).mockRejectedValue(
+        new DraftPersistRejected(code)
+      );
+      const root = mountEmailComposer(context);
+      try {
+        root.edit('Rejected draft');
+        root.state.context.onSend();
+        await vi.advanceTimersByTimeAsync(0);
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+      } finally {
+        root.dispose();
+      }
+    }
+  );
+
+  it.each(['save', 'upload'])(
+    'refuses to send an unuploaded attachment after a failed %s',
+    async (failure) => {
+      const context = createComposeContext();
+      const file = new File(['bytes'], 'notes.txt');
+      if (failure === 'save') {
+        vi.mocked(context.drafts.saveDraft).mockRejectedValue(
+          new Error('Draft save unavailable')
+        );
+      }
+      vi.mocked(context.attachmentStorage.uploadAttachments).mockImplementation(
+        async (input) => {
+          input.onAttachmentUploadFailed?.(file);
+          throw new Error('Upload failed');
+        }
+      );
+      const root = mountEmailComposer(context);
+      try {
+        root.edit('With an attachment');
+        await root.state.context.onAddAttachments([{ type: 'local', file }]);
+        await vi.advanceTimersByTimeAsync(600);
+        root.state.context.onSend();
+        await vi.advanceTimersByTimeAsync(10);
+        expect(context.delivery.sendMessage).not.toHaveBeenCalled();
+        expect(context.notices.feedback.failure).toHaveBeenLastCalledWith(
+          'Failed to send email',
+          { subtext: 'Attachment not uploaded' }
+        );
+      } finally {
+        root.dispose();
+      }
+    }
+  );
 });

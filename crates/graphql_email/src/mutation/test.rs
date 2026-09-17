@@ -1,6 +1,7 @@
 use std::sync::Mutex;
 
 use async_graphql::{EmptySubscription, Object, Schema, SimpleObject};
+use email::domain::models::{AttachmentDraft, AttachmentForwarded, MessageAttachment};
 
 use super::*;
 
@@ -45,6 +46,10 @@ struct CapturingEmailMutationService {
     calls: Mutex<Vec<CapturedMutation>>,
     draft_fails_as_already_sent: std::sync::atomic::AtomicBool,
     delete_reports_missing: std::sync::atomic::AtomicBool,
+    attachment_load_fails: bool,
+    attachments: Vec<MessageAttachment>,
+    attachments_draft: Vec<AttachmentDraft>,
+    attachments_forwarded: Vec<AttachmentForwarded>,
 }
 
 const TEST_THREAD_ID: Uuid = Uuid::from_u128(0x7ead);
@@ -104,6 +109,11 @@ impl EmailMutationService for CapturingEmailMutationService {
             body_html: input.body_html.clone(),
             send_time: input.send_time.map(|time| time.to_rfc3339()),
         });
+        if self.attachment_load_fails {
+            return Err(EmailErr::RepoErr(
+                std::io::Error::other("attachment loading failed").into(),
+            ));
+        }
         Ok(SavedUserDraft {
             draft: email::domain::models::CreatedDraft {
                 db_id: input.db_id.unwrap_or_default(),
@@ -123,6 +133,9 @@ impl EmailMutationService for CapturingEmailMutationService {
                 send_time: input.send_time,
             },
             link: test_sending_link(link_id.unwrap_or_default()),
+            attachments: self.attachments.clone(),
+            attachments_draft: self.attachments_draft.clone(),
+            attachments_forwarded: self.attachments_forwarded.clone(),
         })
     }
 
@@ -284,7 +297,7 @@ async fn save_email_draft_calls_the_service_and_returns_the_payload() {
                 subject: "Re: hello",
                 bodyHtml: "PHA-aGk8L3A",
                 sendTime: "2026-08-27T12:00:00+00:00"
-            }}) {{ draftId draft {{ id isDraft isSent subject from {{ email }} }} thread {{ id isRead }} }} }}"#
+            }}) {{ draftId draft {{ id isDraft isSent subject from {{ email }} hasAttachments attachments {{ id }} attachmentsDraft {{ id }} attachmentsForwarded {{ attachmentId }} }} thread {{ id isRead }} }} }}"#
         ))
         .await;
 
@@ -299,6 +312,10 @@ async fn save_email_draft_calls_the_service_and_returns_the_payload() {
                 "isSent": false,
                 "subject": "Re: hello",
                 "from": { "email": "viewer@example.com" },
+                "hasAttachments": false,
+                "attachments": [],
+                "attachmentsDraft": [],
+                "attachmentsForwarded": [],
             },
             "thread": { "id": TEST_THREAD_ID, "isRead": true },
         })
@@ -315,6 +332,102 @@ async fn save_email_draft_calls_the_service_and_returns_the_payload() {
             send_time: Some("2026-08-27T12:00:00+00:00".to_string()),
         }]
     );
+}
+
+#[tokio::test]
+async fn save_email_draft_returns_each_kind_of_persisted_attachment() {
+    let draft_id = Uuid::now_v7();
+    let attachment_id = Uuid::now_v7();
+    let services = [
+        CapturingEmailMutationService {
+            attachments: vec![MessageAttachment {
+                db_id: attachment_id,
+                provider_id: Some("provider-attachment".to_string()),
+                filename: Some("provider.txt".to_string()),
+                mime_type: Some("text/plain".to_string()),
+                size_bytes: Some(42),
+                sfs_id: None,
+                content_id: None,
+            }],
+            ..Default::default()
+        },
+        CapturingEmailMutationService {
+            attachments_draft: vec![AttachmentDraft {
+                id: attachment_id,
+                draft_id,
+                file_name: "upload.txt".to_string(),
+                content_type: "text/plain".to_string(),
+                sha: "digest".to_string(),
+                size: 42,
+                s3_key: "uploads/file".to_string(),
+            }],
+            ..Default::default()
+        },
+        CapturingEmailMutationService {
+            attachments_forwarded: vec![AttachmentForwarded {
+                attachment_id,
+                draft_id,
+                provider_attachment_id: Some("forwarded-attachment".to_string()),
+                message_provider_id: "original-message".to_string(),
+                filename: Some("forwarded.txt".to_string()),
+                mime_type: Some("text/plain".to_string()),
+                size_bytes: Some(42),
+            }],
+            ..Default::default()
+        },
+    ];
+    let expected_attachments = [
+        serde_json::json!({"id": attachment_id, "filename": "provider.txt"}),
+        serde_json::json!({"id": attachment_id, "draftId": draft_id, "fileName": "upload.txt"}),
+        serde_json::json!({"attachmentId": attachment_id, "draftId": draft_id, "filename": "forwarded.txt"}),
+    ];
+    let fields = ["attachments", "attachmentsDraft", "attachmentsForwarded"];
+    for (index, service) in services.into_iter().enumerate() {
+        let response = schema(Arc::new(service))
+            .execute(format!(
+                r#"mutation {{ saveEmailDraft(input: {{ draftId: "{draft_id}", subject: "updated" }}) {{
+                    draft {{
+                        hasAttachments
+                        attachments {{ id filename }}
+                        attachmentsDraft {{ id draftId fileName }}
+                        attachmentsForwarded {{ attachmentId draftId filename }}
+                    }}
+                }} }}"#
+            ))
+            .await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        let data = response.data.into_json().unwrap();
+        let draft = &data["saveEmailDraft"]["draft"];
+        assert_eq!(draft["hasAttachments"], true);
+        for (field_index, field) in fields.iter().enumerate() {
+            let expected = if field_index == index {
+                serde_json::json!([expected_attachments[index]])
+            } else {
+                serde_json::json!([])
+            };
+            assert_eq!(draft[field], expected);
+        }
+    }
+}
+
+#[tokio::test]
+async fn save_email_draft_does_not_return_a_message_when_attachment_loading_fails() {
+    let service = Arc::new(CapturingEmailMutationService {
+        attachment_load_fails: true,
+        ..Default::default()
+    });
+    let draft_id = Uuid::now_v7();
+    let response = schema(service)
+        .execute(format!(
+            r#"mutation {{ saveEmailDraft(input: {{ draftId: "{draft_id}", subject: "s" }}) {{
+                draft {{ id hasAttachments attachments {{ id }} attachmentsDraft {{ id }} attachmentsForwarded {{ attachmentId }} }}
+            }} }}"#
+        ))
+        .await;
+
+    assert_eq!(response.errors.len(), 1);
+    assert!(format!("{:?}", response.errors[0].extensions).contains("INTERNAL"));
+    assert!(response.data.into_json().unwrap().is_null());
 }
 
 #[tokio::test]

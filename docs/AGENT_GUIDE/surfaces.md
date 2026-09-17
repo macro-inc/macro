@@ -292,6 +292,8 @@ send or discard, its sender and scheduling controls cannot change the operation.
 Attachments that can be opened are buttons named by their filename; Tab to one
 and press Enter or Space. Removal is a separate button named `Remove <filename>`.
 Removing a forwarded file keeps the received original.
+When checking draft autosave, edit the body of a draft with uploaded or forwarded
+attachments, wait for the save, and reopen it; the attachments should remain visible.
 AI email tool drafts persist body-only edits; changing recipients or the subject
 is not required to save the body.
 The three-dot button beneath a body reveals quoted content and a trimmed
@@ -313,6 +315,9 @@ draft is still syncing (its save was accepted locally but not yet confirmed by t
 server; retry after a moment), or while an attachment has no completed upload. The
 composer keeps its content in each case. Attachments cannot be added while
 offline: a blocking notice explains and nothing is attached.
+For a new standalone email, a failed REST draft save is best-effort: Send can
+still proceed without a draft ID when no save was queued and no attachment is
+waiting to upload. A server rejection still blocks sending the unconfirmed draft.
 
 While a schedule change is pending, immediate send and further schedule changes
 are disabled. Reply recipients cannot be edited or dragged during scheduling,

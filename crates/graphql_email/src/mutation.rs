@@ -277,12 +277,16 @@ where
     }
 }
 
-/// Builds the payload's message record from the saved draft. Attachment
-/// collections are empty even when an upserted draft already has uploads —
-/// the post-commit thread revalidation restores them; this record's job is
-/// carrying the draft's content and identity.
+/// Builds the payload's message record from the saved draft and its persisted
+/// attachments. The service fails the save response if attachment loading fails.
 fn saved_draft_message(saved: SavedUserDraft) -> Message {
-    let SavedUserDraft { draft, link } = saved;
+    let SavedUserDraft {
+        draft,
+        link,
+        attachments,
+        attachments_draft,
+        attachments_forwarded,
+    } = saved;
     let now = Utc::now();
     Message {
         db_id: draft.db_id,
@@ -302,7 +306,9 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
         is_starred: false,
         is_sent: false,
         is_draft: true,
-        has_attachments: false,
+        has_attachments: !attachments.is_empty()
+            || !attachments_draft.is_empty()
+            || !attachments_forwarded.is_empty(),
         scheduled_send_time: draft.send_time,
         from: Some(ContactInfo {
             email: String::from(link.email_address),
@@ -317,9 +323,9 @@ fn saved_draft_message(saved: SavedUserDraft) -> Message {
         body_html_sanitized: draft.body_html,
         body_macro: draft.body_macro,
         body_replyless: None,
-        attachments: Vec::new(),
-        attachments_draft: Vec::new(),
-        attachments_forwarded: Vec::new(),
+        attachments,
+        attachments_draft,
+        attachments_forwarded,
         headers_json: draft.headers_json,
         created_at: now,
         updated_at: now,
