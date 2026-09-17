@@ -12,9 +12,14 @@
 /js
 /rust
 
-# Keep /apps and /packages: the lexical service installs the root JavaScript
-# workspace and needs its packages and apps/web/patches. Compose builds through
-# Podman's Docker API can use this file instead of Dockerfile-specific ignores.
+# User-facing applications and shared JavaScript packages are not part of most
+# backend service build contexts. Hosted lexical is a Cloudflare Worker; the
+# local Docker image uses docker/lexical-service.Dockerfile.dockerignore, which
+# still includes the JS workspace. Do not drop these lines to unstick a local
+# lexical build — that invalidates every service image cache. If a builder
+# ignores Dockerfile-specific dockerignores, comment them out locally only.
+/apps
+/packages
 
 # Secrets and local configuration
 .env
