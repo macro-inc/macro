@@ -10,7 +10,12 @@
   runtime status. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
 - The starting page has a compact composer that starts at one line and grows
-  with longer prompts or Shift+Enter. **Agent** and **Send** sit inside the input on the right.
+  with longer prompts or Shift+Enter. Lists, quotes, headings, and other
+  non-paragraph blocks expand immediately, even with short text. This also applies
+  to session composers. The editor takes the full width and controls move below;
+  returning to a short paragraph restores the compact row. Height changes animate
+  over 150ms, with reduced-motion preferences respected. **Agent** and **Send**
+  sit inside the input on the right.
   Direct model selections show only the model name and provider icon in the input.
   Saved and coding agents show their identity beside the current model. There is
   no Chat/Code switch or separate model button.
