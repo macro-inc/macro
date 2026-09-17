@@ -43,6 +43,8 @@ type GridSource = {
   sheetId?: Accessor<string>;
   canEdit: Accessor<boolean>;
   rowCount?: Accessor<number>;
+  hiddenRows?: Accessor<number[]>;
+  hiddenColumns?: Accessor<number[]>;
   copyCells?: (copies: CellCopy[]) => Promise<SpreadsheetCellEdits>;
   setCells: (edits: Record<string, Partial<SpreadsheetCell> | null>) => void;
   setSelection?: (selection: SpreadsheetSelection) => void;
@@ -60,7 +62,26 @@ export function createGridController(source: GridSource) {
   onCleanup(() => {
     operation++;
   });
-  const origin = { row: 0, column: 0 };
+  const visiblePosition = (position: CellPosition): CellPosition => {
+    const bounded = boundPosition(position);
+    const visible = (index: number, limit: number, hidden: number[]) => {
+      if (!hidden.includes(index)) return index;
+      for (let next = index + 1; next < limit; next++)
+        if (!hidden.includes(next)) return next;
+      for (let next = index - 1; next >= 0; next--)
+        if (!hidden.includes(next)) return next;
+      return 0;
+    };
+    return {
+      row: visible(bounded.row, rowCount(), source.hiddenRows?.() ?? []),
+      column: visible(
+        bounded.column,
+        GRID_COLUMNS,
+        source.hiddenColumns?.() ?? []
+      ),
+    };
+  };
+  const origin = visiblePosition({ row: 0, column: 0 });
   const [selection, setSelectionValue] = createSignal<CellSelection>({
     anchor: origin,
     focus: origin,
@@ -166,7 +187,7 @@ export function createGridController(source: GridSource) {
   function select(position: CellPosition, extend = false) {
     commit();
     operation++;
-    const bounded = boundPosition(position);
+    const bounded = visiblePosition(position);
     setSelection((current) => ({
       anchor: extend ? current.anchor : bounded,
       focus: bounded,
@@ -187,6 +208,9 @@ export function createGridController(source: GridSource) {
   function beginEdit(location: 'cell' | 'formula', initial?: string) {
     if (!source.canEdit()) return;
     operation++;
+    const visible = visiblePosition(selection().anchor);
+    if (cellAddress(visible) !== activeAddress())
+      setSelection({ anchor: visible, focus: visible });
     originalValue = source.cells()[activeAddress()]?.value ?? '';
     setDraft(initial ?? originalValue);
     setEditing(location);
@@ -257,7 +281,27 @@ export function createGridController(source: GridSource) {
 
   function move(row: number, column: number, extend = false) {
     const from = extend ? selection().focus : selection().anchor;
-    select({ row: from.row + row, column: from.column + column }, extend);
+    const next = boundPosition({
+      row: from.row + row,
+      column: from.column + column,
+    });
+    while (row && source.hiddenRows?.().includes(next.row)) {
+      const candidate = next.row + Math.sign(row);
+      if (candidate < 0 || candidate >= rowCount()) {
+        next.row = from.row;
+        break;
+      }
+      next.row = candidate;
+    }
+    while (column && source.hiddenColumns?.().includes(next.column)) {
+      const candidate = next.column + Math.sign(column);
+      if (candidate < 0 || candidate >= GRID_COLUMNS) {
+        next.column = from.column;
+        break;
+      }
+      next.column = candidate;
+    }
+    select(next, extend);
   }
 
   function clear() {

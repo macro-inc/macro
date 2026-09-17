@@ -9,6 +9,7 @@ import type { JSX, ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SpreadsheetStore } from './primitives/create-spreadsheet-store';
 
+vi.mock('./spreadsheet-mentions', () => ({ spreadsheetMentions: undefined }));
 const mocks = vi.hoisted(() => ({
   create: vi.fn(),
   save: vi.fn(),

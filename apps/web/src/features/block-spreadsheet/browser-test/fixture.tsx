@@ -9,8 +9,13 @@ import {
   SyncServiceSource,
 } from '@macro-inc/collaboration/sync-service/source';
 import { createWebsocketStateSignal } from '@macro-inc/collaboration/websocket/solid/state-signal';
+import {
+  cellPlainText,
+  encodeCellMention,
+} from '@macro-inc/spreadsheet/cell-mentions';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { render } from 'solid-js/web';
+import { CellMentionEditor } from '../components/CellMentionEditor';
 import type { SpreadsheetWorkbookSheet } from '../core/workbook-document';
 import { createLocalSpreadsheetSource } from '../primitives/create-local-spreadsheet-source';
 import { createSpreadsheetStore } from '../primitives/create-spreadsheet-store';
@@ -88,6 +93,40 @@ function Fixture() {
   return (
     <main class="h-[calc(var(--dvh,1dvh)*100)] w-screen overflow-hidden bg-page font-sans text-ink">
       <SpreadsheetEditor
+        mentions={
+          params.has('mentions')
+            ? {
+                renderText: cellPlainText,
+                renderEditor: (props) => (
+                  <CellMentionEditor
+                    {...props}
+                    convertPaste={(value) => value}
+                    renderMenu={(menu, _anchor, pick) => (
+                      <button
+                        type="button"
+                        class="fixed right-4 top-4 z-[100]"
+                        aria-label="Mention Taylor"
+                        onPointerDown={(e) => e.preventDefault()}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() =>
+                          pick(
+                            encodeCellMention({
+                              type: 'user',
+                              userId: 'macro|taylor@macro.com',
+                              email: 'taylor@macro.com',
+                              displayName: 'Taylor',
+                            })
+                          )
+                        }
+                      >
+                        Taylor ({menu.searchTerm()})
+                      </button>
+                    )}
+                  />
+                ),
+              }
+            : undefined
+        }
         store={store}
         name="Browser fixture"
         autoFocus

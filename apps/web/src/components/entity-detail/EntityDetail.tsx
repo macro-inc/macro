@@ -64,6 +64,7 @@ export function entityDetailBlockType(
     blockType === 'snippet' ||
     blockType === 'skill' ||
     blockType === 'canvas' ||
+    blockType === 'spreadsheet' ||
     blockType === 'code' ||
     blockType === 'csv' ||
     blockType === 'image' ||

@@ -18,7 +18,11 @@ type HistoryChange = {
   after: Scalar;
 };
 type HistoryMetadata =
-  | { kind: 'structural' | 'edit'; changes: HistoryChange[] }
+  | {
+      kind: 'structural' | 'edit';
+      changes: HistoryChange[];
+      axisWorkbook?: string;
+    }
   | { kind: 'unavailable' };
 
 function metadata(value: Value | undefined): HistoryMetadata | undefined {
@@ -53,6 +57,13 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
           popped && popped.kind !== 'unavailable'
             ? {
                 kind: popped.kind,
+                ...(popped.axisWorkbook
+                  ? {
+                      axisWorkbook: JSON.stringify(
+                        readSpreadsheetWorkbook(doc)
+                      ),
+                    }
+                  : {}),
                 changes: popped.changes.map((change) => ({
                   ...change,
                   after: scalar(doc, change.map, change.key),
@@ -81,7 +92,13 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
           }));
         });
         return {
-          value: { kind: structural ? 'structural' : 'edit', changes },
+          value: {
+            kind: structural ? 'structural' : 'edit',
+            changes,
+            ...(event.origin === 'spreadsheet-axis-change'
+              ? { axisWorkbook: JSON.stringify(readSpreadsheetWorkbook(doc)) }
+              : {}),
+          },
           cursors: [],
         };
       } catch {
@@ -99,6 +116,11 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
     const action = direction === 'undo' ? 'Undo' : 'Redo';
     if (item?.kind === 'unavailable')
       return `${action} is unavailable because this sheet change could not be checked safely.`;
+    if (
+      item?.axisWorkbook &&
+      item.axisWorkbook !== JSON.stringify(readSpreadsheetWorkbook(doc))
+    )
+      return `${action} is blocked because the workbook changed after moving rows or columns. Newer changes have been kept.`;
     if (
       item?.changes.some(
         (change) =>
@@ -148,6 +170,7 @@ export function createSpreadsheetHistory(doc: LoroDoc, onChange: () => void) {
     reversing = item
       ? {
           kind: item.kind,
+          ...(item.axisWorkbook ? { axisWorkbook: item.axisWorkbook } : {}),
           changes: item.changes.map((change) => ({
             ...change,
             before: scalar(doc, change.map, change.key),

@@ -1,5 +1,9 @@
 import type { LoroDoc } from 'loro-crdt';
 import { formulaReferencesSheet } from './sheet-references';
+import {
+  parseWorkbookMetadata,
+  type WorkbookSheetMetadata,
+} from './workbook-metadata';
 
 export { formulaReferencesSheet } from './sheet-references';
 
@@ -41,12 +45,14 @@ export const SPREADSHEET_MAX_SHEETS = 10;
 export type SpreadsheetWorkbookSheet = SpreadsheetSheet & {
   cells: SpreadsheetCells;
   layout: SpreadsheetLayout;
+  metadata?: WorkbookSheetMetadata;
 };
 export type SpreadsheetSheetInput = {
   name: string;
   cells: SpreadsheetCells;
   rowCount: number;
   columnWidths: Record<number, number>;
+  metadata?: WorkbookSheetMetadata;
 };
 
 export function readSpreadsheetWorkbook(
@@ -55,6 +61,9 @@ export function readSpreadsheetWorkbook(
   const readEntries = createSpreadsheetEntryReader(doc);
   return readSpreadsheetSheets(doc).map((sheet) => ({
     ...sheet,
+    metadata: parseWorkbookMetadata(
+      doc.getMap('spreadsheetSheetMetadata').get(sheet.id)
+    ),
     cells: readSpreadsheetCells(doc, sheet.id, readEntries),
     layout: readSpreadsheetLayout(doc, sheet.id, readEntries),
   }));
@@ -98,6 +107,21 @@ function availableSheetName(doc: LoroDoc, base?: string): string {
 
 function assertUnreferenced(doc: LoroDoc, sheet: SpreadsheetSheet) {
   for (const current of readSpreadsheetWorkbook(doc)) {
+    if (current.id === sheet.id && current.metadata?.definedNames?.length)
+      throw new Error(
+        `“${sheet.name}” contains Excel name definitions. Keep the sheet name while those definitions are in use.`
+      );
+    if (
+      current.metadata?.definedNames?.some((entry) =>
+        formulaReferencesSheet(
+          `=${entry.formula.replace(/^=/, '')}`,
+          sheet.name
+        )
+      )
+    )
+      throw new Error(
+        `“${sheet.name}” is referenced by an Excel name definition.`
+      );
     for (const cell of Object.values(current.cells)) {
       if (
         cell.format !== 'text' &&
@@ -148,7 +172,27 @@ function validateSheetInputs(
       `A workbook can contain up to ${SPREADSHEET_MAX_SHEETS} sheets.`
     );
   const names = new Set(existing.map((sheet) => sheet.name.toLowerCase()));
+  const globalNames = new Set(
+    (replace ? [] : readSpreadsheetWorkbook(doc)).flatMap((sheet) =>
+      (sheet.metadata?.definedNames ?? [])
+        .filter((entry) => !entry.local)
+        .map((entry) => entry.name.toLowerCase())
+    )
+  );
   for (const sheet of inputs) {
+    if (
+      sheet.metadata &&
+      !parseWorkbookMetadata(JSON.stringify(sheet.metadata))
+    )
+      throw new Error('Invalid Excel workbook metadata.');
+    const localNames = new Set<string>();
+    for (const entry of sheet.metadata?.definedNames ?? []) {
+      const definitions = entry.local ? localNames : globalNames;
+      const key = entry.name.toLowerCase();
+      if (definitions.has(key))
+        throw new Error(`Duplicate Excel name: ${entry.name}`);
+      definitions.add(key);
+    }
     const name = validateSpreadsheetSheetName(sheet.name);
     if (name !== sheet.name)
       throw new Error(
@@ -212,6 +256,10 @@ export function importSpreadsheetSheets(
   }
   inputs.forEach((sheet, index) => {
     const id = ids[index];
+    if (sheet.metadata)
+      doc
+        .getMap('spreadsheetSheetMetadata')
+        .set(id, JSON.stringify(sheet.metadata));
     doc.getMap('spreadsheetSheetNames').set(id, sheet.name);
     doc.getMap('spreadsheetSheetOrder').set(id, order + index + 1);
     writeSpreadsheetCells(doc, sheet.cells, id, false);
@@ -252,9 +300,17 @@ export function duplicateSpreadsheetSheet(
   sheetId: string
 ): string {
   const sheet = existingSheet(doc, sheetId);
+  const metadata = parseWorkbookMetadata(
+    doc.getMap('spreadsheetSheetMetadata').get(sheetId)
+  );
+  if (metadata?.definedNames)
+    metadata.definedNames = metadata.definedNames.filter(
+      (entry) => entry.local
+    );
   return importSpreadsheetSheets(doc, [
     {
       name: availableSheetName(doc, sheet.name),
+      metadata,
       cells: readSpreadsheetCells(doc, sheetId),
       ...readSpreadsheetLayout(doc, sheetId),
     },

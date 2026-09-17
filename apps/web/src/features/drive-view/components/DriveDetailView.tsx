@@ -192,6 +192,13 @@ function StackEntityDetail(props: {
 
 export function DriveDetailView(props: { breadcrumbOrderOffset: number }) {
   const [shareOpen, setShareOpen] = createSignal(false);
+  const navigationStack = useEntityDetailNavigationStack();
+  // Spreadsheets use their live block in PreviewPanel, which supplies its own
+  // header, sharing controls and the enclosing ViewShell's sidebar toggle.
+  const hasBlockHeader = () => {
+    const target = navigationStack.active()?.data;
+    return target && entityDetailBlockType(target) === 'spreadsheet';
+  };
 
   return (
     <ShareDialogContext.Provider
@@ -206,7 +213,9 @@ export function DriveDetailView(props: { breadcrumbOrderOffset: number }) {
       />
       <SidePanel.Root>
         <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
-          <DriveDetailTopBar />
+          <Show when={!hasBlockHeader()}>
+            <DriveDetailTopBar />
+          </Show>
           <div class="relative min-h-0 min-w-0 flex-1">
             <EntityDetailNavigationStack.Outlet>
               {(entry, state) => (

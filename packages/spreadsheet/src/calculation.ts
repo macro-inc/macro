@@ -1,4 +1,6 @@
 import { type CompletionContext, getTokens, Model } from '@ironcalc/wasm';
+import { format as formatExcelNumber } from 'ssf';
+import { cellPlainText } from './cell-mentions';
 import {
   formatCellAddress,
   parseCellAddress,
@@ -10,11 +12,14 @@ import {
   type SpreadsheetCellEdits,
   type SpreadsheetCells,
 } from './spreadsheet-document';
+import type { WorkbookSheetMetadata } from './workbook-metadata';
+import { changeWorkbookAxis } from './workbook-structure';
 
 export type CalculatedCell = {
   display: string;
   number?: number;
   error?: string;
+  warning?: string;
   /** Included only for callers requesting typed results. */
   type?: 'blank' | 'number' | 'text' | 'boolean' | 'error';
   value?: string | number | boolean | null;
@@ -26,6 +31,7 @@ export type CalculationSheet = {
   name: string;
   cells: SpreadsheetCells;
   rowCount: number;
+  metadata?: WorkbookSheetMetadata;
 };
 export type WorkbookCalculation = Record<string, SpreadsheetCalculation>;
 export type CalculationContext = { sheetNames: string[]; activeSheet: number };
@@ -53,6 +59,7 @@ export type SpreadsheetCalculator = {
     cursor: number,
     context?: CalculationContext
   ) => CompletionContext;
+  changeAxis: typeof changeWorkbookAxis;
   dispose: () => void;
 };
 
@@ -196,25 +203,113 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
         model,
         bounded.map((sheet) => sheet.name)
       );
+      const definedNames = new Set<string>();
+      const constants = new Map<string, string>();
+      const invalidNames = new Set<string>();
+      const definitions = new Map<string, string>();
+      for (const [sheetIndex, sheet] of bounded.entries()) {
+        for (const entry of sheet.metadata?.definedNames ?? []) {
+          const key = `${entry.local ? sheetIndex : 'global'}:${entry.name.toLowerCase()}`;
+          if (definedNames.has(key))
+            throw new Error(`Duplicate Excel name: ${entry.name}`);
+          definedNames.add(key);
+          const formula = entry.formula.replace(/^=/, '');
+          definitions.set(key, formula);
+          // IronCalc's named-range API only accepts references. Named constants
+          // remain authoritative definitions; substitute tokens for calculation.
+          if (
+            /^(?:[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?|TRUE|FALSE|"(?:[^"\r\n]|"")*")$/i.test(
+              formula
+            )
+          )
+            constants.set(key, formula);
+          else {
+            try {
+              model.newDefinedName(
+                entry.name,
+                entry.local ? sheetIndex : undefined,
+                formula
+              );
+            } catch {
+              invalidNames.add(key);
+            }
+          }
+        }
+      }
       for (const [sheetIndex, { id, cells, rowCount }] of bounded.entries()) {
         const unsupported: Record<string, string> = {};
         unsupportedBySheet[id] = unsupported;
         for (const address of Object.keys(cells).sort()) {
           const position = parseCellAddress(address);
           const cell = cells[address];
-          const value = cell.value;
+          const value = cellPlainText(cell.value);
+          const literal = cell.format === 'text' || value !== cell.value;
           if (!position || position.row >= rowCount || value === '') continue;
-          const fn =
-            cell.format === 'text' ? undefined : unsupportedFunction(value);
+          const fn = literal ? undefined : unsupportedFunction(value);
           if (fn) {
             unsupported[address] =
               `${fn} is not supported yet because collaborators need the same calculation clock and random seed.`;
+          }
+          let input = fn ? '=NA()' : literal ? `'${value}` : value;
+          if (!fn && !literal && value.startsWith('=')) {
+            // Excel permits Sheet!LocalName, which IronCalc does not tokenize.
+            // Skip double-quoted literals and resolve only known definitions;
+            // ordinary sheet-qualified cell references stay unchanged.
+            const qualified = value.replace(
+              /"(?:[^"]|"")*"|'((?:[^']|'')+)'!([\p{L}_\\][\p{L}\p{N}_.\\]*)|([\p{L}_\\][\p{L}\p{N}_.\\]*)!([\p{L}_\\][\p{L}\p{N}_.\\]*)/gu,
+              (
+                match,
+                quoted: string | undefined,
+                quotedName: string | undefined,
+                plain: string | undefined,
+                plainName: string | undefined
+              ) => {
+                if (match.startsWith('"')) return match;
+                const target = bounded.findIndex(
+                  (sheet) =>
+                    sheet.name.toLowerCase() ===
+                    (quoted?.replaceAll("''", "'") ?? plain ?? '').toLowerCase()
+                );
+                if (target < 0) return match;
+                const name = (quotedName ?? plainName ?? '').toLowerCase();
+                const local = `${target}:${name}`;
+                const key = definedNames.has(local) ? local : `global:${name}`;
+                if (invalidNames.has(key))
+                  unsupported[address] =
+                    `The Excel name ${name} uses a definition this calculation engine does not support.`;
+                const definition = definitions.get(key);
+                return definition === undefined ? match : `(${definition})`;
+              }
+            );
+            const characters = Array.from(qualified);
+            const tokens = getTokens(qualified);
+            for (let index = tokens.length - 1; index >= 0; index--) {
+              const { token, start, end } = tokens[index];
+              if (
+                typeof token !== 'object' ||
+                !('Ident' in token) ||
+                tokens[index + 1]?.token === 'LeftParenthesis'
+              )
+                continue;
+              const name = token.Ident.toLowerCase();
+              const localKey = `${sheetIndex}:${name}`;
+              const key = definedNames.has(localKey)
+                ? localKey
+                : `global:${name}`;
+              if (invalidNames.has(key))
+                unsupported[address] =
+                  `The Excel name ${token.Ident} uses a definition this calculation engine does not support.`;
+              const constant = constants.get(key);
+              if (constant !== undefined)
+                characters.splice(start, end - start, `(${constant})`);
+            }
+            input = unsupported[address] ? '=NA()' : characters.join('');
           }
           model.setUserInput(
             sheetIndex,
             position.row + 1,
             position.column + 1,
-            fn ? '=NA()' : cell.format === 'text' ? `'${value}` : value
+            input
           );
         }
         // The WASM binding exposes numeric values through its formatter. Read
@@ -272,8 +367,21 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
               };
             } else if (cellType === 1) {
               const number = Number(display);
+              const customFormat = cells[address]?.numberFormat;
+
+              let formatted = displayNumber(number, cells[address]);
+              let warning: string | undefined;
+              if (customFormat) {
+                try {
+                  formatted = formatExcelNumber(customFormat, number);
+                } catch {
+                  warning =
+                    'This Excel number format cannot be displayed in Macro. Its value and original format are retained for export.';
+                }
+              }
               results[address] = {
-                display: displayNumber(number, cells[address]),
+                display: formatted,
+                ...(warning && { warning }),
                 number,
                 ...(options?.includeTypes && {
                   type: 'number' as const,
@@ -302,6 +410,7 @@ export function createInitializedSpreadsheetCalculator(): SpreadsheetCalculator 
   }
 
   return {
+    changeAxis: changeWorkbookAxis,
     complete(text, cursor, context) {
       if (disposed) throw new Error('The spreadsheet calculator is disposed.');
       const model = new Model('Formula help', 'en', 'UTC', 'en');

@@ -460,3 +460,26 @@ describe('spreadsheet AI atomic editing', () => {
     expect(readSpreadsheetCells(doc)).toEqual({});
   });
 });
+
+it('uses selected-sheet local names in private AI calculations without changing the workbook', () => {
+  const doc = document();
+  doc.getMap('spreadsheetSheetMetadata').set(
+    'sheet1',
+    JSON.stringify({
+      definedNames: [
+        { name: 'Rate', formula: '0.1' },
+        { name: 'Rate', formula: '0.25', local: true },
+      ],
+    })
+  );
+  doc.commit();
+  const before = doc.version().encode();
+  const result = calculateSpreadsheetForAi(
+    doc,
+    'revision',
+    { action: 'calculate', formulas: [{ formula: '=Rate*100' }] },
+    calculator
+  );
+  expect(result.results[0]).toMatchObject({ type: 'number', value: 25 });
+  expect(doc.version().encode()).toEqual(before);
+});

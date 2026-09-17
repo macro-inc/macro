@@ -1,6 +1,12 @@
-import { cleanup, fireEvent, render } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import { type Accessor, type ComponentProps, createSignal } from 'solid-js';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { SpreadsheetCells } from '../core/spreadsheet-document';
 import {
   createGridController,
@@ -23,6 +29,9 @@ function renderGrid(
   initial: SpreadsheetCells = {},
   options: Pick<
     ComponentProps<typeof SpreadsheetGrid>,
+    | 'comments'
+    | 'onCellAction'
+    | 'mentions'
     | 'zoom'
     | 'showGridlines'
     | 'showFormulas'
@@ -85,6 +94,9 @@ function renderGrid(
           onReturnToGrid={() => {}}
         />
         <SpreadsheetGrid
+          onCellAction={options.onCellAction}
+          comments={options.comments}
+          mentions={options.mentions}
           cells={cells()}
           sheetId={options.sheetId}
           rowCount={options.rowCount ?? 30}
@@ -676,6 +688,11 @@ describe('spreadsheet presentation', () => {
       {
         A1: {
           value: 'Styled cell',
+          borderTopColor: '#123456',
+          borderRightColor: '#123456',
+          borderLeftColor: '#123456',
+          borderBottomColor: '#123456',
+          borderBottomStyle: 'double',
           bold: true,
           italic: true,
           underline: true,
@@ -706,8 +723,11 @@ describe('spreadsheet presentation', () => {
     expect(cell.style.backgroundColor).toBe('rgb(171, 205, 239)');
     expect(cell.style.textAlign).toBe('center');
     expect(cell.style.justifyContent).toBe('flex-start');
-    expect(cell.style.borderColor).toBe('transparent');
-    expect(cell.style.boxShadow.match(/inset/g)).toHaveLength(4);
+    expect(cell.style.borderBottomColor).not.toBe('transparent');
+    expect(cell.style.borderTopStyle).toBe('solid');
+    expect(cell.style.borderBottomStyle).toBe('double');
+    expect(cell.style.borderRightStyle).toBe('solid');
+    expect(cell.style.borderLeftStyle).toBe('solid');
     expect(cell.classList.contains('font-semibold')).toBe(true);
     expect((cell.firstElementChild as HTMLElement).style.whiteSpace).toBe(
       'pre-wrap'
@@ -784,5 +804,210 @@ describe('spreadsheet presentation', () => {
     expect(cell.textContent).toBe('=SUM(B1:B3)');
     expect(cell.style.textAlign).toBe('left');
     expect(view.cells().A1.value).toBe('=SUM(B1:B3)');
+  });
+});
+
+it('renders imported URL and email cells without raw native tooltips, but leaves formulas intact', () => {
+  const renderText = vi.fn((value: string) => (
+    <a href="https://example.com">{value}</a>
+  ));
+  const view = renderGrid(
+    {
+      A1: { value: "'https://example.com" },
+      A2: { value: 'person@example.one' },
+      A3: { value: '=HYPERLINK("https://example.com","Site")' },
+    },
+    {
+      mentions: { renderText, renderEditor: () => null },
+      values: { A3: { display: 'Site' } },
+    }
+  );
+  expect(view.getByRole('link', { name: 'https://example.com' })).toBeTruthy();
+  expect(view.getByRole('link', { name: 'person@example.one' })).toBeTruthy();
+  expect(
+    view.container.querySelector('[data-address="A1"]')?.hasAttribute('title')
+  ).toBe(false);
+  expect(view.container.querySelector('[data-address="A3"]')?.textContent).toBe(
+    'Site'
+  );
+  expect(renderText).not.toHaveBeenCalledWith(
+    expect.stringContaining('HYPERLINK')
+  );
+  fireEvent.keyDown(view.getByRole('link', { name: 'https://example.com' }), {
+    key: 'Enter',
+  });
+  expect(view.queryByRole('textbox', { name: 'Edit A1' })).toBeNull();
+});
+
+it('marks commented cells and opens hover/click comments without selecting or editing the cell', () => {
+  const comments = {
+    canComment: () => true,
+    add: vi.fn(),
+    hasComment: (address: string) => address === 'B2',
+    enter: vi.fn(),
+    leave: vi.fn(),
+    show: vi.fn(),
+  };
+  const view = renderGrid({}, { comments });
+  const cell = view.getByRole('gridcell', { name: 'B2' });
+  expect(cell.getAttribute('aria-description')).toBe('Has comments');
+  fireEvent.mouseEnter(cell);
+  expect(comments.enter).toHaveBeenCalledWith('B2', cell);
+  const marker = view.getByRole('button', { name: 'Comments on B2' });
+  fireEvent.keyDown(marker, { key: 'Enter' });
+  expect(view.controller.editing()).toBeUndefined();
+  fireEvent.pointerDown(marker, { pointerId: 1, button: 0 });
+  fireEvent.click(marker);
+  expect(comments.show).toHaveBeenCalledWith('B2', cell);
+  expect(view.controller.activeAddress()).toBe('A1');
+  expect(view.controller.editing()).toBeUndefined();
+  fireEvent.mouseLeave(cell);
+  expect(comments.leave).toHaveBeenCalled();
+});
+
+describe('cell context menu', () => {
+  beforeEach(() => {
+    // jsdom has no CSS animations or layout. Explicitly use the browser's
+    // default animation name so Kobalte can finish its unmount/focus lifecycle.
+    const style = document.createElement('style');
+    style.textContent = '[role="menu"] { animation-name: none; }';
+    document.head.append(style);
+    const scroll = vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+    return () => {
+      style.remove();
+      scroll.mockRestore();
+    };
+  });
+  it('preserves a range on right-click and dispatches its command after restoring focus', async () => {
+    const onCellAction = vi.fn();
+    const view = renderGrid({}, { onCellAction });
+    view.controller.selectRange({ row: 1, column: 1 }, { row: 3, column: 2 });
+    const selection = structuredClone(view.controller.selection());
+    const cell = view.getByRole('gridcell', { name: 'C3' });
+    fireEvent.pointerDown(cell, { button: 2 });
+    expect(fireEvent.contextMenu(cell, { clientX: 250, clientY: 120 })).toBe(
+      false
+    );
+    expect(view.controller.selection()).toEqual(selection);
+    const copy = await screen.findByRole('menuitem', {
+      name: 'Copy',
+    });
+    fireEvent.keyDown(copy, { key: 'ArrowDown' });
+    expect(view.controller.selection()).toEqual(selection);
+    fireEvent.keyDown(copy, { key: 'Enter' });
+    await waitFor(() => expect(onCellAction).toHaveBeenCalledWith('copy'));
+    expect(view.controller.selection()).toEqual(selection);
+    expect(document.activeElement).toBe(view.element);
+  });
+
+  it('targets an unselected cell and enables fill only for the matching range dimension', async () => {
+    const view = renderGrid();
+    view.controller.selectRange({ row: 0, column: 0 }, { row: 2, column: 2 });
+    fireEvent.contextMenu(view.getByRole('gridcell', { name: 'E5' }));
+    expect(view.controller.activeAddress()).toBe('E5');
+    expect(view.controller.selection().anchor).toEqual(
+      view.controller.selection().focus
+    );
+    expect(
+      (await screen.findByRole('menuitem', { name: 'Fill down' })).hasAttribute(
+        'data-disabled'
+      )
+    ).toBe(true);
+    expect(
+      screen
+        .getByRole('menuitem', { name: 'Fill right' })
+        .hasAttribute('data-disabled')
+    ).toBe(true);
+    fireEvent.keyDown(document, { key: 'Escape' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    view.controller.selectRange({ row: 0, column: 1 }, { row: 2, column: 1 });
+    fireEvent.keyDown(view.element, { key: 'F10', shiftKey: true });
+    expect(
+      (await screen.findByRole('menuitem', { name: 'Fill down' })).hasAttribute(
+        'data-disabled'
+      )
+    ).toBe(false);
+    expect(
+      screen
+        .getByRole('menuitem', { name: 'Fill right' })
+        .hasAttribute('data-disabled')
+    ).toBe(true);
+  });
+
+  it('allows comments and copy for commenters while disabling cell mutations', async () => {
+    const comments = {
+      canComment: () => true,
+      add: vi.fn(),
+      hasComment: () => false,
+      enter: vi.fn(),
+      leave: vi.fn(),
+      show: vi.fn(),
+    };
+    const onCellAction = vi.fn();
+    const view = renderGrid({}, { readonly: true, comments, onCellAction });
+    const cell = view.getByRole('gridcell', { name: 'B2' });
+    fireEvent.contextMenu(cell);
+    for (const name of [
+      'Cut',
+      'Paste',
+      'Paste values only',
+      'Clear values',
+      'Clear formatting',
+      'Fill down',
+      'Fill right',
+    ]) {
+      expect(
+        (await screen.findByRole('menuitem', { name })).hasAttribute(
+          'data-disabled'
+        )
+      ).toBe(true);
+    }
+    expect(
+      screen
+        .getByRole('menuitem', { name: 'Copy' })
+        .hasAttribute('data-disabled')
+    ).toBe(false);
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: 'Comment' }), {
+      key: 'Enter',
+    });
+    await waitFor(() => expect(comments.add).toHaveBeenCalledWith(cell));
+    expect(onCellAction).not.toHaveBeenCalled();
+  });
+
+  it('keeps the native text editing menu and does not open the cell menu over headers', async () => {
+    const view = renderGrid({ A1: { value: 'draft' } });
+    view.controller.beginEdit('cell');
+    const input = view.getByRole('textbox', { name: 'Edit A1' });
+    expect(fireEvent.contextMenu(input)).toBe(true);
+    expect(screen.queryByRole('menu')).toBeNull();
+    expect(view.controller.editing()).toBe('cell');
+    view.controller.cancel();
+    fireEvent.contextMenu(
+      view.getByRole('button', { name: 'Select column B' })
+    );
+    await screen.findByRole('menuitem', { name: 'Resize 1 column…' });
+    expect(
+      screen.queryByRole('menuitem', { name: 'Clear formatting' })
+    ).toBeNull();
+  });
+
+  it('ignores a stale cell action after switching sheets', async () => {
+    const [sheetId, setSheetId] = createSignal('one');
+    const onCellAction = vi.fn();
+    const view = renderGrid(
+      {},
+      {
+        get sheetId() {
+          return sheetId();
+        },
+        onCellAction,
+      }
+    );
+    fireEvent.keyDown(view.element, { key: 'ContextMenu' });
+    const clear = await screen.findByRole('menuitem', { name: 'Clear values' });
+    setSheetId('two');
+    fireEvent.keyDown(clear, { key: 'Enter' });
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    expect(onCellAction).not.toHaveBeenCalled();
   });
 });

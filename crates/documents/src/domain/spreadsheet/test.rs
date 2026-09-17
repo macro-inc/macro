@@ -213,3 +213,21 @@ fn worker_json_contract_omits_optional_fields_and_round_trips_response() {
         matches!(parsed, SpreadsheetResponse::Read { ranges, .. } if ranges[0].cells[0].source == "=1+1")
     );
 }
+
+#[test]
+fn imported_styles_round_trip_through_the_ai_contract() {
+    let json = serde_json::json!({
+        "numberFormat": "#,##0.00;[Red](#,##0.00)",
+        "fontName": "Calibri",
+        "borderBottomStyle": "double",
+        "borderBottomColor": "#123456"
+    });
+    let style: super::models::SpreadsheetStyle = serde_json::from_value(json.clone()).unwrap();
+    assert_eq!(serde_json::to_value(style).unwrap(), json);
+    assert!(
+        serde_json::from_value::<super::models::SpreadsheetStyle>(
+            serde_json::json!({"borderBottomStyle":"bogus"})
+        )
+        .is_err()
+    );
+}

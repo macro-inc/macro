@@ -1,3 +1,7 @@
+import {
+  parseWorkbookMetadata,
+  type WorkbookSheetMetadata,
+} from '@macro-inc/spreadsheet/workbook-metadata';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import {
   type Accessor,
@@ -10,11 +14,15 @@ import {
 import type { SpreadsheetDocumentSource } from '../context/spreadsheet-source';
 import {
   appendSpreadsheetRows,
+  DEFAULT_COLUMN_WIDTH,
   DEFAULT_SHEET_ID,
   resizeSpreadsheetColumn,
+  SPREADSHEET_DEFAULT_STYLE,
   SPREADSHEET_ROWS,
   type SpreadsheetCellEdits,
   type SpreadsheetSelection,
+  spreadsheetSheetKey,
+  validateSpreadsheetCellEdits,
   writeSpreadsheetCells,
 } from '../core/spreadsheet-document';
 import { createSpreadsheetHistory } from '../core/spreadsheet-history';
@@ -160,6 +168,92 @@ export function createSpreadsheetStore(options: {
       const doc = options.source.doc();
       if (!doc || !editable()) return;
       resizeSpreadsheetColumn(doc, column, width, activeSheetId());
+      refresh();
+    },
+    setMetadata(metadata: WorkbookSheetMetadata) {
+      const doc = options.source.doc();
+      if (!doc || !editable()) return;
+      const encoded = JSON.stringify(metadata);
+      if (!parseWorkbookMetadata(encoded))
+        throw new Error('Invalid sheet layout.');
+      doc.getMap('spreadsheetSheetMetadata').set(activeSheetId(), encoded);
+      doc.commit({ origin: 'spreadsheet-layout' });
+      refresh();
+    },
+    canChangeStructure: () => editable() && options.source.status() === 'local',
+    applyStructure(
+      expected: SpreadsheetWorkbookSheet[],
+      next: SpreadsheetWorkbookSheet[]
+    ) {
+      const doc = options.source.doc();
+      if (!doc || !editable())
+        throw new Error('This spreadsheet is view only.');
+      if (options.source.status() !== 'local')
+        throw new Error(
+          'Inserting and deleting rows or columns is not yet available in shared workbooks.'
+        );
+      if (
+        JSON.stringify(readSpreadsheetWorkbook(doc)) !==
+        JSON.stringify(expected)
+      )
+        throw new Error(
+          'The workbook changed while moving cells. No changes were applied; try again.'
+        );
+      for (const sheet of next) {
+        validateSpreadsheetCellEdits(sheet.cells);
+        if (
+          sheet.metadata &&
+          !parseWorkbookMetadata(JSON.stringify(sheet.metadata))
+        )
+          throw new Error(
+            'The changed layout would exceed the supported sheet size.'
+          );
+      }
+      for (const sheet of next) {
+        const previous = expected.find((item) => item.id === sheet.id)!;
+        const edits: SpreadsheetCellEdits = {};
+        for (const address of new Set([
+          ...Object.keys(previous.cells),
+          ...Object.keys(sheet.cells),
+        ])) {
+          if (
+            JSON.stringify(previous.cells[address]) !==
+            JSON.stringify(sheet.cells[address])
+          )
+            edits[address] = sheet.cells[address]
+              ? { ...SPREADSHEET_DEFAULT_STYLE, ...sheet.cells[address] }
+              : null;
+        }
+        writeSpreadsheetCells(doc, edits, sheet.id, false);
+        if (
+          JSON.stringify(previous.metadata) !== JSON.stringify(sheet.metadata)
+        )
+          doc
+            .getMap('spreadsheetSheetMetadata')
+            .set(sheet.id, JSON.stringify(sheet.metadata ?? {}));
+        for (const key of new Set([
+          ...Object.keys(previous.layout.columnWidths),
+          ...Object.keys(sheet.layout.columnWidths),
+        ])) {
+          if (
+            previous.layout.columnWidths[Number(key)] !==
+            sheet.layout.columnWidths[Number(key)]
+          )
+            resizeSpreadsheetColumn(
+              doc,
+              Number(key),
+              sheet.layout.columnWidths[Number(key)] ?? DEFAULT_COLUMN_WIDTH,
+              sheet.id,
+              false
+            );
+        }
+        const addition = sheet.layout.rowCount - previous.layout.rowCount;
+        if (addition > 0)
+          doc
+            .getMap('spreadsheetRowAdditions')
+            .set(spreadsheetSheetKey(crypto.randomUUID(), sheet.id), addition);
+      }
+      doc.commit({ origin: 'spreadsheet-axis-change' });
       refresh();
     },
     appendRows(count: number) {

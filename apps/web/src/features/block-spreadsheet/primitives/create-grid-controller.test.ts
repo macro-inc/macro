@@ -28,6 +28,8 @@ function setup(
     const [cells, updateCells] = createSignal(initial);
     const [canEdit, setCanEdit] = createSignal(true);
     const [rowCount, setRowCount] = createSignal(200);
+    const [hiddenRows, setHiddenRows] = createSignal<number[]>([]);
+    const [hiddenColumns, setHiddenColumns] = createSignal<number[]>([]);
     const [sheetId, setSheetId] = createSignal(initialSheetId ?? 'sheet1');
     const setCells = vi.fn((edits: SpreadsheetCellEdits) => {
       const next = { ...cells() };
@@ -42,6 +44,8 @@ function setup(
     const redo = vi.fn();
     const grid = createGridController({
       cells,
+      hiddenRows,
+      hiddenColumns,
       setSelection: publishSelection,
       canEdit,
       setCells,
@@ -67,6 +71,8 @@ function setup(
       setCells,
       setCanEdit,
       setRowCount,
+      setHiddenRows,
+      setHiddenColumns,
       setSheetId,
       undo,
       redo,
@@ -76,6 +82,23 @@ function setup(
 }
 
 describe('spreadsheet grid editing', () => {
+  it('keeps Home and typing into a whole-row/column selection out of hidden cells', () => {
+    const { grid, key, setHiddenRows, setHiddenColumns, cells } = setup();
+    setHiddenRows([0]);
+    setHiddenColumns([0]);
+    grid.select({ row: 2, column: 4 });
+    key('Home');
+    expect(grid.activeAddress()).toBe('B3');
+    key('Home', { ctrlKey: true });
+    expect(grid.activeAddress()).toBe('B2');
+    grid.selectRange({ row: 0, column: 0 }, { row: 0, column: 25 });
+    key('x');
+    grid.commit();
+    expect(cells().B2.value).toBe('x');
+    expect(cells().A1).toBeUndefined();
+    key('ArrowLeft');
+    expect(grid.activeAddress()).toBe('B2');
+  });
   it('publishes the current range for direct selection, keyboard movement, and tab restoration', async () => {
     const { grid, publishSelection, setSheetId, key } = setup(
       {},

@@ -13,8 +13,9 @@ ellipsis beside the title uses the same menu as documents, including rename,
 favorite, move, copy, and permission-appropriate file actions. Native spreadsheets
 use a green grid icon in file lists and search. The grid fills
 the panel beneath the formatting and formula bars. They have the `.spreadsheet` file type; uploading an
-Excel workbook in Files does not automatically convert it. Open a native spreadsheet
-and use the bottom-right **Import and export → Import…** menu to import its sheets.
+Excel or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
+
+You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets.
 
 Select a cell to inspect its address and input in the formula bar. Double-click
 a cell, start typing, or use the formula bar to edit its value. Formulas begin
@@ -96,18 +97,39 @@ Select data without its header when sorting. A concurrent edit cancels a pending
 sort; references elsewhere in the sheet are not rewritten to follow sorted rows.
 
 The footer's bottom-right **Import and export → Import…** accepts `.csv` and `.xlsx`.
+Right-click a row number or column letter for Macro's contextual menu: clipboard actions,
+clear, hide/unhide, resize and fit-to-data; columns also offer whole-sheet sorting.
+The menu keeps an existing whole-row/column selection when opened within it.
+Insert/delete shifts references and named ranges in local workbooks only; these
+commands are disabled on shared workbooks (including offline sessions) until
+collaborative rows and columns have stable identities. Adding blank rows at the
+bottom remains available. Hidden cells are skipped by keyboard navigation.
+
+Cells support Macro mentions without Markdown formatting. Type `@` in a cell or
+the formula bar to search people, documents, channels and email, then choose an
+item with the pointer or keyboard. Pasting a Macro app link renders a document
+pill, preserving navigation parameters. Formulas still use the formula editor;
+`@` inside a formula or email address does not start mention search. Other Markdown
+is literal text. Mentions remain attached through copy/fill, undo and collaboration;
+Excel/CSV export uses their display text. Plain URLs and email addresses are clickable;
+web links use the same hover preview as channel messages. Click the surrounding cell
+or use the formula bar to edit link text. AI `set_cells` accepts Macro URLs or the
+same `<m-user-mention>` / `<m-document-mention>` encoding as docs. Formula references
+to mention cells use literal labels, never execute a label as a formula.
+
 CSV imports a file up to 1 MB into the selection, adding rows if needed within the
 1,000 × 26 limit. Existing cells in that rectangle
 are replaced, with undo available. Excel imports accept up to 5 MB, 10 sheets, and
 1,000 rows × 26 columns per sheet. An import preview lists each sheet and warns about
-unsupported content (for example charts, merges, and custom formatting). Choose
+unsupported content (for example charts, validation rules, and rich text). Choose
 **Insert new sheets** to keep existing work, or **Replace workbook** to replace it
 in one undoable operation. Names must be unique when inserting sheets. Canceling
 leaves the workbook untouched; a replacement is blocked if the workbook changed
 while the preview was open. Legacy `.xls`, macros, and encrypted files are rejected.
 
 **Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
-current formula result caches, supported formatting, and column widths.
+current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges and named constants are retained; unsupported named expressions show explicit calculation errors. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Complex Excel features such as pivots, structured table formulas, charts, conditional formatting, validation, and rich text are not fully supported; review import notes before conversion.
+CSV imports preserve long identifiers and leading zeros as text and never execute formula-like strings.
 **Download as CSV** in the same menu exports only the active sheet's current
 calculated values. Clipboard menu actions use the browser clipboard; if access is
 unavailable, use Cmd/Ctrl+V or Cmd/Ctrl+Shift+V in the grid.
@@ -171,6 +193,39 @@ software keyboard. The isolated browser fixture has separate Android Chrome and
 iPhone WebKit projects. Chromium uses trusted touch drags; WebKit uses native taps
 and mouse-pointer handle drags. A reduced test viewport only checks layout; verify
 actual keyboard resizing and iOS gesture behavior in the simulator or on a device.
+
+Right-click a cell for the Macro cell menu: Cut, Copy, Paste, Paste values only,
+Clear values, Clear formatting, Fill down/right, and Comment on saved workbooks.
+Right-click inside a selected range to act on that range; outside it targets the
+clicked cell. **Shift + F10** or the keyboard context-menu key opens the same menu
+for the selection; Escape returns focus to the grid. Fill requires a multi-cell
+range along that direction. Commenters can copy and comment without editing cells.
+Right-click inside the cell text editor retains the native text-editing menu.
+
+Opening a saved spreadsheet from Files/Drive (including a favorite) keeps the
+Drive navigation sidebar in place. Collapse it with the sidebar control; the
+spreadsheet header then shows the navigation toggle to reopen it. Opening a
+spreadsheet does not change the saved sidebar preference.
+
+## Spreadsheet comments
+
+On a saved spreadsheet, select a cell or range and choose **Comment** in the
+formatting ribbon (or **⌘/Ctrl + Alt + M**) to compose beside the cell. A comment
+captures the sheet ID and selected range; later selection changes do not move
+the draft's attachment. The top-right triangle marks the first cell of a
+commented range. Hover any cell in that range to read its threads; choose
+**Reply** in the card to respond without opening the sidebar. Clicking the
+triangle also opens the card on touch devices. Interacting with a card keeps it
+open until dismissed so a reply is not lost when moving the pointer.
+
+**Comments** in the document header opens all workbook threads. Range labels
+navigate to the corresponding sheet and cells; deleted-sheet threads remain
+readable. These are the same document annotation comments used by docs/tasks:
+mentions and replies use the existing inbox notifications and comment links.
+Opening an inbox notification opens the sidebar and targets its comment/range.
+Comment-only access can post/reply; view-only access can read. Edit/delete applies
+to the author's own comments, and failures retain the input draft. Draft demos
+must be saved before persistent comments are available.
 
 ## Ask Macro about a spreadsheet
 

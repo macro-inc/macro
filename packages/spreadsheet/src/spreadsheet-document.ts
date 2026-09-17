@@ -44,6 +44,17 @@ export type SpreadsheetCell = {
   borderLeft?: boolean;
   decimals?: number;
   format?: SpreadsheetFormat;
+  /** Excel number format, preserved verbatim for display and export. */
+  numberFormat?: string;
+  fontName?: string;
+  borderTopStyle?: string;
+  borderTopColor?: string;
+  borderRightStyle?: string;
+  borderRightColor?: string;
+  borderBottomStyle?: string;
+  borderBottomColor?: string;
+  borderLeftStyle?: string;
+  borderLeftColor?: string;
 };
 export type SpreadsheetCellStyle = Omit<SpreadsheetCell, 'value'>;
 export type SpreadsheetCells = Record<string, SpreadsheetCell>;
@@ -67,10 +78,39 @@ export const SPREADSHEET_DEFAULT_STYLE: Required<SpreadsheetCellStyle> = {
   borderLeft: false,
   decimals: -1,
   format: 'general',
+  numberFormat: '',
+  fontName: '',
+  borderTopStyle: '',
+  borderTopColor: '',
+  borderRightStyle: '',
+  borderRightColor: '',
+  borderBottomStyle: '',
+  borderBottomColor: '',
+  borderLeftStyle: '',
+  borderLeftColor: '',
 };
 
 const booleanStyle = (value: unknown): value is boolean =>
   typeof value === 'boolean';
+const borderStyle = (value: unknown): value is string =>
+  typeof value === 'string' &&
+  [
+    '',
+    'thin',
+    'medium',
+    'thick',
+    'double',
+    'dotted',
+    'dashed',
+    'dashDot',
+    'dashDotDot',
+    'slantDashDot',
+    'hair',
+    'mediumDashed',
+    'mediumDashDot',
+    'mediumDashDotDot',
+  ].includes(value);
+
 const colorStyle = (value: unknown): value is string =>
   typeof value === 'string' && (value === '' || /^#[0-9a-f]{6}$/i.test(value));
 const integerStyle = (
@@ -127,6 +167,34 @@ const styleFields: {
     valid: (value): value is number => integerStyle(value, -1, 10),
   },
   format: { map: 'spreadsheetFormats', valid: isSpreadsheetFormat },
+  fontName: {
+    map: 'spreadsheetFontNames',
+    valid: (value): value is string =>
+      typeof value === 'string' &&
+      value.length <= 128 &&
+      Array.from(value).every((character) => character.charCodeAt(0) >= 32),
+  },
+  borderTopStyle: { map: 'spreadsheetBorderTopStyles', valid: borderStyle },
+  borderTopColor: { map: 'spreadsheetBorderTopColors', valid: colorStyle },
+  borderRightStyle: { map: 'spreadsheetBorderRightStyles', valid: borderStyle },
+  borderRightColor: { map: 'spreadsheetBorderRightColors', valid: colorStyle },
+  borderBottomStyle: {
+    map: 'spreadsheetBorderBottomStyles',
+    valid: borderStyle,
+  },
+  borderBottomColor: {
+    map: 'spreadsheetBorderBottomColors',
+    valid: colorStyle,
+  },
+  borderLeftStyle: { map: 'spreadsheetBorderLeftStyles', valid: borderStyle },
+  borderLeftColor: { map: 'spreadsheetBorderLeftColors', valid: colorStyle },
+  numberFormat: {
+    map: 'spreadsheetNumberFormats',
+    valid: (value): value is string =>
+      typeof value === 'string' &&
+      value.length <= 512 &&
+      Array.from(value).every((character) => character.charCodeAt(0) >= 32),
+  },
 };
 const styleKeys = Object.keys(styleFields) as (keyof SpreadsheetCellStyle)[];
 
@@ -409,6 +477,14 @@ export function writeSpreadsheetCells(
       if (edit.value) values.set(key, edit.value);
       else values.delete(key);
     }
+    // Choosing a built-in format/precision explicitly replaces the imported format.
+    if (edit.fontFamily !== undefined && edit.fontName === undefined)
+      doc.getMap('spreadsheetFontNames').delete(key);
+    if (
+      edit.numberFormat === undefined &&
+      (edit.format !== undefined || edit.decimals !== undefined)
+    )
+      doc.getMap('spreadsheetNumberFormats').delete(key);
     for (const { key: styleKey, map } of styles) {
       const value = edit[styleKey];
       if (value === undefined) continue;

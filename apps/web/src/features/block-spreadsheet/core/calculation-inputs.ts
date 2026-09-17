@@ -1,8 +1,9 @@
+import type { WorkbookSheetMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
 import type { SpreadsheetCell, SpreadsheetCells } from './spreadsheet-document';
 
 export type CalculationCells = Record<
   string,
-  Pick<SpreadsheetCell, 'value' | 'format' | 'decimals'>
+  Pick<SpreadsheetCell, 'value' | 'format' | 'decimals' | 'numberFormat'>
 >;
 
 /** Keep appearance edits out of the calculation dependency graph. */
@@ -17,14 +18,27 @@ export function calculationInputs(
     const decimals = cell.decimals ?? -1;
     // Formatting an otherwise empty cell must not trigger calculation. Keep
     // number formats, though: a blank source cell can display an array spill.
-    if (cell.value === '' && format === 'general' && decimals === -1) continue;
-    next[address] = { value: cell.value, format, decimals };
+    const numberFormat = cell.numberFormat;
+    if (
+      cell.value === '' &&
+      format === 'general' &&
+      decimals === -1 &&
+      !numberFormat
+    )
+      continue;
+    next[address] = {
+      value: cell.value,
+      format,
+      decimals,
+      ...(numberFormat && { numberFormat }),
+    };
     const prior = previous[address];
     if (
       !prior ||
       prior.value !== cell.value ||
       prior.format !== format ||
-      prior.decimals !== decimals
+      prior.decimals !== decimals ||
+      prior.numberFormat !== numberFormat
     ) {
       unchanged = false;
     }
@@ -39,6 +53,7 @@ export type CalculationWorkbookInput = {
   name: string;
   cells: SpreadsheetCells;
   rowCount: number;
+  metadata?: WorkbookSheetMetadata;
 };
 
 /** Preserve each sheet's calculation identity across formatting and layout edits. */
@@ -53,6 +68,8 @@ export function workbookCalculationInputs(
     return prior &&
       prior.name === sheet.name &&
       prior.rowCount === sheet.rowCount &&
+      JSON.stringify(prior.metadata?.definedNames) ===
+        JSON.stringify(sheet.metadata?.definedNames) &&
       cells === prior.cells
       ? prior
       : { ...sheet, cells };

@@ -1,10 +1,20 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Button } from '@ui/components/Button';
-import { createDeferred, createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  createDeferred,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  on,
+  Show,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import { SpreadsheetFileMenu } from '../components/SpreadsheetActionMenus';
+import { SpreadsheetDialog } from '../components/SpreadsheetDialog';
 import { SpreadsheetFindDialog } from '../components/SpreadsheetDialogs';
 import { SpreadsheetGrid } from '../components/SpreadsheetGrid';
+import type { HeaderAction } from '../components/SpreadsheetHeaderMenu';
 import { SpreadsheetSheetTabs } from '../components/SpreadsheetSheetTabs';
 import {
   FormulaBar,
@@ -14,15 +24,17 @@ import {
   SpreadsheetImportDialog,
   SpreadsheetSheetDialog,
 } from '../components/SpreadsheetWorkbookDialogs';
+import type { SpreadsheetCommentsCapability } from '../context/spreadsheet-comments';
+import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
+import { encodeCsv } from '../core/csv-export';
 import { formulaRangeReference } from '../core/formula-reference';
 import {
   cellAddress,
   GRID_COLUMNS,
   positionFromAddress,
-  safeCsvValue,
   selectionBounds,
-  serializeTable,
 } from '../core/grid-selection';
+import type { SpreadsheetCommentAnchor } from '../core/spreadsheet-comments';
 import { SPREADSHEET_MAX_ROWS } from '../core/spreadsheet-document';
 import { spreadsheetCursors } from '../core/spreadsheet-presence';
 import type { SpreadsheetCommand } from '../core/toolbar-types';
@@ -36,8 +48,11 @@ import { createWorkbookActions } from '../primitives/create-workbook-actions';
 
 export function SpreadsheetEditor(props: {
   store: SpreadsheetStore;
+  mentions?: SpreadsheetMentions;
   name: string;
   autoFocus?: boolean;
+  commentLocation?: SpreadsheetCommentAnchor;
+  comments?: SpreadsheetCommentsCapability;
   onExport: (content: string) => void;
   onExportXlsx: (bytes: Uint8Array) => void;
 }) {
@@ -47,7 +62,15 @@ export function SpreadsheetEditor(props: {
   const [showGridlines, setShowGridlines] = createSignal(true);
   const [showFormulaBar, setShowFormulaBar] = createSignal(true);
   const [showFormulas, setShowFormulas] = createSignal(false);
-  const editable = () => props.store.canEdit();
+  const [structureBusy, setStructureBusy] = createSignal(false);
+  const [resize, setResize] = createSignal<{
+    sheetId: string;
+    axis: 'row' | 'column';
+    start: number;
+    end: number;
+  }>();
+  const [resizeSize, setResizeSize] = createSignal('100');
+  const editable = () => props.store.canEdit() && !structureBusy();
   const calculation = createCalculation(
     props.store.cells,
     props.store.rowCount,
@@ -59,6 +82,9 @@ export function SpreadsheetEditor(props: {
     canEdit: editable,
     sheetId: props.store.activeSheetId,
     copyCells: calculation.copy,
+    hiddenRows: () => props.store.activeSheet().metadata?.hiddenRows ?? [],
+    hiddenColumns: () =>
+      props.store.activeSheet().metadata?.hiddenColumns ?? [],
   });
   const values = calculation.values;
   const workbookActions = createWorkbookActions({
@@ -98,6 +124,34 @@ export function SpreadsheetEditor(props: {
     gridElement
       ?.querySelector(`[data-address="${cellAddress(grid.selection().focus)}"]`)
       ?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  // Comment links drive the imperative grid selection and scroll without moving
+  // keyboard focus out of the comment composer.
+  createEffect(
+    on(
+      () => props.commentLocation,
+      (location) => {
+        if (!location) return;
+        const [start, end = start] = location.range.split(':');
+        const anchor = positionFromAddress(start);
+        const focus = positionFromAddress(end);
+        if (!anchor || !focus) return;
+        grid.commit();
+        props.store.setActiveSheet(location.sheetId);
+        queueMicrotask(() => {
+          grid.selectRange(anchor, focus);
+          revealSelection();
+        });
+      }
+    )
+  );
+  const addComment = () => {
+    grid.commit();
+    props.comments?.add(
+      gridElement?.querySelector<HTMLElement>(
+        `[data-address="${grid.activeAddress()}"]`
+      ) ?? undefined
+    );
+  };
   const restoreEditorFocus = () => {
     const pending = pendingMenuAction;
     pendingMenuAction = undefined;
@@ -109,7 +163,9 @@ export function SpreadsheetEditor(props: {
     )
       return;
     if (grid.editing() === 'cell') {
-      const editor = gridElement?.querySelector('textarea');
+      const editor = gridElement?.querySelector<HTMLElement>(
+        'textarea, [contenteditable=true]'
+      );
       editor?.focus({ preventScroll: true });
     } else focusGrid();
     revealSelection();
@@ -170,29 +226,7 @@ export function SpreadsheetEditor(props: {
       return;
     }
     if (calculation.busy() || calculation.error()) return;
-    const positions = [
-      ...new Set([
-        ...Object.keys(props.store.cells()),
-        ...Object.keys(values()),
-      ]),
-    ]
-      .map(positionFromAddress)
-      .filter((position) => position !== undefined);
-    const bottom = Math.max(0, ...positions.map((position) => position.row));
-    const right = Math.max(0, ...positions.map((position) => position.column));
-    const rows = Array.from({ length: bottom + 1 }, (_, row) =>
-      Array.from({ length: right + 1 }, (_, column) => {
-        const address = cellAddress({ row, column });
-        const value = values()[address];
-        return safeCsvValue(
-          value?.number !== undefined
-            ? String(value.number)
-            : (value?.display ?? props.store.cells()[address]?.value ?? ''),
-          value?.number !== undefined
-        );
-      })
-    );
-    props.onExport(serializeTable(rows, ','));
+    props.onExport(encodeCsv(props.store.cells(), values()));
   }
 
   function command(action: SpreadsheetCommand) {
@@ -245,6 +279,123 @@ export function SpreadsheetEditor(props: {
       .with('insert-min', () => actions.insertFunction('MIN'))
       .with('insert-max', () => actions.insertFunction('MAX'))
       .exhaustive();
+  }
+
+  async function headerAction(axis: 'row' | 'column', action: HeaderAction) {
+    grid.commit();
+    if (action === 'copy') {
+      command('copy');
+      return;
+    }
+    if (!editable()) return;
+    const area = selectionBounds(grid.selection());
+    const start = axis === 'row' ? area.top : area.left;
+    const end = axis === 'row' ? area.bottom : area.right;
+    const sheet = props.store.activeSheet();
+    actions.clearNotice();
+    try {
+      if (
+        action === 'insert-before' ||
+        action === 'insert-after' ||
+        action === 'delete'
+      ) {
+        const before = props.store.workbook();
+        setStructureBusy(true);
+        const next = await calculation.changeAxis(before, {
+          sheetId: sheet.id,
+          axis,
+          index: action === 'insert-after' ? end + 1 : start,
+          count: end - start + 1,
+          kind: action === 'delete' ? 'delete' : 'insert',
+        });
+        props.store.applyStructure(before, next);
+      } else if (action === 'resize') {
+        setResizeSize(
+          String(
+            axis === 'row'
+              ? Math.round(
+                  ((sheet.metadata?.rowHeights?.[start] ?? 15.75) * 4) / 3
+                )
+              : (sheet.layout.columnWidths[start] ?? 100)
+          )
+        );
+        setResize({ sheetId: sheet.id, axis, start, end });
+      } else if (action === 'hide' || action === 'unhide') {
+        const key = axis === 'row' ? 'hiddenRows' : 'hiddenColumns';
+        const hidden =
+          action === 'unhide'
+            ? []
+            : [
+                ...new Set([
+                  ...(sheet.metadata?.[key] ?? []),
+                  ...Array.from(
+                    { length: end - start + 1 },
+                    (_, i) => start + i
+                  ),
+                ]),
+              ];
+        if (
+          hidden.length >=
+          (axis === 'row' ? props.store.rowCount() : GRID_COLUMNS)
+        )
+          throw new Error(`Keep at least one ${axis} visible.`);
+        props.store.setMetadata({ ...sheet.metadata, [key]: hidden });
+        if (action === 'hide') {
+          const next = Array.from(
+            { length: axis === 'row' ? props.store.rowCount() : GRID_COLUMNS },
+            (_, i) => i
+          ).find((i) => !hidden.includes(i))!;
+          grid.select(
+            axis === 'row'
+              ? { row: next, column: area.left }
+              : { row: area.top, column: next }
+          );
+        }
+      } else if (action === 'autofit') {
+        const heights = { ...sheet.metadata?.rowHeights };
+        for (let row = start; row <= end; row++) delete heights[row];
+        props.store.setMetadata({ ...sheet.metadata, rowHeights: heights });
+      } else if (action === 'sort-asc' || action === 'sort-desc') {
+        await actions.sort(action === 'sort-desc', start);
+      } else command(action);
+    } catch (error) {
+      actions.setNotice(
+        error instanceof Error
+          ? error.message
+          : 'Unable to change rows or columns.'
+      );
+    } finally {
+      setStructureBusy(false);
+    }
+  }
+
+  function confirmResize() {
+    const selection = resize();
+    const value = Number(resizeSize());
+    if (
+      !selection ||
+      !editable() ||
+      props.store.activeSheetId() !== selection.sheetId
+    ) {
+      setResize(undefined);
+      return;
+    }
+    if (
+      !Number.isFinite(value) ||
+      value < (selection.axis === 'row' ? 21 : 64) ||
+      value > (selection.axis === 'row' ? 400 : 640)
+    )
+      return;
+    if (selection.axis === 'row') {
+      const metadata = props.store.activeSheet().metadata;
+      const heights = { ...metadata?.rowHeights };
+      for (let row = selection.start; row <= selection.end; row++)
+        heights[row] = (value * 3) / 4;
+      props.store.setMetadata({ ...metadata, rowHeights: heights });
+    } else
+      for (let column = selection.start; column <= selection.end; column++)
+        props.store.resizeColumn(column, value);
+    setResize(undefined);
   }
 
   async function importFile(file: File | undefined) {
@@ -304,6 +455,50 @@ export function SpreadsheetEditor(props: {
         }
       }}
     >
+      <SpreadsheetDialog
+        open={!!resize()}
+        onOpenChange={(open) => {
+          if (!open) setResize(undefined);
+        }}
+        onRestoreFocus={focusGrid}
+        position="center"
+        class="w-80"
+      >
+        <form
+          class="p-5 text-sm"
+          onSubmit={(event) => {
+            event.preventDefault();
+            confirmResize();
+          }}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
+          <SpreadsheetDialog.Title class="font-semibold">
+            Resize {resize()?.axis}s
+          </SpreadsheetDialog.Title>
+          <SpreadsheetDialog.Description class="my-3 text-ink-muted">
+            Enter the size in pixels.
+          </SpreadsheetDialog.Description>
+          <input
+            aria-label="Size in pixels"
+            type="number"
+            required
+            min={resize()?.axis === 'row' ? 21 : 64}
+            max={resize()?.axis === 'row' ? 400 : 640}
+            value={resizeSize()}
+            onInput={(event) => setResizeSize(event.currentTarget.value)}
+            onFocus={(event) => event.currentTarget.select()}
+            class="w-full rounded border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
+          />
+          <div class="mt-4 flex justify-end gap-2">
+            <Button type="button" onClick={() => setResize(undefined)}>
+              Cancel
+            </Button>
+            <Button type="submit" variant="accent">
+              Apply
+            </Button>
+          </div>
+        </form>
+      </SpreadsheetDialog>
       <Show when={props.store.error()}>
         {(error) => (
           <div
@@ -334,6 +529,8 @@ export function SpreadsheetEditor(props: {
         )}
       </Show>
       <SpreadsheetToolbar
+        onComment={props.comments ? addComment : undefined}
+        canComment={props.comments?.canComment()}
         readonly={!editable() || actions.pending() || !!workbookActions.busy()}
         canUndo={props.store.canUndo()}
         canRedo={props.store.canRedo()}
@@ -364,6 +561,7 @@ export function SpreadsheetEditor(props: {
       />
       <Show when={showFormulaBar() || (isTouchDevice() && !!grid.editing())}>
         <FormulaBar
+          mentions={props.mentions}
           editing={!!grid.editing()}
           complete={calculation.complete}
           selectionRequest={grid.editorSelection()}
@@ -410,6 +608,7 @@ export function SpreadsheetEditor(props: {
         }
       >
         <SpreadsheetGrid
+          mentions={props.mentions}
           sheetId={props.store.activeSheetId()}
           complete={calculation.complete}
           cells={props.store.cells()}
@@ -418,11 +617,18 @@ export function SpreadsheetEditor(props: {
           showFormulas={showFormulas()}
           rowCount={props.store.rowCount()}
           columnWidths={props.store.layout().columnWidths}
+          rowHeights={props.store.activeSheet().metadata?.rowHeights}
+          hiddenRows={props.store.activeSheet().metadata?.hiddenRows}
+          hiddenColumns={props.store.activeSheet().metadata?.hiddenColumns}
+          canChangeStructure={props.store.canChangeStructure()}
+          onCellAction={command}
+          onHeaderAction={(axis, action) => void headerAction(axis, action)}
           onResizeColumn={props.store.resizeColumn}
           onFill={grid.fill}
           onCopyMetadata={grid.copyMetadata}
           values={values()}
           remoteCursors={remoteCursors()}
+          comments={props.comments}
           selection={grid.selection()}
           editing={grid.editing() === 'cell'}
           formulaEditing={grid.editing() === 'formula'}
@@ -458,6 +664,17 @@ export function SpreadsheetEditor(props: {
             ) {
               event.preventDefault();
               command('find');
+              return;
+            }
+            if (
+              (event.metaKey || event.ctrlKey) &&
+              event.altKey &&
+              (event.code === 'KeyM' || event.key.toLowerCase() === 'm') &&
+              props.comments?.canComment()
+            ) {
+              event.preventDefault();
+              event.stopPropagation();
+              addComment();
               return;
             }
             grid.keyDown(event);

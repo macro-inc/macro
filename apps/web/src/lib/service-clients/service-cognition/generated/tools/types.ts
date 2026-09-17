@@ -105,6 +105,24 @@ export type SpreadsheetResponse =
       action: 'edit';
     };
 /**
+ * Excel border line style.
+ */
+export type SpreadsheetBorderStyle =
+  | ''
+  | 'thin'
+  | 'medium'
+  | 'thick'
+  | 'double'
+  | 'dotted'
+  | 'dashed'
+  | 'dashDot'
+  | 'dashDotDot'
+  | 'slantDashDot'
+  | 'hair'
+  | 'mediumDashed'
+  | 'mediumDashDot'
+  | 'mediumDashDotDot';
+/**
  * Font family.
  */
 export type SpreadsheetFont = 'sans' | 'serif' | 'mono';
@@ -1271,7 +1289,10 @@ export interface SpreadsheetCellInput {
    */
   address: string;
   /**
-   * Raw text or formula, at most 10,000 characters.
+   * Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
+   * For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
+   * or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
+   * Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
    */
   value: string;
 }
@@ -1377,6 +1398,46 @@ export interface SpreadsheetReadCell {
  * Sparse cell styling patch. Omitted fields remain unchanged.
  */
 export interface SpreadsheetStyle {
+  /**
+   * Exact Excel number format, up to 512 characters.
+   */
+  numberFormat?: string | null;
+  /**
+   * Exact Excel font name, up to 128 characters.
+   */
+  fontName?: string | null;
+  /**
+   * Top border style.
+   */
+  borderTopStyle?: SpreadsheetBorderStyle | null;
+  /**
+   * Top border color.
+   */
+  borderTopColor?: string | null;
+  /**
+   * Right border style.
+   */
+  borderRightStyle?: SpreadsheetBorderStyle | null;
+  /**
+   * Right border color.
+   */
+  borderRightColor?: string | null;
+  /**
+   * Bottom border style.
+   */
+  borderBottomStyle?: SpreadsheetBorderStyle | null;
+  /**
+   * Bottom border color.
+   */
+  borderBottomColor?: string | null;
+  /**
+   * Left border style.
+   */
+  borderLeftStyle?: SpreadsheetBorderStyle | null;
+  /**
+   * Left border color.
+   */
+  borderLeftColor?: string | null;
   /**
    * Bold text.
    */
