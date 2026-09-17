@@ -69,13 +69,15 @@ describe('sanitizeCalendarDescription', () => {
     );
   });
 
-  it('leaves code-like tokens and bare emails as text', () => {
+  it('links bare emails but leaves code-like tokens as text', () => {
     expect(sanitizeCalendarDescription('Edit parser.ts before sync')).toBe(
       '<p>Edit parser.ts before sync</p>'
     );
     expect(
       sanitizeCalendarDescription('Email bob@example.com to confirm')
-    ).toBe('<p>Email bob@example.com to confirm</p>');
+    ).toBe(
+      '<p>Email <a href="mailto:bob@example.com">bob@example.com</a> to confirm</p>'
+    );
   });
 
   it('keeps angle brackets in plain text as text', () => {
@@ -83,7 +85,7 @@ describe('sanitizeCalendarDescription', () => {
       'Send the agenda to <bob@example.com>\nOwner: <TBD>'
     );
     expect(safe).toBe(
-      '<p>Send the agenda to &lt;bob@example.com&gt;<br>Owner: &lt;TBD&gt;</p>'
+      '<p>Send the agenda to &lt;<a href="mailto:bob@example.com">bob@example.com</a>&gt;<br>Owner: &lt;TBD&gt;</p>'
     );
     // Already-safe output must not change on the next pass.
     expect(sanitizeCalendarDescription(safe)).toBe(safe);

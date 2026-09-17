@@ -286,10 +286,10 @@ function wrapInlineRuns(parent: Element) {
 const DESCRIPTION_AUTO_LINK_MODE = 'common-tlds';
 
 /**
- * Wrap the URLs in a plain-text string as anchors so the detail view can open
- * them. Bare emails are recognized too but kept as text: a description often
- * carries an address as a reference, not a link. Returns null when nothing was
- * linked so the caller can leave the original text node untouched.
+ * Wrap the URLs and bare emails in a plain-text string as anchors so the detail
+ * view can open them — emails become `mailto:` links, which `openExternalUrl`
+ * routes to the in-app composer. Returns null when nothing was linked so the
+ * caller can leave the original text node untouched.
  */
 function linkifyText(text: string, doc: Document): Node[] | null {
   const nodes: Node[] = [];
@@ -301,19 +301,14 @@ function linkifyText(text: string, doc: Document): Node[] | null {
       nodes.push(doc.createTextNode(rest));
       break;
     }
-    const before = rest.slice(0, match.index);
-    const raw = rest.slice(match.index, match.lastIndex);
-    rest = rest.slice(match.lastIndex);
-    if (match.url.startsWith('mailto:')) {
-      nodes.push(doc.createTextNode(before + raw));
-      continue;
-    }
     linked = true;
+    const before = rest.slice(0, match.index);
     if (before) nodes.push(doc.createTextNode(before));
     const anchor = doc.createElement('a');
     anchor.setAttribute('href', match.url);
-    anchor.textContent = raw;
+    anchor.textContent = rest.slice(match.index, match.lastIndex);
     nodes.push(anchor);
+    rest = rest.slice(match.lastIndex);
   }
   return linked ? nodes : null;
 }
