@@ -72,7 +72,10 @@ export type ViewShellLayout = {
   };
 };
 
-type ViewShellInternal = ViewShellLayout & { id: string };
+type ViewShellInternal = ViewShellLayout & {
+  id: string;
+  atLayoutBreakpoint: Accessor<boolean>;
+};
 
 const RESIZE_GUTTER = 1;
 
@@ -249,6 +252,7 @@ function Root(props: ViewShellRootProps) {
     id,
     width,
     breakpoints,
+    atLayoutBreakpoint,
     aside: {
       layout: asideLayout,
       mode: asideMode,
@@ -414,10 +418,15 @@ function Aside(props: ViewShellAsideProps) {
   };
 
   let overlayAside: HTMLDivElement | undefined;
+  const overlayWidth = () =>
+    Math.min(preferredWidth(), ws.width() ?? preferredWidth());
 
+  // Layout owns the host: closing an overlay must not mount a second sidebar
+  // while its exit animation is still retaining the first one.
   return (
-    <>
-      <Show when={!ws.aside.isOverlay()}>
+    <Show
+      when={ws.atLayoutBreakpoint()}
+      fallback={
         <Resize.Panel
           id={`${ws.id}-aside`}
           index={0}
@@ -438,7 +447,8 @@ function Aside(props: ViewShellAsideProps) {
             {local.children}
           </div>
         </Resize.Panel>
-      </Show>
+      }
+    >
       <CollapseTransition
         open={ws.aside.isOverlay()}
         axis="width"
@@ -466,14 +476,17 @@ function Aside(props: ViewShellAsideProps) {
               local.class
             )}
             ref={overlayAside}
-            style={{ width: `${preferredWidth()}px` }}
+            style={{ width: `${overlayWidth()}px` }}
             data-view-shell-aside=""
           >
-            {local.children}
+            {/* Keep text at its resting width while the outer frame reveals it. */}
+            <div class="h-full" style={{ width: `${overlayWidth()}px` }}>
+              {local.children}
+            </div>
           </div>
         </div>
       </CollapseTransition>
-    </>
+    </Show>
   );
 }
 
@@ -483,7 +496,7 @@ export function ViewSidebarCloseButton(
 ) {
   const ws = useContext(ViewShellContext);
   return (
-    <Show when={!ws?.aside.isOverlay()}>
+    <Show when={!ws?.atLayoutBreakpoint()}>
       <SplitPanel.CloseButton {...props} />
     </Show>
   );
@@ -495,7 +508,7 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
   const visible = () =>
     ws?.aside.canCollapse() &&
     (props.action === 'expand'
-      ? ws.aside.isCollapsed()
+      ? ws.aside.isCollapsed() || ws.aside.isOverlay()
       : !ws.aside.isCollapsed());
   return (
     <Show when={visible()}>
@@ -504,7 +517,10 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
         size="icon-sm"
         class={cn(
           'shrink-0 touch:hidden',
-          props.action === 'collapse' && 'ml-auto'
+          props.action === 'collapse' && 'ml-auto',
+          props.action === 'collapse' &&
+            ws?.aside.isOverlay() &&
+            'motion-safe:animate-[dialog-overlay-open_60ms_ease-out_80ms_both]'
         )}
         label={
           props.action === 'expand' ? 'Show navigation' : 'Hide navigation'
@@ -537,12 +553,15 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
   );
 }
 
-/** Shared leading controls when a workspace's navigation is collapsed. */
+/** Shared leading controls, kept in place beneath navigation overlays. */
 export function ViewNavigationControls() {
   const ws = useContext(ViewShellContext);
   return (
-    <Show when={ws?.aside.isCollapsed()}>
-      <SplitPanel.ControlGroup>
+    <Show when={ws?.aside.isCollapsed() || ws?.aside.isOverlay()}>
+      <SplitPanel.ControlGroup
+        inert={ws?.aside.isOverlay()}
+        aria-hidden={ws?.aside.isOverlay()}
+      >
         <SplitPanel.CloseButton />
         <ViewSidebarToggle action="expand" />
       </SplitPanel.ControlGroup>
