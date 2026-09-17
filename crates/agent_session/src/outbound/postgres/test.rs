@@ -533,21 +533,49 @@ async fn generated_name_only_replaces_the_default(pool: PgPool) {
             .await
             .expect("set generated name")
     );
+    let after_generated = AgentSessionRepo::get(&repo, id).await.expect("get session");
+    assert_eq!(after_generated.name, "Generated Name");
+    let (_, _, _, _, entity_updated_at) = fetch_session_entity(&pool, id).await;
+    assert_eq!(entity_updated_at, after_generated.modified_at);
+
     repo.set_name(id, "Manual Name")
         .await
         .expect("set manual name");
+    let after_manual = AgentSessionRepo::get(&repo, id).await.expect("get session");
+    let (_, _, _, _, after_manual_entity_updated_at) = fetch_session_entity(&pool, id).await;
     assert!(
         !repo
             .set_name_if_default(id, "Late Generated Name")
             .await
             .expect("skip generated name")
     );
+    let skipped = AgentSessionRepo::get(&repo, id).await.expect("get session");
+    assert_eq!(skipped.name, "Manual Name");
+    assert_eq!(skipped.modified_at, after_manual.modified_at);
+    let (_, _, _, _, skipped_entity_updated_at) = fetch_session_entity(&pool, id).await;
+    assert_eq!(skipped_entity_updated_at, after_manual_entity_updated_at);
+
+    let unregistered = create_session(&repo, new_session(bot_id, None, None)).await;
+    sqlx::query!(
+        r#"
+        DELETE FROM entity WHERE id = $1
+        "#,
+        unregistered.id.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .expect("drop the registry row");
+    assert!(
+        repo.set_name_if_default(unregistered.id, "Generated Without Registry")
+            .await
+            .expect("generate a name without a registry row")
+    );
     assert_eq!(
-        AgentSessionRepo::get(&repo, id)
+        AgentSessionRepo::get(&repo, unregistered.id)
             .await
             .expect("get session")
             .name,
-        "Manual Name"
+        "Generated Without Registry"
     );
 }
 
