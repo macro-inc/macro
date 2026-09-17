@@ -1575,10 +1575,6 @@ impl IntoResponse for CreateSessionApiError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "owner is not a known user".to_owned(),
             ),
-            Self::Domain(AgentSessionError::Forbidden) => (
-                StatusCode::FORBIDDEN,
-                "the owner may not post in the claimed thread".to_owned(),
-            ),
             Self::Domain(error) => {
                 tracing::error!(error = ?error, "failed to open an agent session");
                 (

@@ -62,8 +62,17 @@ impl WorkExecutor for Dispatcher {
                     repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),
                     thread: Some(CreateSessionThread {
+                        // Keep `channel_id` populated for channel parents so a
+                        // pre-parent harness, which ignores `parent` and reads
+                        // `channel_id` as a required UUID, still deserializes
+                        // the request. Document parents have no channel id.
+                        channel_id: match &parent {
+                            messages::domain::models::MessageParent::Channel(channel_id) => {
+                                Some(*channel_id)
+                            }
+                            messages::domain::models::MessageParent::Document(_) => None,
+                        },
                         parent: Some(parent),
-                        channel_id: None,
                         thread_id: Some(thread_id),
                         message_id,
                         content: content.clone(),

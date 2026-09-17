@@ -1693,3 +1693,33 @@ async fn a_deleted_session_without_an_origin_is_its_owners_alone() {
         Some(1)
     );
 }
+
+/// The live stream mirrors the persisted fan-out: a departed session's owner
+/// keeps ownership, so the stream audience is the union of the owner's
+/// workspace and the origin parent, not the parent alone.
+#[test]
+fn a_deleted_session_streams_to_both_its_owner_and_origin_parent() {
+    use crate::domain::ingestion::stream::agent_session_lifecycle_stream_candidate;
+    use crate::domain::stream::StreamAudience;
+    use agent_session::domain::events::{AgentSessionLifecycleEvent, SessionDeletedMetadata};
+
+    let event = agent_session_lifecycle_event(|identity| {
+        AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity })
+    });
+
+    let candidate =
+        agent_session_lifecycle_stream_candidate(&event).expect("a deleted session streams");
+
+    assert_eq!(
+        candidate.audience,
+        StreamAudience::Any(vec![
+            StreamAudience::Workspace {
+                workspace_id: "macro|asker@example.com".to_owned(),
+            },
+            StreamAudience::Entity {
+                entity_id: uuid::Uuid::from_u128(1).to_string(),
+                entity_type: EntityType::Channel,
+            },
+        ]),
+    );
+}
