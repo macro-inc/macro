@@ -7,7 +7,10 @@
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.
   Chat rows use a chat icon; coding rows use `</>` and show their agent and
-  runtime status. Changing the composer mode does not filter the sidebar.
+  runtime status. Home and the Agents sidebar share these agent rows. Coding
+  sessions with a linked PR show its number and open/merged/closed status;
+  clicking the chip opens the PR without opening the session. The chip updates
+  when the session publishes a PR. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. **Agent** and **Send** sit inside the input on the right.

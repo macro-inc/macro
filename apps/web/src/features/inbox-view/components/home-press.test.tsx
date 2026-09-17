@@ -4,6 +4,9 @@ import type { JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { HomeListEntity } from './HomeListEntity';
 
+vi.mock('@app/features/agents-view/views/AgentSessionListItem', () => ({
+  AgentSessionListItem: () => null,
+}));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'test-user' }));
 vi.mock('@core/user', () => ({
   getDisplayName: () => 'Peter',
