@@ -348,7 +348,8 @@
 	:where(.agents-view, .agents-view-portal) .composer-drawer-content {
 		display: flex;
 		align-items: center;
-		padding: 6px 12px 10px;
+		margin-top: -32px;
+		padding: 42px 12px 10px;
 		border-radius: 0 0 20px 20px;
 		background: var(--surface-2);
 		border: var(--hair) solid var(--edge-muted);

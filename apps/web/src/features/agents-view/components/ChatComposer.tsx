@@ -119,7 +119,7 @@ export function ChatComposer(props: {
       <ComposerSurface
         as="div"
         data-agent-composer="chat"
-        class="flex min-w-0 items-end gap-2 rounded-[32px] px-4 py-3"
+        class="relative z-10 flex min-w-0 items-end gap-2 rounded-[32px] px-4 py-3"
         onPointerDown={focusEditor}
         onMouseDown={focusEditor}
       >

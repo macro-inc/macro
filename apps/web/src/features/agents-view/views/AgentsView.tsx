@@ -6,6 +6,7 @@ import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { ChatEmptyStateContext } from '@core/component/AI/component/message/EmptyChatState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
@@ -381,8 +382,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                           <Suspense fallback={<LoadingComposer />}>
                             <AgentSessionPane
                               id={conversation.id}
-                              mode={mode()}
-                              roster={rosterSource.roster()}
                               onSessionId={(sessionId) =>
                                 adoptSessionId(conversation.id, sessionId)
                               }
@@ -391,14 +390,26 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                           </Suspense>
                         </Match>
                         <Match when={true}>
-                          <Topbar title="Chat" />
                           <div class="body">
                             <Suspense fallback={<LoadingComposer />}>
-                              <PreviewPanel
-                                selectedEntity={conversation}
-                                orchestrator={orchestrator}
-                                splitPanelContext={panel}
-                              />
+                              <ChatEmptyStateContext.Provider
+                                value={() => (
+                                  <div class="px-4 py-16 text-center">
+                                    <h2 class="text-[28px] font-medium tracking-[-0.03em] text-ink">
+                                      What should we work on?
+                                    </h2>
+                                  </div>
+                                )}
+                              >
+                                <PreviewPanel
+                                  selectedEntity={conversation}
+                                  orchestrator={orchestrator}
+                                  splitPanelContext={panel}
+                                  headerLeading={
+                                    <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
+                                  }
+                                />
+                              </ChatEmptyStateContext.Provider>
                             </Suspense>
                           </div>
                         </Match>

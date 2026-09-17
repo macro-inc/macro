@@ -57,32 +57,34 @@ export function AgentPicker(props: {
             ? label()
             : `${props.selected?.name ?? 'Choose agent'} · ${label()}`
         }
-        class="pill min-w-0 max-w-full gap-2"
+        class="h-[33.75px] min-w-0 max-w-full gap-[5.625px] rounded-full bg-transparent hover:bg-hover px-[7.5px] text-base font-normal text-ink-muted light-mode:text-composer-placeholder"
       >
         <Show
           when={rawModel()}
           fallback={
             <Show when={props.selected}>
-              {(agent) => <AgentIcon agent={agent()} class="size-6 shrink-0" />}
+              {(agent) => (
+                <AgentIcon agent={agent()} class="size-[15px] shrink-0" />
+              )}
             </Show>
           }
         >
-          <ProviderIcon model={model()} class="size-6" />
+          <ProviderIcon model={model()} class="size-[15px]" />
         </Show>
-        <span class="min-w-0 truncate text-left text-sm leading-5">
+        <span class="min-w-0 truncate text-left leading-5">
           <Show
             when={rawModel()}
             fallback={
               <>
                 {props.selected?.name ?? 'Choose agent'}
-                <span class="text-[13px] text-ink-muted"> · {label()}</span>
+                <span> · {label()}</span>
               </>
             }
           >
             {label()}
           </Show>
         </span>
-        <CaretDownIcon class="size-3 shrink-0" />
+        <CaretDownIcon class="size-[15px] shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Content
         class="w-80 max-w-[calc(100vw-1rem)] overflow-hidden"
@@ -134,12 +136,14 @@ export function AgentPicker(props: {
                         title={modelLabel(option.id, option.name)}
                         onSelect={() => choose(agent(), option.id)}
                       >
-                        <Show
-                          when={modelProvider(option.id)}
-                          fallback={<SparkleIcon class="size-5 shrink-0" />}
-                        >
-                          <ProviderIcon model={option.id} class="size-5" />
-                        </Show>
+                        <span class="flex size-5 shrink-0 items-center justify-center">
+                          <Show
+                            when={modelProvider(option.id)}
+                            fallback={<SparkleIcon class="size-4 shrink-0" />}
+                          >
+                            <ProviderIcon model={option.id} class="size-4" />
+                          </Show>
+                        </span>
                         <span class="min-w-0 flex-1 truncate">
                           {modelLabel(option.id, option.name)}
                         </span>

@@ -1,6 +1,7 @@
 import CaretDown from '@phosphor/caret-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
+import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
 import { cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
@@ -174,23 +175,29 @@ export function ModelCatalogMenu(
 
   return (
     <>
-      <div class="border-b border-edge-muted bg-menu p-1.5">
-        <input
-          ref={props.searchRef}
-          aria-label={props.searchPlaceholder ?? 'Search models'}
-          placeholder={props.searchPlaceholder ?? 'Search models'}
-          value={query()}
-          onInput={(event) => setQuery(event.currentTarget.value)}
-          onMouseDown={(event: MouseEvent) => event.stopPropagation()}
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => {
-            if (event.key !== 'Escape') event.stopPropagation();
-          }}
-          onKeyUp={(event) => {
-            if (event.key !== 'Escape') event.stopPropagation();
-          }}
-          class="w-full rounded-lg border border-edge-muted bg-transparent px-3 py-2 text-sm text-ink outline-none placeholder:text-ink-extra-muted focus:border-accent"
-        />
+      <div class="bg-menu p-1.5">
+        <div class="flex items-center gap-2 px-2">
+          <MagnifyingGlassIcon
+            aria-hidden="true"
+            class="size-4 shrink-0 text-ink-extra-muted"
+          />
+          <input
+            ref={props.searchRef}
+            aria-label={props.searchPlaceholder ?? 'Search models'}
+            placeholder={props.searchPlaceholder ?? 'Search models'}
+            value={query()}
+            onInput={(event) => setQuery(event.currentTarget.value)}
+            onMouseDown={(event: MouseEvent) => event.stopPropagation()}
+            onClick={(event) => event.stopPropagation()}
+            onKeyDown={(event) => {
+              if (event.key !== 'Escape') event.stopPropagation();
+            }}
+            onKeyUp={(event) => {
+              if (event.key !== 'Escape') event.stopPropagation();
+            }}
+            class="min-w-0 w-full border-0 bg-transparent py-2 text-sm text-ink outline-none placeholder:text-ink-extra-muted"
+          />
+        </div>
       </div>
 
       {props.children}
@@ -220,7 +227,6 @@ export function ModelCatalogMenu(
             </Show>
 
             <Show when={extraCount() > 0}>
-              <Dropdown.Separator class="h-px border-0 bg-edge-muted" />
               <Dropdown.Group>
                 <Dropdown.Sub>
                   <Dropdown.SubTrigger>

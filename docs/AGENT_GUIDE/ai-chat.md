@@ -37,7 +37,9 @@
   while the agent and model lists scroll. It opens the roster on the selected kind's
   tab, where either kind can be created.
 - Selecting a coding agent reveals a repository drawer directly under the input
-  with a short slide and fade; selecting a chat agent retracts it. Reduced-motion
+  with a short slide and fade; it extends 32px behind the rounded input and stays
+  behind it throughout the transition, keeping its existing edge-muted border.
+  Selecting a chat agent retracts it. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
   offers **Choose automatically**, recent repositories, or GitHub `owner/repo` /
   URL entry confirmed with **Use repository**. Once selected, **Branch** opens
@@ -379,6 +381,16 @@ outside the tool group so the live reasoning row stays visible. Do not wait
 for every Thinking label to disappear — only the tail one is in flight.
 ### Sharing a session
 
+In the Agents workspace, saved sessions use the shared top-bar controls: session
+icon, title and action menu, Share, Copy Share Link, and a side-panel toggle.
+There is no breadcrumb because Agents has no subspaces. Unknown model providers
+fall back to the chat icon. The toggle (or `]`) opens the session's Details, Plan,
+Changes, and Activity sections when available, beside the transcript in wide
+layouts or over it in narrow layouts; it does not open another split.
+New conversation pages have no disabled session action buttons. Older chats
+also have one header row, and empty chats show a simple conversation prompt
+instead of the standalone recent-sessions and tips surface.
+
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;
 on mobile, open the session title menu and choose **Share**. The owner can
 select people or channels and send the session with an optional message using
@@ -502,6 +514,10 @@ Both AI composers display their model trigger label at the input text size
 (15px), using the softer secondary text color. This includes the agent model
 catalog trigger and mobile model sheet trigger. Opening the agent model
 catalog focuses the `Search models` field so you can type immediately.
+The search field is borderless inside the menu. New-session and active-session
+model triggers use a transparent round pill with a background only on hover,
+15px icons, and compact spacing,
+matching the production chat composer's proportions.
 
 Soup and recent-chat icons recognize the provider in the saved model ID even
 when that model is no longer selectable. For example, `openai/gpt-5.5` retains
