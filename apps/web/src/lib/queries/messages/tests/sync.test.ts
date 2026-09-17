@@ -422,18 +422,16 @@ describe.each(['channel', 'document'] as const)(
       });
       await fetching.catch(() => undefined);
     });
-    it('refetches an expanded thread whose replies are still loading when a live reply arrives', async () => {
-      // The root is in the timeline, but its own replies query has not resolved
-      // yet — an expanded thread whose first fetch is in flight.
+    // An expanded thread whose first replies fetch is still in flight: the root
+    // is in the timeline, but the thread's own query has not resolved yet.
+    async function expandThreadWithPendingFetch() {
       testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
         pageParams: [null],
         pages: [
           { items: [item(parent)], next_cursor: null, previous_cursor: null },
         ],
       });
-      const reply = message(parent, 'reply', 'root');
       mocks.thread.mockReset();
-      // The first fetch is in flight and, when it resolves, predates the reply.
       let resolveFirst: (thread: MessageThread) => void = () => {};
       mocks.thread.mockImplementationOnce(
         () =>
@@ -447,18 +445,29 @@ describe.each(['channel', 'document'] as const)(
       );
       const unsubscribe = observer.subscribe(() => {});
       await vi.waitFor(() => expect(mocks.thread).toHaveBeenCalledTimes(1));
+      const threadReplies = () =>
+        testQueryClient.getQueryData<MessageThread>(threadKey())?.replies;
+      // The fetch settles predating whatever arrived while it was in flight.
+      const settleEmpty = async () => {
+        resolveFirst({ state, root: message(parent, 'root'), replies: [] });
+        await vi.waitFor(() => expect(threadReplies()).toBeDefined());
+        await Promise.resolve();
+      };
+      return { settleEmpty, threadReplies, unsubscribe };
+    }
 
-      // A live reply arrives before the first fetch resolves. The preview-only
-      // insert drops it from the not-yet-cached thread; the reply must be
-      // re-applied once the fetch settles rather than lost to the stale read.
-      applyMessage(reply, 'posted');
-      resolveFirst({ state, root: message(parent, 'root'), replies: [] });
+    it('keeps a live reply that arrives while its first replies fetch is in flight', async () => {
+      const { settleEmpty, threadReplies, unsubscribe } =
+        await expandThreadWithPendingFetch();
 
-      await vi.waitFor(() =>
-        expect(
-          testQueryClient.getQueryData<MessageThread>(threadKey())?.replies
-        ).toEqual([expect.objectContaining({ id: 'reply' })])
-      );
+      // The preview-only insert drops the reply from the not-yet-cached thread;
+      // it must be re-applied once the fetch settles rather than lost.
+      applyMessage(message(parent, 'reply', 'root'), 'posted');
+      await settleEmpty();
+
+      expect(threadReplies()).toEqual([
+        expect.objectContaining({ id: 'reply' }),
+      ]);
       // Convergence needs no extra network round trip.
       expect(mocks.thread).toHaveBeenCalledTimes(1);
 
@@ -470,6 +479,40 @@ describe.each(['channel', 'document'] as const)(
       expect(root.thread.preview).toEqual([
         expect.objectContaining({ id: 'reply' }),
       ]);
+      unsubscribe();
+    });
+
+    it('applies the latest edit of a reply that arrives while the fetch is in flight', async () => {
+      const { settleEmpty, threadReplies, unsubscribe } =
+        await expandThreadWithPendingFetch();
+      const reply = message(parent, 'reply', 'root');
+
+      applyMessage(reply, 'posted');
+      applyMessage({ ...reply, content: 'edited' }, 'edited');
+      await settleEmpty();
+
+      // The deferred re-apply reads the current preview state, not the stale
+      // posted payload, so the edit wins.
+      expect(threadReplies()).toEqual([
+        expect.objectContaining({ id: 'reply', content: 'edited' }),
+      ]);
+      unsubscribe();
+    });
+
+    it('does not resurrect a reply deleted while the fetch is in flight', async () => {
+      const { settleEmpty, threadReplies, unsubscribe } =
+        await expandThreadWithPendingFetch();
+      const reply = message(parent, 'reply', 'root');
+
+      applyMessage(reply, 'posted');
+      applyMessage(
+        { ...reply, content: '', deleted_at: time },
+        'message_deleted'
+      );
+      await settleEmpty();
+
+      // The reply left the preview on delete, so the deferred re-apply skips it.
+      expect(threadReplies()).toEqual([]);
       unsubscribe();
     });
     it('skips the sender nonce and scopes ephemeral typing to the parent and root', () => {
