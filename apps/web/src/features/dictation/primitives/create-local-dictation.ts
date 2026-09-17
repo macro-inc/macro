@@ -1,19 +1,25 @@
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { match } from 'ts-pattern';
-import type {
-  DictationController,
-  DictationPhase,
-  LocalSpeechConstructor,
-  LocalSpeechRecognition,
-  SpeechAvailability,
-  StartVolumeMeter,
+import type { CreateRecorder, RecorderHandle } from '../core/recording';
+import {
+  ACTIVE_PHASES,
+  type DictationController,
+  type DictationPhase,
+  type LocalSpeechConstructor,
+  type LocalSpeechRecognition,
+  type SpeechAvailability,
 } from '../core/types';
-import { MAX_VOLUME_SAMPLES } from '../core/volume';
+import { appendLevel, type VolumeLevel } from '../core/volume';
 
-export function createDictation(options: {
+/**
+ * On-device dictation through the local-only Web Speech API. The optional
+ * recorder runs as a microphone meter for the volume timeline; speech
+ * recognition captures audio on its own.
+ */
+export function createLocalDictation(options: {
   recognition?: LocalSpeechConstructor;
   language: string;
-  startVolumeMeter?: StartVolumeMeter;
+  createRecorder?: CreateRecorder;
   onConfirm: (text: string) => void;
   onCancel?: () => void;
 }): DictationController {
@@ -21,28 +27,35 @@ export function createDictation(options: {
   const [availability, setAvailability] =
     createSignal<SpeechAvailability>('unavailable');
   const [transcript, setTranscript] = createSignal('');
-  const [volumeHistory, setVolumeHistory] = createSignal<readonly number[]>([]);
+  const [volumeHistory, setVolumeHistory] = createSignal<
+    readonly VolumeLevel[]
+  >([]);
   const [message, setMessage] = createSignal('');
   const localOptions = {
     langs: [options.language],
     processLocally: true as const,
   };
   let recognition: LocalSpeechRecognition | undefined;
+  let meter: RecorderHandle | undefined;
   let disposed = false;
-  let finishTimer: ReturnType<typeof setTimeout> | undefined;
-  let volumeMeter: ReturnType<StartVolumeMeter> | undefined;
+  let pendingConfirm: (() => void) | undefined;
 
-  const stopVolumeMeter = () => {
-    volumeMeter?.stop();
-    volumeMeter = undefined;
+  const active = () => ACTIVE_PHASES.includes(phase());
+  const restingPhase = () =>
+    availability() === 'unavailable' ? 'unavailable' : 'idle';
+
+  const settleConfirm = () => {
+    pendingConfirm?.();
+    pendingConfirm = undefined;
   };
 
-  const active = () =>
-    ['starting', 'listening', 'finishing', 'review'].includes(phase());
+  const stopMeter = () => {
+    meter?.cancel();
+    meter = undefined;
+  };
 
   const release = () => {
-    clearTimeout(finishTimer);
-    stopVolumeMeter();
+    stopMeter();
     const current = recognition;
     recognition = undefined;
     if (!current) return;
@@ -68,40 +81,69 @@ export function createDictation(options: {
   const commit = () => {
     const text = transcript().trim();
     release();
-    setPhase(availability() === 'unavailable' ? 'unavailable' : 'idle');
+    setPhase(restingPhase());
     setTranscript('');
     setVolumeHistory([]);
     setMessage('');
     if (text) options.onConfirm(text);
     else options.onCancel?.();
+    settleConfirm();
+  };
+
+  const startMeter = (current: LocalSpeechRecognition) => {
+    if (!options.createRecorder) return;
+    const recorder = options.createRecorder({
+      onLevel: (level) => {
+        if (recognition === current && phase() === 'listening')
+          setVolumeHistory((history) => appendLevel(history, level));
+      },
+      onError: () => {
+        if (recognition === current)
+          setMessage(
+            'Microphone volume is unavailable. You can still dictate.'
+          );
+      },
+    });
+    meter = recorder;
+    const begin = async () => {
+      try {
+        await recorder.start();
+      } catch {
+        if (recognition === current)
+          setMessage(
+            'Microphone volume is unavailable. You can still dictate.'
+          );
+      }
+    };
+    void begin();
+  };
+
+  const install = async (Recognition: LocalSpeechConstructor) => {
+    setPhase('installing');
+    try {
+      const installed = await Recognition.install(localOptions);
+      if (disposed) return;
+      if (!installed) {
+        setMessage('The speech language download failed. Try again.');
+        setPhase('unavailable');
+        return;
+      }
+      setAvailability('available');
+      setMessage('Ready. Select the microphone to start dictation.');
+      // Starting recognition needs a fresh user gesture after the download.
+      setPhase('idle');
+    } catch {
+      if (disposed) return;
+      setMessage('The speech language download failed. Try again.');
+      setPhase('unavailable');
+    }
   };
 
   const start = async () => {
     const Recognition = options.recognition;
     if (!Recognition || phase() !== 'idle' || disposed) return;
     setMessage('');
-    if (availability() !== 'available') {
-      setPhase('installing');
-      try {
-        const installed = await Recognition.install(localOptions);
-        if (disposed) return;
-        if (!installed) {
-          setMessage('The speech language download failed. Try again.');
-          setPhase('unavailable');
-          return;
-        }
-        setAvailability('available');
-        setMessage('Ready. Select the microphone to start dictation.');
-      } catch {
-        if (disposed) return;
-        setMessage('The speech language download failed. Try again.');
-        setPhase('unavailable');
-        return;
-      }
-      // Starting recording needs a fresh user gesture after the download.
-      setPhase('idle');
-      return;
-    }
+    if (availability() !== 'available') return install(Recognition);
 
     setTranscript('');
     setVolumeHistory([]);
@@ -152,6 +194,7 @@ export function createDictation(options: {
           setAvailability('unavailable');
           if (!transcript().trim()) setPhase('unavailable');
         }
+        if (phase() !== 'review') settleConfirm();
       };
       current.onend = () => {
         const shouldCommit = phase() === 'finishing';
@@ -164,24 +207,7 @@ export function createDictation(options: {
         }
       };
       current.start();
-      if (recognition === current) {
-        volumeMeter = options.startVolumeMeter?.(
-          (level) => {
-            if (recognition !== current || phase() !== 'listening') return;
-            setVolumeHistory((history) => [
-              ...history.slice(-(MAX_VOLUME_SAMPLES - 1)),
-              level,
-            ]);
-          },
-          () => {
-            if (recognition === current) {
-              setMessage(
-                'Microphone volume is unavailable. You can still dictate.'
-              );
-            }
-          }
-        );
-      }
+      if (recognition === current) startMeter(current);
     } catch {
       release();
       setMessage(
@@ -191,20 +217,37 @@ export function createDictation(options: {
     }
   };
 
-  const confirm = () => {
-    if (phase() === 'review') return commit();
-    if (phase() !== 'listening' || !recognition) return;
-    setPhase('finishing');
-    stopVolumeMeter();
-    // Wait for the final result emitted after stop; bound browsers that fail
-    // to emit end so the composer can never get stuck recording.
-    finishTimer = setTimeout(commit, 3000);
-    try {
-      recognition.stop();
-    } catch {
-      commit();
-    }
-  };
+  const confirm = () =>
+    new Promise<void>((resolve) => {
+      match(phase())
+        .with('review', () => {
+          pendingConfirm = resolve;
+          commit();
+        })
+        .with('listening', () => {
+          if (!recognition) return resolve();
+          pendingConfirm = resolve;
+          setPhase('finishing');
+          stopMeter();
+          // The final, corrected result arrives before `onend`, which commits.
+          try {
+            recognition.stop();
+          } catch {
+            commit();
+          }
+        })
+        .with('finishing', () => {
+          // A browser that never emits `onend` would otherwise strand the user;
+          // confirming again commits whatever has been recognized so far.
+          const previous = pendingConfirm;
+          pendingConfirm = () => {
+            previous?.();
+            resolve();
+          };
+          commit();
+        })
+        .otherwise(() => resolve());
+    });
 
   const cancel = () => {
     if (!active()) return;
@@ -212,14 +255,16 @@ export function createDictation(options: {
     setTranscript('');
     setVolumeHistory([]);
     setMessage('');
-    setPhase(availability() === 'unavailable' ? 'unavailable' : 'idle');
+    setPhase(restingPhase());
     options.onCancel?.();
+    settleConfirm();
   };
 
   onMount(() => void checkAvailability());
   onCleanup(() => {
     disposed = true;
     release();
+    settleConfirm();
   });
 
   return {

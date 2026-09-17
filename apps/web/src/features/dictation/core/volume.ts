@@ -1,14 +1,13 @@
-/** Each bar represents 200ms; retain a bounded history independent of layout. */
+/** Each timeline bar covers one recorder chunk; keep a bounded history. */
 export const VOLUME_INTERVAL_MS = 200;
 export const MAX_VOLUME_SAMPLES = 512;
 
-/** Fixed dB scale keeps historical heights comparable across loud/quiet speech. */
-export function microphoneLevel(samples: Float32Array): number {
-  if (samples.length === 0) return 0;
-  let power = 0;
-  for (const sample of samples) power += sample * sample;
-  const rms = Math.sqrt(power / samples.length);
-  if (rms === 0) return 0;
-  const decibels = 20 * Math.log10(rms);
-  return Math.max(0, Math.min(1, (decibels + 60) / 48));
+/** Normalized 0..1 microphone level for one interval. */
+export type VolumeLevel = number;
+
+export function appendLevel(
+  history: readonly VolumeLevel[],
+  level: VolumeLevel
+): readonly VolumeLevel[] {
+  return [...history.slice(-(MAX_VOLUME_SAMPLES - 1)), level];
 }
