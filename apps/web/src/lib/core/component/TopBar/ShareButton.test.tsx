@@ -527,27 +527,17 @@ describe('call team sharing', () => {
     expect(mocks.updateCallTeamShare).not.toHaveBeenCalled();
   });
 
-  it('loads team access from the call record outside a block', async () => {
+  it('loads team access from the call record outside a block', () => {
     mocks.inBlock = false;
     mocks.hasTeam = true;
-    mocks.fetchCallSharePermission.mockResolvedValue({
-      isErr: () => false,
-      value: {
-        id: 'call-1',
-        owner: 'owner',
-        teamShareAccessLevel: 'view',
-      },
-    });
     mountCallShare();
 
-    await vi.waitFor(() =>
-      expect(
-        screen
-          .getByRole('group', { name: 'Team access level' })
-          .getAttribute('data-value')
-      ).toBe('view')
-    );
-    expect(mocks.fetchCallSharePermission).toHaveBeenCalledWith('call-1');
+    expect(
+      screen
+        .getByRole('group', { name: 'Team access level' })
+        .getAttribute('data-value')
+    ).toBe('view');
+    expect(mocks.fetchCallSharePermission).not.toHaveBeenCalled();
   });
 });
 

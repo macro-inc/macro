@@ -49,9 +49,10 @@ import UserCircle from '@phosphor/user-circle.svg';
 import UsersIcon from '@phosphor/users.svg';
 import IconX from '@phosphor/x.svg';
 import {
-  fetchCallSharePermission,
   setCallRecordTeamShareCache,
+  sharePermissionFromCallRecord,
   updateCallTeamShare,
+  useCallRecordQuery,
 } from '@queries/call/call';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cognitionApiServiceClient } from '@service-cognition/client';
@@ -136,9 +137,6 @@ async function fetchSharePermissions(id: string, itemType: ItemType) {
       return;
     }
     return storageServiceClient.projects.getPermissions({ id });
-  }
-  if (itemType === 'call') {
-    return fetchCallSharePermission(id);
   }
 }
 
@@ -689,6 +687,9 @@ export function ShareModal(props: ShareModalProps) {
   const navigate = useNavigate();
   const analytics = useAnalytics();
   const currentTeamQuery = useCurrentTeamQuery();
+  const callRecordQuery = useCallRecordQuery(() =>
+    props.itemType === 'call' ? props.id : ''
+  );
   const isBlockContext = isInBlock() && props.itemType !== 'agent_session';
   const [fallbackPermissionsResource, { refetch: refetchFallback }] =
     createResource(
@@ -975,6 +976,12 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const teamShareAccessLevel = createMemo(() => {
+    if (props.itemType === 'call') {
+      if (!callRecordQuery.isSuccess) return;
+      const record = callRecordQuery.data;
+      if (!record) return;
+      return sharePermissionFromCallRecord(record).teamShareAccessLevel;
+    }
     const currentPermissions = permissionsResource.latest;
     if (!currentPermissions || currentPermissions.isErr()) return;
 
