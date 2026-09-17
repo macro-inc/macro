@@ -1,0 +1,21 @@
+mutation SaveEmailDraft($input: SaveEmailDraftInput!) {
+	saveEmailDraft(input: $input) {
+		draftId
+		draft {
+			...EmailThreadMessageFields
+		}
+		thread {
+			__typename
+			id
+			updatedAt
+		}
+	}
+}
+
+mutation DeleteEmailDraft($input: DeleteEmailDraftInput!) {
+	deleteEmailDraft(input: $input) {
+		draftId
+		deleted
+		threadDeleted
+	}
+}

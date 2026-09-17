@@ -1,5 +1,5 @@
-use super::{message, thread};
-use crate::domain::models::{ResolvedDraftInput, ThreadRow, UpsertedContacts};
+use super::{client_id_mapping, message, thread};
+use crate::domain::models::{ResolvedDraftInput, SettledDraftIds, ThreadRow, UpsertedContacts};
 use chrono::Utc;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -7,7 +7,9 @@ use uuid::Uuid;
 /// Insert a draft message within a transaction.
 /// Includes: thread insert (if new), message upsert, scheduled message, recipients,
 /// thread metadata update, and user history.
-/// Returns the thread DB ID.
+/// Returns the IDs the save settled on, or `None` (rolling everything back)
+/// when the upsert's owner guard rejected the write — the message ID exists
+/// under another inbox or is no longer an unsent draft.
 #[tracing::instrument(skip(pool, input, contacts, new_thread), err)]
 pub(crate) async fn insert_message(
     pool: &PgPool,
@@ -16,17 +18,42 @@ pub(crate) async fn insert_message(
     link_id: Uuid,
     new_thread: Option<ThreadRow>,
     is_draft: bool,
-) -> Result<(), sqlx::Error> {
+) -> Result<Option<SettledDraftIds>, sqlx::Error> {
     let mut tx = pool.begin().await?;
 
-    let message_db_id = input.db_id;
-    let thread_db_id = input.thread_db_id;
+    let mut settled = SettledDraftIds {
+        message_db_id: input.db_id,
+        thread_db_id: input.thread_db_id,
+    };
+    let mut new_thread = new_thread;
+
+    // The caller resolved this handle on its own connection, where a
+    // concurrent first save's binding is invisible until it commits — so two
+    // first saves of one draft would each mint a message and a thread, and the
+    // losing binding upsert would orphan a full row set. Serialize on the
+    // handle and re-read the binding under the lock: the loser adopts the row
+    // the winner settled on and updates it instead.
+    if let Some(client_id) = input.draft_client_id {
+        client_id_mapping::lock_draft_client_id(&mut tx, client_id, link_id).await?;
+        if let Some(bound) = client_id_mapping::bound_draft_row(&mut tx, client_id, link_id).await?
+            && bound.message_db_id != settled.message_db_id
+        {
+            settled = bound;
+            // Our thread would have no messages left to hold.
+            new_thread = None;
+        }
+    }
+
+    let SettledDraftIds {
+        message_db_id,
+        thread_db_id,
+    } = settled;
 
     if let Some(thread) = new_thread {
         thread::insert_thread(&mut tx, &thread, link_id).await?;
     }
 
-    upsert_draft(
+    let applied = upsert_draft(
         &mut tx,
         input,
         message_db_id,
@@ -36,6 +63,10 @@ pub(crate) async fn insert_message(
         is_draft,
     )
     .await?;
+    if !applied {
+        tx.rollback().await?;
+        return Ok(None);
+    }
 
     // Only touch scheduling if send_time is explicitly provided.
     // Scheduling is managed via the dedicated /drafts/scheduled endpoints.
@@ -56,11 +87,26 @@ pub(crate) async fn insert_message(
 
     thread::upsert_user_history(&mut tx, link_id, thread_db_id).await?;
 
+    // Bind client handles to the settled rows in the same transaction, so a
+    // replayed offline save resolves to this row instead of creating another.
+    if let Some(client_id) = input.draft_client_id {
+        client_id_mapping::bind_draft_client_id(&mut tx, client_id, link_id, message_db_id).await?;
+    }
+    if let Some(client_id) = input.thread_client_id {
+        client_id_mapping::bind_thread_client_id(&mut tx, client_id, link_id, thread_db_id).await?;
+    }
+
     tx.commit().await?;
-    Ok(())
+    Ok(Some(settled))
 }
 
 /// Upsert a draft message row.
+///
+/// The conflict clause is owner-guarded: an existing row is only updated when
+/// it is an unsent draft in the sending inbox. The IDs reaching this upsert
+/// come from validated reads, but reads race — the guard, not the read, is
+/// what keeps a raced save from rewriting another inbox's row or a sent
+/// message. Returns `false` when the guard rejected the write.
 pub(crate) async fn upsert_draft(
     tx: &mut sqlx::PgConnection,
     input: &ResolvedDraftInput,
@@ -69,10 +115,10 @@ pub(crate) async fn upsert_draft(
     from_contact_id: Option<Uuid>,
     link_id: Uuid,
     is_draft: bool,
-) -> Result<(), sqlx::Error> {
+) -> Result<bool, sqlx::Error> {
     let now = Utc::now();
 
-    sqlx::query!(
+    let result = sqlx::query!(
         r#"
         INSERT INTO email_messages (
             id, provider_id, link_id, thread_id, provider_thread_id,
@@ -100,6 +146,9 @@ pub(crate) async fn upsert_draft(
             body_macro = EXCLUDED.body_macro,
             headers_jsonb = EXCLUDED.headers_jsonb,
             updated_at = NOW()
+        WHERE email_messages.link_id = EXCLUDED.link_id
+            AND email_messages.is_draft
+            AND NOT email_messages.is_sent
         "#,
         message_db_id,
         input.provider_id,
@@ -125,5 +174,5 @@ pub(crate) async fn upsert_draft(
     .execute(&mut *tx)
     .await?;
 
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }

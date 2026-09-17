@@ -17,8 +17,10 @@ pub use loaders::{
     email_thread_metadata_loader,
 };
 pub use mutation::{
-    EmailMutationService, EmailThreadMutationLoadFuture, EmailThreadMutationOutput,
-    GraphqlEmailMutation, MarkEmailThreadSeenInput, UpdateEmailThreadLabelInput,
+    DeleteEmailDraftInput, DeleteEmailDraftPayload, EmailMutationService,
+    EmailThreadMutationLoadFuture, EmailThreadMutationOutput, GraphqlEmailMutation,
+    MarkEmailThreadSeenInput, SaveEmailDraftContactInput, SaveEmailDraftInput,
+    SaveEmailDraftPayload, UpdateEmailThreadLabelInput,
 };
 pub use objects::{
     GraphqlMailPreviewMessage, GraphqlSoupEmailMessage,

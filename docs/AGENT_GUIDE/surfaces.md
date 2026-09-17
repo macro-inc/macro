@@ -325,6 +325,12 @@ A failure from an older, unmounted editor must not overwrite a newer edited repl
 A presentation or refresh error after successful delivery is not a reason to send
 again.
 
+Send and schedule are refused with a notice while the device is offline, while a
+draft is still syncing (its save was accepted locally but not yet confirmed by the
+server; retry after a moment), or while an attachment has no completed upload. The
+composer keeps its content in each case. Attachments cannot be added while
+offline: a blocking notice explains and nothing is attached.
+
 While a schedule change is pending, immediate send and further schedule changes
 are disabled. Reply recipients cannot be edited or dragged during scheduling,
 sending, or discarding. A failed schedule or unschedule keeps the last confirmed time.

@@ -1,4 +1,4 @@
-import { createMemo, createRoot, createSignal } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { message } from '../../email-message/tests/messages';
 import type {
@@ -8,73 +8,14 @@ import type {
 import { decodeBase64Utf8 } from '../core/decode-base64';
 import { createComposeContext } from '../tests/capabilities';
 import { mountEmailComposer } from '../tests/composer';
-import { createEmailEditor, setEmailEditorText } from '../tests/editor';
-import { createEmailFormState } from './email-form-state';
-import {
-  createReplyComposer,
-  type ReplyComposerOptions,
-} from './reply-composer';
-
-function replyComposer(
-  composeContext: EmailComposeContext,
-  replyingTo = () => message('parent'),
-  callbacks: Pick<ReplyComposerOptions, 'sideEffectOnSend' | 'onMarkDone'> = {}
-) {
-  return createRoot((dispose) => {
-    const editor = createEmailEditor('Ready to send');
-    const parent = replyingTo();
-    const form = createEmailFormState(
-      {
-        viewerEmail: composeContext.viewerEmail,
-        inboxes: composeContext.accounts.inboxes,
-      },
-      { type: 'replying_to', messageId: parent.db_id },
-      { getMessageById: () => parent, getDraftForMessageReply: () => undefined }
-    );
-    const state = createReplyComposer(
-      {
-        ...callbacks,
-        ...composeContext,
-        focusAfterReplyRequest: () => true,
-        sourceEntityId: 'thread',
-        replyingTo,
-        session: {
-          thread: () => ({
-            db_id: 'thread',
-            link_id: 'inbox',
-            inbox_visible: false,
-          }),
-          recipientOptions: () => [],
-          isPersonalReply: () => false,
-          onDraftRemoved() {},
-          exitToThread: () => false,
-          replyRequest: { replyType: () => undefined, clear() {} },
-          getMarkDoneNavigationTargetId: () => undefined,
-        },
-      },
-      () => editor,
-      { container: () => undefined, footer: () => undefined },
-      () => form
-    );
-    state.onContentChange('Ready to send');
-    return {
-      ...state,
-      sendActionDisabled: createMemo(state.sendActionDisabled),
-      dispose,
-      edit(text: string) {
-        setEmailEditorText(editor, text);
-        state.onContentChange(text);
-      },
-    };
-  });
-}
+import { mountReplyComposer } from '../tests/reply';
 
 function composer(
   kind: 'standalone' | 'reply',
   composeContext: EmailComposeContext
 ) {
   if (kind === 'reply') {
-    const state = replyComposer(composeContext);
+    const state = mountReplyComposer(composeContext);
     return {
       dispose: state.dispose,
       send: () => state.sendEmail(),
@@ -95,7 +36,7 @@ describe('send and schedule ordering', () => {
     const context = createComposeContext();
     const pending = Promise.withResolvers<void>();
     vi.mocked(context.delivery.schedule).mockReturnValueOnce(pending.promise);
-    const state = replyComposer(context);
+    const state = mountReplyComposer(context);
     const originalTo = [...state.form.recipients().to];
     const schedule = state.handleSendTimeChange(
       new Date('2026-12-01T12:00:00Z')
@@ -151,7 +92,7 @@ describe('send and schedule ordering', () => {
       .mockImplementationOnce((options) =>
         options.onUndoHandle({ id: 'second', undo: undoSecond, dispose() {} })
       );
-    const state = replyComposer(context, undefined, { onMarkDone });
+    const state = mountReplyComposer(context, undefined, { onMarkDone });
     try {
       await state.sendEmail(true);
       const firstNotice = vi.mocked(context.notices.feedback.success).mock
@@ -183,7 +124,7 @@ describe('send and schedule ordering', () => {
         await onUndone();
       }
     );
-    const state = replyComposer(composeContext, undefined, {
+    const state = mountReplyComposer(composeContext, undefined, {
       sideEffectOnSend: () => refresh,
       onMarkDone,
     });
@@ -224,7 +165,7 @@ describe('send and schedule ordering', () => {
         throw failure;
       }
     );
-    const state = replyComposer(composeContext);
+    const state = mountReplyComposer(composeContext);
     try {
       await state.handleSendTimeChange(new Date('2026-12-01T12:00:00Z'));
       expect(composeContext.delivery.schedule).not.toHaveBeenCalled();
@@ -242,12 +183,12 @@ describe('send and schedule ordering', () => {
     const { promise: sending, reject } =
       Promise.withResolvers<PersistedEmailIdentity>();
     vi.mocked(composeContext.delivery.sendMessage).mockReturnValueOnce(sending);
-    const first = replyComposer(composeContext);
+    const first = mountReplyComposer(composeContext);
     first.edit('Older reply');
     const send = first.sendEmail();
     await vi.advanceTimersByTimeAsync(0);
     first.dispose();
-    const newer = replyComposer(composeContext);
+    const newer = mountReplyComposer(composeContext);
     try {
       newer.form.setSubject('New subject');
       newer.edit('Newer reply');
@@ -265,7 +206,7 @@ describe('send and schedule ordering', () => {
     const composeContext = createComposeContext();
     const failure = new Error('Refresh failed');
     const onMarkDone = vi.fn();
-    const state = replyComposer(composeContext, undefined, {
+    const state = mountReplyComposer(composeContext, undefined, {
       sideEffectOnSend: async () => {
         throw failure;
       },
@@ -289,7 +230,7 @@ describe('send and schedule ordering', () => {
       new Error('Offline')
     );
     const onMarkDone = vi.fn();
-    const state = replyComposer(composeContext, undefined, { onMarkDone });
+    const state = mountReplyComposer(composeContext, undefined, { onMarkDone });
     try {
       state.edit('Keep my reply');
       await state.sendEmail(true);
@@ -314,7 +255,7 @@ describe('send and schedule ordering', () => {
       Promise.withResolvers<PersistedEmailIdentity>();
     const composeContext = createComposeContext();
     vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(saving);
-    const state = replyComposer(composeContext);
+    const state = mountReplyComposer(composeContext);
     state.edit('First version');
     await vi.advanceTimersByTimeAsync(500);
     state.edit('Final version');
@@ -334,7 +275,7 @@ describe('send and schedule ordering', () => {
   it('flushes an unmounted editor only to its original reply target', async () => {
     const [target, setTarget] = createSignal(message('original'));
     const composeContext = createComposeContext();
-    const state = replyComposer(composeContext, target);
+    const state = mountReplyComposer(composeContext, target);
     state.edit('Belongs to the original message');
     // Solid updates keyed parent props before disposing the previous child.
     setTarget(message('next'));
@@ -355,7 +296,7 @@ describe('send and schedule ordering', () => {
     vi.mocked(
       composeContext.attachmentStorage.uploadAttachments
     ).mockReturnValueOnce(uploading);
-    const state = replyComposer(composeContext);
+    const state = mountReplyComposer(composeContext);
     try {
       state.form.setSelectedInbox('secondary');
       state.handleAddAttachments([new File(['attachment'], 'review.txt')]);
@@ -383,7 +324,7 @@ describe('send and schedule ordering', () => {
     vi.mocked(
       composeContext.attachmentStorage.uploadAttachments
     ).mockReturnValueOnce(uploading);
-    const state = replyComposer(composeContext);
+    const state = mountReplyComposer(composeContext);
     try {
       state.handleAddAttachments([new File(['attachment'], 'review.txt')]);
       await vi.advanceTimersByTimeAsync(500);
@@ -420,7 +361,7 @@ describe('send and schedule ordering', () => {
         vi.mocked(composeContext.drafts.deleteDraft).mockReturnValueOnce(
           pending
         );
-      const state = replyComposer(composeContext);
+      const state = mountReplyComposer(composeContext);
       try {
         state.edit('Ready');
         await vi.advanceTimersByTimeAsync(500);
@@ -456,7 +397,7 @@ describe('send and schedule ordering', () => {
       Promise.withResolvers<PersistedEmailIdentity>();
     const composeContext = createComposeContext();
     vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(saving);
-    const state = replyComposer(composeContext);
+    const state = mountReplyComposer(composeContext);
     try {
       const attachment = {
         type: 'forwarded' as const,
@@ -484,7 +425,7 @@ describe('send and schedule ordering', () => {
       Promise.withResolvers<PersistedEmailIdentity>();
     const composeContext = createComposeContext();
     vi.mocked(composeContext.drafts.saveDraft).mockReturnValueOnce(saving);
-    const state = replyComposer(composeContext);
+    const state = mountReplyComposer(composeContext);
     try {
       const sending = state.sendEmail();
       await vi.advanceTimersByTimeAsync(0);
@@ -525,7 +466,7 @@ describe('send and schedule ordering', () => {
         }
       );
       const target = () => message(`cross-inbox-${remount}`);
-      let state = replyComposer(composeContext, target);
+      let state = mountReplyComposer(composeContext, target);
       try {
         state.form.setSelectedInbox('secondary');
         state.form.setSubject('Custom reply subject');
@@ -560,7 +501,7 @@ describe('send and schedule ordering', () => {
             }),
           })
         );
-        if (remount) state = replyComposer(composeContext, target);
+        if (remount) state = mountReplyComposer(composeContext, target);
         await vi.advanceTimersByTimeAsync(0);
         expect(state.activeInboxId()).toBe('secondary');
         state.edit('Continued after undo');
@@ -610,7 +551,7 @@ describe('send and schedule ordering', () => {
         threadId: 'thread-c',
         inboxId: 'c',
       });
-    const state = replyComposer(composeContext);
+    const state = mountReplyComposer(composeContext);
     try {
       state.edit('Moving between inboxes');
       await vi.advanceTimersByTimeAsync(500);

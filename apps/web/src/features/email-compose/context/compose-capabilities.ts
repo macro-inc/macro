@@ -19,10 +19,51 @@ export interface PersistedEmailIdentity {
   draftId?: string;
   threadId?: string;
   inboxId: string;
+  /**
+   * How a save landed. `committed`: the server holds this identity, so
+   * REST-only actions (send, schedule, attachment uploads) can use it.
+   * `queued`: durably accepted by the local mutation queue under the
+   * caller's client handles, which the server may not know yet. Absent
+   * means committed.
+   */
+  persistence?: 'committed' | 'queued';
+}
+
+/** Server rejection codes for a draft save or delete. None is retried by autosave. */
+export type DraftPersistFailureCode =
+  | 'DRAFT_ALREADY_SENT'
+  | 'NOT_FOUND'
+  | 'INBOX_NOT_FOUND'
+  | 'UNAUTHORIZED'
+  | 'INVALID'
+  | 'INTERNAL';
+
+/**
+ * A deterministic server rejection of a draft save or delete. Transport
+ * failures reject with a plain error and may be retried; this one carries
+ * the code so a composer can interpret it (an already-sent draft resets the
+ * composer, anything else latches autosave).
+ */
+export class DraftPersistRejected extends Error {
+  constructor(readonly code: DraftPersistFailureCode) {
+    super(`Draft persistence rejected: ${code}`);
+    this.name = 'DraftPersistRejected';
+  }
+}
+
+/**
+ * Client-minted identity for a draft the server has not confirmed. Carried
+ * apart from `draft.db_id` (a server id) because only the durable queue can
+ * resolve handles; a REST save ignores them and mints server ids instead.
+ */
+export interface DraftClientHandles {
+  draftId: string;
+  threadId?: string;
 }
 
 export interface SaveEmailDraft {
   draft: EmailDraft;
+  clientHandles?: DraftClientHandles;
   sendTime?: Date | null;
   previousThreadId?: string;
   inboxId?: string;
@@ -104,6 +145,8 @@ export interface EmailComposeFeedback {
     alert(message: string, options?: ComposeNoticeOptions): void;
     dismiss(id: number): void;
   };
+  /** A modal notice with a single acknowledgement; resolves when dismissed. */
+  blockingNotice(input: { title: string; body: string }): Promise<void>;
   reportError(error: unknown): void;
 }
 

@@ -68,6 +68,12 @@ impl From<email::domain::models::EmailPreview> for GraphqlMailPreviewMessage {
 pub struct GraphqlSoupEmailMessage(EmailContentMessage);
 
 impl GraphqlSoupEmailMessage {
+    /// Wraps a message produced outside the DataLoader path (e.g. a
+    /// mutation payload's draft record).
+    pub(crate) fn from_content(message: EmailContentMessage) -> Self {
+        Self(message)
+    }
+
     fn parsed(&self) -> &ParsedMessage {
         self.0.parsed()
     }

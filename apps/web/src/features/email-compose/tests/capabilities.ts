@@ -37,6 +37,7 @@ export function createComposeContext(): EmailComposeContext {
         alert: vi.fn(),
         dismiss: vi.fn(),
       },
+      blockingNotice: vi.fn(async () => {}),
       reportError: vi.fn(),
     },
     drafts: {

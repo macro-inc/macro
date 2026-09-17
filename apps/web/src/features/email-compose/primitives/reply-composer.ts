@@ -5,6 +5,7 @@ import {
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/utils/mentionsUtils';
 import { setEditorStateFromHtml } from '@core/component/LexicalMarkdown/utils/setEditorStateFromHtml';
+import { deviceLooksOffline } from '@core/util/connectivity';
 import { plural } from '@core/util/string';
 import { $generateHtmlFromNodes } from '@lexical/html';
 import {
@@ -24,13 +25,15 @@ import {
   type Setter,
   untrack,
 } from 'solid-js';
-import type {
-  EmailAttachmentStorage,
-  EmailComposeAccounts,
-  EmailComposeFeedback,
-  EmailDelivery,
-  EmailDraftStorage,
-  EmailUndoHandle,
+import { v7 as uuidv7 } from 'uuid';
+import {
+  DraftPersistRejected,
+  type EmailAttachmentStorage,
+  type EmailComposeAccounts,
+  type EmailComposeFeedback,
+  type EmailDelivery,
+  type EmailDraftStorage,
+  type EmailUndoHandle,
 } from '../context/compose-capabilities';
 import type { EmailReplySession } from '../context/email-form-inputs';
 import type { EmailDraft } from '../core/email-draft';
@@ -40,6 +43,7 @@ import {
 } from '../core/recipient-conversion';
 import { createAttachmentPersistence } from './attachment-persistence';
 import { createDraftAutosave } from './draft-autosave';
+import { createDraftSession } from './draft-session';
 import type { DraftFormAttachment } from './email-form-state';
 import type { EmailFormContextValue, FormAccessKey } from './email-form-types';
 import { createEmailSendSchedule } from './email-send-schedule';
@@ -210,23 +214,22 @@ export function createReplyComposer(
   // remount case). It carries a just-undone send. Consumed below.
   const restoredSnapshot = replyUndo.takePending(undoKey);
 
-  // Switching inboxes can move a draft out of the displayed thread. Keep its
-  // persisted identity together for subsequent saves, discard, schedule and undo.
-  const [savedDraft, setSavedDraft] = createSignal<
-    | {
-        id: string;
-        threadId: string | undefined;
-      }
-    | undefined
-  >(
+  // Switching inboxes can move a draft out of the displayed thread. The
+  // session keeps the draft's persisted identity together for subsequent
+  // saves, discard, schedule and undo — and whether the server has confirmed
+  // it, which the REST-only send and schedule depend on.
+  const session = createDraftSession(
     restoredSnapshot
-      ? { id: restoredSnapshot.draftId, threadId: restoredSnapshot.threadId }
+      ? {
+          draftId: restoredSnapshot.draftId,
+          threadId: restoredSnapshot.threadId,
+        }
       : draftSeed?.db_id
-        ? { id: draftSeed.db_id, threadId: draftSeed.thread_db_id }
+        ? { draftId: draftSeed.db_id, threadId: draftSeed.thread_db_id }
         : undefined
   );
-  const savedDraftId = () => savedDraft()?.id;
-  const savedDraftThreadId = () => savedDraft()?.threadId;
+  const savedDraftId = session.draftId;
+  const savedDraftThreadId = session.threadId;
 
   // Consume the undo-send snapshot so a later composer mount doesn't restore
   // it again. Use bodyHtml as initialHtml for the editor, restore attachments
@@ -263,7 +266,7 @@ export function createReplyComposer(
   const restoreMountedReply = (snapshot: UndoReplySnapshot) => {
     const draftId = snapshot.draftId;
     props.onEngaged?.();
-    setSavedDraft({ id: draftId, threadId: snapshot.threadId });
+    session.dispatch({ type: 'seeded', draftId, threadId: snapshot.threadId });
     restoreEnvelope(snapshot);
     const currentEditor = editor();
     if (currentEditor && snapshot.bodyHtml) {
@@ -416,6 +419,36 @@ export function createReplyComposer(
     inboxId: activeInboxId(),
     completingThread,
   });
+  // The server rejected this draft as already sent from another device: its
+  // outcome supersedes the local draft. Drop content and identity — so no
+  // later save or send targets the sent message — and show the thread's
+  // real state. The session's epoch bump makes in-flight continuations
+  // stale; the deletion flag blocks the save that resetting schedules and is
+  // restored on a timeout for the stay-mounted case, as in deleteDraftAndReset.
+  const handleAlreadySent = () => {
+    props.notices.feedback.alert('This reply was already sent');
+    setPendingDeletion(true);
+    autosave.cancel();
+    try {
+      resetState();
+      clearDraftState();
+    } finally {
+      setTimeout(() => {
+        autosave.cancel();
+        setPendingDeletion(false);
+      }, 0);
+    }
+  };
+  // A deterministic rejection is the session's to record (latch autosave,
+  // or drop the draft on already-sent); transport failures just reject and
+  // the next save may retry them.
+  const recordRejection = (error: unknown, epoch: number) => {
+    if (!(error instanceof DraftPersistRejected) || session.isStale(epoch))
+      return;
+    session.dispatch({ type: 'rejected', epoch, code: error.code });
+    if (error.code === 'DRAFT_ALREADY_SENT') handleAlreadySent();
+  };
+
   async function persistDraft({
     draft: draftToSave,
     thread: currentThread,
@@ -424,15 +457,22 @@ export function createReplyComposer(
   }: ReturnType<typeof captureSave>) {
     if (!draftToSave) {
       const draftId = savedDraftId();
+      const epoch = session.epoch();
       if (draftId) {
-        await props.drafts.deleteDraft({
-          draftId,
-          threadId: savedDraftThreadId(),
-          inboxId,
-          completingThread,
-        });
+        try {
+          await props.drafts.deleteDraft({
+            draftId,
+            threadId: savedDraftThreadId(),
+            inboxId,
+            completingThread,
+          });
+        } catch (error) {
+          recordRejection(error, epoch);
+          throw error;
+        }
       }
-      setSavedDraft(undefined);
+      if (session.isStale(epoch)) return;
+      session.dispatch({ type: 'emptied' });
       return;
     }
     if (!currentThread) {
@@ -441,42 +481,89 @@ export function createReplyComposer(
       );
       return;
     }
+    // Latched after a deterministic rejection: the content stays in the
+    // editor, but the same save must never be replayed on its own. Checked
+    // after the empty branch so clearing the draft still runs, and lifts it.
+    if (!session.autosaveAllowed()) return;
 
-    const draftResponse = await props.drafts.saveDraft({
-      draft: {
-        ...draftToSave,
-        db_id: savedDraftId(),
-        provider_thread_id: currentThread.provider_id,
-        thread_db_id: currentThread.db_id,
-      },
-      inboxId,
-      completingThread,
-      previousThreadId: savedDraftThreadId(),
-    });
-
-    const draftId = draftResponse.draftId;
-    if (draftId) {
-      setSavedDraft({
-        id: draftId,
-        threadId: draftResponse.threadId ?? undefined,
+    // Identity is local-first: a handle minted before the first dispatch, so
+    // every queued save for this draft resolves to one server row — even when
+    // the responses arrive after an app restart. The server maps the handle
+    // to a server-minted row; a committed save's ids are adopted below.
+    // Minted v7 (best effort, never trusted) to keep the mapping index friendly.
+    const previousThreadId = savedDraftThreadId();
+    if (!session.draftId()) {
+      session.dispatch({
+        type: 'minted',
+        draftId: uuidv7(),
+        threadId: currentThread.db_id,
       });
-      await attachmentPersistence.upload(draftId, { inboxId });
+    }
+    const identity = session.identity();
+    const epoch = session.epoch();
+    let draftResponse;
+    try {
+      draftResponse = await props.drafts.saveDraft({
+        draft: {
+          ...draftToSave,
+          // Only a server-confirmed id travels as db_id; a minted handle
+          // goes apart, since a REST save cannot resolve it.
+          db_id: identity.kind === 'server' ? identity.draftId : undefined,
+          provider_thread_id: currentThread.provider_id,
+          thread_db_id: currentThread.db_id,
+        },
+        clientHandles:
+          identity.kind === 'handle'
+            ? { draftId: identity.draftId, threadId: identity.threadId }
+            : undefined,
+        inboxId,
+        completingThread,
+        previousThreadId,
+      });
+    } catch (error) {
+      recordRejection(error, epoch);
+      throw error;
+    }
+    // Reset while the save was on the wire (a send, a discard, another
+    // save's already-sent outcome): the answer belongs to a draft the user
+    // already dropped. Adopting its ids, uploading — the upload reads the
+    // live form, which may already hold the next draft's files — or
+    // refetching would re-plant that draft into the fresh composer.
+    if (session.isStale(epoch)) return;
+    session.dispatch({ type: 'saved', epoch, identity: draftResponse });
+    const draftId = draftResponse.draftId;
+    if (!draftId) return;
 
-      const forwarded = form.attachments
-        .list()
-        .filter((attachment) => attachment.type === 'forwarded');
-      if (forwarded.length) {
-        await props.attachmentStorage.addForwardedAttachments({
-          draftId: draftId,
-          attachments: forwarded.map((a) => ({
-            attachmentId: a.attachmentId,
-          })),
-          inboxId,
-        });
-      }
-
+    if (draftResponse.persistence === 'queued') {
+      // Durably queued under client handles. Local attachments are not on
+      // the durable queue yet (a later change moves them there), so they
+      // upload over REST right away — offline, or against a handle the
+      // server has not seen, that fails out the way an offline attachment
+      // does today: the upload's own notice, file kept for the next save.
+      // The miss is not the save's failure, and forwarded attachments wait
+      // for a committed save.
+      await attachmentPersistence
+        .upload(draftId, { inboxId })
+        .catch(() => undefined);
       return draftId;
     }
+    await attachmentPersistence.upload(draftId, { inboxId });
+    if (session.isStale(epoch)) return;
+
+    const forwarded = form.attachments
+      .list()
+      .filter((attachment) => attachment.type === 'forwarded');
+    if (forwarded.length) {
+      await props.attachmentStorage.addForwardedAttachments({
+        draftId: draftId,
+        attachments: forwarded.map((a) => ({
+          attachmentId: a.attachmentId,
+        })),
+        inboxId,
+      });
+    }
+
+    return draftId;
   }
 
   const autosave = createDraftAutosave({
@@ -597,11 +684,58 @@ export function createReplyComposer(
       ? ctx.getMarkDoneNavigationTargetId()
       : undefined;
 
+    // Sending is a REST call that resolves server ids only and is never
+    // queued (email send moves onto the durable queue in a later change).
+    // Offline, the pre-send save below can only queue, leaving a handle the
+    // send cannot resolve — refuse outright, with a clear reason.
+    if (deviceLooksOffline()) {
+      props.notices.feedback.failure('Failed to send email', {
+        subtext: "You're offline",
+      });
+      return;
+    }
+
     setSendPhase('preparing');
     try {
       // Ensure draft is saved before sending so undo-send always has a draft to restore
       autosave.cancel();
-      await executeSaveDraft(willMarkDone);
+      const epochBeforeSave = session.epoch();
+      try {
+        await executeSaveDraft(willMarkDone);
+      } catch (error) {
+        // The save (or its attachment upload) has already reported itself;
+        // a draft the server may not have must not be sent.
+        props.notices.reportError(error);
+        props.notices.feedback.failure('Failed to send email', {
+          subtext: 'Draft not saved',
+        });
+        return;
+      }
+      // The save can learn the reply was already sent from another device
+      // and reset the composer; the recipients captured above would
+      // otherwise go out on an empty message.
+      if (session.isStale(epochBeforeSave)) return;
+      // A queued pre-send save left client handles the REST send cannot
+      // resolve (offline detection missed, or a first save still holds the
+      // queue head). Ask for a retry while the content is still here.
+      if (session.identity().kind === 'handle') {
+        props.notices.feedback.failure('Failed to send email', {
+          subtext: 'Draft still syncing, try again',
+        });
+        return;
+      }
+      // A local attachment still without a record did not upload, and the
+      // upload has already reported it. Sending now would silently drop it.
+      if (
+        form.attachments
+          .list()
+          .some((a) => a.type === 'local' && !a.attachmentId)
+      ) {
+        props.notices.feedback.failure('Failed to send email', {
+          subtext: 'Attachment not uploaded',
+        });
+        return;
+      }
 
       // Snapshot editor state before watermark so undo-send can restore it.
       // Remember by draft so sends in separate composers cannot replace each other.
@@ -795,7 +929,7 @@ export function createReplyComposer(
   const resetState = () => {
     clearEmailBody(editor());
     setBodyMacro('');
-    setSavedDraft(undefined);
+    session.dispatch({ type: 'reset' });
     form.reset();
   };
 
@@ -813,11 +947,22 @@ export function createReplyComposer(
       await autosave.settled().catch(() => {});
       const draftId = savedDraftId();
       if (draftId) {
-        await props.drafts.deleteDraft({
-          draftId,
-          threadId: savedDraftThreadId(),
-          inboxId: activeInboxId(),
-        });
+        try {
+          await props.drafts.deleteDraft({
+            draftId,
+            threadId: savedDraftThreadId(),
+            inboxId: activeInboxId(),
+          });
+        } catch (error) {
+          // Sent from another device: the reset below is exactly what that
+          // outcome asks for. Anything else keeps the draft.
+          if (
+            !(error instanceof DraftPersistRejected) ||
+            error.code !== 'DRAFT_ALREADY_SENT'
+          )
+            throw error;
+          props.notices.feedback.alert('This reply was already sent');
+        }
       }
       resetState();
       form.setReplyAppended(false);
@@ -849,7 +994,19 @@ export function createReplyComposer(
     });
   };
 
-  const handleAddAttachments = (files: File[]) => {
+  const handleAddAttachments = async (files: File[]) => {
+    // Attachments cannot be added while offline: a queued draft save durably
+    // carries only the draft's text, while attached file bytes live solely in
+    // the open composer's memory and upload only on a later save that
+    // commits. Rather than accept an attachment that can silently miss the
+    // draft, refuse at attach time.
+    if (deviceLooksOffline()) {
+      await props.notices.blockingNotice({
+        title: "You're offline",
+        body: "Attachments can't be added while you're offline. Reconnect and try again.",
+      });
+      return;
+    }
     const currentAttachments = form.attachments.list();
 
     const attachmentsToAddByteSize = files.reduce((sum, f) => sum + f.size, 0);
@@ -892,7 +1049,12 @@ export function createReplyComposer(
     delivery: props.delivery,
     notices: props.notices,
     draftId: savedDraftId,
-    saveDraft: executeSaveDraft,
+    saveDraft: async () => {
+      const draftId = await executeSaveDraft();
+      // The schedule endpoint resolves server ids only; a queued save's
+      // handle reads as "no draft" so scheduling fails before the wire.
+      return session.restSendable() ? draftId : undefined;
+    },
     threadId: savedDraftThreadId,
     inboxId: activeInboxId,
     sendTime: form.sendTime,
