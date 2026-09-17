@@ -388,8 +388,8 @@ body.tauri-ios {
      default covers first paint, before the mode attribute is written. */
   --color-avatar-edge: oklch(0 0 0 / 0.4);
   --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
-  --color-list-hover: color-mix(in oklch, var(--color-ink) 6%, transparent);
-  --color-list-highlighted: color-mix(in oklch, var(--color-ink) 8%, transparent);
+  --color-list-hover: var(--color-hover);
+  --color-list-highlighted: var(--color-hover);
   --color-list-selected: var(--color-selected);
   --color-list-selected-highlighted: color-mix(in oklch, var(--color-accent) 16%, transparent);
 

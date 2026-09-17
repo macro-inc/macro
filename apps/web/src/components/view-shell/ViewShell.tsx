@@ -550,10 +550,7 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <Show when={ws.detail.placement() !== 'replace'}>
       <div
         {...rest}
-        class={cn(
-          'min-h-0 min-w-0 flex-1 px-4 pb-4 @max-[760px]/view-shell:px-3 @max-[720px]/view-shell:pb-2 @max-[480px]/view-shell:px-2',
-          local.class
-        )}
+        class={cn('min-h-0 min-w-0 flex-1', local.class)}
         data-view-shell-content=""
       >
         {local.children}
