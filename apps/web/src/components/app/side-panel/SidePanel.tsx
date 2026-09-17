@@ -172,7 +172,6 @@ function Layout(
     defaultOpen?: boolean;
     persistKey?: string;
     headerToggle?: boolean;
-    panelHeader?: boolean;
   }>
 ) {
   const parentContext = useContext(SidePanelContext);
@@ -196,7 +195,6 @@ function Layout(
             isOpen={ctx.isOpen}
             setIsOpen={ctx.setIsOpen}
             setIsNarrow={ctx.setIsNarrow}
-            showHeader={props.panelHeader ?? true}
           >
             {props.children}
           </SidePanelLayoutInner>
@@ -227,7 +225,6 @@ function SidePanelLayoutInner(
     isOpen: Accessor<boolean>;
     setIsOpen: (next: boolean | ((prev: boolean) => boolean)) => void;
     setIsNarrow: Setter<boolean>;
-    showHeader: boolean;
   }>
 ) {
   const resolved = children(() => props.children);
@@ -264,19 +261,6 @@ function SidePanelLayoutInner(
           index={1}
         >
           <div class="relative flex size-full min-h-0 flex-col z-split-panel-chrome">
-            <Show when={props.showHeader}>
-              <div class="flex h-12 shrink-0 items-center justify-between border-b border-edge-muted px-4">
-                <span class="text-sm font-semibold text-ink">Details</span>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  label="Hide side panel"
-                  onClick={() => props.setIsOpen(false)}
-                >
-                  <SidePanelIcon class="size-4" />
-                </Button>
-              </div>
-            </Show>
             <SidePanelOutlet
               sections={props.sections}
               openIds={props.openIds}

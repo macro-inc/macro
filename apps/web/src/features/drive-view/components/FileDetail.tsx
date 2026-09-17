@@ -70,7 +70,6 @@ export function FileDetailLayout(props: FileDetailLayoutProps) {
         defaultOpen={props.defaultSidePanelOpen ?? false}
         persistKey={`file:${props.documentId}`}
         headerToggle={false}
-        panelHeader={false}
       >
         <DocumentFileSidePanelSections
           documentId={props.documentId}
