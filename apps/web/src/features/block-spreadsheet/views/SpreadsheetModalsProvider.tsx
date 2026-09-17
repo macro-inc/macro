@@ -1,6 +1,3 @@
-import { useBlockId } from '@core/block';
-import { DetailsDrawer } from '@core/component/DetailsDrawer';
-import { ReferencesDrawer } from '@core/component/ReferencesModal';
 import {
   ShareBlockModal,
   ShareDialogContext,
@@ -11,7 +8,6 @@ import { createSignal, type ParentProps } from 'solid-js';
 export function SpreadsheetModalsProvider(
   props: ParentProps<{ share?: string }>
 ) {
-  const documentId = useBlockId();
   const name = useBlockDocumentName();
   const [shareOpen, setShareOpen] = createSignal(props.share === 'true');
 
@@ -24,9 +20,7 @@ export function SpreadsheetModalsProvider(
       }}
     >
       {props.children}
-      <ReferencesDrawer documentId={documentId} documentName={name()} />
-      <DetailsDrawer documentId={documentId} />
-      <ShareBlockModal />
+      <ShareBlockModal name={name()} />
     </ShareDialogContext.Provider>
   );
 }
