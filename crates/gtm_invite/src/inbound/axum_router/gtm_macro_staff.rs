@@ -14,9 +14,10 @@ use macro_authorization::{
 
 use crate::domain::models::GtmInviteError;
 
-/// Authenticated Macro staff principal for GTM invite staff endpoints.
+/// Branded authenticated principal that has already been proven to be Macro
+/// staff.
 pub struct GtmMacroStaffExtractor<Auth> {
-    /// The staff-authenticated principal.
+    /// The authenticated principal, already checked as Macro staff.
     pub authorization: UserOrInternalAuthorization,
     _auth: PhantomData<fn() -> Auth>,
 }
@@ -28,15 +29,15 @@ pub enum GtmMacroStaffRejection {
     #[error("authorization failed")]
     Authorization(#[from] MacroAuthorizationRejection),
     /// The authenticated user is not Macro staff.
-    #[error("{}", GtmInviteError::Forbidden)]
-    Forbidden,
+    #[error("only Macro staff can manage invite links")]
+    NotStaff,
 }
 
 impl IntoResponse for GtmMacroStaffRejection {
     fn into_response(self) -> Response {
         match self {
             Self::Authorization(rejection) => rejection.into_response(),
-            Self::Forbidden => GtmInviteError::Forbidden.into_response(),
+            Self::NotStaff => GtmInviteError::Forbidden.into_response(),
         }
     }
 }
@@ -60,7 +61,7 @@ where
             .macro_user_id
             .is_macro_staff()
         {
-            return Err(GtmMacroStaffRejection::Forbidden);
+            return Err(GtmMacroStaffRejection::NotStaff);
         }
 
         Ok(Self {

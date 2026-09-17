@@ -106,7 +106,6 @@ fn redeemed_link() -> InviteLink {
     }
 }
 
-/// A service that hands back canned links.
 struct FakeGtmInviteService {
     config: GtmInviteConfig,
     resolve: Result<InviteLink, GtmInviteError>,
@@ -256,8 +255,6 @@ async fn read_json<T: serde::de::DeserializeOwned>(response: axum::response::Res
     serde_json::from_slice(&body).unwrap()
 }
 
-// -- staff endpoints --
-
 #[tokio::test]
 async fn staff_can_create_links() {
     let app = build_router(FakeGtmInviteService::new(), false);
@@ -359,8 +356,6 @@ async fn staff_can_revoke_links() {
     assert_eq!(link.status, GtmInviteLinkStatus::Revoked);
 }
 
-// -- public resolve --
-
 #[tokio::test]
 async fn anyone_can_resolve_a_link_and_only_sees_public_fields() {
     let app = build_router(FakeGtmInviteService::new(), false);
@@ -430,8 +425,6 @@ async fn the_rate_limit_does_not_cover_authenticated_routes() {
 
     assert_eq!(response.status(), StatusCode::OK);
 }
-
-// -- redeem + offer --
 
 #[tokio::test]
 async fn signed_in_users_redeem_links_and_receive_the_offer() {
