@@ -17,9 +17,6 @@ use crate::domain::models::{GtmInviteError, InviteToken};
 use crate::domain::ports::GtmInviteService;
 
 /// Resolves an invite link for the public welcome page and counts the open.
-///
-/// Unauthenticated: the recipient has no account yet. Only the first name and
-/// whether the link is still usable are exposed.
 #[utoipa::path(
     tag = "gtm_invite",
     get,

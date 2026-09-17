@@ -58,7 +58,6 @@ impl IntoResponse for GtmInviteError {
         let mut message = self.to_string();
         if status_code.is_server_error() {
             tracing::error!(error=?self, "internal server error");
-            // override internal server error to hide errors
             message = "internal server error".to_string();
         }
 
@@ -107,8 +106,6 @@ where
     S: Send + Sync + 'static,
 {
     Router::new()
-        // The public route is the only unauthenticated one; tokens are
-        // unguessable, the per-IP limit just keeps scanners cheap to ignore.
         .route("/public/{token}", get(resolve_link::handler::<T, R, Auth>))
         .layer(axum::middleware::from_fn_with_state(
             state.rate_limiter.clone(),

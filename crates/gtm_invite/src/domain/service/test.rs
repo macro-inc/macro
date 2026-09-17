@@ -93,8 +93,6 @@ fn converted(link: InviteLink) -> InviteLink {
     InviteLink { redemption, ..link }
 }
 
-// -- create_link --
-
 #[tokio::test]
 async fn create_link_rejects_non_staff_without_touching_the_repo() {
     let svc = service(MockGtmInviteRepo::new());
@@ -180,8 +178,6 @@ fn normalize_trims_and_lowercases_input() {
     assert_eq!(normalized.note, None);
 }
 
-// -- list_links --
-
 #[tokio::test]
 async fn list_links_only_mine_scopes_to_the_caller() {
     let mut repo = MockGtmInviteRepo::new();
@@ -219,8 +215,6 @@ async fn list_links_rejects_non_staff() {
 
     assert!(matches!(result, Err(GtmInviteError::Forbidden)));
 }
-
-// -- revoke_link --
 
 #[tokio::test]
 async fn revoke_link_refuses_a_redeemed_link() {
@@ -279,8 +273,6 @@ async fn revoke_link_reports_missing_links() {
     assert!(matches!(result, Err(GtmInviteError::NotFound)));
 }
 
-// -- resolve_link --
-
 #[tokio::test]
 async fn resolve_link_counts_the_open_and_returns_the_link() {
     let link = active_link();
@@ -327,8 +319,6 @@ async fn resolve_link_reports_unknown_tokens() {
 
     assert!(matches!(result, Err(GtmInviteError::NotFound)));
 }
-
-// -- redeem_link --
 
 fn repo_with_link(link: InviteLink) -> MockGtmInviteRepo {
     let mut repo = MockGtmInviteRepo::new();
@@ -453,8 +443,6 @@ async fn redeem_link_treats_a_lost_race_as_already_redeemed() {
     assert!(matches!(result, Err(GtmInviteError::AlreadyRedeemed)));
 }
 
-// -- active_offer_for_user --
-
 #[tokio::test]
 async fn active_offer_is_the_unconverted_redeemed_link() {
     let link = redeemed_by(active_link(), prospect());
@@ -487,8 +475,6 @@ async fn active_offer_is_gone_once_converted() {
 
     assert!(offer.is_none());
 }
-
-// -- models --
 
 #[test]
 fn status_prefers_redemption_over_expiry_and_revocation() {

@@ -270,9 +270,6 @@ impl FromStr for InviteLinkStatus {
 
 impl InviteLink {
     /// The link's lifecycle status as of `now`.
-    ///
-    /// A redemption outranks expiry and revocation: a recipient who signed
-    /// up keeps their attribution even after the window closes.
     pub fn status(&self, now: DateTime<Utc>) -> InviteLinkStatus {
         match &self.redemption {
             Some(redemption) if redemption.conversion.is_some() => InviteLinkStatus::Converted,

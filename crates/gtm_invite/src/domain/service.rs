@@ -94,8 +94,6 @@ impl<R: GtmInviteRepo> GtmInviteService for GtmInviteServiceImpl<R> {
         }
 
         if link.revoked_at.is_none() {
-            // The update is conditional on the row still being unredeemed, so a
-            // signup racing this revoke wins and keeps its attribution.
             let revoked = self
                 .repo
                 .revoke_link(id, Utc::now())
@@ -122,7 +120,6 @@ impl<R: GtmInviteRepo> GtmInviteService for GtmInviteServiceImpl<R> {
             .map_err(internal)?
             .ok_or(GtmInviteError::NotFound)?;
 
-        // Tracking only — never fail the welcome page over it.
         let _ = self
             .repo
             .record_open(link.id, Utc::now())
@@ -149,7 +146,6 @@ impl<R: GtmInviteRepo> GtmInviteService for GtmInviteServiceImpl<R> {
             return Ok(link);
         }
 
-        // A user holds one offer: whichever link they redeemed first stays.
         if let Some(existing) = self
             .repo
             .get_redeemed_link_for_user(user)
@@ -174,8 +170,6 @@ impl<R: GtmInviteRepo> GtmInviteService for GtmInviteServiceImpl<R> {
             }
         }
 
-        // The repository re-checks the guards atomically; `None` means a
-        // concurrent signup, revoke, or the expiry beat us.
         self.repo
             .redeem_link(link.id, user, now)
             .await
