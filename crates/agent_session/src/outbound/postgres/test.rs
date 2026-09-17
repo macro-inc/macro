@@ -377,8 +377,6 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
     let (_, _, _, _, entity_updated_at) = fetch_session_entity(&pool, id).await;
     assert_eq!(entity_updated_at, after_change.modified_at);
 
-    // Idempotent: restating the same model succeeds and changes nothing,
-    // including the registry mirror.
     let modified_at = after_change.modified_at;
     repo.set_model(id, "opus").await.expect("restate model");
     assert_eq!(

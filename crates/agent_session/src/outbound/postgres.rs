@@ -32,7 +32,8 @@ use entity_access_db_utils::{
     insert_entity_access_row,
 };
 use entity_registry_db_utils::{
-    NewEntityRecord, RegisteredEntityType, delete_entity, insert_entity, touch_updated,
+    NewEntityRecord, RegisteredEntityType, WriteOutcome, delete_entity, insert_entity,
+    touch_updated,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -157,8 +158,6 @@ async fn upsert_user_history(
     Ok(())
 }
 
-/// `EntityRegistryResult` is `Report<EntityRegistryError>`. A bare `?` would
-/// take `From<rootcause::Report>` and become [`AgentSessionError::Fold`].
 fn registry_unknown(
     error: rootcause::Report<entity_registry_db_utils::EntityRegistryError>,
     context: &'static str,
@@ -166,9 +165,6 @@ fn registry_unknown(
     AgentSessionError::Unknown(anyhow::anyhow!("{error}").context(context))
 }
 
-/// Call `touch_updated` only when the session UPDATE actually moved
-/// `modified_at`. `WriteOutcome::NotFound` is success: a missing registry row
-/// must not fail rename.
 async fn touch_entity_updated(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     id: AgentSessionId,
@@ -177,10 +173,13 @@ async fn touch_entity_updated(
     let Some(modified_at) = modified_at else {
         return Ok(());
     };
-    touch_updated(tx, id.as_uuid(), modified_at)
-        .await
-        .map_err(|error| registry_unknown(error, "failed to touch agent session entity"))?;
-    Ok(())
+    match touch_updated(tx, id.as_uuid(), modified_at).await {
+        Ok(WriteOutcome::Applied | WriteOutcome::NotFound) => Ok(()),
+        Err(error) => Err(registry_unknown(
+            error,
+            "failed to touch agent session entity",
+        )),
+    }
 }
 
 struct AgentSessionRow {
@@ -906,12 +905,15 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             .await
             .context("failed to delete agent session entity access rows")?;
 
-        // Missing registry rows are WriteOutcome::NotFound, not an error.
-        delete_entity(&mut transaction, id.as_uuid())
-            .await
-            .map_err(|error| {
-                registry_unknown(error, "failed to delete the agent session entity")
-            })?;
+        match delete_entity(&mut transaction, id.as_uuid()).await {
+            Ok(WriteOutcome::Applied | WriteOutcome::NotFound) => {}
+            Err(error) => {
+                return Err(registry_unknown(
+                    error,
+                    "failed to delete the agent session entity",
+                ));
+            }
+        }
 
         // Same story for history: `"UserHistory"."itemId"` is polymorphic
         // text, so the session's rows in every viewer's history go here.
