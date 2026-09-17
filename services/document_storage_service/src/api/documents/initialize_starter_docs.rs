@@ -204,8 +204,79 @@ pub async fn handler(
         filled
     };
 
-    // Ids created by THIS call: backlinks and decorations run once, on the
-    // call that created the document.
+    let organization_id = user_context
+        .authorization
+        .user
+        .user_context
+        .organization_id
+        .map(i64::from);
+    // Decorate immediately after each create, including conflicts on retry.
+    // Tagging must succeed before starting the next document so a later create
+    // failure cannot strand an earlier document without its docs tag.
+    let decorate =
+        async |document_id: &str, priority: Option<PriorityOption>| -> Result<(), Response> {
+            // One Edit receipt per doc covers both property writes; the
+            // properties service takes its authorization as this typed receipt.
+            let receipt = match state
+                .entity_access_service
+                .generate_bot_entity_access_receipt::<EditAccessLevel>(
+                    bot_id::MACRO_SYSTEM_BOT_ID,
+                    BotAccessScope::User {
+                        user_id: user_context.authorization.user.macro_user_id.clone(),
+                        user_org_id: organization_id,
+                    },
+                    document_id,
+                    EntityType::Document,
+                )
+                .await
+            {
+                Ok(receipt) => receipt,
+                Err(e) => {
+                    tracing::error!(
+                        error=?e,
+                        document_id=%document_id,
+                        "failed to authorize starter doc decoration"
+                    );
+                    return Err(internal_error("failed to authorize starter doc decoration"));
+                }
+            };
+
+            if let Some(priority) = priority {
+                let _ = state
+                    .properties_service
+                    .set_entity_property(
+                        &receipt,
+                        SystemPropertyKey::PRIORITY_UUID,
+                        Some(SetPropertyValue::SelectOption {
+                            option_id: priority.uuid(),
+                        }),
+                    )
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(
+                            error=?e,
+                            document_id=%document_id,
+                            "failed to set starter task priority"
+                        );
+                    });
+            }
+
+            state
+                .properties_service
+                .add_entity_property_option(&receipt, tag_definition_id, tag_option_id)
+                .await
+                .map_err(|e| {
+                    tracing::error!(
+                        error=?e,
+                        document_id=%document_id,
+                        "failed to tag starter doc"
+                    );
+                    internal_error("failed to tag starter doc")
+                })?;
+            Ok(())
+        };
+
+    // Only the call that created a document records its non-idempotent backlinks.
     let mut created_now: HashSet<String> = HashSet::new();
 
     for (task, id) in STARTER_TASKS.iter().zip(&task_ids) {
@@ -238,6 +309,7 @@ pub async fn handler(
                 return Err(internal_error("failed to create starter task"));
             }
         }
+        decorate(id, Some(task.priority)).await?;
     }
 
     let created = state
@@ -265,6 +337,8 @@ pub async fn handler(
             return Err(internal_error("failed to create how to guide document"));
         }
     }
+
+    decorate(&guide_id, None).await?;
 
     // Record mention backlinks (the References panel) for the starter set.
     // The mention graph is derived from the templates themselves: a source
@@ -306,82 +380,6 @@ pub async fn handler(
                     source_id=%source_id,
                     target_id=%target_id,
                     "failed to record starter doc mention backlink"
-                );
-            });
-    }
-
-    // Decorate the documents created by this call: each task's priority,
-    // plus the personal "docs" tag. Best-effort like the mention backlinks
-    // — a decoration failure on an existing document could never be retried
-    // into success, so log and continue instead of failing the request.
-    let organization_id = user_context
-        .authorization
-        .user
-        .user_context
-        .organization_id
-        .map(i64::from);
-    let starter_docs = STARTER_TASKS
-        .iter()
-        .zip(&task_ids)
-        .map(|(task, id)| (id.clone(), Some(task.priority)))
-        .chain(std::iter::once((guide_id.clone(), None)))
-        .filter(|(id, _)| created_now.contains(id));
-    for (document_id, priority) in starter_docs {
-        // One Edit receipt per doc covers both property writes; the
-        // properties service takes its authorization as this typed receipt.
-        let receipt = match state
-            .entity_access_service
-            .generate_bot_entity_access_receipt::<EditAccessLevel>(
-                bot_id::MACRO_SYSTEM_BOT_ID,
-                BotAccessScope::User {
-                    user_id: user_context.authorization.user.macro_user_id.clone(),
-                    user_org_id: organization_id,
-                },
-                &document_id,
-                EntityType::Document,
-            )
-            .await
-        {
-            Ok(receipt) => receipt,
-            Err(e) => {
-                tracing::error!(
-                    error=?e,
-                    document_id=%document_id,
-                    "failed to authorize starter doc decoration"
-                );
-                continue;
-            }
-        };
-
-        if let Some(priority) = priority {
-            let _ = state
-                .properties_service
-                .set_entity_property(
-                    &receipt,
-                    SystemPropertyKey::PRIORITY_UUID,
-                    Some(SetPropertyValue::SelectOption {
-                        option_id: priority.uuid(),
-                    }),
-                )
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(
-                        error=?e,
-                        document_id=%document_id,
-                        "failed to set starter task priority"
-                    );
-                });
-        }
-
-        let _ = state
-            .properties_service
-            .add_entity_property_option(&receipt, tag_definition_id, tag_option_id)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(
-                    error=?e,
-                    document_id=%document_id,
-                    "failed to tag starter doc"
                 );
             });
     }
