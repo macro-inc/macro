@@ -180,6 +180,9 @@ impl AgentState {
     fn set_model(&self, model: String) {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
             state.model = model;
+            // Chosen, so every turn runs on it - including the first, which
+            // would otherwise open on the faster model.
+            state.model_pinned = true;
         }
     }
 
@@ -207,7 +210,17 @@ impl AgentState {
             },
             |state| TurnInput {
                 messages: messages_for_turn(&state.history, prompt),
-                model: state.model.clone(),
+                // An opening turn the caller did not pick a model for runs on
+                // the fast one, so the first token arrives while they are
+                // still watching. Everything after it is the session's own.
+                model: crate::domain::first_turn::first_turn_model(
+                    state.history.is_empty(),
+                    state.model_pinned,
+                    &state.model,
+                    self.engine.supported_models(),
+                    &crate::domain::first_turn::configured_fast_model(),
+                )
+                .unwrap_or_else(|| state.model.clone()),
                 identity: state.identity.clone(),
                 instructions: state.instructions.clone(),
             },

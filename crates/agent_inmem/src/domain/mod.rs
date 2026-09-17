@@ -3,6 +3,7 @@
 
 pub mod agent;
 pub mod engine;
+pub mod first_turn;
 pub mod mcp;
 /// ACP model configuration generated from the turn engine catalog.
 pub mod model_options;

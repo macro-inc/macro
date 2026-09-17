@@ -405,6 +405,7 @@ dependencies = [
  "genai_telemetry",
  "http 1.4.0",
  "http-body-util",
+ "macro_env_var",
  "macro_user_id",
  "macro_uuid",
  "mcp_select",

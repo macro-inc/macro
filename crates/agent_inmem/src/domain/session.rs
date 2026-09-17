@@ -29,6 +29,10 @@ pub struct SessionState {
     pub acp_session_id: Option<SessionId>,
     /// Model id turns run on; `session/set_config_option` moves it.
     pub model: String,
+    /// The caller chose [`Self::model`] themselves, so nothing substitutes
+    /// for it - not even the faster model an opening turn would otherwise
+    /// run on. See [`crate::domain::first_turn`].
+    pub model_pinned: bool,
     /// Who this agent is, snapshotted from the session's bot at attach.
     pub identity: Option<AgentIdentity>,
     /// Instructions every turn runs under, snapshotted from the session row
@@ -47,6 +51,7 @@ impl SessionState {
         Self {
             acp_session_id: None,
             model,
+            model_pinned: false,
             identity: None,
             instructions: None,
             history: Vec::new(),

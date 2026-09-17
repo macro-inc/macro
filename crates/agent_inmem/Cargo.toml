@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+macro_env_var = { path = "../macro_env_var" }
 agent = { path = "../agent" }
 # The egress proxy's domain service, driven in-process: the same verification,
 # resolution and stamping a sandbox reaches over the wire, minus the wire.

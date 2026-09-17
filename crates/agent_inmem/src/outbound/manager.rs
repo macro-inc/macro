@@ -143,6 +143,10 @@ impl InMemAgentManager {
             self.store.entry(facts.id).or_insert_with(|| SessionState {
                 acp_session_id: facts.acp_session_id.clone(),
                 model: facts.model.clone(),
+                // The session row's model, not a choice made in this
+                // conversation, so an opening turn may still run on the
+                // faster one. `set_config_option` pins it.
+                model_pinned: false,
                 identity: facts.identity.clone(),
                 instructions: facts.instructions.clone(),
                 history,
