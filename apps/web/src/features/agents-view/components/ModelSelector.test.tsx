@@ -76,6 +76,41 @@ describe('shared model selector', () => {
     ).toBeTruthy();
     expect(screen.getByRole('menuitem', { name: /GPT-5/ })).toBeTruthy();
   });
+  it('uses pretty session names while retaining model ids for selection', async () => {
+    const select = vi.fn();
+    const [changingTo, setChangingTo] = createSignal<string>();
+    const ids = [
+      'anthropic/claude-sonnet-5',
+      'anthropic/claude-opus-5',
+      'anthropic/claude-haiku-4-5',
+    ];
+    render(() => (
+      <SessionModelSelector
+        model={ids[0]}
+        options={ids.map((id) => ({
+          id,
+          name: id,
+          description: null,
+          group: null,
+        }))}
+        changingTo={changingTo()}
+        onSelect={select}
+      />
+    ));
+    const trigger = screen.getByRole('button', { name: 'Model' });
+    expect(trigger.textContent).toBe('Sonnet 5');
+    expect(trigger.title).toBe('Sonnet 5');
+    fireEvent.keyDown(trigger, { key: 'Enter' });
+    expect(screen.getByRole('menuitem', { name: /^Haiku 4.5/ })).toBeTruthy();
+    expect(screen.queryByText(ids[0])).toBeNull();
+    fireEvent.keyDown(screen.getByRole('menuitem', { name: /^Opus 5/ }), {
+      key: 'Enter',
+    });
+    expect(select).toHaveBeenCalledWith(ids[1]);
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
+    setChangingTo(ids[1]);
+    expect(trigger.textContent).toBe('Opus 5');
+  });
   it('keeps the new-session default selectable before models are available', async () => {
     const selectDefault = vi.fn();
     render(() => (

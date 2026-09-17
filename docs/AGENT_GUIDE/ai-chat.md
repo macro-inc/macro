@@ -45,9 +45,10 @@
   a model selected from its submenu overrides that default for the next send
   only. Sending or choosing another agent clears the override. This does not
   update the saved agent; configure persistent defaults in the agent editor.
-  Within an existing session, the model picker remains available on the right:
-  provider icons, search, a short **Recommended** list, and a scrollable
-  **More models** submenu shared with Settings.
+  Within an existing session, the model picker remains available on the right.
+  Its trigger, model options, and session metadata use the same readable model names
+  as the new-conversation picker. The menu includes provider icons, search, a short
+  **Recommended** list, and a scrollable **More models** submenu shared with Settings.
 - Chat agents' empty input cycles tips about connectors, skills, mentions, and
   agents; coding agents show **Describe what you want to build**. Type `@` for
   mentions and `/` for skills.

@@ -35,6 +35,7 @@ import { repositoryLabel } from '../core/repository';
 import { type RosterAgent, runtimeLabel } from '../core/roster';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
+import { modelLabel } from './model-label';
 import { ConfirmDialog, RenameDialog } from './SimpleDialogs';
 import { Topbar } from './Topbar';
 
@@ -186,7 +187,7 @@ function SessionContent(props: {
             <Show when={metadata()?.model ?? session()?.model}>
               {(model) => (
                 <span>
-                  <span class="k">model</span> {model()}
+                  <span class="k">model</span> {modelLabel(model())}
                 </span>
               )}
             </Show>

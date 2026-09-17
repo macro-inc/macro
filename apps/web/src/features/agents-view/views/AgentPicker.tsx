@@ -3,10 +3,6 @@ import {
   modelProvider,
   ProviderIcon,
 } from '@core/component/AI/component/ProviderIcon';
-import {
-  MODEL_PRETTYNAME,
-  type Model,
-} from '@core/component/AI/constant/model';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CheckIcon from '@phosphor/check.svg';
@@ -16,19 +12,9 @@ import SparkleIcon from '@phosphor/sparkle.svg';
 import { Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { AgentIcon } from '../components/AgentGlyph';
+import { modelLabel } from '../components/model-label';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import { createComposerModels } from '../queries/composer-models';
-
-function modelLabel(id: string | undefined, name?: string) {
-  if (!id) return 'Model';
-  return (
-    MODEL_PRETTYNAME[id as Model] ??
-    MODEL_PRETTYNAME[`anthropic/${id}` as Model] ??
-    (name ?? id)
-      .replace(/^(anthropic|openai|google)\//, '')
-      .replace(/^Claude /, '')
-  );
-}
 
 /** Agent selection with a per-message model catalog in each submenu. */
 export function AgentPicker(props: {

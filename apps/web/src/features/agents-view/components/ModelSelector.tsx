@@ -1,6 +1,7 @@
 import type { AgentModelSelectorProps } from '@app/features/block-agent/ui/AgentModelSelector';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import type { JSX } from 'solid-js';
+import { modelLabel } from './model-label';
 
 export type ModelChoice = {
   id: string;
@@ -25,12 +26,12 @@ export function ModelSelector(props: {
       value={props.model ?? null}
       options={props.options.map((option) => ({
         id: option.id,
-        label: option.name,
+        label: modelLabel(option.id, option.name),
         description: option.description,
         group: option.group,
       }))}
       triggerLabel={props.label}
-      placeholder={props.model ?? 'Model'}
+      placeholder={modelLabel(props.model)}
       triggerClass="pill min-w-0 max-w-full gap-2 border-0 text-ink-muted"
       ariaLabel="Model"
       placement="top-end"
@@ -52,11 +53,10 @@ export function SessionModelSelector(props: AgentModelSelectorProps) {
   return (
     <ModelSelector
       model={shown()}
-      label={
-        props.options.find((option) => option.id === shown())?.name ??
-        shown() ??
-        'Model'
-      }
+      label={modelLabel(
+        shown(),
+        props.options.find((option) => option.id === shown())?.name
+      )}
       options={props.options.map((option) => ({
         id: option.id,
         name: option.name,
