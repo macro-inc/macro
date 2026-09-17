@@ -537,12 +537,14 @@ async fn rejects_concurrent_runner_ambiguous_anchors_and_duplicate_marks(pool: P
     assert!(mappings(&mut connection).await.is_empty());
 
     // The lock is released after a failed preflight.
+    let mut probe = other_connection(&pool).await;
     let acquired: bool =
         sqlx::query_scalar!(r#"SELECT pg_try_advisory_lock($1) AS "acquired!""#, LOCK_ID)
-            .fetch_one(&mut other_connection(&pool).await)
+            .fetch_one(&mut probe)
             .await
             .unwrap();
     assert!(acquired);
+    probe.close().await.unwrap();
 
     sqlx::query!(r#"UPDATE "Thread" SET metadata = '{"markId":"not-a-mark"}' WHERE id = 5"#)
         .execute(&mut connection)
@@ -665,17 +667,26 @@ fn pdf_comment_ids_are_remapped_at_any_depth_and_unmapped_ids_are_counted() {
     let mapped_id = Uuid::from_u128(12);
     let mappings = HashMap::from([(12_i64, mapped_id)]);
     let mut payload = json!({
-        "placeables": [{"payload": {"comments": [{"id": "12", "content": "a"}, {"id": "13", "content": "b"}]}}],
+        "placeables": [{"payload": {"comments": [
+            {"id": "12", "content": "a"},
+            {"id": "13", "content": "b"},
+            {"id": "wrapper", "comments": [{"id": 12}]}
+        ]}}],
         "highlights": {"1": [{"thread": {"comments": [{"id": 12}, {"id": "external"}, "not an object"]}}]},
         "comments": "not an array",
     });
     let stats = remap_comment_ids(&mut payload, &mappings);
+    // Two top-level 12s plus the 12 nested inside the "wrapper" comment.
     assert_eq!(
         stats,
         RemapStats {
-            remapped: 2,
+            remapped: 3,
             unmapped: 1,
         }
+    );
+    assert_eq!(
+        payload["placeables"][0]["payload"]["comments"][2]["comments"][0]["id"],
+        mapped_id.to_string()
     );
     assert_eq!(
         payload["placeables"][0]["payload"]["comments"][0]["id"],

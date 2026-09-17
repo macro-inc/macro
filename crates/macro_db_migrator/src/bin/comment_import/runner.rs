@@ -148,7 +148,7 @@ async fn run_locked(
 async fn preflight(connection: &mut PgConnection) -> Result<(), rootcause::Report> {
     let ambiguous = sqlx::query_scalar!(
         r#"SELECT t.id FROM "Thread" t
-           LEFT JOIN "PdfPlaceableCommentAnchor" p ON p."threadId" = t.id
+           LEFT JOIN "PdfPlaceableCommentAnchor" p ON p."threadId" = t.id AND NOT p."wasDeleted"
            LEFT JOIN "PdfHighlightAnchor" h ON h."threadId" = t.id AND h."deletedAt" IS NULL
            WHERE t."deletedAt" IS NULL
            GROUP BY t.id HAVING count(DISTINCT p.uuid) + count(DISTINCT h.uuid) > 1
@@ -169,7 +169,7 @@ async fn preflight(connection: &mut PgConnection) -> Result<(), rootcause::Repor
            WHERE t."deletedAt" IS NULL
              AND t.metadata->>'markId' ~ $1
              AND EXISTS (SELECT 1 FROM "Comment" c WHERE c."threadId" = t.id)
-             AND NOT EXISTS (SELECT 1 FROM "PdfPlaceableCommentAnchor" p WHERE p."threadId" = t.id)
+             AND NOT EXISTS (SELECT 1 FROM "PdfPlaceableCommentAnchor" p WHERE p."threadId" = t.id AND NOT p."wasDeleted")
              AND NOT EXISTS (SELECT 1 FROM "PdfHighlightAnchor" h
                              WHERE h."threadId" = t.id AND h."deletedAt" IS NULL)
            GROUP BY 1, 2 HAVING count(*) > 1
@@ -275,6 +275,11 @@ async fn lock_legacy_tables(tx: &mut Transaction<'_, Postgres>) -> Result<(), sq
         .execute(&mut **tx)
         .await?;
     sqlx::query(r#"LOCK TABLE "Comment", "Thread" IN SHARE ROW EXCLUSIVE MODE"#)
+        .execute(&mut **tx)
+        .await?;
+    // The 5s timeout bounds only the table-lock wait. Clear it so later batch
+    // statements wait normally for unrelated row locks instead of aborting.
+    sqlx::query("SET LOCAL lock_timeout = 0")
         .execute(&mut **tx)
         .await?;
     Ok(())
@@ -487,7 +492,8 @@ async fn upsert_thread_state(
            FROM "Thread" t
            JOIN migrated_comment_thread_id tm ON tm.thread_id = t.id
            LEFT JOIN LATERAL (
-               SELECT a.uuid FROM "PdfPlaceableCommentAnchor" a WHERE a."threadId" = t.id
+               SELECT a.uuid FROM "PdfPlaceableCommentAnchor" a
+               WHERE a."threadId" = t.id AND NOT a."wasDeleted"
                ORDER BY a.uuid LIMIT 1
            ) pa ON true
            LEFT JOIN LATERAL (
@@ -689,16 +695,20 @@ fn remap_comment_ids(value: &mut serde_json::Value, mappings: &HashMap<i64, Uuid
             for (key, child) in fields.iter_mut() {
                 if key == "comments" && child.is_array() {
                     for comment in child.as_array_mut().into_iter().flatten() {
-                        let Some(id) = comment.get("id").and_then(legacy_comment_id) else {
-                            continue;
-                        };
-                        match mappings.get(&id) {
-                            Some(message_id) => {
-                                comment["id"] = serde_json::Value::String(message_id.to_string());
-                                stats.remapped += 1;
+                        if let Some(id) = comment.get("id").and_then(legacy_comment_id) {
+                            match mappings.get(&id) {
+                                Some(message_id) => {
+                                    comment["id"] =
+                                        serde_json::Value::String(message_id.to_string());
+                                    stats.remapped += 1;
+                                }
+                                None => stats.unmapped += 1,
                             }
-                            None => stats.unmapped += 1,
                         }
+                        // A comments array may nest inside a comment object.
+                        let inner = remap_comment_ids(comment, mappings);
+                        stats.remapped += inner.remapped;
+                        stats.unmapped += inner.unmapped;
                     }
                 } else {
                     let inner = remap_comment_ids(child, mappings);
@@ -732,7 +742,7 @@ async fn count_invalid_mark_ids(
              AND t.metadata->>'markId' IS NOT NULL
              AND t.metadata->>'markId' !~ $2
              AND t.metadata->>'markId' NOT LIKE $3
-             AND NOT EXISTS (SELECT 1 FROM "PdfPlaceableCommentAnchor" p WHERE p."threadId" = t.id)
+             AND NOT EXISTS (SELECT 1 FROM "PdfPlaceableCommentAnchor" p WHERE p."threadId" = t.id AND NOT p."wasDeleted")
              AND NOT EXISTS (SELECT 1 FROM "PdfHighlightAnchor" h
                              WHERE h."threadId" = t.id AND h."deletedAt" IS NULL)"#,
         documents,

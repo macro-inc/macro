@@ -36,7 +36,7 @@ Two runs cannot overlap: a session advisory lock makes the second exit with
    writes: set `LEGACY_COMMENT_WRITES_ENABLED=false` on the document storage
    service (Doppler project `cloud-storage-service`) and roll it out. Comment
    create, edit, and delete and anchor delete then answer `503` with
-   `Document comments are read-only while they move to the new message store`.
+   `Document comments are read-only while they move to the new message store. Refresh the app in a few minutes and try again.`.
    Reads, highlight creation, and anchor edits keep working.
 3. Run the importer once more. It must end with `Nothing to import` on a
    second invocation.

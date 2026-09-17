@@ -5690,7 +5690,12 @@
       "crates/workspace-hack"
     ],
     "macro_db_migrator": [
+      "crates/database_env_vars",
       "crates/macro_db_migrator",
+      "crates/macro_entrypoint",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_uuid",
       "crates/workspace-hack"
     ],
     "macro_entrypoint": [
