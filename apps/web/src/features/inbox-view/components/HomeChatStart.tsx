@@ -1,13 +1,9 @@
-<<<<<<< Updated upstream
-import { useViewShell, ViewShell } from '@app/components/view-shell';
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-=======
 import {
   useViewShell,
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
->>>>>>> Stashed changes
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
