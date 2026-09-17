@@ -65,7 +65,7 @@ pub(super) async fn create(
 
     super::members::insert_members(&mut tx, id, &args.member_ids).await?;
 
-    // The document's Owner row was written when the documents side created it.
+    // Owner on the document was written when the documents side created it.
     insert_entity_access_row(
         &mut tx,
         &id,
@@ -85,8 +85,6 @@ pub(super) async fn create(
         .map_err(AdapterError::TeamShareCreate)
         .map_err(map_sqlx)?;
 
-    // The document was minted for this owner moments ago and nobody else can see it yet, so
-    // any failure here is an invariant violation rather than something the caller can fix.
     team_share::initialize(
         &mut tx,
         &targets.description_entity(),
@@ -103,8 +101,7 @@ pub(super) async fn create(
     require_detail(pool, args.id).await
 }
 
-/// Team share on the document follows the initiative's create-time intent, under the variant
-/// that names the document so the write is visibly deliberate.
+/// Team share on the document follows the initiative's create-time intent.
 fn description_team_share(intent: TeamShareCreation) -> TeamShareCreation {
     match intent {
         TeamShareCreation::Initiative => TeamShareCreation::InitiativeDescription,
@@ -192,7 +189,7 @@ pub(super) async fn update(
     require_detail(pool, args.id).await
 }
 
-/// The document's rows are untouched here; the service purges them after this commits.
+/// The document's rows are untouched here. The service purges them after this commits.
 pub(super) async fn delete(
     pool: &PgPool,
     id: InitiativeId,
@@ -247,7 +244,6 @@ pub(super) async fn delete(
         .transpose()
 }
 
-/// Row values the rest of the update transaction needs after patching.
 struct PatchedRow {
     share_permission_id: String,
     description_document_id: DescriptionDocumentId,

@@ -181,12 +181,7 @@ export type SubType = {
   is_completed?: boolean;
 } | null;
 
-/**
- * Narrow a wire sub type to the ones the app renders specially. The backend
- * also tags documents the app has no dedicated block for, such as an
- * initiative's description; those come through as `null` so the document
- * renders as a plain document of its file type.
- */
+/** Wire subtypes without a dedicated block, including initiative_description, become null. */
 export const toSubType = (
   wire: { type: string; is_completed?: boolean } | null | undefined
 ): SubType => {

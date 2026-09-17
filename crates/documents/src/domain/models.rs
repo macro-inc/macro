@@ -345,8 +345,7 @@ pub struct CreateDocumentRepoArgs {
     pub skip_history: bool,
     /// Explicit activity attribution. Unset uses [`Self::resolved_attribution`].
     pub attribution: Option<Attribution>,
-    /// Honored by [`super::ports::DocumentService::create_document`]. Copies and email imports
-    /// resolve their own permission and ignore it.
+    /// How the new document's link share is initialized.
     pub initial_link_share: InitialLinkShare,
 }
 

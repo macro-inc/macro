@@ -2365,7 +2365,6 @@ async fn exact_initial_link_share_bypasses_md_public_edit_default() {
             level: AccessLevel::View,
         },
     ] {
-        // No `expect_get_team_default_link_share`: an exact state never consults the team.
         let mut repo = make_mock_repo();
         let created_metadata = make_test_metadata();
         repo.expect_create_document()

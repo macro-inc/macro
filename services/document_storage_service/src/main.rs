@@ -1155,8 +1155,6 @@ async fn run() -> anyhow::Result<()> {
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
     let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
 
-    // Shared by the document router and the initiative service, which creates each
-    // initiative's description document through the same editor-ready path.
     let document_creator = documents_hex::domain::create::DocumentCreator::new(
         document_service.clone(),
         markdown_initializer,

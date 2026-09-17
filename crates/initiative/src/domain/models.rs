@@ -65,10 +65,6 @@ impl FromStr for InitiativeId {
 }
 
 /// Id of the markdown document that holds an initiative's description.
-///
-/// The documents side mints it as a UUID; `"Document".id` and
-/// `initiative.description_document_id` store it as TEXT, so it is parsed once at the
-/// adapter boundary and displayed back when bound in SQL.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(transparent)]
@@ -325,8 +321,7 @@ pub struct UpdateInitiativeRepoArgs {
 }
 
 /// Team-share commands for an initiative and its description document, authorized by the
-/// owner against one snapshot of facts. The repository applies both in one guarded
-/// transaction, so the document's team grant can never drift from the initiative's.
+/// owner against one snapshot of facts.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct LockstepTeamShare {
     /// Command whose expected facts name the initiative.

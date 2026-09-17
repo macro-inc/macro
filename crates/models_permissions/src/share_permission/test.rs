@@ -190,7 +190,6 @@ fn link_share_state_round_trips_through_a_permission() {
 
 #[test]
 fn from_link_share_state_ignores_entity_and_team_defaults() {
-    // An md document would default to PUBLIC/Edit; an exact state never consults that.
     assert_eq!(
         SharePermissionV2::from_link_share_state(LinkShareState::Off),
         share(None, None)

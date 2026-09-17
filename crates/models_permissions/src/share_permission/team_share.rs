@@ -214,8 +214,7 @@ pub enum TeamShareCreation {
     Call,
     /// A new initiative initializes Edit; missing membership is an error.
     Initiative,
-    /// The description document of a new initiative. Resolves like `Initiative`; a distinct
-    /// variant so an `initialize` on a document entity is visibly intentional.
+    /// The description document of a new initiative. Resolves like `Initiative`.
     InitiativeDescription,
 }
 

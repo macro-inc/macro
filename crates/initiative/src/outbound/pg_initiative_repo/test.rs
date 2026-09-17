@@ -85,8 +85,6 @@ fn set_team_share(level: AccessLevel) -> UpdateSharePermissionRequestV2 {
     }
 }
 
-/// The rows `insert_new_document` writes for a description document, minus history and the
-/// entity registry, which team sharing and access checks never read.
 async fn seed_description_document(
     pool: &PgPool,
     owner: &str,
@@ -209,7 +207,6 @@ async fn add_team_user(
     Ok(())
 }
 
-/// Owner plus a team the owner belongs to; returns the team id.
 async fn seed_owner_with_team(pool: &PgPool) -> anyhow::Result<Uuid> {
     insert_user(pool, OWNER).await?;
     let team_id = Uuid::now_v7();
@@ -291,8 +288,6 @@ async fn access_level(
     Ok(row.flatten())
 }
 
-/// `(access level, source id)` for every grant on both entities, so a test can assert the
-/// document mirrors the initiative in one comparison.
 async fn mirrored_access(
     pool: &PgPool,
     initiative_id: InitiativeId,
@@ -342,7 +337,6 @@ async fn document_share_permission(
     })
 }
 
-/// What the service does before calling `update` with a team-share patch.
 async fn lockstep_team_share(
     repo: &PgInitiativeRepo,
     id: InitiativeId,
@@ -810,7 +804,6 @@ async fn update_team_share_applies_both_commands_and_a_second_apply_is_not_untra
     assert_eq!(facts.description.current, grant);
     assert_eq!(facts.description.revision, 1);
 
-    // The document's team row is tracked, so changing the level is an ordinary apply.
     repo.update(UpdateInitiativeRepoArgs {
         share_permission: Some(set_team_share(AccessLevel::View)),
         team_share: Some(lockstep_team_share(&repo, created.id, AccessLevel::View).await?),
@@ -1072,7 +1065,6 @@ async fn delete_returns_the_document_id_and_leaves_no_initiative_rows(
     )
     .fetch_one(&pool)
     .await?;
-    // The document itself is the service's to purge after this commit.
     let document_remains = sqlx::query_scalar!(
         r#"SELECT EXISTS(SELECT 1 FROM "Document" WHERE id = $1) AS "exists!""#,
         document_id.to_string(),

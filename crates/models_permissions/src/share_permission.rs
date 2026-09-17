@@ -79,7 +79,6 @@ impl SharePermissionV2 {
     }
 
     /// Exactly `state`, consulting neither the entity-type default nor the owner's team default.
-    /// For a document created alongside another entity whose link share is already resolved.
     pub fn from_link_share_state(state: LinkShareState) -> Self {
         match state {
             LinkShareState::Off => Self::new(None, None),

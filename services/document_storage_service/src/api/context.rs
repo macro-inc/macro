@@ -481,8 +481,6 @@ pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
 pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
-/// Type alias for the description-document adapter behind the initiative service. Its
-/// creator parameters match [`documents_hex::inbound::axum_router::DefaultDocumentCreator`].
 pub(crate) type InitiativeDescriptionDocumentsType =
     crate::outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter<
         Arc<DocumentService>,

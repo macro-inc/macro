@@ -604,7 +604,6 @@ function mapDocumentSubType(subType: GraphqlSoupDocument['subType']) {
       type: 'skill' as const,
     }))
     .with({ __typename: 'GraphqlInitiativeDescriptionSubType' }, () => {
-      // No dedicated block yet; the document renders as a plain document.
       return undefined;
     })
     .exhaustive();

@@ -130,8 +130,8 @@ impl InitiativeRepo for PgInitiativeRepo {
     }
 }
 
-/// Both entities every grant write targets. Built once per mutation and threaded through
-/// every helper, so no code path can grant on the initiative and forget the document.
+/// Both entities every grant write targets. Built once per mutation so no path
+/// can grant on the initiative and forget the document.
 #[derive(Debug, Clone, Copy)]
 struct GrantTargets {
     initiative: uuid::Uuid,
@@ -216,8 +216,7 @@ impl InitiativeRecord {
     }
 }
 
-/// A NULL is a deploy-window artifact, not a valid state; failing loudly here keeps
-/// `description_document_id` non-optional for every caller instead of forever.
+/// A NULL is a deploy-window artifact. Fail here so callers never treat it as optional.
 fn require_description_document_id(
     initiative: uuid::Uuid,
     raw: Option<String>,
@@ -306,8 +305,7 @@ fn map_sqlx(error: AdapterError) -> InitiativeError {
 fn classify_sqlx(error: sqlx::Error) -> InitiativeError {
     if let Some(db) = error.as_database_error() {
         if db.is_unique_violation() {
-            // The service mints a fresh document per create, so a second initiative on the
-            // same document is a bug in this code path, not a request the caller can fix.
+            // A second initiative on the same document is a bug in this path, not a caller error.
             if db.constraint() == Some(DESCRIPTION_DOCUMENT_UNIQUE) {
                 return InitiativeError::Internal(report!(
                     "description document already linked to another initiative: {error}"

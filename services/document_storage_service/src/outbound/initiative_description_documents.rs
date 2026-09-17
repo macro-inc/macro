@@ -1,7 +1,4 @@
-//! Adapter that gives the initiative domain its description documents. Creation goes
-//! through the documents domain's [`DocumentCreator`] so the document opens in the
-//! editor; purge runs the same sequence a permanent document delete runs elsewhere in
-//! this service.
+//! Adapter that gives the initiative domain its description documents.
 
 use std::str::FromStr;
 use std::sync::Arc;
@@ -20,14 +17,12 @@ use sqlx::PgPool;
 
 use crate::service::document_event_publisher::publish_document_purged_event;
 
-/// Wrap a documents-side failure as an internal initiative error.
 macro_rules! internal {
     ($error:expr) => {
         InitiativeError::Internal(rootcause::report!($error).into())
     };
 }
 
-/// Production adapter backed by the documents domain creator and the legacy purge clients.
 pub struct InitiativeDescriptionDocumentsAdapter<Svc, MarkdownInit, BytesUpload, MentionTracker, B>
 {
     creator: DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>,
@@ -39,7 +34,6 @@ pub struct InitiativeDescriptionDocumentsAdapter<Svc, MarkdownInit, BytesUpload,
 impl<Svc, MarkdownInit, BytesUpload, MentionTracker, B>
     InitiativeDescriptionDocumentsAdapter<Svc, MarkdownInit, BytesUpload, MentionTracker, B>
 {
-    /// Construct the adapter from concrete outbound dependencies.
     pub fn new(
         creator: DocumentCreator<Svc, MarkdownInit, BytesUpload, MentionTracker>,
         db: PgPool,
@@ -75,8 +69,7 @@ where
             prefill_markdown,
             link_share,
         } = document;
-        // Not in recents: the initiative is what people open, and the editor reaches the
-        // document by id.
+        // Recents list the initiative. The editor opens this document by id.
         let metadata = NewDocumentMetadata::builder(name)
             .skip_history()
             .initial_link_share(link_share)
@@ -101,8 +94,6 @@ where
         })
     }
 
-    /// Every step is keyed by the document id and tolerates an id that is already gone, so a
-    /// failed purge can be re-run from the top.
     #[tracing::instrument(skip(self), err)]
     async fn purge(&self, id: DescriptionDocumentId) -> Result<(), InitiativeError> {
         let document_id = id.to_string();
@@ -127,8 +118,6 @@ where
     }
 }
 
-/// Keep the caller-facing classes; everything else is a failure of this service, since the
-/// initiative domain already validated every field it sent.
 fn map_document_error(error: DocumentError) -> InitiativeError {
     match error {
         DocumentError::BadRequest(message) => InitiativeError::BadRequest(message),

@@ -69,8 +69,6 @@ impl From<DocumentSubType> for EntityType {
     fn from(sub_type: DocumentSubType) -> Self {
         match sub_type {
             DocumentSubType::Task => EntityType::Task,
-            // No dedicated property entity type for snippets, skills, or initiative
-            // descriptions; they key under Document.
             DocumentSubType::Snippet
             | DocumentSubType::Skill
             | DocumentSubType::InitiativeDescription => EntityType::Document,

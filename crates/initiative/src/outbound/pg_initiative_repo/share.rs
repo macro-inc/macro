@@ -14,8 +14,6 @@ use crate::domain::models::{
     DescriptionDocumentId, InitiativeError, InitiativeId, LockstepTeamShareFacts,
 };
 
-/// One `SharePermission` row plus the `entity_access` entity it governs. Built only from
-/// [`GrantTargets`] so the two halves cannot be mixed up.
 pub(super) struct ShareTarget<'a> {
     entity_id: Uuid,
     entity_type: EntityType,
@@ -83,7 +81,6 @@ pub(super) async fn insert_share_permission(
     Ok(row.id)
 }
 
-/// Every document the documents side creates has a permission row, so a miss is corruption.
 pub(super) async fn description_share_permission_id(
     tx: &mut Transaction<'_, Postgres>,
     id: DescriptionDocumentId,
@@ -105,8 +102,6 @@ pub(super) async fn description_share_permission_id(
     })
 }
 
-/// Link columns, channel `entity_access` grants, and `ChannelSharePermission` rows for one
-/// target. Called once per target so both entities end identical.
 pub(super) async fn apply_share_patch(
     tx: &mut Transaction<'_, Postgres>,
     target: ShareTarget<'_>,
@@ -253,7 +248,6 @@ async fn update_channel_share_access(
     Ok(result.rows_affected() > 0)
 }
 
-/// One guarded read for both entities, so the service authorizes them against one snapshot.
 pub(super) async fn get_lockstep_team_share_facts(
     pool: &PgPool,
     id: InitiativeId,

@@ -14,8 +14,7 @@ use crate::domain::models::{
     UpdateInitiativeRepoArgs, UpdateInitiativeRequest,
 };
 
-/// Outbound port for the description document's lifecycle. The initiative domain's whole view
-/// of the documents domain: no read, rename, or thin delete.
+/// Outbound port for the description document's lifecycle.
 #[cfg_attr(test, mockall::automock)]
 pub trait InitiativeDescriptionDocuments: Send + Sync + 'static {
     /// Create the `initiative_description` markdown document, editor-ready, owned by

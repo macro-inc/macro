@@ -99,7 +99,6 @@ fn owner_receipt() -> EntityAccessReceipt<OwnerAccessLevel> {
     receipt(OWNER, EntityType::Initiative, AccessLevel::Owner)
 }
 
-/// A service whose document port panics on any call.
 fn service(
     repo: MockInitiativeRepo,
 ) -> InitiativeServiceImpl<MockInitiativeRepo, MockInitiativeDescriptionDocuments> {
@@ -177,7 +176,6 @@ async fn create_rejects_empty_and_too_long_names() {
 
 #[tokio::test]
 async fn create_rejects_too_long_description_before_creating_any_document() {
-    // No expectations on either port: a call to `create` on the document port would panic.
     let result = service(MockInitiativeRepo::new())
         .create(
             &user(OWNER),

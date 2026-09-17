@@ -49,8 +49,7 @@ where
     }
 
     /// Authorize one team-share edit against both entities from a single snapshot of facts.
-    /// The description document is owned by the initiative owner, so a `NotOwner` on it means
-    /// the two have drifted apart rather than that the caller lacks authority.
+    /// A `NotOwner` on the description document means the two owners have drifted apart.
     async fn authorize_lockstep_team_share(
         &self,
         receipt: &EntityAccessReceipt<EditAccessLevel>,
@@ -95,9 +94,8 @@ where
     R::Err: Into<InitiativeError>,
     D: InitiativeDescriptionDocuments,
 {
-    /// Two commits with compensation: the documents side commits the description document
-    /// first, then the initiative transaction links it and mirrors the grants. A failed
-    /// initiative write purges the document so nothing orphaned survives a `Err`.
+    /// Two commits with compensation. The documents side commits first. A failed
+    /// initiative write purges the document so nothing orphaned survives an `Err`.
     #[tracing::instrument(err, skip_all)]
     async fn create(
         &self,
@@ -308,9 +306,8 @@ where
             .map_err(Into::into)
     }
 
-    /// Initiative rows first, document second. The FK's `ON DELETE SET NULL` means the other
-    /// order could leave an initiative with no description after a half-failure, which is
-    /// worse for readers than an orphaned document.
+    /// Initiative rows first, then the document. The FK's `ON DELETE SET NULL` means
+    /// the other order can leave an initiative with no description after a half-failure.
     #[tracing::instrument(err, skip_all)]
     async fn delete(
         &self,

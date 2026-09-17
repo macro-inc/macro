@@ -32,8 +32,6 @@ pub(super) async fn insert_members(
     Ok(())
 }
 
-/// Edit on both entities. The upsert's owner guard keeps each Owner row intact when the
-/// owner is also listed.
 pub(super) async fn grant_members_edit(
     tx: &mut Transaction<'_, Postgres>,
     targets: &GrantTargets,

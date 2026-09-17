@@ -37,7 +37,6 @@ pub enum DocumentSubType {
     /// A skill document — a markdown document containing instructions that AI
     /// can read and follow when referenced in an AI input
     Skill,
-    /// The description document of an initiative. Exactly one per initiative,
-    /// created by the initiative service rather than through `POST /documents`.
+    /// The description document of an initiative.
     InitiativeDescription,
 }

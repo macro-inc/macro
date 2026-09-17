@@ -189,9 +189,7 @@ pub enum MarkdownSubtype {
     /// A skill document — markdown instructions that AI reads and follows when
     /// the skill is referenced in an AI input.
     Skill,
-    /// An initiative's description document. Created only by the initiative
-    /// service, which mirrors the initiative's grants onto it in its own
-    /// transaction; nothing is team-shared here.
+    /// An initiative's description document.
     InitiativeDescription,
 }
 
