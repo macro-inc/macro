@@ -11,7 +11,7 @@ import {
   entityDetailTarget,
   useEntityDetailNavigationStack,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
-import { ViewShell } from '@app/components/view-shell';
+import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import type { MarkdownDocumentKind } from '@block-md/types';
 import { SidePanel } from '@components/app/side-panel';
@@ -159,6 +159,18 @@ function StackEntityDetail(props: {
           target={props.entry.data}
           shareOpen={props.shareOpen}
           onShareOpenChange={props.onShareOpenChange}
+          previewHeaderLeading={
+            <Show
+              when={entityDetailBlockType(props.entry.data) === 'spreadsheet'}
+            >
+              <DriveBreadcrumbsOutlet
+                aria-label="File location"
+                class="max-w-[min(40vw,24rem)] overflow-hidden"
+              >
+                <ViewBreadcrumbs.Separator />
+              </DriveBreadcrumbsOutlet>
+            </Show>
+          }
         >
           {(context) => (
             <FileDetailBreadcrumbItem
