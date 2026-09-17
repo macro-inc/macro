@@ -168,17 +168,27 @@ export function softInvalidateThreadReplies(
   });
 }
 
-/** Update replies while retaining the canonical root and thread state in the same cache entry. */
+/**
+ * Update replies while retaining the canonical root and thread state in the
+ * same cache entry. Returns whether an entry existed to update; a caller
+ * inserting a new reply uses `false` to detect that the thread's replies are
+ * not cached yet (its first fetch is likely in flight).
+ */
 export function setThreadRepliesData(
   parent: MessageParent,
   root: string,
   update: (replies: EntityMessage[] | undefined) => EntityMessage[] | undefined
-) {
+): boolean {
+  let applied = false;
   queryClient.setQueryData<MessageThread>(
     getThreadRepliesQueryKey(parent, root),
-    (thread) =>
-      thread ? { ...thread, replies: update(thread.replies) ?? [] } : undefined
+    (thread) => {
+      if (!thread) return undefined;
+      applied = true;
+      return { ...thread, replies: update(thread.replies) ?? [] };
+    }
   );
+  return applied;
 }
 export function getThreadRepliesData(parent: MessageParent, root: string) {
   return queryClient.getQueryData<MessageThread>(

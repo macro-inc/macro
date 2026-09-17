@@ -102,9 +102,28 @@ export function insertMessageIntoTargetCaches(
         payload as EntityMessage
       )
     );
-    setThreadRepliesData(parent, target.threadId, (prev) =>
+    const inserted = setThreadRepliesData(parent, target.threadId, (prev) =>
       insertThreadReply(prev, payload as EntityMessage)
     );
+    // No cache entry means the thread's first replies fetch is likely in
+    // flight and may have read before this reply, and a soft invalidate only
+    // refetches inactive copies. Re-run the insert once that fetch settles so
+    // an expanded thread keeps the reply instead of the pre-reply snapshot;
+    // `insertThreadReply` ignores a reply the fetch already returned.
+    if (!inserted) {
+      const inFlight = queryClient.getQueryCache().find<MessageThread>({
+        queryKey: getThreadRepliesQueryKey(parent, target.threadId),
+        exact: true,
+      })?.promise;
+      if (inFlight)
+        void inFlight
+          .catch(() => {})
+          .finally(() =>
+            setThreadRepliesData(parent, target.threadId, (prev) =>
+              insertThreadReply(prev, payload as EntityMessage)
+            )
+          );
+    }
     return;
   }
 

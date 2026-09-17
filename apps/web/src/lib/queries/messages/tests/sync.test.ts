@@ -9,6 +9,7 @@ import type {
   MessageParent,
   MessageThread,
 } from '@service-storage/messages';
+import { QueryObserver } from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
@@ -27,7 +28,10 @@ vi.mock('@service-storage/messages', async (importOriginal) => ({
 import { registerNonce } from '../../nonce';
 import { MessageNonceKeys, messageKeys } from '../keys';
 import { applyMessage, applyThreadState, handleMessageEvent } from '../sync';
-import { getThreadRepliesQueryKey } from '../thread-replies';
+import {
+  getThreadRepliesQueryKey,
+  threadRepliesQueryOptions,
+} from '../thread-replies';
 import {
   getMessageTimelineQueryKey,
   type MessageTimelineData,
@@ -417,6 +421,56 @@ describe.each(['channel', 'document'] as const)(
         ],
       });
       await fetching.catch(() => undefined);
+    });
+    it('refetches an expanded thread whose replies are still loading when a live reply arrives', async () => {
+      // The root is in the timeline, but its own replies query has not resolved
+      // yet — an expanded thread whose first fetch is in flight.
+      testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
+        pageParams: [null],
+        pages: [
+          { items: [item(parent)], next_cursor: null, previous_cursor: null },
+        ],
+      });
+      const reply = message(parent, 'reply', 'root');
+      mocks.thread.mockReset();
+      // The first fetch is in flight and, when it resolves, predates the reply.
+      let resolveFirst: (thread: MessageThread) => void = () => {};
+      mocks.thread.mockImplementationOnce(
+        () =>
+          new Promise<MessageThread>((resolve) => {
+            resolveFirst = resolve;
+          })
+      );
+      const observer = new QueryObserver(
+        testQueryClient,
+        threadRepliesQueryOptions(parent, 'root')
+      );
+      const unsubscribe = observer.subscribe(() => {});
+      await vi.waitFor(() => expect(mocks.thread).toHaveBeenCalledTimes(1));
+
+      // A live reply arrives before the first fetch resolves. The preview-only
+      // insert drops it from the not-yet-cached thread; the reply must be
+      // re-applied once the fetch settles rather than lost to the stale read.
+      applyMessage(reply, 'posted');
+      resolveFirst({ state, root: message(parent, 'root'), replies: [] });
+
+      await vi.waitFor(() =>
+        expect(
+          testQueryClient.getQueryData<MessageThread>(threadKey())?.replies
+        ).toEqual([expect.objectContaining({ id: 'reply' })])
+      );
+      // Convergence needs no extra network round trip.
+      expect(mocks.thread).toHaveBeenCalledTimes(1);
+
+      // The timeline preview mirrors the reply while the thread settles.
+      const root = testQueryClient.getQueryData<MessageTimelineData>(
+        timelineKey()
+      )!.pages[0].items[0];
+      expect(root.thread.reply_count).toBe(1);
+      expect(root.thread.preview).toEqual([
+        expect.objectContaining({ id: 'reply' }),
+      ]);
+      unsubscribe();
     });
     it('skips the sender nonce and scopes ephemeral typing to the parent and root', () => {
       seed();
