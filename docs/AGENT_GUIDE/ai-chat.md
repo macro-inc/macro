@@ -40,6 +40,10 @@ is available, the AI composer returns with its draft intact, including in
 documents without a comment composer. Type a
 prompt, optionally choose a model or
 attach context, and tap **Send** to create the chat and send its first message.
+The paperclip (**Attach files**) opens the device file chooser directly, including
+in the native iPhone app; it does not open a Macro file browser. Select supported
+files to upload and attach them, or cancel to return to the unchanged draft.
+Existing Macro documents can still be attached through an `@mention`.
 On touch devices, the accessory hides whenever an editable field outside its
 Ask AI composer is focused, including email recipients, subject, and body fields.
 It returns with the same draft when focus leaves that field. While typing in
