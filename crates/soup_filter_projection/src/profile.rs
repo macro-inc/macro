@@ -1,7 +1,6 @@
-use std::{collections::HashMap, str::FromStr};
+use std::collections::HashMap;
 
 use item_filter_index::vocabulary;
-use model_file_type::FileType;
 use predicate_index::{ExactFact, IndexDocument, IntegerFact, Token, ValidationError};
 use thiserror::Error;
 
@@ -150,11 +149,9 @@ fn validate_exact_facts(
             }
         } else if attribute == &vocabulary::file_type() && kind == PartitionKind::Document {
             file_type += 1;
-            let value = std::str::from_utf8(value)
+            // The GraphQL field is nullable text, not the supported-format enum.
+            std::str::from_utf8(value)
                 .map_err(|_| ProfileValidationError::InvalidValue("file-type"))?;
-            if FileType::from_str(value).is_err() {
-                return Err(ProfileValidationError::InvalidValue("file-type"));
-            }
         } else if attribute == &vocabulary::document_sub_type() && kind == PartitionKind::Document {
             sub_type += 1;
             if !matches!(value, b"task" | b"snippet" | b"skill") {

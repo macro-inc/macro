@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for cardinality-independent notification membership and batched edits.
-version = "0.6.15"
+# Rebuild for raw file-type projections and SQL-compatible nullable filters.
+version = "0.6.16"
 
 [features]
 default = []
