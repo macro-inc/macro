@@ -280,9 +280,27 @@ function Aside(props: ViewShellAsideProps) {
     'onWidthChangeEnd',
   ]);
   const ws = useViewShellInternal();
+  const [resizedWidth, setResizedWidth] = createSignal<{
+    configuredWidth: number;
+    width: number;
+  }>();
+  const preferredWidth = () => {
+    const configuredWidth = ws.aside.layout().width;
+    const resized = resizedWidth();
+    return resized?.configuredWidth === configuredWidth
+      ? resized.width
+      : configuredWidth;
+  };
+  const onWidthChangeEnd = (width: number) => {
+    // Automatic solves must preserve the user's choice, not the initial target.
+    // Keep it separate from constrained widths while the shell is narrow.
+    setResizedWidth({ configuredWidth: ws.aside.layout().width, width });
+    local.onWidthChangeEnd?.(width);
+  };
   const redistributionPreferredSize = () => {
     const layout = ws.aside.layout();
-    if (layout.preserveDuringResize !== false) return layout.width;
+    const width = preferredWidth();
+    if (layout.preserveDuringResize !== false) return width;
 
     const shellWidth = ws.width();
     const mainLayout = ws.main.layout();
@@ -291,7 +309,7 @@ function Aside(props: ViewShellAsideProps) {
       mainLayout.preferredWidth === undefined ||
       ws.detail.placement() === 'inline'
     ) {
-      return layout.width;
+      return width;
     }
 
     const availableForAside =
@@ -299,7 +317,7 @@ function Aside(props: ViewShellAsideProps) {
       RESIZE_GUTTER -
       Math.max(mainLayout.preferredWidth, mainLayout.min);
 
-    return Math.min(layout.width, Math.max(layout.min, availableForAside));
+    return Math.min(width, Math.max(layout.min, availableForAside));
   };
 
   return (
@@ -309,9 +327,9 @@ function Aside(props: ViewShellAsideProps) {
       minSize={ws.aside.layout().min}
       maxSize={ws.aside.layout().max}
       redistributionPreferredSize={redistributionPreferredSize()}
-      target={{ kind: 'px', px: ws.aside.layout().width }}
+      target={{ kind: 'px', px: preferredWidth() }}
       collapsed={() => ws.aside.isCollapsed()}
-      onSizeChangeEnd={local.onWidthChangeEnd}
+      onSizeChangeEnd={onWidthChangeEnd}
     >
       <div
         {...rest}

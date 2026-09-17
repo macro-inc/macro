@@ -9,7 +9,8 @@ export type AsideLayout = {
   min: number;
   max: number;
   /**
-   * Whether automatic container resizing should preserve `width`.
+   * Whether automatic container resizing should preserve the user-resized
+   * width (or `width` before resizing).
    * Set to false with a main `preferredWidth` to let the aside yield first.
    */
   preserveDuringResize?: boolean;

@@ -90,6 +90,10 @@ These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
 sidebar layout default to 256px; manually resized Chat widths remain saved.
+After dragging a view's inner sidebar divider (or using its arrow keys), resizing
+the containing split preserves the chosen sidebar width while space permits.
+Narrow splits may shrink or collapse the sidebar; widening restores its chosen
+width for the mounted view.
 
 Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
