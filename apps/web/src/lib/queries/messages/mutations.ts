@@ -480,11 +480,12 @@ export function useSendMessageMutation(
             invalidateSoupEntity(variables.parent.id);
           }
 
-          analytics.track('channel_message_sent', {
-            contentLength: variables.message.content?.length ?? 0,
-            attachmentsLength: variables.message.attachments?.length ?? 0,
-            isThreadReply: threadId !== undefined,
-          });
+          if (variables.parent.type === 'channel')
+            analytics.track('channel_message_sent', {
+              contentLength: variables.message.content?.length ?? 0,
+              attachmentsLength: variables.message.attachments?.length ?? 0,
+              isThreadReply: threadId !== undefined,
+            });
           applyMessage(data, 'edited');
         },
         onError(error, vars, context) {

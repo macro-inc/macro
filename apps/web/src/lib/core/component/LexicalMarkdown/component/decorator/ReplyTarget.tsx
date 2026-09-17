@@ -38,6 +38,10 @@ export function ReplyTarget(props: ReplyTargetDecoratorProps) {
     getDisplayName(tryMacroId(props.senderId), {}) ||
     props.senderId;
 
+  const targetReady = () =>
+    props.parent.type === 'channel' ||
+    (document.isSuccess && !!document.data.fileType);
+
   const openTarget = createCallback((event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
@@ -67,6 +71,7 @@ export function ReplyTarget(props: ReplyTargetDecoratorProps) {
   return (
     <button
       type="button"
+      disabled={!targetReady()}
       class="group/reply-target flex w-full min-w-0 items-center gap-1 py-1 text-left text-xs text-ink-muted rounded-md hover:bg-hover"
       aria-label={`Replying to ${senderName()}: ${props.displayText}`}
       data-reply-target-target-message-id={props.targetMessageId}

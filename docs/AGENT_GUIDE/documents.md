@@ -471,13 +471,10 @@ editable view removes the retained mark when the document loads. Read-only
 viewers see plain text without a dead comment highlight; the stored document
 and overlapping live comments stay intact.
 
-PDFs expose a `Comments` section in the side panel as well as anchored margin
-threads. Highlight comments attach to the highlight annotation; deleting a
-discussion attached to a regular highlight leaves the independent highlight in
-place. Placeable comments post through the message API too, but the anchors
-read on the current backend only returns placeables that still reference a
-legacy thread, so a message-backed placeable does not reappear after reload
-until that read includes `root_id`-only rows.
+Unified PDF discussions are deferred: PDFs keep the legacy comment subsystem
+regardless of the flag, so PDF comments (the side-panel `Comments` section,
+anchored margin threads, highlight comments, and placeable comments) behave as
+they do with the flag off. The message-backed PDF path is a follow-up.
 
 With the flag off, documents behave exactly as described above this section.
 
