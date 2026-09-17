@@ -88,6 +88,8 @@ pub enum StripeOperationError {
     PlanUnavailable,
     #[error("No active subscription")]
     NoSubscription,
+    #[error("More than one active subscription; contact support to change plans")]
+    AmbiguousSubscription,
     #[error("Already on this plan")]
     AlreadyOnPlan,
     #[error("Only team admins can change plans on a team")]
@@ -114,6 +116,7 @@ impl IntoResponse for StripeOperationError {
             StripeOperationError::RolesErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
             StripeOperationError::PlanUnavailable => StatusCode::BAD_REQUEST,
             StripeOperationError::NoSubscription => StatusCode::NOT_FOUND,
+            StripeOperationError::AmbiguousSubscription => StatusCode::CONFLICT,
             StripeOperationError::AlreadyOnPlan => StatusCode::CONFLICT,
             StripeOperationError::NotTeamAdmin => StatusCode::FORBIDDEN,
             StripeOperationError::TeamPlanErr(e) => match e {

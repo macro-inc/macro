@@ -1,6 +1,9 @@
 import { ROUTER_BASE_CONCAT } from '@app/constants/routerBase';
 import type { PaidPlanTier } from '@app/features/paywall/plans';
-import { stripeServiceClient } from '@service-stripe/client';
+import {
+  type CreateCheckoutSessionArgs,
+  useCreateCheckoutSessionMutation,
+} from '@queries/auth';
 import { useMutation } from '@tanstack/solid-query';
 
 const PENDING_TEAM_KEY = 'onboarding_pending_team';
@@ -19,26 +22,21 @@ interface OnboardingCheckoutResult {
 }
 
 /**
- * Creates a Stripe checkout session whose round-trip returns to the
- * onboarding flow: the flow is still incomplete during checkout, so both
- * legs land back on the plan step (restored from sessionStorage), which
- * reads the query params to show the paid or cancelled state.
+ * The checkout request for a plan bought during onboarding. Both legs of the
+ * Stripe round-trip return to the onboarding flow: the flow is still
+ * incomplete during checkout, so success and cancel land back on the plan
+ * step (restored from sessionStorage), which reads the query params to show
+ * the paid or cancelled state.
  */
-export async function createOnboardingCheckoutSession(
+export function onboardingCheckoutArgs(
   tier: PaidPlanTier
-): Promise<OnboardingCheckoutResult> {
+): CreateCheckoutSessionArgs {
   const onboardingUrl = `${window.location.origin}${ROUTER_BASE_CONCAT}onboarding`;
-  const checkoutUrl = await stripeServiceClient.createCheckoutSessionV2({
+  return {
     successUrl: `${onboardingUrl}?subscriptionSuccess=true&type=${tier}`,
     cancelUrl: `${onboardingUrl}?subscriptionCancel=true`,
     plan: tier,
-  });
-
-  if (!checkoutUrl) {
-    throw new Error('No checkout URL returned');
-  }
-
-  return { checkoutUrl };
+  };
 }
 
 // Pending team info is saved to localStorage before checkout redirect,
@@ -65,11 +63,15 @@ export function useOnboardingCheckoutMutation(callbacks?: {
   onSuccess?: (result: OnboardingCheckoutResult) => void;
   onError?: (error: Error) => void;
 }) {
+  const checkout = useCreateCheckoutSessionMutation();
   return useMutation(() => ({
     mutationFn: async (
       args: OnboardingCheckoutArgs
-    ): Promise<OnboardingCheckoutResult> =>
-      await createOnboardingCheckoutSession(args.tier),
+    ): Promise<OnboardingCheckoutResult> => ({
+      checkoutUrl: await checkout.mutateAsync(
+        onboardingCheckoutArgs(args.tier)
+      ),
+    }),
     onSuccess: callbacks?.onSuccess,
     onError: callbacks?.onError,
   }));

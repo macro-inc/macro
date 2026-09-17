@@ -31,12 +31,13 @@ pub struct ChangePlanResponse {
 
 /// Moves the caller's own seat between paid plans.
 ///
-/// On a paying team this moves only the caller's seat (team admins and the
-/// owner may do so; teammates' seats are managed from team settings). Solo
-/// subscribers get the price on their subscription's seat item swapped. The
-/// proration is invoiced immediately either way; roles and the AI allowance
-/// follow at once on a team and from the `customer.subscription.updated`
-/// webhook for a personal subscription.
+/// On a team billed per seat this moves only the caller's seat (team admins
+/// and the owner may do so; teammates' seats are managed from team
+/// settings). Members of a free team, and solo subscribers, get the price on
+/// their own subscription's seat item swapped. The proration is invoiced
+/// immediately either way; roles and the AI allowance follow at once on a
+/// team and from the `customer.subscription.updated` webhook for a personal
+/// subscription.
 #[utoipa::path(
     post,
     path = "/user/stripe/plan",
@@ -48,7 +49,7 @@ pub struct ChangePlanResponse {
         (status = 402, description = "The team has no active subscription", body = ErrorResponse),
         (status = 403, description = "Only team admins change plans on a team", body = ErrorResponse),
         (status = 404, description = "No active subscription", body = ErrorResponse),
-        (status = 409, description = "Already on this plan", body = ErrorResponse),
+        (status = 409, description = "Already on this plan, or more than one active subscription", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
     )
 )]
@@ -61,12 +62,15 @@ pub async fn change_plan(
     let target_price = ctx.stripe_prices.price_id(req.plan)?.to_string();
     let user_id = &user.authorization.user.macro_user_id;
 
-    // A member of a paying team is billed through the team: move their seat.
+    // A member of a team billed per seat is billed through the team: move
+    // their seat. A free team bills nobody, so its members (admin or not)
+    // change their own personal subscription below.
     if let Some(team) = ctx
         .entity_access_service
         .get_user_team(user_id)
         .await
         .map_err(|e| StripeOperationError::TeamsErr(e.into()))?
+        && ctx.teams_service.team_bills_per_seat(&team.team_id).await?
     {
         let receipt = EntityAccessReceipt::<AdminTeamRole>::try_new_authenticated_user(
             user_id.clone().into_owned(),
@@ -83,7 +87,7 @@ pub async fn change_plan(
             .await
         {
             Ok(member) => return Ok(Json(ChangePlanResponse { plan: member.plan })),
-            // A free team bills nobody; fall through to the personal subscription.
+            // The team stopped paying between the two calls: personal it is.
             Err(SetTeamMemberPlanError::TeamNotPaying) => {}
             Err(e) => return Err(e.into()),
         }
@@ -102,16 +106,25 @@ pub async fn change_plan(
     list_subscriptions.limit = Some(10);
     let subscriptions = stripe::Subscription::list(&ctx.stripe_client, &list_subscriptions).await?;
 
-    let subscription = subscriptions
-        .data
-        .into_iter()
-        .find(|sub| {
-            matches!(
+    // Only this customer's own seat: a team subscription on the same customer
+    // (the caller owns a team) carries `team_id` and is repriced per seat
+    // from team settings, never here. Two live personal subscriptions (a
+    // checkout raced the webhook that cancels duplicates) is ambiguous, and
+    // repricing whichever Stripe listed first could hit the one about to be
+    // cancelled; refuse rather than guess.
+    let mut personal = subscriptions.data.into_iter().filter(|sub| {
+        !sub.metadata.contains_key("team_id")
+            && matches!(
                 sub.status,
                 stripe::SubscriptionStatus::Active | stripe::SubscriptionStatus::Trialing
             )
-        })
+    });
+    let subscription = personal
+        .next()
         .ok_or(StripeOperationError::NoSubscription)?;
+    if personal.next().is_some() {
+        return Err(StripeOperationError::AmbiguousSubscription);
+    }
 
     let seat_prices = ctx.stripe_prices.seat_price_ids();
     let seat_item = subscription

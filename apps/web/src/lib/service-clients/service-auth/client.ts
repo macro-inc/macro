@@ -17,6 +17,7 @@ import type {
   AiPlanCatalog,
   AiUsageSnapshot,
   PaidPlan,
+  TeamMemberPlan,
 } from './ai-billing-types';
 import { fetchWithAuth as _fetchWithAuth } from './fetch';
 import type {

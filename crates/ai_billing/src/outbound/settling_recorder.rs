@@ -5,11 +5,25 @@ use crate::domain::{BillingService, SettlementTrigger};
 use ai_usage::domain::service::UsageServiceImpl;
 use ai_usage::{SYSTEM_USER_ID, UsageEvent, UsageRecorder, UsageRepo};
 use std::sync::Arc;
+use std::time::Duration;
+
+/// Pauses between attempts to land a usage row; the length is the number of
+/// retries after the first attempt.
+const RECORD_RETRY_BACKOFF: [Duration; 3] = [
+    Duration::from_millis(200),
+    Duration::from_secs(1),
+    Duration::from_secs(5),
+];
 
 /// Wraps the Postgres usage recorder. After each row lands it reads the
 /// payer's position and, when there is uncovered usage, triggers settlement
 /// (credit consumption and overage collection) in the service that owns
 /// Stripe. Recording stays best-effort and never delays the completion.
+///
+/// A row that cannot be written is billable usage lost, so the write is
+/// retried with backoff before it is given up on. The retry is bounded and
+/// in-process: usage rows carry no idempotency key, so a durable queue that
+/// re-delivered after an ambiguous failure could double count instead.
 pub struct SettlingUsageRecorder<Repo, B, T> {
     inner: Arc<UsageServiceImpl<Repo>>,
     billing: Arc<B>,
@@ -39,9 +53,28 @@ where
         let trigger = self.trigger.clone();
         tokio::spawn(async move {
             let user = event.user.clone();
-            if let Err(e) = inner.record_now(event).await {
-                tracing::error!(error = ?e, "failed to record ai usage");
-                return;
+            let mut backoff = RECORD_RETRY_BACKOFF.iter();
+            loop {
+                let Err(e) = inner.record_now(event.clone()).await else {
+                    break;
+                };
+                match backoff.next() {
+                    Some(pause) => {
+                        tracing::warn!(error = ?e, "failed to record ai usage; retrying");
+                        tokio::time::sleep(*pause).await;
+                    }
+                    None => {
+                        tracing::error!(
+                            error = ?e,
+                            attempts = RECORD_RETRY_BACKOFF.len() + 1,
+                            model = %event.model,
+                            input_tokens = event.input_tokens,
+                            output_tokens = event.output_tokens,
+                            "failed to record ai usage; giving up"
+                        );
+                        return;
+                    }
+                }
             }
             if user.as_ref() == SYSTEM_USER_ID.as_ref() {
                 return;
@@ -56,7 +89,7 @@ where
                     }
                 }
                 Err(e) => {
-                    tracing::warn!(error = ?e, user = %user, "failed to read ai billing position");
+                    tracing::warn!(error = ?e, "failed to read ai billing position");
                 }
             }
         });

@@ -5,7 +5,12 @@ use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
 /// Rows recorded before a model had pricing carry a NULL total. Bill them at
-/// the Opus rate rather than for free; `set_pricing` backfills them later.
+/// the Opus 5 rate rather than for free; `set_pricing` backfills them later.
+///
+/// These mirror the `claude-opus-5` row seeded into `ai_pricing` by
+/// `20260724182218_seed_claude_opus_5_pricing.sql` ($5 in / $25 out per
+/// million tokens), the dearest model the picker offered when the fallback
+/// was chosen. Keep them in step with that seed.
 const FALLBACK_PRICE_PER_MILLION_IN: f64 = 5.0;
 const FALLBACK_PRICE_PER_MILLION_OUT: f64 = 25.0;
 

@@ -6,7 +6,7 @@ import { useAiBillingSummaryQuery, useChangePlanMutation } from '@queries/auth';
 import type { AiDenyCode } from '@service-auth/ai-billing-types';
 import { useNavigate } from '@solidjs/router';
 import { Button, Dialog, Surface } from '@ui';
-import { Show } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 
 const TITLES: Record<AiDenyCode, string> = {
   ai_allowance_exhausted: "You've used this month's included AI",
@@ -59,19 +59,23 @@ export function AiUsageLimitDialog() {
             </p>
           </div>
 
-          <Show when={summary.isSuccess && summary.data}>
-            {(snapshot) => (
-              <div class="flex flex-col gap-4 rounded-lg bg-active p-4">
-                <AiUsageMeter snapshot={snapshot()} />
-                <div class="border-t border-t-edge-muted pt-4">
-                  <AiUsageControls
-                    snapshot={snapshot()}
-                    returnUrl={returnUrl()}
-                  />
+          {/* The summary is a suspending query resource; keep its
+              suspension inside the dialog rather than the route boundary. */}
+          <Suspense fallback={null}>
+            <Show when={summary.isSuccess && summary.data}>
+              {(snapshot) => (
+                <div class="flex flex-col gap-4 rounded-lg bg-active p-4">
+                  <AiUsageMeter snapshot={snapshot()} />
+                  <div class="border-t border-t-edge-muted pt-4">
+                    <AiUsageControls
+                      snapshot={snapshot()}
+                      returnUrl={returnUrl()}
+                    />
+                  </div>
                 </div>
-              </div>
-            )}
-          </Show>
+              )}
+            </Show>
+          </Suspense>
 
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Button
@@ -94,22 +98,24 @@ export function AiUsageLimitDialog() {
               >
                 Dismiss
               </Button>
-              <Show
-                when={
-                  summary.isSuccess &&
-                  summary.data.can_manage_billing &&
-                  summary.data.tier === 'premium'
-                }
-              >
-                <Button
-                  variant="cta"
-                  class="rounded-full px-3 py-1.5"
-                  disabled={changePlan.isPending}
-                  onClick={() => void upgradeToMax()}
+              <Suspense fallback={null}>
+                <Show
+                  when={
+                    summary.isSuccess &&
+                    summary.data.can_manage_billing &&
+                    summary.data.tier === 'premium'
+                  }
                 >
-                  Upgrade to Max
-                </Button>
-              </Show>
+                  <Button
+                    variant="cta"
+                    class="rounded-full px-3 py-1.5"
+                    disabled={changePlan.isPending}
+                    onClick={() => void upgradeToMax()}
+                  >
+                    Upgrade to Max
+                  </Button>
+                </Show>
+              </Suspense>
             </div>
           </div>
         </section>

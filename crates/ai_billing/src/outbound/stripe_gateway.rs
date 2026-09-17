@@ -2,9 +2,10 @@
 //! for overage chunks.
 
 use crate::domain::{
-    BillingError, CreditCheckoutRequest, OverageChargeReceipt, OverageChargeRequest,
-    PaymentGateway, Result,
+    BillingError, CreditCheckoutRequest, OverageChargeRequest, PaymentGateway, Result,
 };
+use chrono::Utc;
+use macro_uuid::Uuid;
 use std::collections::HashMap;
 use std::sync::Arc;
 use stripe::{
@@ -12,7 +13,7 @@ use stripe::{
     CreateCheckoutSessionLineItems, CreateCheckoutSessionLineItemsPriceData,
     CreateCheckoutSessionLineItemsPriceDataProductData, CreateCheckoutSessionPaymentIntentData,
     CreateInvoice, CreateInvoiceItem, Currency, CustomerId, FinalizeInvoiceParams, Invoice,
-    InvoiceItem, InvoicePendingInvoiceItemsBehavior, InvoiceStatus, RequestStrategy,
+    InvoiceId, InvoiceItem, InvoicePendingInvoiceItemsBehavior, InvoiceStatus, RequestStrategy,
 };
 
 /// Metadata key stamped on every Stripe object this crate creates.
@@ -113,7 +114,7 @@ impl PaymentGateway for StripePaymentGateway {
     }
 
     #[tracing::instrument(skip(self, request), fields(charge = %request.charge_id, cents = request.amount_cents), err)]
-    async fn charge_overage(&self, request: OverageChargeRequest) -> Result<OverageChargeReceipt> {
+    async fn open_overage_invoice(&self, request: OverageChargeRequest) -> Result<String> {
         let customer = parse_customer(&request.customer_id)?;
         let key = format!("ai_overage:{}", request.charge_id);
         let metadata: HashMap<String, String> = HashMap::from([
@@ -127,31 +128,44 @@ impl PaymentGateway for StripePaymentGateway {
             ),
         ]);
 
-        // 1. The line item, held as a pending invoice item on the customer.
-        let mut item = CreateInvoiceItem::new(customer.clone());
-        item.amount = Some(request.amount_cents);
-        item.currency = Some(Currency::USD);
-        item.description = Some(request.description.as_str());
-        item.metadata = Some(metadata.clone());
-        InvoiceItem::create(&self.idempotent(format!("{key}:item")), item)
-            .await
-            .map_err(payment)?;
-
-        // 2. An invoice that sweeps the pending item and charges the default
-        //    payment method. `auto_advance` keeps Stripe's retry schedule on a
-        //    declined card; the outcome arrives via webhook.
+        // 1. An empty draft invoice that takes nothing else pending on the
+        //    customer, so it can never bill more than this one charge.
+        //    `auto_advance` keeps Stripe's retry schedule on a declined card;
+        //    the outcome arrives via webhook.
         let mut invoice = CreateInvoice::new();
-        invoice.customer = Some(customer);
+        invoice.customer = Some(customer.clone());
         invoice.auto_advance = Some(true);
         invoice.collection_method = Some(CollectionMethod::ChargeAutomatically);
-        invoice.pending_invoice_items_behavior = Some(InvoicePendingInvoiceItemsBehavior::Include);
+        invoice.pending_invoice_items_behavior = Some(InvoicePendingInvoiceItemsBehavior::Exclude);
         invoice.description = Some("Macro AI usage beyond plan");
-        invoice.metadata = Some(metadata);
+        invoice.metadata = Some(metadata.clone());
         let invoice = Invoice::create(&self.idempotent(format!("{key}:invoice")), invoice)
             .await
             .map_err(payment)?;
 
-        // 3. Finalize and attempt payment now rather than in an hour.
+        // 2. The line item, attached to that invoice rather than left pending
+        //    on the customer where another invoice could sweep it up.
+        let mut item = CreateInvoiceItem::new(customer);
+        item.invoice = Some(invoice.id.clone());
+        item.amount = Some(request.amount_cents);
+        item.currency = Some(Currency::USD);
+        item.description = Some(request.description.as_str());
+        item.metadata = Some(metadata);
+        if let Err(e) = InvoiceItem::create(&self.idempotent(format!("{key}:item")), item).await {
+            // Nothing is owed on a draft with no lines; drop it so nothing else
+            // can finalize it. Best effort: a retry replays the same keys and
+            // lands on the same draft either way.
+            if let Err(delete_err) = Invoice::delete(&self.client, &invoice.id).await {
+                tracing::warn!(
+                    error = ?delete_err,
+                    invoice = %invoice.id,
+                    "could not delete an empty overage draft invoice"
+                );
+            }
+            return Err(payment(e));
+        }
+
+        // 3. Finalize so it is collectable now rather than in an hour.
         Invoice::finalize(
             &self.idempotent(format!("{key}:finalize")),
             &invoice.id,
@@ -161,20 +175,51 @@ impl PaymentGateway for StripePaymentGateway {
         )
         .await
         .map_err(payment)?;
-        let paid = match Invoice::pay(&self.idempotent(format!("{key}:pay")), &invoice.id).await {
-            Ok(paid) => paid.status == Some(InvoiceStatus::Paid),
-            Err(e) => {
-                // A declined card is a failed collection, not a failed request:
-                // the invoice exists and Stripe will retry it.
-                tracing::warn!(error = ?e, invoice = %invoice.id, "overage invoice payment did not succeed");
-                false
-            }
-        };
 
-        Ok(OverageChargeReceipt {
-            invoice_id: invoice.id.to_string(),
-            paid,
-        })
+        Ok(invoice.id.to_string())
+    }
+
+    #[tracing::instrument(skip(self), fields(charge = %charge_id, invoice = %invoice_id), err)]
+    async fn pay_overage_invoice(&self, charge_id: Uuid, invoice_id: &str) -> Result<bool> {
+        let invoice_id: InvoiceId = invoice_id.parse().map_err(|e| {
+            BillingError::Payment(anyhow::anyhow!("invalid stripe invoice id: {e}"))
+        })?;
+        // Every attempt is its own request: replaying the first attempt's key
+        // would replay its decline instead of trying the payer's (new) card.
+        let key = format!(
+            "ai_overage:{charge_id}:pay:{}",
+            Utc::now().timestamp_millis()
+        );
+        match Invoice::pay(&self.idempotent(key), &invoice_id).await {
+            Ok(invoice) => Ok(invoice.status == Some(InvoiceStatus::Paid)),
+            Err(e) => {
+                // A decline is a failed collection, not a failed request: the
+                // invoice stays open and Stripe retries it. The invoice's own
+                // status also tells a retry that Stripe already collected it.
+                let invoice = Invoice::retrieve(&self.client, &invoice_id, &[])
+                    .await
+                    .map_err(|retrieve_err| {
+                        tracing::warn!(
+                            error = ?e,
+                            "overage invoice payment failed and the invoice could not be read"
+                        );
+                        payment(retrieve_err)
+                    })?;
+                match invoice.status {
+                    Some(InvoiceStatus::Paid) => Ok(true),
+                    Some(InvoiceStatus::Open) => {
+                        tracing::warn!(
+                            error = ?e,
+                            "overage invoice payment did not succeed; left open for stripe retries"
+                        );
+                        Ok(false)
+                    }
+                    other => Err(BillingError::Payment(anyhow::anyhow!(
+                        "overage invoice is {other:?} after a failed payment attempt: {e}"
+                    ))),
+                }
+            }
+        }
     }
 }
 
@@ -190,7 +235,13 @@ impl PaymentGateway for NoOpPaymentGateway {
         )))
     }
 
-    async fn charge_overage(&self, _request: OverageChargeRequest) -> Result<OverageChargeReceipt> {
+    async fn open_overage_invoice(&self, _request: OverageChargeRequest) -> Result<String> {
+        Err(BillingError::Payment(anyhow::anyhow!(
+            "payments are not configured in this service"
+        )))
+    }
+
+    async fn pay_overage_invoice(&self, _charge_id: Uuid, _invoice_id: &str) -> Result<bool> {
         Err(BillingError::Payment(anyhow::anyhow!(
             "payments are not configured in this service"
         )))

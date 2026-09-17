@@ -25,6 +25,10 @@ export { useInitGmailLink } from './gmail-link';
 export { authKeys } from './keys';
 export { useSendMobileWelcomeEmail } from './mobile-welcome-email';
 export {} from './mutations';
+export {
+  type CreateCheckoutSessionArgs,
+  useCreateCheckoutSessionMutation,
+} from './stripe-checkout';
 export type { UserInfoData } from './user-info';
 export {
   normalizeUserNameQueryId,

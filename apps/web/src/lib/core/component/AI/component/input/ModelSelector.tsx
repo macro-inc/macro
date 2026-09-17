@@ -98,9 +98,13 @@ export function ModelSelector(props: ModelSelectorProps) {
                     <span class="flex-1 truncate">
                       {MODEL_PRETTYNAME[option.id]}
                     </span>
+                    {/* Decorative: the item's accessible name stays the model. */}
                     <Show when={modelUsageHint(option.id)}>
                       {(hint) => (
-                        <span class="shrink-0 text-[10px] text-ink-extra-muted">
+                        <span
+                          aria-hidden="true"
+                          class="shrink-0 text-[10px] text-ink-extra-muted"
+                        >
                           {hint()}
                         </span>
                       )}

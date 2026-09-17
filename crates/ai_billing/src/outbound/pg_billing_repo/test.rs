@@ -16,6 +16,18 @@ fn policy(period_ended: bool) -> SettlementPolicy {
     }
 }
 
+/// How many `ai_overage_charge` rows the test payer has.
+async fn charge_rows(pool: &PgPool) -> i64 {
+    let payer = payer();
+    sqlx::query_scalar!(
+        r#"SELECT COUNT(*)::bigint AS "count!" FROM ai_overage_charge WHERE user_id = $1"#,
+        payer.as_ref(),
+    )
+    .fetch_one(pool)
+    .await
+    .unwrap()
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn settings_default_and_roundtrip(pool: PgPool) {
     let repo = PgBillingRepo::new(pool);
@@ -128,20 +140,197 @@ async fn settlement_consumes_credits_then_reserves_overage(pool: PgPool) {
     repo.finish_overage_charge(pending.id, Some("in_1"), OverageChargeStatus::Paid)
         .await
         .unwrap();
-    let who = repo
-        .resolve_overage_invoice("in_1", OverageChargeStatus::Failed)
-        .await
-        .unwrap();
-    assert_eq!(who.unwrap().as_ref(), payer().as_ref());
-    // A failed charge stops covering usage.
+    assert_eq!(
+        repo.latest_charge_status(&payer()).await.unwrap(),
+        Some(OverageChargeStatus::Paid)
+    );
+    // Paid is terminal: a late failure webhook changes nothing and keeps the
+    // usage covered.
+    assert!(
+        repo.resolve_overage_invoice("in_1", OverageChargeStatus::Failed)
+            .await
+            .unwrap()
+            .is_none()
+    );
     let ledger = repo.period_ledger(&payer(), period_start).await.unwrap();
-    assert_eq!(ledger.overage_charged_cents, 0);
+    assert_eq!(ledger.overage_charged_cents, 1_300);
     assert!(
         repo.resolve_overage_invoice("in_unknown", OverageChargeStatus::Paid)
             .await
             .unwrap()
             .is_none()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn invoice_webhooks_apply_out_of_order_without_unpaying(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool);
+    let period_start = Utc::now() - chrono::Duration::days(10);
+    repo.update_overage(&payer(), true, 10_000).await.unwrap();
+    let pending = repo
+        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("charge reserved");
+    assert_eq!(pending.amount_cents, 1_300);
+    assert!(pending.stripe_invoice_id.is_none());
+    // The collector records the invoice before attempting payment.
+    repo.finish_overage_charge(pending.id, Some("in_1"), OverageChargeStatus::Pending)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.latest_charge_status(&payer()).await.unwrap(),
+        Some(OverageChargeStatus::Pending)
+    );
+
+    // Declined: the failure webhook lands first.
+    let who = repo
+        .resolve_overage_invoice("in_1", OverageChargeStatus::Failed)
+        .await
+        .unwrap();
+    assert_eq!(who.unwrap().as_ref(), payer().as_ref());
+    let ledger = repo.period_ledger(&payer(), period_start).await.unwrap();
+    assert_eq!(ledger.overage_charged_cents, 0);
+    // Re-reporting the same status is a no-op.
+    assert!(
+        repo.resolve_overage_invoice("in_1", OverageChargeStatus::Failed)
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    // Stripe's retry collected it.
+    assert!(
+        repo.resolve_overage_invoice("in_1", OverageChargeStatus::Paid)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    let ledger = repo.period_ledger(&payer(), period_start).await.unwrap();
+    assert_eq!(ledger.overage_charged_cents, 1_300);
+
+    // A duplicate or late failure after that cannot un-pay it.
+    assert!(
+        repo.resolve_overage_invoice("in_1", OverageChargeStatus::Failed)
+            .await
+            .unwrap()
+            .is_none()
+    );
+    let ledger = repo.period_ledger(&payer(), period_start).await.unwrap();
+    assert_eq!(ledger.overage_charged_cents, 1_300);
+    assert_eq!(
+        repo.latest_charge_status(&payer()).await.unwrap(),
+        Some(OverageChargeStatus::Paid)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn settlement_retries_a_failed_charge_instead_of_reserving_a_new_one(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone());
+    let period_start = Utc::now() - chrono::Duration::days(10);
+    repo.update_overage(&payer(), true, 10_000).await.unwrap();
+
+    let first = repo
+        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("charge reserved");
+    // The invoice was opened but payment failed at the provider.
+    repo.finish_overage_charge(first.id, Some("in_1"), OverageChargeStatus::Failed)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.period_ledger(&payer(), period_start)
+            .await
+            .unwrap()
+            .overage_charged_cents,
+        0
+    );
+
+    // The next settlement hands the same charge back, with its invoice, and
+    // reserves nothing new.
+    let retry = repo
+        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("charge retried");
+    assert_eq!(retry.id, first.id);
+    assert_eq!(retry.amount_cents, 1_300);
+    assert_eq!(retry.stripe_invoice_id.as_deref(), Some("in_1"));
+    assert_eq!(charge_rows(&pool).await, 1);
+    assert_eq!(
+        repo.period_ledger(&payer(), period_start)
+            .await
+            .unwrap()
+            .overage_charged_cents,
+        1_300
+    );
+
+    // It fails again; then credits arrive and cover the usage. The stale
+    // failed charge must not be retried after that.
+    repo.finish_overage_charge(first.id, None, OverageChargeStatus::Failed)
+        .await
+        .unwrap();
+    repo.record_credit_purchase(&payer(), 2_000, "cs_1")
+        .await
+        .unwrap();
+    let covered = repo
+        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .await
+        .unwrap();
+    assert_eq!(covered.consumed_credits_cents, 1_300);
+    assert!(covered.pending_charge.is_none());
+    let again = repo
+        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .await
+        .unwrap();
+    assert_eq!(again, SettlementOutcome::default());
+    assert_eq!(
+        repo.latest_charge_status(&payer()).await.unwrap(),
+        Some(OverageChargeStatus::Failed)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn settlement_collects_a_reservation_whose_collector_died(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone());
+    let period_start = Utc::now() - chrono::Duration::days(10);
+    repo.update_overage(&payer(), true, 10_000).await.unwrap();
+
+    let reserved = repo
+        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("charge reserved");
+    // Fresh reservations are left to their collector...
+    assert!(
+        repo.apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+            .await
+            .unwrap()
+            .pending_charge
+            .is_none()
+    );
+    // ...but one that never got an invoice after a while is handed back.
+    sqlx::query!(
+        "UPDATE ai_overage_charge SET updated_at = NOW() - INTERVAL '1 hour' WHERE id = $1",
+        reserved.id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let orphan = repo
+        .apply_settlement(&payer(), period_start, 5_300, 4_000, policy(false))
+        .await
+        .unwrap()
+        .pending_charge
+        .expect("orphaned charge handed back");
+    assert_eq!(orphan.id, reserved.id);
+    assert!(orphan.stripe_invoice_id.is_none());
+    assert_eq!(charge_rows(&pool).await, 1);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

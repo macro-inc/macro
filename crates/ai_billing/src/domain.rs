@@ -14,8 +14,7 @@ pub use models::{
     PeriodLedger, PlanTier, Result, TARGET_GROSS_MARGIN_BPS, UsageSnapshot, list_rate_cents,
 };
 pub use ports::{
-    BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeReceipt,
-    OverageChargeRequest, PaymentGateway, PendingCharge, SettlementOutcome, SettlementTrigger,
-    UsageReader,
+    BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,
+    PaymentGateway, PendingCharge, SettlementOutcome, SettlementTrigger, UsageReader,
 };
 pub use service::BillingServiceImpl;

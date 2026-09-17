@@ -36,6 +36,24 @@ ON CONFLICT (model) DO NOTHING;
 --    chat rows never resolved a price. The recorder now normalizes to the bare
 --    id before pricing; normalize the history the same way and backfill the
 --    price of every row that can now be priced.
+--
+--    Rollback: the provider prefix is a pure function of the bare id (chat
+--    only ever routed to Anthropic and OpenAI, whose ids never collide), so
+--    the original values are recoverable without a backup column:
+--
+--      UPDATE ai_usage
+--      SET model = CASE
+--          WHEN model LIKE 'claude-%' THEN 'anthropic/' || model
+--          WHEN model LIKE 'gpt-%' OR model LIKE 'o%' THEN 'openai/' || model
+--          ELSE model
+--      END
+--      WHERE model NOT LIKE '%/%'
+--        AND created_at < '<this migration''s run time>';
+--
+--    Rows recorded by non-chat features (imports, summaries) always carried
+--    the bare id and are unaffected in both directions. The backfilled
+--    price columns need no rollback: they are exactly what `set_pricing`
+--    recomputes, and NULL was never a meaningful value.
 -- ---------------------------------------------------------------------------
 UPDATE ai_usage
 SET model = split_part(model, '/', 2)
@@ -51,10 +69,10 @@ FROM ai_pricing p
 WHERE u.model = p.model
   AND u.total IS NULL;
 
--- Per-user, per-period sums are the hot billing query. The composite index
--- covers the old single-column user_id index (CS-06), so replace it.
-CREATE INDEX ai_usage_user_id_created_at_idx ON ai_usage (user_id, created_at DESC);
-DROP INDEX IF EXISTS ai_usage_user_id_idx;
+-- The (user_id, created_at) index the per-period billing sums need is built
+-- CONCURRENTLY by the two migrations that follow this one: ai_usage takes
+-- writes on every completion, and a plain CREATE/DROP INDEX would block them
+-- for the duration.
 
 -- ---------------------------------------------------------------------------
 -- 4. Billing state, keyed by the *payer*: the personal subscriber, or the team

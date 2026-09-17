@@ -1,5 +1,6 @@
 import { InviteOfferPanel } from '@app/features/gtm-invite/InviteOfferPanel';
 import {
+  type PaidPlanTier,
   PLAN_BY_TIER,
   PLAN_FEATURES,
   PLANS,
@@ -30,8 +31,9 @@ export function PlanStep(props: {
   /** The promotion an invite-link signup holds, once known. */
   inviteOffer?: GtmInviteOffer | null;
   onFree: (planSkipped: boolean) => void;
-  onStartCheckout: (tier: Exclude<PlanTier, 'free'>) => void;
-  onPremiumPaid: () => void;
+  onStartCheckout: (tier: PaidPlanTier) => void;
+  /** Payment confirmed (or a license already active) for `tier`. */
+  onPremiumPaid: (tier: PaidPlanTier) => void;
 }) {
   const [searchParams] = useSearchParams();
   const userInfoQuery = useUserInfoQuery();
@@ -39,6 +41,11 @@ export function PlanStep(props: {
   const [selected, setSelected] = createSignal<PlanTier>('free');
 
   const returnedFromCheckout = searchParams.subscriptionSuccess === 'true';
+  // The success leg carries `type=<tier>` so the confirmation names the plan
+  // that was actually bought; anything else reads as Premium.
+  const paidTier = (): PaidPlanTier =>
+    searchParams.type === 'max' ? 'max' : 'premium';
+  const paidPlanName = () => PLAN_BY_TIER[paidTier()].name;
   const hasPaidAccess = () =>
     userInfoQuery.data?.licenseStatus === 'active' ||
     userInfoQuery.data?.licenseStatus === 'trialing';
@@ -49,7 +56,7 @@ export function PlanStep(props: {
 
   onMount(() => {
     if (!returnedFromCheckout) return;
-    analytics.track('subscription_success', { type: searchParams.type });
+    analytics.track('subscription_success', { type: paidTier() });
     let cancelled = false;
     onCleanup(() => {
       cancelled = true;
@@ -85,12 +92,12 @@ export function PlanStep(props: {
               <span class="text-sm font-semibold text-ink">
                 {returnedFromCheckout
                   ? 'Payment successful'
-                  : 'Premium is already active'}
+                  : `${paidPlanName()} is already active`}
               </span>
               <p class="text-sm leading-relaxed text-ink-muted">
                 {returnedFromCheckout
-                  ? 'Premium is now active on your account.'
-                  : 'Your account already has Premium access — no payment needed.'}
+                  ? `${paidPlanName()} is now active on your account.`
+                  : `Your account already has ${paidPlanName()} access — no payment needed.`}
               </p>
             </div>
           </div>
@@ -98,7 +105,7 @@ export function PlanStep(props: {
             variant="cta"
             size="xl"
             disabled={props.finishing}
-            onClick={() => props.onPremiumPaid()}
+            onClick={() => props.onPremiumPaid(paidTier())}
           >
             {props.finishing ? 'Setting up your workspace…' : 'Continue'}
             <ArrowRight class="size-5" />

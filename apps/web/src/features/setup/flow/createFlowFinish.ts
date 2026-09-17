@@ -1,8 +1,9 @@
 import { AFTER_SETUP_ROUTE, DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { createOnboardingCheckoutSession } from '@app/features/onboarding/use-onboarding-checkout';
+import { onboardingCheckoutArgs } from '@app/features/onboarding/use-onboarding-checkout';
 import type { PaidPlanTier, PlanTier } from '@app/features/paywall/plans';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
+import { useCreateCheckoutSessionMutation } from '@queries/auth';
 import { authKeys } from '@queries/auth/keys';
 import { useCompleteTutorialMutation } from '@queries/auth/tutorial';
 import type { UserInfoData } from '@queries/auth/user-info';
@@ -29,6 +30,7 @@ export function createFlowFinish(options?: {
   const [searchParams] = useSearchParams();
   const completeOnboarding = useCompleteOnboardingMutation();
   const completeTutorial = useCompleteTutorialMutation();
+  const checkout = useCreateCheckoutSessionMutation();
   const analytics = useAnalytics();
   const [finishing, setFinishing] = createSignal(false);
 
@@ -124,7 +126,9 @@ export function createFlowFinish(options?: {
     if (finishing()) return;
     setFinishing(true);
     try {
-      const { checkoutUrl } = await createOnboardingCheckoutSession(tier);
+      const checkoutUrl = await checkout.mutateAsync(
+        onboardingCheckoutArgs(tier)
+      );
       // Deliberately leave `finishing` set: the page is navigating away,
       // and re-enabling the buttons mid-unload invites a double checkout.
       window.location.href = checkoutUrl;
@@ -134,13 +138,14 @@ export function createFlowFinish(options?: {
     }
   };
 
-  /** Finish after checkout confirmed payment (or an existing license). */
-  const finishPremium = async () => {
+  /** Finish after checkout confirmed payment (or an existing license),
+   * recording the tier Stripe returned with rather than assuming Premium. */
+  const finishPremium = async (tier: PaidPlanTier = 'premium') => {
     if (finishing()) return;
     setFinishing(true);
     try {
       if (await completeFlow()) {
-        trackCompleted('premium', false);
+        trackCompleted(tier, false);
         navigate(afterTarget(), { replace: true });
       }
     } finally {

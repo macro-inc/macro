@@ -16,6 +16,7 @@ use super::ports::{
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 
 /// The billing service over its four ports.
 #[derive(Clone)]
@@ -148,7 +149,10 @@ where
         Ok(())
     }
 
-    /// Collect a reserved overage charge; a failure suspends overage.
+    /// Collect a reserved overage charge: open its invoice (or pick up the
+    /// one an earlier attempt opened) and try to pay it. A provider failure
+    /// marks the charge failed, which stops it covering usage, and suspends
+    /// overage until the payer re-enables it; that retries the same charge.
     async fn collect(
         &self,
         entitlement: &Entitlement,
@@ -156,57 +160,104 @@ where
         charge: PendingCharge,
     ) -> Result<()> {
         let payer = &entitlement.payer;
-        let Some(customer_id) = self.entitlements.stripe_customer_id(payer).await? else {
-            tracing::warn!("overage charge reserved but payer has no stripe customer");
-            self.repo
-                .finish_overage_charge(charge.id, None, OverageChargeStatus::Failed)
-                .await?;
-            self.repo.suspend_overage(payer).await?;
-            return Err(BillingError::NoStripeCustomer);
+        let customer_id = match self.entitlements.stripe_customer_id(payer).await {
+            Ok(Some(customer_id)) => customer_id,
+            Ok(None) => {
+                tracing::warn!("overage charge reserved but payer has no stripe customer");
+                self.fail_charge(payer, charge.id).await?;
+                return Err(BillingError::NoStripeCustomer);
+            }
+            Err(e) => {
+                // Left pending, the charge would cover usage that is never
+                // invoiced. Fail it so the next settlement retries it.
+                self.fail_charge(payer, charge.id).await?;
+                return Err(e);
+            }
         };
 
-        let description = format!(
-            "Macro AI usage beyond plan, {} to {}",
-            period.start.format("%b %-d"),
-            period.end.format("%b %-d, %Y")
-        );
+        let invoice_id = match charge.stripe_invoice_id.clone() {
+            Some(invoice_id) => invoice_id,
+            None => {
+                let description = format!(
+                    "Macro AI usage beyond plan, {} to {}",
+                    period.start.format("%b %-d"),
+                    period.end.format("%b %-d, %Y")
+                );
+                match self
+                    .payments
+                    .open_overage_invoice(OverageChargeRequest {
+                        customer_id,
+                        charge_id: charge.id,
+                        amount_cents: charge.amount_cents,
+                        description,
+                    })
+                    .await
+                {
+                    Ok(invoice_id) => invoice_id,
+                    Err(e) => {
+                        tracing::error!(
+                            error = ?e,
+                            cents = charge.amount_cents,
+                            "ai overage invoice could not be opened"
+                        );
+                        self.fail_charge(payer, charge.id).await?;
+                        return Err(e);
+                    }
+                }
+            }
+        };
+        // Record the invoice before collecting: if this process dies here the
+        // next settlement pays this invoice instead of opening another.
+        self.repo
+            .finish_overage_charge(charge.id, Some(&invoice_id), OverageChargeStatus::Pending)
+            .await?;
+
         match self
             .payments
-            .charge_overage(OverageChargeRequest {
-                customer_id,
-                charge_id: charge.id,
-                amount_cents: charge.amount_cents,
-                description,
-            })
+            .pay_overage_invoice(charge.id, &invoice_id)
             .await
         {
-            Ok(receipt) => {
-                let status = if receipt.paid {
-                    OverageChargeStatus::Paid
-                } else {
-                    // Left open for Stripe's retries; the webhook settles it.
-                    OverageChargeStatus::Pending
-                };
+            Ok(true) => {
                 self.repo
-                    .finish_overage_charge(charge.id, Some(&receipt.invoice_id), status)
+                    .finish_overage_charge(charge.id, Some(&invoice_id), OverageChargeStatus::Paid)
                     .await?;
                 tracing::info!(
                     cents = charge.amount_cents,
-                    invoice = %receipt.invoice_id,
-                    paid = receipt.paid,
+                    invoice = %invoice_id,
                     "collected ai overage"
                 );
                 Ok(())
             }
+            Ok(false) => {
+                // Declined: the invoice stays open for Stripe's retries and
+                // the webhook reports the outcome either way.
+                tracing::info!(
+                    cents = charge.amount_cents,
+                    invoice = %invoice_id,
+                    "ai overage invoice awaiting payment"
+                );
+                Ok(())
+            }
             Err(e) => {
-                tracing::error!(error = ?e, cents = charge.amount_cents, "ai overage charge failed");
-                self.repo
-                    .finish_overage_charge(charge.id, None, OverageChargeStatus::Failed)
-                    .await?;
-                self.repo.suspend_overage(payer).await?;
+                tracing::error!(
+                    error = ?e,
+                    cents = charge.amount_cents,
+                    invoice = %invoice_id,
+                    "ai overage charge failed"
+                );
+                self.fail_charge(payer, charge.id).await?;
                 Err(e)
             }
         }
+    }
+
+    /// A charge that could not be collected: it stops covering usage, and
+    /// overage pauses until the payer re-enables it (which retries it).
+    async fn fail_charge(&self, payer: &MacroUserIdStr<'_>, charge_id: Uuid) -> Result<()> {
+        self.repo
+            .finish_overage_charge(charge_id, None, OverageChargeStatus::Failed)
+            .await?;
+        self.repo.suspend_overage(payer).await
     }
 
     fn require_payer(entitlement: &Entitlement, user: &MacroUserIdStr<'_>) -> Result<()> {
@@ -364,12 +415,17 @@ where
             .resolve_overage_invoice(stripe_invoice_id, status)
             .await?
         else {
+            // Not ours, already paid, or already in this state.
             return Ok(());
         };
-        if paid {
-            self.repo.clear_overage_suspension(&payer).await
-        } else {
-            self.repo.suspend_overage(&payer).await
+        // Webhooks arrive in any order. A late `paid` for an older invoice must
+        // not lift the suspension a newer failure caused, and a late failure
+        // must not re-suspend a payer whose newer charge went through: the
+        // newest charge's outcome decides.
+        match self.repo.latest_charge_status(&payer).await? {
+            Some(OverageChargeStatus::Paid) => self.repo.clear_overage_suspension(&payer).await,
+            Some(OverageChargeStatus::Failed) => self.repo.suspend_overage(&payer).await,
+            Some(OverageChargeStatus::Pending) | None => Ok(()),
         }
     }
 }

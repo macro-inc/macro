@@ -8,7 +8,7 @@ use crate::domain::{
 use axum::{
     Json, Router,
     extract::{FromRef, State},
-    http::StatusCode,
+    http::{HeaderMap, StatusCode, Uri, header::ORIGIN},
     response::{IntoResponse, Response},
     routing::{get, patch, post},
 };
@@ -69,10 +69,84 @@ pub struct UpdateOverageRequest {
 pub struct CreditCheckoutRequestBody {
     /// Pack size, cents; one of the catalog's `credit_packs_cents`.
     pub amount_cents: i64,
-    /// Where Stripe returns the user after paying.
+    /// Where Stripe returns the user after paying. Must be an `https` URL
+    /// on the origin the request came from.
     pub success_url: String,
-    /// Where Stripe returns the user on cancel.
+    /// Where Stripe returns the user on cancel. Same rules as `success_url`.
     pub cancel_url: String,
+}
+
+/// Why a Checkout return URL was refused.
+#[derive(Debug, PartialEq, Eq)]
+enum ReturnUrlError {
+    Unparseable,
+    Scheme,
+    Credentials,
+    Origin,
+}
+
+impl std::fmt::Display for ReturnUrlError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            ReturnUrlError::Unparseable => "is not an absolute URL",
+            ReturnUrlError::Scheme => "must use https (http only for localhost)",
+            ReturnUrlError::Credentials => "must not carry credentials",
+            ReturnUrlError::Origin => "must be on the origin the request came from",
+        })
+    }
+}
+
+/// Stripe sends the payer wherever these URLs point after Checkout, so they
+/// must not be an open redirect: absolute `https` (plain `http` only for a
+/// local frontend), no embedded credentials, and, when the browser told us
+/// where the request came from, that same origin.
+fn validate_return_url(url: &str, request_origin: Option<&str>) -> Result<(), ReturnUrlError> {
+    let uri: Uri = url.parse().map_err(|_| ReturnUrlError::Unparseable)?;
+    let (Some(scheme), Some(authority)) = (uri.scheme_str(), uri.authority()) else {
+        return Err(ReturnUrlError::Unparseable);
+    };
+    if authority.as_str().contains('@') {
+        return Err(ReturnUrlError::Credentials);
+    }
+    let host = authority.host();
+    let local = host.eq_ignore_ascii_case("localhost") || host == "127.0.0.1" || host == "[::1]";
+    if !(scheme == "https" || (scheme == "http" && local)) {
+        return Err(ReturnUrlError::Scheme);
+    }
+    if let Some(origin) = request_origin.filter(|o| *o != "null") {
+        // Browsers omit the default port from `Origin`; match that.
+        let default_port = if scheme == "https" { "443" } else { "80" };
+        let expected = match authority.port_u16().map(|p| p.to_string()) {
+            Some(port) if port != default_port => format!("{scheme}://{host}:{port}"),
+            _ => format!("{scheme}://{host}"),
+        };
+        if !origin.eq_ignore_ascii_case(&expected) {
+            return Err(ReturnUrlError::Origin);
+        }
+    }
+    Ok(())
+}
+
+fn validate_return_urls(
+    req: &CreditCheckoutRequestBody,
+    headers: &HeaderMap,
+) -> Result<(), Response> {
+    let origin = headers.get(ORIGIN).and_then(|v| v.to_str().ok());
+    for (name, url) in [
+        ("successUrl", &req.success_url),
+        ("cancelUrl", &req.cancel_url),
+    ] {
+        if let Err(e) = validate_return_url(url, origin) {
+            return Err((
+                StatusCode::BAD_REQUEST,
+                Json(AiBillingErrorBody {
+                    error: format!("{name} {e}"),
+                }),
+            )
+                .into_response());
+        }
+    }
+    Ok(())
 }
 
 /// Response for [`create_credit_checkout_handler`].
@@ -266,7 +340,7 @@ pub async fn update_overage_handler<B: BillingService, Auth: MacroAuthorizationS
     request_body = CreditCheckoutRequestBody,
     responses(
         (status = 200, description = "Checkout URL", body = CreditCheckoutResponse),
-        (status = 400, description = "Invalid pack or no payment account", body = AiBillingErrorBody),
+        (status = 400, description = "Invalid pack, untrusted return URL, or no payment account", body = AiBillingErrorBody),
         (status = 401, description = "Unauthorized"),
         (status = 402, description = "A paid plan is required", body = AiBillingErrorBody),
         (status = 403, description = "Only the payer may buy credits", body = AiBillingErrorBody),
@@ -278,8 +352,12 @@ pub async fn update_overage_handler<B: BillingService, Auth: MacroAuthorizationS
 pub async fn create_credit_checkout_handler<B: BillingService, Auth: MacroAuthorizationService>(
     State(service): State<Arc<B>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    headers: HeaderMap,
     Json(req): Json<CreditCheckoutRequestBody>,
 ) -> Response {
+    if let Err(response) = validate_return_urls(&req, &headers) {
+        return response;
+    }
     match service
         .create_credit_checkout(
             &user.authorization.user.macro_user_id,
@@ -335,5 +413,56 @@ pub async fn settle_handler<B: BillingService, Auth: MacroAuthorizationService>(
             StatusCode::NO_CONTENT.into_response()
         }
         Err(e) => error_response(e),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::{ReturnUrlError, validate_return_url};
+
+    #[test]
+    fn return_urls_must_be_https_on_the_calling_origin() {
+        let origin = Some("https://macro.com");
+        assert_eq!(
+            validate_return_url("https://macro.com/app/settings/billing?x=1", origin),
+            Ok(())
+        );
+        // Without an Origin header any https URL without credentials passes.
+        assert_eq!(
+            validate_return_url("https://preview.macro.com/app", None),
+            Ok(())
+        );
+        assert_eq!(
+            validate_return_url("http://localhost:3000/app", Some("http://localhost:3000")),
+            Ok(())
+        );
+        assert_eq!(
+            validate_return_url("https://macro.com:443/app", origin),
+            Ok(())
+        );
+        assert_eq!(
+            validate_return_url("https://macro.com:8443/app", origin),
+            Err(ReturnUrlError::Origin)
+        );
+        assert_eq!(
+            validate_return_url("https://evil.example/app", origin),
+            Err(ReturnUrlError::Origin)
+        );
+        assert_eq!(
+            validate_return_url("http://macro.com/app", None),
+            Err(ReturnUrlError::Scheme)
+        );
+        assert_eq!(
+            validate_return_url("javascript:alert(1)", None),
+            Err(ReturnUrlError::Unparseable)
+        );
+        assert_eq!(
+            validate_return_url("/app/settings/billing", None),
+            Err(ReturnUrlError::Unparseable)
+        );
+        assert_eq!(
+            validate_return_url("https://user:pw@macro.com/app", None),
+            Err(ReturnUrlError::Credentials)
+        );
     }
 }

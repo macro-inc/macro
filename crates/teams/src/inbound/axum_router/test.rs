@@ -377,6 +377,10 @@ impl TeamService for FakeTeamService {
         panic!("unexpected set_team_member_plan call")
     }
 
+    async fn team_bills_per_seat(&self, _team_id: &uuid::Uuid) -> Result<bool, TeamError> {
+        panic!("unexpected team_bills_per_seat call")
+    }
+
     async fn get_team_user_permissions(
         &self,
         _user_id: &MacroUserIdStr<'_>,

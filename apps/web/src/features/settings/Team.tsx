@@ -1,4 +1,3 @@
-import { useHasPaidAccess } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getLinkShareScope,
@@ -29,7 +28,10 @@ import SpinnerIcon from '@phosphor/spinner.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import UsersIcon from '@phosphor/users.svg';
 import XIcon from '@phosphor/x.svg';
-import { useGithubLinkStatusQuery } from '@queries/auth';
+import {
+  useAiBillingSummaryQuery,
+  useGithubLinkStatusQuery,
+} from '@queries/auth';
 import {
   useJoinTeamMutation,
   useRejectInvitationMutation,
@@ -1060,15 +1062,30 @@ function TeamManagement(props: {
   });
   const isAdminOrOwner = () => isTeamAdminOrOwner(currentUserRole());
   const canManageMemberRemovals = () => isAdminOrOwner();
-  // Seat plans only exist on paying (or enterprise) teams; a member of such
-  // a team has paid access, a free-team member does not.
-  const hasPaid = useHasPaidAccess();
-  const showSeatPlans = () => hasPaid();
+  // Seat plans only exist on teams billed per seat: enterprise teams, and
+  // paying teams, which pool every member's AI onto the owner. The team API
+  // does not expose its subscription, so a paying team is recognised from the
+  // viewer's billing position: a paid tier whose payer is the team owner and
+  // whose seat count spans more than one member (a free-team owner with a
+  // personal subscription is billed for exactly one seat). A paying team of
+  // one therefore shows no seat menu; its owner moves their own seat from
+  // Billing.
+  const billingSummary = useAiBillingSummaryQuery();
+  const showSeatPlans = () => {
+    const team = teamQuery.data?.team;
+    if (!team) return false;
+    if (team.enterprise) return true;
+    return (
+      billingSummary.isSuccess &&
+      billingSummary.data.tier !== 'free' &&
+      billingSummary.data.payer === team.owner_id &&
+      billingSummary.data.seats > 1
+    );
+  };
   const setMemberPlanMutation = useSetTeamMemberPlanMutation();
-  const pendingPlanMemberId = () =>
-    setMemberPlanMutation.isPending
-      ? setMemberPlanMutation.variables?.userId
-      : undefined;
+  // Seat moves read and rewrite the subscription's item quantities, so only
+  // one may be in flight per team: every plan menu waits while one runs.
+  const planMovePending = () => setMemberPlanMutation.isPending;
   const isOwner = createMemo(() => {
     const currentUserId = userId();
     if (!currentUserId) return false;
@@ -1563,7 +1580,7 @@ function TeamManagement(props: {
                       )}
                       showPlan={showSeatPlans()}
                       canEditPlan={isAdminOrOwner()}
-                      planPending={pendingPlanMemberId() === member.user_id}
+                      planPending={planMovePending()}
                       onPlanChange={(plan) => {
                         if (!props.teamId || plan === memberPlan(member))
                           return;

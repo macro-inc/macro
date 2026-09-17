@@ -3,7 +3,10 @@
 #[cfg(test)]
 mod test;
 
-use std::{collections::HashSet, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::{Arc, LazyLock, Mutex, Weak},
+};
 
 use channels::domain::{
     models::{ChannelType, CreateChannelRequest, Sender},
@@ -64,6 +67,29 @@ fn team_member_roles_to_remove() -> Vec<RoleId> {
     std::iter::once(RoleId::TeamSubscriber)
         .chain(SeatPlan::ALL.iter().map(|plan| plan.role()))
         .collect()
+}
+
+/// Per-team locks serializing seat moves within this process (see
+/// [`TeamService::set_team_member_plan`]). Entries are weak so a team whose
+/// move finished costs nothing; a concurrent move on the same team picks up
+/// the live lock instead. Replicas of the service do not share this, so two
+/// admins on different replicas moving seats in the same instant can still
+/// race; the seat picker disables itself while a move is in flight, which
+/// covers the realistic case of one admin double-clicking.
+fn seat_move_lock(team_id: &uuid::Uuid) -> Arc<tokio::sync::Mutex<()>> {
+    static LOCKS: LazyLock<Mutex<HashMap<uuid::Uuid, Weak<tokio::sync::Mutex<()>>>>> =
+        LazyLock::new(Default::default);
+    let mut locks = LOCKS
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    if let Some(live) = locks.get(team_id).and_then(Weak::upgrade) {
+        return live;
+    }
+    // Drop entries whose lock nobody holds any more while we are here.
+    locks.retain(|_, weak| weak.strong_count() > 0);
+    let lock = Arc::new(tokio::sync::Mutex::new(()));
+    locks.insert(*team_id, Arc::downgrade(&lock));
+    lock
 }
 
 /// Implementation of the TeamService using a TeamRepository
@@ -1540,6 +1566,27 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
+    async fn team_bills_per_seat(&self, team_id: &uuid::Uuid) -> Result<bool, TeamError> {
+        if self
+            .team_repository
+            .get_team_enterprise_status(team_id)
+            .await?
+        {
+            return Ok(true);
+        }
+        let paying = self
+            .team_repository
+            .get_team_payment_status(team_id)
+            .await?;
+        let subscribed = self
+            .team_repository
+            .get_team_subscription_id(team_id)
+            .await?
+            .is_some();
+        Ok(paying && subscribed)
+    }
+
+    #[tracing::instrument(skip(self), err)]
     async fn set_team_member_plan(
         &self,
         entity_access_receipt: EntityAccessReceipt<AdminTeamRole>,
@@ -1548,6 +1595,12 @@ where
     ) -> Result<TeamMember<'static>, SetTeamMemberPlanError> {
         let team_id =
             macro_uuid::string_to_uuid(&entity_access_receipt.entity().entity_id).unwrap();
+        // Moving a seat reads the subscription's per-plan quantities and
+        // writes them back, so two moves on one team must not interleave:
+        // both would apply the same pre-image and Stripe would under-count a
+        // plan. Serialize per team for the whole move.
+        let lock = seat_move_lock(&team_id);
+        let _moving = lock.lock().await;
         let changed_by = entity_access_receipt
             .get_authenticated_user()
             .map_err(|e| SetTeamMemberPlanError::TeamError(TeamError::AccessError(e)))?

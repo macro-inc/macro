@@ -176,7 +176,10 @@ pub async fn handler(
         EventType::InvoicePaymentFailed
         | EventType::InvoicePaymentSucceeded
         | EventType::InvoicePaid => handle_payment_event(&ctx, event.data.object, event_type).await,
-        EventType::CheckoutSessionCompleted => {
+        // A credit pack paid with a delayed method (bank debit, etc.) completes
+        // its session unpaid and reports the money later; both events book
+        // through the same idempotent path.
+        EventType::CheckoutSessionCompleted | EventType::CheckoutSessionAsyncPaymentSucceeded => {
             handle_checkout_session_completed(&ctx, event.data.object).await
         }
         _ => {
@@ -308,6 +311,11 @@ async fn handle_payment_event(
         .iter()
         .filter_map(|item| item.price.as_ref())
         .find_map(|price| ctx.stripe_prices.plan_for_price(price.id.as_str()));
+    // This subscription was fetched with the `stripe` client, which pins its
+    // own (older) API version where the current period still lives on the
+    // subscription. Webhook payloads arrive on the endpoint's newer version,
+    // where it moved onto the items; `handle_customer_subscription_event`
+    // reads it from there.
     let period = period_from_timestamps(
         subscription.current_period_start,
         subscription.current_period_end,
@@ -376,7 +384,7 @@ async fn handle_payment_event(
                 .unwrap_or(ProductTier::Opus),
         )
         .await?;
-    sync_personal_billing_period(ctx, &email, period).await;
+    sync_personal_billing_period(ctx, &email, period).await?;
 
     Ok(())
 }
@@ -387,26 +395,28 @@ fn period_from_timestamps(start: i64, end: i64) -> Option<(DateTime<Utc>, DateTi
 }
 
 /// Anchor a personal subscriber's AI allowance to their Stripe period.
-/// Best-effort: the allowance falls back to the calendar month without it.
+///
+/// A storage failure fails the webhook so Stripe redelivers it: until the
+/// anchor lands the allowance is metered against the calendar month, which
+/// is the wrong window for anyone who did not subscribe on the 1st. Every
+/// step of the handler before this is idempotent, so the retry is safe. An
+/// email that cannot become a user id is not transient and is only logged.
 async fn sync_personal_billing_period(
     ctx: &ApiContext,
     email: &Email<Lowercase<'_>>,
     period: Option<(DateTime<Utc>, DateTime<Utc>)>,
-) {
+) -> anyhow::Result<()> {
     let Some((start, end)) = period else {
-        return;
+        return Ok(());
     };
     let Ok(user_id) = MacroUserIdStr::try_from_email(email.as_ref()) else {
         tracing::warn!("could not derive a macro user id for billing period sync");
-        return;
+        return Ok(());
     };
-    if let Err(e) = ctx
-        .ai_billing_service
+    ctx.ai_billing_service
         .sync_period(&user_id, start, end)
         .await
-    {
-        tracing::warn!(error = ?e, "failed to sync ai billing period");
-    }
+        .context("failed to sync ai billing period")
 }
 
 /// What a team subscription event tells us about the team's billing period.
@@ -422,29 +432,37 @@ struct TeamPlanSync {
     period: Option<(DateTime<Utc>, DateTime<Utc>)>,
 }
 
-/// Anchor the team's pooled AI allowance to the subscription's period.
-/// Best-effort: the allowance falls back to the calendar month without it.
-async fn sync_team_billing_period(ctx: &ApiContext, sync: &TeamPlanSync) {
+/// Anchor the team's pooled AI allowance to the subscription's period. As
+/// with [`sync_personal_billing_period`], a storage failure fails the webhook
+/// so Stripe redelivers it; a subscription with no `owner_id` metadata is
+/// not transient and is only logged.
+async fn sync_team_billing_period(ctx: &ApiContext, sync: &TeamPlanSync) -> anyhow::Result<()> {
     let Some(owner) = sync.owner.as_ref() else {
         tracing::warn!("team subscription without owner_id metadata; skipping period sync");
-        return;
+        return Ok(());
     };
-    if let Some((start, end)) = sync.period
-        && let Err(e) = ctx.ai_billing_service.sync_period(owner, start, end).await
-    {
-        tracing::warn!(error = ?e, owner = %owner, "failed to sync team billing period");
-    }
+    let Some((start, end)) = sync.period else {
+        return Ok(());
+    };
+    ctx.ai_billing_service
+        .sync_period(owner, start, end)
+        .await
+        .context("failed to sync team billing period")
 }
 
-/// Book a completed credit-pack purchase. Subscription checkouts also arrive
-/// here and are ignored; the subscription events carry those.
+/// Book a paid credit-pack purchase, from `checkout.session.completed` or,
+/// for delayed payment methods, `checkout.session.async_payment_succeeded`.
+/// Subscription checkouts also arrive here and are ignored; the subscription
+/// events carry those. Idempotent on the session id.
 #[tracing::instrument(skip(ctx, event_object), err, ret)]
 async fn handle_checkout_session_completed(
     ctx: &ApiContext,
     event_object: EventObject,
 ) -> anyhow::Result<()> {
-    let EventObject::CheckoutSessionCompleted(session) = event_object else {
-        anyhow::bail!("expected checkout session");
+    let session = match event_object {
+        EventObject::CheckoutSessionCompleted(session)
+        | EventObject::CheckoutSessionAsyncPaymentSucceeded(session) => session,
+        _ => anyhow::bail!("expected checkout session"),
     };
     let metadata = session.metadata.clone().unwrap_or_default();
     if metadata.get(PURPOSE_METADATA_KEY).map(String::as_str) != Some(PURPOSE_AI_CREDITS) {
@@ -455,7 +473,7 @@ async fn handle_checkout_session_completed(
         tracing::info!(
             session_id = %session.id,
             payment_status = ?session.payment_status,
-            "credit purchase not paid yet; waiting for a later event"
+            "credit purchase not paid yet; waiting for checkout.session.async_payment_succeeded"
         );
         return Ok(());
     }
@@ -745,7 +763,7 @@ async fn handle_customer_subscription_event(
             product_tier,
         )
         .await?;
-    sync_personal_billing_period(ctx, &email, period).await;
+    sync_personal_billing_period(ctx, &email, period).await?;
 
     // Track conversion events to GA and Meta (fire-and-forget)
     let subscription_id = stripe::SubscriptionId::from_str(subscription_id).unwrap();
@@ -858,7 +876,7 @@ async fn handle_team_subscription_event<'a>(
             ctx.teams_service
                 .restore_permissions_for_team_members(team_id)
                 .await?;
-            sync_team_billing_period(ctx, &plan_sync).await;
+            sync_team_billing_period(ctx, &plan_sync).await?;
 
             ctx.teams_service
                 .patch_team_payment_status(team_id, true)
@@ -875,7 +893,7 @@ async fn handle_team_subscription_event<'a>(
             ctx.teams_service
                 .revoke_permissions_for_team_members(team_id)
                 .await?;
-            sync_team_billing_period(ctx, &plan_sync).await;
+            sync_team_billing_period(ctx, &plan_sync).await?;
             ctx.teams_service
                 .patch_team_payment_status(team_id, false)
                 .await?;

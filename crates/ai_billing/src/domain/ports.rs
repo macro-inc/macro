@@ -42,6 +42,9 @@ pub struct PendingCharge {
     pub id: Uuid,
     /// Amount to collect, list-rate cents.
     pub amount_cents: i64,
+    /// The Stripe invoice an earlier attempt opened for this charge, if any.
+    /// A retry pays that invoice instead of opening a second one.
+    pub stripe_invoice_id: Option<String>,
 }
 
 /// What a settlement booked.
@@ -117,6 +120,18 @@ pub trait BillingRepo: Send + Sync + 'static {
     /// pending overage charge. `used_cents`/`included_cents` come from the
     /// caller; the overage policy is read inside the lock, with
     /// `charge_threshold_cents` and `period_ended` taken from `policy`.
+    ///
+    /// A charge that was reserved earlier but never collected is handed back
+    /// before anything new is reserved, so retries reuse its id (and so its
+    /// Stripe idempotency keys and invoice) rather than billing the same
+    /// usage twice:
+    ///
+    /// - a `pending` charge with no invoice whose collection never finished
+    ///   (the process died between reserving and opening the invoice);
+    /// - a `failed` charge, once overage is active again and the plan would
+    ///   charge at least its amount anyway. It flips back to `pending`. A
+    ///   failed charge whose usage has since been covered another way (say
+    ///   by a credit purchase) stays failed and is never retried.
     fn apply_settlement(
         &self,
         payer: &MacroUserIdStr<'_>,
@@ -135,12 +150,22 @@ pub trait BillingRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 
     /// Update a charge by its Stripe invoice (webhook). Returns the payer when
-    /// the invoice was one of ours.
+    /// the invoice was one of ours *and* the status changed. `Paid` is
+    /// terminal: a late or duplicate failure event never un-pays a charge, and
+    /// re-reporting the current status is a no-op.
     fn resolve_overage_invoice(
         &self,
         stripe_invoice_id: &str,
         status: OverageChargeStatus,
     ) -> impl Future<Output = Result<Option<MacroUserIdStr<'static>>>> + Send;
+
+    /// The status of the payer's most recently reserved charge, if any. The
+    /// newest outcome is what decides whether overage stays suspended; older
+    /// invoices' webhooks may arrive out of order.
+    fn latest_charge_status(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<OverageChargeStatus>>> + Send;
 }
 
 /// A one-off credit purchase to start.
@@ -158,27 +183,18 @@ pub struct CreditCheckoutRequest {
     pub cancel_url: String,
 }
 
-/// An overage chunk to collect.
+/// An overage chunk to invoice.
 #[derive(Debug, Clone)]
 pub struct OverageChargeRequest {
     /// The payer's Stripe customer.
     pub customer_id: String,
-    /// The reserved charge; doubles as the idempotency key.
+    /// The reserved charge; doubles as the idempotency key, so opening the
+    /// same charge twice yields the same invoice.
     pub charge_id: Uuid,
     /// Amount, list-rate cents.
     pub amount_cents: i64,
     /// Line description shown on the invoice.
     pub description: String,
-}
-
-/// The result of collecting an overage chunk.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct OverageChargeReceipt {
-    /// The Stripe invoice.
-    pub invoice_id: String,
-    /// Whether it was paid synchronously. When false the invoice stays open
-    /// for Stripe's retries and the webhook reports the outcome.
-    pub paid: bool,
 }
 
 /// The payment provider.
@@ -189,11 +205,23 @@ pub trait PaymentGateway: Send + Sync + 'static {
         request: CreditCheckoutRequest,
     ) -> impl Future<Output = Result<String>> + Send;
 
-    /// Invoice and collect an overage chunk.
-    fn charge_overage(
+    /// Open a finalized invoice for exactly this overage chunk (and nothing
+    /// else pending on the customer). Returns the invoice id. Idempotent on
+    /// `charge_id`.
+    fn open_overage_invoice(
         &self,
         request: OverageChargeRequest,
-    ) -> impl Future<Output = Result<OverageChargeReceipt>> + Send;
+    ) -> impl Future<Output = Result<String>> + Send;
+
+    /// Attempt to collect an open overage invoice now. `Ok(true)` when it is
+    /// paid, `Ok(false)` when the card was declined and the invoice stays
+    /// open for Stripe's own retries (the webhook reports the outcome), `Err`
+    /// when the provider could not be reached or rejected the request.
+    fn pay_overage_invoice(
+        &self,
+        charge_id: Uuid,
+        invoice_id: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Asks whoever owns Stripe to settle a payer. Fire-and-forget: services that
@@ -215,6 +243,14 @@ impl SettlementTrigger for NoOpSettlementTrigger {
 /// The use cases offered to inbound adapters and other services.
 pub trait BillingService: Send + Sync + 'static {
     /// May `user` start another AI request?
+    ///
+    /// Admission is a read of the position at this instant; usage is
+    /// metered after the completion, so requests that are in flight together
+    /// can each be admitted against the same headroom. The overshoot is
+    /// bounded by one completion per concurrent request, is billed at list
+    /// rate like everything else, and can only exceed the payer's overage cap
+    /// by that much. Reserving capacity per request would need a second
+    /// ledger write on every completion; the gate deliberately does not.
     fn check_allowance(
         &self,
         user: &MacroUserIdStr<'_>,

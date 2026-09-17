@@ -12,6 +12,7 @@ use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use sqlx::PgPool;
+use std::str::FromStr;
 
 /// Postgres-backed [`BillingRepo`].
 #[derive(Clone)]
@@ -268,7 +269,67 @@ impl BillingRepo for PgBillingRepo {
             .map_err(storage)?;
         }
 
-        let pending_charge = if plan.charge_overage_cents > 0 {
+        // A charge still owed from an earlier pass comes first, so a retry
+        // reuses its id (and with it its Stripe idempotency keys and invoice)
+        // instead of reserving a second charge for the same usage. Failed
+        // charges are excluded from the ledger above, so `plan` already
+        // treats their usage as uncovered; only take one back when the plan
+        // would charge at least that much anyway (credits and the cap have
+        // had their say), otherwise it is stale and stays failed.
+        let owed = sqlx::query!(
+            r#"
+            SELECT id, amount_cents, stripe_invoice_id, status::text AS "status!"
+            FROM ai_overage_charge
+            WHERE user_id = $1
+              AND period_start = $2
+              AND (
+                status = 'failed'
+                OR (
+                  status = 'pending'
+                  AND stripe_invoice_id IS NULL
+                  AND updated_at < NOW() - INTERVAL '10 minutes'
+                )
+              )
+            ORDER BY created_at
+            FOR UPDATE
+            "#,
+            payer,
+            period_start,
+        )
+        .fetch_all(&mut *tx)
+        .await
+        .map_err(storage)?;
+        let orphaned = owed.iter().find(|row| row.status == "pending");
+        let retryable = owed
+            .iter()
+            .find(|row| row.status == "failed" && row.amount_cents <= plan.charge_overage_cents);
+
+        let pending_charge = if let Some(row) = orphaned {
+            // Reserved but never collected (the collector died before it
+            // opened an invoice). It already counts as covered; collect it.
+            Some(PendingCharge {
+                id: row.id,
+                amount_cents: row.amount_cents,
+                stripe_invoice_id: row.stripe_invoice_id.clone(),
+            })
+        } else if let Some(row) = retryable {
+            sqlx::query!(
+                r#"
+                UPDATE ai_overage_charge
+                SET status = 'pending', updated_at = NOW()
+                WHERE id = $1
+                "#,
+                row.id,
+            )
+            .execute(&mut *tx)
+            .await
+            .map_err(storage)?;
+            Some(PendingCharge {
+                id: row.id,
+                amount_cents: row.amount_cents,
+                stripe_invoice_id: row.stripe_invoice_id.clone(),
+            })
+        } else if plan.charge_overage_cents > 0 {
             let id = macro_uuid::generate_uuid_v7();
             sqlx::query!(
                 r#"
@@ -286,6 +347,7 @@ impl BillingRepo for PgBillingRepo {
             Some(PendingCharge {
                 id,
                 amount_cents: plan.charge_overage_cents,
+                stripe_invoice_id: None,
             })
         } else {
             None
@@ -327,11 +389,16 @@ impl BillingRepo for PgBillingRepo {
         stripe_invoice_id: &str,
         status: OverageChargeStatus,
     ) -> Result<Option<MacroUserIdStr<'static>>> {
+        // `paid` is terminal and re-reporting the current status changes
+        // nothing, so a late or duplicate webhook cannot un-pay a charge or
+        // count twice.
         let row = sqlx::query!(
             r#"
             UPDATE ai_overage_charge
             SET status = ($2::text)::ai_overage_charge_status, updated_at = NOW()
             WHERE stripe_invoice_id = $1
+              AND status <> 'paid'
+              AND status <> ($2::text)::ai_overage_charge_status
             RETURNING user_id
             "#,
             stripe_invoice_id,
@@ -345,6 +412,32 @@ impl BillingRepo for PgBillingRepo {
                 .map_err(|e| BillingError::Storage(anyhow::anyhow!("invalid payer id: {e}")))
         })
         .transpose()
+    }
+
+    async fn latest_charge_status(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+    ) -> Result<Option<OverageChargeStatus>> {
+        let status = sqlx::query_scalar!(
+            r#"
+            SELECT status::text AS "status!"
+            FROM ai_overage_charge
+            WHERE user_id = $1
+            ORDER BY created_at DESC, id DESC
+            LIMIT 1
+            "#,
+            payer.as_ref(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(storage)?;
+        status
+            .map(|s| {
+                OverageChargeStatus::from_str(&s).map_err(|e| {
+                    BillingError::Storage(anyhow::anyhow!("unknown overage charge status {s}: {e}"))
+                })
+            })
+            .transpose()
     }
 }
 

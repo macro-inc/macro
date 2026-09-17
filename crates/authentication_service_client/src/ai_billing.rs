@@ -10,7 +10,10 @@ impl AuthServiceClient {
     /// Ask the authentication service to settle AI billing for `user_id`'s
     /// payer: apply prepaid credits to usage past the allowance and collect
     /// any chargeable overage. Idempotent; safe to call often.
-    #[tracing::instrument(skip(self))]
+    ///
+    /// `user_id` is the payer's `macro|email` identity, so it stays out of
+    /// the span.
+    #[tracing::instrument(skip(self, user_id))]
     pub async fn settle_ai_billing(&self, user_id: &str) -> Result<(), AuthServiceClientError> {
         let res = self
             .client

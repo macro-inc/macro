@@ -7,7 +7,11 @@ import { usePermissions, useUserId } from '@core/context/user';
 import { plural } from '@core/util/string';
 import CheckIcon from '@phosphor/check.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
-import { useAiBillingSummaryQuery, useChangePlanMutation } from '@queries/auth';
+import {
+  useAiBillingSummaryQuery,
+  useChangePlanMutation,
+  useCreateCheckoutSessionMutation,
+} from '@queries/auth';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { PaidPlan } from '@service-auth/ai-billing-types';
 import type { TeamMember } from '@service-auth/generated/schemas/teamMember';
@@ -79,6 +83,7 @@ export const Billing = () => {
   const team = useCurrentTeamQuery();
   const summary = useAiBillingSummaryQuery();
   const changePlan = useChangePlanMutation();
+  const checkout = useCreateCheckoutSessionMutation();
 
   const canManageSubscription = createMemo(() => {
     return permissions()?.includes(PERMISSION_IDS.WRITE_STRIPE_SUBSCRIPTION);
@@ -107,12 +112,19 @@ export const Billing = () => {
     if (summary.isSuccess) return summary.data.tier;
     return hasPaid() ? 'premium' : 'free';
   });
-  const isOwnerOrSolo = () => !teamRole() || teamRole() === 'owner';
+  // A member whose seat the team pays for manages nothing here; a member of
+  // a free team pays for themself and gets the same controls as a solo user.
+  const billedThroughTeam = () =>
+    summary.isSuccess &&
+    !summary.data.can_manage_billing &&
+    summary.data.tier !== 'free';
+  const isOwnerOrSolo = () =>
+    !teamRole() || teamRole() === 'owner' || !billedThroughTeam();
   const canChangePlan = () => canManageSubscription() && isOwnerOrSolo();
 
   const handleCheckout = async (plan: PaidPlan) => {
     try {
-      const url = await stripeServiceClient.createCheckoutSessionV2({ plan });
+      const url = await checkout.mutateAsync({ plan });
       analytics.track('subscription_start', { type: plan });
       window.location.href = url;
     } catch (error) {
@@ -180,7 +192,7 @@ export const Billing = () => {
                   </Layer>
                 </div>
                 <Switch>
-                  <Match when={teamRole() === 'member'}>
+                  <Match when={teamRole() === 'member' && billedThroughTeam()}>
                     <p class="text-ink-extra-muted text-xs">
                       Your seat is billed through your team. Team admins choose
                       each seat's plan in{' '}

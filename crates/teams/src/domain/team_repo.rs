@@ -427,6 +427,14 @@ pub trait TeamService: Clone + Send + Sync + 'static {
         plan: SeatPlan,
     ) -> impl Future<Output = Result<TeamMember<'static>, SetTeamMemberPlanError>> + Send;
 
+    /// Whether the team's seats are billed per plan through the team: a
+    /// paying team with a subscription, or an enterprise team. On a free team
+    /// every member pays for themself and seat plans do not apply.
+    fn team_bills_per_seat(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<bool, TeamError>> + Send;
+
     /// Patches the team subscription id
     /// NOTE: this is not exposed via axum and is meant for internal usage within stripe webhook only.
     fn patch_team_subscription_id(

@@ -51,10 +51,11 @@ export function AiUsageMeter(props: { snapshot: AiUsageSnapshot }) {
   const used = () => props.snapshot.used_cents;
   const includedUsed = () => Math.min(used(), included());
   const beyond = () => Math.max(0, used() - included());
-  const pct = () =>
-    included() > 0 ? Math.min(100, (includedUsed() / included()) * 100) : 0;
-  const beyondPct = () =>
-    included() > 0 ? Math.min(100, (beyond() / included()) * 100) : 0;
+  // Both segments share one scale (the larger of included and used) so they
+  // total at most 100% and the beyond-included segment stays visible.
+  const scale = () => Math.max(included(), used());
+  const pct = () => (scale() > 0 ? (includedUsed() / scale()) * 100 : 0);
+  const beyondPct = () => (scale() > 0 ? (beyond() / scale()) * 100 : 0);
   const blocked = () => !!props.snapshot.blocked_reason;
 
   return (
