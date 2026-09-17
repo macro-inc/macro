@@ -1,9 +1,12 @@
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use item_filter_index::vocabulary;
 use model_file_type::FileType;
 use predicate_index::{ExactFact, IndexDocument, IntegerFact, Token, ValidationError};
 use thiserror::Error;
+
+#[cfg(test)]
+mod test;
 
 /// Semantic validation failure for one complete versioned Soup document.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -125,6 +128,7 @@ fn validate_exact_facts(
     let mut channel_participant = 0;
     let mut channel_team = 0;
     let mut channel_organization = 0;
+    let mut notification_states = HashMap::new();
 
     for fact in facts {
         let attribute = &fact.attribute;
@@ -206,12 +210,10 @@ fn validate_exact_facts(
             if value.len() != 16 {
                 return Err(ProfileValidationError::InvalidValue("notification-id"));
             }
-            if facts.iter().any(|other| {
-                other.value == fact.value
-                    && other.attribute != *attribute
-                    && (other.attribute == vocabulary::notification_seen()
-                        || other.attribute == vocabulary::notification_unseen())
-            }) {
+            if notification_states
+                .insert(&fact.value, attribute)
+                .is_some_and(|previous| previous != attribute)
+            {
                 return Err(ProfileValidationError::InvalidValue("notification-state"));
             }
         } else {

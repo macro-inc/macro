@@ -36,7 +36,7 @@ pub use wire::{
 /// Maximum authoritative task Status options accepted in one complete projection.
 pub const MAX_TASK_STATUS_OPTION_IDS: usize = 64;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "models"))]
 mod test;
 
 /// Failure to project an authoritative Soup item.

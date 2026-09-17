@@ -564,7 +564,7 @@ fn optimistic_notification_conversion_rejects_unsupported_mutations() {
 }
 
 #[test]
-fn snapshot_completeness_aliases_primary_scope_and_bounds() {
+fn snapshot_completeness_aliases_and_primary_scope() {
     let data = snapshot(vec![notification(A, "UNSEEN"), notification(B, "SEEN")]);
     let mutations = authoritative_projection_mutations(SNAPSHOT, None, &data).unwrap();
     let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
@@ -622,15 +622,33 @@ fn snapshot_completeness_aliases_primary_scope_and_bounds() {
         authoritative_projection_mutations(alias_query.as_str(), None, &alias_data).unwrap(),
         authoritative_projection_mutations(SNAPSHOT, None, &data).unwrap()
     );
-    let too_many = (1..=256)
+}
+
+#[test]
+fn backfill_accepts_large_notification_sets_without_losing_members() {
+    let notifications = (1..=10_000)
         .map(|n| notification(&uuid::Uuid::from_u128(n + 1000).to_string(), "UNSEEN"))
         .collect();
-    assert!(matches!(
-        authoritative_projection_mutations(SNAPSHOT, None, &snapshot(too_many))
-            .unwrap()
-            .as_slice(),
-        [ProjectionMutation::MarkIncomplete { .. }]
-    ));
+    let backfill = SNAPSHOT.replace("query Snapshot", "query SoupBackfill");
+    let mutations = authoritative_projection_mutations(
+        &backfill,
+        Some("SoupBackfill"),
+        &snapshot(notifications),
+    )
+    .unwrap();
+    let [ProjectionMutation::Replace(document)] = mutations.as_slice() else {
+        panic!("large notification snapshots must remain complete");
+    };
+    assert_eq!(
+        document
+            .exact_facts
+            .iter()
+            .filter(|fact| { fact.attribute == vocabulary::notification_unseen() })
+            .count(),
+        10_000
+    );
+    assert!(document.matches(&unseen()));
+    assert!(!document.matches(&seen()));
 }
 
 #[test]
