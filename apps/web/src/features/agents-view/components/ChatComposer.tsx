@@ -5,32 +5,19 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { Button, ComposerSurface, SendButton } from '@ui';
-import { CLEAR_HISTORY_COMMAND } from 'lexical';
-import {
-  createEffect,
-  createSignal,
-  type JSX,
-  on,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
+import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
 import { createChatComposerTip } from '../primitives/chat-composer-tip';
 
-/** Shared multiline input for Chat, Code, and their sessions. */
+/** Shared input that starts on one line and grows with the draft. */
 export function ChatComposer(props: {
   draft: string;
   onDraftChange: (draft: string) => void;
   blockedReason?: string;
-  agentSelector?: JSX.Element;
-  modelSelector: JSX.Element;
+  selector: JSX.Element;
   onSend: (prompt: string) => void;
   session?: AgentInputProps;
-  modeSelector?: JSX.Element;
   drawer?: JSX.Element;
   drawerOpen?: boolean;
-  /** Switch the editor between independently stored drafts without remounting it. */
-  draftKey?: string;
   placeholder?: string;
 }) {
   const tip = createChatComposerTip(
@@ -77,17 +64,6 @@ export function ChatComposer(props: {
     editor.withSkills();
   }
 
-  createEffect(
-    on(
-      () => props.draftKey,
-      () => {
-        editor.controls.setMarkdown(props.draft);
-        editor.lexical.dispatchCommand(CLEAR_HISTORY_COMMAND, undefined);
-      },
-      { defer: true }
-    )
-  );
-
   onMount(() => {
     props.session?.registerFocus?.(() => editor.controls.focus());
     props.session?.registerQuoteInsert?.((text) => {
@@ -127,13 +103,13 @@ export function ChatComposer(props: {
       <ComposerSurface
         as="div"
         data-agent-composer="chat"
-        class="flex min-w-0 flex-col gap-3 px-4 pt-4 pb-3"
+        class="flex min-w-0 items-end gap-2 rounded-[32px] px-4 py-3"
         onPointerDown={focusEditor}
         onMouseDown={focusEditor}
       >
-        <div class="max-h-60 min-w-0 overflow-y-auto px-1">
+        <div class="max-h-60 min-w-0 flex-1 self-center overflow-y-auto px-1">
           <MarkdownShell
-            class="h-auto min-h-24 text-base leading-6 [&_[data-markdown-editable]]:min-h-24 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
+            class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
             config={editor}
             initialValue={props.draft}
             placeholder={props.placeholder ?? tip()}
@@ -145,16 +121,12 @@ export function ChatComposer(props: {
         </div>
         <div
           data-composer-controls
-          class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-2"
+          class="flex min-w-0 max-w-[55%] shrink-0 items-center"
           role="group"
           aria-label="Composer settings"
         >
-          <div class="flex min-w-0 max-w-full flex-wrap items-center gap-1 [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
-            {props.modeSelector}
-            {props.agentSelector}
-          </div>
           <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
-            {props.modelSelector}
+            {props.selector}
             <Show
               when={
                 props.session?.busy &&
@@ -226,7 +198,7 @@ export function ChatSessionInput(props: AgentInputProps) {
     <ChatComposer
       draft={draft()}
       onDraftChange={setDraft}
-      modelSelector={props.modelControl}
+      selector={props.modelControl}
       onSend={props.onSend}
       session={props}
     />

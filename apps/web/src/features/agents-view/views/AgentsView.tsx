@@ -41,7 +41,7 @@ import { AgentsSidebar } from '../components/AgentsSidebar';
 import { ConfirmDialog } from '../components/SimpleDialogs';
 import { Topbar } from '../components/Topbar';
 import { DataModeProvider, dataModeFor } from '../context/data-mode';
-import type { AgentKind } from '../core/agent-kind';
+import { type AgentKind, modeForKind } from '../core/agent-kind';
 import type { AgentsMode } from '../core/mode';
 import type { AgentsPage } from '../core/pages';
 import {
@@ -53,7 +53,6 @@ import {
 } from '../core/recent-conversations';
 import { kindForBot } from '../core/roster';
 import { type AgentsRoute, agentsRouteId } from '../core/route';
-import { createAgentsMode } from '../primitives/agents-mode';
 import { createAgentRosterSource } from '../queries/agent-roster-source';
 import { connectedRuntimes } from '../queries/connected-runtimes';
 import { AgentEditorDialog } from './AgentEditorDialog';
@@ -84,8 +83,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
   const layout = useSplitLayout();
   const orchestrator = useGlobalBlockOrchestrator();
   const userId = useUserId();
-  const modeState = createAgentsMode(userId());
-  const mode = (): AgentsMode => props.initialRoute?.mode ?? modeState.mode();
+  const mode = (): AgentsMode => props.initialRoute?.mode ?? 'chat';
   const dataMode = () => dataModeFor(mode());
   const [page, setPage] = createSignal<AgentsPage>('new');
   const [rosterKind, setRosterKind] = createSignal<AgentKind>('agent');
@@ -161,20 +159,11 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
 
   const showComposer = () => {
     if (panel.handle.content().id !== 'agents') {
-      modeState.setMode(mode());
       panel.handle.replace({ next: { type: 'component', id: 'agents' } });
       return;
     }
     setSelected(undefined);
     setPage('new');
-  };
-  const changeMode = (next: AgentsMode) => {
-    modeState.setMode(next);
-    if (panel.handle.content().id !== 'agents') {
-      panel.handle.replace({ next: { type: 'component', id: 'agents' } });
-    } else {
-      showComposer();
-    }
   };
   const openRoster = (kind: AgentKind) => {
     setSelected(undefined);
@@ -207,7 +196,11 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       modelOverride: start.modelOverride,
       repoUrl: start.repoUrl,
     });
-    openConversation({ id, type: 'agent_session' });
+    openConversation(
+      { id, type: 'agent_session' },
+      undefined,
+      modeForKind(kindForBot(start.botId, rosterSource.roster()))
+    );
   };
   const adoptSessionId = (placeholderId: string, sessionId: string) => {
     setSelected((current) => {
@@ -286,7 +279,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
 
   const pageTitle = () => {
     if (page() === 'agents') return 'Agents';
-    return mode() === 'code' ? 'New Session' : 'New Chat';
+    return 'New conversation';
   };
 
   return (
@@ -369,10 +362,8 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                               </Match>
                               <Match when={true}>
                                 <NewChatPage
-                                  mode={mode()}
                                   roster={rosterSource.roster()}
                                   rosterLoading={rosterSource.loading()}
-                                  onModeChange={changeMode}
                                   onStart={startConversation}
                                   onOpenRoster={openRoster}
                                 />

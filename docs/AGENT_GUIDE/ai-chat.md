@@ -9,35 +9,48 @@
   Chat rows use a chat icon; coding rows use `</>` and show their agent and
   runtime status. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
-- The starting page has one multiline composer under **What should we work on?**
-  in Chat and **What should we build?** in Code.
-  Both modes start four lines tall and grow with longer prompts. Inside the
-  bottom of the input, the **Chat / Code** control (`role="group"`,
-  `aria-label="Conversation mode"`) sits on the left, followed by **Agent**.
-  **Model** and **Send** sit on the right. The controls wrap on narrow screens.
-- **Chat** only offers in-memory agents: Macro and saved chat agents.
-  **Code** only offers Cursor and saved Cursor coding agents. Both modes use
-  the same compact agent dropdown; there are no coding-agent cards. The menu's
-  **Create agent** / **Create coding agent** opens the matching roster tab.
+- The starting page has a compact composer that starts at one line and grows
+  with longer prompts or Shift+Enter. **Agent** and **Send** sit inside the input on the right.
+  Direct model selections show only the model name and provider icon in the input.
+  Saved and coding agents show their identity beside the current model. There is
+  no Chat/Code switch or separate model button.
+- The agent dropdown combines Cursor and saved in-memory or Cursor
+  agents in **Coding agents** and **Agents** sections. A **Models** section lists
+  Macro’s available models with readable names (for example, **Sonnet 5**) and
+  provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
+  Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
+  Selecting a model here selects
+  the default runtime and applies that model to the next send, retracting the repository drawer.
+  The built-in Macro agent is hidden from the agent sections; its models remain available.
+  Coding agents carry a `</>` badge. The most recently used supported,
+  available agent is selected initially; otherwise Macro is selected.
+  Hover an agent (or use the right arrow key) to open its model submenu, with
+  the searchable Settings catalog, provider icons, and scrollable **More models**.
+  Clicking an agent directly uses its default; choosing a submenu model selects
+  both the agent and that model. A checkmark identifies the selected model,
+  including when it is the agent’s configured default; there is no separate default row.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Harness.
-  Chat and Code retain independent drafts, agent choices, and model choices
-  when toggled; changing the chosen agent resets that mode's model override.
-- Switching to **Code** reveals a repository drawer directly under the input
-  with a short slide and fade. Switching back retracts it. Reduced-motion
-  preferences disable the animation. The hidden drawer is inert, so its
-  controls cannot receive focus. Its **Repository** menu offers **No repository**,
-  recent repositories, or `owner/repo` / URL entry. The chosen repository
-  survives mode changes and is sent as `repoUrl` only for Code.
-- Both modes use the same model pill and dropdown: provider icon, readable
-  model name, and the same searchable catalog as Settings. A short
-  **Recommended** list leads to **More models**, grouped by model family in a
-  scrollable submenu. The menus stay within the available viewport height. Choices
-  and defaults come from discovery before session creation. Loading and failed
-  discovery appear in the menu. A disconnected Cursor menu offers **Connect
-  Cursor**. The built-in sandbox is not offered in the agent picker.
-- Chat's empty input cycles tips about connectors, skills, mentions, and agents;
-  Code says **Describe what you want to build**. Type `@` for mentions and `/`
-  for skills. Sending starts a session with the chosen agent and model.
+  The built-in sandbox and paired macrod runtimes are not offered here.
+- Selecting an agent changes the heading: **What should we work on?** for chat
+  agents and **What should we build?** for coding agents. The draft stays intact
+  when changing agents. **Create agent** stays pinned at the bottom of the dropdown
+  while the agent and model lists scroll. It opens the roster on the selected kind's
+  tab, where either kind can be created.
+- Selecting a coding agent reveals a repository drawer directly under the input
+  with a short slide and fade; selecting a chat agent retracts it. Reduced-motion
+  preferences disable the animation. The hidden drawer is inert. **Repository**
+  offers **No repository**, recent repositories, or `owner/repo` / URL entry.
+  The chosen repository survives agent changes and is sent only to coding agents.
+- Sending starts a session with the chosen agent's configured default model;
+  a model selected from its submenu overrides that default for the next send
+  only. Sending or choosing another agent clears the override. This does not
+  update the saved agent; configure persistent defaults in the agent editor.
+  Within an existing session, the model picker remains available on the right:
+  provider icons, search, a short **Recommended** list, and a scrollable
+  **More models** submenu shared with Settings.
+- Chat agents' empty input cycles tips about connectors, skills, mentions, and
+  agents; coding agents show **Describe what you want to build**. Type `@` for
+  mentions and `/` for skills.
 - Opening a conversation updates the URL based on that conversation's kind:
   `/app/agents/<id>` for Chat sessions, `/app/coders/<id>` for Code sessions,
   and `/app/agent-chats/<id>` for legacy chats. Reload and back/forward restore
@@ -52,8 +65,9 @@
 - **Session**: the header has favorite, Share, Side panel, and a More menu
   (Rename, Copy link, Delete). A metadata strip lists the agent, runtime,
   model, repository, pull request, and status. Chat and Code session inputs
-  use the same multiline surface with the model selector inside on the right.
-  Existing sessions retain their agent and mode; use **New conversation** to
+  use the same growing, initially single-line input with the model selector on
+  the right.
+  Existing sessions retain their agent and kind; use **New conversation** to
   choose another. Stop, queued-message advancement, and quoting remain available.
 - Users outside the flag retain the Owned / Running / Shared / Automations /
   Skills list. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat

@@ -36,9 +36,10 @@ export function createAgentRosterSource(): AgentRosterSource {
     cursorConnected
   );
 
+  const agents = () => (agentsQuery.isSuccess ? agentsQuery.data : []);
   const roster = createMemo(() =>
     buildAgentRoster({
-      agents: agentsQuery.isSuccess ? agentsQuery.data : [],
+      agents: agents(),
       runtimes: harnessesQuery.isSuccess ? harnessesQuery.data : [],
       cursorConnected: cursorConnected(),
       cursorNeedsConnection: cursorNeedsConnection(),

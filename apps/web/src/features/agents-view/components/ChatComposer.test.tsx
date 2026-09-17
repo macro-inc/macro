@@ -146,23 +146,19 @@ describe('Chat session input', () => {
         draft=""
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
-        agentSelector={<button>Agent</button>}
-        modelSelector={<button>Model</button>}
+        selector={<button>Agent</button>}
       />
     ));
     expect(screen.getByRole('button', { name: 'Agent' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Model' })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Model' })).toBeNull();
   });
-  it('switches drafts without remounting the editor and hides the closed repository drawer', () => {
+  it('reveals the repository drawer without remounting the editor', () => {
     const [mode, setMode] = createSignal('chat');
     const { container } = render(() => (
       <ChatComposer
-        draftKey={mode()}
-        draft={mode() === 'chat' ? 'Chat draft' : 'Code draft'}
+        draft="Shared draft"
         onDraftChange={vi.fn()}
-        modelSelector={<button>Model</button>}
-        agentSelector={<button>Agent</button>}
-        modeSelector={<button>Mode</button>}
+        selector={<button>Agent</button>}
         drawer={<button>Repository</button>}
         drawerOpen={mode() === 'code'}
         onSend={vi.fn()}
@@ -173,15 +169,13 @@ describe('Chat session input', () => {
     expect((drawer as HTMLElement).inert).toBe(true);
     expect(drawer?.getAttribute('aria-hidden')).toBe('true');
     setMode('code');
-    expect(editor.setMarkdown).toHaveBeenLastCalledWith('Code draft');
     expect(screen.getByTestId('editor')).toBe(input);
     expect((drawer as HTMLElement).inert).toBe(false);
     expect(drawer?.hasAttribute('data-open')).toBe(true);
     setMode('chat');
-    expect(editor.setMarkdown).toHaveBeenLastCalledWith('Chat draft');
     expect((drawer as HTMLElement).inert).toBe(true);
     const settings = screen.getByRole('group', { name: 'Composer settings' });
-    expect(settings.textContent).toBe('ModeAgentModel');
+    expect(settings.textContent).toBe('Agent');
   });
   it('lets controls inside the composer receive pointer focus', () => {
     render(() => (
@@ -189,7 +183,7 @@ describe('Chat session input', () => {
         draft=""
         onDraftChange={vi.fn()}
         onSend={vi.fn()}
-        modelSelector={<input aria-label="Filter models" />}
+        selector={<input aria-label="Filter models" />}
       />
     ));
     const event = new MouseEvent('pointerdown', {

@@ -7,13 +7,7 @@ import {
   MACRO_AGENT_HANDLE,
   MACRO_AGENT_NAME,
 } from '@core/constant/macroAgent';
-import {
-  type AgentKind,
-  kindForHarness,
-  kindForMode,
-  systemBotKind,
-} from './agent-kind';
-import type { AgentsMode } from './mode';
+import { type AgentKind, kindForHarness, systemBotKind } from './agent-kind';
 
 /**
  * Macro's own chat agent: the deployment's managed default. Started without a
@@ -218,15 +212,11 @@ export function buildAgentRoster(input: RosterInput): RosterAgent[] {
   ];
 }
 
-/** The half of the roster a mode shows. */
-export function rosterForMode(
-  roster: readonly RosterAgent[],
-  mode: AgentsMode
+/** Both chat and coding agents supported by the new-conversation composer. */
+export function rosterForComposer(
+  roster: readonly RosterAgent[]
 ): RosterAgent[] {
-  const kind = kindForMode(mode);
-  return roster.filter(
-    (agent) => agent.kind === kind && startableFromComposer(agent.harness)
-  );
+  return roster.filter((agent) => startableFromComposer(agent.harness));
 }
 
 /**

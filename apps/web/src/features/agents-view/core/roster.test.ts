@@ -7,7 +7,7 @@ import {
   MACRO_PERSONA_ID,
   type PersistedAgentLike,
   type RosterInput,
-  rosterForMode,
+  rosterForComposer,
 } from './roster';
 
 function persisted(
@@ -111,22 +111,22 @@ describe('buildAgentRoster', () => {
   });
 });
 
-describe('rosterForMode and kindForBot', () => {
+describe('rosterForComposer and kindForBot', () => {
   const roster = buildAgentRoster({
     ...EMPTY,
     agents: [
       persisted({ harness: 'in-memory' }),
       persisted({ harness: 'cursor' }),
+      persisted({ harness: 'macrod' }),
+      persisted({ harness: 'sandbox' }),
     ],
   });
 
-  it('splits the roster by mode', () => {
-    expect(rosterForMode(roster, 'chat').map((a) => a.id)).toEqual([
+  it('combines supported chat and coding agents in one picker', () => {
+    expect(rosterForComposer(roster).map((a) => a.id)).toEqual([
       MACRO_PERSONA_ID,
-      'bot-in-memory',
-    ]);
-    expect(rosterForMode(roster, 'code').map((a) => a.id)).toEqual([
       CURSOR_BOT_ID,
+      'bot-in-memory',
       'bot-cursor',
     ]);
   });
