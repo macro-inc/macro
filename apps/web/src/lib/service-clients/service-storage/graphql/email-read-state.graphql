@@ -1,0 +1,17 @@
+fragment EmailReadStateFields on GraphqlSoupEmailThread {
+	__typename
+	id
+	isRead
+}
+
+mutation MarkEmailThreadSeen($input: MarkEmailThreadSeenInput!) {
+	markEmailThreadSeen(input: $input) {
+		...EmailReadStateFields
+	}
+}
+
+mutation UpdateEmailThreadReadLabel($input: UpdateEmailThreadLabelInput!) {
+	updateEmailThreadLabel(input: $input) {
+		...EmailReadStateFields
+	}
+}

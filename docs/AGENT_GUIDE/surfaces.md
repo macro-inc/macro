@@ -65,6 +65,11 @@ Touch devices render the legacy Notifications view without waiting for the new a
 views feature flag. Desktop waits for flag readiness before choosing the new Home
 view or its legacy fallback.
 
+GraphQL-attached notification rows share the global feed's local seen/done
+overrides: Mark Done and Undo reflect local intent without waiting for an older
+cached notification snapshot to be replaced. These display overrides do not turn
+incomplete predicate-index facts into authoritative membership evidence.
+
 On desktop with the new app views enabled, Home defaults to a Signal feed merging
 notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
@@ -232,6 +237,14 @@ default All selections are not marked.
 Email Status and Done are single choices that close the menu; attachment filters
 stay open for multiple selections. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
+
+### Read state and trash
+
+With GraphQL Soup enabled, **Mark read/unread** updates the normalized email row
+optimistically. Permanent server errors roll it back; retryable transport failures
+can leave the action in the durable queue. Unread uses the UNREAD label belonging
+to the thread's inbox. Trash and its Undo refresh mounted GraphQL lists after the
+server operation finishes. The GraphQL-disabled REST path is unchanged.
 
 ### Cached Mail filtering
 

@@ -94,6 +94,11 @@ export type NotificationSource = {
   /** subscribe to entity notifications */
   unmuteEntity: (entity: Entity) => Promise<void>;
 
+  /** Apply local seen/done intent to a GraphQL edge without replacing its data. */
+  withLocalOverrides?: (
+    notification: UnifiedNotification
+  ) => UnifiedNotification;
+
   /** subscribe to new notifications */
   subscribe: (subscribe: SubscribeFn) => UnsubscribeFn;
 };
@@ -189,6 +194,35 @@ function setSeenOverride(ids: readonly string[], viewedAt: string | undefined) {
     });
 }
 
+function withNotificationOverrides(
+  notification: UnifiedNotification
+): UnifiedNotification {
+  const doneOverride = doneOverrides().get(notification.id);
+  if (notification.state !== 'unseen' && doneOverride === undefined) {
+    return notification;
+  }
+  return {
+    ...notification,
+    get state() {
+      const state = doneOverride?.done
+        ? 'done'
+        : doneOverride?.reopened
+          ? 'seen'
+          : doneOverride
+            ? nextNotificationState(notification.state, 'MARK_UNDONE')
+            : notification.state;
+      return state === 'unseen' && seenOverrides[notification.id]
+        ? 'seen'
+        : state;
+    },
+    // Only the affected id's seen state is a dependency of this row.
+    get viewed_at() {
+      if (notification.viewed_at) return notification.viewed_at;
+      return seenOverrides[notification.id]?.viewedAt ?? notification.viewed_at;
+    },
+  };
+}
+
 export function createNotificationSource(
   ws: ConnectionGatewayWebsocket,
   onNotification?: (notification: UnifiedNotification) => void
@@ -217,38 +251,7 @@ export function createNotificationSource(
   const notifications = createMemo(() => {
     const raw = notificationsQuery.data;
     if (!raw) return [];
-    const done = doneOverrides();
-    return raw.map((notification) => {
-      const doneOverride = done.get(notification.id);
-      if (notification.state !== 'unseen' && doneOverride === undefined) {
-        return notification;
-      }
-
-      return {
-        ...notification,
-        get state() {
-          const state = doneOverride?.done
-            ? 'done'
-            : doneOverride?.reopened
-              ? 'seen'
-              : doneOverride
-                ? nextNotificationState(notification.state, 'MARK_UNDONE')
-                : notification.state;
-          return state === 'unseen' && seenOverrides[notification.id]
-            ? 'seen'
-            : state;
-        },
-        // Keep seen overrides granular. Reading one notification's state/viewed_at
-        // subscribes only to that id instead of invalidating the complete
-        // notifications array and every channel/favorite consumer.
-        get viewed_at() {
-          if (notification.viewed_at) return notification.viewed_at;
-          return (
-            seenOverrides[notification.id]?.viewedAt ?? notification.viewed_at
-          );
-        },
-      };
-    });
+    return raw.map(withNotificationOverrides);
   });
 
   // Prune overrides for notifications that are no longer in the query cache
@@ -257,15 +260,24 @@ export function createNotificationSource(
   // pruned — during an in-flight mutation the cache may still hold the
   // pre-mutation value and a stale fetch could flip it back before the
   // API lands.
+  let previousDoneQueryIds = new Set<string>();
   createEffect(() => {
     const raw = notificationsQuery.data;
     if (!raw) return;
+    const presentIds = new Set(raw.map((n) => n.id));
+    const previousIds = previousDoneQueryIds;
+    previousDoneQueryIds = presentIds;
     const overrides = doneOverrides();
     if (overrides.size === 0) return;
-    const presentIds = new Set(raw.map((n) => n.id));
     const toPrune: string[] = [];
     for (const id of overrides.keys()) {
-      if (!presentIds.has(id)) toPrune.push(id);
+      // A Soup edge can exist outside this paginated notification feed.
+      // Do not discard its local intent just because this source never saw it.
+      if (
+        !presentIds.has(id) &&
+        (!isFeatureEnabled(enableGraphqlSoup) || previousIds.has(id))
+      )
+        toPrune.push(id);
     }
     if (toPrune.length > 0) setDoneOverride(toPrune, undefined);
   });
@@ -275,9 +287,12 @@ export function createNotificationSource(
   // while a mark is in flight the seen cache row is the optimistic write, and
   // a fetch that is still running may hold a pre-write snapshot that will
   // land later; in both cases the override must survive.
+  let previousSeenQueryIds = new Set<string>();
   createEffect(() => {
     const raw = notificationsQuery.data;
     if (!raw) return;
+    const previousIds = previousSeenQueryIds;
+    previousSeenQueryIds = new Set(raw.map((notification) => notification.id));
     const seenIds = Object.keys(seenOverrides);
     if (seenIds.length === 0) return;
     const quiet =
@@ -287,8 +302,10 @@ export function createNotificationSource(
     const toPrune: string[] = [];
     for (const id of seenIds) {
       const row = byId.get(id);
-      if (!row) toPrune.push(id);
-      else if (row.state !== 'unseen' && quiet) toPrune.push(id);
+      if (!row) {
+        if (!isFeatureEnabled(enableGraphqlSoup) || previousIds.has(id))
+          toPrune.push(id);
+      } else if (row.state !== 'unseen' && quiet) toPrune.push(id);
     }
     if (toPrune.length > 0) setSeenOverride(toPrune, undefined);
   });
@@ -517,5 +534,10 @@ export function createNotificationSource(
     muteEntity,
     unmuteEntity,
     subscribe,
+    get withLocalOverrides() {
+      return isFeatureEnabled(enableGraphqlSoup)
+        ? withNotificationOverrides
+        : undefined;
+    },
   };
 }

@@ -75,6 +75,14 @@ successful deletes should remain hidden after the confirmation closes and clear
 their suppression after a successful retry. Partial deletion failures restore
 only the failed items.
 
+## Other list actions
+
+With GraphQL Soup enabled, **Rename** updates the row title before the request
+finishes, as well as updating previews. **Move to folder**, **Remove from folder**,
+and **Duplicate** refresh mounted GraphQL lists after the server responds; a
+manual page reload is not required. Duplication does not show a placeholder before
+the server returns the new item ID. Use disposable tasks/folders for these checks.
+
 ## View and edit task properties
 
 An open task shows Status, Priority, and Assignees as property pills below its title. Task

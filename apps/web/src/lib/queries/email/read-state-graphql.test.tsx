@@ -1,4 +1,3 @@
-import type { CacheWriteArgs } from '@graphql-cache/host/types';
 import { QueryClient } from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -9,8 +8,8 @@ const mocks = vi.hoisted(() => ({
   markSeen: vi.fn(),
   updateLabel: vi.fn(),
   legacyPatch: vi.fn(),
-  writeQuery: vi.fn(),
-  enqueue: vi.fn(),
+  graphqlMutation: vi.fn(),
+  refresh: vi.fn(),
 }));
 vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
@@ -32,6 +31,9 @@ vi.mock('../soup/cache', () => ({
   optimisticUpdateSoupEntity: mocks.legacyPatch,
   refetchSoupEntity: vi.fn(),
 }));
+vi.mock('../soup/graphql/active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: mocks.refresh,
+}));
 vi.mock('../soup/normalized-cache', () => ({ invalidateAllSoup: vi.fn() }));
 vi.mock('../undo', () => ({ useUndoableMutation: vi.fn() }));
 vi.mock('./graphql/thread', () => ({
@@ -48,11 +50,13 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { failure: vi.fn() } }));
 vi.mock('@macro-inc/observability', () => ({ Telemetry: { error: vi.fn() } }));
 vi.mock('@service-storage/graphql-soup', () => ({
-  graphqlCacheEnabled: () => true,
-  getGraphqlCacheHost: () => host,
-  getGraphqlSoupCacheHost: () => host,
+  getGraphqlSoupClient: () => ({ mutation: mocks.graphqlMutation }),
 }));
 
+import {
+  MarkEmailThreadSeenDocument,
+  UpdateEmailThreadReadLabelDocument,
+} from '@service-storage/graphql/generated/graphql';
 import { emailKeys } from './keys';
 import {
   useMarkThreadAsSeenMutation,
@@ -60,13 +64,6 @@ import {
 } from './thread';
 
 let client: QueryClient;
-// Healthy cache boundary: no initialization, fallback, real browser storage, or
-// websocket delivery is involved. Inspect the write intent before network success.
-const host = {
-  disabled: false,
-  writeQuery: mocks.writeQuery,
-  enqueueOptimisticMutation: mocks.enqueue,
-};
 
 function hasReadPatch(value: unknown, isRead: boolean): boolean {
   if (!value || typeof value !== 'object') return false;
@@ -82,11 +79,10 @@ function hasReadPatch(value: unknown, isRead: boolean): boolean {
 }
 
 beforeEach(() => {
-  vi.clearAllMocks();
+  vi.resetAllMocks();
   mocks.graphqlEnabled = true;
   mocks.legacyPatch.mockReturnValue({ rollback: vi.fn() });
-  mocks.writeQuery.mockResolvedValue(undefined);
-  mocks.enqueue.mockResolvedValue(undefined);
+  mocks.refresh.mockResolvedValue(undefined);
   client = new QueryClient({ defaultOptions: { mutations: { retry: false } } });
   client.setQueryData(emailKeys.labels.queryKey, {
     labels: [
@@ -107,11 +103,26 @@ describe('email read state with GraphQL Soup', () => {
     async ({ read, graphql }) => {
       mocks.graphqlEnabled = graphql;
       let finish!: () => void;
-      const network = new Promise<ReturnType<typeof ok<void>>>((resolve) => {
-        finish = () => resolve(ok(undefined));
+      const network = new Promise<void>((resolve) => {
+        finish = resolve;
       });
-      const request = read ? mocks.markSeen : mocks.updateLabel;
-      request.mockReturnValue(network);
+      const restRequest = read ? mocks.markSeen : mocks.updateLabel;
+      restRequest.mockImplementation(async () => {
+        await network;
+        return ok(undefined);
+      });
+      // Inspect the actual optimistic context sent to the normalized exchange,
+      // before allowing the GraphQL network result through. No uncached fallback.
+      mocks.graphqlMutation.mockReturnValue({
+        toPromise: async () => {
+          await network;
+          return {
+            data: read
+              ? { markEmailThreadSeen: { id: 'thread', isRead: true } }
+              : { updateEmailThreadLabel: { id: 'thread', isRead: false } },
+          };
+        },
+      });
       const mutation = mountEmailMutation(
         read ? useMarkThreadAsSeenMutation : useMarkThreadAsUnreadMutation,
         client
@@ -121,19 +132,36 @@ describe('email read state with GraphQL Soup', () => {
         linkId: 'inbox',
       });
       try {
-        await vi.waitFor(() => expect(request).toHaveBeenCalledOnce());
-        expect(mutation.isPending).toBe(true);
-        const writes: CacheWriteArgs[] = [
-          ...mocks.writeQuery.mock.calls.map(([args]) => args),
-          ...mocks.enqueue.mock.calls.map(([args]) => args),
-        ];
-        if (graphql) {
+        await vi.waitFor(() =>
           expect(
-            writes.some((write) => hasReadPatch(write.data, read)),
+            graphql ? mocks.graphqlMutation : restRequest
+          ).toHaveBeenCalledOnce()
+        );
+        expect(mutation.isPending).toBe(true);
+        if (graphql) {
+          const [document, variables, context] =
+            mocks.graphqlMutation.mock.calls[0];
+          expect(document).toBe(
+            read
+              ? MarkEmailThreadSeenDocument
+              : UpdateEmailThreadReadLabelDocument
+          );
+          expect(variables).toEqual({
+            input: read
+              ? { threadId: 'thread' }
+              : { threadId: 'thread', labelId: 'unread-label', value: true },
+          });
+          expect(
+            hasReadPatch(
+              context.normalizedCacheOptimistic.optimisticResponse,
+              read
+            ),
             'A legacy Soup patch does not update GraphqlSoupEmailThread.isRead'
           ).toBe(true);
+          expect(restRequest).not.toHaveBeenCalled();
+          expect(mocks.legacyPatch).not.toHaveBeenCalled();
         } else {
-          expect(writes).toEqual([]);
+          expect(mocks.graphqlMutation).not.toHaveBeenCalled();
           expect(mocks.legacyPatch).toHaveBeenCalledWith(
             expect.objectContaining({
               tag: 'emailThread',
@@ -141,10 +169,29 @@ describe('email read state with GraphQL Soup', () => {
             })
           );
         }
+        expect(mocks.refresh).not.toHaveBeenCalled();
       } finally {
         finish();
         await result;
       }
+      expect(mocks.refresh).toHaveBeenCalledTimes(graphql ? 1 : 0);
     }
   );
+
+  it('does not refetch server membership over a queued offline read update', async () => {
+    mocks.graphqlMutation.mockReturnValue({
+      toPromise: async () => ({
+        extensions: {
+          normalizedCacheMutationDisposition: {
+            kind: 'queued',
+            transactionId: 'tx',
+          },
+        },
+      }),
+    });
+    const mutation = mountEmailMutation(useMarkThreadAsSeenMutation, client);
+    await mutation.mutateAsync({ threadId: 'thread' });
+    expect(mocks.refresh).not.toHaveBeenCalled();
+    expect(mocks.markSeen).not.toHaveBeenCalled();
+  });
 });

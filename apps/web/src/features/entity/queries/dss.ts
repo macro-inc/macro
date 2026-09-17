@@ -25,6 +25,7 @@ import {
   removeSoupEntities,
   removeSoupEntitiesFromQueriesReferencing,
 } from '@queries/soup/cache';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import {
   createGraphqlSoupDeletion,
   GRAPHQL_SOUP_DELETE_MUTATION_KEY,
@@ -239,6 +240,9 @@ function invalidateAfterMove(
       queryKey: ['project'],
     });
   }
+  if (isFeatureEnabled(enableGraphqlSoup)) {
+    return refreshActiveGraphqlSoupQueries();
+  }
 }
 
 export function createMoveToProjectDssEntityMutation() {
@@ -281,7 +285,7 @@ export function createMoveToProjectDssEntityMutation() {
         console.error(`Failed to move dss item ${id}`, data, error);
       }
 
-      invalidateAfterMove([id], project.id, type === 'project', failed);
+      return invalidateAfterMove([id], project.id, type === 'project', failed);
     },
   }));
 }
@@ -383,6 +387,9 @@ export function createBulkRemoveFromProjectDssEntityMutation() {
       if (entities.some((e) => e.type === 'project')) {
         queryClient.invalidateQueries({ queryKey: ['project'] });
       }
+      if (isFeatureEnabled(enableGraphqlSoup)) {
+        return refreshActiveGraphqlSoupQueries();
+      }
     },
   }));
 }
@@ -456,6 +463,9 @@ export function createBulkCopyDssEntityMutation() {
         queryKey: soupKeys.astItems._def,
       });
       queryClient.invalidateQueries({ queryKey: ['entity'] });
+      if (isFeatureEnabled(enableGraphqlSoup)) {
+        return refreshActiveGraphqlSoupQueries();
+      }
     },
   }));
 }
@@ -531,7 +541,7 @@ export function createBulkMoveToProjectDssEntityMutation() {
         console.error(`Failed to bulk move dss items`, entities, data, error);
       }
 
-      invalidateAfterMove(
+      return invalidateAfterMove(
         entities.map((e) => e.id),
         project.id,
         entities.some((e) => e.type === 'project'),

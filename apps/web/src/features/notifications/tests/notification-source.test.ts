@@ -201,6 +201,42 @@ describe('createNotificationSource', () => {
     }
   });
 
+  it.each([true, false])(
+    'only overlays attached Soup edges when GraphQL is enabled (%s)',
+    (graphql) => {
+      mocks.graphqlEnabled = graphql;
+      const row = notification('edge-outside-feed', 'document', 'task');
+      const attached = [row];
+      mocks.notificationsQuery = {
+        data: [],
+        transport: graphql ? 'graphql' : 'rest',
+        isFetching: false,
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      const entity = {
+        id: 'task',
+        type: 'document',
+        name: 'Task',
+        notifications: attached,
+      } as EntityData & { notifications: UnifiedNotification[] };
+      try {
+        setDoneOverride([row.id], true);
+        expect(getEntityNotifications(entity, source)[0].state).toBe(
+          graphql ? 'done' : 'unseen'
+        );
+        if (!graphql)
+          expect(getEntityNotifications(entity, source)).toBe(attached);
+        expect(row.state).toBe('unseen');
+      } finally {
+        setDoneOverride([row.id], undefined);
+        dispose();
+      }
+    }
+  );
+
   it('keeps done through a late seen action, and reopens as seen across stale snapshots', async () => {
     const row = notification('lifecycle-stale', 'document', 'doc');
     mocks.notificationsQuery = {
