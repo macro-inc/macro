@@ -123,6 +123,7 @@ impl AgentSessionRepo for FixedBotSessions {
 
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
+            repo_branch: None,
             pull_request_url: None,
             id,
             owner_id: MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())

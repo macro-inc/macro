@@ -84,6 +84,7 @@ fn new_session(
     originating_message_id: Option<Uuid>,
 ) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
+        repo_branch: None,
         id: AgentSessionId::new(),
         owner_id: user_id(OWNER),
         bot_id,
@@ -217,7 +218,10 @@ fn acp_notification() -> AcpMessage {
 async fn create_and_get_round_trips(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
-    let params = new_session(bot_id, None, None);
+    let mut params = new_session(bot_id, None, None);
+    params.repo_branch = Some(
+        crate::domain::repository_branch::RepositoryBranch::parse("feature/home".into()).unwrap(),
+    );
     let id = params.id;
 
     let created = create_session(&repo, params).await;
@@ -229,6 +233,10 @@ async fn create_and_get_round_trips(pool: PgPool) {
     assert_eq!(created.created_at, session.created_at);
     assert_eq!(created.modified_at, session.modified_at);
     assert_eq!(session.id, id);
+    assert_eq!(
+        session.repo_branch.as_ref().map(|branch| branch.as_str()),
+        Some("feature/home")
+    );
     assert_eq!(session.name, DEFAULT_AGENT_SESSION_NAME);
     assert_eq!(session.bot_id, bot_id);
     assert_eq!(

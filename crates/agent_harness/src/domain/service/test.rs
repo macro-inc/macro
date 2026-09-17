@@ -470,6 +470,7 @@ async fn disconnected_session(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            repo_branch: None,
             id,
             owner_id: origin.sender,
             bot_id,
@@ -2082,6 +2083,8 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
 
     let session = service
         .open_managed_session(agent_session::domain::ports::OpenManagedSession {
+            repo_url: None,
+            repo_branch: None,
             instructions: None,
             owner: sender(),
             prompt: None,
@@ -2316,6 +2319,8 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
 
     let result = service
         .open_managed_session(OpenManagedSession {
+            repo_url: None,
+            repo_branch: None,
             instructions: None,
             owner: sender(),
             prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
@@ -2341,6 +2346,8 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         .expect("the user default should persist");
 
     let open = service.open_managed_session(OpenManagedSession {
+        repo_url: None,
+        repo_branch: None,
         instructions: None,
         owner: sender(),
         prompt: None,
@@ -3038,6 +3045,8 @@ mod lifecycle_events {
 async fn codex_named_session_provisions_egress_without_advertising_mcp() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        repo_url: None,
+        repo_branch: None,
         owner: sender(),
         instructions: None,
         prompt: Some("inspect".into()),
@@ -3129,3 +3138,84 @@ async fn codex_channel_mention_provisions_egress_without_advertising_mcp() {
 }
 
 mod reopen;
+
+struct SelectedRepositories(Vec<String>);
+#[async_trait::async_trait]
+impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
+    async fn for_user(&self, _: &MacroUserIdStr<'_>) -> crate::domain::error::Result<Vec<String>> {
+        Ok(self.0.clone())
+    }
+}
+
+fn explicit_cursor_request() -> OpenManagedSession {
+    OpenManagedSession {
+        owner: sender(),
+        instructions: None,
+        prompt: None,
+        repo_url: Some("https://github.com/macro-inc/macro".into()),
+        repo_branch: Some(
+            agent_session::domain::repository_branch::RepositoryBranch::parse(
+                "feature/home".into(),
+            )
+            .unwrap(),
+        ),
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: bot_id::CURSOR_BOT_ID,
+            profile: None,
+        }),
+    }
+}
+
+#[tokio::test]
+async fn selected_repository_requires_owner_access_before_provisioning() {
+    let (service, _, containers, _, _) = harness();
+    let service = service.with_repositories(Arc::new(SelectedRepositories(vec![])));
+    let result = service
+        .open_managed_session(explicit_cursor_request())
+        .await;
+    assert!(matches!(
+        result,
+        Err(agent_session::domain::error::AgentSessionError::Forbidden)
+    ));
+    assert!(service.inner.egress.provisioned().is_empty());
+    assert_eq!(containers.spawned(), 0);
+}
+
+#[tokio::test]
+async fn selected_repository_and_branch_are_persisted_for_cursor() {
+    let (service, repo, containers, _, _) = harness();
+    let service = service.with_repositories(Arc::new(SelectedRepositories(vec![
+        "https://github.com/macro-inc/macro".into(),
+    ])));
+    let open = service.open_managed_session(explicit_cursor_request());
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(
+        session.repo_url.as_deref(),
+        Some("https://github.com/macro-inc/macro")
+    );
+    assert_eq!(
+        session.repo_branch.as_ref().map(|branch| branch.as_str()),
+        Some("feature/home")
+    );
+}
+
+#[tokio::test]
+async fn branch_without_repository_is_rejected_before_provisioning() {
+    let (service, _, containers, _, _) = harness();
+    let mut request = explicit_cursor_request();
+    request.repo_url = None;
+    assert!(matches!(
+        service.open_managed_session(request).await,
+        Err(agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(_))
+    ));
+    assert!(service.inner.egress.provisioned().is_empty());
+    assert_eq!(containers.spawned(), 0);
+}

@@ -104,6 +104,7 @@ fn message(mentions: Vec<SimpleMention>) -> ChannelMessagePostedMetadata {
 
 fn session(id: AgentSessionId, bot_id: BotId) -> AgentSession {
     AgentSession {
+        repo_branch: None,
         pull_request_url: None,
         id,
         name: agent_session::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),

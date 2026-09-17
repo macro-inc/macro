@@ -8,6 +8,7 @@ async fn codex_session(
     agent_session::domain::ports::AgentSessionRepo::create(
         repo,
         CreateAgentSessionParams {
+            repo_branch: None,
             id,
             owner_id: sender(),
             bot_id: bot_id::CODEX_BOT_ID,

@@ -5,11 +5,20 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import { Button, ComposerSurface, SendButton } from '@ui';
-import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import { createChatComposerTip } from '../primitives/chat-composer-tip';
 
 /** Shared input that starts on one line and grows with the draft. */
 export function ChatComposer(props: {
+  autoFocus?: boolean;
+  registerFocus?: (focus: () => void) => void;
   draft: string;
   onDraftChange: (draft: string) => void;
   blockedReason?: string;
@@ -64,7 +73,14 @@ export function ChatComposer(props: {
     editor.withSkills();
   }
 
+  // Apply host-supplied drafts (Home suggestions) to the existing editor.
+  createEffect(() => {
+    if (props.draft !== editor.controls.getMarkdown())
+      editor.controls.setMarkdown(props.draft);
+  });
+
   onMount(() => {
+    props.registerFocus?.(() => editor.controls.focus());
     props.session?.registerFocus?.(() => editor.controls.focus());
     props.session?.registerQuoteInsert?.((text) => {
       editor.lexical.update(() => $insertReferencedPaste(text), {
@@ -116,7 +132,10 @@ export function ChatComposer(props: {
             refFn={(element) =>
               element.setAttribute('aria-label', 'Message the agent')
             }
-            autofocus={!isTouchDevice() && (props.session?.autofocus ?? true)}
+            autofocus={
+              !isTouchDevice() &&
+              (props.autoFocus ?? props.session?.autofocus ?? true)
+            }
           />
         </div>
         <div

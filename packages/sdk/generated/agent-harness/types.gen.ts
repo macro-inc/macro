@@ -404,8 +404,13 @@ export type CreateAgentSessionRequest = {
      */
     prompt?: string | null;
     /**
-     * Repository nominally checked out at `workspace`. Informational and
-     * optional: having it cloned there is the runtime operator's job.
+     * Starting branch for a managed coding session's selected repository.
+     */
+    repoBranch?: string | null;
+    /**
+     * Explicit GitHub repository for a managed Cursor session. Access is
+     * checked for the session owner. For external sessions this is
+     * informational: cloning it is the runtime operator's job.
      */
     repoUrl?: string | null;
     thread?: null | CreateSessionThread;

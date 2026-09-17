@@ -176,6 +176,8 @@ pub struct CreateAgentSessionParams {
     pub harness: String,
     /// Repository the agent works with, when one was stated.
     pub repo_url: Option<String>,
+    /// Starting branch explicitly selected for this session.
+    pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
     /// Absolute directory the harness runs in on its runtime.
     pub workspace: String,
     /// Compute tier the managed sandbox was spawned with.
@@ -224,6 +226,8 @@ pub struct AgentSession {
     pub harness: String,
     /// repo we are working with, when one was stated
     pub repo_url: Option<String>,
+    /// Starting branch explicitly selected for this session.
+    pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
     /// The pull request associated with this session, independent of conversation history.
     pub pull_request_url: Option<String>,
     /// Directory the harness runs in, snapshotted at creation. The session

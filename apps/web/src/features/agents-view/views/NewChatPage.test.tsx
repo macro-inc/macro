@@ -184,13 +184,16 @@ describe('agent-led new conversation', () => {
       screen.getByRole('heading', { name: 'What should we build?' })
     ).toBeTruthy();
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
-    fireEvent.click(screen.getByRole('button', { name: /Add repository/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
     fireEvent.input(screen.getByRole('textbox', { name: 'Add repository' }), {
       target: { value: 'macro-inc/macro' },
     });
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Add repository' }), {
-      key: 'Enter',
+    fireEvent.click(screen.getByRole('button', { name: 'Use repository' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Starting branch' }), {
+      target: { value: 'feature/home' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
     await selectAgent(/^Chat default$/);
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
     expect(
@@ -204,14 +207,13 @@ describe('agent-led new conversation', () => {
       modelOverride: 'chat-default',
     });
     await selectAgent(/Cursor/);
-    expect(
-      screen.getByRole('button', { name: /macro-inc\/macro/ })
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Repository' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
       prompt: 'Shared draft',
       repoUrl: 'https://github.com/macro-inc/macro',
+      repoBranch: 'feature/home',
     });
   });
   it('uses a saved agent without sending a per-session model override', async () => {

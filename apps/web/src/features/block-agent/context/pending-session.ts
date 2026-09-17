@@ -52,10 +52,11 @@ export type StartPendingSessionOptions = {
   /** Optional model switch applied before the first prompt. */
   modelOverride?: string;
   /**
-   * Repository the session should work in. Informational for the runtime:
-   * having it cloned there is the runtime operator's job.
+   * Explicit GitHub repository for the managed Cursor session.
    */
   repoUrl?: string;
+  /** Starting branch for the selected repository. */
+  repoBranch?: string;
 };
 
 /**
@@ -73,7 +74,9 @@ export function startPendingSession(
   void agentHarnessServiceClient
     .create({
       ...(options.botId ? { botId: options.botId } : {}),
-      ...(options.repoUrl ? { repoUrl: options.repoUrl } : {}),
+      ...(options.repoUrl
+        ? { repoUrl: options.repoUrl, repoBranch: options.repoBranch }
+        : {}),
     } satisfies CreateAgentSessionRequest)
     .then(async (result) => {
       if (result.isErr()) {

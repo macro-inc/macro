@@ -64,6 +64,7 @@ export * from './createAgentSessionRequestBotId';
 export * from './createAgentSessionRequestInstructions';
 export * from './createAgentSessionRequestOwner';
 export * from './createAgentSessionRequestPrompt';
+export * from './createAgentSessionRequestRepoBranch';
 export * from './createAgentSessionRequestRepoUrl';
 export * from './createAgentSessionRequestThread';
 export * from './createAgentSessionRequestWorkspace';

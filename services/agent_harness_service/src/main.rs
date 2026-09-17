@@ -478,7 +478,7 @@ async fn run() -> anyhow::Result<()> {
         cursor_keys.clone(),
         cursor_api_base_url(),
         session_repo.clone(),
-        reachable_repositories,
+        Arc::clone(&reachable_repositories),
         ai_usage::pg_recorder(pool.clone()),
         PostgresJournal {
             pool: pool.clone(),
@@ -717,23 +717,29 @@ async fn run() -> anyhow::Result<()> {
     // explicitly selected coding agents keep their configured runtimes.
     .with_managed_bot(inmem_bot);
 
-    let harness = Arc::new(AgentHarnessService::new(
-        sessions,
-        containers,
-        announcer,
-        HarnessKeyedConnections::new(PgHarnessBindings::new(pool.clone()), Arc::clone(&runtimes)),
-        prompt_context,
-        prompt_composer,
-        EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url),
-        RedisCommandForwarder::new(redis.clone()),
-        defaults,
-        Arc::clone(&lifecycle_publisher),
-        pending_commands,
-        prompt_mentions,
-        // Finished / asking / mentioned reach people through the same
-        // notification ingress channel messages use.
-        IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
-    ));
+    let harness = Arc::new(
+        AgentHarnessService::new(
+            sessions,
+            containers,
+            announcer,
+            HarnessKeyedConnections::new(
+                PgHarnessBindings::new(pool.clone()),
+                Arc::clone(&runtimes),
+            ),
+            prompt_context,
+            prompt_composer,
+            EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url),
+            RedisCommandForwarder::new(redis.clone()),
+            defaults,
+            Arc::clone(&lifecycle_publisher),
+            pending_commands,
+            prompt_mentions,
+            // Finished / asking / mentioned reach people through the same
+            // notification ingress channel messages use.
+            IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
+        )
+        .with_repositories(reachable_repositories),
+    );
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.
     turn_observer.bind(harness.clone());

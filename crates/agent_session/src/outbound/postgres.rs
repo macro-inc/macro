@@ -193,6 +193,7 @@ struct AgentSessionRow {
     model: String,
     harness: String,
     repo_url: Option<String>,
+    repo_branch: Option<String>,
     pull_request_url: Option<String>,
     workspace: String,
     sandbox_size: String,
@@ -228,6 +229,11 @@ impl TryFrom<AgentSessionRow> for AgentSession {
             model: row.model,
             harness: row.harness,
             repo_url: row.repo_url,
+            repo_branch: row
+                .repo_branch
+                .map(crate::domain::repository_branch::RepositoryBranch::parse)
+                .transpose()
+                .map_err(anyhow::Error::msg)?,
             pull_request_url: row.pull_request_url,
             workspace: row.workspace,
             sandbox_size: parse_sandbox_size(&row.sandbox_size)?,
@@ -266,6 +272,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             model,
             harness,
             repo_url,
+            repo_branch,
             workspace,
             sandbox_size,
             instructions,
@@ -292,12 +299,12 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
                 harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status, status_event_name, egress_token_hash,
-                mcp_scope, mcp_servers
+                mcp_scope, mcp_servers, repo_branch
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             RETURNING
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
@@ -324,6 +331,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             egress_token_hash,
             mcp_servers.scope_str(),
             mcp_servers_json,
+            repo_branch.as_ref().map(|branch| branch.as_str()),
         )
         .fetch_one(&mut *transaction)
         .await
@@ -411,7 +419,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
@@ -521,7 +529,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
@@ -561,7 +569,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
@@ -594,7 +602,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
@@ -629,7 +637,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
                 (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)

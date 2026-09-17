@@ -1573,9 +1573,13 @@
             "type": ["string", "null"],
             "description": "First prompt to deliver once the session is running. Managed sessions\nonly - an external runtime sends its own first prompt through the\ncontrol endpoint. Omitted, the session opens idle."
           },
+          "repoBranch": {
+            "type": ["string", "null"],
+            "description": "Starting branch for a managed coding session's selected repository."
+          },
           "repoUrl": {
             "type": ["string", "null"],
-            "description": "Repository nominally checked out at `workspace`. Informational and\noptional: having it cloned there is the runtime operator's job."
+            "description": "Explicit GitHub repository for a managed Cursor session. Access is\nchecked for the session owner. For external sessions this is\ninformational: cloning it is the runtime operator's job."
           },
           "thread": {
             "oneOf": [

@@ -1383,9 +1383,12 @@ pub struct CreateAgentSessionRequest {
     /// only - an external runtime sends its own first prompt through the
     /// control endpoint. Omitted, the session opens idle.
     pub prompt: Option<String>,
-    /// Repository nominally checked out at `workspace`. Informational and
-    /// optional: having it cloned there is the runtime operator's job.
+    /// Explicit GitHub repository for a managed Cursor session. Access is
+    /// checked for the session owner. For external sessions this is
+    /// informational: cloning it is the runtime operator's job.
     pub repo_url: Option<String>,
+    /// Starting branch for a managed coding session's selected repository.
+    pub repo_branch: Option<String>,
     /// The user who owns the session. Ignored for user callers, who always
     /// own their own sessions, and for harness callers, whose verified acting
     /// user (owner or confirmed team member) owns the session instead;
@@ -1528,7 +1531,7 @@ impl IntoResponse for CreateSessionApiError {
             Self::MixedSessionShape => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "a managed session may take a prompt, persona and instructions; naming a \
-                 workspace, repo, owner or thread asks for an external one"
+                 workspace, owner or thread asks for an external one"
                     .to_owned(),
             ),
             Self::ThreadSessionExists { session_id } => {
@@ -1541,6 +1544,13 @@ impl IntoResponse for CreateSessionApiError {
             Self::Domain(AgentSessionError::ThreadSessionExists) => (
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
+            ),
+            Self::Domain(AgentSessionError::InvalidRepositorySelection(reason)) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned())
+            }
+            Self::Domain(AgentSessionError::Forbidden) => (
+                StatusCode::FORBIDDEN,
+                "repository is not available to this user".to_owned(),
             ),
             Self::Domain(AgentSessionError::UnknownOwner) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -1669,7 +1679,7 @@ pub async fn create_agent_session_handler<
     // persona; the domain resolver owns its user/team/channel authorization
     // policy. External-only fields remain invalid on this shape.
     let Some(workspace) = request.workspace else {
-        if request.repo_url.is_some() || request.thread.is_some() || request.owner.is_some() {
+        if request.thread.is_some() || request.owner.is_some() {
             return Err(CreateSessionApiError::MixedSessionShape);
         }
         let owner = resolve_owner(&caller.authorization, None)?;
@@ -1691,6 +1701,16 @@ pub async fn create_agent_session_handler<
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                repo_url: request.repo_url,
+                repo_branch: request
+                    .repo_branch
+                    .map(crate::domain::repository_branch::RepositoryBranch::parse)
+                    .transpose()
+                    .map_err(|reason| {
+                        CreateSessionApiError::Domain(
+                            AgentSessionError::InvalidRepositorySelection(reason),
+                        )
+                    })?,
                 owner,
                 prompt: request.prompt,
                 profile,
@@ -1707,7 +1727,7 @@ pub async fn create_agent_session_handler<
 
     // An external runtime sends its own first prompt through the control
     // endpoint, so accepting one here would silently drop it.
-    if request.prompt.is_some() {
+    if request.prompt.is_some() || request.repo_branch.is_some() {
         return Err(CreateSessionApiError::MixedSessionShape);
     }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;

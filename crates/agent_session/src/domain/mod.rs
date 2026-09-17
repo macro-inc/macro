@@ -11,3 +11,5 @@ pub mod service;
 pub mod session;
 
 pub mod credentials;
+
+pub mod repository_branch;

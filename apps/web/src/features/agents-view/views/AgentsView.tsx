@@ -195,6 +195,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       prompt: start.prompt,
       modelOverride: start.modelOverride,
       repoUrl: start.repoUrl,
+      repoBranch: start.repoBranch,
     });
     openConversation(
       { id, type: 'agent_session' },

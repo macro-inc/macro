@@ -208,12 +208,15 @@ pub struct OpenExternalAgentSession {
 
 /// Everything needed to open a session the server hosts itself.
 ///
-/// Deliberately thin: a managed session runs in a sandbox this deployment
-/// provisions from its own configuration, so the bot, the repository and the
-/// workspace are not the caller's to choose. There is no originating mention
-/// and nothing to announce.
+/// The deployment provisions the selected persona's runtime. Cursor sessions
+/// may select an owner-accessible repository and starting branch; workspace
+/// paths remain runtime-owned. There is no originating mention to announce.
 #[derive(Debug, Clone)]
 pub struct OpenManagedSession {
+    /// Repository explicitly selected by the caller for a supported runtime.
+    pub repo_url: Option<String>,
+    /// Starting branch for the selected repository.
+    pub repo_branch: Option<super::repository_branch::RepositoryBranch>,
     /// The user who owns the session and is credited for its messages.
     pub owner: MacroUserIdStr<'static>,
     /// First prompt to deliver once the sandbox is attached. `None` opens an

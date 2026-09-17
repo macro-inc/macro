@@ -8,25 +8,20 @@ import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { createMentionAttachmentCallbacks } from '@core/component/AI/signal/mention-attachment-callbacks';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
-import { toast } from '@core/component/Toast/Toast';
 import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isPaymentError } from '@core/util/handlePaymentError';
 import { createRenameDssEntityMutation } from '@entity';
-import {
-  useAgentSessionControlMutation,
-  useCreateAgentSessionMutation,
-} from '@queries/agent-session/mutations';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { $getRoot } from 'lexical';
-import { createEffect } from 'solid-js';
+import { createEffect, Show, Suspense } from 'solid-js';
+import { HomeAgentComposer } from './home-agent-composer';
 import { replaceHomeComposerDraft } from './home-composer-selection';
-import { buildHomeAgentPrompt } from './queries/home-agent-prompt';
 
-export const HomeChatInput = (props: {
+export type HomeChatInputProps = {
   variant?: 'default' | 'tall';
   class?: string;
   placeholder?: string;
@@ -37,16 +32,22 @@ export const HomeChatInput = (props: {
    * the conversation (the Agents view and its sidebar) opens it in place.
    */
   openChat?: (chatId: string) => void;
-}) => {
+};
+
+export const HomeChatInput = (props: HomeChatInputProps) => {
+  const flag = useFeatureFlag(enableChatV3Agents);
+  return (
+    <Show when={flag().enabled} fallback={<LegacyHomeChatInput {...props} />}>
+      <Suspense fallback={<div class="min-h-24" />}>
+        <HomeAgentComposer autoFocus={props.autoFocusOnMount} />
+      </Suspense>
+    </Show>
+  );
+};
+
+export const LegacyHomeChatInput = (props: HomeChatInputProps) => {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
-  const agentsFlag = useFeatureFlag(enableChatV3Agents);
-  const createSession = useCreateAgentSessionMutation();
-  const controlSession = useAgentSessionControlMutation();
-  // Retain a created session if model setup or prompt delivery needs a retry.
-  let unsentSessionId: string | undefined;
-  let appliedModel: string | undefined;
-
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
   const attachmentMentionCallbacks = createMentionAttachmentCallbacks(
     input.attachments,
@@ -98,59 +99,7 @@ export const HomeChatInput = (props: {
     replaceHomeComposerDraft(editor.controls, request.content);
   };
 
-  const sendAgentSession = async (request: ChatSendInput) => {
-    if (input.isGenerating()) return;
-    input.setIsGenerating(true);
-    let sessionId: string;
-    try {
-      const prompt = await buildHomeAgentPrompt(request);
-      if (!unsentSessionId) {
-        const created = await createSession.mutateAsync({});
-        unsentSessionId = created.session.id;
-      }
-      sessionId = unsentSessionId;
-      if (appliedModel !== request.model) {
-        await controlSession.mutateAsync({
-          sessionId,
-          request: { type: 'setModel', model: request.model },
-        });
-        appliedModel = request.model;
-      }
-      await controlSession.mutateAsync({
-        sessionId,
-        request: { type: 'prompt', prompt },
-      });
-    } catch (error) {
-      restoreDraft(request);
-      toast.failure(
-        error instanceof Error
-          ? error.message
-          : 'Could not start the agent session. Please try again.'
-      );
-      return;
-    } finally {
-      input.setIsGenerating(false);
-    }
-    unsentSessionId = undefined;
-    appliedModel = undefined;
-    const openSession = () =>
-      splitPanelContext.handle.replace({
-        next: { type: 'agent', id: sessionId },
-      });
-    if (request.metaKey) {
-      toast.success('Session started in background', {
-        actions: [{ label: 'Open session', onClick: openSession }],
-      });
-    } else {
-      openSession();
-    }
-  };
-
   const handleSend = async (request: ChatSendInput) => {
-    if (agentsFlag().enabled || unsentSessionId) {
-      await sendAgentSession(request);
-      return;
-    }
     const backgroundSend = request.metaKey;
 
     // Create a new persistent chat

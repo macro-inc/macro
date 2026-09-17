@@ -28,6 +28,7 @@ where
     }
 }
 
+#[async_trait::async_trait]
 impl<Installations, Client> ReachableRepositories
     for GithubReachableRepositories<Installations, Client>
 where

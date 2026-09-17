@@ -5,6 +5,7 @@
 use agent_session::domain::ports::SelectedManagedPersona;
 
 use super::*;
+use crate::domain::model::SessionRepository;
 
 /// External sessions create the row and announce - the magic-chip message
 /// the session's bot posts into the mention's thread, which is where the
@@ -58,6 +59,7 @@ where
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
+                repo_branch: None,
                 id: AgentSessionId::new(),
                 owner_id: request.owner.clone(),
                 bot_id: request.bot_id,
@@ -156,6 +158,45 @@ where
                 servers: Vec::new(),
             };
         }
+        // Explicit source choices are a domain decision, before any session or egress grant exists.
+        let selected_repo = if let Some(url) = request.repo_url.as_deref() {
+            if kind != AgentKind::Cursor {
+                return Err(
+                    agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(
+                        "repository selection is supported for Cursor coding agents",
+                    ),
+                );
+            }
+            let repo = SessionRepository::parse(url).ok_or(
+                agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(
+                    "select a valid GitHub repository",
+                ),
+            )?;
+            let repositories = self
+                .repositories
+                .as_ref()
+                .ok_or(agent_session::domain::error::AgentSessionError::Forbidden)?;
+            let reachable = repositories
+                .for_user(&request.owner)
+                .await
+                .map_err(into_session_error)?;
+            if !reachable
+                .iter()
+                .any(|allowed| allowed.eq_ignore_ascii_case(repo.as_str()))
+            {
+                return Err(agent_session::domain::error::AgentSessionError::Forbidden);
+            }
+            Some(repo)
+        } else {
+            if request.repo_branch.is_some() {
+                return Err(
+                    agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(
+                        "select a repository before choosing a branch",
+                    ),
+                );
+            }
+            None
+        };
         let defaults = self.inner.defaults.for_bot(bot_id);
         let sandbox_size = self
             .inner
@@ -176,6 +217,14 @@ where
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
+                repo_branch: selected_repo.as_ref().map(|_| {
+                    request.repo_branch.unwrap_or_else(|| {
+                        agent_session::domain::repository_branch::RepositoryBranch::parse(
+                            "main".to_owned(),
+                        )
+                        .expect("main is a valid branch")
+                    })
+                }),
                 id: session_id,
                 owner_id: request.owner.clone(),
                 bot_id,
@@ -186,9 +235,9 @@ where
                 // Whatever this bot's sessions work in: the deployment's
                 // repository, or nothing for a bot whose sessions work
                 // somewhere this deployment does not name.
-                repo_url: defaults
-                    .repo_url
+                repo_url: selected_repo
                     .as_ref()
+                    .or(defaults.repo_url.as_ref())
                     .map(|repo| repo.as_str().to_owned()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
@@ -352,6 +401,7 @@ where
         let session = self
             .sessions
             .create_session(CreateAgentSessionParams {
+                repo_branch: None,
                 id: session_id,
                 owner_id: origin.sender.clone(),
                 bot_id,

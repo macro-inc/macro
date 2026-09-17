@@ -129,6 +129,7 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let now = chrono::Utc::now();
         let session = AgentSession {
+            repo_branch: params.repo_branch,
             pull_request_url: None,
             id: params.id,
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
@@ -690,6 +691,7 @@ impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
 pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     let now = chrono::Utc::now();
     AgentSession {
+        repo_branch: None,
         pull_request_url: None,
         id,
         name: DEFAULT_AGENT_SESSION_NAME.to_owned(),

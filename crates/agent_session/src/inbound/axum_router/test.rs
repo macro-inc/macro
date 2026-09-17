@@ -107,6 +107,7 @@ impl SessionOpener for RecordingOpener {
         request: OpenExternalAgentSession,
     ) -> crate::domain::error::Result<AgentSession> {
         let session = AgentSession {
+            repo_branch: None,
             pull_request_url: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
@@ -141,6 +142,7 @@ impl SessionOpener for RecordingOpener {
             .as_ref()
             .map_or(BotId::TEST_B, |selected| selected.bot_id);
         let session = AgentSession {
+            repo_branch: None,
             pull_request_url: None,
             id: AgentSessionId::TEST_A,
             name: crate::domain::model::DEFAULT_AGENT_SESSION_NAME.to_owned(),
@@ -791,3 +793,52 @@ async fn an_external_open_carries_its_instructions() {
 }
 
 mod read;
+
+#[tokio::test]
+async fn managed_repository_and_branch_reach_the_domain() {
+    let opener = Arc::new(RecordingOpener::default());
+    let response = router_for(opener.clone(), OneBotDirectory::system_coder())
+        .oneshot(as_user(
+            OWNER,
+            serde_json::json!({
+                "botId": BotId::TEST_A.as_uuid(),
+                "repoUrl": "https://github.com/macro-inc/macro",
+                "repoBranch": "feature/home"
+            })
+            .to_string(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::CREATED);
+    let managed = opener.managed.lock().unwrap();
+    assert_eq!(
+        managed[0].repo_url.as_deref(),
+        Some("https://github.com/macro-inc/macro")
+    );
+    assert_eq!(
+        managed[0]
+            .repo_branch
+            .as_ref()
+            .map(|branch| branch.as_str()),
+        Some("feature/home")
+    );
+}
+
+#[tokio::test]
+async fn invalid_repository_branch_is_rejected_before_opening() {
+    let opener = Arc::new(RecordingOpener::default());
+    let response = router_for(opener.clone(), OneBotDirectory::system_coder())
+        .oneshot(as_user(
+            OWNER,
+            serde_json::json!({
+                "botId": BotId::TEST_A.as_uuid(),
+                "repoUrl": "https://github.com/macro-inc/macro",
+                "repoBranch": "../invalid"
+            })
+            .to_string(),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(opener.managed.lock().unwrap().is_empty());
+}

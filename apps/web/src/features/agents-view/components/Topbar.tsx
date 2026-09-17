@@ -7,8 +7,8 @@ import SidebarIcon from '@phosphor/sidebar.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import SparkleFillIcon from '@phosphor-fill/sparkle-fill.svg';
+import { Dropdown } from '@ui';
 import { type JSX, Show } from 'solid-js';
-import { MenuAnchor } from './Menu';
 
 /** What the toolbar can do to the open session. */
 export type SessionActions = {
@@ -77,87 +77,53 @@ export function Topbar(props: {
             <SidebarIcon class="ph" />
           </button>
           <span class="sep session-only" />
-          <MenuAnchor
-            class="session-only"
-            menuLabel="Session actions"
-            menuClass="below"
-            role="menu"
-            style={{ width: '220px' }}
-            trigger={(menu) => (
-              <button
-                type="button"
-                class="icon-btn"
-                aria-label="More"
-                aria-haspopup="menu"
-                aria-expanded={menu.open()}
-                onClick={(event) => {
-                  event.stopPropagation();
-                  menu.toggle();
-                }}
-              >
-                <DotsIcon class="ph" />
-              </button>
+          <Show when={props.session}>
+            {(session) => (
+              <Dropdown placement="bottom-end" gutter={8}>
+                <Dropdown.Trigger
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Session menu"
+                >
+                  <DotsIcon class="size-5" />
+                </Dropdown.Trigger>
+                <Dropdown.Content class="w-56 max-w-[calc(100vw-1rem)]">
+                  <Dropdown.Group>
+                    <Dropdown.Item closeOnSelect onSelect={session().onRename}>
+                      <PencilIcon class="size-4" />
+                      Rename
+                    </Dropdown.Item>
+                    <Dropdown.Item
+                      closeOnSelect
+                      onSelect={session().onCopyLink}
+                    >
+                      <CopyIcon class="size-4" />
+                      Copy link
+                    </Dropdown.Item>
+                    <Dropdown.Item
+                      closeOnSelect
+                      onSelect={session().onToggleFavorite}
+                    >
+                      <SparkleIcon class="size-4" />
+                      {session().favorite
+                        ? 'Remove from favorites'
+                        : 'Add to favorites'}
+                    </Dropdown.Item>
+                  </Dropdown.Group>
+                  <Dropdown.Group>
+                    <Dropdown.Item
+                      closeOnSelect
+                      class="text-failure"
+                      onSelect={session().onDelete}
+                    >
+                      <TrashIcon class="size-4" />
+                      Delete session
+                    </Dropdown.Item>
+                  </Dropdown.Group>
+                </Dropdown.Content>
+              </Dropdown>
             )}
-          >
-            {(close) => (
-              <>
-                <button
-                  type="button"
-                  class="opt"
-                  role="menuitem"
-                  onClick={() => {
-                    close();
-                    props.session?.onRename();
-                  }}
-                >
-                  <PencilIcon class="ph" />
-                  <span class="nm">Rename</span>
-                </button>
-                <button
-                  type="button"
-                  class="opt"
-                  role="menuitem"
-                  onClick={() => {
-                    close();
-                    props.session?.onCopyLink();
-                  }}
-                >
-                  <CopyIcon class="ph" />
-                  <span class="nm">Copy link</span>
-                </button>
-                <button
-                  type="button"
-                  class="opt"
-                  role="menuitem"
-                  onClick={() => {
-                    close();
-                    props.session?.onToggleFavorite();
-                  }}
-                >
-                  <SparkleIcon class="ph" />
-                  <span class="nm">
-                    {props.session?.favorite
-                      ? 'Remove from favorites'
-                      : 'Add to favorites'}
-                  </span>
-                </button>
-                <div class="grp" style={{ padding: '4px 0 0' }} />
-                <button
-                  type="button"
-                  class="opt"
-                  role="menuitem"
-                  style={{ color: 'var(--red)' }}
-                  onClick={() => {
-                    close();
-                    props.session?.onDelete();
-                  }}
-                >
-                  <TrashIcon class="ph" />
-                  <span class="nm">Delete session</span>
-                </button>
-              </>
-            )}
-          </MenuAnchor>
+          </Show>
         </div>
       </div>
     </ViewShell.TopBar>

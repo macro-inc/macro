@@ -29,6 +29,9 @@ vi.mock('@service-agent-harness/client', () => ({
 }));
 
 const { startPendingSession } = await import('./pending-session');
+const { agentHarnessServiceClient } = await import(
+  '@service-agent-harness/client'
+);
 const { resolveSessionId } = await import('./resolve-session-id');
 
 /** Let the mocked create's `.then` run. */
@@ -86,6 +89,13 @@ describe('a placeholder', () => {
       botId: 'persona-1',
       modelOverride: 'model-2',
       prompt: 'Fix the tests',
+      repoUrl: 'https://github.com/macro-inc/macro',
+      repoBranch: 'feature/home',
+    });
+    expect(agentHarnessServiceClient.create).toHaveBeenLastCalledWith({
+      botId: 'persona-1',
+      repoUrl: 'https://github.com/macro-inc/macro',
+      repoBranch: 'feature/home',
     });
     await createRoot(async (dispose) => {
       const resolved = resolveSessionId(() => placeholder);

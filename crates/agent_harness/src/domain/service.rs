@@ -159,6 +159,7 @@ pub struct AgentHarnessService<
         Notifier,
     >,
     workers: Arc<SessionWorkers>,
+    repositories: Option<Arc<dyn crate::domain::ports::ReachableRepositories>>,
 }
 
 // Manual Clone impl so the port types don't need to be Clone (both fields
@@ -194,6 +195,7 @@ impl<
         Self {
             inner: Arc::clone(&self.inner),
             workers: Arc::clone(&self.workers),
+            repositories: self.repositories.clone(),
         }
     }
 }
@@ -272,7 +274,17 @@ where
                 notifier,
             }),
             workers: Arc::new(DashMap::new()),
+            repositories: None,
         }
+    }
+
+    /// Enable explicit repository choices, authorized against the owner's reachable repositories.
+    pub fn with_repositories(
+        mut self,
+        repositories: Arc<dyn crate::domain::ports::ReachableRepositories>,
+    ) -> Self {
+        self.repositories = Some(repositories);
+        self
     }
 
     /// Queue one command behind any work already running for its session.

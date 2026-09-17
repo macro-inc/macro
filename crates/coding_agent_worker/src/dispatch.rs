@@ -59,6 +59,7 @@ impl WorkExecutor for Dispatcher {
                     // the control endpoint. Sending one here is refused.
                     prompt: None,
                     repo_url: self.workspace.repo_url.clone(),
+                    repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),
                     thread: Some(CreateSessionThread {
                         channel_id,

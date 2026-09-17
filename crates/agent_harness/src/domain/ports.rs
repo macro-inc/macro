@@ -35,12 +35,10 @@ pub enum CommandTarget {
 /// states what it needs - a list of repository urls for one user - without the
 /// installation records, App credentials and HTTP client that answering it
 /// takes. Reaching nothing is an empty list, not an error.
+#[async_trait::async_trait]
 pub trait ReachableRepositories: Send + Sync + 'static {
     /// Every repository `user` reaches, as `https://github.com/owner/name`.
-    fn for_user(
-        &self,
-        user: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<Vec<String>>> + Send;
+    async fn for_user(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<String>>;
 }
 
 /// Forwards commands to the replica currently responsible for execution.
