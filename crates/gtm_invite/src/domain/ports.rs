@@ -1,4 +1,6 @@
 //! Port definitions for the GTM invite domain.
+//!
+//! These traits define the contracts that adapters must implement.
 
 use std::future::Future;
 
@@ -11,6 +13,9 @@ use crate::domain::models::{
 };
 
 /// Repository for invite links.
+///
+/// All methods perform database operations — SQL queries are written
+/// directly in the outbound adapter implementation.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait GtmInviteRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
@@ -79,6 +84,8 @@ pub trait GtmInviteRepo: Send + Sync + 'static {
 }
 
 /// Service interface for invite link operations.
+///
+/// Orchestrates business logic using the repository.
 pub trait GtmInviteService: Send + Sync + 'static {
     /// The offer configuration links are created with.
     fn config(&self) -> &GtmInviteConfig;

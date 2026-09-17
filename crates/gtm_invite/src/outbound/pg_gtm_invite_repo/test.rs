@@ -160,6 +160,7 @@ async fn revoke_only_touches_open_links(pool: Pool<Postgres>) {
     repo.insert_link(&created).await.unwrap();
 
     assert!(repo.revoke_link(created.id, Utc::now()).await.unwrap());
+    // Already revoked: nothing to do.
     assert!(!repo.revoke_link(created.id, Utc::now()).await.unwrap());
     let revoked = repo.get_link_by_id(created.id).await.unwrap().unwrap();
     assert_eq!(revoked.status(Utc::now()), InviteLinkStatus::Revoked);
@@ -188,6 +189,7 @@ async fn redeem_is_first_come_and_idempotent_for_the_winner(pool: Pool<Postgres>
     assert!(redeemed.is_redeemed_by(&prospect()));
     assert_eq!(redeemed.status(now), InviteLinkStatus::Redeemed);
 
+    // Same user again keeps the original redemption time.
     let again = repo
         .redeem_link(created.id, &prospect(), now + Duration::hours(1))
         .await
@@ -201,6 +203,7 @@ async fn redeem_is_first_come_and_idempotent_for_the_winner(pool: Pool<Postgres>
         Some(now.timestamp_millis())
     );
 
+    // Someone else is refused.
     assert!(
         repo.redeem_link(created.id, &other_prospect(), now)
             .await
@@ -275,6 +278,7 @@ async fn mark_converted_records_the_subscription_once(pool: Pool<Postgres>) {
     let created = link("valentina@macro.com", "Ada");
     repo.insert_link(&created).await.unwrap();
 
+    // Nobody redeemed it yet: nothing to convert.
     assert!(
         !repo
             .mark_converted(&prospect(), "sub_1", Utc::now())
@@ -292,6 +296,7 @@ async fn mark_converted_records_the_subscription_once(pool: Pool<Postgres>) {
             .await
             .unwrap()
     );
+    // A second subscription event does not overwrite the first.
     assert!(
         !repo
             .mark_converted(&prospect(), "sub_2", Utc::now())
