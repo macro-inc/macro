@@ -1,12 +1,15 @@
 import { transcribeAudio } from '@queries/dictation/transcribe';
 import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
-import { canRecordAudio, startRecording } from './browser-recording';
-import { getLocalSpeechRecognition } from './browser-speech';
-import { startMicrophoneVolume } from './browser-volume';
+import { AudioRecorder } from './browser/audio-recorder';
+import { getLocalSpeechRecognition } from './browser/local-speech';
+import type { CreateRecorder } from './core/recording';
 import type { DictationController } from './core/types';
-import { createDictation } from './primitives/create-dictation';
+import { createLocalDictation } from './primitives/create-local-dictation';
 import { createRecordedDictation } from './primitives/create-recorded-dictation';
+
+const createRecorder: CreateRecorder = (callbacks) =>
+  new AudioRecorder(callbacks);
 
 /** Append plain speech without reparsing or replacing the existing rich draft. */
 export function createComposerDictation(editor: () => LexicalEditor) {
@@ -29,16 +32,16 @@ export function createComposerDictation(editor: () => LexicalEditor) {
     },
     onCancel: () => editor().focus(),
   };
-  const local = createDictation({
+  const local = createLocalDictation({
     ...callbacks,
     recognition: getLocalSpeechRecognition(),
     language,
-    startVolumeMeter: startMicrophoneVolume,
+    createRecorder,
   });
   const cloud = createRecordedDictation({
     ...callbacks,
-    supported: canRecordAudio(),
-    startRecording,
+    supported: AudioRecorder.isSupported(),
+    createRecorder,
     transcribe: (audio, signal) => transcribeAudio(audio, language, signal),
   });
   const current = () =>

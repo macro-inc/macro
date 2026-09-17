@@ -3,6 +3,7 @@ import MicrophoneIcon from '@phosphor-icons/core/regular/microphone.svg?componen
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { Button } from '@ui';
 import { Show } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { DictationController } from '../core/types';
 import { VolumeTimeline } from './volume-timeline';
 
@@ -47,13 +48,11 @@ export function DictationPanel(props: { dictation: DictationController }) {
             classList={{ 'sr-only': props.dictation.phase() === 'listening' }}
             role="status"
           >
-            {props.dictation.phase() === 'starting'
-              ? 'Starting…'
-              : props.dictation.phase() === 'finishing'
-                ? 'Finishing…'
-                : props.dictation.phase() === 'review'
-                  ? 'Ready'
-                  : 'Listening…'}
+            {match(props.dictation.phase())
+              .with('starting', () => 'Starting…')
+              .with('finishing', () => 'Finishing…')
+              .with('review', () => 'Ready')
+              .otherwise(() => 'Listening…')}
           </span>
         </div>
         <Button
@@ -75,11 +74,8 @@ export function DictationPanel(props: { dictation: DictationController }) {
           size="icon-composer"
           class="rounded-full text-composer-ink"
           label="Use dictation"
-          disabled={
-            props.dictation.phase() === 'starting' ||
-            props.dictation.phase() === 'finishing'
-          }
-          onClick={props.dictation.confirm}
+          disabled={props.dictation.phase() === 'starting'}
+          onClick={() => void props.dictation.confirm()}
         >
           <CheckIcon />
         </Button>

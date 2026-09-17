@@ -1,12 +1,9 @@
 import { renderHook, waitFor } from '@solidjs/testing-library';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type {
-  LocalSpeechRecognition,
-  SpeechAvailability,
-  StartVolumeMeter,
-} from '../core/types';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import type { AudioRecorderCallbacks, RecorderHandle } from '../core/recording';
+import type { LocalSpeechRecognition, SpeechAvailability } from '../core/types';
 import { MAX_VOLUME_SAMPLES } from '../core/volume';
-import { createDictation } from './create-dictation';
+import { createLocalDictation } from './create-local-dictation';
 
 class Recognition implements LocalSpeechRecognition {
   static available = vi.fn(
@@ -38,82 +35,106 @@ class Recognition implements LocalSpeechRecognition {
   }
 }
 
-async function setup(
-  recognition = Recognition,
-  startVolumeMeter?: StartVolumeMeter
-) {
+/** Meter-only recorder; the test fires its level events. */
+class FakeMeter implements RecorderHandle {
+  static latest: FakeMeter | undefined;
+  /** Overrides how the next constructed meter acquires the microphone. */
+  static nextStart: (() => Promise<void>) | undefined;
+  start = vi.fn(FakeMeter.nextStart ?? (async () => {}));
+  stop = vi.fn();
+  cancel = vi.fn();
+  constructor(readonly callbacks: AudioRecorderCallbacks) {
+    FakeMeter.latest = this;
+  }
+}
+
+async function setup(recognition = Recognition, withMeter = false) {
   const onConfirm = vi.fn();
   const onCancel = vi.fn();
   const hook = renderHook(() =>
-    createDictation({
+    createLocalDictation({
       recognition,
       language: 'en-US',
       onConfirm,
       onCancel,
-      startVolumeMeter,
+      createRecorder: withMeter
+        ? (callbacks) => new FakeMeter(callbacks)
+        : undefined,
     })
   );
   await waitFor(() => expect(hook.result.phase()).toBe('idle'));
   return { ...hook, onConfirm, onCancel };
 }
 
+const meter = () => {
+  if (!FakeMeter.latest) throw new Error('no meter was created');
+  return FakeMeter.latest;
+};
+
 beforeEach(() => {
   Recognition.available.mockReset().mockResolvedValue('available');
   Recognition.install.mockReset().mockResolvedValue(true);
+  FakeMeter.latest = undefined;
+  FakeMeter.nextStart = undefined;
 });
-afterEach(() => vi.useRealTimers());
 
 describe('local dictation', () => {
-  it('keeps a bounded volume timeline and stops sampling immediately on confirm', async () => {
-    let sample!: (level: number) => void;
-    const stop = vi.fn();
-    const { result } = await setup(Recognition, (onLevel) => {
-      sample = onLevel;
-      return { stop };
-    });
+  it('keeps a bounded volume timeline and stops metering on confirm', async () => {
+    const { result } = await setup(Recognition, true);
     await result.start();
-    sample(0.1);
-    sample(0.8);
-    sample(0);
+    const { onLevel } = meter().callbacks;
+    onLevel?.(0.1);
+    onLevel?.(0.8);
+    onLevel?.(0);
     expect(result.volumeHistory()).toEqual([0.1, 0.8, 0]);
-    for (let index = 0; index < MAX_VOLUME_SAMPLES; index++) sample(0.5);
+    for (let index = 0; index < MAX_VOLUME_SAMPLES; index++) onLevel?.(0.5);
     expect(result.volumeHistory()).toHaveLength(MAX_VOLUME_SAMPLES);
-    result.confirm();
-    expect(stop).toHaveBeenCalledOnce();
-    sample(1);
+    const confirmed = result.confirm();
+    expect(meter().cancel).toHaveBeenCalledOnce();
+    onLevel?.(1);
     expect(result.volumeHistory().at(-1)).toBe(0.5);
     result.cancel();
+    await confirmed;
     expect(result.volumeHistory()).toEqual([]);
   });
 
-  it('releases volume analysis on error and unmount, and resets for each recording', async () => {
-    let sample!: (level: number) => void;
-    const stop = vi.fn();
-    const { result, cleanup } = await setup(Recognition, (onLevel) => {
-      sample = onLevel;
-      return { stop };
-    });
+  it('releases the meter on error and unmount, and resets per recording', async () => {
+    const { result, cleanup } = await setup(Recognition, true);
     await result.start();
-    sample(0.8);
+    const first = meter();
+    first.callbacks.onLevel?.(0.8);
     Recognition.latest.onerror?.({ error: 'no-speech' });
-    expect(stop).toHaveBeenCalledTimes(1);
+    expect(first.cancel).toHaveBeenCalledOnce();
     await result.start();
     expect(result.volumeHistory()).toEqual([]);
+    const second = meter();
+    expect(second).not.toBe(first);
     cleanup();
-    sample(1);
-    expect(stop).toHaveBeenCalledTimes(2);
+    second.callbacks.onLevel?.(1);
+    expect(second.cancel).toHaveBeenCalledOnce();
     expect(result.volumeHistory()).toEqual([]);
+  });
+
+  it('dictates without a timeline when the meter cannot start', async () => {
+    const { result } = await setup(Recognition, true);
+    FakeMeter.nextStart = async () => {
+      throw new Error('busy');
+    };
+    await result.start();
+    FakeMeter.nextStart = undefined;
+    await waitFor(() => expect(result.message()).toMatch(/volume/i));
+    expect(result.phase()).toBe('listening');
   });
 
   it('disables dictation without a local recognizer or supported language', async () => {
     const unsupported = renderHook(() =>
-      createDictation({ language: 'en-US', onConfirm: vi.fn() })
+      createLocalDictation({ language: 'en-US', onConfirm: vi.fn() })
     );
     expect(unsupported.result.phase()).toBe('unavailable');
     expect(unsupported.result.disabled()).toBe(true);
     Recognition.available.mockResolvedValue('unavailable');
     const unavailable = renderHook(() =>
-      createDictation({
+      createLocalDictation({
         recognition: Recognition,
         language: 'fr-FR',
         onConfirm: vi.fn(),
@@ -134,11 +155,12 @@ describe('local dictation', () => {
     expect(speech.lang).toBe('en-US');
     speech.result('A first guess');
     speech.result('The corrected sentence.', 'Another thought');
-    result.confirm();
+    const confirmed = result.confirm();
     expect(speech.stop).toHaveBeenCalledOnce();
     expect(onConfirm).not.toHaveBeenCalled();
     speech.result('The corrected sentence.', 'Another thought.');
     speech.onend?.();
+    await confirmed;
     expect(onConfirm).toHaveBeenCalledExactlyOnceWith(
       'The corrected sentence. Another thought.'
     );
@@ -150,8 +172,9 @@ describe('local dictation', () => {
     await result.start();
     const speech = Recognition.latest;
     speech.result('discard this');
-    result.confirm();
+    const confirmed = result.confirm();
     result.cancel();
+    await confirmed;
     speech.result('late words');
     speech.onend?.();
     expect(speech.abort).toHaveBeenCalledOnce();
@@ -168,19 +191,20 @@ describe('local dictation', () => {
     Recognition.latest.onend?.();
     expect(result.phase()).toBe('review');
     expect(onConfirm).not.toHaveBeenCalled();
-    result.confirm();
+    await result.confirm();
     expect(onConfirm).toHaveBeenCalledExactlyOnceWith('Keep this');
   });
 
-  it('releases the microphone and finalization timeout on unmount', async () => {
+  it('releases the recognizer on unmount and ignores a late end', async () => {
     const { result, cleanup, onConfirm } = await setup();
-    vi.useFakeTimers();
     await result.start();
-    Recognition.latest.result('do not insert after navigation');
-    result.confirm();
+    const speech = Recognition.latest;
+    speech.result('do not insert after navigation');
+    const confirmed = result.confirm();
     cleanup();
-    vi.runAllTimers();
-    expect(Recognition.latest.abort).toHaveBeenCalledOnce();
+    await confirmed;
+    speech.onend?.();
+    expect(speech.abort).toHaveBeenCalledOnce();
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
@@ -194,7 +218,7 @@ describe('local dictation', () => {
     Recognition.latest.result('Retain my words');
     Recognition.latest.onerror?.({ error: 'audio-capture' });
     expect(result.phase()).toBe('review');
-    result.confirm();
+    await result.confirm();
     expect(onConfirm).toHaveBeenCalledExactlyOnceWith('Retain my words');
   });
 
@@ -232,14 +256,17 @@ describe('local dictation', () => {
     expect(onConfirm).not.toHaveBeenCalled();
   });
 
-  it('finishes even when a browser never emits end', async () => {
+  it('commits on a second confirm when a browser never emits end', async () => {
     const { result, onConfirm } = await setup();
-    vi.useFakeTimers();
     await result.start();
     Recognition.latest.result('Last available words');
-    result.confirm();
-    vi.advanceTimersByTime(3000);
+    const first = result.confirm();
+    expect(result.phase()).toBe('finishing');
+    expect(onConfirm).not.toHaveBeenCalled();
+    const second = result.confirm();
+    await Promise.all([first, second]);
     expect(onConfirm).toHaveBeenCalledExactlyOnceWith('Last available words');
     expect(Recognition.latest.abort).toHaveBeenCalledOnce();
+    expect(result.phase()).toBe('idle');
   });
 });

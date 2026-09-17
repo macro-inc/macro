@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { getLocalSpeechRecognition } from './browser-speech';
+import { getLocalSpeechRecognition } from './local-speech';
 
 afterEach(() => vi.unstubAllGlobals());
 

@@ -286,6 +286,8 @@ Volume analysis stays on-device and stops on confirm, cancel, error, or close.
 Use dictation stops listening, waits for final words, and appends plain text to
 the draft without sending it. Existing rich text and attachments remain intact.
 If the browser stops listening on its own, **Ready** waits for confirmation.
+While **Finishing…**, selecting the checkmark again commits the words recognized
+so far, so a browser that never reports the end of speech cannot strand the user.
 Closing the composer releases the microphone. Microphone and download failures
 appear below the composer.
 
@@ -294,7 +296,10 @@ Recordings stop after five minutes or near 8 MB and wait for confirmation.
 Cancel discards the recording; cancel during transcription aborts the request and
 ignores any late result. Failed uploads keep the recording in memory for an explicit
 retry with the checkmark. No audio or transcript is persisted by the dictation
-endpoint. The backend meters provider duration/cost without charging user credits.
+endpoint. The server detects the audio container from the bytes, requires a
+signed-in user (bots and internal callers are refused), and rate limits each
+user to 60 transcriptions per hour; a limited request shows a retry message.
+The backend meters provider duration/cost without charging user credits.
 
 Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.

@@ -104,6 +104,7 @@
     "@solid-primitives/rootless": "^1.5.2",
     "@solid-primitives/scheduled": "^1.5.2",
     "@solid-primitives/storage": "^4.3.3",
+    "@solid-primitives/stream": "^0.7.4",
     "@solidjs/router": "^0.15.3",
     "@tailwindcss/vite": "^4.2.4",
     "@tanstack/pacer": "^0.17.3",

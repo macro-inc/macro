@@ -1,4 +1,4 @@
-import type { LocalSpeechConstructor } from './core/types';
+import type { LocalSpeechConstructor } from '../core/types';
 
 export function getLocalSpeechRecognition():
   | LocalSpeechConstructor
