@@ -10,7 +10,7 @@ import { usePdfDocument } from '../context/pdf-document-context';
 import { MarkupToolbar } from './MarkupToolbar';
 import { PageNumberInput } from './PageNumberInput';
 
-function TabsToggle() {
+export function PdfTabsToggle() {
   const pdf = usePdfDocument();
   const canEdit = pdf.permissions.canEdit;
   const [showTabBar, setShowTabBar] = pdf.state.signals.showTabBar;
@@ -31,21 +31,27 @@ function TabsToggle() {
   );
 }
 
+export function PdfToolbarControls() {
+  return (
+    <div class="flex items-center gap-2">
+      <PageNumberInput />
+      <Show when={ENABLE_PDF_MARKUP}>
+        <div class="h-5 w-px bg-edge" />
+        <MarkupToolbar />
+      </Show>
+    </div>
+  );
+}
+
 export function PdfSplitToolbar() {
   const [documentProxy] = usePdfDocument().state.signals.documentProxy;
   return (
     <Show when={documentProxy()}>
       <SplitToolbarLeft>
-        <div class="flex items-center gap-2">
-          <PageNumberInput />
-          <Show when={ENABLE_PDF_MARKUP}>
-            <div class="h-5 w-px bg-edge" />
-            <MarkupToolbar />
-          </Show>
-        </div>
+        <PdfToolbarControls />
       </SplitToolbarLeft>
       <SplitToolbarRight>
-        <TabsToggle />
+        <PdfTabsToggle />
       </SplitToolbarRight>
     </Show>
   );

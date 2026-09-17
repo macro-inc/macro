@@ -414,13 +414,12 @@ is restricted to your own files. Recent offers only file-scope filtering.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,
-while Markdown, code/CSV, image, video, and unrecognized file clicks and Enter
-replace the list with a breadcrumbed detail. Choose the current location
+while Markdown, code/CSV, image, video, PDF/DOCX, canvas, and unrecognized file
+clicks and Enter replace the list with a breadcrumbed detail. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
 entries. Opening a list row or sidebar favorite starts a new detail path; only
-navigation originating inside a detail appends to that path. Modified clicks and
-file types without a dedicated detail, including PDF and canvas, retain existing
-split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
+navigation originating inside a detail appends to that path. Modified clicks
+retain existing split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
 and folders. Navigation state and expanded folders are restored when returning
 from an opened file.
 
