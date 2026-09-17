@@ -1,5 +1,8 @@
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
+import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
+import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
+import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -290,6 +293,19 @@ export function runCreateAction(
         });
       return;
     }
+    case 'spreadsheet':
+      if (!isSpreadsheetEnabledForCurrentUser()) return;
+      void createBlock({
+        blockName: 'spreadsheet',
+        loading: true,
+        createFn: () =>
+          createSpreadsheetDocument({
+            projectId: options.projectId,
+            source,
+          }),
+        shouldInsert,
+      });
+      return;
     case 'canvas':
       createBlock({
         blockName: 'canvas',
@@ -647,6 +663,24 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
+    label: 'Spreadsheet',
+    enabled: isSpreadsheetEnabledForCurrentUser,
+    icon: getIconConfig('spreadsheet').icon,
+    description: 'Create spreadsheet',
+    launcherHint: 'Tables, formulas, and shared calculations',
+    keywords: ['new', 'make', 'add', 'sheet', 'table', 'formula'],
+    blockName: 'spreadsheet',
+    hotkeyToken: TOKENS.create.spreadsheet,
+    altHotkeyToken: TOKENS.create.spreadsheetNewSplit,
+    hotkey: 'b',
+    keyDownHandler: () => {
+      runCreateAction('spreadsheet', {
+        shouldInsert: pressedKeys().has('shift'),
+      });
+      return true;
+    },
+  },
+  {
     label: 'Folder',
     icon: getIconConfig('project').icon,
     description: 'Create folder',
@@ -686,6 +720,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
 export function useCreateMenuBlocks(
   source: () => CreatableBlock[] = () => CREATABLE_BLOCKS
 ): Accessor<CreatableBlock[]> {
+  const spreadsheets = useSpreadsheetAccess();
   const snippetsFlag = useFeatureFlag(enableSnippets);
   // Subscribed to rather than left to the block's own `enabled`, which reads
   // PostHog without tracking it: this memo has no other reason to re-run, so a
@@ -696,6 +731,7 @@ export function useCreateMenuBlocks(
     remindersFlag();
     agentsFlag();
     return source().filter((block) => {
+      if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;
       return block.enabled?.() ?? true;
     });

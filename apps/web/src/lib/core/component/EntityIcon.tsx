@@ -14,6 +14,8 @@ import type {
   NamedSubType,
   ReminderEntity,
 } from '@entity';
+import Spreadsheet from '@icon/wide-spreadsheet.svg';
+import SpreadsheetBold from '@icon/wide-spreadsheet-bold.svg';
 import AddressBook from '@phosphor/address-book.svg';
 import BellSimple from '@phosphor/bell-simple.svg';
 import Blueprint from '@phosphor/blueprint.svg';
@@ -151,6 +153,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-canvas',
     background: 'bg-canvas/20',
     prettyName: 'Canvas',
+  },
+  spreadsheet: {
+    icon: Spreadsheet,
+    boldIcon: SpreadsheetBold,
+    foreground: 'text-success',
+    background: 'bg-success/20',
+    prettyName: 'Spreadsheet',
   },
   html: {
     icon: FileHtml,
@@ -480,7 +489,7 @@ export type EntityIconProps = {
    * fill = "w-fill h-fill"
    */
   size?: keyof typeof ICON_SIZE_CLASSES;
-  /** Use the matching Phosphor weight. Defaults to regular. */
+  /** Use the matching icon weight. Defaults to regular. */
   weight?: 'regular' | 'bold';
   theme?: 'monochrome';
   /**
@@ -589,6 +598,7 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
   return match<EntityIconData, EntityWithValidIcon>(entity)
     .with({ type: 'document' }, (e) => {
       if (e.subType?.type === 'task') return 'task';
+      if (e.fileType === 'spreadsheet') return 'spreadsheet';
       if (e.fileType && isArchiveType(e.fileType)) return 'archive';
       const blockName = itemToBlockName(e, true);
       return blockName === 'unknown' ? 'document' : blockName;

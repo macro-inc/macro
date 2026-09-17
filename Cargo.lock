@@ -16431,7 +16431,9 @@ dependencies = [
 name = "sync_service"
 version = "0.1.0"
 dependencies = [
+ "base64 0.22.1",
  "bebop",
+ "futures",
  "getrandom 0.3.4",
  "loro",
  "macro_sync_service_jwt",
@@ -16440,6 +16442,7 @@ dependencies = [
  "serde_json",
  "subtle",
  "sync_service_bebop_schema",
+ "thiserror 2.0.18",
  "time",
  "tracing",
  "tracing-subscriber",

@@ -177,6 +177,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
   return (
     <Dropdown open={props.open} onOpenChange={props.onOpenChange}>
       <Dropdown.Trigger
+        label="File actions"
         class={cn(props.triggerClass)}
         size="icon-sm"
         variant="ghost"
@@ -511,12 +512,6 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     group: 'sharing' as const,
   });
 
-  createEffect(() => {
-    const openMenu = () => setOpen(true);
-    ctx.setTitleFileMenuTrigger(() => openMenu);
-    onCleanup(() => ctx.setTitleFileMenuTrigger(undefined));
-  });
-
   const ownsMenuEntity = () => props.permissions === Permissions.OWNER;
 
   const ops = createMemo<SplitFileMenuAction[]>(() => {
@@ -690,31 +685,39 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
     return groups;
   });
 
-  createEffect(() => {
-    ctx.setTitleFileMenuActions(actionGroups());
-  });
+  return (
+    <SplitFileActionsMenu
+      open={open()}
+      onOpenChange={setOpen}
+      triggerClass={props.buttonClass}
+      groups={actionGroups()}
+      views={props.mobileViews}
+    />
+  );
+}
 
+/** The shared title menu without persisted-entity operations, for local drafts. */
+export function SplitFileActionsMenu(
+  props: SplitFileMenuRenderProps & { views?: SplitFileMenuViews }
+) {
+  const ctx = useContext(SplitPanelContext);
+  if (!ctx)
+    throw new Error(
+      '<SplitFileActionsMenu> must be used in <SplitPanelContext>'
+    );
+
+  createEffect(() => {
+    ctx.setTitleFileMenuTrigger(() => () => props.onOpenChange(true));
+    onCleanup(() => ctx.setTitleFileMenuTrigger(undefined));
+  });
+  createEffect(() => {
+    ctx.setTitleFileMenuActions(props.groups);
+  });
   onCleanup(() => ctx.setTitleFileMenuActions(undefined));
 
   return (
-    <Show
-      when={isTouchDevice()}
-      fallback={
-        <DesktopRender
-          open={open()}
-          onOpenChange={setOpen}
-          triggerClass={props.buttonClass}
-          groups={actionGroups()}
-        />
-      }
-    >
-      <MobileRender
-        open={open()}
-        onOpenChange={setOpen}
-        triggerClass={props.buttonClass}
-        groups={actionGroups()}
-        views={props.mobileViews}
-      />
+    <Show when={isTouchDevice()} fallback={<DesktopRender {...props} />}>
+      <MobileRender {...props} />
     </Show>
   );
 }

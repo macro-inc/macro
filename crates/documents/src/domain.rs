@@ -22,6 +22,10 @@ pub mod models;
 pub mod permission_token;
 pub mod response;
 
+/// Permission-scoped spreadsheet inspection, calculation, and mutation.
+#[cfg(feature = "ai_tools")]
+pub mod spreadsheet;
+
 #[cfg(feature = "ports")]
 pub mod ports;
 

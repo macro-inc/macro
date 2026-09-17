@@ -2,6 +2,7 @@ import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
 import { AgentsView } from '@app/features/agents-view/views/AgentsView';
 import { ComposeAgentSession } from '@app/features/block-agent/component/ComposeAgentSession';
+import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
@@ -873,6 +874,26 @@ if (LOCAL_ONLY) {
   registerComponent(
     'linked-conversation',
     withAuth(lazy(() => import('@core/linked-conversation/debug/Demo')))
+  );
+}
+
+if (import.meta.env.DEV) {
+  registerComponent(
+    'spreadsheet-demo',
+    withAuth(() => {
+      const enabled = useSpreadsheetAccess();
+      const Demo = lazy(
+        () => import('@app/features/block-spreadsheet/SpreadsheetDemo')
+      );
+      return (
+        <Show
+          when={enabled()}
+          fallback={<RedirectSplit to={{ type: 'component', id: 'inbox' }} />}
+        >
+          <Demo />
+        </Show>
+      );
+    })
   );
 }
 

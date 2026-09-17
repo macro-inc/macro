@@ -696,6 +696,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     ToolEntityAccessManagementService,
     ToolForeignEntityService,
     ToolEventBroker,
+    sync_service_client::SyncServiceClient,
 >;
 
 /// Type alias for the entity access service implementation

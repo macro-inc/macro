@@ -187,7 +187,7 @@ function DriveViewContent(props: DriveViewProps) {
   const createOptions = () =>
     CREATABLE_BLOCKS.filter(
       (block) =>
-        ['md', 'snippet', 'canvas', 'code', 'project'].includes(
+        ['md', 'snippet', 'spreadsheet', 'canvas', 'code', 'project'].includes(
           block.blockName
         ) && isCreatableEnabled(block.blockName)
     );

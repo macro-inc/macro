@@ -32,7 +32,7 @@ impl AccessLevel {
 #[derive(Deserialize, Debug)]
 pub struct AuthToken {
     pub user_id: Option<String>,
-    document_id: String,
+    pub(crate) document_id: String,
     pub access_level: AccessLevel,
     #[serde(default)]
     pub actor: Option<String>,
@@ -70,6 +70,8 @@ pub struct WebsocketQueryParams {
 
 pub enum TokenFrom {
     Headers,
+    /// Require a document-scoped JWT, even when an internal key is present.
+    DocumentHeaders,
     QueryParams,
 }
 
@@ -80,28 +82,31 @@ pub fn decode_jwt(
 ) -> worker::Result<AuthToken> {
     let secrets = Secrets::from(env);
     let token = match token_from {
-        TokenFrom::Headers => {
+        TokenFrom::Headers | TokenFrom::DocumentHeaders => {
             // NB: rewrite with if/let chain on edition 2024
-            let is_admin = match req
-                .headers()
-                .get(header_names::MACRO_INTERNAL_AUTH_KEY_HEADER_KEY)?
-            {
-                // sholud we warn when false?
-                Some(internal_key) => {
-                    let res: bool = internal_key
-                        .as_bytes()
-                        .ct_eq(secrets.internal_api_secret.as_bytes())
-                        .into();
+            let is_admin = matches!(token_from, TokenFrom::Headers)
+                && match req
+                    .headers()
+                    .get(header_names::MACRO_INTERNAL_AUTH_KEY_HEADER_KEY)?
+                {
+                    // sholud we warn when false?
+                    Some(internal_key) => {
+                        let res: bool = internal_key
+                            .as_bytes()
+                            .ct_eq(secrets.internal_api_secret.as_bytes())
+                            .into();
 
-                    if !res {
-                        error!("provided header: {internal_key} did not match expected value");
+                        if !res {
+                            error!(
+                                "provided internal authentication key did not match expected value"
+                            );
+                        }
+                        res
                     }
-                    res
-                }
-                None => false,
-            };
+                    None => false,
+                };
 
-            if is_admin {
+            if is_admin && matches!(token_from, TokenFrom::Headers) {
                 return Ok(AuthToken {
                     user_id: None,
                     document_id: "TODO should be option".to_string(),
@@ -131,6 +136,24 @@ pub fn decode_jwt(
         .context("failed to decode `AuthToken`")?;
 
     Ok(claims)
+}
+
+/// Dedicated access boundary for spreadsheet HTTP requests. Internal service
+/// credentials do not substitute for a signed, document-scoped user grant.
+pub fn spreadsheet_access(
+    req: &worker::Request,
+    env: &worker::Env,
+    document_id: &str,
+) -> Result<(crate::spreadsheet::SpreadsheetAccess, AuthToken), crate::spreadsheet::SpreadsheetError>
+{
+    let claims = decode_jwt(req, env, TokenFrom::DocumentHeaders)
+        .map_err(|_| crate::spreadsheet::SpreadsheetError::Unauthorized)?;
+    let access = crate::spreadsheet::SpreadsheetAccess::authorize(
+        document_id,
+        &claims.document_id,
+        claims.access_level >= AccessLevel::Edit,
+    )?;
+    Ok((access, claims))
 }
 
 #[cfg(test)]

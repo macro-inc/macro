@@ -13,6 +13,9 @@ const FROM_CLIENT_TAG: &str = "from_client";
 const FROM_SERVICE_TAG: &str = "from_service";
 const FRONTIERS_ID_SEPERATOR: &str = "|";
 
+#[cfg(test)]
+mod test;
+
 #[derive(Debug)]
 pub struct DocumentState {
     pub loro_doc: LoroDoc,
@@ -59,6 +62,11 @@ impl DocumentState {
 
     pub fn get_json(&self) -> String {
         self.loro_doc.get_deep_value().to_json()
+    }
+
+    /// Only Lexical documents can be consumed by the markdown search extractor.
+    pub fn has_markdown_content(&self) -> bool {
+        matches!(self.loro_doc.get_value(), LoroValue::Map(roots) if roots.contains_key("root"))
     }
     pub fn should_save(&self) -> bool {
         let Some(up) = *self

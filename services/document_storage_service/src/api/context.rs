@@ -322,6 +322,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     EntityAccessManagementService,
     ForeignEntityServiceImpl<PgForeignEntityRepo>,
     DssEventBroker,
+    sync_service_client::SyncServiceClient,
 >;
 
 /// Type alias for the authorization service.

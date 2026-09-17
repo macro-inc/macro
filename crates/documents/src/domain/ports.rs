@@ -7,6 +7,7 @@ pub mod create;
 pub mod editing;
 pub mod markdown;
 pub mod mentions;
+pub mod sync;
 
 use std::future::Future;
 

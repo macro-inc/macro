@@ -16,6 +16,34 @@ pub struct SessionStorage {
     oplog: DurableKVStorage,
 }
 
+/// Outbound adapter for atomic spreadsheet updates, sharing the websocket log.
+pub struct SpreadsheetUpdateStorage<'a> {
+    pub document_state: &'a DocumentState,
+    pub storage: &'a SessionStorage,
+    pub attribution: Option<&'a crate::spreadsheet::SpreadsheetAttribution>,
+}
+
+impl crate::spreadsheet::SpreadsheetUpdatePort for SpreadsheetUpdateStorage<'_> {
+    fn document(&self) -> &loro::LoroDoc {
+        &self.document_state.loro_doc
+    }
+
+    async fn apply_and_persist(
+        &self,
+        update: &[u8],
+    ) -> std::result::Result<(), crate::spreadsheet::SpreadsheetError> {
+        self.storage
+            .oplog
+            .apply_op_with_attribution(self.document_state, update, self.attribution)
+            .await
+            .map(|_| ())
+            .map_err(|error| {
+                tracing::error!(error = ?error, "failed to persist spreadsheet update");
+                crate::spreadsheet::SpreadsheetError::Persistence
+            })
+    }
+}
+
 impl SessionStorage {
     pub fn new(snapshot_storage: Storage, oplog: DurableKVStorage) -> Self {
         Self {

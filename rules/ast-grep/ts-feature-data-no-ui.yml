@@ -11,6 +11,8 @@ note: |-
   with fake clients and controllers with fake capabilities; neither imports
   rendering code.
 files:
+  - apps/web/src/features/block-spreadsheet/queries/**
+  - apps/web/src/features/block-spreadsheet/primitives/**
   - apps/web/src/features/property/tags/queries/**
   - apps/web/src/features/property/tags/primitives/**
   - apps/web/src/features/claude-connection/primitives/**

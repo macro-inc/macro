@@ -1,4 +1,5 @@
 import { itemToBlockName } from '@core/constant/allBlocks';
+import SpreadsheetIcon from '@icon/wide-spreadsheet.svg';
 import ContactIcon from '@phosphor/address-book.svg';
 import ReminderIcon from '@phosphor/bell-simple.svg';
 import SkillIcon from '@phosphor/blueprint.svg';
@@ -43,6 +44,12 @@ const entityGlyphs: [
 ][] = [
   ['document', { type: 'document', fileType: 'md' }, FileIcon, 'md'],
   ['unresolved document', { type: 'document' }, FileIcon, 'unknown'],
+  [
+    'native spreadsheet',
+    { type: 'document', fileType: 'spreadsheet' },
+    SpreadsheetIcon,
+    'unknown',
+  ],
   [
     'snippet document',
     { type: 'document', fileType: 'md', subType: { type: 'snippet' } },
