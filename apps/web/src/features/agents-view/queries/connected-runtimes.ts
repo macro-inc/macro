@@ -21,38 +21,41 @@ export function connectedRuntimes(
   cursorConnected: boolean,
   harnesses: readonly Harness[]
 ): ConnectedRuntime[] {
-  return buildAgentModelTargets(cursorConnected, harnesses).map((target) => {
-    if (target.harness === 'in-memory') {
+  // Claude Cloud remains in Settings; this workspace offers its existing runtimes.
+  return buildAgentModelTargets(cursorConnected, harnesses, false).map(
+    (target) => {
+      if (target.harness === 'in-memory') {
+        return {
+          id: 'in-memory',
+          name: 'Macro Harness',
+          kind: 'builtin',
+          target,
+          connected: true,
+        };
+      }
+      if (target.harness === 'cursor') {
+        return {
+          id: 'cursor',
+          name: 'Cursor',
+          kind: 'builtin',
+          target,
+          connected: true,
+        };
+      }
+      const harness = harnesses.find(
+        (candidate) => candidate.id === target.harnessId
+      );
       return {
-        id: 'in-memory',
-        name: 'Macro Harness',
-        kind: 'builtin',
+        id: target.harnessId ?? '',
+        name: harness
+          ? harness.owner.type === 'team'
+            ? `${harness.name} · Team`
+            : harness.name
+          : 'macrod',
+        kind: 'macrod',
         target,
-        connected: true,
+        connected: harness?.connected ?? false,
       };
     }
-    if (target.harness === 'cursor') {
-      return {
-        id: 'cursor',
-        name: 'Cursor',
-        kind: 'builtin',
-        target,
-        connected: true,
-      };
-    }
-    const harness = harnesses.find(
-      (candidate) => candidate.id === target.harnessId
-    );
-    return {
-      id: target.harnessId ?? '',
-      name: harness
-        ? harness.owner.type === 'team'
-          ? `${harness.name} · Team`
-          : harness.name
-        : 'macrod',
-      kind: 'macrod',
-      target,
-      connected: harness?.connected ?? false,
-    };
-  });
+  );
 }

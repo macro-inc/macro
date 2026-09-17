@@ -1,5 +1,5 @@
-import { ViewSidebarToggle } from '@app/components/view-shell/ViewShell';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
+import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
 import {
   AgentSessionProvider,
@@ -40,10 +40,6 @@ import { ConfirmDialog, RenameDialog } from './SimpleDialogs';
 import { Topbar } from './Topbar';
 
 const FAVORITES_FILTER: FavoritesFilter = { entityType: ['agent_session'] };
-
-function pullRequestNumber(url: string): string | undefined {
-  return url.match(/\/pull\/(\d+)/)?.[1];
-}
 
 function SessionContent(props: {
   mode: AgentsMode;
@@ -158,7 +154,11 @@ function SessionContent(props: {
           onCopyLink: copyLink,
           onDelete: () => setDeleting(true),
         }}
-      />
+      >
+        <Show when={session()?.pullRequestUrl}>
+          {(url) => <AgentPullRequestChip url={url()} />}
+        </Show>
+      </Topbar>
       <div class="body">
         <section class="page pane" data-active aria-label="Agent session">
           <div class="meta mono">
@@ -195,18 +195,6 @@ function SessionContent(props: {
               {(url) => (
                 <span>
                   <span class="k">repo</span> {repositoryLabel(url())}
-                </span>
-              )}
-            </Show>
-            <Show when={session()?.pullRequestUrl}>
-              {(url) => (
-                <span>
-                  <span class="k">pr</span>{' '}
-                  <a href={url()} target="_blank" rel="noreferrer">
-                    {pullRequestNumber(url())
-                      ? `#${pullRequestNumber(url())}`
-                      : 'open'}
-                  </a>
                 </span>
               )}
             </Show>

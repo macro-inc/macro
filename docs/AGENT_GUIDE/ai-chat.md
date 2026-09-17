@@ -63,9 +63,10 @@
   the roster into Team and Private, with Edit / Delete actions. The coding
   tab includes runtime setup. The create/edit dialog has sharing, name,
   `@tag`, runtime, default model, connections, channels, and instructions.
-- **Session**: the header has favorite, Share, Side panel, and a More menu
+- **Session**: the header has the sidebar reopen control, a linked PR status chip,
+  favorite, Share, Side panel, and a More menu
   (Rename, Copy link, Delete). A metadata strip lists the agent, runtime,
-  model, repository, pull request, and status. Chat and Code session inputs
+  model, repository, and status. Chat and Code session inputs
   use the same growing, initially single-line input with the model selector on
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to

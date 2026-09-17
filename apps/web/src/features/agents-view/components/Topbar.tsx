@@ -1,3 +1,4 @@
+import { ViewSidebarToggle } from '@app/components/view-shell/ViewShell';
 import CopyIcon from '@phosphor/copy.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import PencilIcon from '@phosphor/pencil-simple.svg';
@@ -6,7 +7,7 @@ import SidebarIcon from '@phosphor/sidebar.svg';
 import SparkleIcon from '@phosphor/sparkle.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import SparkleFillIcon from '@phosphor-fill/sparkle-fill.svg';
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { MenuAnchor } from './Menu';
 
 /** What the toolbar can do to the open session. */
@@ -24,11 +25,17 @@ export type SessionActions = {
  * The main pane's title row. Session-only controls stay in the markup and the
  * stylesheet hides them until the root carries `data-session`.
  */
-export function Topbar(props: { title: string; session?: SessionActions }) {
+export function Topbar(props: {
+  title: string;
+  session?: SessionActions;
+  children?: JSX.Element;
+}) {
   return (
     <div class="topbar">
+      <ViewSidebarToggle action="expand" />
       <h1 class="truncate">{props.title}</h1>
       <div class="right">
+        {props.children}
         <div class="bbar" role="toolbar" aria-label="Session actions">
           <button
             type="button"
