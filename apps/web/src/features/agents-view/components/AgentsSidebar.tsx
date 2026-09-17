@@ -128,7 +128,7 @@ function AgentFavorites(props: {
   return (
     <Show when={favorites().length > 0}>
       <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger class="text-xs">
+        <CollapsibleSection.Trigger>
           <span class="min-w-0 truncate">Favorites</span>
           <CollapsibleSection.Indicator />
         </CollapsibleSection.Trigger>
@@ -328,7 +328,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
         </div>
       </ViewSidebar.Header>
 
-      <ViewSidebar.Content class="flex flex-col gap-6 overflow-hidden pt-4">
+      <ViewSidebar.Content class="overflow-hidden">
         <ViewSidebar.Nav aria-label="Agent views">
           <For each={PAGES}>
             {(item) => (
@@ -357,22 +357,17 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
             recentChatsOpen() ? 'flex-1' : 'shrink-0'
           )}
         >
-          <div class="flex h-7 shrink-0 items-center gap-1 pr-1">
-            <CollapsibleSection.Trigger class="h-7 min-w-0 flex-1 py-1 text-xs">
+          <CollapsibleSection.Header>
+            <CollapsibleSection.Trigger class="flex-1">
               <span class="min-w-0 truncate">Recent chats</span>
               <CollapsibleSection.Indicator />
             </CollapsibleSection.Trigger>
-            <Button
-              variant="ghost"
-              size="icon-sm"
+            <CollapsibleSection.Action
               label={
                 searchOpen() ? 'Close agent chat search' : 'Search agent chats'
               }
               aria-pressed={searchOpen()}
-              class={cn(
-                'size-7 rounded-lg',
-                searchOpen() && 'bg-active text-ink'
-              )}
+              class={cn(searchOpen() && 'bg-active text-ink')}
               onClick={() => {
                 if (searchOpen()) {
                   props.onSearchChange('');
@@ -383,8 +378,8 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               }}
             >
               <MagnifyingGlassIcon class="size-3.5" />
-            </Button>
-          </div>
+            </CollapsibleSection.Action>
+          </CollapsibleSection.Header>
           <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col gap-1">
             <Show when={searchOpen()}>
               <SearchBar

@@ -1,13 +1,26 @@
+import { CollapsibleSection as WorkspaceSection } from '@app/components/view-shell';
+import { CollapseTransition } from '@app/components/view-shell/CollapseTransition';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
-import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createContext,
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+  useContext,
+} from 'solid-js';
 import { useOffscreenActivity } from './hooks/useOffscreenActivity';
 
 const LOADING_SKELETON_ROWS = [0, 1, 2];
+const SectionContainerContext = createContext<() => HTMLElement | undefined>();
 
 function SectionScrollArea(props: {
   contentRef: (element: HTMLDivElement) => void;
@@ -33,7 +46,7 @@ function SectionScrollArea(props: {
         }}
       >
         <div role="group" class={props.class}>
-          {props.children}
+          <Suspense>{props.children}</Suspense>
         </div>
       </Scroll>
       <Show when={activity.direction()}>
@@ -80,19 +93,24 @@ function CollapsibleSectionRoot(props: {
   class?: string;
   children: JSX.Element;
 }) {
+  let sectionRef: HTMLElement | undefined;
+
   return (
-    <section
-      class={cn(
-        'flex min-h-0 flex-col gap-1',
-        props.open && props.fillAvailable && 'flex-1',
-        props.open && !props.fillAvailable && 'shrink',
-        !props.open && 'shrink-0',
-        props.open && !props.fillAvailable && 'max-h-[calc(50%_-_0.375rem)]',
-        props.class
-      )}
-    >
-      {props.children}
-    </section>
+    <SectionContainerContext.Provider value={() => sectionRef}>
+      <section
+        ref={sectionRef}
+        class={cn(
+          'group/sidebar-section flex min-h-0 flex-col gap-1',
+          props.open && props.fillAvailable && 'flex-1',
+          props.open && !props.fillAvailable && 'shrink',
+          !props.open && 'shrink-0',
+          props.open && !props.fillAvailable && 'max-h-[calc(50%_-_0.375rem)]',
+          props.class
+        )}
+      >
+        {props.children}
+      </section>
+    </SectionContainerContext.Provider>
   );
 }
 
@@ -103,16 +121,16 @@ function CollapsibleSectionHeader(props: {
   children: JSX.Element;
 }) {
   return (
-    <div
+    <WorkspaceSection.Header
       class={cn(
-        'group/section-header flex w-full items-center rounded-xl text-xs font-medium uppercase tracking-wide text-ink-extra-muted transition-colors hover:text-ink-muted',
+        'w-full rounded-lg text-xs leading-5 font-medium text-ink-muted transition-colors group-hover/sidebar-section:text-ink',
         props.focused && 'bg-hover text-ink-muted',
         !props.focused && props.focusWithin && 'text-ink-muted',
         props.class
       )}
     >
       {props.children}
-    </div>
+    </WorkspaceSection.Header>
   );
 }
 
@@ -126,8 +144,14 @@ function CollapsibleSectionContent(props: {
   activityTooltip?: boolean;
   children: JSX.Element;
 }) {
+  const container = useContext(SectionContainerContext);
+
   return (
-    <Show when={props.open}>
+    <CollapseTransition
+      open={props.open}
+      container={container}
+      collapsedHeight={32}
+    >
       <SectionScrollArea
         contentRef={props.contentRef}
         containerClass={props.containerClass}
@@ -138,7 +162,7 @@ function CollapsibleSectionContent(props: {
       >
         {props.children}
       </SectionScrollArea>
-    </Show>
+    </CollapseTransition>
   );
 }
 

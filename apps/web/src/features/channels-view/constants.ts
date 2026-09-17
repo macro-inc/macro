@@ -1,7 +1,8 @@
+import { DEFAULT_ASIDE_LAYOUT } from '@app/components/view-shell/view-shell-layout';
 import type { ChannelListSort, ChannelsGroup } from './types';
 
 export const CHANNELS_NARROW_RAIL_WIDTH = 64;
-export const CHANNELS_DEFAULT_RAIL_WIDTH = 256;
+export const CHANNELS_DEFAULT_RAIL_WIDTH = DEFAULT_ASIDE_LAYOUT.width;
 export const CHANNELS_MIN_RAIL_WIDTH = 224;
 export const CHANNELS_MAX_RAIL_WIDTH = 420;
 

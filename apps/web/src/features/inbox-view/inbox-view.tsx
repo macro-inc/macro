@@ -78,7 +78,6 @@ function InboxViewRoot() {
                   <ViewShell.Root
                     asidePreferenceKey="inbox"
                     aside={{
-                      width: 256,
                       min: 224,
                       max: 420,
                       preserveDuringResize: false,

@@ -30,6 +30,17 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 (`/app/<left>/<right>`). Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
 
+The app views are referred to as **workspaces**. Expanded workspace sidebars start
+at the shared 256px width; manual resizing and narrow layouts can change the
+displayed width. Workspace navigation uses shared 36px rows (44px on touch), aligned icon slots, and compact sentence-case section
+headings. Tags and folders have a separate disclosure button on the **right** of
+the row: clicking the label selects the destination; clicking Expand/Collapse
+only opens or closes its children. Long destination names are single-line and
+expose the full name on hover. Section chevrons point right and stay visible when
+collapsed. Expanded chevrons point down and appear when hovering their section;
+the section heading also brightens on hover. Sections and nested branches briefly
+animate height and opacity when toggled, and respect reduced-motion preferences.
+
 Desktop app navigation panels have **Hide navigation** at the right end of their
 48px title bar. It hides only that split's navigation; **Show navigation** (the
 hamburger) appears before the main header's title/breadcrumbs, including when a

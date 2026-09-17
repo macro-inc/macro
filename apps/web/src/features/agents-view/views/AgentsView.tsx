@@ -133,7 +133,6 @@ function AgentsWorkspace() {
           class="bg-panel"
           resizable
           aside={{
-            width: 320,
             min: 224,
             max: 380,
             preserveDuringResize: false,

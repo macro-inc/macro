@@ -116,7 +116,7 @@ function TaskFavorites(props: {
       open={props.open}
       onOpenChange={props.onOpenChange}
     >
-      <CollapsibleSection.Trigger class="text-xs">
+      <CollapsibleSection.Trigger>
         <span class="min-w-0 truncate">Favorites</span>
         <CollapsibleSection.Indicator />
       </CollapsibleSection.Trigger>
@@ -158,7 +158,7 @@ export function TasksSidebar() {
   });
 
   return (
-    <ViewSidebar.Root aria-label="Tasks navigation" class="gap-4 bg-panel">
+    <ViewSidebar.Root aria-label="Tasks navigation">
       <SidebarCreateHeader
         title="Tasks"
         label="New task"
@@ -167,7 +167,7 @@ export function TasksSidebar() {
         }
       />
 
-      <ViewSidebar.Content class="flex flex-col gap-6">
+      <ViewSidebar.Content>
         <TasksNavigation />
 
         <TaskFavorites

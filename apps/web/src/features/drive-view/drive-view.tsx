@@ -121,11 +121,12 @@ function DriveFavorite(props: {
   return (
     <FavoriteContextMenu favorite={props.favorite} triggerClass="block">
       <ViewSidebar.Item
-        class="font-normal"
         title={name()}
         onClick={(event) => props.onOpen(props.favorite, name(), event)}
       >
-        <FavoriteIcon favorite={props.favorite} class="size-4 shrink-0" />
+        <ViewSidebar.Icon>
+          <FavoriteIcon favorite={props.favorite} class="size-4" />
+        </ViewSidebar.Icon>
         <span class="truncate">{name()}</span>
       </ViewSidebar.Item>
     </FavoriteContextMenu>
@@ -309,14 +310,11 @@ function DriveViewContent(props: DriveViewProps) {
 
   const CreateMenu = () => (
     <Dropdown placement="bottom-start">
-      <Dropdown.Trigger
-        variant="ghost"
-        depth={2}
-        class="h-10 w-full shrink-0 justify-start gap-3 rounded-xl bg-ink/5 px-3"
-        aria-label="New file or folder"
-      >
-        <PlusIcon class="size-4 shrink-0" />
-        <span>New</span>
+      <Dropdown.Trigger as={ViewSidebar.Action} aria-label="New file or folder">
+        <ViewSidebar.Icon>
+          <PlusIcon class="size-4" />
+        </ViewSidebar.Icon>
+        <span class="truncate">New</span>
         <CaretDownIcon class="ml-auto size-3 shrink-0" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-48">

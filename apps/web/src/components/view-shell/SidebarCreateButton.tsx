@@ -24,7 +24,7 @@ export function SidebarCreateHeader(props: {
           {props.actions}
         </ViewSidebar.Header>
       </Show>
-      <div class="min-w-0 px-1.5 pt-4 touch:pt-[calc(var(--safe-top,0px)+1rem)]">
+      <div class="min-w-0 px-2 pt-2 touch:pt-[calc(var(--safe-top,0px)+0.5rem)]">
         <SidebarCreateButton label={props.label} onCreate={props.onCreate} />
       </div>
     </header>
@@ -36,9 +36,7 @@ export function SidebarCreateButton(props: {
   onCreate: () => void;
 }) {
   return (
-    <button
-      type="button"
-      class="flex h-9 w-full shrink-0 items-center gap-2 rounded-xl bg-hover px-2.5 text-left text-sm font-medium text-ink-muted hover:bg-active hover:text-ink focus-visible:outline-2 focus-visible:outline-accent touch:h-11"
+    <ViewSidebar.Action
       {...pressHandlers((event) => {
         event.preventDefault();
         props.onCreate();
@@ -51,6 +49,6 @@ export function SidebarCreateButton(props: {
         <PlusIcon class="size-4" />
       </span>
       <span class="truncate">{props.label}</span>
-    </button>
+    </ViewSidebar.Action>
   );
 }

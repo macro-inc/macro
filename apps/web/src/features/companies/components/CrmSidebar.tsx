@@ -33,7 +33,7 @@ export function CrmSidebar(props: {
   const [viewsOpen, setViewsOpen] = createSignal(true);
   const [listsOpen, setListsOpen] = createSignal(true);
   return (
-    <ViewSidebar.Root aria-label="CRM navigation" class="gap-4 bg-panel">
+    <ViewSidebar.Root aria-label="CRM navigation">
       <SidebarCreateHeader
         title="Customers"
         label="New company"
@@ -51,7 +51,7 @@ export function CrmSidebar(props: {
           </Tooltip>
         }
       />
-      <ViewSidebar.Content class="flex flex-col gap-6">
+      <ViewSidebar.Content>
         <div class="px-1.5">
           <TabsInset
             aria-label="Company layout"
@@ -69,7 +69,7 @@ export function CrmSidebar(props: {
           />
         </div>
         <CollapsibleSection.Root open={viewsOpen()} onOpenChange={setViewsOpen}>
-          <CollapsibleSection.Trigger class="text-xs">
+          <CollapsibleSection.Trigger>
             <span>Views</span>
             <CollapsibleSection.Indicator />
           </CollapsibleSection.Trigger>
@@ -82,7 +82,8 @@ export function CrmSidebar(props: {
                       active={props.active === view.id}
                       onClick={() => props.onNavigate(view.id)}
                     >
-                      <span class="ml-7 truncate">{view.label}</span>
+                      <ViewSidebar.Icon />
+                      <span class="truncate">{view.label}</span>
                     </ViewSidebar.Item>
                   </Tooltip>
                 )}
@@ -109,7 +110,7 @@ export function CrmSidebar(props: {
             open={listsOpen()}
             onOpenChange={setListsOpen}
           >
-            <CollapsibleSection.Trigger class="text-xs">
+            <CollapsibleSection.Trigger>
               <span>Lists</span>
               <CollapsibleSection.Indicator />
             </CollapsibleSection.Trigger>
@@ -155,7 +156,7 @@ export function CrmSidebar(props: {
           </CollapsibleSection.Root>
         </Show>
       </ViewSidebar.Content>
-      <div class="shrink-0 border-t border-edge-muted p-1.5 py-3">
+      <ViewSidebar.Footer>
         <ViewSidebar.Nav aria-label="CRM tools">
           <ViewSidebar.Item
             onClick={props.onImport}
@@ -182,7 +183,7 @@ export function CrmSidebar(props: {
             CRM settings
           </ViewSidebar.Item>
         </ViewSidebar.Nav>
-      </div>
+      </ViewSidebar.Footer>
     </ViewSidebar.Root>
   );
 }

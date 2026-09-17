@@ -75,7 +75,7 @@ export function DriveLayout(props: {
         open={props.state.favoritesOpen}
         onOpenChange={props.onFavoritesOpen}
       >
-        <CollapsibleSection.Trigger class="text-xs">
+        <CollapsibleSection.Trigger>
           <span class="min-w-0 truncate">Favorites</span>
           <CollapsibleSection.Indicator />
         </CollapsibleSection.Trigger>
@@ -87,16 +87,13 @@ export function DriveLayout(props: {
         open={props.state.rootOpen}
         onOpenChange={props.onRootOpen}
       >
-        <div class="flex items-center gap-1">
-          <CollapsibleSection.Trigger class="min-w-0 flex-1 text-xs">
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger class="flex-1">
             <span class="min-w-0 truncate">Folders</span>
             <CollapsibleSection.Indicator />
           </CollapsibleSection.Trigger>
-          <Button
-            variant="ghost"
-            size="icon-sm"
+          <CollapsibleSection.Action
             label="Search folders"
-            class="ml-auto mr-2 shrink-0 rounded-lg"
             onClick={() => {
               const open = !searchingFolders();
               setSearchingFolders(open);
@@ -105,8 +102,8 @@ export function DriveLayout(props: {
             }}
           >
             <SearchIcon class="size-3.5" />
-          </Button>
-        </div>
+          </CollapsibleSection.Action>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <Show when={searchingFolders()}>
             <SearchBar
@@ -132,7 +129,7 @@ export function DriveLayout(props: {
                 <span>Drive</span>
               </ViewSidebar.Item>
             </props.locationMenu>
-            <div class="ml-3 border-l border-edge pl-3">
+            <ViewSidebar.Branch>
               <Show
                 when={!props.foldersLoading}
                 fallback={
@@ -176,7 +173,7 @@ export function DriveLayout(props: {
                   </Show>
                 </Show>
               </Show>
-            </div>
+            </ViewSidebar.Branch>
           </ViewSidebar.Nav>
         </CollapsibleSection.Content>
       </CollapsibleSection.Root>
@@ -193,18 +190,17 @@ export function DriveLayout(props: {
           main={{ preferredWidth: 640 }}
         >
           <ViewShell.Aside>
-            <ViewSidebar.Root
-              aria-label="Drive navigation"
-              class="gap-4 bg-panel"
-            >
+            <ViewSidebar.Root aria-label="Drive navigation">
               <ViewSidebar.Header>
                 <div class="flex min-w-0 items-center gap-1">
                   <SplitPanel.CloseButton />
                   <ViewSidebar.Title>Drive</ViewSidebar.Title>
                 </div>
               </ViewSidebar.Header>
-              <ViewSidebar.Content class="flex flex-col gap-6">
+              <div class="px-2 pt-2">
                 <props.createMenu />
+              </div>
+              <ViewSidebar.Content>
                 <SidebarContent />
               </ViewSidebar.Content>
             </ViewSidebar.Root>
