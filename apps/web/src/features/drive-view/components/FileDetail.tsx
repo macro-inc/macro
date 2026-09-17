@@ -3,8 +3,6 @@ import {
   SidePanel,
 } from '@components/app/side-panel';
 import type { BlockAlias, BlockName } from '@core/block';
-import { DetailsDrawer } from '@core/component/DetailsDrawer';
-import { ReferencesDrawer } from '@core/component/ReferencesModal';
 import {
   getPermissions,
   hasPermissions,
@@ -80,11 +78,6 @@ export function FileDetailLayout(props: FileDetailLayoutProps) {
           {props.children}
         </div>
       </SidePanel.Layout>
-      <ReferencesDrawer
-        documentId={props.documentId}
-        documentName={documentName()}
-      />
-      <DetailsDrawer documentId={props.documentId} />
       <Suspense>
         <ShareModal
           isSharePermOpen={shareOpen()}

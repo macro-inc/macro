@@ -1,8 +1,3 @@
-import {
-  activeCommentThreadSignal,
-  noScrollToActiveCommentThreadSignal,
-} from '@block-pdf/store/comments/commentStore';
-import { createBlockSignal } from '@core/block';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
 import {
@@ -12,29 +7,23 @@ import {
   onMount,
   type VoidProps,
 } from 'solid-js';
+import { usePdfDocument } from '../context/pdf-document-context';
 import { Color, type IColor } from '../model/Color';
 import type { IHighlight } from '../model/Highlight';
-import {
-  generalPopupLocationSignal,
-  useSetLocationStore,
-} from '../signal/location';
 import { useIsPopup } from '../signal/pdfViewer';
 import { usePopupContextUpdate } from '../store/definitionPopup';
-import { selectionStore, useGetHighlightByUuid } from '../store/highlight';
 import type { IHighlightObj } from './PageOverlay';
-
-const hoverHighlightSignal = createBlockSignal<string | null>(null);
-// uuid of the highlight that is currently active
-export const activeHighlightSignal = createBlockSignal<string | null>(null);
 
 // TODO: only check for highlight IDs within the block DOM subtree
 export const highlightIdSelector = (highlightId: string) =>
   `[data-highlight-id="${highlightId}"]`;
 
 export const useResetUserHighlights = () => {
-  const setActiveThread = activeCommentThreadSignal.set;
-  const setHoverHighlight = hoverHighlightSignal.set;
-  const setActiveHighlight = activeHighlightSignal.set;
+  const { activeCommentThread, activeHighlight, hoverHighlight } =
+    usePdfDocument().state.signals;
+  const setActiveThread = activeCommentThread[1];
+  const setHoverHighlight = hoverHighlight[1];
+  const setActiveHighlight = activeHighlight[1];
 
   return createCallback(() => {
     setActiveThread(null);
@@ -103,15 +92,16 @@ const isHighlightComment = (highlight: IHighlight) =>
 
 // TODO: handle highlight selection in a different document
 export const useHighlightSelection = () => {
-  const setSelectionStore = selectionStore.set;
-  const getHighlightByUuid = useGetHighlightByUuid();
-  const setActiveThread = activeCommentThreadSignal.set;
-  const setActiveHighlight = activeHighlightSignal.set;
-  const setGeneralPopupLocation = generalPopupLocationSignal.set;
-  const setLocationStore = useSetLocationStore();
+  const pdf = usePdfDocument();
+  const { signals, stores, derived } = pdf.state;
+  const setSelectionStore = stores.selection[1];
+  const setActiveThread = signals.activeCommentThread[1];
+  const setActiveHighlight = signals.activeHighlight[1];
+  const setGeneralPopupLocation = signals.generalPopupLocation[1];
+  const setLocationStore = stores.location[1];
 
   return (highlightId: string, element?: HTMLElement) => {
-    const highlight = getHighlightByUuid(highlightId);
+    const highlight = derived.highlightsUuidMap()?.[highlightId];
     if (!highlight) return;
 
     // handle comments and regular highlights differently
@@ -125,7 +115,9 @@ export const useHighlightSelection = () => {
     // Find the highlight element in the DOM
     const highlightElement =
       element ??
-      document.querySelector<HTMLElement>(highlightIdSelector(highlightId));
+      pdf
+        .rootElement()
+        ?.querySelector<HTMLElement>(highlightIdSelector(highlightId));
     if (!highlightElement) return;
 
     // Check if the highlight is in the viewport
@@ -145,6 +137,7 @@ export const useHighlightSelection = () => {
         element: highlightElement,
       });
       setLocationStore('annotation', {
+        type: 'annotation',
         pageIndex: highlight.pageNum,
         id: highlight.uuid,
       });
@@ -170,12 +163,13 @@ export function UserHighlight(props: VoidProps<IHighlightObj>) {
   let highlightRef!: HTMLDivElement;
   let textRef!: HTMLDivElement;
 
+  const { signals } = usePdfDocument().state;
   const isPopup = useIsPopup();
   const popupDispatchCtx = usePopupContextUpdate(isPopup);
   const highlightSelection = useHighlightSelection();
-  const setActiveThread = activeCommentThreadSignal.set;
-  const [hoverHighlight, setHoverHighlight] = hoverHighlightSignal;
-  const setActiveHighlight = activeHighlightSignal.set;
+  const setActiveThread = signals.activeCommentThread[1];
+  const [hoverHighlight, setHoverHighlight] = signals.hoverHighlight;
+  const setActiveHighlight = signals.activeHighlight[1];
 
   onMount(() => {
     const handleSelectStart = (e: MouseEvent) => {
@@ -231,8 +225,8 @@ export function UserHighlight(props: VoidProps<IHighlightObj>) {
     };
   });
 
-  const setGeneralPopupLocation = generalPopupLocationSignal.set;
-  const setNoScroll = noScrollToActiveCommentThreadSignal.set;
+  const setGeneralPopupLocation = signals.generalPopupLocation[1];
+  const setNoScroll = signals.noScrollToActiveCommentThread[1];
   const clickHandler: JSX.EventHandler<HTMLDivElement, MouseEvent> =
     createCallback((e) => {
       // prevents the page overlay from receiving the click event and resetting

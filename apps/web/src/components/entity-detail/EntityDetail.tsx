@@ -1,6 +1,8 @@
+import { CanvasDetail } from '@app/features/drive-view/views/CanvasDetail';
 import { CodeDetail } from '@app/features/drive-view/views/CodeDetail';
 import { ImageDetail } from '@app/features/drive-view/views/ImageDetail';
 import { MarkdownDetail } from '@app/features/drive-view/views/MarkdownDetail';
+import { PdfDetail } from '@app/features/drive-view/views/PdfDetail';
 import { UnknownDetail } from '@app/features/drive-view/views/UnknownDetail';
 import { VideoDetail } from '@app/features/drive-view/views/VideoDetail';
 import type { MarkdownDocumentKind } from '@block-md/types';
@@ -61,9 +63,11 @@ export function entityDetailBlockType(
     blockType === 'task' ||
     blockType === 'snippet' ||
     blockType === 'skill' ||
+    blockType === 'canvas' ||
     blockType === 'code' ||
     blockType === 'csv' ||
     blockType === 'image' ||
+    blockType === 'pdf' ||
     blockType === 'video' ||
     blockType === 'unknown'
   ) {
@@ -128,6 +132,20 @@ export function EntityDetail(props: EntityDetailProps) {
           }
         </CodeDetail>
       </Match>
+      <Match when={blockType() === 'canvas'}>
+        <CanvasDetail
+          documentId={props.target.id}
+          shareOpen={props.shareOpen}
+          onShareOpenChange={props.onShareOpenChange}
+        >
+          {(context) =>
+            renderChildren(
+              context.data.documentMetadata,
+              context.data.userAccessLevel
+            )
+          }
+        </CanvasDetail>
+      </Match>
       <Match when={blockType() === 'image'}>
         <ImageDetail
           documentId={props.target.id}
@@ -155,6 +173,20 @@ export function EntityDetail(props: EntityDetailProps) {
             )
           }
         </VideoDetail>
+      </Match>
+      <Match when={blockType() === 'pdf'}>
+        <PdfDetail
+          documentId={props.target.id}
+          shareOpen={props.shareOpen}
+          onShareOpenChange={props.onShareOpenChange}
+        >
+          {(context) =>
+            renderChildren(
+              context.data.documentMetadata,
+              context.data.userAccessLevel
+            )
+          }
+        </PdfDetail>
       </Match>
       <Match when={blockType() === 'unknown'}>
         <UnknownDetail

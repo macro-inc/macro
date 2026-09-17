@@ -25,7 +25,9 @@ outbound = [
   "dep:ai_usage",
   "dep:connection_gateway_client",
   "dep:entity_access_db_utils",
+  "dep:entity_registry_db_utils",
   "dep:model-entity",
+  "dep:model_owner",
   "dep:sqlx",
   "macro_user_id/sqlx",
 ]
@@ -61,8 +63,10 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "ports",
 ] }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
 genai_telemetry = { path = "../genai_telemetry" }
 model-entity = { path = "../model-entity", optional = true }
+model_owner = { path = "../model_owner", optional = true }
 clap = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, optional = true }
 macro_user_id = { path = "../macro_user_id" }

@@ -8,7 +8,7 @@
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
-| `/app/component/inbox` | Home (notifications + recent activity) |
+| `/app/component/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/component/mail` | Email client |
 | `/app/component/channels` | Channels list |
 | `/app/component/documents` | Files (documents list) |
@@ -114,6 +114,13 @@ These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
 sidebar layout default to 256px; manually resized Chat widths remain saved.
+After dragging a view's inner sidebar divider (or using its arrow keys), resizing
+the containing split preserves the chosen sidebar width while space permits.
+Narrow splits may shrink or collapse the sidebar; widening restores its chosen
+width for the mounted view.
+Widening the sidebar while its split is constrained also reduces the main
+content's soft width preference, so the next split resize keeps that choice
+instead of snapping the sidebar back to its constrained width.
 
 Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
@@ -154,7 +161,7 @@ changes roll back rather than becoming committed local favorites.
 
 ## Create menu
 
-On mobile, the bottom dock fits fixed-width buttons in this order: Home,
+On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
 Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
 dock and search scope pills only when the calendar UI flag is enabled.
 Resizing the screen moves views between the dock
@@ -193,7 +200,7 @@ company-creation sheet.
 
 The labeled glass button one row above Search opens the current page's creation
 flow directly: **+ Task** on Tasks, **+ Email** on Email, **+ Message** on Channels,
-**+ Document** on Files, and **+ Event** on Calendar. On Home/Notifications,
+**+ Document** on Files, and **+ Event** on Calendar. On Notifications,
 **+ New** opens a blurred backdrop and a stack of glass actions: Email, Message,
 Document, Event, Task, More. Event follows the calendar UI flag; unavailable
 launcher actions are omitted. The plus rotates into an X; tap it or the backdrop,

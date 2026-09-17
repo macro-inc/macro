@@ -4,7 +4,6 @@ import {
 } from '@block-canvas/model/CanvasModel';
 import { useCachedStyle } from '@block-canvas/signal/cachedStyle';
 import { useToolManager } from '@block-canvas/signal/toolManager';
-import { useIsNestedBlock } from '@core/block';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   ENABLE_CANVAS_FILES,
@@ -14,8 +13,6 @@ import {
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
-import { useCanEdit } from '@core/signal/permissions';
 import CaretDown from '@phosphor/caret-down.svg';
 import Cursor from '@phosphor/cursor.svg';
 import Hand from '@phosphor/hand.svg';
@@ -28,6 +25,7 @@ import { Button, ButtonGroup, Dropdown, Hotkey, Toolbar } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Tools } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import { FileSelector } from './FileSelector';
 import {
   ConnectorBezierArrows,
@@ -35,13 +33,13 @@ import {
   ConnectorStraightArrows,
 } from './icons-custom/ArrowIcons';
 import { MediaSelector } from './MediaSelector';
-import { connectorTypeMenuTriggerSignal } from './TopBar';
 
 const ConnectorTypeSubMenu = (props: {
   onSelect: (connectionStye: EdgeConnectionStyle) => void;
 }) => {
+  const state = useCanvasDocument().state.signals;
   const [connectorTypeMenuTrigger, setConnectorTypeMenuTrigger] =
-    connectorTypeMenuTriggerSignal;
+    state.connectorTypeMenuTrigger;
 
   return (
     <Dropdown
@@ -100,15 +98,14 @@ const ConnectorTypeSubMenu = (props: {
 };
 
 export function ToolBar() {
-  const baseCanEdit = useCanEdit();
-  const isNested = useIsNestedBlock();
-  const canEdit = () => baseCanEdit() && !isNested;
+  const canvas = useCanvasDocument();
+  const canEdit = () => canvas.canEdit() && !canvas.isNested();
   const toolManager = useToolManager();
   const cachedStyle = useCachedStyle();
   const { activeTool } = toolManager;
   const [connectorTypeMenuTrigger, setConnectorTypeMenuTrigger] =
-    connectorTypeMenuTriggerSignal;
-  const scopeId = blockHotkeyScopeSignal.get;
+    canvas.state.signals.connectorTypeMenuTrigger;
+  const scopeId = canvas.hotkeyScope;
 
   const [connectionStyle, setConnectionStyle] =
     createSignal<EdgeConnectionStyle>('straight');
@@ -171,7 +168,7 @@ export function ToolBar() {
   });
 
   return (
-    <ScopedPortal scope="block">
+    <ScopedPortal scope={canvas.portalScope()}>
       {/* Full-frame mobile/tablet: rest above the floating bottom chrome. */}
       <Toolbar
         size="icon-sm"
