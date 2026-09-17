@@ -12,7 +12,6 @@ import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@components/app/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -22,10 +21,6 @@ import { BlockItemSplitLabel } from '@components/app/split-layout/components/Spl
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId, useBlockName } from '@core/block';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
-import {
-  REFERENCES_DRAWER_ID,
-  ReferencesButton,
-} from '@core/component/ReferencesModal';
 import { toast } from '@core/component/Toast/Toast';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import {
@@ -33,14 +28,12 @@ import {
   ShareTrigger,
   useShareDialogContext,
 } from '@core/component/TopBar/ShareButton';
-import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { platformFetch } from '@core/util/platformFetch';
 import { downloadFile } from '@filesystem/download';
 import DownloadIcon from '@phosphor/download-simple.svg';
 import Printer from '@phosphor/printer.svg';
-import Quotes from '@phosphor/quotes.svg';
 import IconShared from '@phosphor/share.svg';
 import {
   blockNameToItemType,
@@ -61,7 +54,6 @@ export function TopBar() {
   const hasComments = useHasComments();
   const fileName = useBlockDocumentName('Unknown Filename');
 
-  const referencesControl = useDrawerControl(REFERENCES_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   const createShareUrl = useCreateShareUrl();
@@ -183,19 +175,6 @@ export function TopBar() {
   ];
 
   const tools: BlockTool[] = [
-    {
-      label: 'References',
-      icon: Quotes,
-      action: referencesControl.toggle,
-      condition: () => !!isAuth() && ENABLE_REFERENCES_MODAL,
-      buttonComponent: () => (
-        <ReferencesButton
-          documentId={documentId}
-          documentName={fileName()}
-          buttonSize="sm"
-        />
-      ),
-    },
     {
       label: 'Chat',
       icon: ChatWithAgentIcon,
