@@ -956,9 +956,19 @@ async fn run() -> anyhow::Result<()> {
         !cohere_api_key.trim().is_empty(),
         "Cohere API key is required for task dedup reranking",
     );
-    let dictation_service = Arc::new(dictation::domain::DictationService::new(
-        dictation::outbound::WhisperClient::new(openai_api_key.clone())?,
-    ));
+    // Dictation reads `OPENAI_API_KEY` through its own typed env var so the
+    // adapter fails at startup, not on the first request, when it is unset.
+    let dictation_state = dictation::inbound::axum_router::DictationRouterState::new(
+        dictation::domain::DictationServiceImpl::new(
+            dictation::outbound::WhisperTranscriber::try_from_env()?,
+        ),
+        RateLimitServiceImpl {
+            repo: RedisRateLimitAdapter {
+                redis: redis_client.clone(),
+            },
+        },
+        authorization_state.clone(),
+    );
     let task_dedup_service = Arc::new(TaskDedupService::new(
         TextEmbedding3Small::new(openai_api_key),
         PgTaskVectorDb::new(db.clone()),
@@ -1481,7 +1491,7 @@ async fn run() -> anyhow::Result<()> {
         ));
 
     let api_context = ApiContext {
-        dictation_service,
+        dictation_state,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),
