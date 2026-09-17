@@ -345,6 +345,7 @@ export function InboxList(props: InboxListProps) {
   });
 
   useEntityActionHotkeys({
+    enableDeleteHotkey: false,
     scopeId: panel.splitHotkeyScope,
     list: actionState,
     selectedEntities,

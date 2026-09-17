@@ -329,3 +329,7 @@ refreshes the session credential and restores the saved selection.
 Claude sessions expose **Open in Claude** in the header
 toolbar (or its overflow menu). With a live runtime, messages sent in Claude are
 polled into Macro about every two seconds; disconnected runtimes must resume first.
+
+Home does not bind Delete or Backspace to deleting list items. These keys remain
+available to the open editor (for example, clearing a selected spreadsheet range).
+Use the item menu to delete an item from Home.
