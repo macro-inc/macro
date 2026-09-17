@@ -163,6 +163,49 @@ async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) 
     (channel_id, thread_id, originating_message_id)
 }
 
+async fn fetch_session_entity(
+    pool: &PgPool,
+    id: AgentSessionId,
+) -> (String, String, String, Option<DateTime<Utc>>, DateTime<Utc>) {
+    let row = sqlx::query!(
+        r#"
+        SELECT
+            entity_type,
+            owner_type::text AS "owner_type!",
+            owner_id,
+            deleted_at,
+            updated_at
+        FROM entity
+        WHERE id = $1
+        "#,
+        id.as_uuid(),
+    )
+    .fetch_one(pool)
+    .await
+    .expect("read the session's entity row");
+    (
+        row.entity_type,
+        row.owner_type,
+        row.owner_id,
+        row.deleted_at,
+        row.updated_at,
+    )
+}
+
+async fn entity_row_count(pool: &PgPool, id: AgentSessionId) -> i64 {
+    sqlx::query_scalar!(
+        r#"
+        SELECT count(*) AS "count!"
+        FROM entity
+        WHERE id = $1
+        "#,
+        id.as_uuid(),
+    )
+    .fetch_one(pool)
+    .await
+    .expect("count the session's entity row")
+}
+
 fn acp_notification() -> AcpMessage {
     AcpMessage(
         RawJsonRpcMessage::notification("test/notify".to_string(), serde_json::json!({}))
@@ -329,19 +372,14 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
         .id;
 
     repo.set_model(id, "opus").await.expect("persist model");
-    assert_eq!(
-        AgentSessionRepo::get(&repo, id)
-            .await
-            .expect("get session")
-            .model,
-        "opus"
-    );
+    let after_change = AgentSessionRepo::get(&repo, id).await.expect("get session");
+    assert_eq!(after_change.model, "opus");
+    let (_, _, _, _, entity_updated_at) = fetch_session_entity(&pool, id).await;
+    assert_eq!(entity_updated_at, after_change.modified_at);
 
-    // Idempotent: restating the same model succeeds and changes nothing.
-    let modified_at = AgentSessionRepo::get(&repo, id)
-        .await
-        .expect("get session")
-        .modified_at;
+    // Idempotent: restating the same model succeeds and changes nothing,
+    // including the registry mirror.
+    let modified_at = after_change.modified_at;
     repo.set_model(id, "opus").await.expect("restate model");
     assert_eq!(
         AgentSessionRepo::get(&repo, id)
@@ -349,6 +387,28 @@ async fn set_model_updates_only_the_model(pool: PgPool) {
             .expect("get session")
             .modified_at,
         modified_at
+    );
+    let (_, _, _, _, restated_entity_updated_at) = fetch_session_entity(&pool, id).await;
+    assert_eq!(restated_entity_updated_at, entity_updated_at);
+
+    sqlx::query!(
+        r#"
+        DELETE FROM entity WHERE id = $1
+        "#,
+        id.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .expect("drop the registry row");
+    repo.set_model(id, "haiku")
+        .await
+        .expect("set model without a registry row");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .model,
+        "haiku"
     );
 }
 
@@ -411,18 +471,12 @@ async fn set_name_updates_only_the_name(pool: PgPool) {
     repo.set_name(id, "Fix Flaky Tests")
         .await
         .expect("persist name");
-    assert_eq!(
-        AgentSessionRepo::get(&repo, id)
-            .await
-            .expect("get session")
-            .name,
-        "Fix Flaky Tests"
-    );
+    let after_change = AgentSessionRepo::get(&repo, id).await.expect("get session");
+    assert_eq!(after_change.name, "Fix Flaky Tests");
+    let (_, _, _, _, entity_updated_at) = fetch_session_entity(&pool, id).await;
+    assert_eq!(entity_updated_at, after_change.modified_at);
 
-    let modified_at = AgentSessionRepo::get(&repo, id)
-        .await
-        .expect("get session")
-        .modified_at;
+    let modified_at = after_change.modified_at;
     repo.set_name(id, "Fix Flaky Tests")
         .await
         .expect("restate name");
@@ -432,6 +486,28 @@ async fn set_name_updates_only_the_name(pool: PgPool) {
             .expect("get session")
             .modified_at,
         modified_at
+    );
+    let (_, _, _, _, restated_entity_updated_at) = fetch_session_entity(&pool, id).await;
+    assert_eq!(restated_entity_updated_at, entity_updated_at);
+
+    sqlx::query!(
+        r#"
+        DELETE FROM entity WHERE id = $1
+        "#,
+        id.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .expect("drop the registry row");
+    repo.set_name(id, "Renamed Without Registry")
+        .await
+        .expect("rename without a registry row");
+    assert_eq!(
+        AgentSessionRepo::get(&repo, id)
+            .await
+            .expect("get session")
+            .name,
+        "Renamed Without Registry"
     );
 }
 
@@ -869,6 +945,12 @@ async fn create_grants_the_owner_and_the_originating_channel(pool: PgPool) {
     expected.sort();
 
     assert_eq!(grants, expected);
+
+    let (entity_type, owner_type, owner_id, deleted_at, _) = fetch_session_entity(&pool, id).await;
+    assert_eq!(entity_type, "agent_session");
+    assert_eq!(owner_type, "user");
+    assert_eq!(owner_id, OWNER);
+    assert_eq!(deleted_at, None);
 }
 
 /// A session created without a mention has no channel to inherit an audience
@@ -1090,6 +1172,23 @@ async fn delete_removes_the_session_grants(pool: PgPool) {
     .expect("count the session's history rows");
 
     assert_eq!(remaining_history, 0);
+
+    assert_eq!(entity_row_count(&pool, id).await, 0);
+
+    let unregistered = create_session(&repo, new_session(bot_id, None, None)).await;
+    sqlx::query!(
+        r#"
+        DELETE FROM entity WHERE id = $1
+        "#,
+        unregistered.id.as_uuid(),
+    )
+    .execute(&pool)
+    .await
+    .expect("drop the registry row");
+    AgentSessionRepo::delete(&repo, unregistered.id)
+        .await
+        .expect("delete a session without a registry row");
+    assert_eq!(entity_row_count(&pool, unregistered.id).await, 0);
 }
 
 fn cursor_external(agent: &str) -> ExternalSession {

@@ -31,8 +31,12 @@ use entity_access_db_utils::{
     AccessLevel, EntityAccessSourceType, EntityType, delete_entity_access_rows,
     insert_entity_access_row,
 };
+use entity_registry_db_utils::{
+    NewEntityRecord, RegisteredEntityType, delete_entity, insert_entity, touch_updated,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_owner::Owner;
 use sqlx::PgPool;
 use std::num::NonZeroUsize;
 
@@ -150,6 +154,32 @@ async fn upsert_user_history(
     )
     .execute(tx.as_mut())
     .await?;
+    Ok(())
+}
+
+/// `EntityRegistryResult` is `Report<EntityRegistryError>`. A bare `?` would
+/// take `From<rootcause::Report>` and become [`AgentSessionError::Fold`].
+fn registry_unknown(
+    error: rootcause::Report<entity_registry_db_utils::EntityRegistryError>,
+    context: &'static str,
+) -> AgentSessionError {
+    AgentSessionError::Unknown(anyhow::anyhow!("{error}").context(context))
+}
+
+/// Call `touch_updated` only when the session UPDATE actually moved
+/// `modified_at`. `WriteOutcome::NotFound` is success: a missing registry row
+/// must not fail rename.
+async fn touch_entity_updated(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    id: AgentSessionId,
+    modified_at: Option<DateTime<Utc>>,
+) -> Result<()> {
+    let Some(modified_at) = modified_at else {
+        return Ok(());
+    };
+    touch_updated(tx, id.as_uuid(), modified_at)
+        .await
+        .map_err(|error| registry_unknown(error, "failed to touch agent session entity"))?;
     Ok(())
 }
 
@@ -318,6 +348,17 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         )
         .await
         .context("failed to grant the owner access to the agent session")?;
+
+        insert_entity(
+            &mut transaction,
+            NewEntityRecord::new(
+                id.as_uuid(),
+                RegisteredEntityType::AgentSession,
+                Owner::User(owner_id.clone()),
+            ),
+        )
+        .await
+        .map_err(|error| registry_unknown(error, "failed to register the agent session"))?;
 
         // The channel the bot was invoked in can steer the session: the
         // invocation was public there, so that audience is. Read from the
@@ -702,26 +743,48 @@ impl AgentSessionRepo for PgAgentSessionRepo {
     }
 
     async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
-        sqlx::query!(
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session set_model")?;
+        let modified_at = sqlx::query_scalar!(
             r#"
             UPDATE agent_session
             SET model = $2,
                 modified_at = NOW()
             WHERE id = $1
               AND model IS DISTINCT FROM $2
+            RETURNING modified_at
             "#,
             id.as_uuid(),
             model,
         )
-        .execute(&self.pool)
+        .fetch_optional(&mut *transaction)
         .await
         .context("failed to persist agent session model")?;
+        touch_entity_updated(&mut transaction, id, modified_at).await?;
+        transaction
+            .commit()
+            .await
+            .context("commit agent session set_model")?;
         Ok(())
     }
 
     async fn set_name(&self, id: AgentSessionId, name: &str) -> Result<()> {
-        let result = sqlx::query!(
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session set_name")?;
+        let row = sqlx::query!(
             r#"
+            WITH previous AS (
+                SELECT modified_at
+                FROM agent_session
+                WHERE id = $1
+                FOR UPDATE
+            )
             UPDATE agent_session
             SET name = $2,
                 modified_at = CASE
@@ -729,17 +792,25 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                     ELSE modified_at
                 END
             WHERE id = $1
+            RETURNING
+                modified_at,
+                (modified_at IS DISTINCT FROM (SELECT modified_at FROM previous)) AS "bumped!"
             "#,
             id.as_uuid(),
             name,
         )
-        .execute(&self.pool)
+        .fetch_optional(&mut *transaction)
         .await
         .context("failed to persist agent session name")?;
 
-        if result.rows_affected() == 0 {
+        let Some(row) = row else {
             return Err(anyhow::anyhow!("agent session not found").into());
-        }
+        };
+        touch_entity_updated(&mut transaction, id, row.bumped.then_some(row.modified_at)).await?;
+        transaction
+            .commit()
+            .await
+            .context("commit agent session set_name")?;
         Ok(())
     }
 
@@ -834,6 +905,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         delete_entity_access_rows(&mut transaction, &id.as_uuid(), EntityType::AgentSession)
             .await
             .context("failed to delete agent session entity access rows")?;
+
+        // Missing registry rows are WriteOutcome::NotFound, not an error.
+        delete_entity(&mut transaction, id.as_uuid())
+            .await
+            .map_err(|error| {
+                registry_unknown(error, "failed to delete the agent session entity")
+            })?;
 
         // Same story for history: `"UserHistory"."itemId"` is polymorphic
         // text, so the session's rows in every viewer's history go here.
