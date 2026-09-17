@@ -2367,6 +2367,7 @@ async fn exact_initial_link_share_bypasses_md_public_edit_default() {
     ] {
         let mut repo = make_mock_repo();
         let created_metadata = make_test_metadata();
+        repo.expect_get_team_default_link_share().times(0);
         repo.expect_create_document()
             .withf(move |args, share_permission| {
                 args.initial_link_share == InitialLinkShare::Exact(state)
@@ -2423,6 +2424,7 @@ async fn initiative_description_accepts_exact_link_share() {
 
     let mut repo = make_mock_repo();
     let created_metadata = make_test_metadata();
+    repo.expect_get_team_default_link_share().times(0);
     repo.expect_create_document()
         .withf(|args, share_permission| {
             args.sub_type == Some(document_sub_type::DocumentSubType::InitiativeDescription)
