@@ -258,12 +258,11 @@ function RegisteredInboxView() {
     enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
   });
   return (
-    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
-      <Show
-        when={newAppViews.enabled() && !isTouchDevice()}
-        fallback={<LegacyInboxView />}
-      >
-        <InboxView />
+    <Show when={!isTouchDevice()} fallback={<LegacyInboxView />}>
+      <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+        <Show when={newAppViews.enabled()} fallback={<LegacyInboxView />}>
+          <InboxView />
+        </Show>
       </Show>
     </Show>
   );

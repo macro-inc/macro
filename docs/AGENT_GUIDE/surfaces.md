@@ -61,6 +61,10 @@ it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove r
 
 ## Home (desktop) / Notifications (mobile) — `/app/component/inbox`
 
+Touch devices render the legacy Notifications view without waiting for the new app
+views feature flag. Desktop waits for flag readiness before choosing the new Home
+view or its legacy fallback.
+
 On desktop with the new app views enabled, Home defaults to a Signal feed merging
 notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
