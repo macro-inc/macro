@@ -22,6 +22,7 @@ fn runtime(kind: AgentKind) -> Option<AgentRuntimeConfig> {
         harness: match kind {
             AgentKind::Cursor => "cursor",
             AgentKind::CodexCloud => "codex-cloud",
+            AgentKind::ClaudeCloud => "claude-cloud",
             AgentKind::InMemory => "in-memory",
             AgentKind::SandboxedCoder => "opencode",
             AgentKind::External => "byoa",

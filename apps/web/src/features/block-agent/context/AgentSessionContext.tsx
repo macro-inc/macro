@@ -225,7 +225,7 @@ export function AgentSessionProvider(
 }
 
 /**
- * Compensating read for a Cursor session whose provider url arrived after
+ * Compensating read for a cloud session whose provider URL arrived after
  * the feed's snapshot. Lives in its own Suspense so the rest of the block
  * stays mounted while this query's first fetch is in flight.
  */
@@ -234,13 +234,15 @@ function CloudExternalUrlPoll(props: {
   session: Accessor<AgentSessionResponse | undefined>;
   applySnapshot: (session: AgentSessionResponse) => void;
 }) {
-  // Only a loaded Cursor session whose provider url is still missing polls;
+  // Only a loaded cloud session whose provider URL is still missing polls;
   // everything else passes `undefined`, which disables the query.
   const query = useAgentSessionExternalUrlQuery(() => {
     const id = props.sessionId();
     const session = props.session();
     if (!id || !session || session.external?.url) return undefined;
-    return isCursorBotId(session.botId) || isCodexBotId(session.botId)
+    return isCursorBotId(session.botId) ||
+      isCodexBotId(session.botId) ||
+      session.harness === 'claude-cloud'
       ? id
       : undefined;
   });

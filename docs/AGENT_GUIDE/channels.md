@@ -244,6 +244,11 @@ a channel cached away from its latest page, and a delta longer than one page use
 
 ## Chat navigation rail
 
+The title bar's **Hide navigation** control hides the whole rail. Reopen it with
+**Show navigation** (the hamburger) immediately before the conversation title,
+or in the Chat header when no conversation is selected. Chat remembers this
+choice independently of other apps and restores it after reload.
+
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists

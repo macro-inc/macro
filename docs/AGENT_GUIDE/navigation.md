@@ -28,6 +28,26 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 (`/app/<left>/<right>`). Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
 
+Desktop app navigation panels have **Hide navigation** at the right end of their
+48px title bar. It hides only that split's navigation; **Show navigation** (the
+hamburger) appears before the main header's title/breadcrumbs, including when a
+document, email, or conversation is open. Home's filter sits beside its label.
+Visibility is a sticky preference per app type (Home, Email, Chat, Tasks, Drive,
+Agents, Customers), independent of other apps and restored on reload. Narrow
+workspaces reopen navigation as an overlay; the backdrop closes it. Mobile keeps
+its existing navigation controls. Block detail panels (including Calendar) have
+**Hide side panel** in their own header and a hamburger **Show side panel** beside
+the main title when hidden, with separate preferences per block type.
+
+Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
+panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
+again to restore the split layout.
+
+Image lightboxes, channel media viewers, sharing, and onboarding dialogs use
+the standard glass scrim. Scroll-edge indicators fade smoothly toward content
+and disappear at the corresponding scroll boundary. Image and video error
+placeholders retain diagonal stripes.
+
 Shift-click on content links requests a new split wherever splits are supported,
 including mentions, references, folder links, and list rows with a linked preview.
 Unmodified clicks keep each surface’s default (same split, preview, or new split).
@@ -99,6 +119,11 @@ a preparatory hover is not required. REST-backed rows retain eager registration.
 Verify first-press dragging after navigation as well as ordinary row clicks and
 right-click menus. A completed drop can move or copy real data; use a disposable
 test item when verifying drop actions.
+
+Split-header, file-upload, and conversation drop targets use plain color
+overlays with small sans-serif hints in fully rounded pills. Invalid file drops
+use the failure background color. Cancel the drag to inspect these hints without
+uploading or moving anything.
 
 ## Favorites
 
@@ -230,3 +255,28 @@ category, Esc closes. The category strip and footer have transparent backgrounds
 Settings → Agents and Settings → Harness render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
+
+With the `claude-cloud` feature flag enabled, Claude Cloud connection setup is in
+Settings → Harness, above Cursor, with the
+Anthropic logo. Settings → Agents selects an agent's harness but does not host
+Claude's connection form. **Connect Claude** starts authorization and opens sign-in
+on the first click; a fallback link remains if the browser blocks the tab.
+Approve on Claude's page, copy the complete `code#state`, then use **Finish
+connecting**. Hosted and local deployments use the same flow. Grants and pending
+sign-in attempts are encrypted in MacroDB and survive restarts or replica changes.
+If the card says sign-in is not configured, the deployment is missing its Claude
+OAuth KMS key; changing the frontend flag cannot fix that backend configuration.
+Claude's model picker uses provider-reported IDs,
+names, descriptions, and order. Settings discovers from recent account sessions;
+session catalogs update through replay, polling, and streaming. Before any catalog
+is available, only subscription default is shown with an explanation. It saves the next-turn preference
+without waking an idle worker; provider model rejections surface during the turn.
+Claude agents use their saved MCP selection through the shared authenticated
+session egress path. Remote HTTP/SSE servers are supported; stdio servers are
+rejected. Tool permission requests use Macro's standard session policy. MCP setup
+failures surface as turn errors and request interruption; the first prompt also
+wakes the cloud worker, so setup failure may occur after submission. Reconnecting
+refreshes the session credential and restores the saved selection.
+Claude sessions expose **Open in Claude** in the header
+toolbar (or its overflow menu). With a live runtime, messages sent in Claude are
+polled into Macro about every two seconds; disconnected runtimes must resume first.

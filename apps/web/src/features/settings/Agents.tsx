@@ -1,7 +1,9 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { MODEL_PRETTYNAME, Model } from '@core/component/AI/constant/model';
 import { toast } from '@core/component/Toast/Toast';
+import { claudeCloud } from '@core/constant/featureFlags';
 import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
@@ -93,6 +95,7 @@ const MACRO_AGENT: AgentSummary = {
 
 /** Settings page for viewing and creating persistent agents. */
 export function Agents() {
+  const claudeCloudFlag = useFeatureFlag(claudeCloud);
   const [creating, setCreating] = createSignal(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const creatingFromLink = () => searchParams.createAgent === 'true';
@@ -118,33 +121,43 @@ export function Agents() {
   const harnessesQuery = useHarnessesQuery();
   const connectedHarnesses = (): readonly ConnectedHarness[] => {
     const harnesses = harnessesQuery.isSuccess ? harnessesQuery.data : [];
-    return buildAgentModelTargets(cursorConnected(), harnesses).map(
-      (target) => {
-        if (target.harness === 'in-memory') return IN_MEMORY_HARNESS;
-        if (target.harness === 'cursor') {
-          return {
-            id: 'cursor',
-            name: 'Cursor',
-            kind: 'builtin',
-            target,
-          };
-        }
-
-        const harness = harnesses.find(
-          (candidate) => candidate.id === target.harnessId
-        );
+    return buildAgentModelTargets(
+      cursorConnected(),
+      harnesses,
+      claudeCloudFlag().enabled
+    ).map((target) => {
+      if (target.harness === 'in-memory') return IN_MEMORY_HARNESS;
+      if (target.harness === 'claude-cloud') {
         return {
-          id: target.harnessId ?? '',
-          name:
-            harness?.owner.type === 'team'
-              ? `${harness.name} · Team`
-              : (harness?.name ?? 'macrod'),
-          kind: 'macrod',
+          id: 'claude-cloud',
+          name: 'Claude Cloud',
+          kind: 'builtin',
           target,
-          connected: harness?.connected,
         };
       }
-    );
+      if (target.harness === 'cursor') {
+        return {
+          id: 'cursor',
+          name: 'Cursor',
+          kind: 'builtin',
+          target,
+        };
+      }
+
+      const harness = harnesses.find(
+        (candidate) => candidate.id === target.harnessId
+      );
+      return {
+        id: target.harnessId ?? '',
+        name:
+          harness?.owner.type === 'team'
+            ? `${harness.name} · Team`
+            : (harness?.name ?? 'macrod'),
+        kind: 'macrod',
+        target,
+        connected: harness?.connected,
+      };
+    });
   };
   const channelOptions = createMemo(() =>
     botAssignableChannelOptions(channelsContext.channels())
@@ -379,6 +392,7 @@ function summarizeAgent(
 function harnessName(id: string): string {
   if (id === 'in-memory') return 'In-memory';
   if (id === 'cursor') return 'Cursor';
+  if (id === 'claude-cloud') return 'Claude Cloud';
   // Any other id is a registered macrod harness uuid; if it is not in the
   // connected list any more, the harness has been removed.
   return 'Disconnected harness';
@@ -857,7 +871,14 @@ function AgentDialog(props: {
                       handleHarnessChange(event.currentTarget.value)
                     }
                   >
-                    <For each={props.connectedHarnesses}>
+                    <For
+                      each={props.connectedHarnesses.filter(
+                        (harness) =>
+                          harness.id !== 'claude-cloud' ||
+                          modelDataForHarness(harness.id)?.status ===
+                            'available'
+                      )}
+                    >
                       {(harness) => (
                         <option value={harness.id}>{harness.name}</option>
                       )}
@@ -1008,7 +1029,7 @@ function AgentDialog(props: {
                 <Show when={share() === 'Team'}>
                   <p class="mt-3 border-t border-edge-muted pt-3 text-xs text-ink-extra-muted">
                     Connections are personal. Teammates who use this agent
-                    connect these apps under Settings → Connections; the
+                    connect these apps under Settings → Integrations; the
                     indicators here show only your own.
                   </p>
                 </Show>

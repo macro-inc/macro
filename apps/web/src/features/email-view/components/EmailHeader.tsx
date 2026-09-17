@@ -38,7 +38,10 @@ export function EmailViewBreadcrumbItem() {
           isActive={item.isActive()}
           onClick={item.onSelect}
         >
-          <span class="truncate">{tabTitle()}</span>
+          <span class="truncate @max-[720px]/view-shell:hidden">
+            {tabTitle()}
+          </span>
+          <span class="hidden @max-[720px]/view-shell:inline">Email</span>
         </ViewBreadcrumbs.Button>
       )}
     </ViewBreadcrumbs.Item>
@@ -47,7 +50,7 @@ export function EmailViewBreadcrumbItem() {
 
 export function EmailTopBar() {
   return (
-    <ViewShell.TopBar class="px-3">
+    <ViewShell.TopBar>
       <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
       <ViewBreadcrumbs.Outlet class="flex-1" aria-label="Email location" />
     </ViewShell.TopBar>

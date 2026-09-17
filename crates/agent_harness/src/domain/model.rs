@@ -66,6 +66,8 @@ pub enum AgentKind {
     Cursor,
     /// A per-owner Codex cloud conversation served over ACP.
     CodexCloud,
+    /// Anthropic-hosted Claude Code using the session owner's subscription.
+    ClaudeCloud,
     /// The in-process (in-memory) "macro(new)" bot, served by `agent_inmem`.
     InMemory,
     /// The bot's operator hosts the runtime and dials the gateway; no
@@ -96,6 +98,7 @@ impl AgentKind {
         match harness {
             "cursor" => Self::Cursor,
             "codex-cloud" => Self::CodexCloud,
+            "claude-cloud" => Self::ClaudeCloud,
             "in-memory" | "macro-inmem" => Self::InMemory,
             // Registered macrod harnesses are the deliberate external case:
             // the agent's `harness_id` names whose daemon serves it.

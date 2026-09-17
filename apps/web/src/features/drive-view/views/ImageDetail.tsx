@@ -1,4 +1,5 @@
 import { ImageContent } from '@block-image/component/ImageContent';
+import type { JSX } from 'solid-js';
 import {
   FileDetailLayout,
   FileDetailLoadGate,
@@ -9,10 +10,15 @@ import {
   loadImageDocument,
 } from '../queries/image-document';
 
+export type ImageDetailContext = {
+  data: ImageDocumentData;
+};
+
 export function ImageDetailDocument(
   props: FileDetailShareProps & {
     documentId: string;
     data: ImageDocumentData;
+    children?: (context: ImageDetailContext) => JSX.Element;
   }
 ) {
   return (
@@ -24,6 +30,7 @@ export function ImageDetailDocument(
       shareOpen={props.shareOpen}
       onShareOpenChange={props.onShareOpenChange}
     >
+      {props.children?.({ data: props.data })}
       <ImageContent
         file={props.data.file}
         alt={props.data.documentMetadata.documentName || 'Image'}
@@ -33,7 +40,10 @@ export function ImageDetailDocument(
 }
 
 export function ImageDetail(
-  props: FileDetailShareProps & { documentId: string }
+  props: FileDetailShareProps & {
+    documentId: string;
+    children?: (context: ImageDetailContext) => JSX.Element;
+  }
 ) {
   return (
     <FileDetailLoadGate
@@ -47,6 +57,7 @@ export function ImageDetail(
           data={data}
           shareOpen={props.shareOpen}
           onShareOpenChange={props.onShareOpenChange}
+          children={props.children}
         />
       )}
     </FileDetailLoadGate>

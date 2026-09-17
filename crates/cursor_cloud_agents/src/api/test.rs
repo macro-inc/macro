@@ -70,6 +70,18 @@ fn a_placeholder_key_is_rejected_with_a_diagnostic() {
 /// status and body, then closes. Enough to exercise how a create-agent
 /// failure is classified without a mock-HTTP dependency.
 fn stand_in_server(status_line: &str, body: &'static str) -> String {
+    stand_in_server_capturing(status_line, body).0
+}
+
+/// [`stand_in_server`] that also hands back the request it was sent, for the
+/// tests that are about what went out rather than what came back — a
+/// percent-encoded query string, or an `Authorization` header that must not
+/// be there at all.
+fn stand_in_server_capturing(
+    status_line: &str,
+    body: &'static str,
+) -> (String, std::sync::mpsc::Receiver<String>) {
+    let (sender, receiver) = std::sync::mpsc::channel();
     let listener = std::net::TcpListener::bind("127.0.0.1:0").expect("a loopback port");
     let base_url = format!("http://{}", listener.local_addr().expect("a bound address"));
     let response = format!(
@@ -107,10 +119,11 @@ fn stand_in_server(status_line: &str, body: &'static str) -> String {
                 Ok(read) => remaining = remaining.saturating_sub(read),
             }
         }
+        let _ = sender.send(String::from_utf8_lossy(&request).into_owned());
         let _ = socket.write_all(response.as_bytes());
         let _ = socket.flush();
     });
-    base_url
+    (base_url, receiver)
 }
 
 fn client_against(base_url: String) -> CursorClient {
@@ -175,4 +188,108 @@ async fn an_unrelated_client_error_is_still_a_plain_rejection() {
         "the raw body still travels: {}",
         rejected.0
     );
+}
+
+fn agent() -> CursorAgentId {
+    CursorAgentId::new("bc-00000000-0000-0000-0000-000000000001".to_owned())
+}
+
+/// The documented listing body reads, and an extra field Cursor may add
+/// later does not break it.
+#[tokio::test]
+async fn artifact_listings_read_the_documented_body() {
+    let base_url = stand_in_server(
+        "200 OK",
+        r#"{"items":[{"path":"artifacts/mobile_selection_menu_format_option.png","sizeBytes":12345,"updatedAt":"2026-04-13T18:45:00.000Z","contentType":"image/png"}]}"#,
+    );
+    let listing = client_against(base_url)
+        .list_artifacts(&agent())
+        .await
+        .expect("the documented body parses");
+    assert_eq!(listing.items.len(), 1);
+    assert_eq!(
+        listing.items[0].path,
+        "artifacts/mobile_selection_menu_format_option.png"
+    );
+    assert_eq!(listing.items[0].size_bytes, 12345);
+    assert_eq!(listing.items[0].updated_at, "2026-04-13T18:45:00.000Z");
+}
+
+/// An agent that has written nothing is the ordinary case for most sessions,
+/// so an empty list must be a clean empty answer, not a parse failure.
+#[tokio::test]
+async fn an_agent_with_no_artifacts_lists_nothing() {
+    let base_url = stand_in_server("200 OK", r#"{"items":[]}"#);
+    let listing = client_against(base_url)
+        .list_artifacts(&agent())
+        .await
+        .expect("an empty page parses");
+    assert!(listing.items.is_empty());
+}
+
+/// The artifact path travels as a percent-encoded query parameter. Spelled
+/// into the path by hand, a name with a space or a `#` would arrive
+/// truncated or as a different file.
+#[tokio::test]
+async fn the_download_request_percent_encodes_the_artifact_path() {
+    let (base_url, requests) = stand_in_server_capturing(
+        "200 OK",
+        r#"{"url":"https://cloud-agent-artifacts.s3.us-east-1.amazonaws.com/x?sig=1","expiresAt":"2026-04-13T19:00:00.000Z"}"#,
+    );
+    let download = client_against(base_url)
+        .artifact_download_url(&agent(), "artifacts/walkthrough one.mp4")
+        .await
+        .expect("the documented body parses");
+    assert!(
+        download
+            .url
+            .starts_with("https://cloud-agent-artifacts.s3."),
+        "got {}",
+        download.url
+    );
+    assert_eq!(download.expires_at, "2026-04-13T19:00:00.000Z");
+
+    let request = requests.recv().expect("the stand-in saw the request");
+    let request_line = request.lines().next().expect("a request line");
+    assert!(
+        request_line.contains("path=artifacts%2Fwalkthrough%20one.mp4"),
+        "got {request_line}"
+    );
+}
+
+/// The presigned url authenticates itself in its query string, and it points
+/// at S3 rather than Cursor. Attaching our API key to it would hand a live
+/// credential to a third-party host.
+#[tokio::test]
+async fn fetching_an_artifact_sends_no_api_key() {
+    let (base_url, requests) = stand_in_server_capturing("200 OK", "bytes");
+    let response = client_against(config().base_url)
+        .fetch_artifact(&format!("{base_url}/artifacts/screenshot.png?sig=1"))
+        .await
+        .expect("the stand-in serves the bytes");
+    assert!(response.status().is_success());
+
+    let request = requests.recv().expect("the stand-in saw the request");
+    assert!(
+        !request.to_lowercase().contains("authorization:"),
+        "the presigned fetch must be unauthenticated: {request}"
+    );
+}
+
+/// A presigned url outlives its usefulness after fifteen minutes, and S3
+/// answers a stale one with a 403. The status has to survive into the report,
+/// since that is what tells an expiry apart from a genuinely missing file.
+#[tokio::test]
+async fn an_expired_presigned_url_fails_with_its_status() {
+    let (base_url, _requests) = stand_in_server_capturing(
+        "403 Forbidden",
+        "<Error><Code>AccessDenied</Code><Message>Request has expired</Message></Error>",
+    );
+    let error = client_against(config().base_url)
+        .fetch_artifact(&format!("{base_url}/artifacts/screenshot.png?sig=stale"))
+        .await
+        .expect_err("a 403 is not bytes");
+    let printed = format!("{error}");
+    assert!(printed.contains("403"), "got {printed}");
+    assert!(printed.contains("Request has expired"), "got {printed}");
 }

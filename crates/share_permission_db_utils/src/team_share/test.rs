@@ -15,6 +15,14 @@ fn chat() -> Entity<'static> {
     EntityType::Chat.with_entity_string("20000000-0000-0000-0000-000000000003".to_string())
 }
 
+fn active_call() -> Entity<'static> {
+    EntityType::Call.with_entity_string("20000000-0000-0000-0000-000000000005".to_string())
+}
+
+fn archived_call() -> Entity<'static> {
+    EntityType::Call.with_entity_string("20000000-0000-0000-0000-000000000006".to_string())
+}
+
 fn command(facts: &TeamShareFacts, level: Option<AccessLevel>) -> AuthorizedTeamShareCommand {
     authorize_team_share(
         Some(&facts.owner),
@@ -136,6 +144,87 @@ async fn apply_inserts_updates_and_deletes_direct_team_entity_access_for_chat(
 ) -> rootcause::Result<()> {
     let mut tx = pool.begin().await?;
     apply_comment_view_and_clear(&mut tx, &chat()).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn apply_inserts_updates_and_deletes_direct_team_entity_access_for_calls(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    let mut tx = pool.begin().await?;
+    apply_comment_view_and_clear(&mut tx, &active_call()).await?;
+    apply_comment_view_and_clear(&mut tx, &archived_call()).await
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn load_facts_prefers_active_call_over_archived_record_with_same_id(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    let mut tx = pool.begin().await?;
+    // Model the archive hand-off: an archived row with the active call's id and
+    // permission, but a different creator, exists at the same time.
+    sqlx::query!(
+        r#"INSERT INTO call_records
+            (id, channel_id, room_name, created_by, started_at, duration_ms, share_permission_id)
+        VALUES ('20000000-0000-0000-0000-000000000005', '40000000-0000-0000-0000-000000000001',
+            'active', 'macro|other@example.com', now(), 0, 'active-call')"#
+    )
+    .execute(tx.as_mut())
+    .await?;
+
+    let facts = load_facts(&mut tx, &active_call()).await?;
+
+    assert_eq!(facts.owner.as_ref(), "macro|owner@example.com");
+    assert_eq!(facts.current, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn initialize_call_grants_view_to_creator_team_or_nothing(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    let mut tx = pool.begin().await?;
+
+    // A creator on a team: View, attributed to that team, revision 1.
+    let entity = active_call();
+    let uuid = Uuid::parse_str(&entity.entity_id)?;
+    let team_id = load_facts(&mut tx, &entity)
+        .await?
+        .owner_team_id
+        .expect("fixture owner belongs to a team");
+    initialize(&mut tx, &entity, TeamShareCreation::Call).await?;
+    let facts = load_facts(&mut tx, &entity).await?;
+    assert_eq!(
+        facts.current,
+        Some(TeamShareGrant {
+            team_id,
+            level: TeamShareLevel::View,
+        })
+    );
+    assert_eq!(facts.revision, 1);
+    assert_eq!(
+        direct_team_rows(&mut tx, &uuid, EntityType::Call, team_id).await?,
+        vec![AccessLevel::View]
+    );
+
+    // A creator without a team: nothing is promised, revision stays 0.
+    sqlx::query!("DELETE FROM team_user WHERE user_id = 'macro|owner@example.com'")
+        .execute(tx.as_mut())
+        .await?;
+    let entity = archived_call();
+    initialize(&mut tx, &entity, TeamShareCreation::Call).await?;
+    let facts = load_facts(&mut tx, &entity).await?;
+    assert_eq!(facts.current, None);
+    assert_eq!(facts.revision, 0);
+    Ok(())
 }
 
 #[sqlx::test(

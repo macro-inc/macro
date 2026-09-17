@@ -2,17 +2,26 @@ import { useToggleShareWithTeamMutation } from '@queries/call/call';
 import { useCallContext } from './CallContext';
 
 /**
- * Returns a handler that flips the active call's `shared_with_team` flag and
- * mirrors the new value into the local call store. No-op when there's no
- * active call.
+ * Team sharing controls for the active call.
+ *
+ * `toggle` flips the live call's share-with-team toggle through
+ * `POST /call/record/{id}/share-with-team/toggle` and mirrors the new value
+ * into the local call store. Any participant with edit access may flip it;
+ * the toggle becomes canonical team sharing (view for the creator's team)
+ * when the call is archived. No-op when there's no active call.
  */
-export function useToggleShareWithTeam() {
+export function useActiveCallTeamShare() {
   const callCtx = useCallContext();
   const mutation = useToggleShareWithTeamMutation();
-  return async () => {
+
+  const canToggle = () => callCtx.activeCallId() !== null;
+
+  const toggle = async () => {
     const callId = callCtx.activeCallId();
     if (!callId) return;
     const newValue = await mutation.mutateAsync(callId);
     callCtx.setSharedWithTeam(newValue);
   };
+
+  return { toggle, canToggle, isPending: () => mutation.isPending };
 }

@@ -1,6 +1,7 @@
 import {
   SearchBar,
   useViewControlHotkeys,
+  ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
 import { useSplitLayout } from '@components/app/split-layout/layout';
@@ -22,18 +23,41 @@ export type TasksHeaderProps = {
   onSearchEscape?: () => void;
 };
 
-export function TasksTopBar() {
+export function TaskViewBreadcrumbItem() {
   const { state } = useTasksView();
   const tabTitle = () =>
     TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
 
   return (
-    <ViewShell.TopBar class="px-3">
+    <ViewBreadcrumbs.Item
+      value="tasks-view"
+      metadata={{ type: 'tasks' }}
+      order={0}
+    >
+      {(item) => (
+        <ViewBreadcrumbs.ReturnButton
+          isActive={item.isActive()}
+          onClick={item.onSelect}
+          tooltip={tabTitle()}
+        >
+          <span class="truncate">{tabTitle()}</span>
+        </ViewBreadcrumbs.ReturnButton>
+      )}
+    </ViewBreadcrumbs.Item>
+  );
+}
+
+export function TasksTopBar() {
+  return (
+    <ViewShell.TopBar>
       <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
-      <h1 class="min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-        <span class="@max-[720px]/view-shell:hidden">{tabTitle()}</span>
-        <span class="hidden @max-[720px]/view-shell:inline">Tasks</span>
+      <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
+        Tasks
       </h1>
+      <ViewBreadcrumbs.Outlet
+        class="@max-[720px]/view-shell:hidden"
+        aria-label="Task location"
+      />
     </ViewShell.TopBar>
   );
 }

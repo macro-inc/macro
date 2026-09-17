@@ -314,6 +314,20 @@ export type AgentSetModelAction = {
 export type BotId = string;
 
 /**
+ * One-time manual code. Deliberately does not implement Debug.
+ */
+export type CompleteRequest = {
+    /**
+     * Server-issued handle; never an owner selected by the caller.
+     */
+    attemptId: string;
+    /**
+     * Claude's complete code#state string, not an access token.
+     */
+    code: string;
+};
+
+/**
  * The operation to perform.
  */
 export type ControlRequest = AgentAction;
@@ -493,6 +507,13 @@ export type ElicitationContentValue = string | boolean | number | number | Array
 export type ElicitationRequestId = number | string;
 
 /**
+ * A JSON body is required on writes, including start/disconnect (no form-based CSRF).
+ */
+export type EmptyRequest = {
+    [key: string]: never;
+};
+
+/**
  * The provider-side identity of an externally-served session.
  */
 export type ExternalSessionResponse = {
@@ -573,7 +594,7 @@ export type LogFrameDto = {
 /**
  * Harness names accepted by the model discovery endpoint.
  */
-export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
+export type ModelHarnessDto = 'in-memory' | 'cursor' | 'claude-cloud' | 'macrod';
 
 /**
  * Request body for `POST /agent-sessions/preview`.
@@ -696,6 +717,42 @@ export type SessionStatusDto = {
     kind: 'event';
 } | {
     kind: 'disconnected';
+};
+
+/**
+ * Public PKCE challenge and attempt handle; contains no verifier or provider tokens.
+ */
+export type StartResponse = {
+    /**
+     * Opaque owner-bound attempt handle.
+     */
+    attemptId: string;
+    /**
+     * Claude-hosted consent page.
+     */
+    authorizationUrl: string;
+    /**
+     * Attempt lifetime in seconds.
+     */
+    expiresIn: number;
+};
+
+/**
+ * Safe connection metadata.
+ */
+export type StatusResponse = {
+    /**
+     * Whether the authenticated Macro user has connected.
+     */
+    connected: boolean;
+    /**
+     * Whether this deployment supports browser connection.
+     */
+    enabled: boolean;
+    /**
+     * Whether reconnecting after service restart is required.
+     */
+    ephemeral: boolean;
 };
 
 /**
@@ -1096,3 +1153,101 @@ export type PutAgentSessionSandboxSizeResponses = {
 };
 
 export type PutAgentSessionSandboxSizeResponse = PutAgentSessionSandboxSizeResponses[keyof PutAgentSessionSandboxSizeResponses];
+
+export type DisconnectData = {
+    body: EmptyRequest;
+    path?: never;
+    query?: never;
+    url: '/claude-auth';
+};
+
+export type DisconnectErrors = {
+    /**
+     * Disabled
+     */
+    403: unknown;
+};
+
+export type DisconnectResponses = {
+    /**
+     * Disconnected
+     */
+    204: void;
+};
+
+export type DisconnectResponse = DisconnectResponses[keyof DisconnectResponses];
+
+export type StatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/claude-auth';
+};
+
+export type StatusErrors = {
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+};
+
+export type StatusResponses = {
+    200: StatusResponse;
+};
+
+export type StatusResponse2 = StatusResponses[keyof StatusResponses];
+
+export type CompleteData = {
+    body: CompleteRequest;
+    path?: never;
+    query?: never;
+    url: '/claude-auth/complete';
+};
+
+export type CompleteErrors = {
+    /**
+     * Invalid code
+     */
+    400: unknown;
+    /**
+     * Expired or replayed
+     */
+    409: unknown;
+    /**
+     * Provider failed
+     */
+    502: unknown;
+};
+
+export type CompleteResponses = {
+    /**
+     * Connected
+     */
+    204: void;
+};
+
+export type CompleteResponse = CompleteResponses[keyof CompleteResponses];
+
+export type StartData = {
+    body: EmptyRequest;
+    path?: never;
+    query?: never;
+    url: '/claude-auth/start';
+};
+
+export type StartErrors = {
+    /**
+     * Disabled
+     */
+    403: unknown;
+    /**
+     * Too many attempts
+     */
+    429: unknown;
+};
+
+export type StartResponses = {
+    200: StartResponse;
+};
+
+export type StartResponse2 = StartResponses[keyof StartResponses];

@@ -1932,7 +1932,9 @@ export const getCallRecordResponse = zod
     roomName: zod.string().describe('The RTC room name.'),
     shareWithTeam: zod
       .boolean()
-      .describe("Whether the call is shared with the creator's team."),
+      .describe(
+        "Whether the call is shared with the creator's team. While the call is\nlive this is the pending toggle applied at archive; afterwards it\nmirrors `team_share_access_level`."
+      ),
     startedAt: zod.iso
       .datetime({})
       .describe(
@@ -1954,6 +1956,14 @@ export const getCallRecordResponse = zod
       .describe(
         'AI-generated summary of the call. Only set on archived `call_records`\nonce summarization has run; active calls always return `None`.'
       ),
+    teamShareAccessLevel: zod
+      .union([
+        zod.null(),
+        zod
+          .enum(['view', 'comment', 'edit', 'owner'])
+          .describe('Ordered from least to most access top -> bottom'),
+      ])
+      .optional(),
     transcript: zod
       .array(
         zod
@@ -2008,8 +2018,11 @@ export const deleteCallRecordParams = zod.object({
 });
 
 /**
- * Edits a call record — currently supports updating the record's share
-permissions. Access is validated via channel membership
+ * Edits a call record: link/channel share permissions, display name, and
+team sharing. Edit access (channel membership) is required for the request.
+`sharePermission.teamShareAccessLevel` only accepts `view` or `null`; while
+the call is live it sets the pending share-with-team toggle, and once the
+call is archived it is additionally authorized against the call's creator.
  * @summary Handler for `PATCH /call/record/{call_id}`.
  */
 export const editCallRecordParams = zod.object({
@@ -2082,14 +2095,16 @@ export const editCallRecordBody = zod
       .boolean()
       .nullish()
       .describe(
-        "If `Some(true)`, grant the creator's team View access on the call.\nIf `Some(false)`, revoke the creator's team's access. `None` is a no-op.\nThe team is resolved from the call's `created_by`, not the acting user."
+        'Deprecated alias for `sharePermission.teamShareAccessLevel`:\n`Some(true)` behaves like `\"view\"`, `Some(false)` like `null`, and\n`None` is a no-op. Supplying both with disagreeing values is rejected.\nThe team is resolved from the call\'s `created_by`, not the acting user.'
       ),
   })
-  .describe('Edit call request');
+  .describe('Edit call request, as supplied by inbound callers.');
 
 /**
- * Toggles the `share_with_team` flag on the active call. Returns the new
-value as the JSON body.
+ * Flips the live call's share-with-team toggle and returns the new value as
+the JSON body. The toggle is applied as canonical team sharing (View for
+the creator's team) when the call is archived; archived calls answer 409
+and are edited through `PATCH /call/record/{call_id}` instead.
  * @summary Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
  */
 export const toggleShareWithTeamParams = zod.object({

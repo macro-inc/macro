@@ -391,12 +391,22 @@ label's font weight matches the file title. The link
 restores the originating Drive view.
 The `Drive` folder row opens the folder overview. Click a folder name to browse
 its contents in the main pane; its separate expand/collapse button reveals child
-folders without navigating. Folder breadcrumbs in the top bar use `/` separators
-and navigate to ancestors. Empty folders show `This folder is empty` and a
-`Back to Drive` action that returns to the folder overview. Folder
-search retains matching descendants' ancestors and reveals their branches.
+folders without navigating. The top bar keeps the full folder and file detail
+path in one breadcrumb trail. Folder containment uses `/` separators, while the
+transition to a file detail and nested detail navigation use the default `>`
+separator. Choosing a folder breadcrumb returns to that folder and clears newer
+file details. Empty folders show `This folder is empty` and a `Back to Drive`
+action that returns to the folder overview. Folder search retains matching
+descendants' ancestors and reveals their branches.
 
-`Search Drive` searches the current tab or folder. The **Filter** menu reuses the
+`Search Drive` searches the current tab or folder overview; search within a folder
+is temporarily hidden, including its Cmd+F shortcut. The sidebar's folder-name
+search remains available. Right-click any Drive view, the Drive folder overview,
+or a folder at any depth for **Open in new split**, **Open in current split**, and
+**Open fullscreen** (when multiple splits are open). Folder menus also offer
+Favorite/Unfavorite, Move to folder, Copy Link, and owner-only Rename and Delete.
+Favorites use the same open actions and **Remove from favorites** menu as Tasks.
+The **Filter** menu reuses the
 legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**
 for Default, All files, and Email attachments. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
@@ -404,9 +414,15 @@ is restricted to your own files. Recent offers only file-scope filtering.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,
-while modified clicks retain existing split navigation. On narrow layouts, use
-`Select Drive view` for tabs, favorites, and folders. Navigation state and expanded
-folders are restored when returning from an opened file.
+while Markdown, code/CSV, image, video, and unrecognized file clicks and Enter
+replace the list with a breadcrumbed detail. Choose the current location
+breadcrumb to return to the list; choosing an ancestor file drops newer detail
+entries. Opening a list row or sidebar favorite starts a new detail path; only
+navigation originating inside a detail appends to that path. Modified clicks and
+file types without a dedicated detail, including PDF and canvas, retain existing
+split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
+and folders. Navigation state and expanded folders are restored when returning
+from an opened file.
 
 ## Calendar — `/app/calendar/view`
 
@@ -481,6 +497,18 @@ Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, tr
 and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
+
+### Sharing a call
+
+A call's side panel has a `Sharing` section with one `Share with team` checkbox, and the in-call
+controls carry the same checkbox while a call is live. It is canonical team sharing (the same
+`Team access` model documents and AI chats use), fixed at **view**. While the call is **live**
+the checkbox is a pending toggle (on by default) that any participant with edit access can flip;
+other participants see it update live. When the call ends it is applied: with the toggle on,
+everyone on the creator's team can open the recorded call, read the transcript and AI summary,
+and find it under Calls and in search; off means nothing is shared. Afterwards only the call's
+**creator** can change it — everyone else sees the checkbox read-only with a note saying so.
+Team sharing is independent of channel access and of link sharing.
 
 ## Customers (CRM) — `/app/component/companies`
 

@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+claude_cloud_agents = { path = "../claude_cloud_agents" }
 async-trait = { workspace = true }
 codex_cloud_agents = { path = "../codex_cloud_agents", features = ["postgres"] }
 codex_connection = { path = "../codex_connection" }

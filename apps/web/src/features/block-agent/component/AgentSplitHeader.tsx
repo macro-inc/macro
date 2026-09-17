@@ -94,6 +94,7 @@ export function AgentSplitHeader(props: {
     {
       label: () => {
         const provider = props.session?.external?.provider;
+        if (provider === 'claude-cloud') return 'Open in Claude';
         if (!provider) return 'Open externally';
         return `Open in ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
       },

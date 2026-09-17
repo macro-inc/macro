@@ -355,3 +355,55 @@ pub struct ApiErrorCode {
     /// Cursor's error code, e.g. `repository_access`.
     pub code: String,
 }
+
+/// `GET /v1/agents/{id}/artifacts` response.
+///
+/// The listing is the agent's whole artifact directory, not one run's output:
+/// artifacts persist across runs and Cursor offers no run filter, so `items`
+/// on a later turn still contains everything earlier turns wrote.
+#[derive(Debug, Deserialize)]
+pub struct ListArtifactsResponse {
+    /// Every artifact the agent has written so far. Defaulted so a bare `{}`
+    /// for an agent that has written none reads as empty; the docs show only
+    /// the populated shape, so this is a guard, not an observed answer.
+    #[serde(default)]
+    pub items: Vec<ArtifactListing>,
+}
+
+/// One artifact in a `GET /v1/agents/{id}/artifacts` page.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactListing {
+    /// Workspace-relative path, always under `artifacts/`, e.g.
+    /// `artifacts/screenshot.png`. This is both the artifact's identity and
+    /// the value the download endpoint takes.
+    pub path: String,
+    /// Size in bytes. Videos run to tens of megabytes, so a caller deciding
+    /// whether to fetch something has this before it commits to the body.
+    #[serde(default)]
+    pub size_bytes: u64,
+    /// When Cursor last wrote the artifact, as the RFC 3339 string it sends.
+    ///
+    /// Kept as text because nothing in this crate reads a Cursor timestamp as
+    /// a moment in time — parsing one here would mean adding a date library
+    /// to serve a field that is currently only compared for equality, which is
+    /// exactly what a change detector needs it for.
+    #[serde(default)]
+    pub updated_at: String,
+}
+
+/// `GET /v1/agents/{id}/artifacts/download` response.
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ArtifactDownloadResponse {
+    /// A presigned S3 GET url. It carries its own credentials in the query
+    /// string, so it must be fetched without this crate's API key.
+    pub url: String,
+    /// When the presigned url stops working, as the RFC 3339 string Cursor
+    /// sends. Text for the same reason as [`ArtifactListing::updated_at`];
+    /// the expiry that matters in practice is the documented 15 minutes,
+    /// which a caller honours by fetching promptly rather than by storing
+    /// the url.
+    #[serde(default)]
+    pub expires_at: String,
+}

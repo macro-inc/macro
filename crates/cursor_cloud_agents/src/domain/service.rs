@@ -38,6 +38,7 @@
 #[cfg(test)]
 mod test;
 
+use crate::domain::artifact::{ArtifactListing, CollectedArtifact, mime_type};
 use crate::domain::error::SessionError;
 use crate::domain::event::CursorEvent;
 use crate::domain::journal::{CursorJournal, JournalEntry, JournalInput, ReplayMachine};
@@ -46,7 +47,8 @@ use crate::domain::model::{
     ModelChoice, RepoUrl, RunStatus,
 };
 use crate::domain::ports::{
-    CursorAgents, RepositoryChooser, RunStream, SessionNotifier, StreamConnectError,
+    ArtifactStore, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream, SessionNotifier,
+    StreamConnectError,
 };
 use agent_client_protocol::schema::v1::{
     ContentBlock, SessionId, SessionUpdate, StopReason, TextContent,
@@ -100,6 +102,24 @@ const STREAM_RECONNECT_ATTEMPTS: usize = 5;
 /// How long a prompt waits behind a run something else started (the same
 /// agent is drivable from cursor.com) before giving up, in poll intervals.
 const BUSY_ATTEMPTS: usize = 450;
+
+/// How long a turn that saw no new artifacts waits before listing once more.
+///
+/// Cursor uploads a run's artifacts as the run finishes, so the listing can
+/// still be empty a moment after the terminal frame that ended the turn. The
+/// trade is plain: every turn that produced nothing pays this before it
+/// answers, and without it a walkthrough's screenshots are silently missing
+/// from the turn that took them. Five seconds is long enough to cover the
+/// upload lag seen in practice and short enough to read as the turn ending.
+const ARTIFACT_LISTING_RETRY_DELAY: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// The largest artifact this service will pull into memory, 64 MiB.
+///
+/// Read from the listing's `sizeBytes`, so an oversized recording is declined
+/// before a byte of it is fetched. Well past any screenshot and past most
+/// screen recordings; a run that produces something bigger loses that one
+/// file, loudly, rather than the process losing its memory.
+const MAX_ARTIFACT_BYTES: u64 = 64 * 1024 * 1024;
 
 #[derive(Clone, Copy)]
 struct IngestMode {
@@ -281,11 +301,14 @@ struct Session {
 
 /// The service behind the ACP handlers.
 #[derive(Debug)]
-pub struct CursorSessionService<Cursor, Notifier, Chooser> {
+pub struct CursorSessionService<Cursor, Notifier, Chooser, Store> {
     journal: Arc<dyn CursorJournal>,
     cursor: Cursor,
     notifier: Notifier,
     chooser: Chooser,
+    /// Where a turn's walkthrough files are re-hosted. A store that reports
+    /// itself unavailable turns artifact collection off entirely.
+    artifacts: Store,
     sessions: Mutex<HashMap<SessionId, Arc<Session>>>,
     /// Monotonic counter for minting session ids without a clock or RNG.
     next_session: Mutex<u64>,
@@ -297,11 +320,12 @@ pub struct CursorSessionService<Cursor, Notifier, Chooser> {
     models: tokio::sync::Mutex<Option<Vec<CursorModel>>>,
 }
 
-impl<Cursor, Notifier, Chooser> CursorSessionService<Cursor, Notifier, Chooser>
+impl<Cursor, Notifier, Chooser, Store> CursorSessionService<Cursor, Notifier, Chooser, Store>
 where
-    Cursor: CursorAgents + RunStream,
+    Cursor: CursorAgents + CursorArtifacts + RunStream,
     Notifier: SessionNotifier,
     Chooser: RepositoryChooser,
+    Store: ArtifactStore,
 {
     /// Wire the service to its ports.
     pub fn new(
@@ -309,12 +333,14 @@ where
         notifier: Notifier,
         chooser: Chooser,
         journal: Arc<dyn CursorJournal>,
+        artifacts: Store,
     ) -> Self {
         Self {
             journal,
             cursor,
             notifier,
             chooser,
+            artifacts,
             sessions: Mutex::new(HashMap::new()),
             next_session: Mutex::new(0),
             default_model_id: None,
@@ -831,6 +857,14 @@ where
                 true,
             )
             .await?;
+        }
+        // The run's walkthrough files, collected once its outcome is known
+        // and before the turn answers, so the fold appends their markdown to
+        // this turn's reply like any other streamed text. A failed turn
+        // collects nothing: there is no reply for the text to land in.
+        if outcome.is_ok() {
+            self.collect_artifacts(session_id, &session, &agent, &run, &cancel)
+                .await?;
         }
         let reconciled = session
             .state
@@ -1785,6 +1819,164 @@ where
         Ok(mirrored)
     }
 
+    /// Re-host the walkthrough files this run produced and say so in the
+    /// turn's own text.
+    ///
+    /// Artifacts never fail a turn: a listing that cannot be read, a file
+    /// that cannot be fetched or stored, is reported and skipped, and the
+    /// prompt still answers with the run's stop reason. Only a journal
+    /// failure propagates, and that is already fatal to the session by the
+    /// time it is seen here.
+    #[tracing::instrument(
+        name = "cursor.artifacts.collect",
+        skip_all,
+        fields(
+            cursor.agent.id = %agent,
+            artifacts.known = tracing::field::Empty,
+            artifacts.collected = tracing::field::Empty,
+            artifacts.retried = tracing::field::Empty,
+        ),
+    )]
+    async fn collect_artifacts(
+        &self,
+        session_id: &SessionId,
+        session: &Session,
+        agent: &CursorAgentId,
+        run: &CursorRunId,
+        cancel: &tokio_util::sync::CancellationToken,
+    ) -> Result<(), SessionError> {
+        if !self.artifacts.is_available() {
+            return Ok(());
+        }
+        let span = tracing::Span::current();
+        // Every earlier collection in this session, because the provider's
+        // listing is agent-scoped and repeats everything older turns wrote.
+        let known: std::collections::HashSet<String> = session
+            .state
+            .lock()
+            .expect("session state poisoned")
+            .journal_entries
+            .iter()
+            .filter_map(|entry| match &entry.input {
+                JournalInput::ArtifactsCollected(artifacts) => Some(artifacts),
+                _ => None,
+            })
+            .flatten()
+            .map(|artifact| artifact.key.clone())
+            .collect();
+        span.record("artifacts.known", known.len());
+
+        let Some(mut fresh) = self.new_artifacts(agent, &known).await else {
+            return Ok(());
+        };
+        let retried = fresh.is_empty();
+        span.record("artifacts.retried", retried);
+        if retried {
+            // A cancelled turn skips the wait and lists once more anyway:
+            // `sleep_unless_cancelled` returns immediately, and the second
+            // listing is the cheap half of this.
+            sleep_unless_cancelled(cancel, ARTIFACT_LISTING_RETRY_DELAY).await;
+            let Some(second) = self.new_artifacts(agent, &known).await else {
+                return Ok(());
+            };
+            fresh = second;
+        }
+        if fresh.is_empty() {
+            return Ok(());
+        }
+
+        let mut collected = Vec::new();
+        for listing in fresh {
+            if listing.size_bytes > MAX_ARTIFACT_BYTES {
+                tracing::warn!(
+                    artifact.path = %listing.path,
+                    artifact.size_bytes = listing.size_bytes,
+                    artifact.size_limit = MAX_ARTIFACT_BYTES,
+                    "skipping an artifact larger than this service will buffer"
+                );
+                continue;
+            }
+            let fetched = match self.cursor.fetch_artifact(agent, &listing.path).await {
+                Ok(fetched) => fetched,
+                Err(error) => {
+                    tracing::warn!(
+                        artifact.path = %listing.path,
+                        %error,
+                        "could not fetch an artifact from Cursor"
+                    );
+                    continue;
+                }
+            };
+            let mime_type = mime_type(listing.name(), fetched.content_type.as_deref());
+            match self
+                .artifacts
+                .store(listing.name(), &mime_type, fetched.bytes)
+                .await
+            {
+                Ok(uri) => collected.push(CollectedArtifact {
+                    key: listing.key(),
+                    name: listing.name().to_owned(),
+                    mime_type,
+                    uri,
+                    size_bytes: listing.size_bytes,
+                }),
+                Err(error) => tracing::warn!(
+                    artifact.path = %listing.path,
+                    %error,
+                    "could not re-host an artifact"
+                ),
+            }
+        }
+        span.record("artifacts.collected", collected.len());
+        if collected.is_empty() {
+            return Ok(());
+        }
+        tracing::info!(
+            %agent,
+            %run,
+            artifacts.collected = collected.len(),
+            "re-hosted this run's artifacts"
+        );
+        // Journalled and projected in one step, which is what puts the
+        // markdown on the wire: capture appends before it emits, so a crash
+        // between the two re-announces on replay instead of losing files
+        // whose provider links have since expired.
+        self.capture(
+            session_id,
+            session,
+            Some(run),
+            JournalInput::ArtifactsCollected(collected),
+            true,
+        )
+        .await
+    }
+
+    /// The agent's artifacts this session has not collected yet, oldest
+    /// first. `None` means the listing itself failed and the turn carries on.
+    async fn new_artifacts(
+        &self,
+        agent: &CursorAgentId,
+        known: &std::collections::HashSet<String>,
+    ) -> Option<Vec<ArtifactListing>> {
+        let listings = match self.cursor.list_artifacts(agent).await {
+            Ok(listings) => listings,
+            Err(error) => {
+                tracing::warn!(%agent, %error, "could not list this agent's artifacts");
+                return None;
+            }
+        };
+        let mut fresh: Vec<_> = listings
+            .into_iter()
+            .filter(|listing| !known.contains(&listing.key()))
+            .collect();
+        // Write order, as far as the provider's timestamps show it, so a
+        // walkthrough's screenshots read in the order they were taken.
+        fresh.sort_by(|left, right| {
+            (&left.updated_at, &left.path).cmp(&(&right.updated_at, &right.path))
+        });
+        Some(fresh)
+    }
+
     async fn ensure_journal(&self, id: &SessionId, session: &Session) -> Result<(), SessionError> {
         if session
             .state
@@ -2341,6 +2533,20 @@ enum HistoryGap {
     IsServedAnyway,
 }
 
+/// Whether `run` collects artifacts after `entry`, so its turn outcome has to
+/// wait for them.
+fn collects_artifacts_later(
+    entries: &[JournalEntry],
+    entry: &JournalEntry,
+    run: &CursorRunId,
+) -> bool {
+    entries.iter().any(|later| {
+        later.sequence > entry.sequence
+            && later.run.as_ref() == Some(run)
+            && matches!(later.input, JournalInput::ArtifactsCollected(_))
+    })
+}
+
 fn history_projection(
     entries: &[JournalEntry],
     gap: HistoryGap,
@@ -2367,6 +2573,10 @@ fn history_projection(
     // Intent position is audit order, not conversation order. Accepted
     // prompts project immediately before their first native run input.
     let mut updates = Vec::new();
+    // Turn outcomes held back past their run's terminal frame, keyed by run;
+    // see the artifact case below.
+    let mut deferred: HashMap<CursorRunId, agent_runtime_protocol::domain::turn::TurnOutcome> =
+        HashMap::new();
     for entry in entries {
         let before = entry
             .run
@@ -2383,6 +2593,21 @@ fn history_projection(
             terminal.map(turn_outcome)
         } else {
             None
+        };
+        // A run's artifacts are collected after its terminal frame but belong
+        // to the turn that produced them, and live delivery only ends the
+        // turn when the prompt answers - after that text. Holding the outcome
+        // back to the artifacts entry is what makes a reloaded session read
+        // in the same order the person watched it arrive.
+        let outcome = match (entry.run.as_ref(), outcome) {
+            (Some(run), Some(outcome)) if collects_artifacts_later(entries, entry, run) => {
+                deferred.insert(run.clone(), outcome);
+                None
+            }
+            (Some(run), None) if matches!(entry.input, JournalInput::ArtifactsCollected(_)) => {
+                deferred.remove(run)
+            }
+            (_, outcome) => outcome,
         };
         updates.push((projected, outcome));
     }

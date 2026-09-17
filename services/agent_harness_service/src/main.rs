@@ -93,7 +93,7 @@ use config::{Config, Environment};
 use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
 use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
-use cursor_cloud_agents::api::CURSOR_API_BASE_URL;
+use cursor_cloud_agents::api::cursor_api_base_url;
 use github::domain::service::{
     InstallationTokenConfig, InstallationTokenService, ReachableRepositoriesService,
 };
@@ -203,6 +203,22 @@ async fn run() -> anyhow::Result<()> {
         .connect(config.database_url.as_ref())
         .await
         .context("failed to connect to macrodb")?;
+
+    // The same encrypted connection store serves browser consent and runtime
+    // credentials in every deployment. Only the KMS key configuration varies.
+    let claude_refresh =
+        Arc::new(claude_cloud_agents::outbound::credentials::ClaudeRefresh::new()?);
+    let claude_credentials = config.claude_oauth_kms_key_id().map(|key| {
+        claude_cloud_agents::domain::credentials::AccountCredentials::new(
+            Arc::new(
+                claude_cloud_agents::outbound::postgres::PgClaudeGrants::new(
+                    pool.clone(),
+                    AwsKmsCiphertexts::new(aws_sdk_kms::Client::new(&aws_config), key),
+                ),
+            ),
+            claude_refresh.clone(),
+        )
+    });
 
     // Built before the sessions rather than beside the other channel plumbing
     // below: this service owns the live actors, so it is where a session's
@@ -460,7 +476,7 @@ async fn run() -> anyhow::Result<()> {
     );
     let cursor_manager = CursorContainerManager::new(
         cursor_keys.clone(),
-        CURSOR_API_BASE_URL.to_owned(),
+        cursor_api_base_url(),
         session_repo.clone(),
         reachable_repositories,
         ai_usage::pg_recorder(pool.clone()),
@@ -469,6 +485,17 @@ async fn run() -> anyhow::Result<()> {
             replica,
         },
         pending_commands.clone(),
+    )
+    // Cursor's own artifact links expire in fifteen minutes, so a
+    // walkthrough's screenshots and recordings are re-hosted where every
+    // other user-visible blob in Macro lives.
+    .with_artifact_store(
+        cursor_cloud_agents::outbound::static_file_artifacts::StaticFileArtifactStore::new(
+            static_file_service_client::StaticFileServiceClient::new(
+                config.internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+            ),
+        ),
     )
     .with_pull_requests(session_pull_requests.clone());
     let codex_connections: Option<Arc<dyn codex_connection::domain::ConnectionService>> = config
@@ -581,10 +608,23 @@ async fn run() -> anyhow::Result<()> {
         environment = %config.environment,
         "agent harness serving bots"
     );
+    let claude_provider = Arc::new(claude_cloud_agents::outbound::http::Provider(
+        claude_credentials.clone(),
+    ));
+    let claude_manager = agent_harness::outbound::claude::ClaudeContainerManager::new(
+        agent_harness::domain::claude::ClaudeSessions::new(
+            claude_provider.clone(),
+            session_repo.clone(),
+            session_repo.clone(),
+        ),
+        EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url.clone()),
+        claude_cloud_agents::inbound::acp::attach,
+    );
     let containers = RoutedContainerManager::new(
         sandbox_and_inmem,
         cursor_manager,
         codex_manager,
+        claude_manager,
         session_repo.clone(),
     );
 
@@ -754,13 +794,18 @@ async fn run() -> anyhow::Result<()> {
     .with_harness_authorizer(PgHarnessAuthorizer::new(PgHarnessAuthorizationRepo::new(
         pool.clone(),
     )));
-    let model_service = Arc::new(AgentModelsServiceImpl::new(
-        VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
-        InMemoryModels::new(Some(inmem_model_engine), config.inmem_model.clone()),
-        CursorModels::new(cursor_keys, CURSOR_API_BASE_URL.to_owned()),
-        macrod_models,
-        model_probe_timeout,
-    ));
+    let model_service = Arc::new(
+        AgentModelsServiceImpl::new(
+            VisibleHarnessAccess::new(PgHarnessRepo::new(pool.clone())),
+            InMemoryModels::new(Some(inmem_model_engine), config.inmem_model.clone()),
+            CursorModels::new(cursor_keys, cursor_api_base_url()),
+            macrod_models,
+            model_probe_timeout,
+        )
+        .with_claude(Arc::new(agent_harness::outbound::claude::ClaudeModels(
+            claude_provider,
+        ))),
+    );
     let model_state = AgentModelsRouterState::new(
         model_service,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
@@ -794,6 +839,16 @@ async fn run() -> anyhow::Result<()> {
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let http_runtime_commands_readiness = runtime_commands_readiness.clone();
+    let claude_auth = claude_cloud_agents::inbound::auth::router(
+        claude_cloud_agents::inbound::auth::ClaudeAuthState::new(
+            Arc::new(claude_cloud_agents::domain::auth::AuthService::new(
+                claude_cloud_agents::outbound::oauth::ClaudeOAuth::new()?,
+                claude_credentials,
+                false,
+            )),
+            MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+        ),
+    );
     let http_port = config.port;
     let http = tokio::spawn(async move {
         if let Err(error) = api::setup_and_serve(
@@ -803,7 +858,8 @@ async fn run() -> anyhow::Result<()> {
                 create_state,
                 gateway_state,
                 model_state,
-            ),
+            )
+            .with_claude_auth(claude_auth),
             http_runtime_commands_readiness,
             http_port,
             shutdown_signal(),

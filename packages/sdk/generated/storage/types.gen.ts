@@ -1947,7 +1947,9 @@ export type CallRecord = {
      */
     roomName: string;
     /**
-     * Whether the call is shared with the creator's team.
+     * Whether the call is shared with the creator's team. While the call is
+     * live this is the pending toggle applied at archive; afterwards it
+     * mirrors `team_share_access_level`.
      */
     shareWithTeam: boolean;
     /**
@@ -1960,6 +1962,7 @@ export type CallRecord = {
      * once summarization has run; active calls always return `None`.
      */
     summary?: string | null;
+    teamShareAccessLevel?: null | AccessLevel;
     /**
      * Transcript segments ordered by `sequence_num`.
      */
@@ -4904,7 +4907,7 @@ export type EditAnchorResponse = Anchor & {
 };
 
 /**
- * Edit call request
+ * Edit call request, as supplied by inbound callers.
  */
 export type EditCallRecordRequest = {
     /**
@@ -4917,8 +4920,9 @@ export type EditCallRecordRequest = {
     customName?: string | null;
     sharePermission?: null | UpdateSharePermissionRequestV2;
     /**
-     * If `Some(true)`, grant the creator's team View access on the call.
-     * If `Some(false)`, revoke the creator's team's access. `None` is a no-op.
+     * Deprecated alias for `sharePermission.teamShareAccessLevel`:
+     * `Some(true)` behaves like `"view"`, `Some(false)` like `null`, and
+     * `None` is a no-op. Supplying both with disagreeing values is rejected.
      * The team is resolved from the call's `created_by`, not the acting user.
      */
     shareWithTeam?: boolean | null;
@@ -10497,8 +10501,20 @@ export type EditCallRecordData = {
 };
 
 export type EditCallRecordErrors = {
+    /**
+     * Invalid team-share level, contradictory inputs, or the creator has no team
+     */
+    400: ErrorResponse;
     401: ErrorResponse;
+    /**
+     * Team sharing of an archived call may only be changed by its creator
+     */
+    403: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * Team-sharing facts changed, or the call was archived mid-request; reload and retry
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -10528,6 +10544,10 @@ export type ToggleShareWithTeamData = {
 export type ToggleShareWithTeamErrors = {
     401: ErrorResponse;
     404: ErrorResponse;
+    /**
+     * The call is no longer active
+     */
+    409: ErrorResponse;
     500: ErrorResponse;
 };
 
@@ -10535,7 +10555,7 @@ export type ToggleShareWithTeamError = ToggleShareWithTeamErrors[keyof ToggleSha
 
 export type ToggleShareWithTeamResponses = {
     /**
-     * New value of share_with_team after toggle
+     * New value of the share-with-team toggle
      */
     200: boolean;
 };

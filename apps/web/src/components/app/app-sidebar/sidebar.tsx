@@ -1720,6 +1720,9 @@ interface SidebarOpenInSplitMenuProps {
    * account rows scope the freshly opened mail list to their inbox.
    */
   onOpened?: (split: SplitHandle, action: SidebarOpenAction) => void;
+  /** View-owned navigation for rows that select a location inside this split. */
+  onOpenCurrentSplit?: () => void;
+  onOpenFullscreen?: () => void;
   onOpenChange?: (open: boolean) => void;
   /**
    * Overrides the trigger's default `h-7`, which otherwise clips triggers of a
@@ -1727,6 +1730,7 @@ interface SidebarOpenInSplitMenuProps {
    * size utility here wins.
    */
   triggerClass?: string;
+  additionalActions?: JSX.Element;
   children: JSX.Element;
 }
 
@@ -1744,6 +1748,10 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
   const canOpenFullscreen = () => layout.getSplitCount() > 1;
 
   const openInCurrentSplit = () => {
+    if (props.onOpenCurrentSplit) {
+      props.onOpenCurrentSplit();
+      return;
+    }
     const split = layout.openWithSplit(props.content(), {
       allowDuplicate: true,
       mergeHistory: false,
@@ -1768,6 +1776,11 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
   };
 
   const openFullscreen = () => {
+    if (props.onOpenFullscreen) {
+      props.onOpenFullscreen();
+      globalSplitManager()?.returnFocus();
+      return;
+    }
     const split = layout.replaceAllSplits(props.content(), {
       referredFrom: 'sidebar',
     });
@@ -1792,6 +1805,7 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
             <MenuItem text="Open fullscreen" onClick={openFullscreen} />
           </Show>
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
+          {props.additionalActions}
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>

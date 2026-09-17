@@ -296,8 +296,11 @@ export class Sdk extends HeyApiClient {
     /**
      * Handler for `PATCH /call/record/{call_id}`.
      *
-     * Edits a call record — currently supports updating the record's share
-     * permissions. Access is validated via channel membership
+     * Edits a call record: link/channel share permissions, display name, and
+     * team sharing. Edit access (channel membership) is required for the request.
+     * `sharePermission.teamShareAccessLevel` only accepts `view` or `null`; while
+     * the call is live it sets the pending share-with-team toggle, and once the
+     * call is archived it is additionally authorized against the call's creator.
      */
     public editCallRecord<ThrowOnError extends boolean = false>(options: Options<EditCallRecordData, ThrowOnError>): RequestResult<EditCallRecordResponses, EditCallRecordErrors, ThrowOnError> {
         return (options.client ?? this.client).patch<EditCallRecordResponses, EditCallRecordErrors, ThrowOnError>({
@@ -313,8 +316,10 @@ export class Sdk extends HeyApiClient {
     /**
      * Handler for `POST /call/record/{call_id}/share-with-team/toggle`.
      *
-     * Toggles the `share_with_team` flag on the active call. Returns the new
-     * value as the JSON body.
+     * Flips the live call's share-with-team toggle and returns the new value as
+     * the JSON body. The toggle is applied as canonical team sharing (View for
+     * the creator's team) when the call is archived; archived calls answer 409
+     * and are edited through `PATCH /call/record/{call_id}` instead.
      */
     public toggleShareWithTeam<ThrowOnError extends boolean = false>(options: Options<ToggleShareWithTeamData, ThrowOnError>): RequestResult<ToggleShareWithTeamResponses, ToggleShareWithTeamErrors, ThrowOnError> {
         return (options.client ?? this.client).post<ToggleShareWithTeamResponses, ToggleShareWithTeamErrors, ThrowOnError>({ url: '/call/record/{call_id}/share-with-team/toggle', ...options });

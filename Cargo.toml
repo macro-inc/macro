@@ -29,6 +29,7 @@ members = [
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
+  "crates/claude_cloud_agents",
   "crates/embedding",
   "crates/email_api_client",
   "crates/entity_mutation",
@@ -302,6 +303,7 @@ sqlx = { version = "0.8.6", features = [
   "uuid",
 ] }
 sqlx-core = { version = "0.8.6" }
+sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
 strum = { version = "0.27.1", features = ["derive"] }
 tempfile = "3"
 thiserror = "2.0.0"

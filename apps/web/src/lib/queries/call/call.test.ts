@@ -16,7 +16,14 @@ vi.mock('@core/component/Toast/Toast', () => ({
 vi.mock('@core/constant/featureFlags', () => ({ ENABLE_CALLS: true }));
 
 import { queryClient } from '@queries/client';
-import { setActiveCallEndedCache, setActiveCallStartedCache } from './call';
+import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import {
+  buildCallTeamSharePayload,
+  isCallSharedWithTeam,
+  setActiveCallEndedCache,
+  setActiveCallStartedCache,
+  setCallRecordTeamShareCache,
+} from './call';
 import { callKeys } from './keys';
 
 const summary = (over: Partial<ActiveCallSummary>): ActiveCallSummary => ({
@@ -83,5 +90,134 @@ describe('active call cache writers', () => {
     expect(
       queryClient.getQueryData(callKeys.active('channel-1').queryKey)
     ).toBeNull();
+  });
+});
+
+const record = (over: Partial<CallRecord>): CallRecord => ({
+  callId: 'call-1',
+  channelId: 'channel-1',
+  createdBy: 'macro|a@test.com',
+  isActive: false,
+  participants: [],
+  roomName: 'room',
+  startedAt: '2026-08-21T09:00:00.000Z',
+  transcript: [],
+  teamShareAccessLevel: null,
+  shareWithTeam: false,
+  ...over,
+});
+
+describe('call team sharing helpers', () => {
+  beforeEach(() => {
+    queryClient.clear();
+  });
+
+  it('buildCallTeamSharePayload maps the checkbox to view or an explicit clear', () => {
+    // Calls only ever share at `view`; `null` (not an omitted field) revokes.
+    expect(buildCallTeamSharePayload(true)).toEqual({
+      teamShareAccessLevel: 'view',
+    });
+    expect(buildCallTeamSharePayload(false)).toEqual({
+      teamShareAccessLevel: null,
+    });
+  });
+
+  it('isCallSharedWithTeam covers the live toggle and the archived canonical grant', () => {
+    // Live: the pending toggle, no canonical level yet.
+    expect(
+      isCallSharedWithTeam(
+        record({
+          isActive: true,
+          shareWithTeam: true,
+          teamShareAccessLevel: null,
+        })
+      )
+    ).toBe(true);
+    // Archived: the boolean mirrors the canonical level.
+    expect(
+      isCallSharedWithTeam(
+        record({
+          isActive: false,
+          shareWithTeam: true,
+          teamShareAccessLevel: 'view',
+        })
+      )
+    ).toBe(true);
+    expect(
+      isCallSharedWithTeam(
+        record({
+          isActive: false,
+          shareWithTeam: false,
+          teamShareAccessLevel: null,
+        })
+      )
+    ).toBe(false);
+  });
+
+  it('setCallRecordTeamShareCache updates the level and flag together for archived calls', () => {
+    const key = callKeys.record('call-1').queryKey;
+    queryClient.setQueryData(key, record({}));
+
+    setCallRecordTeamShareCache('call-1', true);
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      teamShareAccessLevel: 'view',
+      shareWithTeam: true,
+    });
+
+    setCallRecordTeamShareCache('call-1', false);
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      teamShareAccessLevel: null,
+      shareWithTeam: false,
+    });
+  });
+
+  it('setCallRecordTeamShareCache only flips the toggle for live calls', () => {
+    const key = callKeys.record('call-live').queryKey;
+    queryClient.setQueryData(
+      key,
+      record({ callId: 'call-live', isActive: true, shareWithTeam: false })
+    );
+
+    setCallRecordTeamShareCache('call-live', true);
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      shareWithTeam: true,
+      teamShareAccessLevel: null,
+    });
+  });
+
+  it('setCallRecordTeamShareCache leaves an unloaded record alone', () => {
+    setCallRecordTeamShareCache('missing', true);
+    expect(
+      queryClient.getQueryData(callKeys.record('missing').queryKey)
+    ).toBeUndefined();
+  });
+
+  it('setCallRecordTeamShareCache drops a late record fetch', async () => {
+    const key = callKeys.record('call-live').queryKey;
+    queryClient.setQueryData(
+      key,
+      record({ callId: 'call-live', isActive: true, shareWithTeam: false })
+    );
+
+    let resolveFetch: (value: CallRecord) => void = () => {};
+    const pending = new Promise<CallRecord>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetchResult = queryClient.fetchQuery({
+      queryKey: key,
+      staleTime: 0,
+      retry: false,
+      queryFn: () => pending,
+    });
+
+    setCallRecordTeamShareCache('call-live', true);
+    resolveFetch(
+      record({ callId: 'call-live', isActive: true, shareWithTeam: false })
+    );
+    await fetchResult.catch(() => undefined);
+
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      shareWithTeam: true,
+    });
   });
 });

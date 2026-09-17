@@ -121,6 +121,7 @@ function ChannelsViewRoot() {
               fallback={
                 <div ref={setWorkspace} class="size-full min-h-0 bg-panel">
                   <ViewShell.Root
+                    asidePreferenceKey="channels"
                     aside={railLayout()}
                     breakpoints={{ collapsed: 0 }}
                     layoutBreakpoint="collapsed"
@@ -144,17 +145,22 @@ function ChannelsViewRoot() {
                       <Show
                         when={selectedChannel()}
                         fallback={
-                          <div class="flex size-full items-center justify-center px-6 text-center">
-                            <div class="flex max-w-sm flex-col gap-2">
-                              <h2 class="text-base font-semibold text-ink">
-                                Select a conversation
-                              </h2>
-                              <p class="text-sm leading-5 text-ink-muted">
-                                Choose a channel or person from the sidebar to
-                                open the conversation here.
-                              </p>
+                          <>
+                            <ViewShell.TopBar>
+                              <span class="text-sm font-semibold">Chat</span>
+                            </ViewShell.TopBar>
+                            <div class="flex min-h-0 flex-1 items-center justify-center px-6 text-center">
+                              <div class="flex max-w-sm flex-col gap-2">
+                                <h2 class="text-base font-semibold text-ink">
+                                  Select a conversation
+                                </h2>
+                                <p class="text-sm leading-5 text-ink-muted">
+                                  Choose a channel or person from the sidebar to
+                                  open the conversation here.
+                                </p>
+                              </div>
                             </div>
-                          </div>
+                          </>
                         }
                       >
                         {(channel) => (

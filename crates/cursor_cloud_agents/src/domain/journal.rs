@@ -1,4 +1,5 @@
 //! Native capture contract and the shared live/load processing machine.
+use super::artifact::{CollectedArtifact, artifact_markdown};
 use super::event::{CursorEvent, InteractionUpdate};
 use super::model::{CursorRunId, RunOutcome, RunStatus};
 use super::translate::TranslateMachine;
@@ -72,6 +73,16 @@ pub enum JournalInput {
     Poll(String),
     /// A local terminal decision (e.g. stop during a disconnected poll).
     Interrupted(String),
+    /// The walkthrough files this run produced, re-hosted and durable.
+    ///
+    /// Journaled before the text announcing them is sent, so a crash between
+    /// the two re-announces on replay rather than losing files nobody can
+    /// fetch again — Cursor's own download links last fifteen minutes.
+    /// Carries the collected list rather than the rendered markdown because
+    /// the rendering is a pure function of it
+    /// ([`artifact_markdown`](super::artifact::artifact_markdown)), and one
+    /// copy of it is the only way live and replay cannot disagree.
+    ArtifactsCollected(Vec<CollectedArtifact>),
     /// Capture has reconciled this run; distinct from ACP delivery checkpoint.
     Reconciled,
 }
@@ -185,6 +196,14 @@ impl ReplayMachine {
                     .collect())
             }
             JournalInput::Sse(record) => self.event(run, record.decode()),
+            JournalInput::ArtifactsCollected(artifacts) => {
+                if artifacts.is_empty() {
+                    return Ok(Vec::new());
+                }
+                Ok(vec![SessionUpdate::AgentMessageChunk(ContentChunk::new(
+                    ContentBlock::Text(TextContent::new(artifact_markdown(artifacts))),
+                ))])
+            }
             JournalInput::Poll(raw) => {
                 let value: serde_json::Value =
                     serde_json::from_str(raw).map_err(|e| rootcause::report!(e))?;

@@ -156,7 +156,7 @@ function CatalogRow(props: { entry: PipedreamCatalogEntryResponse }) {
 }
 
 /**
- * The "MCP integrations" section of the Connections page: apps the user has
+ * The "MCP integrations" section of the Connections/Integrations pages: apps the user has
  * connected, then a searchable catalog of every connectable app, ranked by
  * popularity — all connecting through Pipedream, the single connect path.
  */

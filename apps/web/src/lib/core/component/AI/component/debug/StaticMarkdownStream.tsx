@@ -2,10 +2,7 @@ import {
   type BufferedChatMessageStream,
   bufferedStream,
 } from '@core/component/AI/util/stream';
-import {
-  StaticMarkdown,
-  StaticMarkdownContext,
-} from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import PlayIcon from '@phosphor-icons/core/regular/play.svg?component-solid';
 import StopIcon from '@phosphor-icons/core/regular/stop.svg?component-solid';
@@ -24,6 +21,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
+import { ChatMessageMarkdown } from '../message/ChatMessageMarkdown';
 
 const SAMPLE_TEXT = `Here is a streamed Macro XML sample:
 
@@ -324,7 +322,10 @@ export default function StaticMarkdownStreamDebug() {
                 }
               >
                 <StaticMarkdownContext theme={aiChatTheme}>
-                  <StaticMarkdown markdown={renderedText()} target="internal" />
+                  <ChatMessageMarkdown
+                    text={renderedText()}
+                    generating={isStreaming}
+                  />
                 </StaticMarkdownContext>
               </Show>
             </div>

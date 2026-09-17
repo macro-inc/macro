@@ -16,6 +16,8 @@ export function TextPart(props: { text: string; inFlight?: boolean }) {
         markdown={markdown()}
         theme={channelTheme}
         target="internal"
+        // Keep resolved mentions visible across stream reparses and completion.
+        lazy={false}
       />
     </div>
   );

@@ -166,6 +166,7 @@
       "crates/broadcast",
       "crates/channel_sender",
       "crates/channels",
+      "crates/claude_cloud_agents",
       "crates/codex_cloud_agents",
       "crates/codex_connection",
       "crates/comms_db_client",
@@ -277,6 +278,7 @@
       "crates/channel_sender",
       "crates/channels",
       "crates/chat",
+      "crates/claude_cloud_agents",
       "crates/codex_cloud_agents",
       "crates/codex_connection",
       "crates/comms_db_client",
@@ -1857,6 +1859,26 @@
       "crates/share_permission_db_utils",
       "crates/workspace-hack"
     ],
+    "claude_cloud_agents": [
+      "crates/agent_runtime_protocol",
+      "crates/bot_id",
+      "crates/bot_token",
+      "crates/claude_cloud_agents",
+      "crates/cowlike",
+      "crates/cursor_api_key",
+      "crates/harness_id",
+      "crates/harness_token",
+      "crates/macro_auth",
+      "crates/macro_authorization",
+      "crates/macro_env",
+      "crates/macro_env_var",
+      "crates/macro_user_id",
+      "crates/macro_uuid",
+      "crates/model-error-response",
+      "crates/model_user",
+      "crates/remote_env_var",
+      "crates/workspace-hack"
+    ],
     "codex_cloud_agents": [
       "crates/activity",
       "crates/agent",
@@ -2679,6 +2701,7 @@
       "crates/last_online_tracker",
       "crates/macro_auth",
       "crates/macro_authorization",
+      "crates/macro_aws_config",
       "crates/macro_entrypoint",
       "crates/macro_env",
       "crates/macro_env_var",
@@ -8429,6 +8452,8 @@
       "services/static_file_service"
     ],
     "static_file_service_client": [
+      "crates/macro_aws_config",
+      "crates/macro_env_var",
       "crates/models_sfs",
       "crates/static_file_service_client",
       "crates/workspace-hack"

@@ -293,6 +293,12 @@ where
             | HarnessCommand::EditQueued { actor, .. }
             | HarnessCommand::RemoveQueued { actor, .. } => {
                 let session = self.sessions.get_session(session_id).await?;
+                if AgentKind::for_session(session.bot_id, &session.harness)
+                    == AgentKind::ClaudeCloud
+                    && actor.as_ref() != Some(&session.owner_id)
+                {
+                    return Err(AgentSessionError::Forbidden.into());
+                }
                 if AgentKind::of(session.bot_id) == AgentKind::SandboxedCoder
                     && !actor.as_ref().is_some_and(is_macro_staff)
                 {

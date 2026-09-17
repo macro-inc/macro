@@ -257,6 +257,7 @@ dependencies = [
  "channel_sender",
  "channels",
  "chrono",
+ "claude_cloud_agents",
  "codex_cloud_agents",
  "codex_connection",
  "cursor_api_key",
@@ -325,6 +326,7 @@ dependencies = [
  "bot_id",
  "bots",
  "channels",
+ "claude_cloud_agents",
  "codex_cloud_agents",
  "codex_connection",
  "connection_gateway_client",
@@ -364,6 +366,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "static_file_service_client",
  "tokio",
  "tokio-retry",
  "tokio-util",
@@ -3207,6 +3210,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "share_permission_db_utils",
  "sqlx",
  "subtle",
  "thiserror 2.0.18",
@@ -3613,6 +3617,37 @@ name = "clap_lex"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
+
+[[package]]
+name = "claude_cloud_agents"
+version = "0.1.0"
+dependencies = [
+ "agent-client-protocol",
+ "agent_runtime_protocol",
+ "async-trait",
+ "axum",
+ "base64 0.22.1",
+ "clap",
+ "cursor_api_key",
+ "futures",
+ "macro_authorization",
+ "macro_db_migrator",
+ "rand 0.9.4",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "sqlx",
+ "sse-core",
+ "subtle",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+ "zeroize",
+]
 
 [[package]]
 name = "clipboard-win"
@@ -4643,6 +4678,7 @@ dependencies = [
  "agent_fold",
  "agent_runtime_protocol",
  "agent_session",
+ "bytes",
  "futures",
  "insta",
  "macro_env_var",
@@ -4652,11 +4688,13 @@ dependencies = [
  "serde_json",
  "sqlx",
  "sse-core",
+ "static_file_service_client",
  "thiserror 2.0.18",
  "tokio",
  "tokio-util",
  "tracing",
  "tracing-subscriber",
+ "urlencoding",
  "uuid",
  "workspace-hack",
  "zeroize",
@@ -14881,6 +14919,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "share_permission_db_utils",
  "sqlx",
  "sync_service_client",
  "system_properties",
@@ -16178,6 +16217,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "bytes",
+ "macro_aws_config",
  "macro_service_urls",
  "models_sfs",
  "reqwest 0.13.4",

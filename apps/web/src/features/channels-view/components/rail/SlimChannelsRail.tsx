@@ -1,3 +1,4 @@
+import { ViewSidebarToggle } from '@app/components/view-shell/ViewShell';
 import { runCreateAction } from '@app/features/command/Launcher';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
@@ -385,6 +386,7 @@ function SlimHeader() {
       <div class="flex w-full items-center justify-center px-2">
         <SplitPanel.ControlGroup>
           <SplitPanel.CloseButton size="icon-sm" />
+          <ViewSidebarToggle action="collapse" />
         </SplitPanel.ControlGroup>
       </div>
       <div class="flex h-8 w-full items-center justify-center px-2">

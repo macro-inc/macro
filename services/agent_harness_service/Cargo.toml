@@ -39,6 +39,7 @@ connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 aws-sdk-kms = { workspace = true }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
+claude_cloud_agents = { path = "../../crates/claude_cloud_agents" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
 futures = { workspace = true }
@@ -55,6 +56,7 @@ macro_event_broker = { path = "../../crates/macro_event_broker", features = ["ou
 macro_queues = { path = "../../crates/macro_queues" }
 lexical_client = { path = "../../crates/lexical_client" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
+static_file_service_client = { path = "../../crates/static_file_service_client" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 notification = { path = "../../crates/notification" }
 rdkafka = { workspace = true }

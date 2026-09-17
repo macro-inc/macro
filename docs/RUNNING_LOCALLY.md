@@ -204,6 +204,8 @@ GenAI content is bounded by `genai_telemetry`; check
 While `run_local` is attached:
 
 - Press `r` to rebuild the changed Rust services and reload them.
+- Press `f` to restart Vite with the same frontend port and configuration. This
+  also recovers a stuck frontend reload and leaves backend services and data intact.
 - Press `q` to stop the stack and exit.
 
 Use `q`, not the terminal close button. `q` stops and removes the containers at once. The next start does not have to clean up a stale stack.

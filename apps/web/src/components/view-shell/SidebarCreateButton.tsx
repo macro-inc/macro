@@ -10,6 +10,7 @@ export function SidebarCreateHeader(props: {
   label: string;
   onCreate: () => void;
   actions?: JSX.Element;
+  titleActions?: JSX.Element;
 }) {
   return (
     <header class="flex shrink-0 flex-col">
@@ -18,6 +19,7 @@ export function SidebarCreateHeader(props: {
           <div class="flex min-w-0 items-center gap-1">
             <SplitPanel.CloseButton class="shrink-0" />
             <ViewSidebar.Title>{props.title}</ViewSidebar.Title>
+            {props.titleActions}
           </div>
           {props.actions}
         </ViewSidebar.Header>

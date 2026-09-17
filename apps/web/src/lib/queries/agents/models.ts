@@ -12,9 +12,11 @@ export type AgentModelTarget = LoadAgentModelsRequest;
 /** Every model provider available to the agent dialog, in display order. */
 export function buildAgentModelTargets(
   cursorRegistered: boolean,
-  harnesses: readonly Pick<Harness, 'id'>[]
+  harnesses: readonly Pick<Harness, 'id'>[],
+  claudeCloudEnabled: boolean
 ): AgentModelTarget[] {
   const targets: AgentModelTarget[] = [{ harness: 'in-memory' }];
+  if (claudeCloudEnabled) targets.push({ harness: 'claude-cloud' });
   if (cursorRegistered) targets.push({ harness: 'cursor' });
   targets.push(
     ...harnesses.map(

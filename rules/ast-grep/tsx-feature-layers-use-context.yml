@@ -18,6 +18,8 @@ files:
   - apps/web/src/features/property/tags/queries/**
   - apps/web/src/features/property/tags/primitives/**
   - apps/web/src/features/property/tags/views/**
+  - apps/web/src/features/claude-connection/components/**
+  - apps/web/src/features/claude-connection/primitives/**
   - apps/web/src/features/activity/components/**
   - apps/web/src/features/drive-view/components/**
   - apps/web/src/features/activity/queries/**

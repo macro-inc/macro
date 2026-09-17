@@ -916,6 +916,137 @@
           }
         }
       }
+    },
+    "/claude-auth": {
+      "get": {
+        "tags": ["claude-auth"],
+        "summary": "Read connection status for the authenticated user only.",
+        "operationId": "status",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["claude-auth"],
+        "summary": "Forget only the authenticated user's grant and cancel pending consent.",
+        "operationId": "disconnect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Disconnected"
+          },
+          "403": {
+            "description": "Disabled"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/claude-auth/complete": {
+      "post": {
+        "tags": ["claude-auth"],
+        "summary": "Exchange one code; never return access or refresh tokens.",
+        "operationId": "complete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Connected"
+          },
+          "400": {
+            "description": "Invalid code"
+          },
+          "409": {
+            "description": "Expired or replayed"
+          },
+          "502": {
+            "description": "Provider failed"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/claude-auth/start": {
+      "post": {
+        "tags": ["claude-auth"],
+        "summary": "Create an expiring PKCE challenge for the authenticated user.",
+        "operationId": "start",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Disabled"
+          },
+          "429": {
+            "description": "Too many attempts"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1376,6 +1507,22 @@
       "BotId": {
         "type": "string"
       },
+      "CompleteRequest": {
+        "type": "object",
+        "description": "One-time manual code. Deliberately does not implement Debug.",
+        "required": ["attemptId", "code"],
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "description": "Server-issued handle; never an owner selected by the caller."
+          },
+          "code": {
+            "type": "string",
+            "description": "Claude's complete code#state string, not an access token."
+          }
+        },
+        "additionalProperties": false
+      },
       "ControlRequest": {
         "allOf": [
           {
@@ -1588,6 +1735,11 @@
         ],
         "description": "The JSON-RPC id of an agent's `elicitation/create` request, carried whole\nso the answer echoes exactly what the agent sent.\n\nAgents pick these, not us: Claude Code counts from `0`, others use\nstrings. `null` is not a legal id for a request that expects a response,\nso it is not representable here."
       },
+      "EmptyRequest": {
+        "type": "object",
+        "description": "A JSON body is required on writes, including start/disconnect (no form-based CSRF).",
+        "additionalProperties": false
+      },
       "ExternalSessionResponse": {
         "type": "object",
         "description": "The provider-side identity of an externally-served session.",
@@ -1668,7 +1820,7 @@
       "ModelHarnessDto": {
         "type": "string",
         "description": "Harness names accepted by the model discovery endpoint.",
-        "enum": ["in-memory", "cursor", "macrod"]
+        "enum": ["in-memory", "cursor", "claude-cloud", "macrod"]
       },
       "PreviewAgentSessionsRequest": {
         "type": "object",
@@ -1818,6 +1970,46 @@
           }
         ],
         "description": "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
+      },
+      "StartResponse": {
+        "type": "object",
+        "description": "Public PKCE challenge and attempt handle; contains no verifier or provider tokens.",
+        "required": ["attemptId", "authorizationUrl", "expiresIn"],
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "description": "Opaque owner-bound attempt handle."
+          },
+          "authorizationUrl": {
+            "type": "string",
+            "description": "Claude-hosted consent page."
+          },
+          "expiresIn": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Attempt lifetime in seconds.",
+            "minimum": 0
+          }
+        }
+      },
+      "StatusResponse": {
+        "type": "object",
+        "description": "Safe connection metadata.",
+        "required": ["enabled", "connected", "ephemeral"],
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "description": "Whether the authenticated Macro user has connected."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether this deployment supports browser connection."
+          },
+          "ephemeral": {
+            "type": "boolean",
+            "description": "Whether reconnecting after service restart is required."
+          }
+        }
       },
       "WithAgentSessionId": {
         "type": "object",

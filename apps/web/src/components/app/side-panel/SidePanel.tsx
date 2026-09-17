@@ -1,4 +1,5 @@
 import { usePreference } from '@app/preferences/use-preference';
+import { useMaybeBlockAliasedName } from '@core/block';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -9,6 +10,7 @@ import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
+import ListIcon from '@phosphor/list.svg';
 import SidePanelIcon from '@phosphor/sidebar-simple.svg';
 import { Button, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
@@ -29,7 +31,10 @@ import {
   useContext,
 } from 'solid-js';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
-import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
+import {
+  SplitHeaderLeft,
+  SplitHeaderRight,
+} from '../split-layout/components/SplitHeader';
 import { useSplitPanel } from '../split-layout/layoutUtils';
 import {
   SidePanelContext,
@@ -71,13 +76,19 @@ function createWideOpenState(
 function Root(
   props: ParentProps<{ defaultOpen?: boolean; persistKey?: string }>
 ) {
+  const splitPanel = useSplitPanel();
+  const content = splitPanel?.handle.content();
+  const persistKey =
+    props.persistKey ??
+    useMaybeBlockAliasedName() ??
+    (content?.type === 'component' ? content.id : content?.type);
   const [sections, setSections] = createSignal<SidePanelSectionEntry[]>([]);
   const [openIds, setOpenIds] = createSignal<string[]>([]);
   // Independent open state per mode so wide and narrow can have different
   // defaults (and the user's preference in one mode doesn't bleed into the
   // other after a resize).
   const [isWideOpen, setIsWideOpen] = createWideOpenState(
-    props.persistKey,
+    persistKey,
     props.defaultOpen ?? true
   );
   const [isNarrowOpen, setIsNarrowOpen] = createSignal(false);
@@ -113,7 +124,6 @@ function Root(
   };
 
   const hasSections = createMemo(() => sections().length > 0);
-  const splitPanel = useSplitPanel();
   if (splitPanel?.splitHotkeyScope) {
     registerHotkey({
       hotkey: ']',
@@ -250,7 +260,18 @@ function SidePanelLayoutInner(
           maxSize={SIDE_MAX_PX}
           index={1}
         >
-          <div class={'relative size-full z-split-panel-chrome'}>
+          <div class="relative flex size-full min-h-0 flex-col z-split-panel-chrome">
+            <div class="flex h-12 shrink-0 items-center justify-between border-b border-edge-muted px-4">
+              <span class="text-sm font-semibold text-ink">Details</span>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                label="Hide side panel"
+                onClick={() => props.setIsOpen(false)}
+              >
+                <SidePanelIcon class="size-4" />
+              </Button>
+            </div>
             <SidePanelOutlet
               sections={props.sections}
               openIds={props.openIds}
@@ -329,6 +350,7 @@ function Toggle() {
 }
 
 function SidePanelHeaderToggle() {
+  const panel = useSplitPanel();
   const ctx = useContext(SidePanelContext);
   if (!ctx) {
     throw new Error('<SidePanelHeaderToggle> must be inside <SidePanel.Root>');
@@ -336,18 +358,36 @@ function SidePanelHeaderToggle() {
 
   return (
     <Show when={ctx.hasSections()}>
-      <SplitHeaderRight>
-        <div class="order-last flex items-center">
-          <HeaderIsland
-            class={cn(
-              'size-10 justify-center !px-0',
-              ctx.isOpen() && 'text-accent'
-            )}
-          >
-            <Toggle />
-          </HeaderIsland>
-        </div>
-      </SplitHeaderRight>
+      <Show when={!isTouchDevice() && !panel?.isInlinePreview && !ctx.isOpen()}>
+        <SplitHeaderLeft>
+          <div class="order-first flex shrink-0 items-center">
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              label="Show side panel"
+              aria-label="Show side panel"
+              aria-expanded={false}
+              onClick={() => ctx.setIsOpen(true)}
+            >
+              <ListIcon class="size-4" />
+            </Button>
+          </div>
+        </SplitHeaderLeft>
+      </Show>
+      <Show when={isTouchDevice() || panel?.isInlinePreview}>
+        <SplitHeaderRight>
+          <div class="order-last flex items-center">
+            <HeaderIsland
+              class={cn(
+                'size-10 justify-center !px-0',
+                ctx.isOpen() && 'text-accent'
+              )}
+            >
+              <Toggle />
+            </HeaderIsland>
+          </div>
+        </SplitHeaderRight>
+      </Show>
     </Show>
   );
 }

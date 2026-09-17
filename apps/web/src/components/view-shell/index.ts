@@ -36,6 +36,7 @@ export {
   type ViewBreadcrumbsOutletProps,
   type ViewBreadcrumbsRootProps,
   type ViewBreadcrumbsSeparatorProps,
+  type ViewBreadcrumbsSeparatorState,
 } from './ViewBreadcrumbs';
 export {
   useViewShell,

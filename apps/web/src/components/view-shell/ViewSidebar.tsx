@@ -1,6 +1,7 @@
 import { cn, NavRow, type NavRowProps } from '@ui';
 import type { JSX } from 'solid-js';
 import { splitProps } from 'solid-js';
+import { ViewSidebarToggle } from './ViewShell';
 
 function Root(props: JSX.HTMLAttributes<HTMLElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
@@ -27,6 +28,7 @@ function Header(props: JSX.HTMLAttributes<HTMLDivElement>) {
       data-view-sidebar-header=""
     >
       {local.children}
+      <ViewSidebarToggle action="collapse" />
     </div>
   );
 }

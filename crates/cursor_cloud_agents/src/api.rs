@@ -22,16 +22,19 @@ pub mod wire;
 
 use crate::api::record::SseRecording;
 use crate::api::wire::{
-    AgentSummary, ArchiveAgentResponse, ConversationResponse, CreateAgentRequest,
-    CreateAgentResponse, CreateRunRequest, CreateRunResponse, ListAgentsResponse,
-    ListModelsResponse, ListRunsResponse, McpServerSelection, MeResponse, ModelSelection,
-    PromptBody, RepoSelection,
+    AgentSummary, ArchiveAgentResponse, ArtifactDownloadResponse, ConversationResponse,
+    CreateAgentRequest, CreateAgentResponse, CreateRunRequest, CreateRunResponse,
+    ListAgentsResponse, ListArtifactsResponse, ListModelsResponse, ListRunsResponse,
+    McpServerSelection, MeResponse, ModelSelection, PromptBody, RepoSelection,
 };
+use crate::domain::artifact::{ArtifactListing, FetchedArtifact};
 use crate::domain::model::{
     ConversationLine, ConversationSpeaker, CursorAgentId, CursorModel, CursorRunId, McpServer,
     ModelChoice, ModelParam, ModelVariant, RepoUrl, RunListing,
 };
-use crate::domain::ports::{ConnectedStream, CursorAgents, RunStream, StreamConnectError};
+use crate::domain::ports::{
+    ConnectedStream, CursorAgents, CursorArtifacts, RunStream, StreamConnectError,
+};
 use futures::{Stream, StreamExt as _};
 use sse_core::SseEvent;
 use std::collections::VecDeque;
@@ -62,6 +65,24 @@ pub(crate) const MAX_SSE_PAYLOAD: NonZeroUsize = match NonZeroUsize::new(16 * 10
 /// test points at a stand-in server, but there is nothing for a deployment to
 /// choose between.
 pub const CURSOR_API_BASE_URL: &str = "https://api.cursor.com";
+
+macro_env_var::maybe_env_vars! {
+    /// Overrides [`CURSOR_API_BASE_URL`] when set. Only a local stack sets
+    /// it, to point every Cursor call at a stand-in server; deployed
+    /// environments leave it unset and talk to Cursor.
+    pub struct CursorApiBaseUrl;
+}
+
+/// The Cursor API base url this process should call: the
+/// `CURSOR_API_BASE_URL` override when set, else the one real
+/// [`CURSOR_API_BASE_URL`].
+#[must_use]
+pub fn cursor_api_base_url() -> String {
+    CursorApiBaseUrl::new()
+        .map(|url| url.trim_end_matches('/').to_owned())
+        .filter(|url| !url.is_empty())
+        .unwrap_or_else(|| CURSOR_API_BASE_URL.to_owned())
+}
 
 /// A Cursor API key that never prints itself and does not outlive its client.
 ///
@@ -343,6 +364,75 @@ impl CursorClient {
         Ok(())
     }
 
+    /// List the files an agent has written to its `artifacts/` directory —
+    /// the screenshots and screen recordings a walkthrough produces.
+    ///
+    /// The listing is agent-scoped and cumulative: artifacts survive their
+    /// run, and Cursor offers no run filter, so every turn sees everything
+    /// every earlier turn wrote. A caller that wants "new since last turn"
+    /// has to diff `path` plus `updated_at` against what it saw before —
+    /// `path` alone is not enough, because an agent that reshoots a
+    /// screenshot writes the same path again.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn list_artifacts(
+        &self,
+        agent: &CursorAgentId,
+    ) -> Result<ListArtifactsResponse, rootcause::Report> {
+        self.get_json(&format!("/v1/agents/{agent}/artifacts"))
+            .await
+    }
+
+    /// Ask for a presigned url to one artifact's bytes.
+    ///
+    /// `path` is a [`wire::ArtifactListing::path`] exactly as the listing gave it;
+    /// Cursor requires it to be under `artifacts/` and rejects anything else.
+    /// The url it answers with is good for fifteen minutes, so it is worth
+    /// requesting when a caller is ready to fetch and not worth storing.
+    #[tracing::instrument(skip(self), err)]
+    pub async fn artifact_download_url(
+        &self,
+        agent: &CursorAgentId,
+        path: &str,
+    ) -> Result<ArtifactDownloadResponse, rootcause::Report> {
+        self.get_json(&format!(
+            "/v1/agents/{agent}/artifacts/download?path={}",
+            urlencoding::encode(path)
+        ))
+        .await
+    }
+
+    /// Fetch an artifact's bytes from the presigned url
+    /// [`Self::artifact_download_url`] handed back.
+    ///
+    /// Its own method rather than another `get_*` because everything about
+    /// the request differs from a Cursor API call: the url is S3's, not this
+    /// client's base url; its credentials are already in its query string, so
+    /// the Cursor key must *not* be attached — sending a live API key to a
+    /// third-party host is a credential leak, not a harmless extra header —
+    /// and it stops working fifteen minutes after it was minted.
+    ///
+    /// The response is returned unread. Artifact videos run to tens of
+    /// megabytes, so the caller decides whether to stream the body somewhere
+    /// or buffer it; this method will not buffer it for them.
+    #[tracing::instrument(skip(self, url), err)]
+    pub async fn fetch_artifact(&self, url: &str) -> Result<reqwest::Response, rootcause::Report> {
+        let response = self
+            .http
+            .get(url)
+            .send()
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        let status = response.status();
+        if !status.is_success() {
+            // S3 answers a stale or malformed presigned url with an XML body
+            // naming the reason, which is the only diagnostic there is — the
+            // same bargain `get_json` makes with Cursor's error bodies.
+            let text = response.text().await.unwrap_or_default();
+            return Err(rootcause::report!("artifact fetch -> {status}: {text}"));
+        }
+        Ok(response)
+    }
+
     /// Identify the configured API key. The cheap call that proves the key is
     /// live, for a boot-time health check.
     #[tracing::instrument(skip(self), err)]
@@ -566,6 +656,51 @@ impl CursorAgents for CursorClient {
                 })
             })
             .collect())
+    }
+}
+
+impl CursorArtifacts for CursorClient {
+    #[tracing::instrument(skip(self), err)]
+    async fn list_artifacts(
+        &self,
+        agent: &CursorAgentId,
+    ) -> Result<Vec<ArtifactListing>, rootcause::Report> {
+        let reply = CursorClient::list_artifacts(self, agent).await?;
+        Ok(reply
+            .items
+            .into_iter()
+            .map(|listing| ArtifactListing {
+                path: listing.path,
+                size_bytes: listing.size_bytes,
+                updated_at: listing.updated_at,
+            })
+            .collect())
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn fetch_artifact(
+        &self,
+        agent: &CursorAgentId,
+        path: &str,
+    ) -> Result<FetchedArtifact, rootcause::Report> {
+        // Minted and spent inside this method: the url carries credentials in
+        // its query string and stops working in fifteen minutes, so it is
+        // never returned, logged, or stored.
+        let download = self.artifact_download_url(agent, path).await?;
+        let response = CursorClient::fetch_artifact(self, &download.url).await?;
+        let content_type = response
+            .headers()
+            .get(reqwest::header::CONTENT_TYPE)
+            .and_then(|value| value.to_str().ok())
+            .map(str::to_owned);
+        let bytes = response
+            .bytes()
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        Ok(FetchedArtifact {
+            content_type,
+            bytes,
+        })
     }
 }
 

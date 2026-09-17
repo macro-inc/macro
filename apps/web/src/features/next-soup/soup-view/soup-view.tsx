@@ -804,13 +804,16 @@ export const SoupView = (props: SoupViewProps) => {
 };
 
 interface SoupViewListProps {
-  /** Return true when the host handles ordinary activation in its own detail view. */
-  onOpenEntity?: (entity: EntityData) => boolean;
   emptyState?: () => JSX.Element;
   timestamp?: (entity: EntityData) => DateValue | null | undefined;
   navigationKey?: string;
   /** Composed folder browsers keep ordinary folder activation in their pane. */
   onOpenProject?: (id: string) => void;
+  /** Returns true when a composed view handles ordinary entity activation. */
+  onOpenEntity?: (
+    entity: EntityData,
+    event?: KeyboardEvent | MouseEvent
+  ) => boolean;
   uploadProjectId?: string;
   disableTabHotkeys?: boolean;
   customScrollbarHidden?: boolean;
@@ -1073,15 +1076,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
 
     markReminderSeenOnOpen(entity, notificationSource);
 
-    if (
-      !event.metaKey &&
-      !event.ctrlKey &&
-      !event.shiftKey &&
-      !event.altKey &&
-      props.onOpenEntity?.(entity)
-    )
-      return;
-
     // FIXME: this never gets called because we have overrides
     if (event.metaKey || event.ctrlKey) {
       // Channels the viewer hasn't joined can't be opened; the row's inline
@@ -1091,6 +1085,10 @@ const SoupViewListContent = (props: SoupViewListProps) => {
         markChannelNotificationsSeenOnOpen(entity, notificationSource);
         openEntityInNewTab({ entity, location });
       }
+      return;
+    }
+
+    if (type === 'entity' && props.onOpenEntity?.(entity, event)) {
       return;
     }
 
