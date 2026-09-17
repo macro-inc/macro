@@ -2,29 +2,40 @@
 
 ## Where chats live
 
+- If session creation fails, the session view shows **Unable to start this agent**
+  with the service's reason. Repository access requires a GitHub connection to
+  Macro that covers that repository; connecting only Cursor does not grant Macro
+  GitHub access. Cloud agents also need a public agent gateway: Docker-only hostnames
+  cannot receive their MCP callbacks. Check the runtime error before retrying, and
+  start a new Claude session after correcting its gateway network configuration.
+
 - Open **Go to Agents** → `/app/component/agents`. With AI agents enabled
   (`enable-chat-v3-agents`), the workspace uses one sidebar for Chat and Code.
   **New conversation** opens the composer. **Conversations** is a mixed list
   of chats and coding sessions, newest first, with one search across both.
-  Chat rows use a chat icon; coding rows use `</>` and show their agent and
-  runtime status. Home and the Agents sidebar share these agent rows. Coding
-  sessions with a linked PR show its number and open/merged/closed status;
-  clicking the chip opens the PR without opening the session. The chip updates
-  when the session publishes a PR. Changing the composer mode does not filter the sidebar.
+  Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
+  pull request is linked). Home and the Agents sidebar share these agent rows.
+  Rows have no agent or runtime-status subtext. Sessions with a linked PR show
+  **View PR #<number> in GitHub** beneath the title; clicking it opens GitHub in
+  a new tab without opening the session. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. **Agent** and **Send** sit inside the input on the right.
   Direct model selections show only the model name and provider icon in the input.
   Saved and coding agents show their identity beside the current model. There is
   no Chat/Code switch or separate model button.
-- The agent dropdown combines Cursor and saved in-memory or Cursor
-  agents in **Coding agents** and **Agents** sections. A **Models** section lists
+- The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
+  grouped in **Coding agents** and **Agents** sections. A **Models** section lists
   Macro’s available models with readable names (for example, **Sonnet 5**) and
   provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
   Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
   Selecting a model here selects
   the default runtime and applies that model to the next send, retracting the repository drawer.
-  The built-in Macro agent is hidden from the agent sections; its models remain available.
+  The built-in Macro agent is the only agent excluded from these sections; its models remain available.
+  Unavailable paired agents stay visible with a reason. Model discovery uses the
+  selected runtime, including Claude Cloud. Every coding agent opens the repository
+  drawer; chat agents hide it. Repository/branch overrides are currently applied
+  only to Cursor sessions by the create-session API.
   Coding agents carry a `</>` badge. The most recently used supported,
   available agent is selected initially; otherwise Macro is selected.
   Hover an agent (or use the right arrow key) to open its model submenu, with

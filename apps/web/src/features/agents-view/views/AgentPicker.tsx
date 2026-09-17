@@ -13,7 +13,11 @@ import { Dropdown } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { AgentIcon } from '../components/AgentGlyph';
 import { modelLabel } from '../components/model-label';
-import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
+import {
+  MACRO_PERSONA_ID,
+  type RosterAgent,
+  rosterForAgentPicker,
+} from '../core/roster';
 import { createComposerModels } from '../queries/composer-models';
 
 /** Agent selection with a per-message model catalog in each submenu. */
@@ -31,8 +35,7 @@ export function AgentPicker(props: {
   const macro = () =>
     props.agents.find((agent) => agent.id === MACRO_PERSONA_ID);
   const macroCatalog = createComposerModels(macro);
-  const agents = () =>
-    props.agents.filter((agent) => agent.id !== MACRO_PERSONA_ID);
+  const agents = () => rosterForAgentPicker(props.agents);
   const rawModel = () => props.selected?.id === MACRO_PERSONA_ID;
   const model = () =>
     props.modelOverride ??
@@ -221,11 +224,12 @@ function AgentPickerRow(props: {
             closeOnSelect
             class="min-w-0 flex-1"
             disabled={!props.agent.connectLabel}
+            title={props.agent.unavailableReason}
             onSelect={props.onConnect}
           >
             {identity()}
             <span class="text-xs text-ink-muted">
-              {props.agent.connectLabel}
+              {props.agent.connectLabel ?? props.agent.unavailableReason}
             </span>
           </Dropdown.Item>
         }

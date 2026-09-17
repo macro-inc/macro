@@ -4,11 +4,7 @@ import { useUserId } from '@core/context/user';
 import { createMemo, createSignal } from 'solid-js';
 import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
-import {
-  MACRO_PERSONA_ID,
-  type RosterAgent,
-  rosterForComposer,
-} from '../core/roster';
+import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import { createRecentRepositories } from '../primitives/recent-repositories';
 import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
@@ -39,7 +35,7 @@ export function NewChatPage(props: {
   const { openSettings } = useSettingsState();
   const recentAgents = createRecentAgentSelections(userId());
   const repositories = createRecentRepositories(userId());
-  const options = createMemo(() => rosterForComposer(props.roster));
+  const options = () => props.roster;
   const [agentId, setAgentId] = createSignal<string>();
   const [modelOverride, setModelOverride] = createSignal<string>();
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>(
@@ -62,6 +58,8 @@ export function NewChatPage(props: {
     return options().find((agent) => agent.id === wanted) ?? options()[0];
   });
   const coding = () => selected()?.kind === 'coder';
+  // The create-session API accepts explicit repositories only for Cursor.
+  const canSelectRepository = () => selected()?.harness === 'cursor';
   const blocked = () => {
     const agent = selected();
     return agent ? agent.unavailableReason : 'Choose an agent to start';
@@ -75,7 +73,7 @@ export function NewChatPage(props: {
     const persona = selected();
     if (!prompt.trim() || !persona || blocked()) return;
     recentAgents.remember(persona.id);
-    const repo = coding() ? repoUrl() : undefined;
+    const repo = canSelectRepository() ? repoUrl() : undefined;
     if (repo) repositories.remember(repo);
     props.onStart({
       prompt,

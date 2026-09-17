@@ -16,7 +16,6 @@ import type { AgentsMode } from '../core/mode';
 import {
   type AgentConversationEntity,
   type ConversationGroup,
-  conversationBotId,
   conversationTimestamp,
 } from '../core/recent-conversations';
 import { AgentSessionListItem } from '../views/AgentSessionListItem';
@@ -30,8 +29,6 @@ export type AgentsSidebarProps = {
   error: boolean;
   hasNextPage: boolean;
   loadingNextPage: boolean;
-  /** The bot behind a session, as `@handle`, when the roster knows it. */
-  handleForBot: (botId: string | undefined) => string | undefined;
   onNewConversation: () => void;
   onSearchChange: (search: string) => void;
   onOpenConversation: (
@@ -46,7 +43,6 @@ function Row(props: {
   conversation: AgentConversationEntity;
   mode: AgentsMode;
   active: boolean;
-  handle: string | undefined;
   onOpen: (event: MouseEvent) => void;
 }) {
   const title = () => props.conversation.name || 'Untitled chat';
@@ -74,7 +70,6 @@ function Row(props: {
         <AgentSessionListItem
           entity={session()}
           mode={props.mode}
-          handle={props.handle}
           active={props.active}
           onOpen={props.onOpen}
         />
@@ -203,9 +198,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                           active={
                             props.activeConversationId === conversation().id
                           }
-                          handle={props.handleForBot(
-                            conversationBotId(conversation())
-                          )}
                           onOpen={(event) =>
                             props.onOpenConversation(conversation(), event)
                           }
