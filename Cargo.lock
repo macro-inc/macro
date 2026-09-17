@@ -3058,7 +3058,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.14"
+version = "0.6.16"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -15810,7 +15810,6 @@ dependencies = [
  "document_sub_type",
  "item-filter-index",
  "macro_user_id",
- "model_file_type",
  "models_soup",
  "postcard",
  "predicate-index",

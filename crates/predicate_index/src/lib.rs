@@ -23,8 +23,9 @@ pub const MAX_QUERY_LIMIT: u16 = 500;
 pub const MAX_TOKEN_BYTES: usize = 128;
 /// Maximum bytes in an exact value.
 pub const MAX_EXACT_VALUE_BYTES: usize = 16 * 1_024;
-/// Maximum facts in one index document.
-pub const MAX_FACTS_PER_DOCUMENT: usize = 256;
+/// Maximum distinct attribute names in one index document or patch.
+/// Set-valued attributes may contain any number of individually bounded values.
+pub const MAX_ATTRIBUTES_PER_DOCUMENT: usize = 256;
 /// Maximum distinct records whose optimistic projections may be merged into one query.
 pub const MAX_OPTIMISTIC_RECORDS_PER_QUERY: usize = 128;
 
@@ -227,7 +228,7 @@ impl PredicateExpr {
 }
 
 /// One exact fact in an index document.
-#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 pub struct ExactFact {
     /// Fact vocabulary token.
     pub attribute: Token,
@@ -261,6 +262,19 @@ pub struct IndexDocument {
     pub sort_facts: Vec<IntegerFact>,
 }
 
+fn validate_attribute_count<'a>(
+    attributes: impl IntoIterator<Item = &'a Token>,
+) -> Result<(), ValidationError> {
+    let mut distinct = HashSet::new();
+    for attribute in attributes {
+        distinct.insert(attribute);
+        if distinct.len() > MAX_ATTRIBUTES_PER_DOCUMENT {
+            return Err(ValidationError::DocumentAttributes);
+        }
+    }
+    Ok(())
+}
+
 impl IndexDocument {
     /// Put facts in deterministic order and remove duplicate membership facts.
     pub fn canonicalize(&mut self) {
@@ -271,12 +285,15 @@ impl IndexDocument {
         self.sort_facts.sort();
     }
 
-    /// Validate bounded fact counts and unique sort attributes.
+    /// Validate bounded attribute counts and unique sort attributes.
     pub fn validate(&self) -> Result<(), ValidationError> {
-        let facts = self.exact_facts.len() + self.integer_facts.len() + self.sort_facts.len();
-        if facts > MAX_FACTS_PER_DOCUMENT {
-            return Err(ValidationError::DocumentFacts);
-        }
+        validate_attribute_count(
+            self.exact_facts
+                .iter()
+                .map(|fact| &fact.attribute)
+                .chain(self.integer_facts.iter().map(|fact| &fact.attribute))
+                .chain(self.sort_facts.iter().map(|fact| &fact.attribute)),
+        )?;
         let mut sort_attributes = HashSet::new();
         if self
             .sort_facts
@@ -730,17 +747,20 @@ impl OptimisticProjectionMutation {
             return match self {
                 Self::Replace(document) => document.validate(),
                 Self::Delete { .. } | Self::Unknown { .. } => Ok(()),
-                Self::PatchExact { remove, insert, .. } => {
-                    if remove.len() + insert.len() > MAX_FACTS_PER_DOCUMENT {
-                        Err(ValidationError::DocumentFacts)
-                    } else {
-                        Ok(())
-                    }
-                }
+                Self::PatchExact { remove, insert, .. } => validate_attribute_count(
+                    remove.iter().chain(insert).map(|fact| &fact.attribute),
+                ),
                 Self::Patch { .. } => unreachable!(),
             };
         };
 
+        validate_attribute_count(
+            exact
+                .iter()
+                .map(|patch| &patch.attribute)
+                .chain(integers.iter().map(|patch| &patch.attribute))
+                .chain(sorts.iter().map(|fact| &fact.attribute)),
+        )?;
         let mut attributes = HashSet::new();
         if exact
             .iter()
@@ -835,9 +855,9 @@ pub enum ValidationError {
     /// An integer range is inverted or empty.
     #[error("invalid integer range")]
     InvalidRange,
-    /// A document contains too many facts.
-    #[error("index document contains too many facts")]
-    DocumentFacts,
+    /// A document or patch contains too many distinct attribute names.
+    #[error("index document contains too many distinct attributes")]
+    DocumentAttributes,
     /// A document has more than one sort value for an attribute.
     #[error("duplicate sort fact attribute")]
     DuplicateSortFact,

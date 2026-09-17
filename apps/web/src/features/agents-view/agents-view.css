@@ -1,0 +1,2160 @@
+/*
+ * Feature-specific Agents layouts, scoped to the workspace and its portals.
+ * Colors inherit the app theme. Composer and sidebar chrome use the shared
+ * UI components so changes to those surfaces carry through to this view.
+ */
+
+@layer components {
+	.agents-view,
+	.agents-view-portal {
+		--surface-0: var(--color-surface-0);
+		--surface-1: var(--color-surface-1);
+		--surface-2: var(--color-surface-2);
+		--surface-3: var(--color-surface-3);
+		--surface-4: var(--color-surface-4);
+		--ink: var(--color-ink);
+		--ink-muted: var(--color-ink-muted);
+		--ink-subtle: var(--color-ink-subtle);
+		--ink-disabled: var(--color-ink-disabled);
+		--ink-placeholder: var(--color-ink-placeholder);
+		--edge: var(--color-edge);
+		--edge-muted: var(--color-edge-muted);
+		--accent: var(--color-accent);
+		--accent-contrast: var(--color-accent-contrast);
+		--green: var(--color-green);
+		--amber: var(--color-amber);
+		--red: var(--color-red);
+		--blue: var(--color-blue);
+		--violet: var(--color-violet);
+		--cyan: var(--color-cyan);
+		--chat: var(--color-chat);
+		--page: var(--color-page);
+		--panel: var(--color-panel);
+		--menu: var(--color-menu);
+		--menu-glass: var(--color-menu-glass);
+		--hover: var(--color-hover);
+		--active: var(--color-active);
+		--selected: var(--color-selected);
+		--card-edge: color-mix(in oklch, var(--ink) 5%, transparent);
+		--hair: var(--app-border-width);
+	}
+
+	.agents-view {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		min-height: 0;
+		height: 100%;
+		background: var(--panel);
+		color: var(--ink);
+		font: 14px/1.45 var(--font-sans);
+		-webkit-font-smoothing: antialiased;
+	}
+
+	:where(.agents-view, .agents-view-portal) *,
+	:where(.agents-view, .agents-view-portal) *::before,
+	:where(.agents-view, .agents-view-portal) *::after {
+		box-sizing: border-box;
+	}
+
+	:where(.agents-view, .agents-view-portal) button:focus-visible,
+	:where(.agents-view, .agents-view-portal) textarea:focus-visible,
+	:where(.agents-view, .agents-view-portal) input:focus-visible {
+		outline: 1.5px solid var(--accent);
+		outline-offset: 1px;
+	}
+
+	:where(.agents-view, .agents-view-portal) svg {
+		display: block;
+	}
+
+	:where(.agents-view, .agents-view-portal) svg:not([fill]) {
+		fill: currentColor;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		:where(.agents-view, .agents-view-portal) * {
+			transition: none !important;
+			animation: none !important;
+		}
+	}
+
+	:where(.agents-view, .agents-view-portal) .ph {
+		width: 16px;
+		height: 16px;
+		fill: currentColor;
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .mono {
+		font-family: var(--font-mono);
+		font-size: 11px;
+		letter-spacing: 0.01em;
+		font-variant-numeric: tabular-nums;
+	}
+
+	:where(.agents-view, .agents-view-portal) .num {
+		font-variant-numeric: tabular-nums;
+	}
+
+	:where(.agents-view, .agents-view-portal) .truncate {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .sr {
+		position: absolute;
+		width: 1px;
+		height: 1px;
+		overflow: hidden;
+		clip: rect(0 0 0 0);
+		white-space: nowrap;
+	}
+
+	/* ---------- ViewSidebar ---------- */
+	:where(.agents-view, .agents-view-portal) .ctl {
+		display: inline-flex;
+		gap: 2px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .icon-btn {
+		width: 28px;
+		height: 28px;
+		border-radius: 8px;
+		display: grid;
+		place-items: center;
+		color: var(--ink-subtle);
+	}
+
+	:where(.agents-view, .agents-view-portal) .icon-btn .ph {
+		width: 14px;
+		height: 14px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .icon-btn:hover {
+		background: var(--hover);
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .icon-btn[aria-pressed="true"] {
+		background: var(--active);
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .icon-btn:disabled {
+		color: var(--ink-placeholder);
+	}
+
+	:where(.agents-view, .agents-view-portal) .open {
+		color: var(--green);
+	}
+
+	/* Work mode: a stepped, square "cog" rather than a smooth ring */
+	:where(.agents-view, .agents-view-portal)[data-mode="work"] .spin {
+		border-radius: 2px;
+		border: 1.5px solid var(--surface-4);
+		border-top-color: var(--ink-subtle);
+		border-right-color: var(--ink-subtle);
+		animation: spin 1.2s steps(8) infinite;
+	}
+
+	@keyframes pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+
+		50% {
+			opacity: 0.35;
+		}
+	}
+
+	:where(.agents-view, .agents-view-portal) .stdot.waiting::after {
+		display: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .stdot {
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		font-size: 11px;
+		color: var(--ink-subtle);
+		white-space: nowrap;
+	}
+
+	:where(.agents-view, .agents-view-portal) .stdot::before {
+		content: "";
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--ink-disabled);
+	}
+
+	:where(.agents-view, .agents-view-portal) .stdot.running::before {
+		background: var(--green);
+		animation: pulse 1.6s ease-in-out infinite;
+	}
+
+	:where(.agents-view, .agents-view-portal) .stdot.waiting::before {
+		background: var(--amber);
+	}
+
+	:where(.agents-view, .agents-view-portal) .stdot.failed::before {
+		background: var(--red);
+	}
+
+	/* ---------- Main ---------- */
+	:where(.agents-view, .agents-view-portal) .main {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	:where(.agents-view, .agents-view-portal) .seg {
+		display: inline-flex;
+		padding: 2px;
+		gap: 2px;
+		border-radius: 999px;
+		background: var(--hover);
+	}
+
+	:where(.agents-view, .agents-view-portal) .seg button {
+		padding: 4px 10px;
+		border-radius: 999px;
+		font-size: 12.5px;
+		font-weight: 500;
+		color: var(--ink-subtle);
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		height: 28px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .seg button:hover {
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .seg button[aria-pressed="true"] {
+		background: var(--active);
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .seg button kbd {
+		font: 10px var(--font-mono);
+		color: var(--ink-placeholder);
+	}
+
+	:where(.agents-view, .agents-view-portal) .seg .ph {
+		width: 12px;
+		height: 12px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .seg.side {
+		display: grid;
+		grid-auto-flow: column;
+		grid-auto-columns: 1fr;
+		width: 100%;
+		padding: 3px;
+		border-radius: 999px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .seg.side button {
+		justify-content: center;
+		height: 32px;
+		font-size: 14px;
+		border-radius: 999px;
+		gap: 6px;
+		padding: 4px 6px;
+		min-width: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .seg.side button .ph {
+		width: 14px;
+		height: 14px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .body {
+		flex: 1;
+		min-height: 0;
+		overflow: auto;
+		display: flex;
+		flex-direction: column;
+	}
+
+	:where(.agents-view, .agents-view-portal) .page {
+		display: none;
+		flex: 1;
+		min-height: 0;
+		flex-direction: column;
+	}
+
+	:where(.agents-view, .agents-view-portal) .page[data-active] {
+		display: flex;
+	}
+
+	/* New Chat */
+	:where(.agents-view, .agents-view-portal) .newchat {
+		align-items: center;
+		justify-content: center;
+		padding: 24px 24px 64px;
+		gap: 20px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .newchat .col {
+		width: 100%;
+		max-width: 768px;
+		display: flex;
+		flex-direction: column;
+		gap: 20px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .greeting {
+		text-align: center;
+		margin-bottom: 12px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .greeting h2 {
+		margin: 0;
+		font-size: 28px;
+		font-weight: 500;
+		letter-spacing: -0.03em;
+		line-height: 1.2;
+		text-wrap: balance;
+	}
+
+	:where(.agents-view, .agents-view-portal) .composer-drawer {
+		display: grid;
+		grid-template-rows: 0fr;
+		margin: 0 20px;
+		opacity: 0;
+		visibility: hidden;
+		transition: grid-template-rows 240ms ease, opacity 180ms ease, visibility 240ms;
+	}
+
+	:where(.agents-view, .agents-view-portal) .composer-drawer[data-open] {
+		grid-template-rows: 1fr;
+		opacity: 1;
+		visibility: visible;
+	}
+
+	:where(.agents-view, .agents-view-portal) .composer-drawer-inner {
+		min-height: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .composer-drawer-content {
+		display: flex;
+		align-items: center;
+		padding: 6px 12px 10px;
+		border-radius: 0 0 20px 20px;
+		background: var(--surface-2);
+		border: var(--hair) solid var(--edge-muted);
+		border-top: 0;
+		transform: translateY(-12px);
+		transition: transform 240ms ease;
+	}
+
+	:where(.agents-view, .agents-view-portal) .composer-drawer[data-open] .composer-drawer-content {
+		transform: none;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		:where(.agents-view, .agents-view-portal) .composer-drawer,
+		:where(.agents-view, .agents-view-portal) .composer-drawer-content {
+			transition: none;
+		}
+	}
+
+	:where(.agents-view, .agents-view-portal) .pill {
+		height: 36px;
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		padding: 0 10px 0 8px;
+		border-radius: 999px;
+		font-size: 14px;
+		color: var(--ink-muted);
+		max-width: min(260px, 60vw);
+		min-width: 0;
+		background: transparent;
+	}
+
+	:where(.agents-view, .agents-view-portal) .pill:hover {
+		background: var(--hover);
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .pill.empty {
+		background: transparent;
+		color: var(--ink-subtle);
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .opt .sysb {
+		font-size: 9px;
+		padding: 0 5px;
+		margin-left: auto;
+	}
+
+	:where(.agents-view, .agents-view-portal) .pill.empty:hover {
+		background: var(--hover);
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .opt .sub {
+		font-size: 11px;
+		color: var(--ink-placeholder);
+		white-space: nowrap;
+	}
+
+	:where(.agents-view, .agents-view-portal) .pill .lbl .k {
+		color: var(--ink-placeholder);
+	}
+
+	:where(.agents-view, .agents-view-portal) .pill .caret {
+		width: 14px;
+		height: 14px;
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .pill .av {
+		width: 18px;
+		height: 18px;
+		border-radius: 50%;
+		display: grid;
+		place-items: center;
+		color: var(--ink-muted);
+		background: var(--surface-1);
+		box-shadow: 0 0 0 0.5px var(--edge-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .pill .av .ph {
+		width: 11px;
+		height: 11px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .bar .grow {
+		flex: 1;
+	}
+
+	:where(.agents-view, .agents-view-portal) .logo {
+		width: 16px;
+		height: 16px;
+		flex-shrink: 0;
+		display: grid;
+		place-items: center;
+	}
+
+	:where(.agents-view, .agents-view-portal) .logo svg {
+		width: 16px;
+		height: 16px;
+	}
+
+	/* model menu */
+	:where(.agents-view, .agents-view-portal) .menu-anchor {
+		position: relative;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu {
+		position: absolute;
+		bottom: calc(100% + 6px);
+		left: 0;
+		width: 272px;
+		background: var(--menu);
+		border: var(--hair) solid var(--edge-muted);
+		border-radius: 16px;
+		box-shadow: var(--shadow-menu);
+		padding: 6px;
+		z-index: 20;
+		animation: menu-open 120ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	@keyframes menu-open {
+		from {
+			opacity: 0;
+			transform: translateY(4px) scale(0.98);
+		}
+
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .filter {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 0 8px;
+		height: 32px;
+		margin-bottom: 4px;
+		border-radius: 8px;
+		background: var(--surface-1);
+		border: var(--hair) solid var(--edge-muted);
+		color: var(--ink-placeholder);
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .filter input {
+		flex: 1;
+		background: transparent;
+		border: 0;
+		color: var(--ink);
+		font: 13px var(--font-sans);
+		outline: none;
+		min-width: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .grp {
+		display: flex;
+		align-items: center;
+		gap: 6px;
+		padding: 8px 8px 4px;
+		font-size: 11px;
+		color: var(--ink-placeholder);
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .grp .logo {
+		width: 12px;
+		height: 12px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .grp .logo svg {
+		width: 12px;
+		height: 12px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .grp .logo {
+		display: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .opt {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		width: 100%;
+		height: 32px;
+		padding: 0 8px;
+		border-radius: 8px;
+		text-align: left;
+		font-size: 13.5px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .opt:hover {
+		background: var(--hover);
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .opt[aria-checked="true"] {
+		background: var(--active);
+		font-weight: 500;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .opt .nm {
+		flex: 0 1 auto;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .opt .hint {
+		font-size: 12px;
+		color: var(--ink-placeholder);
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .opt .tick {
+		color: var(--accent);
+		width: 14px;
+		height: 14px;
+		display: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .opt[aria-checked="true"] .tick {
+		display: block;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .opt .hint,
+	:where(.agents-view, .agents-view-portal) .menu .opt .id {
+		margin-left: auto;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .opt .id {
+		display: none;
+	}
+
+	:where(.agents-view, .agents-view-portal)[data-mode="work"] .menu .opt .hint {
+		display: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .foot {
+		margin-top: 4px;
+		padding: 8px 8px 4px;
+		border-top: var(--hair) solid var(--edge-muted);
+		font-size: 11px;
+		color: var(--ink-placeholder);
+		display: flex;
+		justify-content: space-between;
+	}
+
+	/* ---------- Settings-style pages (Agents) ---------- */
+	:where(.agents-view, .agents-view-portal) .settings {
+		overflow-y: auto;
+	}
+
+	:where(.agents-view, .agents-view-portal) .settings .wrap {
+		position: relative;
+		margin: 0 auto;
+		width: 100%;
+		max-width: 710px;
+		padding: 56px 40px 96px;
+		display: flex;
+		flex-direction: column;
+	}
+
+	:where(.agents-view, .agents-view-portal) .page-close {
+		position: absolute;
+		top: 18px;
+		right: 34px;
+		width: 30px;
+		height: 30px;
+		border-radius: 9px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .page-close .ph {
+		width: 16px;
+		height: 16px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .settings header.ph-head {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 16px;
+		padding: 0 24px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .settings h1.big {
+		margin: 0;
+		font-size: 24px;
+		line-height: 1.1;
+		font-weight: 600;
+	}
+
+	:where(.agents-view, .agents-view-portal) .settings .desc {
+		margin: 6px 0 0;
+		color: var(--ink-muted);
+		font-size: 14px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .cta {
+		height: 32px;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 0 12px;
+		border-radius: 999px;
+		background: var(--ink);
+		color: var(--panel);
+		font-size: 13px;
+		font-weight: 500;
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .cta .ph {
+		width: 14px;
+		height: 14px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .cta:hover {
+		filter: brightness(1.04);
+	}
+
+	:where(.agents-view, .agents-view-portal) .cta:disabled {
+		opacity: 0.5;
+		filter: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .cta.sm {
+		height: 28px;
+		padding: 0 10px;
+		font-size: 12.5px;
+		border-radius: 999px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .foot {
+		align-items: center;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu .foot .cnt {
+		color: var(--ink-placeholder);
+	}
+
+	:where(.agents-view, .agents-view-portal) .settings .sections {
+		margin-top: 36px;
+		display: flex;
+		flex-direction: column;
+		gap: 40px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .section {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .section .sh {
+		padding: 0 24px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .section .sh h2 {
+		margin: 0;
+		font-size: 14px;
+		font-weight: 600;
+	}
+
+	:where(.agents-view, .agents-view-portal) .section .sh p {
+		margin: 2px 0 0;
+		font-size: 14px;
+		color: var(--ink-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .scard {
+		border-radius: 16px;
+		border: 1px solid var(--card-edge);
+		background: var(--hover);
+		overflow: hidden;
+	}
+
+	:where(.agents-view, .agents-view-portal) .scard > * + * {
+		border-top: var(--hair) solid var(--edge-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .runtimes > #runtimeList > * + * {
+		border-top: var(--hair) solid var(--edge-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .arow {
+		display: flex;
+		align-items: center;
+		gap: 16px;
+		padding: 16px 24px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .arow .av {
+		width: 40px;
+		height: 40px;
+		border-radius: 50%;
+		display: grid;
+		place-items: center;
+		background: var(--surface-1);
+		color: var(--ink-muted);
+		box-shadow: 0 0 0 1px var(--edge-muted);
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .arow .av .ph {
+		width: 20px;
+		height: 20px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .arow .info {
+		min-width: 0;
+		flex: 1;
+	}
+
+	:where(.agents-view, .agents-view-portal) .arow .line {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 4px 8px;
+		min-width: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .arow .nm {
+		font-size: 14px;
+		font-weight: 500;
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .arow .tag {
+		font-size: 12px;
+		color: var(--ink-disabled);
+	}
+
+	:where(.agents-view, .agents-view-portal) .badge {
+		flex-shrink: 0;
+		border-radius: 999px;
+		border: var(--hair) solid var(--edge-muted);
+		padding: 2px 8px;
+		font-size: 10px;
+		font-weight: 500;
+		text-transform: uppercase;
+		color: var(--ink-disabled);
+		letter-spacing: 0.02em;
+	}
+
+	:where(.agents-view, .agents-view-portal) .arow .sub {
+		margin: 2px 0 0;
+		font-size: 12px;
+		color: var(--ink-disabled);
+	}
+
+	:where(.agents-view, .agents-view-portal) .arow .acts {
+		display: flex;
+		gap: 4px;
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .arow .acts .icon-btn.neg {
+		color: var(--red);
+	}
+
+	:where(.agents-view, .agents-view-portal) .badge.system {
+		color: var(--accent);
+		border-color: color-mix(in oklch, var(--accent) 35%, transparent);
+		background: color-mix(in oklch, var(--accent) 8%, transparent);
+	}
+
+	/* Page tabs: the agents page is split by kind, not by ownership. */
+	:where(.agents-view, .agents-view-portal) .tabs {
+		display: flex;
+		gap: 4px;
+		margin-top: 28px;
+		padding: 0 24px;
+		border-bottom: var(--hair) solid var(--edge);
+	}
+
+	:where(.agents-view, .agents-view-portal) .tabs button {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		gap: 7px;
+		height: 36px;
+		padding: 0 10px;
+		border-radius: 8px 8px 0 0;
+		font-size: 13.5px;
+		font-weight: 500;
+		color: var(--ink-subtle);
+	}
+
+	:where(.agents-view, .agents-view-portal) .tabs button:hover {
+		color: var(--ink);
+		background: var(--hover);
+	}
+
+	:where(.agents-view, .agents-view-portal) .tabs button[aria-selected="true"] {
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .tabs button[aria-selected="true"]::after {
+		content: "";
+		position: absolute;
+		left: 8px;
+		right: 8px;
+		bottom: -0.5px;
+		height: 2px;
+		border-radius: 2px 2px 0 0;
+		background: var(--accent);
+	}
+
+	:where(.agents-view, .agents-view-portal) .tabs button .ph {
+		width: 14px;
+		height: 14px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .tabs button .n {
+		font-size: 11px;
+		font-variant-numeric: tabular-nums;
+		color: var(--ink-placeholder);
+		background: var(--active);
+		border-radius: 999px;
+		padding: 1px 7px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .tabs button[aria-selected="true"] .n {
+		color: var(--ink-subtle);
+	}
+
+	:where(.agents-view, .agents-view-portal) .settings .sections {
+		margin-top: 28px;
+	}
+
+	/* A coder wears its mark on its avatar, so the kind reads before the label does. --mark-ring matches whatever surface the avatar sits on. */
+	:where(.agents-view, .agents-view-portal) .avw {
+		position: relative;
+		display: inline-grid;
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .codemark {
+		position: absolute;
+		right: -3px;
+		bottom: -3px;
+		width: 16px;
+		height: 16px;
+		border-radius: 6px;
+		display: grid;
+		place-items: center;
+		background: var(--accent);
+		color: var(--accent-contrast);
+		box-shadow: 0 0 0 2px var(--mark-ring, var(--surface-2));
+	}
+
+	:where(.agents-view, .agents-view-portal) .codemark .ph {
+		width: 10px;
+		height: 10px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .card {
+		--mark-ring: var(--surface-0);
+	}
+
+	:where(.agents-view, .agents-view-portal) .avrow .codemark {
+		width: 18px;
+		height: 18px;
+		right: -2px;
+		bottom: -2px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .avrow .codemark .ph {
+		width: 11px;
+		height: 11px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .badge.coder {
+		display: inline-flex;
+		align-items: center;
+		padding: 2px 5px;
+		color: var(--accent);
+		border-color: color-mix(in oklch, var(--accent) 35%, transparent);
+		background: color-mix(in oklch, var(--accent) 8%, transparent);
+	}
+
+	:where(.agents-view, .agents-view-portal) .badge.coder .ph {
+		width: 11px;
+		height: 11px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .scard .empty-row {
+		margin: 0;
+		padding: 18px 24px;
+		font-size: 13px;
+		color: var(--ink-disabled);
+	}
+
+	/* ---------- sidebar: per-mode new button, routines view ---------- */
+	/* ---------- slash menu: skills from the composer ---------- */
+	:where(.agents-view, .agents-view-portal) .composer-anchor {
+		display: block;
+	}
+
+	/* Bring your own agent */
+	:where(.agents-view, .agents-view-portal) .byoa {
+		border-radius: 12px;
+		border: 1px solid var(--card-edge);
+		background: var(--surface-2);
+		padding: 20px 24px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .byoa.footer {
+		border-radius: 0;
+		border: 0;
+		border-top: var(--hair) solid var(--edge-muted);
+		background: color-mix(in oklch, var(--accent) 3%, var(--surface-2));
+		padding: 18px 24px;
+		display: grid;
+		grid-template-columns: 3fr 2fr;
+		gap: 20px;
+		align-items: start;
+		position: relative;
+		overflow: hidden;
+	}
+
+	:where(.agents-view, .agents-view-portal) .byoa::before {
+		content: "";
+		position: absolute;
+		inset: -40% -20% auto auto;
+		width: 320px;
+		height: 320px;
+		border-radius: 50%;
+		background: radial-gradient(closest-side, color-mix(in oklch, var(--accent) 12%, transparent), transparent);
+		pointer-events: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .byoa h2 {
+		margin: 0;
+		font-size: 16px;
+		font-weight: 600;
+		letter-spacing: -0.02em;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .byoa h2 .ph {
+		width: 16px;
+		height: 16px;
+		color: var(--accent);
+	}
+
+	:where(.agents-view, .agents-view-portal) .byoa p {
+		margin: 6px 0 0;
+		font-size: 13px;
+		line-height: 1.5;
+		color: var(--ink-muted);
+		max-width: 52ch;
+	}
+
+	:where(.agents-view, .agents-view-portal) .byoa p code {
+		font: 12px var(--font-mono);
+		background: var(--surface-3);
+		padding: 1px 5px;
+		border-radius: 4px;
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .rot {
+		display: inline-grid;
+		vertical-align: baseline;
+		text-align: left;
+		position: relative;
+		color: var(--accent);
+		transition: width 380ms cubic-bezier(0.16, 1, 0.3, 1);
+		overflow: visible;
+	}
+
+	:where(.agents-view, .agents-view-portal) .rot .measure {
+		position: absolute;
+		visibility: hidden;
+		white-space: nowrap;
+		pointer-events: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .rot .w {
+		grid-area: 1 / 1;
+		white-space: nowrap;
+		transition: transform 380ms cubic-bezier(0.16, 1, 0.3, 1), opacity 300ms ease;
+	}
+
+	:where(.agents-view, .agents-view-portal) .rot .w.out {
+		transform: translateY(-70%);
+		opacity: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .rot .w.in {
+		transform: translateY(70%);
+		opacity: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .byoa .side {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		align-items: stretch;
+		min-width: 0;
+		position: relative;
+		justify-content: center;
+	}
+
+	:where(.agents-view, .agents-view-portal) .byoa .snippet {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		height: 32px;
+		padding: 0 6px 0 10px;
+		border-radius: 8px;
+		background: var(--surface-0);
+		border: var(--hair) solid var(--edge-muted);
+		font: 11.5px var(--font-mono);
+		color: var(--ink-subtle);
+		min-width: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .byoa .snippet > span {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	:where(.agents-view, .agents-view-portal) .byoa .snippet .icon-btn {
+		margin-left: auto;
+		width: 22px;
+		height: 22px;
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .runtimes {
+		display: flex;
+		flex-direction: column;
+	}
+
+	:where(.agents-view, .agents-view-portal) .rt {
+		display: grid;
+		grid-template-columns: 32px minmax(0, 1fr) auto auto;
+		gap: 14px;
+		align-items: center;
+		padding: 12px 24px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .rt .ic {
+		width: 32px;
+		height: 32px;
+		border-radius: 8px;
+		display: grid;
+		place-items: center;
+		background: var(--surface-1);
+		color: var(--ink-muted);
+		box-shadow: 0 0 0 1px var(--edge-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .rt .ic .ph {
+		width: 16px;
+		height: 16px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .rt .nm {
+		font-size: 14px;
+		font-weight: 500;
+		color: var(--ink);
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .rt .sub {
+		font-size: 12px;
+		color: var(--ink-disabled);
+		margin-top: 1px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .rt .conn {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 12px;
+		color: var(--ink-subtle);
+		white-space: nowrap;
+	}
+
+	:where(.agents-view, .agents-view-portal) .rt .conn::before {
+		content: "";
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background: var(--green);
+	}
+
+	:where(.agents-view, .agents-view-portal) .rt .conn.off {
+		color: var(--ink-disabled);
+	}
+
+	:where(.agents-view, .agents-view-portal) .rt .conn.off::before {
+		background: var(--ink-disabled);
+	}
+
+	:where(.agents-view, .agents-view-portal) .rt .acts {
+		display: flex;
+		gap: 4px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .paircode {
+		display: flex;
+		gap: 8px;
+		justify-content: center;
+	}
+
+	:where(.agents-view, .agents-view-portal) .paircode input {
+		width: 100%;
+		text-align: center;
+		font: 500 22px/1 var(--font-mono);
+		letter-spacing: 0.18em;
+		text-transform: uppercase;
+		height: 48px;
+		border-radius: 10px;
+		border: var(--hair) solid var(--edge-muted);
+		background: var(--surface-1);
+		color: var(--ink);
+		outline: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .paircode input:focus {
+		border-color: var(--accent);
+	}
+
+	/* ---------- Dialogs (Panel depth 2, rounded-xl) ---------- */
+	:where(.agents-view, .agents-view-portal) .overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 100;
+		background: oklch(0 0 0 / 0.25);
+		display: grid;
+		place-items: center;
+		padding: 16px;
+		animation: dialog-overlay-open 120ms ease-out;
+	}
+
+	@keyframes dialog-overlay-open {
+		from {
+			opacity: 0;
+		}
+
+		to {
+			opacity: 1;
+		}
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog {
+		width: min(720px, calc(100vw - 16px));
+		max-height: 88vh;
+		display: flex;
+		flex-direction: column;
+		border-radius: 20px;
+		background: var(--menu);
+		color: var(--ink);
+		border: var(--hair) solid var(--edge-muted);
+		box-shadow: var(--shadow-menu);
+		overflow: hidden;
+		animation: dialog-content-open 160ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog.narrow {
+		width: min(560px, calc(100vw - 16px));
+	}
+
+	@keyframes dialog-content-open {
+		from {
+			opacity: 0;
+			transform: translateY(6px) scale(0.985);
+		}
+
+		to {
+			opacity: 1;
+			transform: none;
+		}
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog .dh {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0 12px 0 16px;
+		height: 44px;
+		border-bottom: var(--hair) solid var(--edge-muted);
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog .dh .t {
+		font-size: 14px;
+		font-weight: 500;
+		display: flex;
+		align-items: center;
+		gap: 8px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog .dh .t .ph {
+		color: var(--ink-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog .dh .hr {
+		display: flex;
+		align-items: center;
+		gap: 10px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog .dh .hr .segc {
+		margin-right: 4px;
+	}
+
+	/* connector picker (settings/PipedreamAppPicker) */
+	:where(.agents-view, .agents-view-portal) .picker {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .results {
+		max-height: 180px;
+		overflow-y: auto;
+		border-radius: 10px;
+		border: var(--hair) solid var(--edge-muted);
+		background: var(--surface-1);
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .results > * + *,
+	:where(.agents-view, .agents-view-portal) .picker .picked > * + * {
+		border-top: var(--hair) solid var(--edge-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .crow {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		width: 100%;
+		padding: 8px 12px;
+		text-align: left;
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .crow:hover {
+		background: var(--hover);
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .crow .mk {
+		width: 16px;
+		height: 16px;
+		border-radius: 4px;
+		display: grid;
+		place-items: center;
+		font: 600 8.5px var(--font-mono);
+		color: var(--ink);
+		background: var(--surface-3);
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .crow .nm {
+		display: block;
+		font-size: 13px;
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .crow .ds {
+		display: block;
+		font-size: 11.5px;
+		color: var(--ink-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .crow .add {
+		margin-left: auto;
+		color: var(--ink-placeholder);
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .crow:hover .add {
+		color: var(--accent);
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .picked {
+		border-radius: 10px;
+		border: var(--hair) solid var(--edge-muted);
+		background: var(--surface-1);
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .picked .crow {
+		padding: 9px 12px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .picked .crow .mk {
+		width: 20px;
+		height: 20px;
+		font-size: 9.5px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .picked .crow .icon-btn {
+		margin-left: auto;
+		width: 24px;
+		height: 24px;
+		color: var(--ink-disabled);
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .none {
+		margin: 0;
+		font-size: 12px;
+		color: var(--ink-disabled);
+	}
+
+	/* routine dialog */
+	:where(.agents-view, .agents-view-portal) .dialog .db {
+		padding: 20px;
+		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
+		gap: 24px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog.narrow .db {
+		padding: 12px;
+		gap: 12px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog .df {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 8px;
+		padding: 12px 20px;
+		border-top: var(--hair) solid var(--edge-muted);
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog.narrow .df {
+		padding: 8px 12px;
+		justify-content: flex-end;
+	}
+
+	:where(.agents-view, .agents-view-portal) .field {
+		display: flex;
+		flex-direction: column;
+		gap: 6px;
+		min-width: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .field > span {
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .sinput {
+		width: 100%;
+		border-radius: 8px;
+		border: var(--hair) solid var(--edge-muted);
+		background: var(--color-input);
+		color: var(--ink);
+		font: 14px var(--font-sans);
+		padding: 8px 12px;
+		outline: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .sinput:focus {
+		border-color: var(--accent);
+	}
+
+	:where(.agents-view, .agents-view-portal) textarea.sinput {
+		resize: vertical;
+		min-height: 120px;
+		font: 12px/20px var(--font-mono);
+		padding: 10px 12px;
+	}
+
+	:where(.agents-view, .agents-view-portal) select.sinput {
+		appearance: none;
+		background-image: linear-gradient(45deg, transparent 50%, var(--ink-disabled) 50%), linear-gradient(135deg, var(--ink-disabled) 50%, transparent 50%);
+		background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%;
+		background-size: 5px 5px;
+		background-repeat: no-repeat;
+		padding-right: 32px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .grid2 {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 12px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .tagin {
+		display: flex;
+		align-items: center;
+		border-radius: 8px;
+		border: var(--hair) solid var(--edge-muted);
+		padding: 0 8px;
+		background: var(--color-input);
+	}
+
+	:where(.agents-view, .agents-view-portal) .tagin:focus-within {
+		border-color: var(--accent);
+	}
+
+	:where(.agents-view, .agents-view-portal) .tagin .at {
+		font-size: 14px;
+		color: var(--ink-disabled);
+	}
+
+	:where(.agents-view, .agents-view-portal) .tagin input {
+		min-width: 0;
+		flex: 1;
+		background: transparent;
+		border: 0;
+		padding: 8px 6px;
+		font: 14px var(--font-sans);
+		color: var(--ink);
+		outline: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .avrow {
+		display: flex;
+		align-items: center;
+		gap: 12px;
+		border-bottom: var(--hair) solid var(--edge-muted);
+		padding-bottom: 16px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .avrow .bigav {
+		width: 48px;
+		height: 48px;
+		border-radius: 50%;
+		display: grid;
+		place-items: center;
+		background: var(--surface-1);
+		color: var(--accent);
+		box-shadow: 0 0 0 1px var(--edge-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .avrow .bigav .ph {
+		width: 22px;
+		height: 22px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .radio {
+		display: flex;
+		gap: 10px;
+		align-items: flex-start;
+		padding: 10px 12px;
+		border-radius: 10px;
+		border: var(--hair) solid var(--edge-muted);
+		background: var(--surface-1);
+		text-align: left;
+		width: 100%;
+	}
+
+	:where(.agents-view, .agents-view-portal) .radio[aria-checked="true"] {
+		border-color: color-mix(in oklch, var(--accent) 60%, var(--edge));
+		background: var(--selected);
+	}
+
+	:where(.agents-view, .agents-view-portal) .radio .rt {
+		font-size: 13px;
+		font-weight: 500;
+	}
+
+	:where(.agents-view, .agents-view-portal) .radio .rd {
+		font-size: 12px;
+		color: var(--ink-muted);
+		margin-top: 1px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .kv {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 6px 16px;
+		font-size: 12px;
+		color: var(--ink-muted);
+		padding: 12px 14px;
+		border-radius: 8px;
+		background: var(--surface-1);
+		border: var(--hair) solid var(--edge-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .kv .k {
+		color: var(--ink-disabled);
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn {
+		height: 32px;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		padding: 0 12px;
+		border-radius: 999px;
+		font-size: 13px;
+		font-weight: 500;
+		color: var(--ink);
+		background: var(--active);
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn:hover {
+		background: color-mix(in oklch, var(--ink) 9%, transparent);
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn:disabled {
+		opacity: 0.45;
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn:disabled:hover {
+		background: var(--active);
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn.quiet {
+		background: transparent;
+		color: var(--ink-subtle);
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn.quiet:hover {
+		background: var(--hover);
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn.outline {
+		background: transparent;
+		border: var(--hair) solid var(--edge);
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn.outline:hover {
+		background: var(--hover);
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn.danger {
+		background: transparent;
+		color: var(--red);
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn.danger:hover {
+		background: color-mix(in oklch, var(--red) 12%, transparent);
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn .ph {
+		width: 14px;
+		height: 14px;
+	}
+
+	/* two-column dialogs */
+	:where(.agents-view, .agents-view-portal) .dialog.wide {
+		width: min(920px, calc(100vw - 16px));
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog.xwide {
+		width: min(1080px, calc(100vw - 16px));
+	}
+
+	:where(.agents-view, .agents-view-portal) .cols {
+		display: grid;
+		grid-template-columns: 300px minmax(0, 1fr);
+		gap: 20px;
+		align-items: start;
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog.fixed {
+		height: min(860px, 92vh);
+		max-height: 92vh;
+	}
+
+	:where(.agents-view, .agents-view-portal) .dialog.fixed .db {
+		overflow: hidden;
+		flex: 1;
+		min-height: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .cols.agent {
+		grid-template-columns: 400px minmax(0, 1fr);
+		align-items: stretch;
+		height: 100%;
+		min-height: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .mdwrap textarea.always {
+		display: block;
+		font: 13.5px/1.6 var(--font-sans);
+		padding: 14px 18px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .cols.agent .colL {
+		min-height: 0;
+		overflow-y: auto;
+		scrollbar-width: none;
+		padding-right: 2px;
+		gap: 12px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .cols.agent .colL::-webkit-scrollbar {
+		display: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .cols.agent .colR {
+		display: flex;
+		min-height: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .cols.agent .mdwrap {
+		height: auto;
+		flex: 1;
+		min-height: 0;
+	}
+
+	/* uniform pick lists (skills, agents, connectors) */
+	:where(.agents-view, .agents-view-portal) .plist {
+		border: var(--hair) solid var(--edge-muted);
+		border-radius: 10px;
+		background: var(--surface-1);
+		overflow: hidden;
+	}
+
+	:where(.agents-view, .agents-view-portal) .plist.scroll {
+		max-height: 180px;
+		overflow-y: auto;
+		scrollbar-width: thin;
+		scrollbar-color: var(--surface-4) transparent;
+	}
+
+	:where(.agents-view, .agents-view-portal) .plist > * + * {
+		border-top: var(--hair) solid var(--edge-muted);
+	}
+
+	/* scroll affordance: a soft fade at the bottom edge that lifts once you reach the end */
+	:where(.agents-view, .agents-view-portal) .prow {
+		display: grid;
+		grid-template-columns: 16px 16px minmax(0, 1fr) auto;
+		gap: 10px;
+		align-items: center;
+		width: 100%;
+		height: 36px;
+		padding: 0 10px;
+		text-align: left;
+		font-size: 13px;
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow:hover {
+		background: var(--hover);
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow .cb.rd {
+		border-radius: 50%;
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow[aria-checked="true"] .cb.rd {
+		background: transparent;
+		border-color: var(--accent);
+		box-shadow: inset 0 0 0 3px var(--surface-1), inset 0 0 0 8px var(--accent);
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow[aria-checked="true"] .cb.rd .ph {
+		display: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow .cb {
+		width: 14px;
+		height: 14px;
+		border-radius: 4px;
+		border: 1.5px solid var(--ink-disabled);
+		display: grid;
+		place-items: center;
+		color: var(--accent-contrast);
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow[aria-checked="true"] .cb {
+		background: var(--accent);
+		border-color: var(--accent);
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow[aria-checked="true"] .cb .ph {
+		width: 10px;
+		height: 10px;
+		display: block;
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow .cb .ph {
+		display: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow > .ph,
+	:where(.agents-view, .agents-view-portal) .prow .mk {
+		width: 16px;
+		height: 16px;
+		color: var(--ink-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow .mk {
+		border-radius: 4px;
+		display: grid;
+		place-items: center;
+		font: 600 8.5px var(--font-mono);
+		color: var(--ink);
+		background: var(--surface-3);
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow .meta {
+		font-size: 11.5px;
+		color: var(--ink-placeholder);
+		white-space: nowrap;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow .meta .on::before,
+	:where(.agents-view, .agents-view-portal) .prow .meta .off::before {
+		content: "";
+		display: inline-block;
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		margin-right: 5px;
+		background: var(--green);
+		vertical-align: middle;
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow .meta .off::before {
+		background: var(--ink-disabled);
+	}
+
+	:where(.agents-view, .agents-view-portal) .plist .empty {
+		padding: 14px;
+		text-align: center;
+		font-size: 12.5px;
+		color: var(--ink-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .csearch {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		height: 32px;
+		padding: 0 10px;
+		border-radius: 8px;
+		border: var(--hair) solid var(--edge-muted);
+		background: var(--surface-1);
+		color: var(--ink-placeholder);
+	}
+
+	:where(.agents-view, .agents-view-portal) .csearch input {
+		flex: 1;
+		min-width: 0;
+		background: transparent;
+		border: 0;
+		outline: none;
+		color: var(--ink);
+		font: 13px var(--font-sans);
+	}
+
+	:where(.agents-view, .agents-view-portal) .grp-row {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+	}
+
+	:where(.agents-view, .agents-view-portal) .grp-row .cnt {
+		font-size: 11px;
+		color: var(--ink-disabled);
+		font-variant-numeric: tabular-nums;
+	}
+
+	:where(.agents-view, .agents-view-portal) .colL {
+		display: flex;
+		flex-direction: column;
+		gap: 16px;
+		min-width: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .colR {
+		display: flex;
+		flex-direction: column;
+		gap: 10px;
+		min-width: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .grp-h {
+		font-size: 11px;
+		font-weight: 500;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--ink-placeholder);
+		margin: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .divider {
+		height: var(--hair);
+		background: var(--edge-muted);
+	}
+
+	/* markdown surface (fixed height, scrolls) */
+	:where(.agents-view, .agents-view-portal) .mdwrap {
+		display: flex;
+		flex-direction: column;
+		border: var(--hair) solid var(--edge-muted);
+		border-radius: 12px;
+		background: var(--surface-1);
+		overflow: hidden;
+		height: 460px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .mdwrap .mdbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 6px 8px 6px 12px;
+		border-bottom: var(--hair) solid var(--edge-muted);
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .mdwrap .mdbar .lbl {
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .mdwrap textarea {
+		flex: 1;
+		min-height: 0;
+		width: 100%;
+		resize: none;
+		border: 0;
+		outline: none;
+		background: transparent;
+		color: var(--ink);
+		padding: 14px 16px;
+		font: 12.5px/1.65 var(--font-mono);
+	}
+
+	/* compact settings rows */
+	:where(.agents-view, .agents-view-portal) .srow {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		align-items: center;
+		gap: 12px;
+		min-height: 32px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .srow .lab {
+		font-size: 13px;
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .srow .lab small {
+		display: block;
+		font-size: 11.5px;
+		color: var(--ink-disabled);
+		margin-top: 1px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .segc {
+		display: inline-flex;
+		padding: 2px;
+		gap: 2px;
+		border-radius: 999px;
+		background: var(--active);
+	}
+
+	:where(.agents-view, .agents-view-portal) .segc button {
+		padding: 3px 10px;
+		border-radius: 999px;
+		font-size: 12px;
+		font-weight: 500;
+		color: var(--ink-subtle);
+		height: 24px;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .segc button .ph {
+		width: 12px;
+		height: 12px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .segc.lg button {
+		height: 28px;
+		padding: 4px 12px;
+		font-size: 12.5px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .segc button[aria-pressed="true"] {
+		background: var(--surface-3);
+		color: var(--ink);
+		box-shadow: inset 0 0 0 0.5px var(--edge);
+	}
+
+	:where(.agents-view, .agents-view-portal) .sinput.sm {
+		padding: 6px 10px;
+		font-size: 13px;
+		width: auto;
+		min-width: 150px;
+	}
+
+	/* routine block page (block-automation/component/Automation.tsx) */
+	:where(.agents-view, .agents-view-portal) .switch {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		height: 28px;
+		padding: 0 10px 0 6px;
+		border-radius: 8px;
+		border: var(--hair) solid var(--edge);
+		font-size: 12.5px;
+		font-weight: 500;
+		color: var(--ink-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .switch:hover {
+		background: var(--hover);
+	}
+
+	:where(.agents-view, .agents-view-portal) .switch .trk {
+		width: 26px;
+		height: 16px;
+		border-radius: 999px;
+		background: var(--surface-4);
+		position: relative;
+		transition: background 160ms ease;
+	}
+
+	:where(.agents-view, .agents-view-portal) .switch .trk::after {
+		content: "";
+		position: absolute;
+		top: 2px;
+		left: 2px;
+		width: 12px;
+		height: 12px;
+		border-radius: 50%;
+		background: var(--ink);
+		transition: transform 160ms cubic-bezier(0.16, 1, 0.3, 1);
+	}
+
+	:where(.agents-view, .agents-view-portal) .switch[aria-checked="true"] .trk {
+		background: var(--green);
+	}
+
+	:where(.agents-view, .agents-view-portal) .switch[aria-checked="true"] .trk::after {
+		transform: translateX(10px);
+		background: oklch(0.15 0 0);
+	}
+
+	:where(.agents-view, .agents-view-portal) .switch[aria-checked="true"] {
+		color: var(--ink);
+	}
+
+	:where(.agents-view, .agents-view-portal) .bbar {
+		display: inline-flex;
+		align-items: center;
+		gap: 2px;
+		padding: 2px;
+		border-radius: 10px;
+		background: var(--active);
+	}
+
+	:where(.agents-view, .agents-view-portal) .bbar .icon-btn {
+		border-radius: 8px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .bbar .sep {
+		width: var(--hair);
+		height: 16px;
+		background: var(--edge);
+		margin: 0 2px;
+	}
+
+	:where(.agents-view, .agents-view-portal):not([data-session]) .bbar .session-only {
+		display: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .btn.sm {
+		height: 28px;
+		padding: 0 10px;
+		font-size: 12.5px;
+		border-radius: 8px;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu.below {
+		bottom: auto;
+		top: calc(100% + 6px);
+		width: 200px;
+	}
+
+	/* ---------- Session pane ---------- */
+	:where(.agents-view, .agents-view-portal) .pane .meta {
+		display: none;
+		gap: 16px;
+		padding: 6px 16px;
+		border-bottom: var(--hair) solid var(--edge-muted);
+		color: var(--ink-placeholder);
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal)[data-mode="work"] .pane .meta {
+		display: flex;
+	}
+
+	:where(.agents-view, .agents-view-portal) .pane .meta .k {
+		color: var(--ink-disabled);
+	}
+
+	:where(.agents-view, .agents-view-portal) .pane .scroll {
+		flex: 1;
+		overflow: auto;
+		padding: 20px 16px;
+	}
+
+	@keyframes spin {
+		to {
+			transform: rotate(360deg);
+		}
+	}
+
+	:where(.agents-view, .agents-view-portal) .pane .dock {
+		padding: 0 16px 16px;
+		flex-shrink: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .pane .dock .composer-anchor {
+		width: min(100%, 896px);
+		margin: 0 auto;
+	}
+
+	:where(.agents-view, .agents-view-portal) .pane .dock textarea {
+		min-height: 60px;
+		padding-top: 14px;
+	}
+
+	/* The session transcript keeps its own scroller. */
+	:where(.agents-view, .agents-view-portal) .pane .transcript-host {
+		flex: 1;
+		min-height: 0;
+		display: flex;
+		overflow: hidden;
+	}
+
+	:where(.agents-view, .agents-view-portal) .pane .dock .composer-anchor {
+		width: min(100%, 896px);
+		margin: 0 auto;
+	}
+
+	/* Dialogs render through a portal, above every app layer; menus above the page they anchor to. */
+	:where(.agents-view, .agents-view-portal) .overlay {
+		z-index: 1000;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu {
+		z-index: 60;
+	}
+
+	:where(.agents-view, .agents-view-portal) .menu.below {
+		left: auto;
+		right: 0;
+	}
+
+	:where(.agents-view, .agents-view-portal) .sinput.sm select {
+		width: 100%;
+	}
+
+	:where(.agents-view, .agents-view-portal) .icon-btn:disabled {
+		color: var(--ink-placeholder);
+	}
+
+	:where(.agents-view, .agents-view-portal) .cta:disabled {
+		opacity: 0.5;
+		filter: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) a.link-btn {
+		text-decoration: none;
+	}
+
+	:where(.agents-view, .agents-view-portal) .picker .crow .ds {
+		color: var(--ink-muted);
+	}
+
+	:where(.agents-view, .agents-view-portal) .prow .mk img,
+	:where(.agents-view, .agents-view-portal) .picker .crow .mk img,
+	:where(.agents-view, .agents-view-portal) .picker .crow .mk svg {
+		width: 100%;
+		height: 100%;
+		border-radius: inherit;
+	}
+
+	:where(.agents-view, .agents-view-portal) .list-note {
+		margin: 0;
+		padding: 8px 12px;
+		font-size: 13px;
+		color: var(--ink-placeholder);
+	}
+
+	:where(.agents-view, .agents-view-portal) .av img,
+	:where(.agents-view, .agents-view-portal) .bigav img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		border-radius: inherit;
+	}
+
+	/* The view shell sizes the columns; each fills its slot. */
+	:where(.agents-view, .agents-view-portal) .main {
+		height: 100%;
+	}
+}

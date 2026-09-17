@@ -16,6 +16,9 @@ pub trait CloudProvider: Send + Sync + 'static {
 
 /// Lifecycle operations kept separate from an attached conversation.
 pub trait CloudLifecycle: Cloud {
+    /// Ensure the owner's selected environment allows this deployment's MCP host.
+    /// Must finish before creating a container, whose network policy is fixed.
+    fn prepare_mcp_access(&self, host: &str) -> impl Future<Output = Result<()>> + Send;
     /// Create a conversation with this agent's instructions.
     fn create(&self, instructions: &str) -> impl Future<Output = Result<SessionId>> + Send;
     /// Archive the owner's conversation reversibly.

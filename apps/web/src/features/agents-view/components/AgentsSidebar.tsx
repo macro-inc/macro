@@ -1,276 +1,132 @@
-import { createListController } from '@app/components/list';
 import {
   CollapsibleSection,
   SearchBar,
   useViewControlHotkeys,
   ViewSidebar,
 } from '@app/components/view-shell';
-import { DOCS_BASE } from '@app/constants/docs-links';
-import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
-import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
-import {
-  type EntityActionViewContext,
-  toEntityActionListState,
-} from '@app/features/next-soup/actions';
-import { SoupEntityContextMenu } from '@app/features/soup';
-import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
-import { useFavoriteDisplayName } from '@app/util/favorites';
+import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
-import EmptyStateAiGraphic from '@design/empty-state-ai.svg';
-import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
-import { Entity, EntityRowIcon } from '@entity';
-import BookOpenIcon from '@phosphor/book-open.svg';
-import ClockIcon from '@phosphor/clock-clockwise.svg';
+import ChatIcon from '@phosphor/chat-circle.svg';
+import CodeIcon from '@phosphor/code.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import PlugsIcon from '@phosphor/plugs.svg';
-import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
-import {
-  type FavoritesFilter,
-  useFavoritesData,
-} from '@queries/favorites/favorites';
-import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { Key } from '@solid-primitives/keyed';
-import { Button, cn, EmptyStatePanel, Scroll } from '@ui';
+import { cn } from '@ui';
+import { createSignal, Show } from 'solid-js';
 import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  onCleanup,
-  Show,
-} from 'solid-js';
-import { Dynamic } from 'solid-js/web';
-import type { AgentsPage } from '../core/pages';
-import type {
-  AgentConversationEntity,
-  AgentConversationTarget,
+  conversationState,
+  conversationStateLabel,
+} from '../core/conversation-state';
+import { compactAge } from '../core/format-age';
+import type { AgentsMode } from '../core/mode';
+import {
+  type AgentConversationEntity,
+  type ConversationGroup,
+  conversationBotId,
+  conversationTimestamp,
 } from '../core/recent-conversations';
 
-// Configurable agents ship after the sidebar, so the 'agents' and 'skills'
-// pages have no nav entries yet. When they do, add
-// `{ id: 'agents', label: 'Agents', icon: AgentIcon }` and
-// `{ id: 'skills', label: 'Skills', icon: SkillIcon }` back here, both icons
-// imported from `@phosphor/sparkle.svg`.
-const PAGES = [
-  { id: 'new', label: 'New Chat', icon: PlusIcon },
-  { id: 'routines', label: 'Routines', icon: ClockIcon },
-  { id: 'connections', label: 'Connections', icon: PlugsIcon },
-] satisfies {
-  id: AgentsPage;
-  label: string;
-  icon: typeof PlusIcon;
-}[];
-
-const AGENT_ACTION_VIEW_CONTEXT: EntityActionViewContext = {
-  supportsMarkDone: false,
-  senderBucket: undefined,
-};
-
-const AGENT_FAVORITES_FILTER = {
-  entityType: ['agent_session', 'chat'],
-} satisfies FavoritesFilter;
-
-function FavoriteRow(props: {
-  favorite: Favorite;
-  onOpen: (favorite: Favorite, event: MouseEvent) => void;
-}) {
-  const name = useFavoriteDisplayName(props.favorite);
-
-  return (
-    <FavoriteContextMenu favorite={props.favorite} triggerClass="block">
-      <ViewSidebar.Item
-        title={name()}
-        onClick={(event) => props.onOpen(props.favorite, event)}
-      >
-        <ViewSidebar.Icon>
-          <FavoriteIcon favorite={props.favorite} class="size-4" />
-        </ViewSidebar.Icon>
-        <span class="truncate">{name()}</span>
-      </ViewSidebar.Item>
-    </FavoriteContextMenu>
-  );
-}
-
-function AgentFavorites(props: {
-  onOpenConversation: (
-    conversation: AgentConversationTarget,
-    event?: MouseEvent
-  ) => void;
-}) {
-  const favoritesData = useFavoritesData(AGENT_FAVORITES_FILTER);
-  const [open, setOpen] = createSignal(true);
-  const favorites = createMemo(() =>
-    (favoritesData()?.favorites ?? []).toSorted(
-      (left, right) => left.sortOrder - right.sortOrder
-    )
-  );
-
-  const openFavorite = (favorite: Favorite, event: MouseEvent) => {
-    if (
-      favorite.entityType !== 'agent_session' &&
-      favorite.entityType !== 'chat'
-    ) {
-      return;
-    }
-
-    props.onOpenConversation(
-      {
-        id: favorite.entityId,
-        type: favorite.entityType,
-      },
-      event
-    );
-  };
-
-  return (
-    <Show when={favorites().length > 0}>
-      <CollapsibleSection.Root open={open()} onOpenChange={setOpen}>
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Favorites</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
-        <CollapsibleSection.Content>
-          <ViewSidebar.Nav aria-label="Favorite agent chats">
-            <For each={favorites()}>
-              {(favorite) => (
-                <FavoriteRow favorite={favorite} onOpen={openFavorite} />
-              )}
-            </For>
-          </ViewSidebar.Nav>
-        </CollapsibleSection.Content>
-      </CollapsibleSection.Root>
-    </Show>
-  );
-}
-
-function ConversationRow(props: {
-  conversation: AgentConversationEntity;
-  active: boolean;
-  onOpen: (event: MouseEvent) => void;
-}) {
-  const timestamp = () =>
-    props.conversation.updatedAt ?? props.conversation.createdAt;
-
-  return (
-    <ViewSidebar.Item
-      active={props.active}
-      class="group/recent-chat relative"
-      title={props.conversation.name || 'Untitled chat'}
-      onClick={props.onOpen}
-    >
-      <ViewSidebar.Icon>
-        <EntityRowIcon entity={props.conversation} class="size-4" />
-      </ViewSidebar.Icon>
-      <span class="min-w-0 flex-1 truncate text-left group-hover/recent-chat:pr-12">
-        {props.conversation.name || 'Untitled chat'}
-      </span>
-      <Show when={timestamp()}>
-        {(value) => (
-          <span class="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-light text-ink-extra-muted opacity-0 transition-opacity group-hover/recent-chat:opacity-100 touch:hidden">
-            <Entity.Timestamp
-              entity={props.conversation}
-              overrideTimeStamp={value()}
-            />
-          </span>
-        )}
-      </Show>
-    </ViewSidebar.Item>
-  );
-}
-
-function RecentChatsEmptyState(props: {
-  search: string;
-  onStartChat: () => void;
-}) {
-  const search = () => props.search.trim();
-
-  return (
-    <EmptyStatePanel
-      centered
-      graphic={search() ? EmptyStateNoSearchMatchGraphic : EmptyStateAiGraphic}
-      graphicClass="aspect-square h-auto w-[clamp(12rem,70%,18rem)] self-center"
-      title={search() ? `No results for "${search()}"` : 'No recent chats'}
-      description={
-        search()
-          ? 'Try a different search.'
-          : 'Your latest agent conversations will appear here.'
-      }
-      descriptionClass="mt-1 text-balance"
-      actionsClass="mt-5 flex-row @max-sm:flex-row"
-      topSpacerClass="basis-0"
-      titleClass={search() ? 'w-full break-words' : undefined}
-      primaryAction={
-        search()
-          ? undefined
-          : {
-              label: 'Start a chat',
-              icon: PlusIcon,
-              onClick: props.onStartChat,
-            }
-      }
-      documentationUrl={`${DOCS_BASE}/product/${search() ? 'search' : 'agents'}`}
-      documentationIcon={BookOpenIcon}
-      class="h-auto overflow-visible px-2 pt-4 @4xl:px-2"
-    />
-  );
-}
-
 export type AgentsSidebarProps = {
-  page: AgentsPage;
+  modeForConversation: (conversation: AgentConversationEntity) => AgentsMode;
   activeConversationId: string | undefined;
   search: string;
-  conversations: AgentConversationEntity[];
+  groups: ConversationGroup[];
   loading: boolean;
   error: boolean;
   hasNextPage: boolean;
   loadingNextPage: boolean;
-  loadMoreError: boolean;
-  onNavigate: (page: AgentsPage) => void;
+  /** The bot behind a session, as `@handle`, when the roster knows it. */
+  handleForBot: (botId: string | undefined) => string | undefined;
+  onNewConversation: () => void;
   onSearchChange: (search: string) => void;
   onOpenConversation: (
-    conversation: AgentConversationTarget,
+    conversation: AgentConversationEntity,
     event?: MouseEvent
   ) => void;
   onRetry: () => void;
   onLoadMore: () => void;
 };
 
+function Row(props: {
+  conversation: AgentConversationEntity;
+  mode: AgentsMode;
+  active: boolean;
+  handle: string | undefined;
+  onOpen: (event: MouseEvent) => void;
+}) {
+  const title = () => props.conversation.name || 'Untitled chat';
+  const state = () =>
+    props.conversation.type === 'agent_session'
+      ? conversationState(props.conversation.status)
+      : undefined;
+  const age = () => compactAge(conversationTimestamp(props.conversation));
+  const stateLabel = () => {
+    const current = state();
+    return current ? conversationStateLabel(current) : undefined;
+  };
+
+  return (
+    <ViewSidebar.Item
+      active={props.active}
+      class={cn(props.mode === 'code' && 'h-12 items-start py-1.5 touch:h-12')}
+      title={title()}
+      data-kind={props.mode}
+      onClick={props.onOpen}
+    >
+      <ViewSidebar.Icon>
+        <Show
+          when={state() === 'starting'}
+          fallback={
+            <Show when={props.mode === 'code'} fallback={<ChatIcon />}>
+              <CodeIcon />
+            </Show>
+          }
+        >
+          <SpinnerIcon class="motion-safe:animate-spin" />
+        </Show>
+      </ViewSidebar.Icon>
+      <span class="min-w-0 flex-1">
+        <span class="block truncate">{title()}</span>
+        <Show when={props.mode === 'code'}>
+          <span class="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-ink-extra-muted">
+            <Show when={props.handle}>
+              {(handle) => <span class="truncate">@{handle()}</span>}
+            </Show>
+            <Show when={props.handle && stateLabel()}>
+              <span>·</span>
+            </Show>
+            <Show when={stateLabel()}>
+              {(label) => <span class="shrink-0">{label()}</span>}
+            </Show>
+            <span class="ml-auto shrink-0 tabular-nums">{age()}</span>
+          </span>
+        </Show>
+      </span>
+      <Show when={props.mode !== 'code'}>
+        <span class="shrink-0 text-xs text-ink-extra-muted tabular-nums">
+          {age()}
+        </span>
+      </Show>
+    </ViewSidebar.Item>
+  );
+}
+
 export function AgentsSidebar(props: AgentsSidebarProps) {
   const panel = useSplitPanelOrThrow();
-
-  const forceEmptyState = useDebugSetting(
-    DEBUG_SETTING_KEYS.FORCE_EMPTY_STATES
-  );
-
   const [searchOpen, setSearchOpen] = createSignal(false);
-  const [recentChatsOpen, setRecentChatsOpen] = createSignal(true);
-
-  const [scrollRoot, setScrollRoot] = createSignal<HTMLElement>();
-  const [loadMoreSentinel, setLoadMoreSentinel] =
-    createSignal<HTMLDivElement>();
-
+  const [conversationsOpen, setConversationsOpen] = createSignal(true);
   let searchInput: HTMLInputElement | undefined;
-
-  const visibleConversations = () =>
-    forceEmptyState() ? [] : props.conversations;
-
-  const actionController = createListController({
-    items: visibleConversations,
-    getKey: (conversation) => conversation.id,
-    isSelectable: () => false,
-  });
-
-  const actionList = toEntityActionListState({
-    controller: actionController,
-    getEntity: (conversation) => conversation,
-  });
+  const total = () =>
+    props.groups.reduce((sum, group) => sum + group.conversations.length, 0);
 
   const openSearch = () => {
-    setRecentChatsOpen(true);
+    setConversationsOpen(true);
     setSearchOpen(true);
     queueMicrotask(() => searchInput?.focus());
+  };
+  const closeSearch = () => {
+    props.onSearchChange('');
+    setSearchOpen(false);
   };
 
   useViewControlHotkeys({
@@ -285,39 +141,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
     },
   });
 
-  createEffect(() => {
-    const root = scrollRoot();
-    const sentinel = loadMoreSentinel();
-    if (
-      !root ||
-      !sentinel ||
-      forceEmptyState() ||
-      !props.hasNextPage ||
-      props.loadingNextPage ||
-      props.loadMoreError
-    ) {
-      return;
-    }
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        if (!entries[0]?.isIntersecting) return;
-        if (
-          forceEmptyState() ||
-          !props.hasNextPage ||
-          props.loadingNextPage ||
-          props.loadMoreError
-        ) {
-          return;
-        }
-        props.onLoadMore();
-      },
-      { root, rootMargin: '0px 0px 200px' }
-    );
-    observer.observe(sentinel);
-    onCleanup(() => observer.disconnect());
-  });
-
   return (
     <ViewSidebar.Root aria-label="Agents navigation">
       <ViewSidebar.Header>
@@ -327,54 +150,32 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
         </div>
       </ViewSidebar.Header>
 
+      <ViewSidebar.Primary>
+        <SidebarCreateButton
+          label="New conversation"
+          onCreate={props.onNewConversation}
+        />
+      </ViewSidebar.Primary>
+
       <ViewSidebar.Content class="overflow-hidden">
-        <ViewSidebar.Nav aria-label="Agent views">
-          <For each={PAGES}>
-            {(item) => (
-              <ViewSidebar.Item
-                active={props.page === item.id && !props.activeConversationId}
-                onClick={() => props.onNavigate(item.id)}
-              >
-                <ViewSidebar.Icon>
-                  <Dynamic component={item.icon} class="size-4" />
-                </ViewSidebar.Icon>
-                <span class="truncate">{item.label}</span>
-              </ViewSidebar.Item>
-            )}
-          </For>
-        </ViewSidebar.Nav>
-
-        <Show when={!forceEmptyState()}>
-          <AgentFavorites onOpenConversation={props.onOpenConversation} />
-        </Show>
-
         <CollapsibleSection.Root
-          open={recentChatsOpen()}
-          onOpenChange={setRecentChatsOpen}
+          open={conversationsOpen()}
+          onOpenChange={setConversationsOpen}
           class={cn(
             'flex min-h-0 flex-col',
-            recentChatsOpen() ? 'flex-1' : 'shrink-0'
+            conversationsOpen() ? 'flex-1' : 'shrink-0'
           )}
         >
           <CollapsibleSection.Header>
             <CollapsibleSection.Trigger class="flex-1">
-              <span class="min-w-0 truncate">Recent chats</span>
+              <span class="min-w-0 truncate">Conversations</span>
               <CollapsibleSection.Indicator />
             </CollapsibleSection.Trigger>
             <CollapsibleSection.Action
-              label={
-                searchOpen() ? 'Close agent chat search' : 'Search agent chats'
-              }
+              label="Search conversations"
               aria-pressed={searchOpen()}
               class={cn(searchOpen() && 'bg-active text-ink')}
-              onClick={() => {
-                if (searchOpen()) {
-                  props.onSearchChange('');
-                  setSearchOpen(false);
-                } else {
-                  openSearch();
-                }
-              }}
+              onClick={() => (searchOpen() ? closeSearch() : openSearch())}
             >
               <MagnifyingGlassIcon class="size-3.5" />
             </CollapsibleSection.Action>
@@ -382,104 +183,90 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
           <CollapsibleSection.Content class="flex min-h-0 flex-1 flex-col gap-1">
             <Show when={searchOpen()}>
               <SearchBar
-                label="Search agent chats"
-                placeholder="Search chats"
-                ref={(element) => {
-                  searchInput = element;
-                }}
+                ref={searchInput}
+                placeholder="Search conversations"
+                label="Search conversations"
                 value={props.search}
                 onValueChange={props.onSearchChange}
                 onEscape={() => {
-                  if (!props.search) setSearchOpen(false);
+                  if (!props.search) closeSearch();
                 }}
                 class="h-9 shrink-0 rounded-xl"
               />
             </Show>
-            <div class="relative min-h-0 flex-1">
-              <Scroll scrollRef={setScrollRoot}>
-                <ViewSidebar.Nav aria-label="Recent agent chats">
-                  {/* Soup cache updates replace entity objects. Key rows by id so
-                      those updates preserve the list DOM and scroll position. */}
-                  <Key each={visibleConversations()} by="id">
-                    {(conversation) => (
-                      <SoupEntityContextMenu
-                        entity={conversation()}
-                        list={actionList}
-                        selectedEntities={() => []}
-                        viewContext={AGENT_ACTION_VIEW_CONTEXT}
-                        class="block w-full"
-                        onOpenChange={(open) => {
-                          if (!open) return;
-                          actionController.focus.set(conversation().id, {
-                            reason: 'pointer',
-                            force: true,
-                          });
-                        }}
-                      >
-                        <ConversationRow
+            <ViewSidebar.Nav
+              class="min-h-0 flex-1 shrink overflow-auto"
+              aria-label="Recent conversations"
+              onScroll={(event) => {
+                const list = event.currentTarget;
+                if (!props.hasNextPage || props.loadingNextPage) return;
+                if (
+                  list.scrollTop + list.clientHeight >=
+                  list.scrollHeight - 200
+                ) {
+                  props.onLoadMore();
+                }
+              }}
+            >
+              <Key each={props.groups} by="id">
+                {(group) => (
+                  <>
+                    <Show when={group().label}>
+                      {(label) => (
+                        <ViewSidebar.Toolbar>
+                          <h3 class="text-xs font-medium text-ink-muted">
+                            {label()}
+                          </h3>
+                          <span class="text-xs text-ink-extra-muted tabular-nums">
+                            {group().conversations.length}
+                          </span>
+                        </ViewSidebar.Toolbar>
+                      )}
+                    </Show>
+                    <Key each={group().conversations} by="id">
+                      {(conversation) => (
+                        <Row
                           conversation={conversation()}
+                          mode={props.modeForConversation(conversation())}
                           active={
                             props.activeConversationId === conversation().id
                           }
+                          handle={props.handleForBot(
+                            conversationBotId(conversation())
+                          )}
                           onOpen={(event) =>
                             props.onOpenConversation(conversation(), event)
                           }
                         />
-                      </SoupEntityContextMenu>
-                    )}
-                  </Key>
-                  <Show when={!forceEmptyState() && props.loading}>
-                    <p class="px-3 py-2 text-xs text-ink-muted">
-                      Loading chats…
-                    </p>
-                  </Show>
-                  <Show when={!forceEmptyState() && props.error}>
-                    <Button variant="ghost" onClick={props.onRetry}>
-                      Retry loading chats
-                    </Button>
-                  </Show>
-                  <Show
-                    when={
-                      forceEmptyState() ||
-                      (!props.loading &&
-                        !props.error &&
-                        props.conversations.length === 0)
-                    }
-                  >
-                    <RecentChatsEmptyState
-                      search={forceEmptyState() ? '' : props.search}
-                      onStartChat={() => props.onNavigate('new')}
-                    />
-                  </Show>
-                  <Show when={!forceEmptyState() && props.hasNextPage}>
-                    <div
-                      ref={setLoadMoreSentinel}
-                      role={props.loadingNextPage ? 'status' : undefined}
-                      aria-label={
-                        props.loadingNextPage ? 'Loading more chats' : undefined
-                      }
-                      class="grid h-9 shrink-0 place-items-center text-ink-muted"
-                    >
-                      <Show when={props.loadMoreError}>
-                        <Button variant="ghost" onClick={props.onLoadMore}>
-                          Retry loading more chats
-                        </Button>
-                      </Show>
-                      <Show
-                        when={!props.loadMoreError && props.loadingNextPage}
-                      >
-                        <SpinnerIcon class="size-4 animate-spin" />
-                      </Show>
-                    </div>
-                  </Show>
-                </ViewSidebar.Nav>
-              </Scroll>
-              <ScrollIndicators
-                scrollRef={scrollRoot}
-                appearance="gradient"
-                gradientColor="panel"
-              />
-            </div>
+                      )}
+                    </Key>
+                  </>
+                )}
+              </Key>
+              <Show when={props.loading}>
+                <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
+                  Loading conversations…
+                </p>
+              </Show>
+              <Show when={props.error}>
+                <ViewSidebar.Item onClick={props.onRetry}>
+                  <ViewSidebar.Icon />
+                  <span class="truncate">Retry loading</span>
+                </ViewSidebar.Item>
+              </Show>
+              <Show when={!props.loading && !props.error && total() === 0}>
+                <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
+                  {props.search.trim()
+                    ? `No results for "${props.search.trim()}"`
+                    : 'No conversations yet.'}
+                </p>
+              </Show>
+              <Show when={props.loadingNextPage}>
+                <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-muted">
+                  Loading more…
+                </p>
+              </Show>
+            </ViewSidebar.Nav>
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
       </ViewSidebar.Content>

@@ -14,6 +14,9 @@
 | `/app/component/documents` | Files (documents list) |
 | `/app/component/tasks` | Tasks table |
 | `/app/component/agents` | AI chats / agents list |
+| `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
+| `/app/coders/<uuid>` | Code session with the Agents sidebar |
+| `/app/agent-chats/<uuid>` | Legacy AI chat opened in the Agents workspace |
 | `/app/component/calls` | Calls list |
 | `/app/component/companies` | Customers (CRM; needs a team) |
 | `/app/component/activity` | Activity heatmap + feed |
@@ -112,7 +115,9 @@ stay centered and the preview body fills the remaining height below the divider.
 - Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
   `Settings (Ctrl ;)`, `Log out`.
 
-With the new app views enabled, the outer sidebar is an icon rail. Its tooltips
+With the new app views enabled, the outer sidebar is an icon rail. Start a new AI
+chat from the Agents workspace; the rail has no separate new-chat-in-a-new-split
+button. Its tooltips
 use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
 item. Home uses Signal; Email uses Important across all linked inboxes.
@@ -120,6 +125,12 @@ Noise does not light either dot. These are presence indicators, not counts; they
 do not fetch additional pages to find every unread item. Opening a view alone does
 not clear its dot — reading or completing the represented items does. The button's
 accessible description is `Unread items` while its dot is active.
+
+The Agents sidebar mixes chat and coding sessions in one newest-first list.
+Its **New conversation** button opens the unified composer with one **Agent**
+selector on the right. Choosing a coding agent reveals the repository drawer;
+there is no Chat/Code switch. New sessions use the selected agent's default model
+and the URL for its kind. Opening an existing row restores its own kind and URL.
 
 Home's inner rail starts with a full-width **New chat** plus button that returns
 to Home's starting pane without creating a chat. Email and Tasks use the same

@@ -19,7 +19,7 @@ use predicate_index::{
     ValidatedIndexQuery, ValidationError,
 };
 use serde::{Deserialize, Serialize};
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use thiserror::Error;
 
 /// Persisted projection state for one supported normalized record.
@@ -570,6 +570,7 @@ fn patch_exact_members(
     remove: &[ExactFact],
     insert: &[ExactFact],
 ) -> Result<(), ValidationError> {
+    let remove = remove.iter().collect::<HashSet<_>>();
     document.exact_facts.retain(|fact| !remove.contains(fact));
     document.exact_facts.extend_from_slice(insert);
     document.canonicalize();

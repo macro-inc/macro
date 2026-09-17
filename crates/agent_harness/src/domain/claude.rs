@@ -24,6 +24,7 @@ pub struct ClaudeSessions<P, Repo, External> {
     provider: Arc<P>,
     repo: Repo,
     external: External,
+    mcp_gateway_host: String,
     creation: tokio::sync::Mutex<()>,
 }
 
@@ -48,11 +49,12 @@ impl<P: CloudProvider, Repo: AgentSessionRepo, External: ExternalSessionRepo>
     }
 
     /// Wire the provider and the owning session repository at the composition root.
-    pub fn new(provider: Arc<P>, repo: Repo, external: External) -> Self {
+    pub fn new(provider: Arc<P>, repo: Repo, external: External, mcp_gateway_host: String) -> Self {
         Self {
             provider,
             repo,
             external,
+            mcp_gateway_host,
             creation: tokio::sync::Mutex::new(()),
         }
     }
@@ -98,6 +100,13 @@ impl<P: CloudProvider, Repo: AgentSessionRepo, External: ExternalSessionRepo>
             }
             Some(_) => return Err(cloud_error(Error::UncertainCreate)),
             None => {
+                // Network settings are captured when Claude creates its container.
+                // Prepare before the durable create intent: a setup failure can
+                // safely be retried and must not strand the session as pending.
+                client
+                    .prepare_mcp_access(&self.mcp_gateway_host)
+                    .await
+                    .map_err(cloud_error)?;
                 // Write a durable intent before the non-idempotent POST. A crash or
                 // timeout stays visibly pending rather than minting a duplicate VM.
                 self.external

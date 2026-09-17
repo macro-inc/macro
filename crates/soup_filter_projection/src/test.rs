@@ -106,7 +106,7 @@ fn optimistic_direct_projection_and_patch_share_authoritative_vocabulary() {
     })
     .unwrap();
     assert!(projection.exact_facts.iter().any(|fact| {
-        fact.attribute == vocabulary::file_type() && fact.value == ExactValue::utf8("md").unwrap()
+        fact.attribute == vocabulary::file_type() && fact.value == ExactValue::utf8(".MD").unwrap()
     }));
 
     let patch = patch_direct_fields(DirectProjectionPatchInput {

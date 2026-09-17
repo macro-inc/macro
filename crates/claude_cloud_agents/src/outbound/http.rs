@@ -1,6 +1,7 @@
 //! The experimentally verified OAuth API origin, not the cookie-authenticated web origin.
 use crate::domain::{
     credentials::AccountCredentials,
+    environment::gateway_network_patch,
     model::{Error, Event, Result, SessionId},
     ports::{Cloud, CloudLifecycle, CloudProvider, Events},
 };
@@ -57,12 +58,14 @@ impl Client {
         checked(response)
     }
 
-    /// Create only in the explicitly selected, active Anthropic cloud environment.
-    pub async fn create(&self, instructions: &str) -> Result<SessionId> {
+    async fn environment_request(&self, path: &str, body: Option<Value>) -> Result<Value> {
         let credentials = self.credentials.resolve(&self.owner).await?;
-        let response = self
-            .http
-            .get(format!("{API}/v1/environments"))
+        let url = format!("{API}{path}");
+        let request = match body {
+            Some(body) => self.http.post(url).json(&body),
+            None => self.http.get(url),
+        };
+        let response = request
             .bearer_auth(credentials.access_token.expose())
             .header("anthropic-version", "2023-06-01")
             .header(
@@ -74,29 +77,46 @@ impl Client {
             .send()
             .await
             .map_err(|_| Error::Network)?;
-        let environments: Value = checked(response)?
-            .json()
-            .await
-            .map_err(|_| Error::Protocol)?;
-        let valid = environments["data"].as_array().is_some_and(|all| {
-            all.iter().any(|e| {
-                e["id"].as_str() == Some(&credentials.environment_id)
-                    && e["config"]["type"] == "cloud"
-                    && e["state"] == "active"
-                    && e["archived_at"].is_null()
+        checked(response)?.json().await.map_err(|_| Error::Protocol)
+    }
+
+    async fn selected_environment(&self) -> Result<Value> {
+        let credentials = self.credentials.resolve(&self.owner).await?;
+        let environments = self.environment_request("/v1/environments", None).await?;
+        environments["data"]
+            .as_array()
+            .and_then(|all| {
+                all.iter().find(|e| {
+                    e["id"].as_str() == Some(&credentials.environment_id)
+                        && e["config"]["type"] == "cloud"
+                        && e["state"] == "active"
+                        && e["archived_at"].is_null()
+                })
             })
-        });
-        if !valid {
-            return Err(Error::Protocol);
-        }
+            .cloned()
+            .ok_or(Error::CloudEnvironment)
+    }
+
+    /// Create only in the explicitly selected, active Anthropic cloud environment.
+    pub async fn create(&self, instructions: &str) -> Result<SessionId> {
+        let environment = self.selected_environment().await?;
         let mut config = json!({"sources": [], "outcomes": []});
         if !instructions.is_empty() {
             config["append_system_prompt"] = json!(instructions);
         }
-        let response = self.request("/v1/code/sessions", Some(json!({
-            "title": "Macro Claude Cloud demo", "environment_id": credentials.environment_id,
-            "config": config, "events": []
-        }))).await.map_err(|error| match error { Error::Network => Error::UncertainCreate, other => other })?;
+        let response = self
+            .request(
+                "/v1/code/sessions",
+                Some(json!({
+                    "title": "Macro Claude Cloud demo", "environment_id": environment["id"],
+                    "config": config, "events": []
+                })),
+            )
+            .await
+            .map_err(|error| match error {
+                Error::Network => Error::UncertainCreate,
+                other => other,
+            })?;
         let data: Value = response.json().await.map_err(|_| Error::UncertainCreate)?;
         SessionId::parse(
             data["session"]["id"]
@@ -128,6 +148,28 @@ impl CloudProvider for Provider {
 }
 
 impl CloudLifecycle for Client {
+    async fn prepare_mcp_access(&self, host: &str) -> Result<()> {
+        let environment = self.selected_environment().await?;
+        let Some(networking) = gateway_network_patch(&environment["config"]["networking"], host)?
+        else {
+            return Ok(());
+        };
+        let id = environment["id"].as_str().ok_or(Error::Protocol)?;
+        self.environment_request(
+            &format!("/v1/environments/{id}"),
+            Some(json!({"config":{"type":"cloud", "networking":networking}})),
+        )
+        .await?;
+        // Do not launch a container if the provider failed to apply the policy.
+        let updated = self.selected_environment().await?;
+        if updated["id"] != environment["id"]
+            || gateway_network_patch(&updated["config"]["networking"], host)?.is_some()
+        {
+            return Err(Error::EnvironmentNetwork);
+        }
+        Ok(())
+    }
+
     async fn create(&self, instructions: &str) -> Result<SessionId> {
         Client::create(self, instructions).await
     }

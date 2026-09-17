@@ -616,6 +616,10 @@ async fn run() -> anyhow::Result<()> {
             claude_provider.clone(),
             session_repo.clone(),
             session_repo.clone(),
+            url::Url::parse(&egress_base_url)?
+                .host_str()
+                .context("egress URL needs a host")?
+                .to_owned(),
         ),
         EgressProvisioner::new(Arc::clone(&mcp_connections), egress_base_url.clone()),
         claude_cloud_agents::inbound::acp::attach,

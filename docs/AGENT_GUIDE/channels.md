@@ -254,6 +254,11 @@ optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
 channels. Channel favorites open in the channel preview. Shift-clicking a
 favorite, channel, or DM opens that conversation in a new split instead.
+While reading older history or composing in the preview, incoming notifications
+(including ones for other channels) must not jump to latest, blank/refetch the
+messages, or revoke composer focus. To check this, leave an unsent draft in a
+preview scrolled into older history and deliver a notification. Selecting another
+conversation or explicitly navigating to a message must still work.
 The search action beside the tabs opens a search field below them and replaces
 the active tab contents with matching channels and direct messages from one
 activity-ordered source. Search results use compact rows on `All` and

@@ -371,7 +371,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             )
             .fetch_optional(&mut *transaction)
             .await
-            .context("failed to read the originating message's channel")?,
+            .context("failed to read the originating message's channel")?
+            .flatten(),
             None => None,
         };
 
