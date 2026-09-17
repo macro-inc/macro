@@ -27,7 +27,9 @@ export function SenderName(props: { message: MessageData }) {
   const displayName = () => getDisplayName(macroId());
   const agentName = () =>
     getBotDisplayName(props.message.sender_id, props.message.sender);
-  return (
-    <>{props.message.imported_author?.name ?? agentName() ?? displayName()}</>
-  );
+  const importedName = () => {
+    const name = props.message.imported_author?.name?.trim();
+    return name ? name : undefined;
+  };
+  return <>{importedName() ?? agentName() ?? displayName()}</>;
 }

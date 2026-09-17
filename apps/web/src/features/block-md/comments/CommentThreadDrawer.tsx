@@ -138,11 +138,12 @@ function MessagePinnedReplyComposer(props: {
           onSend={async (snapshot) => {
             const { thread_id: _threadId, ...message } =
               buildPostMessageSendPayload({ snapshot }).message;
-            await props.createComment({
+            const created = await props.createComment({
               ...message,
               threadId: props.root.threadId,
             });
-            clear?.();
+            // Keep the draft on failure so the user can retry.
+            if (created) clear?.();
           }}
         />
       </div>

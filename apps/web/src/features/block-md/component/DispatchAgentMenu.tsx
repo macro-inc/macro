@@ -17,14 +17,10 @@ import CopyIcon from '@phosphor/copy.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import PlugIcon from '@phosphor/plug.svg';
 import TerminalWindowIcon from '@phosphor/terminal-window.svg';
+import { fetchDocumentThreads } from '@queries/messages/document-messages';
 import { storageServiceClient } from '@service-storage/client';
 import type { CommentThread } from '@service-storage/generated/schemas/commentThread';
-import {
-  entityMessagesClient,
-  type MessageCursor,
-  type MessageParent,
-  type MessageThread,
-} from '@service-storage/messages';
+import type { MessageThread } from '@service-storage/messages';
 import { createCallback } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
 import { Button, ButtonGroup, Dropdown } from '@ui';
@@ -77,20 +73,10 @@ function messagePromptThreads(threads: MessageThread[]): PromptThread[] {
 async function fetchMessagePromptThreads(
   documentId: string
 ): Promise<PromptThread[]> {
-  const parent: MessageParent = { type: 'document', id: documentId };
-  const threads: MessageThread[] = [];
-  let cursor: MessageCursor | null | undefined;
-  do {
-    const page = await entityMessagesClient.list(parent, {
-      anchored: false,
-      limit: 100,
-      cursor: cursor ?? undefined,
-    });
-    for (const root of page.items) {
-      threads.push(await entityMessagesClient.thread(parent, root.id));
-    }
-    cursor = page.next_cursor;
-  } while (cursor);
+  const threads = await fetchDocumentThreads({
+    type: 'document',
+    id: documentId,
+  });
   threads.reverse();
   return messagePromptThreads(threads);
 }

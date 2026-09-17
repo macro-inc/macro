@@ -43,8 +43,8 @@ import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
+import { useSendMessageMutation } from '@queries/messages/mutations';
 import { staticFileClient } from '@service-static-files/client';
-import { entityMessagesClient } from '@service-storage/messages';
 import { isIOS } from '@solid-primitives/platform';
 import { Button } from '@ui';
 import {
@@ -219,6 +219,7 @@ function IosShareSheetComposer(props: {
 }) {
   const shareTarget = useShareTarget();
   const userId = useUserId();
+  const sendMessage = useSendMessageMutation();
   const { all: destinationOptions } = useCombinedRecipients();
   const attachmentTracker = createInputAttachmentTracker();
   const composerId = crypto.randomUUID();
@@ -311,12 +312,12 @@ function IosShareSheetComposer(props: {
     const channelId = await resolveDestinationChannelId();
     const message = buildPostMessageRequest({ snapshot });
 
-    await entityMessagesClient
-      .post({ type: 'channel', id: channelId }, message)
-      .catch((error) => {
-        toast.failure('Failed to send message');
-        throw error;
-      });
+    await sendMessage.mutateAsync({
+      parent: { type: 'channel', id: channelId },
+      message,
+      senderId,
+      optimisticId: crypto.randomUUID(),
+    });
 
     invalidateListChannels();
     invalidateContacts();

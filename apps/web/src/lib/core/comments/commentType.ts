@@ -45,7 +45,10 @@ export function commentView(comment: IComment): {
       id: comment.id,
       createdAt: comment.created_at,
       owner: comment.sender_id,
-      author: comment.imported_author?.name ?? comment.sender_id,
+      author:
+        comment.imported_author?.name ??
+        comment.sender?.name ??
+        comment.sender_id,
       text: comment.content,
       message: comment,
     };

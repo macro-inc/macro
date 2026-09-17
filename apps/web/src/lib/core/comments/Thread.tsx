@@ -140,7 +140,11 @@ type ThreadBodyProps = {
  * renders it directly.
  */
 export function ThreadBody(props: ThreadBodyProps) {
-  return isFeatureEnabled(enableUnifiedDocumentDiscussions) ? (
+  // PDF flag-on discussions are deferred, so PDF stays on the legacy path even
+  // when the flag is on; only markdown documents use the message thread.
+  const blockName = useBlockAliasedName();
+  return isFeatureEnabled(enableUnifiedDocumentDiscussions) &&
+    blockName !== 'pdf' ? (
     <MessageThreadBody {...props} />
   ) : (
     <LegacyThreadBody {...props} />

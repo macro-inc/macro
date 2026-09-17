@@ -84,29 +84,32 @@ describe('anchored comment links', () => {
     expect(view.getByText('9')).toBeTruthy();
     expect(view.queryByText('4')).toBeNull();
   });
-  it.each(['md', 'pdf', 'task'])(
+  const renderThreadBody = () =>
+    render(() => (
+      <CommentsContext.Provider
+        value={{
+          documentId: 'document',
+          canComment: () => true,
+          isDocumentOwner: () => true,
+          highlightedCommentId: () => null,
+          setActiveThread: () => {},
+          setThreadHeight: () => {},
+          getCommentById: () => undefined,
+          ownedComment: () => false,
+          inComment: true,
+          commentOperations: noopCommentOperations,
+          messageOperations: { createComment: async () => null },
+        }}
+      >
+        <ThreadBody comment={comment} isActive />
+      </CommentsContext.Provider>
+    ));
+
+  it.each(['md', 'task'])(
     'uses the parameter read by document navigation for %s',
     (blockName) => {
       mocks.blockName = blockName;
-      const view = render(() => (
-        <CommentsContext.Provider
-          value={{
-            documentId: 'document',
-            canComment: () => true,
-            isDocumentOwner: () => true,
-            highlightedCommentId: () => null,
-            setActiveThread: () => {},
-            setThreadHeight: () => {},
-            getCommentById: () => undefined,
-            ownedComment: () => false,
-            inComment: true,
-            commentOperations: noopCommentOperations,
-            messageOperations: { createComment: async () => null },
-          }}
-        >
-          <ThreadBody comment={comment} isActive />
-        </CommentsContext.Provider>
-      ));
+      const view = renderThreadBody();
       const url = new URL(view.getByRole('link').getAttribute('href')!);
       expect(url.pathname).toBe(`/app/${blockName}/document`);
       expect(url.searchParams.get(markdownParams.commentId)).toBe(
@@ -115,4 +118,11 @@ describe('anchored comment links', () => {
       expect(url.searchParams.has('commentId')).toBe(false);
     }
   );
+
+  it('keeps PDF on the legacy path while its flag-on discussion is deferred', () => {
+    mocks.blockName = 'pdf';
+    const view = renderThreadBody();
+    // The message thread (mocked as the copy-link anchor) is markdown-only.
+    expect(view.queryByRole('link')).toBeNull();
+  });
 });

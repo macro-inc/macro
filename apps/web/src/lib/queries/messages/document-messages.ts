@@ -1,7 +1,9 @@
 import { useUserId } from '@core/context/user';
 import {
   entityMessagesClient,
+  type MessageCursor,
   type MessageParent,
+  type MessageThread,
   type PostMessage,
 } from '@service-storage/messages';
 import { useQuery } from '@tanstack/solid-query';
@@ -43,6 +45,26 @@ export function useMessageRootsQuery(parent: Accessor<MessageParent>) {
     },
     refetch: query.refetch,
   };
+}
+
+/** Every full thread for a document — copy/export needs whole discussions, not the timeline's bounded reply previews. */
+export async function fetchDocumentThreads(
+  parent: MessageParent
+): Promise<MessageThread[]> {
+  const threads: MessageThread[] = [];
+  let cursor: MessageCursor | null | undefined;
+  do {
+    const page = await entityMessagesClient.list(parent, {
+      anchored: false,
+      limit: 100,
+      cursor: cursor ?? undefined,
+    });
+    for (const root of page.items) {
+      threads.push(await entityMessagesClient.thread(parent, root.id));
+    }
+    cursor = page.next_cursor;
+  } while (cursor);
+  return threads;
 }
 
 /** Bind the shared mutations to an annotation editor's parent. */
