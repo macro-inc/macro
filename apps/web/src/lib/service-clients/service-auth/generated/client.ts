@@ -13,6 +13,7 @@ import type {
   CodexLoginStart,
   CreateAccountMergeRequest,
   CreateCheckoutSessionV2Request,
+  CreateGtmInviteLinkRequest,
   CreateInProgressLinkResponse,
   CreatePortalSessionRequest,
   CreateTeamRequest,
@@ -32,6 +33,10 @@ import type {
   GetUserLinkExistsParams,
   GithubLinkStatusResponse,
   GmailLinkStatusResponse,
+  GtmInviteLink,
+  GtmInviteLinkList,
+  GtmInviteOffer,
+  GtmInviteOfferStatus,
   InitGithubLinkParams,
   InitGithubLinkResponse,
   InitGmailLinkParams,
@@ -39,6 +44,7 @@ import type {
   InitOutlookLinkParams,
   InitOutlookLinkResponse,
   InviteToTeamRequest,
+  ListGtmInviteLinksParams,
   MacroApiTokenParams,
   MacroApiTokenResponse,
   PasswordlessCallbackParams,
@@ -54,10 +60,12 @@ import type {
   Permission,
   PostGetNamesRequestBody,
   ProfilePictures,
+  PublicGtmInviteLink,
   PutCursorApiKeyRequest,
   PutCursorDefaultModelRequest,
   PutProfilePictureParams,
   PutUserNameParams,
+  RedeemGtmInviteLinkRequest,
   ResendFusionauthVerifyUserEmailRequest,
   SendInviteBody,
   SendMobileWelcomeEmailRequest,
@@ -923,6 +931,440 @@ export const enrichGithubPullRequests = async (
     status: res.status,
     headers: res.headers,
   } as enrichGithubPullRequestsResponse;
+};
+
+/**
+ * @summary Lists invite links, newest first. Macro staff only.
+ */
+export type listGtmInviteLinksResponse200 = {
+  data: GtmInviteLinkList;
+  status: 200;
+};
+
+export type listGtmInviteLinksResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type listGtmInviteLinksResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type listGtmInviteLinksResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type listGtmInviteLinksResponseSuccess =
+  listGtmInviteLinksResponse200 & {
+    headers: Headers;
+  };
+export type listGtmInviteLinksResponseError = (
+  | listGtmInviteLinksResponse401
+  | listGtmInviteLinksResponse403
+  | listGtmInviteLinksResponse500
+) & {
+  headers: Headers;
+};
+
+export type listGtmInviteLinksResponse =
+  | listGtmInviteLinksResponseSuccess
+  | listGtmInviteLinksResponseError;
+
+export const getListGtmInviteLinksUrl = (params?: ListGtmInviteLinksParams) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString());
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0
+    ? `/gtm-invite/links?${stringifiedParams}`
+    : `/gtm-invite/links`;
+};
+
+export const listGtmInviteLinks = async (
+  params?: ListGtmInviteLinksParams,
+  options?: RequestInit
+): Promise<listGtmInviteLinksResponse> => {
+  const res = await fetch(getListGtmInviteLinksUrl(params), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listGtmInviteLinksResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listGtmInviteLinksResponse;
+};
+
+/**
+ * @summary Creates an invite link. Macro staff only.
+ */
+export type createGtmInviteLinkResponse200 = {
+  data: GtmInviteLink;
+  status: 200;
+};
+
+export type createGtmInviteLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type createGtmInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type createGtmInviteLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type createGtmInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type createGtmInviteLinkResponseSuccess =
+  createGtmInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type createGtmInviteLinkResponseError = (
+  | createGtmInviteLinkResponse400
+  | createGtmInviteLinkResponse401
+  | createGtmInviteLinkResponse403
+  | createGtmInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type createGtmInviteLinkResponse =
+  | createGtmInviteLinkResponseSuccess
+  | createGtmInviteLinkResponseError;
+
+export const getCreateGtmInviteLinkUrl = () => {
+  return `/gtm-invite/links`;
+};
+
+export const createGtmInviteLink = async (
+  createGtmInviteLinkRequest: CreateGtmInviteLinkRequest,
+  options?: RequestInit
+): Promise<createGtmInviteLinkResponse> => {
+  const res = await fetch(getCreateGtmInviteLinkUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(createGtmInviteLinkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: createGtmInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as createGtmInviteLinkResponse;
+};
+
+/**
+ * @summary Revokes an invite link nobody has signed up through. Macro staff only.
+ */
+export type revokeGtmInviteLinkResponse200 = {
+  data: GtmInviteLink;
+  status: 200;
+};
+
+export type revokeGtmInviteLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type revokeGtmInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type revokeGtmInviteLinkResponse403 = {
+  data: ErrorResponse;
+  status: 403;
+};
+
+export type revokeGtmInviteLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type revokeGtmInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type revokeGtmInviteLinkResponseSuccess =
+  revokeGtmInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type revokeGtmInviteLinkResponseError = (
+  | revokeGtmInviteLinkResponse400
+  | revokeGtmInviteLinkResponse401
+  | revokeGtmInviteLinkResponse403
+  | revokeGtmInviteLinkResponse404
+  | revokeGtmInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type revokeGtmInviteLinkResponse =
+  | revokeGtmInviteLinkResponseSuccess
+  | revokeGtmInviteLinkResponseError;
+
+export const getRevokeGtmInviteLinkUrl = (id: string) => {
+  return `/gtm-invite/links/${id}`;
+};
+
+export const revokeGtmInviteLink = async (
+  id: string,
+  options?: RequestInit
+): Promise<revokeGtmInviteLinkResponse> => {
+  const res = await fetch(getRevokeGtmInviteLinkUrl(id), {
+    ...options,
+    method: 'DELETE',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: revokeGtmInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as revokeGtmInviteLinkResponse;
+};
+
+/**
+ * @summary The promotion the signed-in user's account holds from an invite link, if
+they redeemed one and have not started a paid subscription yet.
+ */
+export type getGtmInviteOfferResponse200 = {
+  data: GtmInviteOfferStatus;
+  status: 200;
+};
+
+export type getGtmInviteOfferResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type getGtmInviteOfferResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type getGtmInviteOfferResponseSuccess = getGtmInviteOfferResponse200 & {
+  headers: Headers;
+};
+export type getGtmInviteOfferResponseError = (
+  | getGtmInviteOfferResponse401
+  | getGtmInviteOfferResponse500
+) & {
+  headers: Headers;
+};
+
+export type getGtmInviteOfferResponse =
+  | getGtmInviteOfferResponseSuccess
+  | getGtmInviteOfferResponseError;
+
+export const getGetGtmInviteOfferUrl = () => {
+  return `/gtm-invite/offer`;
+};
+
+export const getGtmInviteOffer = async (
+  options?: RequestInit
+): Promise<getGtmInviteOfferResponse> => {
+  const res = await fetch(getGetGtmInviteOfferUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: getGtmInviteOfferResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as getGtmInviteOfferResponse;
+};
+
+/**
+ * Unauthenticated: the recipient has no account yet. Only the first name and
+whether the link is still usable are exposed.
+ * @summary Resolves an invite link for the public welcome page and counts the open.
+ */
+export type resolveGtmInviteLinkResponse200 = {
+  data: PublicGtmInviteLink;
+  status: 200;
+};
+
+export type resolveGtmInviteLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type resolveGtmInviteLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type resolveGtmInviteLinkResponse429 = {
+  data: void;
+  status: 429;
+};
+
+export type resolveGtmInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type resolveGtmInviteLinkResponseSuccess =
+  resolveGtmInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type resolveGtmInviteLinkResponseError = (
+  | resolveGtmInviteLinkResponse400
+  | resolveGtmInviteLinkResponse404
+  | resolveGtmInviteLinkResponse429
+  | resolveGtmInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type resolveGtmInviteLinkResponse =
+  | resolveGtmInviteLinkResponseSuccess
+  | resolveGtmInviteLinkResponseError;
+
+export const getResolveGtmInviteLinkUrl = (token: string) => {
+  return `/gtm-invite/public/${token}`;
+};
+
+export const resolveGtmInviteLink = async (
+  token: string,
+  options?: RequestInit
+): Promise<resolveGtmInviteLinkResponse> => {
+  const res = await fetch(getResolveGtmInviteLinkUrl(token), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: resolveGtmInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as resolveGtmInviteLinkResponse;
+};
+
+/**
+ * @summary Attributes the signed-in user's account to the invite link they opened and
+grants them its offer. Idempotent for the same account.
+ */
+export type redeemGtmInviteLinkResponse200 = {
+  data: GtmInviteOffer;
+  status: 200;
+};
+
+export type redeemGtmInviteLinkResponse400 = {
+  data: ErrorResponse;
+  status: 400;
+};
+
+export type redeemGtmInviteLinkResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
+export type redeemGtmInviteLinkResponse404 = {
+  data: ErrorResponse;
+  status: 404;
+};
+
+export type redeemGtmInviteLinkResponse409 = {
+  data: ErrorResponse;
+  status: 409;
+};
+
+export type redeemGtmInviteLinkResponse410 = {
+  data: ErrorResponse;
+  status: 410;
+};
+
+export type redeemGtmInviteLinkResponse500 = {
+  data: ErrorResponse;
+  status: 500;
+};
+
+export type redeemGtmInviteLinkResponseSuccess =
+  redeemGtmInviteLinkResponse200 & {
+    headers: Headers;
+  };
+export type redeemGtmInviteLinkResponseError = (
+  | redeemGtmInviteLinkResponse400
+  | redeemGtmInviteLinkResponse401
+  | redeemGtmInviteLinkResponse404
+  | redeemGtmInviteLinkResponse409
+  | redeemGtmInviteLinkResponse410
+  | redeemGtmInviteLinkResponse500
+) & {
+  headers: Headers;
+};
+
+export type redeemGtmInviteLinkResponse =
+  | redeemGtmInviteLinkResponseSuccess
+  | redeemGtmInviteLinkResponseError;
+
+export const getRedeemGtmInviteLinkUrl = () => {
+  return `/gtm-invite/redeem`;
+};
+
+export const redeemGtmInviteLink = async (
+  redeemGtmInviteLinkRequest: RedeemGtmInviteLinkRequest,
+  options?: RequestInit
+): Promise<redeemGtmInviteLinkResponse> => {
+  const res = await fetch(getRedeemGtmInviteLinkUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(redeemGtmInviteLinkRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: redeemGtmInviteLinkResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as redeemGtmInviteLinkResponse;
 };
 
 /**

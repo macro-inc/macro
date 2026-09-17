@@ -101,6 +101,8 @@ const AUTH_URLS = [
   `${ROUTER_BASE_CONCAT}welcome`,
   `${ROUTER_BASE_CONCAT}mobile-email-signup`,
   `${ROUTER_BASE_CONCAT}team-invite`,
+  `${ROUTER_BASE_CONCAT}invite`,
+  `${ROUTER_BASE_CONCAT}internal/invite-links`,
 ];
 
 const [sidebarState, setSidebarState] = makePersisted(

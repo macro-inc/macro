@@ -9,6 +9,8 @@ use cache_core::{
 };
 use predicate_index::ExactFact;
 
+mod batch;
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
 
@@ -237,6 +239,7 @@ async fn retain_complete_parents<S: Storage>(
     storage: &S,
     mutations: Vec<ProjectionMutation>,
 ) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
+    let mutations = batch::batch_member_changes(mutations);
     if mutations.is_empty() {
         return Ok(mutations);
     }

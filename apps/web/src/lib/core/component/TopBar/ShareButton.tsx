@@ -48,6 +48,12 @@ import IconShared from '@phosphor/share.svg';
 import UserCircle from '@phosphor/user-circle.svg';
 import UsersIcon from '@phosphor/users.svg';
 import IconX from '@phosphor/x.svg';
+import {
+  setCallRecordTeamShareCache,
+  sharePermissionFromCallRecord,
+  updateCallTeamShare,
+  useCallRecordQuery,
+} from '@queries/call/call';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import {
@@ -109,6 +115,7 @@ import {
   TEAM_SHARE_SCOPE_OPTIONS,
   type TeamSharePayload,
   type TeamShareScope,
+  teamShareScopeOptionsForItem,
 } from './linkShare';
 
 false && clickOutside;
@@ -117,6 +124,21 @@ const isLinkSharingDisabledForItem = (itemType: ItemType): boolean =>
   itemType === 'email' ||
   itemType === 'project' ||
   itemType === 'agent_session';
+
+async function fetchSharePermissions(id: string, itemType: ItemType) {
+  if (itemType === 'chat') {
+    return cognitionApiServiceClient.getChatPermissions({ id });
+  }
+  if (itemType === 'document') {
+    return storageServiceClient.getDocumentPermissions({ document_id: id });
+  }
+  if (itemType === 'project') {
+    if (id === 'trash') {
+      return;
+    }
+    return storageServiceClient.projects.getPermissions({ id });
+  }
+}
 
 const agentSessionShareDescription = (canShare: boolean) =>
   canShare
@@ -149,16 +171,7 @@ const permissionsBlockResource = createBlockResource(
     const id = useBlockId();
     const blockName = useBlockName();
     const itemType = blockNameToItemType(blockName);
-    if (itemType === 'chat') {
-      return cognitionApiServiceClient.getChatPermissions({ id });
-    } else if (itemType === 'document') {
-      return storageServiceClient.getDocumentPermissions({ document_id: id });
-    } else if (itemType === 'project') {
-      if (id === 'trash') {
-        return;
-      }
-      return storageServiceClient.projects.getPermissions({ id });
-    }
+    return fetchSharePermissions(id, itemType);
   },
   { initialValue: undefined }
 );
@@ -301,6 +314,7 @@ interface TeamShareControls {
   setAccessLevel: (scope: TeamShareScope) => void;
   /** Noun for the copy, e.g. "document" or "chat". */
   itemNoun: string;
+  scopeOptions: ReadonlyArray<{ value: TeamShareScope; label: string }>;
 }
 
 function LinkSharingControls(props: LinkSharingControlsProps) {
@@ -381,7 +395,11 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
                   props.teamShare?.setAccessLevel(value as TeamShareScope)
                 }
               >
-                <For each={TEAM_SHARE_SCOPE_OPTIONS}>
+                <For
+                  each={
+                    props.teamShare?.scopeOptions ?? TEAM_SHARE_SCOPE_OPTIONS
+                  }
+                >
                   {(option) => (
                     <Dropdown.RadioItem value={option.value}>
                       <span class="flex-1 truncate">{option.label}</span>
@@ -651,6 +669,9 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                       accessLevel: props.teamShareAccessLevel,
                       setAccessLevel: props.setTeamShareAccessLevel,
                       itemNoun: getShareItemNoun(props.itemType),
+                      scopeOptions: teamShareScopeOptionsForItem(
+                        props.itemType
+                      ),
                     }
                   : undefined
               }
@@ -666,6 +687,9 @@ export function ShareModal(props: ShareModalProps) {
   const navigate = useNavigate();
   const analytics = useAnalytics();
   const currentTeamQuery = useCurrentTeamQuery();
+  const callRecordQuery = useCallRecordQuery(() =>
+    props.itemType === 'call' ? props.id : ''
+  );
   const isBlockContext = isInBlock() && props.itemType !== 'agent_session';
   const [fallbackPermissionsResource, { refetch: refetchFallback }] =
     createResource(
@@ -676,18 +700,7 @@ export function ShareModal(props: ShareModalProps) {
       async (source) => {
         if (!source) return;
         const { id, itemType } = source;
-        if (itemType === 'chat') {
-          return cognitionApiServiceClient.getChatPermissions({ id });
-        } else if (itemType === 'document') {
-          return storageServiceClient.getDocumentPermissions({
-            document_id: id,
-          });
-        } else if (itemType === 'project') {
-          if (id === 'trash') {
-            return;
-          }
-          return storageServiceClient.projects.getPermissions({ id });
-        }
+        return fetchSharePermissions(id, itemType);
       },
       { initialValue: undefined }
     );
@@ -963,6 +976,12 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const teamShareAccessLevel = createMemo(() => {
+    if (props.itemType === 'call') {
+      if (!callRecordQuery.isSuccess) return;
+      const record = callRecordQuery.data;
+      if (!record) return;
+      return sharePermissionFromCallRecord(record).teamShareAccessLevel;
+    }
     const currentPermissions = permissionsResource.latest;
     if (!currentPermissions || currentPermissions.isErr()) return;
 
@@ -975,19 +994,23 @@ export function ShareModal(props: ShareModalProps) {
         return;
       }
       const itemNoun = getShareItemNoun(props.itemType);
+      const shared =
+        getTeamShareScope(sharePermission.teamShareAccessLevel) !== 'NONE';
 
-      // Both endpoints accept the same `sharePermission.teamShareAccessLevel`
-      // patch; the backend authorizes it against the persisted owner.
-      const result =
-        props.itemType === 'chat'
-          ? await cognitionApiServiceClient.updateChatPermissions({
-              sharePermission,
-              chat_id: props.id,
-            })
-          : await storageServiceClient.editDocument({
-              sharePermission,
-              documentId: props.id,
-            });
+      let result: Result<unknown, ResultError<any>[]>;
+      if (props.itemType === 'chat') {
+        result = await cognitionApiServiceClient.updateChatPermissions({
+          sharePermission,
+          chat_id: props.id,
+        });
+      } else if (props.itemType === 'call') {
+        result = await updateCallTeamShare(props.id, shared);
+      } else {
+        result = await storageServiceClient.editDocument({
+          sharePermission,
+          documentId: props.id,
+        });
+      }
       if (result.isErr()) {
         toast.alert('Failed to change team access', {
           subtext: 'Please try again',
@@ -998,6 +1021,9 @@ export function ShareModal(props: ShareModalProps) {
 
       refetch();
       const scope = getTeamShareScope(sharePermission.teamShareAccessLevel);
+      if (props.itemType === 'call') {
+        setCallRecordTeamShareCache(props.id, shared);
+      }
       if (scope === 'NONE') {
         toast.success(`Removed team access for this ${itemNoun}`);
         return;
@@ -1028,6 +1054,7 @@ export function ShareModal(props: ShareModalProps) {
           accessLevel: teamShareAccessLevel(),
           setAccessLevel: setTeamShareAccessLevel,
           itemNoun: getShareItemNoun(props.itemType),
+          scopeOptions: teamShareScopeOptionsForItem(props.itemType),
         }
       : undefined;
 

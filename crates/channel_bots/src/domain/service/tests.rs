@@ -42,6 +42,14 @@ struct TestChannelService {
 }
 
 impl ChannelService for TestChannelService {
+    async fn set_channel_picture(
+        &self,
+        _access: channels::domain::ports::ChannelPictureAccess,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), channels::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     fn get_channel_messages(
         &self,
         _channel_id: Uuid,
@@ -155,6 +163,14 @@ impl MutationChannelService {
 }
 
 impl ChannelService for MutationChannelService {
+    async fn set_channel_picture(
+        &self,
+        _access: channels::domain::ports::ChannelPictureAccess,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), channels::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     fn get_channel_messages(
         &self,
         _channel_id: Uuid,

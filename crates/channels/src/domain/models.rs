@@ -1121,6 +1121,8 @@ pub enum ChannelPreview {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 pub struct ChannelPreviewData {
+    /// Static image file used as the channel's profile picture, when accessible.
+    pub profile_picture_id: Option<Uuid>,
     /// Channel id.
     pub channel_id: String,
     /// Resolved channel display name.
@@ -1377,6 +1379,8 @@ impl SortOn<SimpleSortMethod> for ChannelWithLatest {
 /// Raw preview row returned from the repository.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ChannelPreviewRow {
+    /// Static image file used as the channel's profile picture.
+    pub profile_picture_id: Option<Uuid>,
     /// Channel info.
     pub info: ChannelInfo,
     /// Whether the viewer can access the channel.

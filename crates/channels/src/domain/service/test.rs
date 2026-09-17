@@ -280,6 +280,7 @@ async fn attaches_bot_profiles_to_bot_authored_messages() {
 
 #[derive(Clone)]
 struct FakeMutationRepo {
+    picture_updates: Arc<Mutex<Vec<(Uuid, Option<Uuid>)>>>,
     state: Arc<Mutex<FakeMutationRepoState>>,
 }
 
@@ -323,6 +324,7 @@ impl FakeMutationRepo {
             deleted_at: None,
         };
         Self {
+            picture_updates: Arc::default(),
             state: Arc::new(Mutex::new(FakeMutationRepoState {
                 channel_id,
                 channel_name: Some("Project".to_string()),
@@ -368,6 +370,18 @@ impl FakeMutationRepo {
 }
 
 impl ChannelRepo for FakeMutationRepo {
+    async fn set_channel_picture(
+        &self,
+        channel_id: Uuid,
+        picture_id: Option<Uuid>,
+    ) -> Result<(), Self::Err> {
+        self.picture_updates
+            .lock()
+            .unwrap()
+            .push((channel_id, picture_id));
+        Ok(())
+    }
+
     type Err = anyhow::Error;
 
     async fn get_top_level_messages(
@@ -3388,4 +3402,188 @@ async fn join_by_code_is_idempotent_for_active_participant() {
     assert_eq!(state.participant_additions, 0);
     assert!(state.touched_channel_ids.is_empty());
     assert!(events.events.lock().unwrap().is_empty());
+}
+
+#[derive(Clone)]
+struct FakePictureFiles {
+    file: Option<ChannelPictureFile>,
+    fail: bool,
+}
+
+impl ChannelPictureFiles for FakePictureFiles {
+    async fn get_picture_file(&self, _file_id: Uuid) -> anyhow::Result<Option<ChannelPictureFile>> {
+        if self.fail {
+            anyhow::bail!("static-file service unavailable");
+        }
+        Ok(self.file.clone())
+    }
+}
+
+fn owned_picture_file() -> ChannelPictureFile {
+    ChannelPictureFile {
+        owner_id: "macro|sender@test.com".into(),
+        is_uploaded: true,
+        content_type: "image/png".into(),
+    }
+}
+
+#[tokio::test]
+async fn channel_picture_can_be_set_replaced_and_removed_by_admins_and_owners() {
+    use entity_access::domain::models::{
+        AdminParticipantRole, Entity, EntityPermission, ParticipantRole as AccessRole,
+    };
+    for role in [AccessRole::Admin, AccessRole::Owner] {
+        let channel_id = Uuid::new_v4();
+        let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+        let events = FakeEvents::default();
+        let svc = mutation_service(
+            repo.clone(),
+            events.clone(),
+            FakeReferenceSharing::default(),
+        )
+        .with_picture_files(FakePictureFiles {
+            file: Some(owned_picture_file()),
+            fail: false,
+        });
+        let pictures = [Some(Uuid::new_v4()), Some(Uuid::new_v4()), None];
+        for picture in pictures {
+            let access = EntityAccessReceipt::<AdminParticipantRole>::try_new_authenticated_user(
+                macro_id("macro|sender@test.com"),
+                Entity {
+                    entity_id: channel_id.to_string(),
+                    entity_type: EntityType::Channel,
+                },
+                EntityPermission::ChannelRole { role },
+            )
+            .unwrap();
+            svc.set_channel_picture(access, picture).await.unwrap();
+        }
+        assert_eq!(
+            *repo.picture_updates.lock().unwrap(),
+            pictures.map(|picture| (channel_id, picture))
+        );
+        let events = events.events.lock().unwrap();
+        assert_eq!(events.len(), 3);
+        assert!(events.iter().all(|event| matches!(event,
+            ChannelEvent::PictureChanged { channel_id: id, recipients }
+                if *id == channel_id && recipients.contains(&macro_id("macro|sender@test.com"))
+        )));
+    }
+}
+
+#[test]
+fn channel_members_cannot_obtain_picture_write_access() {
+    use entity_access::domain::models::{
+        AdminParticipantRole, Entity, EntityPermission, ParticipantRole as AccessRole,
+    };
+    assert!(
+        EntityAccessReceipt::<AdminParticipantRole>::try_new_authenticated_user(
+            macro_id("macro|sender@test.com"),
+            Entity {
+                entity_id: Uuid::new_v4().to_string(),
+                entity_type: EntityType::Channel
+            },
+            EntityPermission::ChannelRole {
+                role: AccessRole::Member
+            },
+        )
+        .is_err()
+    );
+}
+
+#[tokio::test]
+async fn channel_picture_rejects_direct_messages_and_non_channel_receipts() {
+    use entity_access::domain::models::AdminParticipantRole;
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    repo.state.lock().unwrap().channel_type = ChannelType::DirectMessage;
+    let svc = ChannelServiceImpl::new(repo.clone());
+    for entity_type in [EntityType::Channel, EntityType::Document] {
+        let access =
+            EntityAccessReceipt::<AdminParticipantRole>::dangerously_assert_authenticated_user(
+                macro_id("macro|sender@test.com"),
+                &channel_id.to_string(),
+                entity_type,
+            );
+        assert!(matches!(
+            svc.set_channel_picture(access, Some(Uuid::new_v4())).await,
+            Err(ChannelMutationErr::BadRequest(_))
+        ));
+    }
+    assert!(repo.picture_updates.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn channel_picture_rejects_foreign_missing_pending_non_image_and_unavailable_files() {
+    use entity_access::domain::models::AdminParticipantRole;
+    let files = [
+        FakePictureFiles {
+            file: Some(ChannelPictureFile {
+                owner_id: "macro|someone-else@test.com".into(),
+                ..owned_picture_file()
+            }),
+            fail: false,
+        },
+        FakePictureFiles {
+            file: None,
+            fail: false,
+        },
+        FakePictureFiles {
+            file: Some(ChannelPictureFile {
+                is_uploaded: false,
+                ..owned_picture_file()
+            }),
+            fail: false,
+        },
+        FakePictureFiles {
+            file: Some(ChannelPictureFile {
+                content_type: "text/html".into(),
+                ..owned_picture_file()
+            }),
+            fail: false,
+        },
+        FakePictureFiles {
+            file: Some(owned_picture_file()),
+            fail: true,
+        },
+    ];
+    for file in files {
+        let channel_id = Uuid::new_v4();
+        let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+        let events = FakeEvents::default();
+        let svc = mutation_service(
+            repo.clone(),
+            events.clone(),
+            FakeReferenceSharing::default(),
+        )
+        .with_picture_files(file);
+        let access =
+            EntityAccessReceipt::<AdminParticipantRole>::dangerously_assert_authenticated_user(
+                macro_id("macro|sender@test.com"),
+                &channel_id.to_string(),
+                EntityType::Channel,
+            );
+        assert!(
+            svc.set_channel_picture(access, Some(Uuid::new_v4()))
+                .await
+                .is_err()
+        );
+        assert!(repo.picture_updates.lock().unwrap().is_empty());
+        assert!(events.events.lock().unwrap().is_empty());
+    }
+}
+
+#[tokio::test]
+async fn channel_picture_removal_does_not_require_static_file_availability() {
+    use entity_access::domain::models::AdminParticipantRole;
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let svc = ChannelServiceImpl::new(repo.clone());
+    let access = EntityAccessReceipt::<AdminParticipantRole>::dangerously_assert_authenticated_user(
+        macro_id("macro|sender@test.com"),
+        &channel_id.to_string(),
+        EntityType::Channel,
+    );
+    svc.set_channel_picture(access, None).await.unwrap();
+    assert_eq!(*repo.picture_updates.lock().unwrap(), [(channel_id, None)]);
 }

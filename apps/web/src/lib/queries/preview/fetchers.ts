@@ -70,6 +70,7 @@ async function fetchChannelPreviews(
           rawName: channel.channel_name,
           name: channel.channel_name,
           channelType: channel.channel_type,
+          profilePictureId: channel.profile_picture_id,
         };
       case 'no_access':
       case 'does_not_exist':

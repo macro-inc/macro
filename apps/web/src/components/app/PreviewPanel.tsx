@@ -219,23 +219,44 @@ function PreviewPanelContent(
     );
   });
 
+  // Cache reconciliation can replace an unchanged channel object. Only a new
+  // selection or explicit target should navigate/reset focus, not fresh metadata
+  // or notifications. Keep the live entity available to the preview context.
+  const navigationSelection = createMemo(() => {
+    const entity = props.selectedEntity;
+    if (
+      entity.type === 'channel' ||
+      entity.type === 'channel_message' ||
+      entity.type === 'channel_thread'
+    ) {
+      return JSON.stringify([
+        entity.type,
+        entity.id,
+        entity.type === 'channel' ? undefined : entity.channelId,
+        entity.type === 'channel' ? undefined : entity.messageId,
+        entity.type === 'channel' ? undefined : entity.threadId,
+        entity.target?.messageId,
+        entity.target?.threadId,
+      ]);
+    }
+    return entity;
+  });
+
   createRenderEffect(
-    on(
-      () => props.selectedEntity,
-      (entity) => {
-        setInteractedWith(false);
-        if (!blockInstance()) return;
-        if (
-          entity.type === 'channel' ||
-          entity.type === 'channel_message' ||
-          entity.type === 'channel_thread'
-        ) {
-          void navigateChannelEntityToTarget(entity, props.orchestrator);
-        } else if (entity.type === 'calendar_event') {
-          void navigateCalendarEntityToTarget(entity, props.orchestrator);
-        }
+    on(navigationSelection, () => {
+      const entity = props.selectedEntity;
+      setInteractedWith(false);
+      if (!blockInstance()) return;
+      if (
+        entity.type === 'channel' ||
+        entity.type === 'channel_message' ||
+        entity.type === 'channel_thread'
+      ) {
+        void navigateChannelEntityToTarget(entity, props.orchestrator);
+      } else if (entity.type === 'calendar_event') {
+        void navigateCalendarEntityToTarget(entity, props.orchestrator);
       }
-    )
+    })
   );
 
   return (

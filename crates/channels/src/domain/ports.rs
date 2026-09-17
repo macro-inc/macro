@@ -35,6 +35,10 @@ use models_pagination::{CreatedAt, Query};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
 
+/// Verified channel administration access required to change a channel picture.
+pub type ChannelPictureAccess =
+    EntityAccessReceipt<entity_access::domain::models::AdminParticipantRole>;
+
 /// Repository for channel list persistence and query data.
 #[cfg(feature = "list")]
 pub trait ChannelListRepo: Send + Sync + 'static {
@@ -124,6 +128,12 @@ pub trait ChannelAttachmentRepo: Send + Sync + 'static {
 /// Repository for channel persistence and query data.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait ChannelRepo: Send + Sync + 'static {
+    /// Replace or remove the channel's static-file picture reference.
+    fn set_channel_picture(
+        &self,
+        channel_id: Uuid,
+        picture_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
     /// Error type for repo operations.
     type Err: Into<anyhow::Error> + Send;
 
@@ -529,6 +539,12 @@ pub trait ChannelRepo: Send + Sync + 'static {
 
 /// Service for channel reads and mutations.
 pub trait ChannelService: Send + Sync + 'static {
+    /// Set a channel picture using verified channel administration access.
+    fn set_channel_picture(
+        &self,
+        access: ChannelPictureAccess,
+        picture_id: Option<Uuid>,
+    ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send;
     /// Fetch a page of channel messages with thread previews, reactions, and attachments.
     ///
     /// `notification_user_id` is used only when `filters.notification_filters` is non-empty.
@@ -1114,6 +1130,26 @@ pub trait ChannelEventHandler: Clone + Send + Sync + 'static {
 pub trait ChannelEventDispatcher: Send + Sync + 'static {
     /// Fire-and-forget dispatch of a channel event.
     fn dispatch(&self, event: ChannelEvent);
+}
+
+/// Metadata needed to authorize an uploaded channel picture.
+#[derive(Debug, Clone)]
+pub struct ChannelPictureFile {
+    /// User who uploaded the file.
+    pub owner_id: String,
+    /// Whether the file's upload has completed.
+    pub is_uploaded: bool,
+    /// Declared MIME type of the file.
+    pub content_type: String,
+}
+
+/// Fetches static-file facts; the channel service decides whether they permit use.
+pub trait ChannelPictureFiles: Send + Sync + 'static {
+    /// Look up a candidate picture, returning `None` when it does not exist.
+    fn get_picture_file(
+        &self,
+        file_id: Uuid,
+    ) -> impl Future<Output = anyhow::Result<Option<ChannelPictureFile>>> + Send;
 }
 
 /// Allows a boxed dispatcher to be used wherever a `ChannelEventDispatcher` is

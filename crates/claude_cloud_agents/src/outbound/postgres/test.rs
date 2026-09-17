@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::model::Secret;
+use crate::domain::model::{Credentials, Secret};
 use cursor_api_key::cipher::KmsCiphertextsError;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::sync::{Arc, Mutex};
@@ -95,8 +95,117 @@ async fn durable_encrypted_grants_are_owner_bound_replaceable_and_removable(pool
     );
     sqlx::query!("INSERT INTO claude_oauth_grants (user_id, grant_ciphertext, kms_key_id, encryption_version) SELECT 'bob', grant_ciphertext, kms_key_id, encryption_version FROM claude_oauth_grants WHERE user_id = 'alice'").execute(&pool).await.unwrap();
     assert!(matches!(store.get("bob").await, Err(Error::Credentials)));
-    restarted.delete("bob").await.unwrap();
+    sqlx::query!("DELETE FROM claude_oauth_grants WHERE user_id = $1", "bob")
+        .execute(&pool)
+        .await
+        .unwrap();
     assert!(store.get("alice").await.unwrap().is_some());
     restarted.delete("alice").await.unwrap();
     assert!(store.get("alice").await.unwrap().is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pending_consent_is_encrypted_durable_and_locked_across_replicas(pool: sqlx::PgPool) {
+    user(&pool, "alice").await;
+    let kms = FakeKms::default();
+    let first = Arc::new(PgClaudeGrants::new(pool.clone(), kms.clone()));
+    let second = Arc::new(PgClaudeGrants::new(pool.clone(), kms));
+    let mut transaction = first.lock("alice").await.unwrap();
+    transaction.state().attempt = Some(crate::domain::auth::Attempt {
+        id: "attempt".into(),
+        state: "state".into(),
+        verifier: Some(Secret::parse("private-verifier".into()).unwrap()),
+        started: 1,
+    });
+    let waiting = {
+        let second = second.clone();
+        tokio::spawn(async move { second.lock("alice").await.unwrap() })
+    };
+    tokio::task::yield_now().await;
+    assert!(!waiting.is_finished());
+    transaction.commit().await.unwrap();
+    let mut resumed = waiting.await.unwrap();
+    assert_eq!(
+        resumed
+            .state()
+            .attempt
+            .as_ref()
+            .unwrap()
+            .verifier
+            .as_ref()
+            .unwrap()
+            .expose(),
+        "private-verifier"
+    );
+    resumed.state().attempt.as_mut().unwrap().verifier = None;
+    resumed.commit().await.unwrap();
+    drop(first);
+    let mut restarted = second.lock("alice").await.unwrap();
+    assert!(
+        restarted
+            .state()
+            .attempt
+            .as_ref()
+            .unwrap()
+            .verifier
+            .is_none()
+    );
+    // An uncommitted replacement must not resurrect the consumed verifier.
+    restarted.state().attempt = None;
+    drop(restarted);
+    assert!(
+        second
+            .lock("alice")
+            .await
+            .unwrap()
+            .state()
+            .attempt
+            .is_some()
+    );
+    let ciphertext = sqlx::query_scalar!(
+        "SELECT grant_ciphertext FROM claude_oauth_grants WHERE user_id = 'alice'"
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert!(
+        !ciphertext
+            .windows(16)
+            .any(|bytes| bytes == b"private-verifier")
+    );
+    second.delete("alice").await.unwrap();
+    assert!(
+        second
+            .lock("alice")
+            .await
+            .unwrap()
+            .state()
+            .attempt
+            .is_none()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn reads_legacy_grants_and_upgrades_on_write(pool: sqlx::PgPool) {
+    user(&pool, "alice").await;
+    let kms = FakeKms::default();
+    let (ciphertext, key) = kms
+        .encrypt(context("alice", 1), &serde_json::to_vec(&grant()).unwrap())
+        .await
+        .unwrap();
+    sqlx::query!("INSERT INTO claude_oauth_grants (user_id, grant_ciphertext, kms_key_id, encryption_version) VALUES ($1, $2, $3, 1) ON CONFLICT (user_id) DO UPDATE SET grant_ciphertext = EXCLUDED.grant_ciphertext, kms_key_id = EXCLUDED.kms_key_id, encryption_version = 1, updated_at = now()", "alice", ciphertext, key).execute(&pool).await.unwrap();
+    let repository = PgClaudeGrants::new(pool, kms);
+    let mut transaction = repository.lock("alice").await.unwrap();
+    assert_eq!(
+        transaction
+            .state()
+            .grant
+            .as_ref()
+            .unwrap()
+            .access_token
+            .expose(),
+        "test-access"
+    );
+    transaction.commit().await.unwrap();
+    assert!(repository.get("alice").await.unwrap().is_some());
 }

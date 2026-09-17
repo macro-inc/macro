@@ -42,6 +42,12 @@ the parent and both authors' folded messages, refreshes them, then removes
 documents from older projection generations. Missing sessions delete their
 entire projection, even when triggered by an older event.
 
+Provision and verify the `agent_sessions` index and alias manually before
+deploying this consumer; deployment does not create indices. Normal parent and
+bulk writes require an alias, so a missing alias fails instead of automatically
+creating an index. An explicit backfill `index_override` permits physical
+indices. Use the OpenSearch helper runbook for an explicit repair.
+
 For rollout:
 
 1. Verify the `agent_sessions` alias exists with the join mapping defined in

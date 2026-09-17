@@ -233,6 +233,7 @@ use utoipa::OpenApi;
         channels::inbound::axum_router::get_or_create_dm_handler,
         channels::inbound::axum_router::get_or_create_private_handler,
         channels::inbound::axum_router::patch_channel_handler,
+        channels::inbound::axum_router::profile_picture::set_channel_picture_handler,
         channels::inbound::axum_router::delete_channel_handler,
         channels::inbound::axum_router::post_message_handler,
         channels::inbound::axum_router::patch_message_handler,

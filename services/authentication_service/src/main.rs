@@ -65,6 +65,9 @@ use teams::{
     },
 };
 
+use gtm_invite::{
+    domain::service::GtmInviteServiceImpl, outbound::pg_gtm_invite_repo::PgGtmInviteRepo,
+};
 use referral::{
     domain::service::ReferralServiceImpl,
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
@@ -106,6 +109,9 @@ async fn main() -> anyhow::Result<()> {
             .signup_policy()
             .context("invalid signup policy configuration")?,
     );
+    let gtm_invite_config = config
+        .gtm_invite_config()
+        .context("invalid GTM invite link configuration")?;
     let microsoft_credentials = config
         .microsoft_credentials()
         .context("invalid Microsoft OAuth configuration")?;
@@ -437,6 +443,10 @@ async fn main() -> anyhow::Result<()> {
         ),
         notification_ingress: notification_ingress_service.clone(),
     };
+    let gtm_invite_service = GtmInviteServiceImpl {
+        repo: PgGtmInviteRepo::new(db.clone()),
+        config: gtm_invite_config,
+    };
 
     let codex_connection = if let Some(key_id) = config.codex_oauth_kms_key_id() {
         let cipher = Arc::new(codex_connection::outbound::cipher::EnvelopeCipher::new(
@@ -494,6 +504,7 @@ async fn main() -> anyhow::Result<()> {
             favorites_service: Arc::new(favorites_service),
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),
+            gtm_invite_service: Arc::new(gtm_invite_service),
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(
                     AppServiceUrl::new_for_environment(config.environment)

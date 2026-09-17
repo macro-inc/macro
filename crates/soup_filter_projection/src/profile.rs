@@ -1,9 +1,11 @@
-use std::str::FromStr;
+use std::collections::HashMap;
 
 use item_filter_index::vocabulary;
-use model_file_type::FileType;
 use predicate_index::{ExactFact, IndexDocument, IntegerFact, Token, ValidationError};
 use thiserror::Error;
+
+#[cfg(test)]
+mod test;
 
 /// Semantic validation failure for one complete versioned Soup document.
 #[derive(Debug, Error, PartialEq, Eq)]
@@ -125,6 +127,7 @@ fn validate_exact_facts(
     let mut channel_participant = 0;
     let mut channel_team = 0;
     let mut channel_organization = 0;
+    let mut notification_states = HashMap::new();
 
     for fact in facts {
         let attribute = &fact.attribute;
@@ -146,11 +149,9 @@ fn validate_exact_facts(
             }
         } else if attribute == &vocabulary::file_type() && kind == PartitionKind::Document {
             file_type += 1;
-            let value = std::str::from_utf8(value)
+            // The GraphQL field is nullable text, not the supported-format enum.
+            std::str::from_utf8(value)
                 .map_err(|_| ProfileValidationError::InvalidValue("file-type"))?;
-            if FileType::from_str(value).is_err() {
-                return Err(ProfileValidationError::InvalidValue("file-type"));
-            }
         } else if attribute == &vocabulary::document_sub_type() && kind == PartitionKind::Document {
             sub_type += 1;
             if !matches!(value, b"task" | b"snippet" | b"skill") {
@@ -206,12 +207,10 @@ fn validate_exact_facts(
             if value.len() != 16 {
                 return Err(ProfileValidationError::InvalidValue("notification-id"));
             }
-            if facts.iter().any(|other| {
-                other.value == fact.value
-                    && other.attribute != *attribute
-                    && (other.attribute == vocabulary::notification_seen()
-                        || other.attribute == vocabulary::notification_unseen())
-            }) {
+            if notification_states
+                .insert(&fact.value, attribute)
+                .is_some_and(|previous| previous != attribute)
+            {
                 return Err(ProfileValidationError::InvalidValue("notification-state"));
             }
         } else {

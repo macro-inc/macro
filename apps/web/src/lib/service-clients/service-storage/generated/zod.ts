@@ -2561,6 +2561,12 @@ export const getBatchChannelPreviewResponse = zod
                 channel_type: zod
                   .enum(['public', 'private', 'direct_message', 'team'])
                   .describe('Type of channel.'),
+                profile_picture_id: zod
+                  .uuid()
+                  .nullish()
+                  .describe(
+                    "Static image file used as the channel's profile picture, when accessible."
+                  ),
               })
               .describe('Preview payload returned for accessible channels.')
               .and(
@@ -4030,6 +4036,26 @@ export const removeParticipantsBody = zod
     participants: zod.array(zod.string()).describe('User ids to remove.'),
   })
   .describe('Request to remove participants.');
+
+/**
+ * @summary Set a channel or group chat profile picture. Requires rename permission.
+ */
+export const setChannelPictureParams = zod.object({
+  channel_id: zod.uuid().describe('Channel ID'),
+});
+
+export const setChannelPictureBody = zod
+  .object({
+    profile_picture_id: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Static image file id; null restores the default channel icon.'
+      ),
+  })
+  .describe(
+    "Replace a channel's picture, or remove it by sending a null file id."
+  );
 
 /**
  * @summary Handler for `POST /channels/{channel_id}/reaction`.

@@ -104,7 +104,9 @@ use macro_env_var::maybe_env_vars;
 use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 #[cfg(feature = "delete_document_worker")]
 use macro_service_urls::AiEditingWorkerUrl;
-use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl, SyncServiceUrl};
+use macro_service_urls::{
+    ConnectionGatewayUrl, LexicalServiceUrl, StaticFileServiceUrl, SyncServiceUrl,
+};
 use macro_sha_count_client::Redis;
 use notification::domain::service::{
     NotificationReaderService, PlatformArnConfig, SqsNotificationIngress,
@@ -971,6 +973,14 @@ async fn run() -> anyhow::Result<()> {
             channels_repo,
             SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
             PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
+        )
+        .with_picture_files(
+            channels::outbound::static_file_pictures::StaticFileChannelPictures::new(
+                static_file_service_client::StaticFileServiceClient::new(
+                    config.internal_api_key.to_string(),
+                    StaticFileServiceUrl::new()?.to_string(),
+                ),
+            ),
         )
         .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
             lexical_client.clone(),

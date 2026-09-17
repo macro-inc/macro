@@ -45,7 +45,7 @@ fn sender_from_receipt<T: RequiredPermission>(
         .map_err(|error| EntityMutationErrorCode::forbidden(rootcause::report!(error)))
 }
 
-impl<R, E, P, M> RenameEntity for ChannelServiceImpl<R, E, P, M>
+impl<R, E, P, M, F> RenameEntity for ChannelServiceImpl<R, E, P, M, F>
 where
     Self: ChannelService,
 {
@@ -73,7 +73,7 @@ where
     }
 }
 
-impl<R, E, P, M> DeleteEntityPermanently for ChannelServiceImpl<R, E, P, M>
+impl<R, E, P, M, F> DeleteEntityPermanently for ChannelServiceImpl<R, E, P, M, F>
 where
     Self: ChannelService,
 {

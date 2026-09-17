@@ -71,9 +71,11 @@ import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import BellIcon from '@phosphor/bell.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
@@ -179,9 +181,13 @@ const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 const SIDEBAR_LINKS = [
   {
     id: 'inbox',
-    label: 'Home',
+    get label() {
+      return isTouchDevice() ? 'Notifications' : 'Home';
+    },
     href: LIST_VIEW_PATHS.inbox,
-    icon: HomeIcon,
+    get icon() {
+      return isTouchDevice() ? BellIcon : HomeIcon;
+    },
     hotkey: ['h', 'i'],
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },

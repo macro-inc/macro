@@ -80,7 +80,7 @@ export function agentRuntimeDescription(
   if (persona.harness === 'codex-cloud')
     return 'Runs in your selected Codex cloud environment';
   if (persona.harness === 'claude-cloud') {
-    return 'Runs in Claude’s cloud using your subscription. Demo: text prompts, no Macro connectors';
+    return 'Runs in Claude’s cloud using your subscription';
   }
   if (persona.harness === 'macrod') {
     return `Do work locally using ${persona.name}${ownerName ? ` owned by ${ownerName}` : ''}`;

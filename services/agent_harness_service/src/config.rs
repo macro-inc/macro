@@ -36,6 +36,8 @@ macro_env_var::env_vars!(
 );
 
 macro_env_var::maybe_env_vars!(
+    /// KMS key for encrypted per-owner Claude OAuth connections.
+    pub struct ClaudeOauthKmsKeyId;
     /// Dedicated KMS key for encrypted per-owner Codex OAuth state.
     pub struct CodexOauthKmsKeyId;
 );
@@ -53,12 +55,8 @@ fn default_pipedream_environment() -> String {
 #[derive(macro_config::MacroConfig)]
 #[serde(rename_all = "SCREAMING_SNAKE_CASE")]
 pub struct Config {
-    /// Private owner-keyed OAuth file for the single-replica Claude demo.
-    /// Local browser connections always use encrypted MacroDB storage.
-    /// Empty disables Claude outside the local environment.
-    /// Nonempty is refused in production.
-    #[macro_config_default(String::new())]
-    pub claude_cloud_credentials_path: String,
+    /// OAuth encryption key; deployments without a key do not advertise sign-in.
+    pub claude_oauth_kms_key_id: ClaudeOauthKmsKeyId,
     /// The environment we are in.
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
@@ -177,6 +175,26 @@ pub struct Config {
 }
 
 impl Config {
+    /// Resolve the deployment-injected encryption key. Local stacks use their
+    /// existing LocalStack key with a separate Claude encryption context.
+    pub fn claude_oauth_kms_key_id(&self) -> Option<String> {
+        self.claude_oauth_kms_key_id
+            .value()
+            .filter(|key| !key.trim().is_empty())
+            .map(str::to_owned)
+            .or_else(|| {
+                ClaudeOauthKmsKeyId::new().and_then(|key| {
+                    key.value()
+                        .filter(|key| !key.trim().is_empty())
+                        .map(str::to_owned)
+                })
+            })
+            .or_else(|| {
+                matches!(self.environment, Environment::Local)
+                    .then(|| "alias/macro-local-cursor-api-key".to_owned())
+            })
+    }
+
     /// Resolve the optional key from Doppler or the deployment-injected environment.
     pub fn codex_oauth_kms_key_id(&self) -> Option<String> {
         self.codex_oauth_kms_key_id

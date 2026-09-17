@@ -11,14 +11,15 @@ import {
   isTeamShareSupportedForItem,
   LINK_SHARE_SCOPE_OPTIONS,
   TEAM_SHARE_SCOPE_OPTIONS,
+  teamShareScopeOptionsForItem,
 } from './linkShare';
 
 describe('isTeamShareSupportedForItem', () => {
-  it.each(['document', 'chat'] as const)('supports %s', (itemType) => {
+  it.each(['document', 'chat', 'call'] as const)('supports %s', (itemType) => {
     expect(isTeamShareSupportedForItem(itemType)).toBe(true);
   });
 
-  it.each(['project', 'email', 'agent_session', 'call'] as const)(
+  it.each(['project', 'email', 'agent_session'] as const)(
     'does not offer team access for %s',
     (itemType) => {
       expect(isTeamShareSupportedForItem(itemType)).toBe(false);
@@ -30,6 +31,7 @@ describe('getShareItemNoun', () => {
   it.each([
     ['document', 'document'],
     ['chat', 'chat'],
+    ['call', 'call'],
     ['email', 'email thread'],
     ['agent_session', 'agent session'],
   ] as const)('names %s as "%s"', (itemType, noun) => {
@@ -120,6 +122,19 @@ describe('link share copy', () => {
 describe('team share payload', () => {
   it('lists None plus the allowed team levels', () => {
     expect(TEAM_SHARE_SCOPE_OPTIONS).toEqual([
+      { value: 'NONE', label: 'None' },
+      { value: 'view', label: 'View' },
+      { value: 'comment', label: 'Comment' },
+      { value: 'edit', label: 'Edit' },
+    ]);
+  });
+
+  it('limits calls to None and View', () => {
+    expect(teamShareScopeOptionsForItem('call')).toEqual([
+      { value: 'NONE', label: 'None' },
+      { value: 'view', label: 'View' },
+    ]);
+    expect(teamShareScopeOptionsForItem('document')).toEqual([
       { value: 'NONE', label: 'None' },
       { value: 'view', label: 'View' },
       { value: 'comment', label: 'Comment' },

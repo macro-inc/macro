@@ -254,6 +254,11 @@ optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
 channels. Channel favorites open in the channel preview. Shift-clicking a
 favorite, channel, or DM opens that conversation in a new split instead.
+While reading older history or composing in the preview, incoming notifications
+(including ones for other channels) must not jump to latest, blank/refetch the
+messages, or revoke composer focus. To check this, leave an unsent draft in a
+preview scrolled into older history and deliver a notification. Selecting another
+conversation or explicitly navigating to a message must still work.
 The search action beside the tabs opens a search field below them and replaces
 the active tab contents with matching channels and direct messages from one
 activity-ordered source. Search results use compact rows on `All` and
@@ -321,3 +326,19 @@ bottom through composer resizing and server acknowledgement. Check that restorin
 the caret after send does not pan the page while the keyboard resizes. Repeat with dictation
 and check that sent text does not return. Scroll into history before an incoming
 message or acknowledgement and verify that it does not pull you to latest.
+
+
+## Channel pictures
+
+Channels and group chats can have a custom picture. Admins and owners (the same
+people who can rename a channel) can open the title menu. Beside `Rename`,
+choose `Set channel picture` to add or replace a picture. Select a PNG, JPG,
+WebP, or GIF up to 16 MB. The upload must finish before the picture is saved;
+the server accepts only supported images uploaded by the person setting the
+picture. An error leaves the previous picture in place. When a picture is set, the menu also offers
+`Remove channel picture` to restore the standard channel icon. The picture
+beside the title is display-only and also appears in shared channel rows.
+Picture changes refresh other participants' open sessions, including after
+reconnecting.
+Members see the picture without editing controls. One-to-one direct messages
+continue to show the other person's user picture.

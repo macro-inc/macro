@@ -73,6 +73,7 @@ foreign_entity = { path = "../../crates/foreign_entity" }
 favorites = { path = "../../crates/favorites", features = ["postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
+gtm_invite = { path = "../../crates/gtm_invite" }
 github = { path = "../../crates/github", default-features = false, features = [
   "axum",
   "inbound",

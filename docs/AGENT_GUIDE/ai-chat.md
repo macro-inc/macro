@@ -2,14 +2,78 @@
 
 ## Where chats live
 
-- List: `Go to Agents` → `/app/component/agents`. With new app views enabled
-  on desktop, an Agents sidebar opens New Chat, Routines, configured Agents,
-  Connections, and Skills, followed by favorite and recent conversations.
-  Selecting a recent chat or agent session opens it inside the workspace;
-  Shift-clicking one opens it in a new split instead.
-  Touch devices and users outside the flag retain the Owned / Running / Shared /
-  Automations / Skills list.
-- A chat is `/app/chat/<uuid>`. A doc-scoped chat is `/app/md/<doc>/chat/<chat>` (split view).
+- Open **Go to Agents** → `/app/component/agents`. With AI agents enabled
+  (`enable-chat-v3-agents`), the workspace uses one sidebar for Chat and Code.
+  **New conversation** opens the composer. **Conversations** is a mixed list
+  of chats and coding sessions, newest first, with one search across both.
+  Chat rows use a chat icon; coding rows use `</>` and show their agent and
+  runtime status. Changing the composer mode does not filter the sidebar.
+  Selecting a row opens its own mode; Shift-click opens it in a new split.
+- The starting page has a compact composer that starts at one line and grows
+  with longer prompts or Shift+Enter. **Agent** and **Send** sit inside the input on the right.
+  Direct model selections show only the model name and provider icon in the input.
+  Saved and coding agents show their identity beside the current model. There is
+  no Chat/Code switch or separate model button.
+- The agent dropdown combines Cursor and saved in-memory or Cursor
+  agents in **Coding agents** and **Agents** sections. A **Models** section lists
+  Macro’s available models with readable names (for example, **Sonnet 5**) and
+  provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
+  Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
+  Selecting a model here selects
+  the default runtime and applies that model to the next send, retracting the repository drawer.
+  The built-in Macro agent is hidden from the agent sections; its models remain available.
+  Coding agents carry a `</>` badge. The most recently used supported,
+  available agent is selected initially; otherwise Macro is selected.
+  Hover an agent (or use the right arrow key) to open its model submenu, with
+  the searchable Settings catalog, provider icons, and scrollable **More models**.
+  Clicking an agent directly uses its default; choosing a submenu model selects
+  both the agent and that model. A checkmark identifies the selected model,
+  including when it is the agent’s configured default; there is no separate default row.
+  Disconnected Cursor offers **Connect Cursor**, opening Settings → Harness.
+  The built-in sandbox and paired macrod runtimes are not offered here.
+- Selecting an agent changes the heading: **What should we work on?** for chat
+  agents and **What should we build?** for coding agents. The draft stays intact
+  when changing agents. **Create agent** stays pinned at the bottom of the dropdown
+  while the agent and model lists scroll. It opens the roster on the selected kind's
+  tab, where either kind can be created.
+- Selecting a coding agent reveals a repository drawer directly under the input
+  with a short slide and fade; selecting a chat agent retracts it. Reduced-motion
+  preferences disable the animation. The hidden drawer is inert. **Repository**
+  offers **No repository**, recent repositories, or `owner/repo` / URL entry.
+  The chosen repository survives agent changes and is sent only to coding agents.
+- Sending starts a session with the chosen agent's configured default model;
+  a model selected from its submenu overrides that default for the next send
+  only. Sending or choosing another agent clears the override. This does not
+  update the saved agent; configure persistent defaults in the agent editor.
+  Within an existing session, the model picker remains available on the right.
+  Its trigger, model options, and session metadata use the same readable model names
+  as the new-conversation picker. The menu includes provider icons, search, a short
+  **Recommended** list, and a scrollable **More models** submenu shared with Settings.
+- Chat agents' empty input cycles tips about connectors, skills, mentions, and
+  agents; coding agents show **Describe what you want to build**. Type `@` for
+  mentions and `/` for skills.
+- Opening a conversation updates the URL based on that conversation's kind:
+  `/app/agents/<id>` for Chat sessions, `/app/coders/<id>` for Code sessions,
+  and `/app/agent-chats/<id>` for legacy chats. Reload and back/forward restore
+  its mode and conversation. Newly created sessions replace their temporary
+  URL with the real id without remounting the composer or adding a temporary
+  history step.
+- **Agents page** (inside the workspace; Settings → Agents is unchanged):
+  **Close** returns to the composer. **Agents / Coding agents** tabs split
+  the roster into Team and Private, with Edit / Delete actions. The coding
+  tab includes runtime setup. The create/edit dialog has sharing, name,
+  `@tag`, runtime, default model, connections, channels, and instructions.
+- **Session**: the header has the sidebar reopen control, a linked PR status chip,
+  favorite, Share, Side panel, and a More menu
+  (Rename, Copy link, Delete). A metadata strip lists the agent, runtime,
+  model, repository, and status. Chat and Code session inputs
+  use the same growing, initially single-line input with the model selector on
+  the right.
+  Existing sessions retain their agent and kind; use **New conversation** to
+  choose another. Stop, queued-message advancement, and quoting remain available.
+- Users outside the flag retain the Owned / Running / Shared / Automations /
+  Skills list. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
+  is `/app/md/<doc>/chat/<chat>` (split view).
 
 ## Start a standalone chat
 
@@ -40,6 +104,10 @@ is available, the AI composer returns with its draft intact, including in
 documents without a comment composer. Type a
 prompt, optionally choose a model or
 attach context, and tap **Send** to create the chat and send its first message.
+The paperclip (**Attach files**) opens the device file chooser directly, including
+in the native iPhone app; it does not open a Macro file browser. Select supported
+files to upload and attach them, or cancel to return to the unchanged draft.
+Existing Macro documents can still be attached through an `@mention`.
 On touch devices, the accessory hides whenever an editable field outside its
 Ask AI composer is focused, including email recipients, subject, and body fields.
 It returns with the same draft when focus leaves that field. While typing in
@@ -292,7 +360,6 @@ of an open turn. Earlier thoughts settle to **Thought** as soon as a tool or
 answer follows, including during long Cursor turns. A trailing thought stays
 outside the tool group so the live reasoning row stays visible. Do not wait
 for every Thinking label to disappear — only the tail one is in flight.
-
 ### Sharing a session
 
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;

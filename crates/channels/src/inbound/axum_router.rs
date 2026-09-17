@@ -1,6 +1,10 @@
 #[cfg(test)]
 mod test;
 
+/// Channel profile-picture HTTP endpoint.
+pub mod profile_picture;
+pub use profile_picture::{SetChannelPictureRequest, set_channel_picture_handler};
+
 use crate::domain::models::{
     Activity, ActivityType, AttachmentChannelReference, AttachmentEntityReference,
     AttachmentGenericReference, BotSenderProfile, ChannelAttachment, ChannelAttachmentType,
@@ -27,7 +31,7 @@ use axum::{
     extract::{FromRef, Path, Query, State},
     http::StatusCode,
     response::IntoResponse,
-    routing::{delete, get, patch, post},
+    routing::{delete, get, patch, post, put},
 };
 use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
@@ -285,6 +289,10 @@ where
             post(get_or_create_private_handler::<S, Svc, Auth>),
         )
         .route("/mentions", post(create_mention_handler::<S, Svc, Auth>))
+        .route(
+            "/{channel_id}/profile_picture",
+            put(set_channel_picture_handler::<S, Svc, Auth>),
+        )
         .route(
             "/mentions/{mention_id}",
             delete(delete_mention_handler::<S, Svc, Auth>),

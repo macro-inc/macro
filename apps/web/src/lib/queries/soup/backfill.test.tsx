@@ -407,9 +407,9 @@ describe('runSoupBackfills', () => {
     rendered.unmount();
   });
 
-  it('does not reuse pre-projection native backfill checkpoints', () => {
+  it.each([13, 14])('does not reuse v%i backfill checkpoints', (version) => {
     localStorage.setItem(
-      'graphql-soup-backfill:v13:user-1:email-filter-metadata',
+      `graphql-soup-backfill:v${version}:user-1:email-filter-metadata`,
       JSON.stringify({
         userId: 'user-1',
         nextCursor: 'old-page',
@@ -431,7 +431,7 @@ describe('runSoupBackfills', () => {
 
   it('restarts from the beginning when the cache generation is replaced', async () => {
     localStorage.setItem(
-      'graphql-soup-backfill:v14:user-1:core-entities',
+      'graphql-soup-backfill:v15:user-1:core-entities',
       JSON.stringify({
         userId: 'user-1',
         nextCursor: 'stale-cursor',

@@ -2633,6 +2633,10 @@ export type ChannelPreviewData = {
      * Channel type.
      */
     channel_type: ChannelType;
+    /**
+     * Static image file used as the channel's profile picture, when accessible.
+     */
+    profile_picture_id?: string | null;
 };
 
 export type ChannelSender = string;
@@ -7681,6 +7685,16 @@ export type SessionStoppedMetadata = {
 };
 
 /**
+ * Replace a channel's picture, or remove it by sending a null file id.
+ */
+export type SetChannelPictureRequest = {
+    /**
+     * Static image file id; null restores the default channel icon.
+     */
+    profile_picture_id?: string | null;
+};
+
+/**
  * Request body for `PUT /companies/{company_id}/hidden`.
  */
 export type SetCompanyHiddenRequest = {
@@ -11615,6 +11629,37 @@ export type AddParticipantsError = AddParticipantsErrors[keyof AddParticipantsEr
 export type AddParticipantsResponses = {
     200: unknown;
 };
+
+export type SetChannelPictureData = {
+    body: SetChannelPictureRequest;
+    path: {
+        /**
+         * Channel ID
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channels/{channel_id}/profile_picture';
+};
+
+export type SetChannelPictureErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelPictureError = SetChannelPictureErrors[keyof SetChannelPictureErrors];
+
+export type SetChannelPictureResponses = {
+    /**
+     * Picture updated
+     */
+    204: void;
+};
+
+export type SetChannelPictureResponse = SetChannelPictureResponses[keyof SetChannelPictureResponses];
 
 export type PostReactionData = {
     body: PostReactionRequest;

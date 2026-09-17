@@ -7,6 +7,8 @@ use std::collections::BTreeMap;
 
 use super::*;
 
+mod file_type;
+
 #[test]
 fn optimistic_soup_payloads_compile_to_durable_projection_layers() {
     let mutations = optimistic_projection_mutations(

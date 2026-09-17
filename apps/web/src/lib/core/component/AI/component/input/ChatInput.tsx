@@ -23,7 +23,6 @@ import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
-import { getItemBlockName } from '@core/util/getItemBlockName';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PaperclipIcon from '@phosphor/paperclip.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -31,7 +30,6 @@ import { createCallback } from '@solid-primitives/rootless';
 import { Button, ComposerSurface, cn, SendButton as UiSendButton } from '@ui';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
 import { AttachmentList } from './Attachment';
-import { ChatAttachMenu } from './ChatAttachMenu';
 import { useAiDataConsentGate } from './useAiDataConsent';
 
 /**
@@ -134,9 +132,6 @@ export function ChatInput(props: ChatInputComponentProps) {
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
   const { hasConsent, requestConsent, ConsentDialog } = useAiDataConsentGate();
 
-  const [showAttachMenu, setShowAttachMenu] = createSignal(false);
-  const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
-    createSignal<HTMLDivElement>();
   const [markdownText, setMarkdownText] = createSignal('');
   const [isFocused, setIsFocused] = createSignal(false);
 
@@ -248,15 +243,14 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   const LeftButton = () => (
     <Button
-      ref={setAttachMenuAnchorRef}
       variant="ghost"
       size="icon-composer"
       class="rounded-full text-ink not-touch:text-composer-ink touch:size-6"
       label="Attach files"
       aria-label="Attach files"
       onClick={() => {
-        if (isTouchDevice()) setShowAttachMenu((prev) => !prev);
-        else fileInputRef?.click();
+        // Open synchronously from the tap so the native picker retains user activation.
+        fileInputRef?.click();
       }}
     >
       <PaperclipIcon />
@@ -331,27 +325,25 @@ export function ChatInput(props: ChatInputComponentProps) {
 
   return (
     <div class="relative">
-      <Show when={!isTouchDevice()}>
-        <input
-          ref={fileInputRef}
-          type="file"
-          class="hidden"
-          multiple
-          accept={SUPPORTED_ATTACHMENT_EXTENSIONS.map((ext) => `.${ext}`).join(
-            ','
-          )}
-          onChange={(event) => {
-            const files = Array.from(event.currentTarget.files ?? []).filter(
-              (file) =>
-                SUPPORTED_ATTACHMENT_EXTENSIONS.includes(
-                  file.name.split('.').pop()?.toLowerCase() ?? ''
-                )
-            );
-            event.currentTarget.value = '';
-            if (files.length > 0) uploadQueue.upload(files);
-          }}
-        />
-      </Show>
+      <input
+        ref={fileInputRef}
+        type="file"
+        class="hidden"
+        multiple
+        accept={SUPPORTED_ATTACHMENT_EXTENSIONS.map((ext) => `.${ext}`).join(
+          ','
+        )}
+        onChange={(event) => {
+          const files = Array.from(event.currentTarget.files ?? []).filter(
+            (file) =>
+              SUPPORTED_ATTACHMENT_EXTENSIONS.includes(
+                file.name.split('.').pop()?.toLowerCase() ?? ''
+              )
+          );
+          event.currentTarget.value = '';
+          if (files.length > 0) uploadQueue.upload(files);
+        }}
+      />
       <ComposerSurface
         class={cn(
           'h-auto',
@@ -375,27 +367,6 @@ export function ChatInput(props: ChatInputComponentProps) {
         >
           <Show when={!isTallVariant()}>
             <Attachments />
-          </Show>
-
-          <Show when={showAttachMenu()}>
-            <ChatAttachMenu
-              anchorRef={attachMenuAnchorRef()!}
-              close={() => setShowAttachMenu(false)}
-              containerRef={containerRef}
-              open={showAttachMenu()}
-              onAttach={(attachment, item) => {
-                analytics.track('ai_attachment_add');
-                attachments.addAttachment(attachment);
-                insertChatAttachmentMention(
-                  props.editor.controls.getLexical(),
-                  {
-                    documentId: item.id,
-                    documentName: item.name,
-                    blockName: getItemBlockName(item, true),
-                  }
-                );
-              }}
-            />
           </Show>
 
           <div

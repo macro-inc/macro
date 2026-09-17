@@ -1,7 +1,7 @@
 import { useToolManager } from '@block-canvas/signal/toolManager';
 import { useRenderState } from '@block-canvas/store/RenderState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { type BlockName, useBlockId } from '@core/block';
+import type { BlockName } from '@core/block';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { PopupPreview } from '@core/component/DocumentPreview';
 import { EntityIcon, getPreviewItemIconType } from '@core/component/EntityIcon';
@@ -21,6 +21,7 @@ import {
   Switch,
 } from 'solid-js';
 import { DRAG_THRESHOLD, type RenderMode, Tools } from '../../constants';
+import { useCanvasDocument } from '../../context/canvas-document-context';
 import type { EntityMentionNode } from '../../model/CanvasModel';
 import { fileWidth } from '../../operation/file';
 import { type Vector2, vec2 } from '../../util/vector2';
@@ -90,7 +91,7 @@ export function File(props: { node: EntityMentionNode; mode: RenderMode }) {
     'UNAUTHORIZED' | 'MISSING' | 'INVALID' | 'LOADING' | undefined
   >('LOADING');
 
-  const blockId = useBlockId();
+  const blockId = useCanvasDocument().documentId();
 
   const { openWithSplit } = useSplitLayout();
 

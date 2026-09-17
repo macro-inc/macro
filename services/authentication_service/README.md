@@ -64,6 +64,26 @@ Matching rules:
   supported.
 - Denial responses and policy errors must not disclose configured addresses.
 
+## GTM invite links
+
+Macro staff (any `@macro.com` account) mint personal, 48-hour signup links from
+`/app/internal/invite-links`. The recipient opens `/app/invite?token=…`, signs up,
+and the account is attributed to the staff member who created the link. At the
+plan step of onboarding the account sees a free-month offer instead of the plan
+picker, and checkout applies a Stripe promotion code server-side. The Stripe
+subscription webhook then marks the link converted.
+
+Both settings are optional plain Doppler values (project
+`authentication-service`); the service falls back to the defaults when unset.
+
+| Setting | Default | Meaning |
+| --- | --- | --- |
+| `GTM_INVITE_PROMO_CODE` | `1MF` | Customer-facing Stripe promotion code applied at checkout. Must exist and be active in Stripe (`1MF` is 100% off the first month). |
+| `GTM_INVITE_LINK_TTL_HOURS` | `48` | How long a link can be opened and redeemed after creation. |
+
+Links live in the `gtm_invite_link` MacroDB table (crate `gtm_invite`); the
+dashboard reads it through `GET /gtm-invite/links`.
+
 ## Shared mailboxes
 
 Internal shared-mailbox grant relocation creates ordinary FusionAuth users for

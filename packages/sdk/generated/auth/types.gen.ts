@@ -167,6 +167,24 @@ export type CreateCheckoutSessionV2Request = {
     successUrl: string;
 };
 
+/**
+ * Request body to create a link.
+ */
+export type CreateGtmInviteLinkRequest = {
+    /**
+     * The recipient's first name, shown on the welcome page.
+     */
+    firstName: string;
+    /**
+     * Free-form internal note for the dashboard.
+     */
+    note?: string | null;
+    /**
+     * The recipient's email, when the sender knows it.
+     */
+    recipientEmail?: string | null;
+};
+
 export type CreateInProgressLinkResponse = {
     /**
      * The link id
@@ -620,6 +638,132 @@ export type GmailLinkStatusResponse = {
     reauthentication_required: boolean;
 };
 
+/**
+ * A link as shown on the staff dashboard.
+ */
+export type GtmInviteLink = {
+    /**
+     * When the account started a paid subscription.
+     */
+    convertedAt?: string | null;
+    /**
+     * When the link was created.
+     */
+    createdAt: string;
+    /**
+     * The Macro user id of the staff member who created the link.
+     */
+    createdBy: string;
+    /**
+     * When the link stops being openable.
+     */
+    expiresAt: string;
+    /**
+     * The recipient's first name.
+     */
+    firstName: string;
+    /**
+     * When the welcome page first loaded.
+     */
+    firstOpenedAt?: string | null;
+    /**
+     * Free months the promotion grants.
+     */
+    freeMonths: number;
+    /**
+     * Primary key.
+     */
+    id: string;
+    /**
+     * Internal note.
+     */
+    note?: string | null;
+    /**
+     * How many times the welcome page loaded.
+     */
+    openCount: number;
+    /**
+     * The Stripe promotion code applied at checkout.
+     */
+    promoCode: string;
+    /**
+     * The recipient's email, when known.
+     */
+    recipientEmail?: string | null;
+    /**
+     * When that account redeemed the link.
+     */
+    redeemedAt?: string | null;
+    /**
+     * The Macro user id of the account that signed up through the link.
+     */
+    redeemedBy?: string | null;
+    /**
+     * When staff revoked the link.
+     */
+    revokedAt?: string | null;
+    /**
+     * Lifecycle status.
+     */
+    status: GtmInviteLinkStatus;
+    /**
+     * The Stripe subscription id of that subscription.
+     */
+    stripeSubscriptionId?: string | null;
+    /**
+     * The secret to embed in the link URL.
+     */
+    token: string;
+};
+
+/**
+ * Links for the dashboard.
+ */
+export type GtmInviteLinkList = {
+    /**
+     * Newest first.
+     */
+    links: Array<GtmInviteLink>;
+};
+
+/**
+ * Where a link is in its lifecycle.
+ */
+export type GtmInviteLinkStatus = 'active' | 'expired' | 'revoked' | 'redeemed' | 'converted';
+
+/**
+ * The promotion a signed-in user's account holds.
+ */
+export type GtmInviteOffer = {
+    /**
+     * The first name the link was made out to.
+     */
+    firstName: string;
+    /**
+     * Free months the promotion grants.
+     */
+    freeMonths: number;
+    /**
+     * The redeemed link.
+     */
+    linkId: string;
+    /**
+     * The Stripe promotion code checkout applies.
+     */
+    promoCode: string;
+    /**
+     * When the account redeemed the link.
+     */
+    redeemedAt: string;
+};
+
+/**
+ * Whether the signed-in user holds an unused offer.
+ */
+export type GtmInviteOfferStatus = {
+    offer?: null | GtmInviteOffer;
+};
+
 export type InitGithubLinkResponse = {
     /**
      * The OAuth authorization URL to redirect the user to
@@ -852,6 +996,24 @@ export type ProfilePictures = {
 };
 
 /**
+ * What the public welcome page learns about a link.
+ */
+export type PublicGtmInviteLink = {
+    /**
+     * The recipient's first name.
+     */
+    firstName: string;
+    /**
+     * Free months the promotion grants.
+     */
+    freeMonths: number;
+    /**
+     * Whether the link can still be used.
+     */
+    status: GtmInviteLinkStatus;
+};
+
+/**
  * The key the user pasted.
  */
 export type PutCursorApiKeyRequest = {
@@ -881,6 +1043,16 @@ export type PutUserNameQueryParams = {
      * Last Name of user
      */
     last_name?: string | null;
+};
+
+/**
+ * Request body to redeem a link.
+ */
+export type RedeemGtmInviteLinkRequest = {
+    /**
+     * The token from the link URL.
+     */
+    token: string;
 };
 
 export type ResendFusionauthVerifyUserEmailRequest = {
@@ -1445,6 +1617,153 @@ export type EnrichGithubPullRequestsResponses = {
 };
 
 export type EnrichGithubPullRequestsResponse2 = EnrichGithubPullRequestsResponses[keyof EnrichGithubPullRequestsResponses];
+
+export type ListGtmInviteLinksData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Only the caller's own links (default: every staff member's).
+         */
+        mine?: boolean;
+    };
+    url: '/gtm-invite/links';
+};
+
+export type ListGtmInviteLinksErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListGtmInviteLinksError = ListGtmInviteLinksErrors[keyof ListGtmInviteLinksErrors];
+
+export type ListGtmInviteLinksResponses = {
+    200: GtmInviteLinkList;
+};
+
+export type ListGtmInviteLinksResponse = ListGtmInviteLinksResponses[keyof ListGtmInviteLinksResponses];
+
+export type CreateGtmInviteLinkData = {
+    body: CreateGtmInviteLinkRequest;
+    path?: never;
+    query?: never;
+    url: '/gtm-invite/links';
+};
+
+export type CreateGtmInviteLinkErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateGtmInviteLinkError = CreateGtmInviteLinkErrors[keyof CreateGtmInviteLinkErrors];
+
+export type CreateGtmInviteLinkResponses = {
+    200: GtmInviteLink;
+};
+
+export type CreateGtmInviteLinkResponse = CreateGtmInviteLinkResponses[keyof CreateGtmInviteLinkResponses];
+
+export type RevokeGtmInviteLinkData = {
+    body?: never;
+    path: {
+        /**
+         * The invite link id
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/gtm-invite/links/{id}';
+};
+
+export type RevokeGtmInviteLinkErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RevokeGtmInviteLinkError = RevokeGtmInviteLinkErrors[keyof RevokeGtmInviteLinkErrors];
+
+export type RevokeGtmInviteLinkResponses = {
+    200: GtmInviteLink;
+};
+
+export type RevokeGtmInviteLinkResponse = RevokeGtmInviteLinkResponses[keyof RevokeGtmInviteLinkResponses];
+
+export type GetGtmInviteOfferData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/gtm-invite/offer';
+};
+
+export type GetGtmInviteOfferErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type GetGtmInviteOfferError = GetGtmInviteOfferErrors[keyof GetGtmInviteOfferErrors];
+
+export type GetGtmInviteOfferResponses = {
+    200: GtmInviteOfferStatus;
+};
+
+export type GetGtmInviteOfferResponse = GetGtmInviteOfferResponses[keyof GetGtmInviteOfferResponses];
+
+export type ResolveGtmInviteLinkData = {
+    body?: never;
+    path: {
+        /**
+         * The token from the invite link URL
+         */
+        token: string;
+    };
+    query?: never;
+    url: '/gtm-invite/public/{token}';
+};
+
+export type ResolveGtmInviteLinkErrors = {
+    400: ErrorResponse;
+    404: ErrorResponse;
+    429: unknown;
+    500: ErrorResponse;
+};
+
+export type ResolveGtmInviteLinkError = ResolveGtmInviteLinkErrors[keyof ResolveGtmInviteLinkErrors];
+
+export type ResolveGtmInviteLinkResponses = {
+    200: PublicGtmInviteLink;
+};
+
+export type ResolveGtmInviteLinkResponse = ResolveGtmInviteLinkResponses[keyof ResolveGtmInviteLinkResponses];
+
+export type RedeemGtmInviteLinkData = {
+    body: RedeemGtmInviteLinkRequest;
+    path?: never;
+    query?: never;
+    url: '/gtm-invite/redeem';
+};
+
+export type RedeemGtmInviteLinkErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    410: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RedeemGtmInviteLinkError = RedeemGtmInviteLinkErrors[keyof RedeemGtmInviteLinkErrors];
+
+export type RedeemGtmInviteLinkResponses = {
+    200: GtmInviteOffer;
+};
+
+export type RedeemGtmInviteLinkResponse = RedeemGtmInviteLinkResponses[keyof RedeemGtmInviteLinkResponses];
 
 export type HealthHandlerData = {
     body?: never;

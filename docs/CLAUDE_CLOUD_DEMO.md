@@ -2,7 +2,7 @@
 
 `claude-cloud` runs Claude Code on Anthropic's cloud using **the session owner's subscription OAuth grant**. It does not use macrod, a local Claude process, or Macro's Anthropic API key. This uses an unofficial first-party protocol verified experimentally on September 15, 2026, not a supported third-party OAuth registration.
 
-## Connect in the local UI (recommended)
+## Connect in the browser
 
 The frontend entry points require the PostHog flag **`claude-cloud`**. It is
 off by default everywhere (including dev); for a local demo, set
@@ -11,9 +11,9 @@ the connection card never mounts and agent settings neither offer Claude Cloud
 nor request its model catalog. This is a UI rollout flag, not a backend
 authorization boundary or a kill switch for existing agents/sessions.
 
-Rebuild the local backend from this workspace (`r` in the running `just run_local`
-terminal) and refresh the browser. In **Settings → Harness**, the
-**Claude Cloud (demo)** row has the Anthropic logo and appears above Cursor,
+Deploy the backend and infrastructure from this workspace, or rebuild the local
+backend (`r` in `just run_local`), then refresh the browser. In **Settings → Harness**, the
+**Claude Cloud** row has the Anthropic logo and appears above Cursor,
 even before an account is connected. Connection setup is not in Settings → Agents:
 
 1. Click **Connect Claude** to open Claude sign-in in a new tab automatically.
@@ -21,7 +21,7 @@ even before an account is connected. Connection setup is not in Settings → Age
 2. Sign in and approve on Claude's own page. Macro never asks for your password.
 3. Copy the entire one-time `code#state` displayed by Claude, paste it into Macro,
    and click **Finish connecting**.
-4. Create/edit an agent and select **Claude Cloud (demo)** as its harness.
+4. Create/edit an agent and select **Claude Cloud** as its harness.
 
 This is Claude Code's manual authorization-code + PKCE flow, not an RFC 8628
 device-code grant. The registered callback stays on Claude's site, so this works
@@ -30,15 +30,19 @@ The Macro user comes from authenticated request identity, never an email field.
 Attempts expire after ten minutes, are one-use, and are canceled on disconnect.
 Starting again invalidates the prior attempt. A failed exchange requires starting again.
 
-**No credential file, container mount, or credential environment variable is needed locally.**
-With `ENVIRONMENT=local`, grants are stored in MacroDB's `claude_oauth_grants`
-table. The serialized grant is KMS-encrypted, bound to its exact Macro owner and
-the `claude-cloud-oauth` purpose. The local stack's existing Cursor KMS key is
-reused with this separate encryption context; neither Cursor's configuration rows
-nor macrod token hashes are reused. Grant updates include refresh-token rotation.
-Reconnect once after upgrading from the old in-memory backend; subsequent
-restarts/rebuilds retain the connection. Run one replica: refresh/connect/disconnect
-are serialized in the domain service, not protected by a distributed lock.
+**No credential file or mount is needed.** Every configured deployment stores
+grants and pending PKCE attempts in MacroDB's `claude_oauth_grants` table. KMS
+encryption binds state to its exact Macro owner and the `claude-cloud-oauth`
+purpose. Hosted deployments use a dedicated key; the local stack uses its existing
+Cursor KMS key with this separate context. PostgreSQL owner locks serialize
+sign-in, disconnect, and credential changes across replicas. Starting on one
+replica and finishing on another works, including after a restart. Existing
+version-1 encrypted grants are read and upgraded on their next write.
+
+A refresh is durably marked consumed before contacting Claude. A failed or
+interrupted exchange requires reconnecting instead of reusing a possibly rotated
+refresh token. A persistence retry in the same process may recover the refreshed
+grant, but cannot overwrite a newer connection or undo a disconnect.
 Access/refresh tokens never reach frontend responses, query caches,
 local storage, or logs. The one-time code is briefly in the masked input and POST body,
 and is cleared on submission/cancel/expiry. Consent URLs are no-store responses.
@@ -46,7 +50,7 @@ Local Macro login may be a different email from the Claude account you authorize
 
 **Disconnect Claude** forgets Macro's grant and pending attempt. It does not revoke
 consent at Anthropic or stop a cloud turn already running; stop the turn first if
-needed. Interactive onboarding is disabled outside `ENVIRONMENT=local`.
+needed.
 
 ## Legacy command-line provisioning (optional)
 
@@ -64,21 +68,25 @@ The output defaults to `.claude-cloud/credentials.json` (gitignored). The parent
 
 ## Enable the service
 
-Local service startup always uses encrypted DB storage, ignoring the legacy file
-path. Apply the MacroDB migration before rebuilding the service. Outside local,
-`CLAUDE_CLOUD_CREDENTIALS_PATH` still enables the older private-file experiment;
-empty leaves Claude disabled. Only that legacy mode needs a private directory
-mount. Refresh atomically replaces the file, so mount the directory read/write,
-not just the file. Run **one service replica**.
+The service uses `CLAUDE_OAUTH_KMS_KEY_ID` from MacroConfig/Doppler or the ECS
+container environment. `infra/stacks/agent-harness-service` provisions the dedicated
+key and injects its ARN, with Encrypt/Decrypt permission restricted to the Claude
+purpose and an owner encryption context. Deploy this infrastructure together with
+the service. Without a configured key, connection status reports disabled with an
+explicit setup message. There is no hosted/local auth behavior gate.
 
-Production startup refuses a nonempty path. Before a hosted dev deployment, register the optional config key in the service's Doppler configuration and provision a private persistent volume; this change does not deploy or modify shared credentials. Local overrides use the normal MacroConfig environment loading.
+LocalStack keeps the existing `alias/macro-local-cursor-api-key` default. The old
+`CLAUDE_CLOUD_CREDENTIALS_PATH` service setting is removed; private files remain
+supported only by standalone command-line probes.
 
-The standalone frontend against the existing dev backend cannot exercise this new provider. Use a backend built from this workspace; see [running locally](RUNNING_LOCALLY.md).
+Browser consent is authorization-code + PKCE with manual code entry. It does not
+implement device-code polling. End-to-end provider verification requires approving
+Claude's consent page and completing the one-time code exchange.
 
 ## Use in Macro
 
 1. Connect through the Claude row in Settings → Harness, then create or edit a private agent in Settings → Agents.
-2. Select **Claude Cloud (demo)**. It is offered only when model discovery confirms that your Macro identity has a configured connection.
+2. Select **Claude Cloud**. It is offered only when model discovery confirms that your Macro identity has a configured connection.
 3. Choose from Claude's reported model catalog. Settings reads up to five recent sessions through your connected account and uses the first available initialization catalog; an existing session uses its own latest catalog. IDs, names, descriptions, and ordering come from Claude, not a fixed list. With no catalog yet, only **Claude · subscription default** is offered, with an explanatory description. The first prompt requests initialization alongside the model and user message, and the picker updates when Claude reports its catalog. Subsequent catalogs replace old choices during polling and streaming without resetting your saved preference. This is last-reported availability, not a fresh entitlement guarantee. Selection saves the next-turn preference after event submission; it does not wait for an idle worker. Each prompt repeats that preference immediately before the user message in one ordered batch, including after a Macro restart. A worker rejection surfaces an error and requests interruption; this cannot guarantee zero inference before the rejection arrives.
 4. Start a session with that agent or mention it in a channel. Prompts, follow-ups, text streaming, tool cards, cancellation, and transcript load use Macro's existing session interface.
 5. In the session header, use **Open in Claude** (the external-link icon; in the toolbar overflow on narrow screens). Existing demo sessions get the link too.
@@ -188,3 +196,19 @@ cargo run -p claude_cloud_agents --example smoke -- \
 ```
 
 Omitting `--session` creates a new cloud conversation. Do not automatically rerun a failed create; inspect the account first. The runner prints only the session identity and outcome, not tokens or private transcript contents.
+
+## MCP gateway networking
+
+Before creating a Claude cloud conversation, the shared Claude harness lifecycle
+allows the deployment’s `AgentHarnessEgressUrl` hostname in the connected owner's
+selected environment. Limited networking keeps its existing allowed hosts,
+package access, and connector settings; only the exact gateway hostname is
+added. Unrestricted environments need no update. Disabled or unrecognized
+network policies fail before session creation with an environment setup error.
+An environment update failure can be retried without creating duplicate sessions.
+
+Claude captures networking when it creates a container. Start a new Macro agent
+session after fixing an environment; existing containers keep their old policy.
+The earlier MCP HTTP 403 failure was reproduced with an empty allowlist despite
+`allow_mcp_servers: true`: adding `dev-gateway.macro.com` let a fresh Claude
+session connect `macro`, `macro_internal`, and `linear` and complete a prompt.

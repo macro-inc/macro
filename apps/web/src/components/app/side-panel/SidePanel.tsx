@@ -10,7 +10,6 @@ import ArrowLeft from '@phosphor/arrow-left.svg';
 import CaretRight from '@phosphor/caret-right.svg';
 import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
 import InfoIcon from '@phosphor/info.svg';
-import ListIcon from '@phosphor/list.svg';
 import SidePanelIcon from '@phosphor/sidebar-simple.svg';
 import { Button, Panel, Scroll } from '@ui';
 import { cn } from '@ui/utils/classname';
@@ -31,10 +30,7 @@ import {
   useContext,
 } from 'solid-js';
 import { HeaderIsland } from '../split-layout/components/HeaderIsland';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '../split-layout/components/SplitHeader';
+import { SplitHeaderRight } from '../split-layout/components/SplitHeader';
 import { useSplitPanel } from '../split-layout/layoutUtils';
 import {
   SidePanelContext,
@@ -261,17 +257,6 @@ function SidePanelLayoutInner(
           index={1}
         >
           <div class="relative flex size-full min-h-0 flex-col z-split-panel-chrome">
-            <div class="flex h-12 shrink-0 items-center justify-between border-b border-edge-muted px-4">
-              <span class="text-sm font-semibold text-ink">Details</span>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                label="Hide side panel"
-                onClick={() => props.setIsOpen(false)}
-              >
-                <SidePanelIcon class="size-4" />
-              </Button>
-            </div>
             <SidePanelOutlet
               sections={props.sections}
               openIds={props.openIds}
@@ -358,21 +343,12 @@ function SidePanelHeaderToggle() {
 
   return (
     <Show when={ctx.hasSections()}>
-      <Show when={!isTouchDevice() && !panel?.isInlinePreview && !ctx.isOpen()}>
-        <SplitHeaderLeft>
-          <div class="order-first flex shrink-0 items-center">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              label="Show side panel"
-              aria-label="Show side panel"
-              aria-expanded={false}
-              onClick={() => ctx.setIsOpen(true)}
-            >
-              <ListIcon class="size-4" />
-            </Button>
+      <Show when={!isTouchDevice() && !panel?.isInlinePreview}>
+        <SplitHeaderRight>
+          <div class="order-[1001] flex shrink-0 items-center">
+            <Toggle />
           </div>
-        </SplitHeaderLeft>
+        </SplitHeaderRight>
       </Show>
       <Show when={isTouchDevice() || panel?.isInlinePreview}>
         <SplitHeaderRight>

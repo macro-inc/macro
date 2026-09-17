@@ -80,6 +80,16 @@ impl ToolTestChannelService {
 }
 
 impl ChannelService for ToolTestChannelService {
+    async fn set_channel_picture(
+        &self,
+        _access: entity_access::domain::models::EntityAccessReceipt<
+            entity_access::domain::models::AdminParticipantRole,
+        >,
+        _picture_id: Option<uuid::Uuid>,
+    ) -> Result<(), crate::domain::ports::ChannelMutationErr> {
+        unimplemented!("picture mutation is not used by this fixture")
+    }
+
     async fn get_channel_messages(
         &self,
         _channel_id: Uuid,

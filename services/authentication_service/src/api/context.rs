@@ -24,6 +24,9 @@ use github::domain::service::GithubLinkServiceImpl;
 use github::outbound::github_auth_client::GithubAuthImpl;
 use github::outbound::github_oauth_client::GithubOauthImpl;
 use github::outbound::pg_github_repo::PgGithubRepo;
+use gtm_invite::{
+    domain::service::GtmInviteServiceImpl, outbound::pg_gtm_invite_repo::PgGtmInviteRepo,
+};
 use loops_client::LoopsClient;
 use macro_auth::{InternalApiKey, middleware::decode_jwt::JwtValidationArgs};
 use macro_authorization::{
@@ -95,6 +98,8 @@ pub(crate) type ReferralServiceType = ReferralServiceImpl<
     Arc<SqsNotificationIngress<SqsQueue>>,
 >;
 
+pub(crate) type GtmInviteServiceType = GtmInviteServiceImpl<PgGtmInviteRepo>;
+
 pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
     PgGithubRepo,
     GithubOauthImpl,
@@ -145,6 +150,7 @@ pub(crate) struct ApiContext {
     pub analytics_client: Arc<AnalyticsClient>,
     pub loops_client: Arc<LoopsClient>,
     pub referral_service: Arc<ReferralServiceType>,
+    pub gtm_invite_service: Arc<GtmInviteServiceType>,
     pub rate_limit_service: RateLimiter,
     /// The stripe price id
     pub stripe_price_id: String,

@@ -1,0 +1,114 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE gtm_invite_link\n            SET redeemed_by_user_id = $2,\n                redeemed_at = COALESCE(redeemed_at, $3)\n            WHERE id = $1\n              AND revoked_at IS NULL\n              AND ((redeemed_by_user_id IS NULL AND expires_at > $3)\n                   OR redeemed_by_user_id = $2)\n            RETURNING id, token, first_name, recipient_email, note, promo_code,\n                      created_by_user_id, created_at, expires_at, revoked_at, open_count,\n                      first_opened_at, redeemed_by_user_id, redeemed_at, converted_at,\n                      stripe_subscription_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "token",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "recipient_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "note",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "promo_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_by_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "revoked_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "open_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "first_opened_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "redeemed_by_user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "redeemed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "converted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "stripe_subscription_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "b131304342eee942b45b7b784cb019c00c239d2b5508b09ab8cceea1fd3b92de"
+}

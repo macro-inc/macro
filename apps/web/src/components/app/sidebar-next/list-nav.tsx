@@ -1,3 +1,4 @@
+import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import {
@@ -72,6 +73,12 @@ export const ListNav = (props: ListNavProps) => {
         .includes(props.item.id);
     }
     const expected = content();
+    if (
+      props.item.id === 'agents' &&
+      activeContent.type === 'component' &&
+      parseAgentsRoute(activeContent.id)
+    )
+      return true;
     return (
       activeContent.type === expected.type && activeContent.id === expected.id
     );

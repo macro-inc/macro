@@ -45,12 +45,47 @@ describe('sanitizeCalendarDescription', () => {
     expect(sanitizeCalendarDescription('   ')).toBe('');
   });
 
+  it('links bare urls in text so the detail view can open them', () => {
+    expect(sanitizeCalendarDescription('Join https://zoom.us/j/123 now')).toBe(
+      '<p>Join <a href="https://zoom.us/j/123">https://zoom.us/j/123</a> now</p>'
+    );
+    expect(sanitizeCalendarDescription('See macro.com for details')).toBe(
+      '<p>See <a href="https://macro.com">macro.com</a> for details</p>'
+    );
+    expect(
+      sanitizeCalendarDescription('one https://a.com two https://b.com')
+    ).toBe(
+      '<p>one <a href="https://a.com">https://a.com</a> two <a href="https://b.com">https://b.com</a></p>'
+    );
+  });
+
+  it('links bare urls inside provider html without touching existing links', () => {
+    expect(
+      sanitizeCalendarDescription(
+        '<p>Docs at https://example.com/x and <a href="https://example.com/y">here</a></p>'
+      )
+    ).toBe(
+      '<p>Docs at <a href="https://example.com/x">https://example.com/x</a> and <a href="https://example.com/y">here</a></p>'
+    );
+  });
+
+  it('links bare emails but leaves code-like tokens as text', () => {
+    expect(sanitizeCalendarDescription('Edit parser.ts before sync')).toBe(
+      '<p>Edit parser.ts before sync</p>'
+    );
+    expect(
+      sanitizeCalendarDescription('Email bob@example.com to confirm')
+    ).toBe(
+      '<p>Email <a href="mailto:bob@example.com">bob@example.com</a> to confirm</p>'
+    );
+  });
+
   it('keeps angle brackets in plain text as text', () => {
     const safe = sanitizeCalendarDescription(
       'Send the agenda to <bob@example.com>\nOwner: <TBD>'
     );
     expect(safe).toBe(
-      '<p>Send the agenda to &lt;bob@example.com&gt;<br>Owner: &lt;TBD&gt;</p>'
+      '<p>Send the agenda to &lt;<a href="mailto:bob@example.com">bob@example.com</a>&gt;<br>Owner: &lt;TBD&gt;</p>'
     );
     // Already-safe output must not change on the next pass.
     expect(sanitizeCalendarDescription(safe)).toBe(safe);

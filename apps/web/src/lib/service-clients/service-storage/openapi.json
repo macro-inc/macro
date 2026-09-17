@@ -4250,6 +4250,90 @@
         }
       }
     },
+    "/channels/{channel_id}/profile_picture": {
+      "put": {
+        "tags": ["channels::inbound::axum_router::profile_picture"],
+        "summary": "Set a channel or group chat profile picture. Requires rename permission.",
+        "operationId": "set_channel_picture",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "Channel ID",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetChannelPictureRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Picture updated"
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels/{channel_id}/reaction": {
       "post": {
         "tags": ["channels"],
@@ -17213,6 +17297,11 @@
           "channel_type": {
             "$ref": "#/components/schemas/ChannelType",
             "description": "Channel type."
+          },
+          "profile_picture_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Static image file used as the channel's profile picture, when accessible."
           }
         }
       },
@@ -25627,6 +25716,17 @@
                 "description": "The turn that was running when it stopped, if any."
               }
             ]
+          }
+        }
+      },
+      "SetChannelPictureRequest": {
+        "type": "object",
+        "description": "Replace a channel's picture, or remove it by sending a null file id.",
+        "properties": {
+          "profile_picture_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Static image file id; null restores the default channel icon."
           }
         }
       },

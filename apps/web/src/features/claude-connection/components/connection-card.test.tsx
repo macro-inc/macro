@@ -26,7 +26,7 @@ function props(): ConnectionCardProps {
 it('shows Claude before connection and explains restart behavior', () => {
   const value = props();
   render(() => <ConnectionCard {...value} />);
-  expect(screen.getByText('Claude Cloud (demo)')).toBeTruthy();
+  expect(screen.getByText('Claude Cloud')).toBeTruthy();
   expect(screen.getByText(/Reconnect after a backend restart/)).toBeTruthy();
   fireEvent.click(screen.getByRole('button', { name: 'Connect Claude' }));
   expect(value.onBegin).toHaveBeenCalledOnce();
@@ -61,7 +61,7 @@ it('shows disabled and failed states instead of silently disappearing', () => {
     />
   ));
   expect(
-    screen.getByText(/enabled only in the local demo backend/)
+    screen.getByText(/sign-in is not configured on this deployment/)
   ).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Connect Claude' })).toBeNull();
   cleanup();

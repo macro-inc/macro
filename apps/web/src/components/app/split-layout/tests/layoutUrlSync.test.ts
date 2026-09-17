@@ -1,3 +1,4 @@
+import { agentsRouteId } from '@app/features/agents-view/core/route';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { Navigator } from '@solidjs/router';
 import { batch, createMemo, createRoot, createSignal } from 'solid-js';
@@ -108,6 +109,100 @@ async function flushUrlSync() {
 }
 
 describe('layout URL synchronization', () => {
+  it('navigates between Agents conversations and restores browser back/forward paths', async () => {
+    const chat = {
+      type: 'component' as const,
+      id: agentsRouteId({
+        mode: 'chat',
+        conversation: { type: 'agent_session', id: 'session-1' },
+      }),
+    };
+    const code = {
+      type: 'component' as const,
+      id: agentsRouteId({
+        mode: 'code',
+        conversation: { type: 'agent_session', id: 'session-2' },
+      }),
+    };
+    const harness = createHarness({
+      managerContent: [{ type: 'component', id: 'agents' }],
+      urlSegments: ['component', 'agents'],
+    });
+    await flushUrlSync();
+    const handle = harness.manager.getSplit(harness.manager.splits()[0].id)!;
+    handle.replace({ next: chat });
+    await flushUrlSync();
+    expect(harness.navigate).toHaveBeenLastCalledWith('/agents/session-1', {
+      replace: false,
+    });
+    harness.setUrl(['agents', 'session-1'], undefined);
+    await flushUrlSync();
+    handle.replace({ next: code });
+    await flushUrlSync();
+    expect(harness.navigate).toHaveBeenLastCalledWith('/coders/session-2', {
+      replace: false,
+    });
+    harness.setUrl(['coders', 'session-2'], undefined);
+    await flushUrlSync();
+    harness.setUrl(['agents', 'session-1'], undefined);
+    await flushUrlSync();
+    expect(harness.manager.splits()[0].content).toEqual(chat);
+    harness.setUrl(['coders', 'session-2'], undefined);
+    await flushUrlSync();
+    expect(harness.manager.splits()[0].content).toEqual(code);
+    harness.dispose();
+  });
+
+  it('replaces a pending workspace URL with the real session without remounting', async () => {
+    const pendingId = agentsRouteId({
+      mode: 'chat',
+      conversation: { type: 'agent_session', id: 'pending-1' },
+    });
+    const resolvedId = agentsRouteId({
+      mode: 'chat',
+      conversation: { type: 'agent_session', id: 'session-1' },
+    });
+    const harness = createHarness({
+      managerContent: [{ type: 'component', id: pendingId }],
+      urlSegments: ['agents', 'pending-1'],
+    });
+    await flushUrlSync();
+    const split = harness.manager.splits()[0];
+    const mount = split.mount;
+    const handle = harness.manager.getSplit(split.id)!;
+    const historyLength = handle.history().length;
+    handle.adoptContentId({ type: 'component', nextId: resolvedId });
+    await flushUrlSync();
+    expect(harness.navigate).toHaveBeenLastCalledWith('/agents/session-1', {
+      replace: true,
+    });
+    expect(harness.manager.splits()[0].mount).toBe(mount);
+    expect(handle.history()).toHaveLength(historyLength);
+    expect(handle.history().at(-1)?.id).toBe(resolvedId);
+    harness.dispose();
+  });
+
+  it('restores Agents deep links next to another split', async () => {
+    const harness = createHarness({
+      managerContent: [{ type: 'component', id: 'agents' }],
+      urlSegments: ['md', 'document-1', 'coders', 'session-2'],
+    });
+    await flushUrlSync();
+    expect(harness.manager.getUrlSegments()).toEqual([
+      'md',
+      'document-1',
+      'coders',
+      'session-2',
+    ]);
+    expect(harness.manager.splits()[1].content.id).toBe(
+      agentsRouteId({
+        mode: 'code',
+        conversation: { type: 'agent_session', id: 'session-2' },
+      })
+    );
+    harness.dispose();
+  });
+
   it('coalesces preview engagement into one canonical manager-to-URL update', async () => {
     const harness = createHarness({
       managerContent: [{ type: 'component', id: 'inbox' }],

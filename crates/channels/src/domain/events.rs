@@ -25,6 +25,13 @@ pub struct MessageChangedNotificationContext {
 /// Events emitted after durable channel state changes.
 #[derive(Debug, Clone)]
 pub enum ChannelEvent {
+    /// A channel picture was set, replaced, or removed.
+    PictureChanged {
+        /// Channel whose picture changed.
+        channel_id: Uuid,
+        /// Active participants whose sessions should refresh the picture.
+        recipients: Vec<MacroUserIdStr<'static>>,
+    },
     /// A channel was created.
     ChannelCreated {
         /// Created channel id.

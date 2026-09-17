@@ -196,6 +196,11 @@ impl InfraEnv {
             "OVERRIDE_LEXICAL_SERVICE_URL".into(),
             "http://lexical-service:8096".into(),
         );
+        // Channel picture authorization reads file metadata from inside DSS.
+        env.insert(
+            "OVERRIDE_STATIC_FILE_SERVICE_URL".into(),
+            "http://static-file-service:8080".into(),
+        );
         // Same failure mode for the email connect flows: without these,
         // first-inbox provisioning (auth-service → `/email/init`) and Gmail
         // token fetches (email-service → `/internal/google_access_token`)
