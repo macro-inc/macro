@@ -1,3 +1,4 @@
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ThemeV3 } from '../types/themeTypes';
 
 /** Neutral dark surfaces with a true-black base and amber accent. */
@@ -43,7 +44,10 @@ export const macroDarkTheme = {
     'link-hover': 'var(--color-accent)',
     'link-visited': 'var(--color-accent)',
     page: 'var(--color-surface-0)',
-    panel: 'var(--color-surface-1)',
+    // Full-frame mobile panels use the true-black base.
+    panel: isTouchDevice()
+      ? 'var(--color-surface-0)'
+      : 'var(--color-surface-1)',
     dialog: 'var(--color-surface-2)',
     menu: 'var(--color-surface-2)',
     tooltip: 'var(--color-surface-2)',
