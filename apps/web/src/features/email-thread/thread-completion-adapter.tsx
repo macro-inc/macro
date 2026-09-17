@@ -46,7 +46,6 @@ export function createThreadCompletionAdapter(
   | 'isThreadDone'
   | 'canMarkThreadNotDone'
   | 'markThreadNotDone'
-  | 'getMarkDoneNavigationTargetId'
 > {
   const notificationSource = useGlobalNotificationSource();
   const soup = useMaybeSoup();
@@ -132,22 +131,6 @@ export function createThreadCompletionAdapter(
       );
     },
   });
-
-  const getMarkDoneNavigationTargetId = () => {
-    if (!soup) return;
-
-    const focusedId = soup.focus.id();
-    const navigationOptions = {
-      wrapNavigation: false,
-      skipGroupHeaders: true,
-      skipLoadMore: true,
-    };
-    const candidates = [
-      soup.navigate.peekOffset(1, navigationOptions)?.row,
-      soup.navigate.peekOffset(-1, navigationOptions)?.row,
-    ];
-    return candidates.find((row) => row && row.id !== focusedId)?.id;
-  };
 
   const isThreadDone = () => {
     const thread = threadSource();
@@ -329,6 +312,5 @@ export function createThreadCompletionAdapter(
     isThreadDone,
     canMarkThreadNotDone,
     markThreadNotDone,
-    getMarkDoneNavigationTargetId,
   };
 }
