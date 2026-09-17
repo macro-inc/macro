@@ -16,6 +16,8 @@ const mocks = vi.hoisted(() => ({
   fetchCallSharePermission: vi.fn(),
   updateCallTeamShare: vi.fn(),
   setCallRecordTeamShareCache: vi.fn(),
+  callRecordShared: true,
+  callRecordQuerySuccess: true,
   getProjectPermissions: vi.fn(),
   copyLink: vi.fn(),
   blockPermissionsRead: vi.fn(),
@@ -136,6 +138,27 @@ vi.mock('@queries/call/call', () => ({
     mocks.updateCallTeamShare(...args),
   setCallRecordTeamShareCache: (...args: unknown[]) =>
     mocks.setCallRecordTeamShareCache(...args),
+  sharePermissionFromCallRecord: (record: {
+    callId: string;
+    createdBy: string;
+    shareWithTeam: boolean;
+  }) => ({
+    id: record.callId,
+    owner: record.createdBy,
+    teamShareAccessLevel: record.shareWithTeam ? 'view' : null,
+  }),
+  useCallRecordQuery: () => ({
+    get isSuccess() {
+      return mocks.callRecordQuerySuccess;
+    },
+    get data() {
+      return {
+        callId: 'call-1',
+        createdBy: 'owner',
+        shareWithTeam: mocks.callRecordShared,
+      };
+    },
+  }),
 }));
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({
@@ -227,6 +250,8 @@ beforeEach(() => {
   mocks.inBlock = true;
   mocks.mobile = false;
   mocks.hasTeam = false;
+  mocks.callRecordShared = true;
+  mocks.callRecordQuerySuccess = true;
   mocks.updateChatPermissions.mockResolvedValue({ isErr: () => false });
   mocks.updateCallTeamShare.mockResolvedValue({ isErr: () => false });
   Object.defineProperty(navigator, 'clipboard', {
@@ -477,6 +502,18 @@ describe('call team sharing', () => {
       'call-1',
       false
     );
+  });
+
+  it('shows team access from the call record cache after the checkbox writes it', () => {
+    mocks.hasTeam = true;
+    mocks.callRecordShared = false;
+    mountCallShare();
+
+    expect(
+      screen
+        .getByRole('group', { name: 'Team access level' })
+        .getAttribute('data-value')
+    ).toBe('NONE');
   });
 
   it('hides call team access when the owner has no team', () => {
