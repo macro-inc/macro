@@ -9,7 +9,7 @@
 import type { InputAttachmentData } from '@channel/Input';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import type {
-  AgentAction,
+  AgentPromptAction,
   PromptAttachment,
 } from '@service-agent-harness/generated/schemas';
 
@@ -36,7 +36,7 @@ function promptAttachmentOf(attachment: InputAttachmentData): PromptAttachment {
 export function promptActionOf(
   markdown: string,
   attachments: InputAttachmentData[]
-): AgentAction {
+): AgentPromptAction & { type: 'prompt' } {
   const ready = attachments
     .filter((attachment) => !attachment.pending)
     .map(promptAttachmentOf);

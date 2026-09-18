@@ -335,11 +335,14 @@ export function AgentInput(props: AgentInputProps) {
                   <Show when={isTouchDevice() && props.modelControl}>
                     <div class="min-w-0">{props.modelControl}</div>
                   </Show>
-                  <Show when={canAttach()}>
+                  <Show when={props.onAttachFiles}>
                     {/* The picker accepts whatever the drop zone does: an
                         agent's reason to attach a file is usually a source
                         file, and the static upload stores any type. */}
-                    <Input.AttachFilesAction accept={null} />
+                    <Input.AttachFilesAction
+                      accept={null}
+                      disabled={props.disabled}
+                    />
                   </Show>
                   <div class="ml-auto shrink-0">
                     <Show

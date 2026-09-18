@@ -15,7 +15,9 @@ import { useInput, useInputCommands } from './context';
  * agent composer, where a source file is usually the point — passes `null`
  * to accept whatever it would accept on a drop.
  */
-export function AttachFilesAction(props: { accept?: string | null }) {
+export function AttachFilesAction(
+  props: { accept?: string | null; disabled?: boolean } = {}
+) {
   const commands = useInputCommands();
   let fileInputRef: HTMLInputElement | undefined;
 
@@ -43,10 +45,12 @@ export function AttachFilesAction(props: { accept?: string | null }) {
             : (props.accept ?? CHANNEL_FILE_PICKER_ACCEPT)
         }
         onChange={onAttachFiles}
+        disabled={props.disabled}
         data-input-attach-file-picker
       />
       <InputActionButton
         label="Attach files"
+        disabled={props.disabled}
         onClick={() => fileInputRef?.click()}
       >
         <PaperclipIcon />

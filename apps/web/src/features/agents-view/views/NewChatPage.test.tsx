@@ -1,3 +1,4 @@
+import type { InputAttachmentData } from '@channel/Input/types';
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import {
@@ -15,8 +16,14 @@ import { NewChatPage } from './NewChatPage';
 
 const mocks = vi.hoisted(() => ({
   openSettings: vi.fn(),
+  attachments: [] as InputAttachmentData[],
   recentIds: [] as string[],
   repositories: [] as { url: string; defaultBranch?: string }[],
+}));
+vi.mock('@core/util/upload', () => ({ uploadFile: vi.fn() }));
+vi.mock('@channel/Input', async () => ({
+  ...(await import('../../channel/Input/attachment-tracker')),
+  uploadInputAttachments: vi.fn(),
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@core/constant/SettingsState', () => ({
@@ -80,7 +87,7 @@ type ComposerProps = {
   drawerOpen: boolean;
   draft: string;
   onDraftChange: (draft: string) => void;
-  onSend: (prompt: string) => void;
+  onSend: (prompt: string, attachments: InputAttachmentData[]) => void;
 };
 vi.mock('../components/ChatComposer', () => ({
   ChatComposer: (props: ComposerProps) => (
@@ -94,7 +101,14 @@ vi.mock('../components/ChatComposer', () => ({
         value={props.draft}
         onInput={(event) => props.onDraftChange(event.currentTarget.value)}
       />
-      <button onClick={() => props.onSend(props.draft || 'Prompt')}>
+      <button
+        onClick={() =>
+          props.onSend(
+            props.draft || (mocks.attachments.length ? '' : 'Prompt'),
+            mocks.attachments
+          )
+        }
+      >
         Send
       </button>
     </>
@@ -148,6 +162,7 @@ async function hoverAgent(name: string) {
 describe('agent-led new conversation', () => {
   let motionStyles: HTMLStyleElement;
   beforeEach(() => {
+    mocks.attachments = [];
     mocks.recentIds = [MACRO_CODER_BOT_ID];
     mocks.repositories = [
       { url: 'https://github.com/macro-inc/macro', defaultBranch: 'develop' },
@@ -457,4 +472,31 @@ describe('agent-led new conversation', () => {
     );
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
   });
+});
+
+it('starts a conversation with an uploaded image and no text', () => {
+  mocks.attachments = [
+    {
+      id: 'sfs-image',
+      name: 'pasted.png',
+      kind: 'image',
+      mimeType: 'image/png',
+      size: 123,
+    },
+  ];
+  const start = page();
+  fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+  expect(start).toHaveBeenCalledWith(
+    expect.objectContaining({
+      prompt: '',
+      attachments: [
+        {
+          uri: expect.stringContaining('sfs-image'),
+          name: 'pasted.png',
+          mimeType: 'image/png',
+          size: 123,
+        },
+      ],
+    })
+  );
 });
