@@ -18,6 +18,12 @@ import { Message } from './AgentMessage';
 vi.mock('@core/util/message-send-motion', () => ({
   messageSendMotion: () => {},
 }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => 'macro|me@macro.com',
+}));
+vi.mock('@core/user/util', () => ({
+  idToDisplayName: (id: string) => id.replace(/^macro\|/, ''),
+}));
 vi.mock('@ui', () => ({
   UserMessageBubble: (props: { children: JSX.Element }) => (
     <div data-testid="bubble">{props.children}</div>
@@ -340,5 +346,38 @@ describe('Message thought shimmer', () => {
       <Message message={message([thought('done thinking')])} inFlight={false} />
     ));
     expect(view.getByTestId('thought').dataset.active).toBe('false');
+  });
+});
+
+describe('Message prompt attribution', () => {
+  const prompt = (userId: string | null): FoldedMessage => ({
+    ...message([text('Do the thing.')]),
+    author: { kind: 'user', userId },
+  });
+
+  it("names the sender above another participant's prompt", () => {
+    const view = render(() => (
+      <Message message={prompt('macro|wolf@macro.com')} inFlight={false} />
+    ));
+    expect(view.getByTestId('prompt-author').textContent).toBe(
+      'wolf@macro.com'
+    );
+    expect(view.getByTestId('bubble').textContent).toBe('Do the thing.');
+  });
+
+  it("leaves the viewer's own prompt unlabelled", () => {
+    const view = render(() => (
+      <Message message={prompt('macro|me@macro.com')} inFlight={false} />
+    ));
+    expect(view.queryByTestId('prompt-author')).toBeNull();
+    expect(view.getByTestId('bubble')).toBeTruthy();
+  });
+
+  it('leaves an unattributed prompt unlabelled', () => {
+    const view = render(() => (
+      <Message message={prompt(null)} inFlight={false} />
+    ));
+    expect(view.queryByTestId('prompt-author')).toBeNull();
+    expect(view.getByTestId('bubble')).toBeTruthy();
   });
 });

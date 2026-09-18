@@ -7,6 +7,7 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { MagicChipView } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/MagicChipView';
 import type { MagicChipPresentation } from '@core/component/LexicalMarkdown/component/decorator/MagicChip/presentation';
+import { useUserId } from '@core/context/user';
 import type {
   ElicitationSchema,
   FoldedMessage,
@@ -469,6 +470,37 @@ function LiveTurnDemo() {
 }
 
 /**
+ * A shared session's prompts: the viewer's own bubble stays bare, another
+ * participant's carries their name.
+ */
+function PromptAuthorDemo() {
+  const userId = useUserId();
+  const prompt = (userId: string | null, text: string): FoldedMessage => ({
+    agentSessionId: 'demo',
+    requestId: null,
+    turn: 0,
+    author: { kind: 'user', userId },
+    stop: null,
+    parts: [{ kind: 'text', text }],
+  });
+  return (
+    <div class="flex flex-col gap-3">
+      <Message
+        message={prompt(userId() ?? null, 'Tighten up the fold, please.')}
+        inFlight={false}
+      />
+      <Message
+        message={prompt(
+          'macro|wolf@macro.com',
+          'And run the snapshot tests after.'
+        )}
+        inFlight={false}
+      />
+    </div>
+  );
+}
+
+/**
  * The Claude Code colour question after the fold collapsed its custom pair,
  * plus one of every other field type, so the form's controls can be eyeballed.
  */
@@ -887,6 +919,10 @@ export default function AgentUiGallery() {
 
           <Item label="AgentMessage (turn settles)">
             <LiveTurnDemo />
+          </Item>
+
+          <Item label="AgentMessage (prompts: yours, then another participant's)">
+            <PromptAuthorDemo />
           </Item>
         </div>
       </div>

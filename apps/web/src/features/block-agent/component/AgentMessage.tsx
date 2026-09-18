@@ -9,6 +9,8 @@
  * transcript that let each message decide showed every one of them working.
  */
 
+import { useUserId } from '@core/context/user';
+import { idToDisplayName } from '@core/user/util';
 import { messageSendMotion } from '@core/util/message-send-motion';
 import type {
   FoldedMessage,
@@ -146,14 +148,34 @@ function showsWorkingLine(message: FoldedMessage): boolean {
 }
 
 /**
+ * The display name of whoever sent a prompt, when that is somebody other
+ * than the viewer. A session is shared, so a prompt may be another
+ * participant's; one's own prompts (and unattributed ones) need no byline,
+ * matching the queued-prompt list in `AgentComposer`.
+ */
+function promptAuthorName(
+  author: FoldedMessage['author'],
+  viewerId: string | undefined
+): string | undefined {
+  if (author.kind !== 'user' || author.userId === null) return undefined;
+  return author.userId === viewerId
+    ? undefined
+    : idToDisplayName(author.userId);
+}
+
+/**
  * A prompt, in the chat block's user-bubble treatment
  * (`@core/component/AI/component/message/UserMessage.tsx`): right-aligned,
- * rounded, filled surface shared with production chat.
+ * rounded, filled surface shared with production chat. A prompt another
+ * participant sent carries their name above the bubble.
  */
 function UserMessage(props: { message: FoldedMessage }) {
+  const userId = useUserId();
+  const authorName = () => promptAuthorName(props.message.author, userId());
+
   return (
     <div
-      class="flex w-full"
+      class="flex w-full flex-col items-end gap-0.5"
       ref={(el) =>
         messageSendMotion(el, () =>
           props.message.requestId
@@ -162,6 +184,13 @@ function UserMessage(props: { message: FoldedMessage }) {
         )
       }
     >
+      <Show when={authorName()}>
+        {(name) => (
+          <div class="text-xs text-ink-extra-muted" data-testid="prompt-author">
+            {name()}
+          </div>
+        )}
+      </Show>
       <UserMessageBubble>
         <For each={props.message.parts}>
           {(part, index) => (
