@@ -4253,7 +4253,7 @@
     "/channels/{channel_id}/profile_picture": {
       "put": {
         "tags": ["channels::inbound::axum_router::profile_picture"],
-        "summary": "Set a channel or group chat profile picture. Requires rename permission.",
+        "summary": "Set a channel or group chat profile picture. Requires channel admin or owner access.",
         "operationId": "set_channel_picture",
         "parameters": [
           {
