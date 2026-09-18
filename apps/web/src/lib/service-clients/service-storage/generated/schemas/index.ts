@@ -1413,6 +1413,8 @@ export * from './threadState';
 export * from './threadStateAnchor';
 export * from './threadStateDeletedAt';
 export * from './threadUpdatedAt';
+export * from './transcribeDictationParams';
+export * from './transcribeResponse';
 export * from './transcriptSegmentRequest';
 export * from './transcriptSegmentRequestDiarizedSpeakerId';
 export * from './transcriptSegmentRequestEmbedding';
