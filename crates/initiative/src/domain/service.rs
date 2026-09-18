@@ -144,7 +144,10 @@ where
             )
             .await;
         match created {
-            Ok(detail) => Ok(detail),
+            Ok(mut detail) => {
+                detail.user_access_level = AccessLevel::Owner;
+                Ok(detail)
+            }
             Err(error) => {
                 if let Err(purge_error) = self
                     .description_documents
@@ -181,11 +184,14 @@ where
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<InitiativeDetail, InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        self.repo
+        let mut detail = self
+            .repo
             .get_detail(id)
             .await
             .map_err(Into::into)?
-            .ok_or(InitiativeError::NotFound)
+            .ok_or(InitiativeError::NotFound)?;
+        detail.user_access_level = receipt_access_level(&receipt);
+        Ok(detail)
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -236,7 +242,8 @@ where
             None
         };
 
-        self.repo
+        let mut detail = self
+            .repo
             .update(UpdateInitiativeRepoArgs {
                 id,
                 name,
@@ -246,7 +253,9 @@ where
                 team_share,
             })
             .await
-            .map_err(Into::into)
+            .map_err(Into::into)?;
+        detail.user_access_level = receipt_access_level(&receipt);
+        Ok(detail)
     }
 
     #[tracing::instrument(err, skip_all)]
@@ -351,6 +360,20 @@ fn receipt_is_owner<T: entity_access::domain::models::RequiredPermission>(
             access_level: AccessLevel::Owner,
         }
     )
+}
+
+/// The caller's own level on the initiative. Initiatives are item-based, so the receipt always
+/// carries an `AccessLevel`; the channel and team permission shapes fall back to the weakest
+/// level rather than overstating what the caller may do.
+fn receipt_access_level<T: entity_access::domain::models::RequiredPermission>(
+    receipt: &EntityAccessReceipt<T>,
+) -> AccessLevel {
+    match receipt.entity_permission() {
+        EntityPermission::AccessLevel { access_level } => *access_level,
+        EntityPermission::ChannelViewOnly
+        | EntityPermission::ChannelRole { .. }
+        | EntityPermission::TeamRole { .. } => AccessLevel::View,
+    }
 }
 
 fn initiative_id_from_receipt<T: entity_access::domain::models::RequiredPermission>(

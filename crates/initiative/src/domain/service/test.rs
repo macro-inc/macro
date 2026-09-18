@@ -626,6 +626,67 @@ async fn get_list_and_unassign_call_the_repo() {
 }
 
 #[tokio::test]
+async fn get_and_update_report_the_callers_own_access_level() {
+    for level in [
+        AccessLevel::View,
+        AccessLevel::Comment,
+        AccessLevel::Edit,
+        AccessLevel::Owner,
+    ] {
+        let mut repo = MockInitiativeRepo::new();
+        repo.expect_get_detail()
+            .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
+        let fetched = service(repo)
+            .get(receipt(OWNER, EntityType::Initiative, level))
+            .await
+            .expect("detail");
+        assert_eq!(fetched.user_access_level, level);
+    }
+
+    for level in [AccessLevel::Edit, AccessLevel::Owner] {
+        let mut repo = MockInitiativeRepo::new();
+        repo.expect_update()
+            .return_once(|_| Box::pin(async { Ok(detail(Vec::new())) }));
+        let updated = service(repo)
+            .update(
+                receipt(OWNER, EntityType::Initiative, level),
+                UpdateInitiativeRequest {
+                    name: Some("Renamed".into()),
+                    ..Default::default()
+                },
+            )
+            .await
+            .expect("updated");
+        assert_eq!(updated.user_access_level, level);
+    }
+}
+
+#[tokio::test]
+async fn create_reports_the_creator_as_owner() {
+    let mut repo = MockInitiativeRepo::new();
+    repo.expect_get_team_default_link_share()
+        .return_once(|_| Box::pin(async { Ok(None) }));
+    repo.expect_create()
+        .return_once(|_, _, _| Box::pin(async { Ok(detail(Vec::new())) }));
+    let mut documents = MockInitiativeDescriptionDocuments::new();
+    documents
+        .expect_create()
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
+
+    let created = service_with_documents(repo, documents)
+        .create(
+            &user(OWNER),
+            CreateInitiativeRequest {
+                name: "Launch".into(),
+                ..Default::default()
+            },
+        )
+        .await
+        .expect("created");
+    assert_eq!(created.user_access_level, ShareAccessLevel::Owner);
+}
+
+#[tokio::test]
 async fn delete_purges_the_document_after_the_initiative_is_gone() {
     let mut sequence = Sequence::new();
     let mut repo = MockInitiativeRepo::new();
