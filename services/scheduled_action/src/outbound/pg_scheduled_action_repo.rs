@@ -5,6 +5,8 @@ use entity_registry_db_utils::{
     InsertOutcome, NewEntityRecord, RegisteredEntityType, WriteOutcome, delete_entity,
     insert_entity,
 };
+use macro_user_id::cowlike::CowLike;
+use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::Owner;
