@@ -329,9 +329,10 @@ message or acknowledgement and verify that it does not pull you to latest.
 
 ## Channel pictures
 
-Channels and group chats can have a custom picture. Admins and owners (the same
-people who can rename a channel) can open the title menu. Beside `Rename`,
-choose `Set channel picture` to add or replace a picture. Select a PNG, JPG,
+Channels and group chats can have a custom picture. Any active participant can
+`Rename` a named channel from the title menu. Direct messages cannot be renamed.
+Only admins and owners also get `Set channel picture` and `Remove channel
+picture`. Choose `Set channel picture` to add or replace a picture. Select a PNG, JPG,
 WebP, or GIF up to 16 MB. The upload must finish before the picture is saved;
 the server accepts only supported images uploaded by the person setting the
 picture. An error leaves the previous picture in place. When a picture is set, the menu also offers

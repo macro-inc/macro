@@ -190,7 +190,7 @@ function NewTop(props: { channelId: string }) {
   // The generic rename op is gated on the document block-load signals, which
   // the channel block never sets — so the menu offers a channel-local rename
   // built from the channels context instead. The action's own gate keeps it
-  // off DMs and channels the user does not own.
+  // off DMs and channels the user has not joined.
   const channelEntity = () => {
     const ch = channel();
     if (!ch) return undefined;

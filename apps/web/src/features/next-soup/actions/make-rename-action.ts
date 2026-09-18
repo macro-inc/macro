@@ -20,7 +20,7 @@ export const makeRenameAction = (options: MakeRenameOptions) => {
 
     if (entity.type === 'channel') {
       if (entity.channelType === 'direct_message') return false;
-      return entity.ownerId === userId();
+      return entity.isParticipant !== false;
     }
 
     return entity.ownerId === userId();

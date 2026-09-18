@@ -790,10 +790,12 @@ pub trait ChannelService: Send + Sync + 'static {
     }
 
     /// Patch a channel.
+    ///
+    /// Name-only updates are allowed for any member receipt. Converting a
+    /// channel or changing auto-join still requires channel admin access.
     fn patch_channel(
         &self,
-        _actor: Sender,
-        _channel_id: Uuid,
+        _access: EntityAccessReceipt<MemberParticipantRole>,
         _req: PatchChannelRequest,
     ) -> impl Future<Output = Result<(), ChannelMutationErr>> + Send {
         async move {

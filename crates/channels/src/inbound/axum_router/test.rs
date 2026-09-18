@@ -18,8 +18,8 @@ use axum::{
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, BotId, Entity, EntityAccessReceipt,
-        EntityPermission, EntityType, MemberParticipantRole,
+        AccessError, AccessLevel, AdminParticipantRole, BotAccessScope, BotId, Entity,
+        EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
         ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
@@ -865,8 +865,7 @@ impl ChannelService for RecordingMutationService {
 
     async fn patch_channel(
         &self,
-        _actor: Sender,
-        _channel_id: Uuid,
+        _access: EntityAccessReceipt<MemberParticipantRole>,
         _req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
         Ok(())
