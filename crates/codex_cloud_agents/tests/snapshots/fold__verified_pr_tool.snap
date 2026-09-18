@@ -43,7 +43,13 @@ expression: messages
           "output": "[View pull request](https://github.com/org/repo/pull/42)",
           "input": {
             "url": "https://github.com/org/repo/pull/42"
-          }
+          },
+          "result": {
+            "url": "https://github.com/org/repo/pull/42",
+            "assistantTurnId": "turn-1",
+            "source": "codex_cloud_metadata"
+          },
+          "error": null
         }
       }
     ],
