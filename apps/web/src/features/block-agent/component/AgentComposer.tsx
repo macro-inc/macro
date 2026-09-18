@@ -8,7 +8,6 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
-import type { MessagePart } from '@service-agent-fold/generated/types';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { type Component, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
@@ -24,8 +23,6 @@ import {
 } from '../ui';
 import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
 
-type PendingPermission = Extract<MessagePart, { kind: 'permission' }>;
-
 export function AgentComposer(props: {
   /**
    * Whether the composer opens focused. The block adapter decides, from the
@@ -38,13 +35,12 @@ export function AgentComposer(props: {
   const Input = props.input ?? AgentInput;
   const ModelSelector = props.modelSelector ?? AgentModelSelector;
   const {
-    elicitation,
+    interactions,
     issue,
     loadFailed,
     messages,
     metadata,
     pending,
-    permissions,
     queue,
     sendNext,
     turn,
@@ -82,16 +78,10 @@ export function AgentComposer(props: {
     messages().some((message) => message.pending) &&
     !hasPendingStop(messages());
 
-  const pendingPermissions = (): PendingPermission[] => {
-    if (!busy() || turn() === 'disconnected' || turn() === 'stopping')
-      return [];
-    const last = messages().at(-1);
-    if (last?.author.kind !== 'agent' || last.stop != null) return [];
-    return last.parts.filter(
-      (part): part is PendingPermission =>
-        part.kind === 'permission' && part.outcome.kind === 'pending'
-    );
-  };
+  const pendingPermissions = () =>
+    interactions.pending().filter((request) => request.kind === 'permission');
+  const pendingElicitation = () =>
+    interactions.pending().some((request) => request.kind === 'elicitation');
 
   // Focus plumbing between the input and the queue list above it: Up at the
   // start of the input lands on the bottom (next-to-dispatch) queue row, and
@@ -132,10 +122,10 @@ export function AgentComposer(props: {
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
       </Show>
-      <Show when={turn() === 'blocked'}>
+      <Show when={pendingElicitation()}>
         <ComposerNotice
           text={
-            elicitation.canAnswer()
+            interactions.canAnswer()
               ? 'The agent is waiting for your answer above. Messages sent now are queued.'
               : 'The agent is waiting for an editor to answer above. Messages sent now are queued.'
           }
@@ -145,16 +135,18 @@ export function AgentComposer(props: {
         {(permission) => (
           <div class="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-edge-muted bg-surface px-3 py-2 text-xs">
             <span class="text-ink">
-              The agent is waiting for your permission to continue.
+              {interactions.canAnswer()
+                ? 'The agent is waiting for your permission to continue.'
+                : 'The agent is waiting for an editor to grant permission.'}
             </span>
-            <Show when={permissions.canAnswer()}>
+            <Show when={interactions.canAnswer()}>
               <PermissionOptions
                 options={permission.options}
-                disabled={permissions.answering(permission.requestId)}
+                disabled={interactions.answering(permission)}
                 onSelect={(optionId) =>
-                  void permissions.respond(permission.requestId, {
-                    kind: 'selected',
-                    optionId,
+                  void interactions.respond({
+                    ...permission,
+                    answer: { kind: 'selected', optionId },
                   })
                 }
               />

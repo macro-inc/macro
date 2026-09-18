@@ -3,11 +3,9 @@ import {
   harnessTitle,
   modelDisplayName,
 } from '@app/features/block-agent/component/compose-agent-session-options';
-import {
-  createElicitationController,
-  type ElicitationController,
-} from '@app/features/block-agent/context/create-elicitation-controller';
+import { createInteractionController } from '@app/features/block-agent/primitives/create-interaction-controller';
 import { AgentSession } from '@core/agent-session/AgentSession';
+import { toast } from '@core/component/Toast/Toast';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
@@ -20,7 +18,10 @@ import type {
   FoldedStreamEvent,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
-import type { SessionStatusDto } from '@service-agent-harness/generated/schemas';
+import type {
+  ElicitationAnswer,
+  SessionStatusDto,
+} from '@service-agent-harness/generated/schemas';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   deriveMagicChipPresentation,
@@ -87,7 +88,7 @@ function upsert(
  *
  * Also the chip's half of answering a question the agent stops to ask in
  * that turn: the session's metadata names the live question, the session
- * row names its owner, and {@link ElicitationController} sends the answer.
+ * row names its owner, and the shared interaction controller sends the answer.
  * The header names the persona and model from the session row and the fold.
  *
  * The fold is the shared {@link AgentSession} for the id, so a chip and a
@@ -96,7 +97,7 @@ function upsert(
 export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
-  elicitation: ElicitationController;
+  elicitation: { respond: (answer: ElicitationAnswer) => Promise<boolean> };
 } {
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
   const sessionQuery = useAgentSessionQuery(() => props.agentSessionId);
@@ -109,7 +110,10 @@ export function createMagicChipModel(props: MagicChipData): {
     return (status ? magicChipStatus(status) : undefined) ?? props.status;
   };
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
-  const pendingElicitation = () => metadata()?.pendingElicitation ?? undefined;
+  const pendingElicitation = () =>
+    metadata()?.pendingInteractions.find(
+      (request) => request.kind === 'elicitation'
+    );
   // The last system event's wire name, which the fold carries as status.
   const latestEvent = () => metadata()?.status ?? undefined;
 
@@ -152,17 +156,30 @@ export function createMagicChipModel(props: MagicChipData): {
     const question = pendingElicitation();
     return question?.turn === turn() ? question : undefined;
   };
-  const elicitation = createElicitationController({
-    pending: questionForTurn,
+  const interactions = createInteractionController({
+    sessionId: () => props.agentSessionId,
+    pending: () =>
+      metadata()?.pendingInteractions.filter(
+        (request) => request.turn === turn()
+      ) ?? [],
     canEdit,
     issue: (action) => live.issue(action),
+    onFailure: toast.failure,
   });
+  const elicitation = {
+    respond: (answer: ElicitationAnswer) => {
+      const question = questionForTurn();
+      return question
+        ? interactions.respond({ ...question, answer })
+        : Promise.resolve(false);
+    },
+  };
   const asking = (): MagicChipQuestion | undefined => {
     const question = questionForTurn();
     if (!question) return undefined;
     return {
       question,
-      canAnswer: elicitation.canAnswer(),
+      canAnswer: interactions.canAnswer() && !interactions.answering(question),
     };
   };
 

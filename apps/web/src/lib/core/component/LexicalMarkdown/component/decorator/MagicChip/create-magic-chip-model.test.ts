@@ -134,7 +134,12 @@ const question: PendingElicitation = {
 
 const metadata = (
   pendingElicitation: PendingElicitation | null
-): SessionMetadata => ({ pendingElicitation }) as unknown as SessionMetadata;
+): SessionMetadata =>
+  ({
+    pendingInteractions: pendingElicitation
+      ? [{ kind: 'elicitation', ...pendingElicitation }]
+      : [],
+  }) as unknown as SessionMetadata;
 
 const props = {
   agentSessionId: 'session',
@@ -396,7 +401,10 @@ describe('createMagicChipModel', () => {
     expect(model.presentation()).toEqual({
       kind: 'asking',
       markdown: 'Setting that up.',
-      asking: { question, canAnswer: true },
+      asking: {
+        question: { kind: 'elicitation', ...question },
+        canAnswer: true,
+      },
     });
     expect(await model.elicitation.respond({ action: 'decline' })).toBe(true);
     // The answer rides the session's optimistic path, not a bare POST.

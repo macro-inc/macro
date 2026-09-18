@@ -1,3 +1,4 @@
+import { toast } from '@core/component/Toast/Toast';
 import { isCodexBotId } from '@core/constant/codexAgent';
 
 /**
@@ -35,20 +36,14 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
+import { createInteractionController } from '../primitives/create-interaction-controller';
 import type { QuoteInsert } from '../ui';
 import { createAgentSession } from './create-agent-session';
-import {
-  createElicitationController,
-  type ElicitationController,
-} from './create-elicitation-controller';
-import {
-  createPermissionController,
-  type PermissionController,
-} from './create-permission-controller';
 import {
   createQueueController,
   type QueueController,
 } from './create-queue-controller';
+import type { InteractionController } from './interaction';
 import { resolveSessionId } from './resolve-session-id';
 
 export type AgentSessionState = {
@@ -98,9 +93,8 @@ export type AgentSessionState = {
    * the speculation in place. No-op with nothing queued.
    */
   sendNext: () => void;
-  /** The live question, and the action that answers it. */
-  elicitation: ElicitationController;
-  permissions: PermissionController;
+  /** The live requests, and the action that answers each one. */
+  interactions: InteractionController;
   /**
    * The session's server-side action queue: prompts sent mid-turn wait
    * there and dispatch one per turn end. The server is the only truth —
@@ -165,22 +159,12 @@ export function AgentSessionProvider(
     });
     if (action) live.expect(head.actionId, action);
   };
-  // A question the connection that asked is gone cannot be answered; the
-  // fold keeps the part but the slot is dead.
-  const pendingElicitation = () =>
-    turn() === 'disconnected'
-      ? undefined
-      : (live.metadata()?.pendingElicitation ?? undefined);
-  const elicitation = createElicitationController({
-    pending: pendingElicitation,
-    canEdit: () => live.session()?.canEdit,
-    issue: live.issue,
-  });
-
-  const permissions = createPermissionController({
+  const interactions = createInteractionController({
     sessionId,
+    pending: () => live.metadata()?.pendingInteractions ?? [],
     canEdit: () => live.session()?.canEdit,
     issue: live.issue,
+    onFailure: toast.failure,
   });
 
   // The transcript's "Reply to this" chip hands selected text to the
@@ -222,8 +206,7 @@ export function AgentSessionProvider(
           turn,
           issue: live.issue,
           sendNext,
-          elicitation,
-          permissions,
+          interactions,
           queue,
           quoteSelection,
           registerQuoteInsert,

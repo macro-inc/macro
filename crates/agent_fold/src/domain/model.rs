@@ -22,6 +22,8 @@ use specta::Type;
 mod elicitation;
 /// Per-push change reports.
 mod event;
+/// Requests currently awaiting a user response.
+mod interaction;
 /// Session-level metadata.
 mod metadata;
 /// The parts a message is made of.
@@ -47,6 +49,7 @@ pub use elicitation::{
     ElicitationSchema, PendingElicitation,
 };
 pub use event::{FoldEvent, OwnedFoldEvent};
+pub use interaction::{PendingInteraction, PendingPermission};
 pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata, TurnState};
 pub use part::{Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
@@ -84,7 +87,7 @@ pub struct ToolUseId(pub String);
 pub enum AgentRequestId {
     /// A numeric id. Exported as a plain TypeScript number: agents count
     /// requests from zero, nowhere near where an `i64` stops round-tripping.
-    Number(#[specta(type = f64)] i64),
+    Number(#[specta(type = i32)] i64),
     /// A string id.
     Str(String),
 }

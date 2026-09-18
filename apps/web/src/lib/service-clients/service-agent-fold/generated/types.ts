@@ -11,7 +11,6 @@ export type AgentRequestId =
    *  requests from zero, nowhere near where an `i64` stops round-tripping.
    */
   | number
-  | null
   /**  A string id. */
   | string;
 
@@ -647,6 +646,29 @@ export type PendingElicitation = {
   request: ElicitationRequest;
 };
 
+/**  An answerable request. Each variant retains its own response semantics. */
+export type PendingInteraction =
+  /**  A choice among the permission options offered by the agent. */
+  | ({
+      kind: 'permission';
+    } & PendingPermission)
+  /**  A form, URL consent, or user tool review. */
+  | ({
+      kind: 'elicitation';
+    } & PendingElicitation);
+
+/**  A permission request the current connection can still answer. */
+export type PendingPermission = {
+  /**  The agent's request id, preserving numeric and string identities. */
+  requestId: AgentRequestId;
+  /**  The turn that asked. */
+  turn: number;
+  /**  The tool whose execution needs permission. */
+  toolCall: ToolUseId;
+  /**  The options the agent offered. */
+  options: PermissionOption[];
+};
+
 /**  One choice offered for a permission request. */
 export type PermissionOption = {
   /**  The id to report back when this option is chosen. */
@@ -772,11 +794,11 @@ export type SessionMetadata = {
    */
   status: string | null;
   /**
-   *  The one elicitation the user can answer right now. `None` when
-   *  nothing is pending, when the turn that asked has ended, or when the
-   *  connection that asked is gone - the request id dies with it.
+   *  Requests the user can answer on the current turn and connection.
+   *  Multiple permissions may coexist with the one allowed elicitation.
+   *  History remains in the transcript after these live requests clear.
    */
-  pendingElicitation: PendingElicitation | null;
+  pendingInteractions: PendingInteraction[];
   /**
    *  Where the newest turn stands, as one value. Readers used to derive it
    *  from the transcript's tail, the status, and their own record of what
@@ -1144,7 +1166,7 @@ export type TurnState =
   | 'running'
   /**  A stop was issued against the open turn and no stop reason has arrived. */
   | 'stopping'
-  /**  The open turn is waiting on the user to answer an elicitation. */
+  /**  The open turn is waiting on a permission or elicitation response. */
   | 'blocked'
   /**  The runtime reported `disconnected`; whatever was open is not moving. */
   | 'disconnected';

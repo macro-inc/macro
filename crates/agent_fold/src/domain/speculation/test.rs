@@ -196,7 +196,7 @@ fn a_speculated_answer_resolves_the_question_and_unblocks_the_turn() {
         }
     );
     assert!(pending, "the message holding the question is unconfirmed");
-    assert!(fold.metadata().pending_elicitation.is_none());
+    assert!(fold.metadata().pending_elicitation().is_none());
     assert_eq!(fold.metadata().turn, TurnState::Running);
     // The answer resolves a part; it mints no message of its own.
     assert_eq!(fold.messages().len(), before);
@@ -237,7 +237,7 @@ fn retracting_an_answer_restores_the_question() {
 
     assert!(is_replace(&events));
     assert_eq!(question(&fold), (ElicitationOutcome::Pending, false));
-    assert!(fold.metadata().pending_elicitation.is_some());
+    assert!(fold.metadata().pending_elicitation().is_some());
     assert_eq!(fold.metadata().turn, TurnState::Blocked);
 }
 
@@ -817,6 +817,8 @@ fn permission_answers_speculate_once_and_promote_on_the_agents_request_id() {
     let mut fold = SpeculativeFold::new(test_session());
     fold.push(FoldInput::Snapshot(rows(parse_log(&log.join("\n")))))
         .unwrap();
+    assert_eq!(fold.metadata().turn, TurnState::Blocked);
+    assert_eq!(fold.metadata().pending_interactions.len(), 1);
     let answer = AgentAction::RespondToPermission(
         agent_runtime_protocol::domain::action::AgentPermissionAction {
             request_id: RequestId::Number(7),
@@ -826,6 +828,12 @@ fn permission_answers_speculate_once_and_promote_on_the_agents_request_id() {
         },
     );
     let id = AgentActionId::mint();
+    fold.push(speculation(answer.clone(), id)).unwrap();
+    assert!(fold.metadata().pending_interactions.is_empty());
+    assert_eq!(fold.metadata().turn, TurnState::Running);
+    fold.push(FoldInput::Retracted(id)).unwrap();
+    assert_eq!(fold.metadata().pending_interactions.len(), 1);
+    assert_eq!(fold.metadata().turn, TurnState::Blocked);
     fold.push(speculation(answer.clone(), id)).unwrap();
     fold.push(speculation(answer.clone(), AgentActionId::mint()))
         .unwrap();
@@ -839,4 +847,17 @@ fn permission_answers_speculate_once_and_promote_on_the_agents_request_id() {
     ))
     .unwrap();
     assert_eq!(fold.pending().count(), 0);
+
+    // A later request can reuse an answered id. Its live identity takes
+    // precedence over an older outcome when deduplicating speculation.
+    fold.push(FoldInput::Confirmed(
+        cursor(100),
+        parse_log(log.last().unwrap()).remove(0),
+    ))
+    .unwrap();
+    assert_eq!(fold.metadata().turn, TurnState::Blocked);
+    fold.push(speculation(answer, AgentActionId::mint()))
+        .unwrap();
+    assert!(fold.metadata().pending_interactions.is_empty());
+    assert_eq!(fold.metadata().turn, TurnState::Running);
 }

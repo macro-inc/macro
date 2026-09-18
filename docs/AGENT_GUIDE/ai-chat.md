@@ -448,6 +448,10 @@ must stay hidden; subsequent live messages must still appear.
   A pending request shows the agent's choices in a `Permission needed` card and
   above the composer. View access alone does not authorize an answer. Stopping a
   turn cancels open requests; answered requests show the chosen outcome.
+  Permission requests and questions both put the agent in a waiting state.
+  Several permissions may be pending alongside one question; answering one leaves
+  the others available. Controls disappear when their turn ends, is stopped, or
+  disconnects, and old transcript requests cannot answer a later turn's request.
 - **Harness bypass consent.** Settings → Harnesses → Connect a harness offers
   `Allow bypassing permission requests`, off by default. Enabling it warns that
   personas may run commands and edit files on the machine without approval.

@@ -15,20 +15,28 @@ import { PermissionOptions, ToolCard } from '../../ui';
 
 export function PermissionPart(props: {
   part: Extract<MessagePart, { kind: 'permission' }>;
+  turn: number;
 }) {
   const session = useOptionalAgentSession();
-  const pending = () => props.part.outcome.kind === 'pending';
-  // Only a live session can still take an answer: a request left open by a
-  // runtime that is gone will never be resolved by clicking.
+  const request = () =>
+    session?.interactions
+      .pending()
+      .find(
+        (request) =>
+          request.kind === 'permission' &&
+          request.requestId === props.part.requestId &&
+          request.turn === props.turn
+      );
   const answerable = () =>
-    pending() &&
-    session !== undefined &&
-    session.permissions.canAnswer() &&
-    session.turn() !== 'idle' &&
-    session.turn() !== 'disconnected' &&
-    session.turn() !== 'stopping';
-  const answering = () =>
-    session?.permissions.answering(props.part.requestId) ?? false;
+    props.part.outcome.kind === 'pending' &&
+    request() !== undefined &&
+    session?.interactions.canAnswer() === true;
+  const answering = () => {
+    const pending = request();
+    return pending
+      ? (session?.interactions.answering(pending) ?? false)
+      : false;
+  };
 
   const outcome = () => {
     const resolved = props.part.outcome;
@@ -64,9 +72,11 @@ export function PermissionPart(props: {
             options={props.part.options}
             disabled={answering()}
             onSelect={(optionId) =>
-              void session?.permissions.respond(props.part.requestId, {
-                kind: 'selected',
-                optionId,
+              void session?.interactions.respond({
+                kind: 'permission',
+                requestId: props.part.requestId,
+                turn: props.turn,
+                answer: { kind: 'selected', optionId },
               })
             }
           />

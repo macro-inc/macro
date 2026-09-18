@@ -70,10 +70,14 @@ function AgentMessagePart(props: {
         }}
       />
     ))
-    .with({ kind: 'permission' }, (part) => <PermissionPart part={part} />)
+    .with({ kind: 'permission' }, (part) => (
+      <PermissionPart part={part} turn={props.message.turn} />
+    ))
     .with({ kind: 'plan' }, (part) => <PlanPart part={part} />)
     .with({ kind: 'control' }, (part) => <ControlPart part={part} />)
-    .with({ kind: 'elicitation' }, (part) => <ElicitationPart part={part} />)
+    .with({ kind: 'elicitation' }, (part) => (
+      <ElicitationPart part={part} turn={props.message.turn} />
+    ))
     .exhaustive();
 }
 
