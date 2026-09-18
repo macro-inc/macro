@@ -125,8 +125,9 @@ is the fallback for keyset-batched, dry-run-default backfills.
 
 Use `ON CONFLICT` so the migration is safe if dual-write already inserted some
 rows (CS-02). Filter source rows that cannot satisfy the target table's
-constraints (for example, a non-UUID TEXT id or an owner that fails a CHECK)
-in a subquery before any cast, so one bad row cannot abort the statement.
+constraints (for example, a non-UUID TEXT id or an owner that fails a CHECK).
+Keep any `::uuid` cast in the SELECT list, not in WHERE, so the filter drops
+bad ids before the cast runs.
 
 Do not add a down migration that deletes backfilled `entity` (or similar) rows,
 because that would also delete rows the live dual-write path inserted.

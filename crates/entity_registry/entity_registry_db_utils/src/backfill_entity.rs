@@ -30,7 +30,6 @@ fn user_owner(id: &str) -> Owner {
     Owner::parse(OwnerType::User, id).unwrap()
 }
 
-// Read the shipped migration files so this test cannot drift from the INSERT they run.
 fn backfill_sql() -> Vec<String> {
     let migrations_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("../../..")
