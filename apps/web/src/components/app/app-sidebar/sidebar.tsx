@@ -1759,6 +1759,7 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       return;
     }
     const split = layout.openWithSplit(props.content(), {
+      notifyOnReuse: true,
       allowDuplicate: true,
       mergeHistory: false,
       referredFrom: 'sidebar',

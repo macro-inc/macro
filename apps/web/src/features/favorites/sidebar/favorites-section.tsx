@@ -394,6 +394,7 @@ const FavoriteRow = (props: {
 
   const openFavorite = (preferNewSplit: boolean) => {
     const split = layout.openWithSplit(content(), {
+      notifyOnReuse: true,
       referredFrom: 'sidebar',
       activate: true,
       preferNewSplit,

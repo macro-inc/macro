@@ -284,7 +284,6 @@ export function createThreadCompletionAdapter(
             const splitHandle = splitPanel?.handle;
             if (!splitHandle) return;
             if (!nextEntity) {
-              splitHandle.resetPreview();
               return;
             }
 

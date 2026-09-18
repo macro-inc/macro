@@ -37,8 +37,8 @@ describe('registerSplitHotkeys', () => {
     vi.mocked(registerHotkey).mockClear();
   });
 
-  it('disables cmd+escape and opt+escape inside a Preview Pair Viewer', () => {
-    let isPreviewSplit = true;
+  it('enables close shortcuts for multiple splits but not a sole list', () => {
+    let splitCount = 1;
     registerSplitHotkeys({
       splitHotkeyScope: 'split=test',
       insertSplit: vi.fn(),
@@ -50,16 +50,15 @@ describe('registerSplitHotkeys', () => {
       goForward: vi.fn(),
       goToList: vi.fn(),
       splitName: () => 'Test',
-      getSplitCount: () => 2,
-      isNotUnifiedList: () => true,
-      isViewerSplit: () => isPreviewSplit,
+      getSplitCount: () => splitCount,
+      isNotUnifiedList: () => false,
     });
 
     const closeRegistration = vi.mocked(registerHotkey).mock.calls[0]?.[0];
     expect(closeRegistration?.hotkey).toEqual(['cmd+escape', 'opt+escape']);
     expect(closeRegistration?.condition?.()).toBe(false);
 
-    isPreviewSplit = false;
+    splitCount = 2;
     expect(closeRegistration?.condition?.()).toBe(true);
   });
 });

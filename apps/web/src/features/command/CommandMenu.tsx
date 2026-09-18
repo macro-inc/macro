@@ -282,7 +282,11 @@ export function CommandMenuInner(props: {
         if (USE_MACRO_PR_SUMMARY_BLOCK) {
           openWithSplit(
             { type: 'pr', id: item.data.id },
-            { referredFrom: 'kommand-menu', preferNewSplit: openInNewSplit }
+            {
+              referredFrom: 'kommand-menu',
+              preferNewSplit: openInNewSplit,
+              notifyOnReuse: true,
+            }
           );
         } else {
           openExternalUrl(item.data.metadata.url);
@@ -299,6 +303,7 @@ export function CommandMenuInner(props: {
             { type: blockName, id: item.id },
             {
               referredFrom: 'kommand-menu',
+              notifyOnReuse: true,
               preferNewSplit: openInNewSplit,
               reopen: blockName === 'channel' ? 'latest' : undefined,
             }

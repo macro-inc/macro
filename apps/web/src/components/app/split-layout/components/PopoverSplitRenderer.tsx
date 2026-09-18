@@ -1,6 +1,5 @@
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
-import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { Dialog, Panel } from '@ui';
@@ -20,7 +19,7 @@ import type {
 } from '../layoutManager';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 
-false && clickOutside;
+false;
 
 type PopoverSplitData = {
   id: string;
@@ -83,8 +82,6 @@ function PopoverSplitModal(props: {
     toggleSpotlight: () => {},
     isSpotLight: () => false,
     isPopover: () => true,
-    isViewerSplit: () => false,
-    isControllerSplit: () => false,
     replace: () => {},
     // A popover has no URL and no history to rewrite.
     adoptContentId: () => {},
@@ -108,11 +105,6 @@ function PopoverSplitModal(props: {
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},
     currentEntryState: () => undefined,
-    canEngagePreview: () => false,
-    engagePreview: () => {},
-    disengagePreview: () => {},
-    resetPreview: () => {},
-    viewerId: () => undefined,
   };
 
   const [bindHotKeyDom, scopeId] = useHotkeyDOMScope(

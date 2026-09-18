@@ -99,6 +99,7 @@ function TaskFavorites(props: {
     if (openTask({ id: favorite.entityId, fallbackName }, { event })) return;
 
     layout.openWithSplit(favoriteSplitContent(favorite), {
+      notifyOnReuse: true,
       referredFrom: 'sidebar',
       preferNewSplit: event.shiftKey,
     });

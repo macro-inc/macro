@@ -191,7 +191,6 @@ function DriveViewContent(props: DriveViewProps) {
     results: createDriveResults(view, userId),
     onNavigate: () => {
       navigationStack.clear();
-      panel.handle.resetPreview();
     },
   });
   const selectTab = (tab: DriveTab) => navigate({ kind: 'tab', tab });
@@ -379,6 +378,7 @@ function DriveViewContent(props: DriveViewProps) {
                 return;
               } else
                 layout.openWithSplit(favoriteSplitContent(item), {
+                  notifyOnReuse: true,
                   referredFrom: 'sidebar',
                   preferNewSplit: event.shiftKey,
                 });

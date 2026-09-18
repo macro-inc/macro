@@ -38,6 +38,7 @@ export function FavoritesCommands() {
   const openFavorite = (favorite: Favorite) => {
     openWithSplit(favoriteSplitContent(favorite), {
       referredFrom: 'kommand-menu',
+      notifyOnReuse: true,
     });
     // Close the menu and clear the query once a favorite is opened.
     CommandState.close();

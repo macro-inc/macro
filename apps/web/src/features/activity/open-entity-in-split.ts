@@ -8,5 +8,5 @@ export function openEntityInSplit({
   params,
   newSplit,
 }: OpenEntityTarget): void {
-  openDocument(block, id, params, newSplit);
+  openDocument(block, id, params, newSplit, { notifyOnReuse: true });
 }

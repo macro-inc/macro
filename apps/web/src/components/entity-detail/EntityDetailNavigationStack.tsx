@@ -106,8 +106,9 @@ function Root(props: EntityDetailNavigationStackRootProps) {
   return (
     <NavigationStack.Root<EntityDetailTarget, EntityDetailNavigationOptions>
       {...props}
-      beforeChange={(target) =>
-        props.beforeChange?.(target) !== false && selectPreview(target)
+      beforeChange={(target, reason) =>
+        props.beforeChange?.(target, reason) !== false &&
+        selectPreview(target, reason)
       }
       shouldNavigate={(target, options) =>
         props.shouldNavigate

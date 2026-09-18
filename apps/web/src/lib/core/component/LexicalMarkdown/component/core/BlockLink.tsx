@@ -1,5 +1,6 @@
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { useSplitLayout } from '@components/app/split-layout/layout';
+import type { OpenWithSplitOptions } from '@components/app/split-layout/layoutManager';
 import { type BlockAlias, type BlockName, useMaybeBlockId } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
@@ -38,7 +39,8 @@ export function openDocument(
   blockOrFileType: string,
   id: string,
   params?: Record<string, string>,
-  inNewSplit?: boolean
+  inNewSplit?: boolean,
+  options?: Pick<OpenWithSplitOptions, 'notifyOnReuse'>
 ) {
   const currentBlockId = useMaybeBlockId();
   const { openWithSplit } = useSplitLayout();
@@ -62,6 +64,7 @@ export function openDocument(
     { type: targetBlock, id, params },
     {
       preferNewSplit: inNewSplit,
+      notifyOnReuse: options?.notifyOnReuse,
       reopen: targetBlock === 'channel' && !hasParams ? 'latest' : undefined,
     }
   );

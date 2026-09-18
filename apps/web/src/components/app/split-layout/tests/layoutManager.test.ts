@@ -7,7 +7,6 @@ import {
 } from '@app/features/soup/collection/list-navigation-source';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { toast } from '@core/component/Toast/Toast';
-import { createContentInstanceRegistry } from '@core/contentInstanceRegistry';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -17,7 +16,6 @@ import {
   SplitEvent,
 } from '../layoutManager';
 import { createMobileSwipeLayout } from '../mobile/createMobileSwipeLayout';
-import { previewControllerWidthForContent } from '../previewController';
 
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: vi.fn() },
@@ -55,7 +53,6 @@ beforeAll(() => {
 
 function createMockOrchestrator(): BlockOrchestrator {
   return {
-    contentInstances: createContentInstanceRegistry(),
     isBlockMounted: vi.fn(() => false),
     createBlockInstance: vi.fn((_type, id, _splitId) => ({
       node: { type: 'mock-node', id },
@@ -125,6 +122,11 @@ describe('layoutManager', () => {
           );
 
           manager.activateSplit(other.id);
+          const view = manager.findOpenView(target);
+          expect(view?.owner).toBe(existing.id);
+          expect(view?.topLevelSplit?.id).toBe(existing.id);
+          expect(view?.content).toEqual(entity);
+          expect(manager.activeSplitId()).toBe(other.id);
           const direct = manager.createNewSplit({
             content: target,
             activate: true,
@@ -135,6 +137,7 @@ describe('layoutManager', () => {
           expect(manager.activeSplitId()).toBe(existing.id);
 
           manager.activateSplit(other.id);
+          vi.mocked(toast.alert).mockClear();
           const opened = manager.openWithSplit(target, {
             activate: true,
             allowDuplicate: true,
@@ -146,31 +149,44 @@ describe('layoutManager', () => {
           expect(existing.mount).toBe(mount);
           expect(existing.content).toEqual(initial);
           expect(other.content).toEqual({ type: 'component', id: 'inbox' });
+          expect(toast.alert).not.toHaveBeenCalled();
+
+          manager.openWithSplit(target, { notifyOnReuse: true });
+          expect(toast.alert).toHaveBeenCalledWith('Content already open');
           dispose();
         });
       }
     }
   );
 
-  it('rejects opening a previewed block until its mount is released', () => {
+  it('reuses content without an activation target and only notifies when requested', () => {
     createRoot((dispose) => {
       const orchestrator = createMockOrchestrator();
       const manager = createSplitLayout(orchestrator, [
         { type: 'component', id: 'inbox' },
       ]);
-      const release = orchestrator.contentInstances.register(() => [
+      const release = manager.registerOpenViews(() => [
         {
           owner: 'preview',
           content: { type: 'channel', id: 'preview-channel' },
         },
       ]);
 
+      vi.mocked(toast.alert).mockClear();
       expect(
         manager.openWithSplit(
           { type: 'channel', id: 'preview-channel' },
           { preferNewSplit: true }
         )
       ).toBeUndefined();
+      expect(manager.splits()).toHaveLength(1);
+      expect(orchestrator.createBlockInstance).not.toHaveBeenCalled();
+      expect(toast.alert).not.toHaveBeenCalled();
+
+      manager.openWithSplit(
+        { type: 'channel', id: 'preview-channel' },
+        { preferNewSplit: true, notifyOnReuse: true }
+      );
       expect(manager.splits()).toHaveLength(1);
       expect(orchestrator.createBlockInstance).not.toHaveBeenCalled();
       expect(toast.alert).toHaveBeenCalledWith('Content already open');
@@ -186,6 +202,132 @@ describe('layoutManager', () => {
     });
   });
 
+  it.each([
+    {
+      name: 'channel',
+      content: { type: 'channel', id: 'conversation' },
+      target: { type: 'channel', id: 'conversation' },
+    },
+    ...(
+      [
+        { mode: 'chat', type: 'agent_session', block: 'agent' },
+        { mode: 'code', type: 'agent_session', block: 'agent' },
+        { mode: 'chat', type: 'chat', block: 'chat' },
+      ] as const
+    ).map(({ mode, type, block }) => ({
+      name: `${mode} ${type}`,
+      content: { type: block, id: 'conversation' },
+      target: {
+        type: 'component' as const,
+        id: agentsRouteId({ mode, conversation: { type, id: 'conversation' } }),
+      },
+    })),
+  ] satisfies { name: string; content: SplitContent; target: SplitContent }[])(
+    'reuses an inline $name preview, notifying only when requested',
+    ({ content, target }) => {
+      createRoot((dispose) => {
+        const orchestrator = createMockOrchestrator();
+        const manager = createSplitLayout(orchestrator, [
+          { type: 'component', id: 'channels' },
+          { type: 'component', id: 'inbox' },
+        ]);
+        const [chat, inbox] = manager.splits();
+        manager.activateSplit(inbox.id);
+        const activate = vi.fn(() => manager.activateSplit(chat.id));
+        manager.registerOpenViews(() => [
+          { owner: 'preview', content, activate },
+        ]);
+        const intercept = vi.fn(() => ({ handled: true }));
+        manager.setSplitNavigationInterceptor(intercept);
+
+        const view = manager.findOpenView(target);
+        expect(view?.owner).toBe('preview');
+        expect(view?.content).toEqual(content);
+        expect(view?.topLevelSplit).toBeUndefined();
+        expect(activate).not.toHaveBeenCalled();
+
+        vi.mocked(toast.alert).mockClear();
+        manager.openWithSplit(target, {
+          referredFrom: 'kommand-menu',
+          notifyOnReuse: true,
+        });
+        expect(activate).toHaveBeenCalledOnce();
+        expect(manager.activeSplitId()).toBe(chat.id);
+        expect(toast.alert).toHaveBeenCalledWith('Content already open');
+
+        vi.mocked(toast.alert).mockClear();
+        manager.activateSplit(inbox.id);
+        manager.openWithSplit(target);
+        expect(activate).toHaveBeenCalledTimes(2);
+        expect(manager.activeSplitId()).toBe(chat.id);
+        expect(manager.splits()).toHaveLength(2);
+        expect(orchestrator.createBlockInstance).not.toHaveBeenCalled();
+        expect(toast.alert).not.toHaveBeenCalled();
+
+        manager.activateSplit(inbox.id);
+        manager.openWithSplit(target, { activate: false });
+        expect(activate).toHaveBeenCalledTimes(2);
+        expect(manager.activeSplitId()).toBe(inbox.id);
+        expect(toast.alert).not.toHaveBeenCalled();
+        expect(intercept).not.toHaveBeenCalled();
+        dispose();
+      });
+    }
+  );
+
+  it('notifies on requested reuse of a standalone split too', () => {
+    createRoot((dispose) => {
+      const manager = createSplitLayout(createMockOrchestrator(), [
+        { type: 'channel', id: 'channel' },
+        { type: 'component', id: 'inbox' },
+      ]);
+      const [channel, inbox] = manager.splits();
+      manager.activateSplit(inbox.id);
+      vi.mocked(toast.alert).mockClear();
+      manager.openWithSplit(channel.content, { notifyOnReuse: true });
+      expect(manager.activeSplitId()).toBe(channel.id);
+      expect(toast.alert).toHaveBeenCalledWith('Content already open');
+      vi.mocked(toast.alert).mockClear();
+      manager.activateSplit(inbox.id);
+      manager.openWithSplit(channel.content);
+      expect(manager.activeSplitId()).toBe(channel.id);
+      expect(toast.alert).not.toHaveBeenCalled();
+      dispose();
+    });
+  });
+
+  it('finds an existing shell even when an open action allows duplicating it', () => {
+    createRoot((dispose) => {
+      const content = { type: 'component', id: 'channels' } as const;
+      const manager = createSplitLayout(createMockOrchestrator(), [
+        content,
+        { type: 'component', id: 'inbox' },
+      ]);
+      const [channels, inbox] = manager.splits();
+      manager.activateSplit(inbox.id);
+      vi.mocked(toast.alert).mockClear();
+
+      expect(manager.findOpenView(content)?.topLevelSplit?.id).toBe(
+        channels.id
+      );
+      expect(manager.activeSplitId()).toBe(inbox.id);
+      expect(toast.alert).not.toHaveBeenCalled();
+
+      const duplicate = manager.openWithSplit(content, {
+        preferNewSplit: true,
+        allowDuplicate: true,
+      });
+      expect(duplicate).toBeDefined();
+      expect(duplicate?.id).not.toBe(channels.id);
+      expect(manager.splits()).toHaveLength(3);
+      expect(manager.findOpenView(content)?.topLevelSplit?.id).toBe(
+        channels.id
+      );
+      expect(toast.alert).not.toHaveBeenCalled();
+      dispose();
+    });
+  });
+
   it('blocks detail-owned email through direct split creation, replacement, and history', () => {
     createRoot((dispose) => {
       const orchestrator = createMockOrchestrator();
@@ -194,7 +336,7 @@ describe('layoutManager', () => {
       ]);
       const handle = manager.getSplit(manager.splits()[0].id)!;
       handle.replace({ next: { type: 'email', id: 'two' } });
-      const release = orchestrator.contentInstances.register(() => [
+      const release = manager.registerOpenViews(() => [
         { owner: 'detail', content: { type: 'email', id: 'one' } },
       ]);
       expect(
@@ -223,18 +365,60 @@ describe('layoutManager', () => {
         { type: 'email', id: 'one' },
       ]);
       expect(
-        orchestrator.contentInstances.isOpenElsewhere({
+        manager.findOpenView({
           type: 'email',
           id: 'one',
         })
-      ).toBe(true);
+      ).toBeDefined();
       manager.removeSplit(manager.splits()[0].id);
       expect(
-        orchestrator.contentInstances.isOpenElsewhere({
+        manager.findOpenView({
           type: 'email',
           id: 'one',
         })
-      ).toBe(false);
+      ).toBeUndefined();
+      dispose();
+    });
+  });
+
+  it('scopes content ownership to the layout even when an orchestrator is shared', () => {
+    createRoot((dispose) => {
+      const orchestrator = createMockOrchestrator();
+      const content = { type: 'channel', id: 'channel' } as const;
+      const first = createSplitLayout(orchestrator, [content]);
+      const second = createSplitLayout(orchestrator, []);
+
+      expect(first.findOpenView(content)).toBeDefined();
+      expect(second.findOpenView(content)).toBeUndefined();
+
+      dispose();
+      expect(first.findOpenView(content)).toBeUndefined();
+    });
+  });
+
+  it('navigates and closes adjacent list and detail splits independently', () => {
+    createRoot((dispose) => {
+      const manager = createSplitLayout(createMockOrchestrator(), [
+        { type: 'component', id: 'inbox' },
+        { type: 'md', id: 'detail' },
+      ]);
+      const [list, detail] = manager.splits();
+      const listHandle = manager.getSplit(list.id)!;
+      const detailHandle = manager.getSplit(detail.id)!;
+
+      manager.openWithSplit(
+        { type: 'email', id: 'thread' },
+        { handle: listHandle }
+      );
+      expect(listHandle.content()).toEqual({ type: 'email', id: 'thread' });
+      expect(detailHandle.content()).toEqual({ type: 'md', id: 'detail' });
+      expect(manager.splits()).toHaveLength(2);
+
+      listHandle.goBack();
+      expect(listHandle.content()).toEqual({ type: 'component', id: 'inbox' });
+      expect(detailHandle.content()).toEqual({ type: 'md', id: 'detail' });
+      listHandle.close();
+      expect(manager.splits().map((split) => split.id)).toEqual([detail.id]);
       dispose();
     });
   });
@@ -260,31 +444,6 @@ describe('layoutManager', () => {
           first!.id,
         ]);
         expect(swap).toHaveBeenCalledWith(second!.id, first!.id);
-
-        dispose();
-      });
-    });
-
-    it('swaps a preview pair as a unit', () => {
-      createRoot((dispose) => {
-        const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
-          { type: 'component', id: 'calendar' },
-        ]);
-        const controllerId = manager.splits()[0]!.id;
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-        const calendarId = manager.splits()[2]!.id;
-
-        manager.swapSplit(viewerId, 'right');
-
-        expect(manager.splits().map((split) => split.id)).toEqual([
-          calendarId,
-          controllerId,
-          viewerId,
-        ]);
-        expect(manager.canSwapSplit(viewerId, 'right')).toBe(false);
-        expect(manager.canSwapSplit(viewerId, 'left')).toBe(true);
 
         dispose();
       });
@@ -1025,1015 +1184,6 @@ describe('layoutManager', () => {
 
         swipeLayout.swipeBack();
         expect(manager.activeSplitId()).toBe(originalId);
-
-        dispose();
-      });
-    });
-  });
-
-  describe('preview mode', () => {
-    const setup = () => {
-      const manager = createSplitLayout(createMockOrchestrator(), [
-        { type: 'component', id: 'inbox' },
-      ]);
-      const controllerId = manager.splits()[0].id;
-      manager.activateSplit(controllerId);
-      return { manager, controllerId };
-    };
-
-    it('eagerly opens an empty viewer right of the controller without activating it', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-
-        expect(manager.previewControllerWidth(controllerId)).toBe(360);
-        expect(manager.splits()).toHaveLength(2);
-        const viewerId = manager.splits()[1].id;
-        expect(manager.viewerOf(controllerId)).toBe(viewerId);
-        expect(manager.controllerOf(viewerId)).toBe(controllerId);
-        expect(manager.getSplit(controllerId)?.isControllerSplit()).toBe(true);
-        expect(manager.getSplit(controllerId)?.isViewerSplit()).toBe(false);
-        expect(manager.getSplit(viewerId)?.isControllerSplit()).toBe(false);
-        expect(manager.getSplit(viewerId)?.isViewerSplit()).toBe(true);
-        expect(manager.previewPairs()).toEqual([{ controllerId, viewerId }]);
-        expect(manager.splits()[1].content).toMatchObject({
-          type: 'component',
-          id: 'preview-empty',
-        });
-        expect(manager.events()).toMatchObject({
-          type: SplitEvent.Insert,
-          splitId: viewerId,
-          activate: false,
-        });
-        expect(manager.activeSplitId()).toBe(controllerId);
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        expect(manager.splits()).toHaveLength(2);
-        expect(manager.splits()[1].content).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
-
-        dispose();
-      });
-    });
-
-    it('resets the viewer to its placeholder without stacking history', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        expect(manager.splits()[1].content).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
-
-        manager.getSplit(controllerId)?.resetPreview();
-
-        expect(manager.viewerOf(controllerId)).toBe(viewerId);
-        expect(manager.splits()).toHaveLength(2);
-        expect(manager.splits()[1].content).toMatchObject({
-          type: 'component',
-          id: 'preview-empty',
-        });
-        // Selection state was merge-replaced both ways, so the stale entity
-        // does not linger as a back entry.
-        expect(manager.getSplit(viewerId)?.canGoBack()).toBe(false);
-
-        dispose();
-      });
-    });
-
-    it('resets the viewer when the controller navigates backward or forward', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        const controller = manager.getSplit(controllerId)!;
-        controller.replace({
-          next: { type: 'component', id: 'channels' },
-        });
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: controller }
-        );
-        controller.goBack();
-
-        expect(controller.content()).toMatchObject({
-          type: 'component',
-          id: 'inbox',
-        });
-        expect(manager.getSplit(viewerId)?.content()).toMatchObject({
-          type: 'component',
-          id: 'preview-empty',
-        });
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-2' },
-          { referredFrom: null, handle: controller }
-        );
-        controller.goForward();
-
-        expect(controller.content()).toMatchObject({
-          type: 'component',
-          id: 'channels',
-        });
-        expect(manager.getSplit(viewerId)?.content()).toMatchObject({
-          type: 'component',
-          id: 'preview-empty',
-        });
-        expect(manager.viewerOf(controllerId)).toBe(viewerId);
-
-        dispose();
-      });
-    });
-
-    it('reset is a no-op without a viewer or when already on the placeholder', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-
-        manager.resetPreviewMode(controllerId);
-        expect(manager.splits()).toHaveLength(1);
-
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-        manager.resetPreviewMode(controllerId);
-
-        expect(manager.viewerOf(controllerId)).toBe(viewerId);
-        expect(manager.splits()[1].content).toMatchObject({
-          type: 'component',
-          id: 'preview-empty',
-        });
-
-        dispose();
-      });
-    });
-
-    it('uses the configured controller width for Email Soup', () => {
-      createRoot((dispose) => {
-        const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'mail' },
-        ]);
-        const controllerId = manager.splits()[0].id;
-
-        manager.engagePreviewMode(controllerId);
-
-        expect(manager.previewControllerWidth(controllerId)).toBe(800);
-
-        dispose();
-      });
-    });
-
-    it('allows a Project block to control unless it is already a Viewer', () => {
-      createRoot((dispose) => {
-        const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'project', id: 'project-controller' },
-        ]);
-        const controller = manager.getSplit(manager.splits()[0].id)!;
-
-        expect(controller.canEngagePreview()).toBe(true);
-        controller.engagePreview();
-
-        const viewerId = controller.viewerId()!;
-        const viewer = manager.getSplit(viewerId)!;
-        manager.openWithSplit(
-          { type: 'project', id: 'project-viewer' },
-          { referredFrom: null, handle: controller }
-        );
-
-        expect(controller.content()).toMatchObject({
-          type: 'project',
-          id: 'project-controller',
-        });
-        expect(viewer.content()).toMatchObject({
-          type: 'project',
-          id: 'project-viewer',
-        });
-        expect(manager.viewerOf(controller.id)).toBe(viewer.id);
-        expect(viewer.isViewerSplit()).toBe(true);
-        expect(viewer.canEngagePreview()).toBe(false);
-
-        viewer.engagePreview();
-        expect(manager.previewPairs()).toEqual([
-          { controllerId: controller.id, viewerId: viewer.id },
-        ]);
-
-        dispose();
-      });
-    });
-
-    it('uses the configured Companies controller width', () => {
-      createRoot((dispose) => {
-        const content = { type: 'component' as const, id: 'companies' };
-        const manager = createSplitLayout(createMockOrchestrator(), [content]);
-        const controllerId = manager.splits()[0].id;
-
-        manager.engagePreviewMode(controllerId);
-
-        for (const viewportWidth of [1000, 1600]) {
-          expect(
-            manager.previewControllerWidth(controllerId, viewportWidth)
-          ).toBe(previewControllerWidthForContent(content, viewportWidth));
-        }
-
-        dispose();
-      });
-    });
-
-    it('creates a distinct empty viewer for each preview controller', () => {
-      createRoot((dispose) => {
-        const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
-          { type: 'component', id: 'channels' },
-        ]);
-        const [firstController, secondController] = manager.splits();
-
-        manager.engagePreviewMode(firstController.id);
-        const firstViewerId = manager.viewerOf(firstController.id)!;
-        manager.engagePreviewMode(secondController.id);
-        const secondViewerId = manager.viewerOf(secondController.id)!;
-
-        expect(secondViewerId).toBeDefined();
-        expect(secondViewerId).not.toBe(firstViewerId);
-        expect(manager.splits().map((split) => split.id)).toEqual([
-          firstController.id,
-          firstViewerId,
-          secondController.id,
-          secondViewerId,
-        ]);
-
-        dispose();
-      });
-    });
-
-    it('adopts an unclaimed adjacent placeholder split instead of duplicating it', () => {
-      createRoot((dispose) => {
-        // An existing unclaimed placeholder is adopted rather than duplicated,
-        // leaving the placeholder (last initial split) active beforehand.
-        const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
-          { type: 'component', id: 'preview-empty' },
-        ]);
-        const controllerId = manager.splits()[0].id;
-        const placeholderId = manager.splits()[1].id;
-        expect(manager.activeSplitId()).toBe(placeholderId);
-
-        manager.engagePreviewMode(controllerId);
-
-        expect(manager.splits()).toHaveLength(2);
-        expect(manager.viewerOf(controllerId)).toBe(placeholderId);
-        // The controller takes over activation from its adopted viewer so
-        // active-split-targeted navigations redirect through it.
-        expect(manager.activeSplitId()).toBe(controllerId);
-
-        dispose();
-      });
-    });
-
-    it('restores a persisted Preview Pair onto existing adjacent splits', () => {
-      createRoot((dispose) => {
-        const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
-          { type: 'md', id: 'doc-1' },
-        ]);
-        const controllerId = manager.splits()[0].id;
-        const viewerId = manager.splits()[1].id;
-
-        expect(manager.restorePreviewPair(controllerId, viewerId)).toBe(true);
-        expect(manager.splits()).toHaveLength(2);
-        expect(manager.viewerOf(controllerId)).toBe(viewerId);
-        expect(manager.controllerOf(viewerId)).toBe(controllerId);
-        expect(manager.previewControllerWidth(controllerId)).toBe(360);
-        expect(manager.activeSplitId()).toBe(controllerId);
-
-        dispose();
-      });
-    });
-
-    it('rejects a persisted Preview Pair that is no longer adjacent', () => {
-      createRoot((dispose) => {
-        const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'component', id: 'inbox' },
-          { type: 'md', id: 'between' },
-          { type: 'md', id: 'viewer' },
-        ]);
-        const controllerId = manager.splits()[0].id;
-        const viewerId = manager.splits()[2].id;
-
-        expect(manager.restorePreviewPair(controllerId, viewerId)).toBe(false);
-        expect(manager.previewPairs()).toEqual([]);
-
-        dispose();
-      });
-    });
-
-    it('unlinks a Preview Pair when a split is inserted between it', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        const inserted = manager.createNewSplit({
-          content: { type: 'md', id: 'between' },
-          referredFrom: null,
-          insertIndex: 1,
-        });
-        if (!inserted) throw new Error('Expected content to open');
-
-        expect(manager.splits().map((split) => split.id)).toEqual([
-          controllerId,
-          inserted.id,
-          viewerId,
-        ]);
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.controllerOf(viewerId)).toBeUndefined();
-        expect(manager.previewPairs()).toEqual([]);
-
-        dispose();
-      });
-    });
-
-    it('unlinks a Preview Pair when reconciliation separates it', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        manager.openWithSplit(
-          { type: 'md', id: 'viewer' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        const viewerId = manager.viewerOf(controllerId)!;
-        const between = manager.createNewSplit({
-          content: { type: 'md', id: 'between' },
-          referredFrom: null,
-        });
-        if (!between) throw new Error('Expected content to open');
-
-        manager.reconcile([
-          { type: 'component', id: 'inbox' },
-          { type: 'md', id: 'between' },
-          { type: 'md', id: 'viewer' },
-        ]);
-
-        expect(manager.splits().map((split) => split.id)).toEqual([
-          controllerId,
-          between.id,
-          viewerId,
-        ]);
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.controllerOf(viewerId)).toBeUndefined();
-        expect(manager.previewPairs()).toEqual([]);
-
-        dispose();
-      });
-    });
-
-    it('controller-originated navigation never grows the preview history', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-        const viewer = manager.getSplit(viewerId)!;
-
-        // Selections from the controller replace the preview's current entry.
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-2' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        expect(manager.splits()).toHaveLength(2);
-        expect(viewer.content()).toMatchObject({ type: 'md', id: 'doc-2' });
-        expect(viewer.history()).toHaveLength(1);
-        expect(viewer.canGoBack()).toBe(false);
-        expect(manager.activeSplitId()).toBe(controllerId);
-
-        // The preview's own navigation stacks up as usual...
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-3' },
-          { referredFrom: null, handle: manager.getSplit(viewerId) }
-        );
-        expect(viewer.history()).toHaveLength(2);
-
-        // ...and back returns to the last controller selection.
-        viewer.goBack();
-        expect(viewer.content()).toMatchObject({ type: 'md', id: 'doc-2' });
-
-        dispose();
-      });
-    });
-
-    it('routes Controller replacements to the Viewer, honoring new-split intent', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        // A replacement from the Controller lands in the Viewer.
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        expect(manager.splits()).toHaveLength(2);
-        expect(manager.getSplit(viewerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
-        expect(manager.activeSplitId()).toBe(controllerId);
-
-        // Explicit new-split intent opens a real new split; the Preview Pair
-        // stays.
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-2' },
-          {
-            referredFrom: null,
-            preferNewSplit: true,
-            handle: manager.getSplit(controllerId),
-          }
-        );
-        expect(manager.splits()).toHaveLength(3);
-        expect(manager.getSplit(viewerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
-        expect(manager.viewerOf(controllerId)).toBe(viewerId);
-
-        dispose();
-      });
-    });
-
-    it('replacePreview dissolves the Preview Pair and opens in its place', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        // Something is being previewed...
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        expect(manager.splits()).toHaveLength(2);
-
-        // ...and opening another row for real takes the whole pair's place.
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-2' },
-          {
-            referredFrom: null,
-            replacePreview: true,
-            handle: manager.getSplit(controllerId),
-          }
-        );
-
-        expect(manager.splits()).toHaveLength(1);
-        expect(manager.getSplit(viewerId)).toBeUndefined();
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.getSplit(controllerId)!.isControllerSplit()).toBe(false);
-        expect(manager.getSplit(controllerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-2',
-        });
-        expect(manager.activeSplitId()).toBe(controllerId);
-
-        // The list it replaced is one step back.
-        manager.getSplit(controllerId)!.goBack();
-        expect(manager.getSplit(controllerId)!.content()).toMatchObject({
-          type: 'component',
-          id: 'inbox',
-        });
-
-        dispose();
-      });
-    });
-
-    it('replacePreview wins over new-split intent even with room to spare', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          {
-            referredFrom: null,
-            replacePreview: true,
-            preferNewSplit: true,
-            handle: manager.getSplit(controllerId),
-          }
-        );
-
-        expect(manager.splits()).toHaveLength(1);
-        expect(manager.getSplit(viewerId)).toBeUndefined();
-        expect(manager.getSplit(controllerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
-
-        dispose();
-      });
-    });
-
-    it('replacePreview promotes the previewed row itself without duplicating it', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-
-        // The Viewer holds this content; closing it with the pair leaves the
-        // Controller free to take it, rather than short-circuiting into the
-        // split that is about to disappear.
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          {
-            referredFrom: null,
-            replacePreview: true,
-            handle: manager.getSplit(controllerId),
-          }
-        );
-
-        expect(manager.splits()).toHaveLength(1);
-        expect(manager.getSplit(viewerId)).toBeUndefined();
-        expect(manager.getSplit(controllerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
-
-        dispose();
-      });
-    });
-
-    it('promotes the previewed content into its own split, resetting the Viewer', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        expect(manager.getSplit(viewerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
-
-        // New-split intent for the row currently being previewed: the Viewer's
-        // copy is that preview, so it must not short-circuit into "already
-        // open" — the content gets a real split and the preview resets.
-        const created = manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          {
-            referredFrom: null,
-            preferNewSplit: true,
-            handle: manager.getSplit(controllerId),
-          }
-        );
-
-        expect(manager.splits()).toHaveLength(3);
-        expect(created?.id).not.toBe(viewerId);
-        expect(created?.content()).toMatchObject({ type: 'md', id: 'doc-1' });
-        expect(manager.viewerOf(controllerId)).toBe(viewerId);
-        expect(manager.getSplit(viewerId)!.content()).toMatchObject({
-          type: 'component',
-          id: 'preview-empty',
-        });
-
-        dispose();
-      });
-    });
-
-    it('leaves the preview in place when a promotion cannot fit', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        manager.setResizeContext({
-          canFit: () => false,
-        } as unknown as ResizeZoneCtx);
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          {
-            referredFrom: null,
-            preferNewSplit: true,
-            handle: manager.getSplit(controllerId),
-          }
-        );
-
-        expect(manager.splits()).toHaveLength(2);
-        expect(manager.getSplit(viewerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
-
-        dispose();
-      });
-    });
-
-    it('honors handle-less new-split intent without dissolving the Preview Pair', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        const newSplit = manager.openWithSplit(
-          { type: 'component', id: 'inbox' },
-          {
-            referredFrom: 'hotkey',
-            allowDuplicate: true,
-            preferNewSplit: true,
-          }
-        );
-
-        expect(manager.splits()).toHaveLength(3);
-        expect(manager.viewerOf(controllerId)).toBe(viewerId);
-        expect(manager.controllerOf(viewerId)).toBe(controllerId);
-        expect(newSplit?.content()).toMatchObject({
-          type: 'component',
-          id: 'inbox',
-        });
-        expect(manager.activeSplitId()).toBe(newSplit?.id);
-
-        dispose();
-      });
-    });
-
-    it('new-split intent falls back to the Viewer when the layout is full', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-        manager.setResizeContext({
-          canFit: () => false,
-        } as unknown as ResizeZoneCtx);
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          {
-            referredFrom: null,
-            preferNewSplit: true,
-            handle: manager.getSplit(controllerId),
-          }
-        );
-        // The fallback replaces the Viewer — never the Controller.
-        expect(manager.splits()).toHaveLength(2);
-        expect(manager.getSplit(viewerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
-        expect(manager.getSplit(controllerId)!.content()).toMatchObject({
-          type: 'component',
-          id: 'inbox',
-        });
-
-        dispose();
-      });
-    });
-
-    it('external (handle-less) navigation dissolves the Preview Pair', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        expect(manager.splits()).toHaveLength(2);
-
-        // Sidebar-style soup view: content replaces the controller, the
-        // Viewer closes.
-        manager.openWithSplit(
-          { type: 'component', id: 'channels' },
-          { referredFrom: null }
-        );
-        expect(manager.splits()).toHaveLength(1);
-        expect(manager.getSplit(controllerId)!.content()).toMatchObject({
-          type: 'component',
-          id: 'channels',
-        });
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-
-        // Command-menu-style entity selection dissolves the Preview Pair the
-        // same way.
-        manager.engagePreviewMode(controllerId);
-        expect(manager.splits()).toHaveLength(2);
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-k' },
-          { referredFrom: null }
-        );
-        expect(manager.splits()).toHaveLength(1);
-        expect(manager.getSplit(controllerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-k',
-        });
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-
-        dispose();
-      });
-    });
-
-    it('returns a duplicate split without activating it', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.createNewSplit({
-          content: { type: 'email', id: 'doc-open-elsewhere' },
-          referredFrom: null,
-        });
-        manager.activateSplit(controllerId);
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        const result = manager.openWithSplit(
-          { type: 'email', id: 'doc-open-elsewhere' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-
-        expect(manager.splits()).toHaveLength(3);
-        expect(result?.content()).toMatchObject({
-          type: 'email',
-          id: 'doc-open-elsewhere',
-        });
-        expect(manager.activeSplitId()).toBe(controllerId);
-        // The eager viewer keeps its placeholder; nothing was opened into it.
-        expect(manager.getSplit(viewerId)!.content()).toMatchObject({
-          type: 'component',
-          id: 'preview-empty',
-        });
-
-        dispose();
-      });
-    });
-
-    it('disengages the Controller when the Viewer is closed', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        manager.removeSplit(viewerId);
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.previewPairs()).toEqual([]);
-
-        // Subsequent navigation replaces the controller normally.
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-2' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        expect(manager.splits()).toHaveLength(1);
-        expect(manager.getSplit(controllerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-2',
-        });
-
-        dispose();
-      });
-    });
-
-    it('disengages when the Controller navigates away from a list view', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        expect(manager.splits()).toHaveLength(2);
-
-        // The Viewer still shows the placeholder: it closes along with the
-        // Preview Pair.
-        manager.getSplit(controllerId)!.replace({
-          next: { type: 'md', id: 'doc-x' },
-        });
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.splits()).toHaveLength(1);
-
-        dispose();
-      });
-    });
-
-    it('closes a content-bearing viewer when the controller leaves its list view', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        manager.getSplit(controllerId)!.replace({
-          next: { type: 'md', id: 'doc-x' },
-        });
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.splits()).toHaveLength(1);
-        expect(manager.getSplit(viewerId)).toBeUndefined();
-
-        dispose();
-      });
-    });
-
-    it('closes the viewer when the controller closes', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        manager.getSplit(controllerId)!.close();
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.previewPairs()).toEqual([]);
-        expect(manager.getSplit(controllerId)).toBeUndefined();
-        expect(manager.getSplit(viewerId)).toBeUndefined();
-        expect(manager.splits()).toHaveLength(1);
-        expect(manager.splits()[0].content).toMatchObject({
-          type: 'component',
-          id: 'inbox',
-        });
-
-        dispose();
-      });
-    });
-
-    it('disengages when reconcile drops the viewer', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        expect(manager.viewerOf(controllerId)).toBeDefined();
-
-        manager.reconcile([{ type: 'component', id: 'inbox' }]);
-
-        expect(manager.splits()).toHaveLength(1);
-        expect(manager.splits()[0].id).toBe(controllerId);
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-
-        dispose();
-      });
-    });
-
-    it('disengage closes the viewer and restores normal replace behavior', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        manager.disengagePreviewMode(controllerId);
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.previewControllerWidth(controllerId)).toBeUndefined();
-        expect(manager.getSplit(viewerId)).toBeUndefined();
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-2' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        expect(manager.splits()).toHaveLength(1);
-        expect(manager.getSplit(controllerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-2',
-        });
-
-        dispose();
-      });
-    });
-
-    it('can unlink the Preview Pair without closing splits for URL reconstruction', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        manager.unlinkPreviewPair(controllerId);
-
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.previewControllerWidth(controllerId)).toBeUndefined();
-        expect(manager.getSplit(controllerId)).toBeDefined();
-        expect(manager.getSplit(viewerId)).toBeDefined();
-
-        dispose();
-      });
-    });
-
-    it('leaves openWithSplit untouched when no split is engaged', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-1' },
-          { referredFrom: null, handle: manager.getSplit(controllerId) }
-        );
-        expect(manager.splits()).toHaveLength(1);
-        expect(manager.getSplit(controllerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-1',
-        });
-        expect(manager.activeSplitId()).toBe(controllerId);
-
-        dispose();
-      });
-    });
-
-    it('the Viewer navigates like a normal split', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.engagePreviewMode(controllerId);
-        const viewerId = manager.viewerOf(controllerId)!;
-
-        // A replacement from the Viewer replaces the Viewer.
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-2' },
-          { referredFrom: null, handle: manager.getSplit(viewerId) }
-        );
-        expect(manager.splits()).toHaveLength(2);
-        expect(manager.getSplit(viewerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-2',
-        });
-        expect(manager.viewerOf(controllerId)).toBe(viewerId);
-
-        // New-split intent from the Viewer opens a real new split;
-        // the Preview Pair stays intact and the Controller is untouched.
-        manager.openWithSplit(
-          { type: 'md', id: 'doc-3' },
-          {
-            referredFrom: null,
-            preferNewSplit: true,
-            handle: manager.getSplit(viewerId),
-          }
-        );
-        expect(manager.splits()).toHaveLength(3);
-        expect(manager.getSplit(viewerId)!.content()).toMatchObject({
-          type: 'md',
-          id: 'doc-2',
-        });
-        expect(manager.getSplit(controllerId)!.content()).toMatchObject({
-          type: 'component',
-          id: 'inbox',
-        });
-        expect(manager.viewerOf(controllerId)).toBe(viewerId);
-
-        dispose();
-      });
-    });
-
-    it('cannot engage without room for a Viewer', () => {
-      createRoot((dispose) => {
-        const { manager, controllerId } = setup();
-        manager.setResizeContext({
-          canFit: () => false,
-        } as unknown as ResizeZoneCtx);
-
-        expect(manager.canEngagePreview(controllerId)).toBe(false);
-        manager.engagePreviewMode(controllerId);
-
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.splits()).toHaveLength(1);
-
-        dispose();
-      });
-    });
-
-    it('cannot engage ineligible content as a preview controller', () => {
-      createRoot((dispose) => {
-        const manager = createSplitLayout(createMockOrchestrator(), [
-          { type: 'md', id: 'doc-1' },
-        ]);
-        const controllerId = manager.splits()[0].id;
-
-        expect(manager.canEngagePreview(controllerId)).toBe(false);
-        manager.engagePreviewMode(controllerId);
-
-        expect(manager.viewerOf(controllerId)).toBeUndefined();
-        expect(manager.splits()).toHaveLength(1);
 
         dispose();
       });

@@ -108,7 +108,6 @@ function Zone(props: ParentProps<ZoneProps>) {
       minSize?: number;
       maxSize?: number;
       redistributionPreferredSize?: number;
-      shareGroup?: string;
     }
   ) {
     solver.updatePanel(id, config);
@@ -258,13 +257,6 @@ type PanelProps = {
   maxSize?: number;
   redistributionPreferredSize?: number;
   /**
-   * Panels sharing a `shareGroup` count as ONE unit for automatic share
-   * allocation: an incoming member carves its share out of the group, a
-   * departing member returns it, and redistribution-preference deltas settle
-   * within the group before touching other panels.
-   */
-  shareGroup?: string;
-  /**
    * Initial target size for the panel at registration time.
    * - number: interpreted as a percentage (e.g., 25 = 25%)
    * - PanelSizeSpec: explicit spec like { kind: 'percent', percent: 25 } or { kind: 'px', px: 300 }
@@ -325,7 +317,6 @@ function Panel(props: ParentProps<PanelProps>) {
     minSize: props.minSize,
     maxSize: props.maxSize ?? Infinity,
     redistributionPreferredSize: props.redistributionPreferredSize,
-    shareGroup: props.shareGroup,
     target: getTarget(),
   });
 
@@ -346,7 +337,6 @@ function Panel(props: ParentProps<PanelProps>) {
       minSize: next.minSize,
       maxSize: next.maxSize,
       redistributionPreferredSize: next.redistributionPreferredSize,
-      shareGroup: next.shareGroup,
     });
 
     if (hidden) {

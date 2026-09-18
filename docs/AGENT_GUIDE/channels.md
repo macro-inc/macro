@@ -244,6 +244,11 @@ a channel cached away from its latest page, and a delta longer than one page use
 
 ## Chat navigation rail
 
+Following a channel mention or browser notification for the conversation already
+shown in Chat activates that workspace and jumps to the targeted message or reply. It keeps
+the existing preview and does not show a **Content already open** toast. The
+same applies to a channel preview in Home; a closed channel opens normally.
+
 The title bar's **Hide navigation** control hides the whole rail. Reopen it with
 **Show navigation** (the hamburger) immediately before the conversation title,
 or in the Chat header when no conversation is selected. Chat remembers this

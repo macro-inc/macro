@@ -69,14 +69,14 @@ export function createMobileSwipeLayout(
   // The BG split is always exactly bgSplitId() — derive exclusion directly from
   // the slot signals rather than maintaining a separate set.
   splitManager.setExclusionFilter((split) => split.id === bgSplitId());
-  splitManager.setNavigationInterceptor((content, options) => {
+  splitManager.setSplitNavigationInterceptor((content, options) => {
     if (options.mergeHistory) return { handled: false };
     navigateForward(content, options);
     return { handled: true };
   });
   onCleanup(() => {
     splitManager.setExclusionFilter(undefined);
-    splitManager.setNavigationInterceptor(undefined);
+    splitManager.setSplitNavigationInterceptor(undefined);
   });
 
   function canGoBack() {

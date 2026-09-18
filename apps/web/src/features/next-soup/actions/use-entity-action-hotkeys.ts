@@ -127,20 +127,7 @@ export const useEntityActionHotkeys = (
 
   const openNextEntity: EntityActionNavigationHandler = ({ entity }) => {
     if (!splitHandle) return;
-    if (!entity) {
-      if (splitHandle.isControllerSplit()) splitHandle.resetPreview();
-      return;
-    }
-
-    if (splitHandle.isControllerSplit()) {
-      openEntityInSplitFromUnifiedList(entity, {
-        splitHandle,
-        mergeHistory: true,
-        referredFrom: splitHandle.referredFrom(),
-        notificationSource,
-      });
-      return;
-    }
+    if (!entity) return;
 
     const handleContent = splitHandle.content()?.type;
     if (!handleContent) return;

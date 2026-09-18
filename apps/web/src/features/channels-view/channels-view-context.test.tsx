@@ -14,6 +14,7 @@ const entry = vi.hoisted(() => ({
 const touch = vi.hoisted(() => ({ value: false }));
 const guard = vi.hoisted(() => ({
   selections: [] as unknown[],
+  reasons: [] as unknown[],
   allow: true,
 }));
 
@@ -22,8 +23,9 @@ vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: () => touch.value,
 }));
 vi.mock('@components/app/createPreviewSelectionGuard', () => ({
-  createPreviewSelectionGuard: () => (selection: unknown) => {
+  createPreviewSelectionGuard: () => (selection: unknown, reason: unknown) => {
     guard.selections.push(selection);
+    guard.reasons.push(reason);
     return selection === undefined || guard.allow;
   },
 }));
@@ -59,6 +61,7 @@ beforeEach(() => {
   entry.captors.clear();
   touch.value = false;
   guard.selections = [];
+  guard.reasons = [];
   guard.allow = true;
 });
 afterEach(cleanup);
@@ -78,6 +81,7 @@ describe('ChannelsViewProvider preview selection', () => {
 
       expect(first.context.state.selectedChannelId).toBe('c1');
       expect(first.context.previewChannelId()).toBeUndefined();
+      expect(guard.reasons.at(-1)).toBe('restore');
       // Unrelated preference writes must retain the blocked selection too.
       first.context.setGroupOpen('channels', false);
       expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject(
@@ -103,6 +107,7 @@ describe('ChannelsViewProvider preview selection', () => {
     guard.allow = true;
     context.setSelectedChannelId('c1');
     expect(context.previewChannelId()).toBe('c1');
+    expect(guard.reasons.at(-1)).toBe('navigate');
 
     guard.allow = false;
     context.setSelectedChannelId('c2');

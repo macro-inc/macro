@@ -7,7 +7,6 @@ import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
 import { MobilePageActionRow } from '@components/app/mobile/MobilePageActionRow';
 import { SplitPanelControllerProvider } from '@components/app/split-panel';
 import { isSoloSettings } from '@core/constant/SettingsState';
-import { BlockOpenTrackingDelayContext } from '@core/context/blockOpenTracking';
 import { splitContainerAttribute } from '@core/dom-selectors';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -51,12 +50,6 @@ type SplitPanelProps = {
   index: number;
 };
 
-/**
- * A Preview Pair Viewer displays content passively. Only record it as opened
- * after the user lingers, so keyboard scanning does not mark every row viewed.
- */
-const PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS = 1_500;
-
 export function SplitPanel(props: SplitPanelProps) {
   const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
     `split=${props.split.id}`
@@ -99,7 +92,6 @@ export function SplitPanel(props: SplitPanelProps) {
       });
     },
     isNotUnifiedList,
-    isViewerSplit: () => props.handle.isViewerSplit(),
     getSplitCount: () => splitLayoutHelpers.getSplitCount(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
     canGoForward: () => props.handle.canGoForward(),
@@ -172,22 +164,6 @@ export function SplitPanel(props: SplitPanelProps) {
   const splitUnfocusedStyling = () =>
     !isTouchDevice() && !props.active && multipleSplits();
 
-  const gutterSize = () =>
-    globalSplitManager()?.resizeContext()?.gutterSize() ?? 0;
-
-  /**
-   * This split is a Viewer sitting immediately right of its Controller: the
-   * pane slides left across the gutter so it sits flush against the
-   * Controller, reading as tucked behind it.
-   */
-  const tuckedBehindController = createMemo(() => {
-    return (
-      !isTouchDevice() &&
-      !props.handle.isSpotLight() &&
-      props.handle.isViewerSplit()
-    );
-  });
-
   const usesComposableLayout = () =>
     props.split.mount.kind === 'component' &&
     props.split.mount.meta.splitPanelLayout === 'composable';
@@ -204,24 +180,14 @@ export function SplitPanel(props: SplitPanelProps) {
         goForward: props.handle.goForward,
         canClose: () => {
           const manager = globalSplitManager();
-          return manager
-            ? shouldShowSplitCloseButton(manager, props.handle)
-            : false;
+          return manager ? shouldShowSplitCloseButton(manager) : false;
         },
         close: props.handle.close,
       }}
     >
       <Suspense>
         <SoupViewContextProvider soup={nextSoup}>
-          <BlockOpenTrackingDelayContext.Provider
-            value={
-              props.handle.isViewerSplit()
-                ? PREVIEW_VIEWER_OPEN_TRACK_DELAY_MS
-                : 0
-            }
-          >
-            <Dynamic component={props.split.mount.element} />
-          </BlockOpenTrackingDelayContext.Provider>
+          <Dynamic component={props.split.mount.element} />
         </SoupViewContextProvider>
       </Suspense>
     </SplitPanelControllerProvider>
@@ -284,14 +250,6 @@ export function SplitPanel(props: SplitPanelProps) {
               // mobile/tablet: status bar + floating header strip.
               '--mobile-content-inset-top':
                 'calc(var(--safe-top, 0px) + var(--split-header-height, 0px))',
-              // Slide the preview pane left across the gutter so it sits
-              // flush against the controller, keeping its right edge in
-              // place. The gutter's drag hit-area still paints (and
-              // hit-tests) above this extension, so resizing works.
-              ...(tuckedBehindController() && {
-                'margin-left': `-${gutterSize()}px`,
-                width: `calc(100% + ${gutterSize()}px)`,
-              }),
             }}
             ref={(ref) => {
               setPanelRef(ref);
