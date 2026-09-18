@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ai_billing_period_allowance (\n                user_id, period_start, included_cents, billed_users\n            )\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (user_id, period_start) DO UPDATE\n            SET included_cents = EXCLUDED.included_cents,\n                billed_users = EXCLUDED.billed_users,\n                updated_at = NOW()\n            WHERE ai_billing_period_allowance.included_cents\n                  IS DISTINCT FROM EXCLUDED.included_cents\n               OR ai_billing_period_allowance.billed_users\n                  IS DISTINCT FROM EXCLUDED.billed_users\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Int8",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "474a8d45669a6879881819b8b01de343ebc1f069f7a29e45e5cf992f80ffbf9b"
+}

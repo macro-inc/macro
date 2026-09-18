@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT included_cents, billed_users as \"billed_users!\"\n            FROM ai_billing_period_allowance\n            WHERE user_id = $1 AND period_start = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "included_cents",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 1,
+        "name": "billed_users!",
+        "type_info": "TextArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "06ba8713577f5a927baca7d5651a9148e656512bef5b91bca3c3c68d1aa9ff18"
+}

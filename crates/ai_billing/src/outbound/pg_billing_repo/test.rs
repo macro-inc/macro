@@ -362,3 +362,65 @@ async fn settlement_uses_stored_overage_policy_and_flushes_at_period_end(pool: P
         .unwrap();
     assert!(outcome.pending_charge.is_none());
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn period_allowance_roundtrips_and_upserts_per_period(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool);
+    let start = Utc::now()
+        .duration_trunc(chrono::Duration::microseconds(1))
+        .unwrap();
+    let earlier = start - chrono::Duration::days(30);
+    let member = MacroUserIdStr::try_from("macro|member@example.com".to_string()).unwrap();
+    let billed = vec![payer(), member.clone()];
+
+    assert!(
+        repo.period_allowance(&payer(), start)
+            .await
+            .unwrap()
+            .is_none()
+    );
+
+    repo.remember_period_allowance(&payer(), start, 4_000, &billed)
+        .await
+        .unwrap();
+    let frozen = repo
+        .period_allowance(&payer(), start)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(frozen.included_cents, 4_000);
+    assert_eq!(frozen.billed_users, billed);
+
+    // A later observation of the same (open) period refreshes.
+    repo.remember_period_allowance(&payer(), start, 20_000, &[payer()])
+        .await
+        .unwrap();
+    let frozen = repo
+        .period_allowance(&payer(), start)
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(frozen.included_cents, 20_000);
+    assert_eq!(frozen.billed_users, vec![payer()]);
+
+    // A different period is independent.
+    repo.remember_period_allowance(&payer(), earlier, 8_000, &billed)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.period_allowance(&payer(), start)
+            .await
+            .unwrap()
+            .unwrap()
+            .included_cents,
+        20_000
+    );
+    assert_eq!(
+        repo.period_allowance(&payer(), earlier)
+            .await
+            .unwrap()
+            .unwrap()
+            .included_cents,
+        8_000
+    );
+}
