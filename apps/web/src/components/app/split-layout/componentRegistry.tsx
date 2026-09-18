@@ -413,18 +413,19 @@ function RegisteredAgentsView(params: ComponentParams) {
   usePageViewTracking('agents');
   const panel = useSplitPanelOrThrow();
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
+  const useAgentsWorkspace = () => agentsFlag().enabled && !isTouchDevice();
 
   createRenderEffect(() => {
     if (agentsFlag().loading) return;
     panel.handle.updateMeta?.({
-      splitPanelLayout: agentsFlag().enabled ? 'composable' : 'legacy',
+      splitPanelLayout: useAgentsWorkspace() ? 'composable' : 'legacy',
     });
   });
 
   return (
     <Show when={!agentsFlag().loading} fallback={<LoadingBlock />}>
       <Show
-        when={agentsFlag().enabled}
+        when={useAgentsWorkspace()}
         fallback={
           route ? (
             <RedirectSplit
@@ -613,6 +614,12 @@ registerComponent(
       return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
     }
     usePageViewTracking('companies');
+    const panel = useSplitPanelOrThrow();
+    createRenderEffect(() => {
+      panel.handle.updateMeta?.({
+        splitPanelLayout: isTouchDevice() ? 'legacy' : 'composable',
+      });
+    });
     const preset = getViewPreset('companies');
     // Share links land here as `/companies?crmView=<encoded config>` — the
     // param carries the full view state (never data), decoded client-side.
@@ -631,8 +638,7 @@ registerComponent(
         initialCrmView={initialCrmView}
       />
     );
-  }),
-  { splitPanelLayout: 'composable' }
+  })
 );
 
 registerComponent(

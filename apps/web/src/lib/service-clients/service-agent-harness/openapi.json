@@ -62,6 +62,36 @@
         ]
       }
     },
+    "/agent-repositories": {
+      "get": {
+        "tags": ["agent-repositories"],
+        "summary": "List the GitHub repositories the caller can select for a coding session.",
+        "operationId": "list_agent_repositories",
+        "responses": {
+          "200": {
+            "description": "The caller's reachable repositories",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentRepositoriesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "502": {
+            "description": "GitHub could not be asked which repositories the caller reaches"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
     "/agent-sandbox-size": {
       "get": {
         "tags": ["agent-sessions"],
@@ -1179,6 +1209,35 @@
           }
         }
       },
+      "AgentRepositoriesResponse": {
+        "type": "object",
+        "description": "Response body for `GET /agent-repositories`.",
+        "required": ["repositories"],
+        "properties": {
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/AgentRepositoryDto"
+            },
+            "description": "Every repository the caller reaches through Macro's GitHub App, sorted\nby `owner/name`. Empty when the App is installed nowhere the caller\nhas a claim to."
+          }
+        }
+      },
+      "AgentRepositoryDto": {
+        "type": "object",
+        "description": "One repository the caller can select for a coding session.",
+        "required": ["url"],
+        "properties": {
+          "defaultBranch": {
+            "type": ["string", "null"],
+            "description": "The branch a clone checks out, and where a session starts when its\nrequest selects this repository without a `repoBranch`. Absent for a\nrepository with no commits."
+          },
+          "url": {
+            "type": "string",
+            "description": "The canonical `https://github.com/owner/name` url, in the form\n`POST /agent-sessions` accepts as `repoUrl`."
+          }
+        }
+      },
       "AgentRespondElicitationAction": {
         "allOf": [
           {
@@ -1602,11 +1661,11 @@
           },
           "repoBranch": {
             "type": ["string", "null"],
-            "description": "Starting branch for a managed coding session's selected repository."
+            "description": "Starting branch for a managed coding session's selected repository.\nOmitted, the session starts on the repository's default branch."
           },
           "repoUrl": {
             "type": ["string", "null"],
-            "description": "Explicit GitHub repository for a managed Cursor session. Access is\nchecked for the session owner. For external sessions this is\ninformational: cloning it is the runtime operator's job."
+            "description": "Explicit GitHub repository for a managed Cursor session, as one of the\nurls `GET /agent-repositories` lists for the caller. Access is checked\nfor the session owner. For external sessions this is informational:\ncloning it is the runtime operator's job."
           },
           "thread": {
             "oneOf": [
@@ -2121,6 +2180,10 @@
     {
       "name": "agent-models",
       "description": "Fresh provider model discovery"
+    },
+    {
+      "name": "agent-repositories",
+      "description": "Repositories a coding session can work on"
     }
   ]
 }

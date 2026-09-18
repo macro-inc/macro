@@ -72,6 +72,35 @@ export type AgentPromptAction = {
 };
 
 /**
+ * Response body for `GET /agent-repositories`.
+ */
+export type AgentRepositoriesResponse = {
+    /**
+     * Every repository the caller reaches through Macro's GitHub App, sorted
+     * by `owner/name`. Empty when the App is installed nowhere the caller
+     * has a claim to.
+     */
+    repositories: Array<AgentRepositoryDto>;
+};
+
+/**
+ * One repository the caller can select for a coding session.
+ */
+export type AgentRepositoryDto = {
+    /**
+     * The branch a clone checks out, and where a session starts when its
+     * request selects this repository without a `repoBranch`. Absent for a
+     * repository with no commits.
+     */
+    defaultBranch?: string | null;
+    /**
+     * The canonical `https://github.com/owner/name` url, in the form
+     * `POST /agent-sessions` accepts as `repoUrl`.
+     */
+    url: string;
+};
+
+/**
  * Answer an elicitation the agent is waiting on.
  */
 export type AgentRespondElicitationAction = ElicitationAnswer & {
@@ -417,12 +446,14 @@ export type CreateAgentSessionRequest = {
     prompt?: string | null;
     /**
      * Starting branch for a managed coding session's selected repository.
+     * Omitted, the session starts on the repository's default branch.
      */
     repoBranch?: string | null;
     /**
-     * Explicit GitHub repository for a managed Cursor session. Access is
-     * checked for the session owner. For external sessions this is
-     * informational: cloning it is the runtime operator's job.
+     * Explicit GitHub repository for a managed Cursor session, as one of the
+     * urls `GET /agent-repositories` lists for the caller. Access is checked
+     * for the session owner. For external sessions this is informational:
+     * cloning it is the runtime operator's job.
      */
     repoUrl?: string | null;
     thread?: null | CreateSessionThread;
@@ -850,6 +881,33 @@ export type LoadAgentModelsHandlerResponses = {
 };
 
 export type LoadAgentModelsHandlerResponse = LoadAgentModelsHandlerResponses[keyof LoadAgentModelsHandlerResponses];
+
+export type ListAgentRepositoriesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-repositories';
+};
+
+export type ListAgentRepositoriesErrors = {
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * GitHub could not be asked which repositories the caller reaches
+     */
+    502: unknown;
+};
+
+export type ListAgentRepositoriesResponses = {
+    /**
+     * The caller's reachable repositories
+     */
+    200: AgentRepositoriesResponse;
+};
+
+export type ListAgentRepositoriesResponse = ListAgentRepositoriesResponses[keyof ListAgentRepositoriesResponses];
 
 export type GetAgentSandboxSizeData = {
     body?: never;

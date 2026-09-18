@@ -122,6 +122,13 @@ pub const CODEX_HANDLE: &str = "codex";
 /// Display name for Codex.
 pub const CODEX_NAME: &str = "Codex";
 
+/// Stable identity for the per-owner Claude cloud agent.
+pub const CLAUDE_BOT_ID: BotId = BotId::new_from_uuid(Uuid::from_u128(0xc1a0));
+/// Mention handle for Claude.
+pub const CLAUDE_HANDLE: &str = "claude";
+/// Display name for Claude.
+pub const CLAUDE_NAME: &str = "Claude";
+
 /// Stable handle for the autonomous Macro platform principal.
 pub const MACRO_SYSTEM_HANDLE: &str = "macro-system";
 
@@ -177,6 +184,12 @@ pub const SYSTEM_BOTS: &[SystemBot] = &[
         id: CODEX_BOT_ID,
         name: CODEX_NAME,
         handle: CODEX_HANDLE,
+        has_agent: true,
+    },
+    SystemBot {
+        id: CLAUDE_BOT_ID,
+        name: CLAUDE_NAME,
+        handle: CLAUDE_HANDLE,
         has_agent: true,
     },
     // Posts as itself for autonomous platform operations, but nothing mentions

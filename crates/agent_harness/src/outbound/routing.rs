@@ -18,10 +18,11 @@ use agent_session::domain::model::AgentSessionId;
 use agent_session::domain::ports::AgentSessionRepo;
 
 use crate::domain::error::{HarnessError, Result};
-use crate::domain::model::{AgentKind, SpawnContainer};
+use crate::domain::model::{AgentKind, SessionBlocker, SpawnContainer};
 use crate::domain::ports::ContainerManager;
 use crate::domain::sandbox::SandboxResizeEffect;
 use agent_session::domain::model::SandboxSize;
+use macro_user_id::user_id::MacroUserIdStr;
 
 #[cfg(test)]
 mod test;
@@ -68,6 +69,22 @@ where
 {
     type Transport =
         RoutedTransport<Sandbox::Transport, Cursor::Transport, Codex::Transport, Claude::Transport>;
+
+    async fn preflight(
+        &self,
+        kind: AgentKind,
+        owner: &MacroUserIdStr<'_>,
+    ) -> Result<Option<SessionBlocker>> {
+        match kind {
+            AgentKind::CodexCloud => self.codex.preflight(kind, owner).await,
+            AgentKind::ClaudeCloud => self.claude.preflight(kind, owner).await,
+            AgentKind::Cursor => self.cursor.preflight(kind, owner).await,
+            AgentKind::SandboxedCoder | AgentKind::InMemory => {
+                self.sandbox.preflight(kind, owner).await
+            }
+            AgentKind::External => Err(external_is_unroutable()),
+        }
+    }
 
     async fn spawn(
         &self,

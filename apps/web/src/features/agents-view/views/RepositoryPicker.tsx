@@ -3,38 +3,112 @@ import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
 import GitBranchIcon from '@phosphor/git-branch.svg';
 import GithubIcon from '@phosphor/github-logo.svg';
-import { Button } from '@ui';
-import { createSignal, For, Show } from 'solid-js';
+import { Button, createCommandListController } from '@ui';
 import {
+  createMemo,
+  createSignal,
+  createUniqueId,
+  For,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
+import { match } from 'ts-pattern';
+import {
+  filterRepositories,
+  orderRepositories,
   parseRepositoryInput,
+  type ReachableRepository,
   repositoryLabel,
+  sameRepository,
   validRepositoryBranch,
 } from '../core/repository';
+
+/** One row of the repository list. */
+type RepositoryChoice =
+  | { kind: 'automatic' }
+  | { kind: 'listed'; url: string }
+  /** Named by hand rather than listed; the service decides whether it may be used. */
+  | { kind: 'typed'; url: string };
 
 /** Explicit, portaled repository/branch controls shared by Home and Agents. */
 export function RepositoryPicker(props: {
   repoUrl?: string;
   branch: string;
+  /** Every repository the signed-in user reaches through Macro's GitHub App. */
+  repositories: ReachableRepository[];
+  repositoriesLoading: boolean;
+  repositoriesError: boolean;
+  /** Repositories handed to coders before, newest first; offered ahead of the rest. */
   recentRepositories: string[];
-  onSelect: (url: string | undefined, branch: string) => void;
+  onRetryRepositories: () => void;
+  /** Where to send someone who reaches no repository yet. */
+  onConnectGitHub?: () => void;
+  /** `undefined` leaves the choice to the coder. */
+  onSelectRepository: (url: string | undefined) => void;
+  onSelectBranch: (branch: string) => void;
 }) {
+  const listId = createUniqueId();
   const [repoOpen, setRepoOpen] = createSignal(false);
   const [branchOpen, setBranchOpen] = createSignal(false);
-  const [repoInput, setRepoInput] = createSignal('');
+  const [search, setSearch] = createSignal('');
   const [branchInput, setBranchInput] = createSignal('');
   const [error, setError] = createSignal('');
-  const selectRepo = (url: string | undefined) => {
-    props.onSelect(url, url === props.repoUrl ? props.branch : 'main');
+
+  const offered = createMemo(() =>
+    orderRepositories(props.repositories, props.recentRepositories)
+  );
+  const choices = createMemo<RepositoryChoice[]>(() => {
+    const text = search().trim();
+    const listed = filterRepositories(offered(), text);
+    const choices: RepositoryChoice[] = text ? [] : [{ kind: 'automatic' }];
+    for (const repository of listed) {
+      choices.push({ kind: 'listed', url: repository.url });
+    }
+    const typed = parseRepositoryInput(text);
+    if (
+      typed?.startsWith('https://github.com/') &&
+      !listed.some((repository) => sameRepository(repository.url, typed))
+    ) {
+      choices.push({ kind: 'typed', url: typed });
+    }
+    return choices;
+  });
+  const choose = (choice: RepositoryChoice) => {
+    props.onSelectRepository(
+      choice.kind === 'automatic' ? undefined : choice.url
+    );
     setRepoOpen(false);
   };
-  const applyRepo = () => {
-    const url = parseRepositoryInput(repoInput());
-    if (!url || !url.startsWith('https://github.com/')) {
-      setError('Enter a GitHub repository as owner/repo or a repository URL.');
-      return;
-    }
-    selectRepo(url);
+  const list = createCommandListController<RepositoryChoice>({
+    items: choices,
+    onSelect: choose,
+  });
+  const highlightedId = () => `${listId}-${list.selectedIndex()}`;
+  const scrollHighlightedIntoView = () =>
+    document.getElementById(highlightedId())?.scrollIntoView?.({
+      block: 'nearest',
+    });
+  const submitRepository = () => {
+    if (list.selectSelected()) return;
+    setError('Enter a GitHub repository as owner/repo or a repository URL.');
   };
+  const chosen = (choice: RepositoryChoice) =>
+    choice.kind === 'automatic'
+      ? !props.repoUrl
+      : !!props.repoUrl && sameRepository(props.repoUrl, choice.url);
+  const rowLabel = (choice: RepositoryChoice) =>
+    match(choice)
+      .with({ kind: 'automatic' }, () => 'Choose automatically')
+      .with({ kind: 'listed' }, ({ url }) => repositoryLabel(url))
+      .with({ kind: 'typed' }, ({ url }) => `Use ${repositoryLabel(url)}`)
+      .exhaustive();
+  const nothingReachable = () =>
+    !props.repositoriesLoading &&
+    !props.repositoriesError &&
+    offered().length === 0 &&
+    !search().trim();
+
   const applyBranch = () => {
     const branch = branchInput().trim();
     if (!validRepositoryBranch(branch)) {
@@ -43,7 +117,7 @@ export function RepositoryPicker(props: {
       );
       return;
     }
-    props.onSelect(props.repoUrl, branch);
+    props.onSelectBranch(branch);
     setBranchOpen(false);
   };
   return (
@@ -53,7 +127,10 @@ export function RepositoryPicker(props: {
         onOpenChange={(open) => {
           setRepoOpen(open);
           setError('');
-          if (open) setRepoInput(props.repoUrl ?? '');
+          if (open) {
+            setSearch('');
+            list.setSelectedIndex(0);
+          }
         }}
         placement="top-start"
         gutter={8}
@@ -61,7 +138,9 @@ export function RepositoryPicker(props: {
         <Popover.Trigger class="pill max-w-full" aria-label="Repository">
           <GithubIcon class="size-4 shrink-0" />
           <span class="truncate">
-            {props.repoUrl ? repositoryLabel(props.repoUrl) : 'Add repository'}
+            {props.repoUrl
+              ? repositoryLabel(props.repoUrl)
+              : 'Choose repository'}
           </span>
           <CaretDownIcon class="size-3 shrink-0" />
         </Popover.Trigger>
@@ -71,17 +150,35 @@ export function RepositoryPicker(props: {
             <form
               onSubmit={(event) => {
                 event.preventDefault();
-                applyRepo();
+                submitRepository();
               }}
               class="flex flex-col gap-2"
             >
               <input
-                aria-label="Add repository"
-                placeholder="owner/repo or GitHub URL"
-                value={repoInput()}
+                role="combobox"
+                aria-label="Search repositories"
+                aria-expanded="true"
+                aria-controls={listId}
+                aria-activedescendant={highlightedId()}
+                aria-autocomplete="list"
+                autocomplete="off"
+                placeholder="Search, or paste owner/repo"
+                value={search()}
                 onInput={(event) => {
-                  setRepoInput(event.currentTarget.value);
+                  setSearch(event.currentTarget.value);
                   setError('');
+                  list.setSelectedIndex(0);
+                }}
+                onKeyDown={(event) => {
+                  if (event.key === 'ArrowDown') {
+                    event.preventDefault();
+                    list.selectNext();
+                    scrollHighlightedIntoView();
+                  } else if (event.key === 'ArrowUp') {
+                    event.preventDefault();
+                    list.selectPrevious();
+                    scrollHighlightedIntoView();
+                  }
                 }}
                 class="w-full rounded-lg border border-edge-muted bg-input px-3 py-2 outline-none focus:border-accent"
               />
@@ -90,36 +187,80 @@ export function RepositoryPicker(props: {
                   {error()}
                 </p>
               </Show>
-              <Button type="submit" variant="strong">
-                Use repository
-              </Button>
             </form>
-            <div class="mt-2 max-h-48 overflow-y-auto">
-              <button
-                type="button"
-                class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-hover"
-                onClick={() => selectRepo(undefined)}
-              >
-                Choose automatically
-                <Show when={!props.repoUrl}>
-                  <CheckIcon class="ml-auto size-4" />
-                </Show>
-              </button>
-              <For each={props.recentRepositories}>
-                {(url) => (
+            <div
+              id={listId}
+              role="listbox"
+              aria-label="Repositories"
+              class="mt-2 max-h-56 overflow-y-auto"
+            >
+              <For each={choices()}>
+                {(choice, index) => (
                   <button
                     type="button"
-                    class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-hover"
-                    onClick={() => selectRepo(url)}
+                    role="option"
+                    id={`${listId}-${index()}`}
+                    aria-selected={list.isSelected(index())}
+                    class="flex w-full items-center gap-2 rounded-lg px-2 py-2 text-left hover:bg-hover aria-selected:bg-active"
+                    onClick={() => choose(choice)}
+                    onMouseMove={() =>
+                      list.setSelectedIndexFromPointer(index())
+                    }
                   >
-                    <GithubIcon class="size-4 shrink-0" />
-                    <span class="truncate">{repositoryLabel(url)}</span>
-                    <Show when={url === props.repoUrl}>
+                    <Show when={choice.kind !== 'automatic'}>
+                      <GithubIcon class="size-4 shrink-0" />
+                    </Show>
+                    <span class="truncate">{rowLabel(choice)}</span>
+                    <Show when={chosen(choice)}>
                       <CheckIcon class="ml-auto size-4 shrink-0" />
                     </Show>
                   </button>
                 )}
               </For>
+              <Switch>
+                <Match when={props.repositoriesError}>
+                  <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
+                    Couldn't load your repositories.
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      depth={3}
+                      onClick={() => props.onRetryRepositories()}
+                    >
+                      Retry
+                    </Button>
+                  </div>
+                </Match>
+                <Match
+                  when={props.repositoriesLoading && offered().length === 0}
+                >
+                  <div class="px-2 py-2 text-xs text-ink-muted">
+                    Loading your repositories…
+                  </div>
+                </Match>
+                <Match when={nothingReachable()}>
+                  <div class="flex flex-col gap-2 px-2 py-2 text-xs text-ink-muted">
+                    No repositories yet. Give Macro's GitHub App access to the
+                    repositories your coders should work on.
+                    <Show when={props.onConnectGitHub}>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        depth={3}
+                        class="self-start"
+                        onClick={() => props.onConnectGitHub?.()}
+                      >
+                        Connect GitHub
+                      </Button>
+                    </Show>
+                  </div>
+                </Match>
+                <Match when={choices().length === 0}>
+                  <div class="px-2 py-2 text-xs text-ink-muted">
+                    No repositories match “{search().trim()}”.
+                  </div>
+                </Match>
+              </Switch>
             </div>
           </Popover.Content>
         </Popover.Portal>

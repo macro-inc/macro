@@ -2,10 +2,7 @@ import type { DateValue } from '@core/util/date';
 import type { SubType } from '@entity';
 import type { Property } from '@property/types';
 import type { ChannelType } from '@service-cognition/generated/schemas/channelType';
-import type {
-  ApiChannelContextMessage,
-  ItemType,
-} from '@service-storage/client';
+import type { ItemType } from '@service-storage/client';
 import type { CalendarMentionEvent } from '@service-storage/generated/schemas/calendarMentionEvent';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 
@@ -73,7 +70,7 @@ type PreviewDocumentAccess = {
   documentMetadata?: PreviewDocumentMetadata;
 } & BasePreviewItem<'document'>;
 
-export type MessageContext = ApiChannelContextMessage;
+export type MessageContext = import('@service-storage/messages').Message;
 
 export type PreviewChannelAccess = {
   access: Extract<AccessType, 'access'>;

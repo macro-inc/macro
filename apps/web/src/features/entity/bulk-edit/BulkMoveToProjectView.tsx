@@ -1,19 +1,18 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { analytics } from '@app/lib/analytics';
-import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { scrollToKeepGap } from '@core/util/scrollToKeepGap';
 import {
   createBulkMoveToProjectDssEntityMutation,
   type EntityData,
-  InlineEntity,
 } from '@entity';
-import { Dialog } from '@kobalte/core/dialog';
+import FolderIcon from '@phosphor/folder.svg';
 import FolderPlusIcon from '@phosphor-icons/core/regular/folder-plus.svg?component-solid';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { createProject, useProjectsQuery } from '@queries/storage/projects';
 import type { Project } from '@service-storage/generated/schemas';
-import { Button, cn } from '@ui';
+import { ActionDialogShell, Button, Input } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -23,6 +22,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
+import { EntityActionSelection } from './components/EntityActionSelection';
 
 type ProjectWithDepth = Project & { depth?: number; path?: string };
 
@@ -36,7 +36,7 @@ export const BulkMoveToProjectView = (props: {
   let searchInputRef: HTMLInputElement | undefined;
   const bulkMoveToProjectMutation = createBulkMoveToProjectDssEntityMutation();
   const projectsQuery = useProjectsQuery();
-  const projects = () => projectsQuery.data ?? [];
+  const projects = () => (projectsQuery.isSuccess ? projectsQuery.data : []);
   const [searchQuery, setSearchQuery] = createSignal('');
   const [selectedProject, setSelectedProject] =
     createSignal<ProjectWithDepth | null>(null);
@@ -438,49 +438,22 @@ export const BulkMoveToProjectView = (props: {
   const entityText = () => (entityCount() === 1 ? 'item' : 'items');
 
   return (
-    <div ref={rootScopeId}>
-      <div class="shrink-0 flex flex-row items-center px-2 gap-1 border-b border-b-edge-muted h-10">
-        <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-          <CloseIcon />
-        </Dialog.CloseButton>
-        <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
-          Move {entityCount()} {entityText()} to folder
-        </Dialog.Title>
-      </div>
-
-      <div class="p-2 border-b border-edge-muted">
-        <div class="flex items-center gap-2">
-          <For each={props.entities.slice(0, 2)}>
-            {(entity) => (
-              <div
-                class={cn(
-                  'bg-hover border border-edge-muted px-2 py-1 truncate text-xs rounded-xs',
-                  {
-                    'max-w-[50%]': props.entities.length === 2,
-                  }
-                )}
-              >
-                <InlineEntity entity={entity} />
-              </div>
-            )}
-          </For>
-          <Show when={props.entities.length > 2}>
-            <div class="text-ink-muted text-xs px-2 py-1">
-              +{props.entities.length - 2} more
-            </div>
-          </Show>
-        </div>
-      </div>
-
-      <div class="p-3 flex flex-col gap-3">
-        <div class="border border-edge-muted rounded-sm overflow-hidden">
-          <input
-            ref={(el) => {
-              searchInputRef = el;
-              requestAnimationFrame(() =>
-                requestAnimationFrame(() => el.focus())
-              );
-            }}
+    <div ref={rootScopeId} class="flex min-h-0 flex-col">
+      <ActionDialogShell.Body>
+        <ActionDialogShell.Header>
+          <ActionDialogShell.Title>
+            Move {entityCount()} {entityText()} to folder
+          </ActionDialogShell.Title>
+          <ActionDialogShell.Description>
+            Choose a destination for{' '}
+            {entityCount() === 1 ? 'this item' : 'these items'}.
+          </ActionDialogShell.Description>
+        </ActionDialogShell.Header>
+        <EntityActionSelection entities={props.entities} />
+        <div class="min-w-0">
+          <Input
+            ref={searchInputRef}
+            aria-label="Search folders"
             type="text"
             placeholder="Search folders..."
             value={searchQuery()}
@@ -506,10 +479,10 @@ export const BulkMoveToProjectView = (props: {
                 });
               } else if (e.key === 'Enter') {
                 e.preventDefault();
-                finishEditing();
+                void finishEditing();
               }
             }}
-            class="w-full px-3 py-2 text-sm bg-surface text-ink focus:outline-none border-b border-edge-muted"
+            class="mb-2"
           />
           <div class="h-64 overflow-auto" ref={listRef}>
             <For each={items()}>
@@ -527,62 +500,75 @@ export const BulkMoveToProjectView = (props: {
 
                 return (
                   <div
-                    class={cn(
-                      'flex items-center px-2 py-1 hover:bg-accent/10',
-                      isFocused() && 'focused bg-accent/20',
-                      isSelected() && 'bg-accent/10'
-                    )}
+                    class={
+                      isFocused()
+                        ? 'focused relative min-w-0'
+                        : 'relative min-w-0'
+                    }
                     style={{
-                      'padding-left': `${(project.depth || 0) * 16 + 8}px`,
-                    }}
-                    onClick={() => {
-                      setSelectedProject(project);
-                      setFocusedIndex(index());
-                      scrollToKeepGap({
-                        container: listRef,
-                        target: listRef.querySelector(
-                          '.focused'
-                        ) as HTMLElement,
-                        align: 'top',
-                      });
+                      'padding-left': `calc(${project.depth || 0} * var(--sidebar-icon-slot))`,
                     }}
                   >
-                    <div
-                      class={cn(
-                        'mr-2 size-4 flex items-center justify-center text-xs',
-                        !hasChildren() && 'opacity-20'
+                    <For
+                      each={Array.from(
+                        { length: project.depth || 0 },
+                        (_, depth) => depth
                       )}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (hasChildren()) {
-                          toggleExpanded(project.id);
-                        }
+                    >
+                      {(depth) => (
+                        <span
+                          aria-hidden="true"
+                          class="pointer-events-none absolute inset-y-0 w-px bg-edge-muted"
+                          style={{
+                            left: `calc(${depth} * var(--sidebar-icon-slot) + var(--sidebar-local-rail))`,
+                          }}
+                        />
+                      )}
+                    </For>
+                    <ViewSidebar.TreeItem
+                      active={isSelected()}
+                      expanded={
+                        hasChildren() ? Boolean(isExpanded()) : undefined
+                      }
+                      label={project.name}
+                      onToggle={() => toggleExpanded(project.id)}
+                      onClick={() => {
+                        setSelectedProject(project);
+                        setFocusedIndex(index());
+                        scrollToKeepGap({
+                          container: listRef,
+                          target: listRef.querySelector(
+                            '.focused'
+                          ) as HTMLElement,
+                          align: 'top',
+                        });
                       }}
                     >
-                      {hasChildren() ? (isExpanded() ? '▼' : '▶') : ''}
-                    </div>
-                    <div class="mr-2">
-                      {<EntityIcon targetType="project" />}
-                    </div>
-                    <div class="flex-1 text-sm truncate">{project.name}</div>
-                    <Show when={searchQuery()}>
-                      <div class="text-xs text-ink-placeholder ml-2 truncate max-w-48">
-                        {getProjectPath(project.id)}
-                      </div>
-                    </Show>
+                      <ViewSidebar.Icon>
+                        <FolderIcon class="size-4" />
+                      </ViewSidebar.Icon>
+                      <span class="min-w-0 flex-1 truncate">
+                        {project.name}
+                      </span>
+                      <Show when={searchQuery()}>
+                        <span class="max-w-48 truncate text-xs text-ink-placeholder">
+                          {getProjectPath(project.id)}
+                        </span>
+                      </Show>
+                    </ViewSidebar.TreeItem>
                   </div>
                 );
               }}
             </For>
           </div>
 
-          <div class="border-t border-edge-muted">
+          <div class="mt-2 border-t border-edge-muted pt-2">
             <Show
               when={isCreatingFolder()}
               fallback={
                 <button
                   type="button"
-                  class="flex w-full items-center gap-2 px-2 py-1.5 text-sm text-ink-muted hover:bg-hover hover:text-ink"
+                  class="flex h-8 w-full items-center gap-2 rounded-lg px-2 text-sm text-ink-muted hover:bg-hover hover:text-ink"
                   onClick={startCreatingFolder}
                 >
                   <FolderPlusIcon class="size-4 shrink-0" />
@@ -635,22 +621,20 @@ export const BulkMoveToProjectView = (props: {
             </Show>
           </div>
         </div>
-
-        <div class="flex justify-end gap-2">
-          <Button variant="ghost" class="rounded-xs" onClick={props.onCancel}>
-            Cancel
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            class="rounded-xs"
-            onClick={finishEditing}
-            disabled={!selectedProject()}
-          >
-            Move
-          </Button>
-        </div>
-      </div>
+      </ActionDialogShell.Body>
+      <ActionDialogShell.Footer>
+        <Button variant="ghost" onClick={props.onCancel}>
+          Cancel
+        </Button>
+        <Button
+          type="button"
+          variant="strong"
+          onClick={() => void finishEditing()}
+          disabled={!selectedProject()}
+        >
+          Move
+        </Button>
+      </ActionDialogShell.Footer>
     </div>
   );
 };

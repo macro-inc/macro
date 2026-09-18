@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use super::LexicalClient;
 use crate::types::{CognitionResponseData, CognitionV2ResponseData};
 use messages::domain::models::MessageParent;
@@ -175,6 +178,36 @@ struct AgentAnnouncementRequest<'a> {
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 struct AgentAnnouncementResponse {
     markdown: String,
+}
+
+/// Connection chip metadata interpreted by the editor and lexical service.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentConnectionChip {
+    /// Integration or harness slug.
+    pub app_slug: String,
+    /// Display name on the connection chip.
+    pub name: String,
+    /// Settings surface: `connections` or `harness`.
+    pub target: String,
+}
+
+/// Structured explanation and action for a mention that requires account setup.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AgentConnectionPrompt {
+    /// Bot handle rendered as inline code, such as `@cursor`.
+    pub agent_tag: String,
+    /// Plain text explaining the required setup.
+    pub message: String,
+    /// Connection action rendered by Lexical.
+    pub chip: AgentConnectionChip,
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+struct AgentConnectionPromptRequest<'a> {
+    connection_prompt: &'a AgentConnectionPrompt,
 }
 
 /// A channel message included as context for an agent prompt.
@@ -418,6 +451,28 @@ impl LexicalClient {
             self.client
                 .post(&url)
                 .json(&AgentAnnouncementRequest { reply_target, chip })
+                .send()
+                .await?,
+        )
+        .await?;
+        let data: AgentAnnouncementResponse =
+            response.json().await.context("unexpected response")?;
+        Ok(data.markdown)
+    }
+
+    /// Compose an account setup reply through the lexical service's real nodes.
+    #[tracing::instrument(skip(self, prompt), err)]
+    pub async fn compose_agent_connection_prompt(
+        &self,
+        prompt: &AgentConnectionPrompt,
+    ) -> Result<String> {
+        let url = format!("{}/agent-announcement", self.url);
+        let response = check_response(
+            self.client
+                .post(&url)
+                .json(&AgentConnectionPromptRequest {
+                    connection_prompt: prompt,
+                })
                 .send()
                 .await?,
         )

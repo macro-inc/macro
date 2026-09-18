@@ -9,6 +9,9 @@ use agent_egress::domain::service::EgressService;
 use agent_egress::inbound::axum_router::{EgressRouterState, egress_router};
 use agent_harness::domain::model_load::AgentModelsService;
 use agent_harness::inbound::model_load::{AgentModelsRouterState, agent_models_router};
+use agent_harness::inbound::repositories::{
+    AgentRepositoriesRouterState, agent_repositories_router,
+};
 use agent_harness::inbound::runtime_gateway::{RuntimeGatewayState, runtime_gateway_router};
 use agent_session::domain::ports::{
     AgentSessionNotificationRecipient, BotDirectory, SessionOpener,
@@ -62,6 +65,7 @@ pub struct ApiStates<T, R, Opener, Bots, Access, Auth, Models> {
     create: CreateSessionState<Opener, Bots, Auth>,
     gateway: RuntimeGatewayState<Auth>,
     models: AgentModelsRouterState<Models, Auth>,
+    repositories: AgentRepositoriesRouterState<Auth>,
     claude_auth: Router,
 }
 
@@ -73,6 +77,7 @@ impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Acc
         create: CreateSessionState<Opener, Bots, Auth>,
         gateway: RuntimeGatewayState<Auth>,
         models: AgentModelsRouterState<Models, Auth>,
+        repositories: AgentRepositoriesRouterState<Auth>,
     ) -> Self {
         Self {
             read,
@@ -80,6 +85,7 @@ impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Acc
             create,
             gateway,
             models,
+            repositories,
             claude_auth: Router::new(),
         }
     }
@@ -179,6 +185,7 @@ where
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(states.read))
         .merge(agent_models_router(states.models))
+        .merge(agent_repositories_router(states.repositories))
         .merge(states.claude_auth)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }

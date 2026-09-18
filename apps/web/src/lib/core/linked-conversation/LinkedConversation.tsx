@@ -3,7 +3,6 @@ import {
   shouldGroupWithPreviousMessage,
 } from '@channel/Channel/message-grouping-meta';
 import { Message } from '@channel/Message/Message';
-import type { MessageData } from '@channel/Message/types';
 import { Thread } from '@channel/Thread/Thread';
 import { ThreadRail } from '@channel/Thread/ThreadRail';
 import { ThreadReplyRail } from '@channel/Thread/ThreadReplyRail';
@@ -14,7 +13,8 @@ import {
   getUniqueReplyUserIds,
 } from '@channel/Thread/utils/thread-reply-indicator-helpers';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { senderFromStorageId } from '@queries/channel/message-sender';
+import type { MessageData } from '@core/messages/types';
+import { senderFromStorageId } from '@queries/messages/message-sender';
 import { cn } from '@ui';
 import { createMemo, createSignal, For, Show, Suspense } from 'solid-js';
 import type { LinkedConversationSource } from './types';
@@ -29,7 +29,7 @@ type LinkedConversationProps = {
 /**
  * Read-only rendering of a linked conversation — a root message and its reply
  * chain — from a [`LinkedConversationSource`]. Source-agnostic: back it with
- * `createChannelThreadSource` for channel threads, or supply another source.
+ * `createMessageThreadSource` for native message threads, or supply another source.
  * Long reply chains collapse behind a `Thread.CollapsedIndicator` and expand
  * in place.
  */
@@ -171,7 +171,7 @@ function toGroupable(message: MessageData): GroupableMessage {
 
 /**
  * Grouping over `MessageData` rather than `buildThreadReplyListMeta`'s
- * `ApiThreadReply` — linked-conversation messages may come from non-channel
+ * `EntityMessage` — linked-conversation messages may come from non-channel
  * sources where `sender` is absent.
  */
 function buildIsGroupedById(replies: MessageData[]): Record<string, boolean> {
