@@ -371,6 +371,10 @@ function registerPlugin(editor: LexicalEditor, props: CommentPluginProps) {
           const node: null | CommentNode = $getNodeByKey(key);
           if (!node) continue;
           node.setIsDraft(false);
+          // A committed message-backed mark keeps no legacy thread id: clearing
+          // the -1 draft sentinel lets the legacy orphan-mark cleanup recognize
+          // it as message-backed and leave it in the document.
+          node.setThreadId(undefined);
         }
         draftMarkId = null;
         return true;
@@ -494,9 +498,12 @@ function $disposeExternalDraftComments(validPeerIds: string[]) {
 function $removeOrphanedCommentMarks(validMarkIds: ReadonlySet<string>) {
   $traverseNodes($getRoot(), (node) => {
     if (!$isCommentNode(node) || node.getIsDraft()) return;
-    // Marks without a stored thread id belong to message-backed discussions,
-    // which this legacy reconciliation knows nothing about.
-    if (node.getThreadId() == null) return;
+    // Marks without a stored legacy thread id belong to message-backed
+    // discussions, which this legacy reconciliation knows nothing about.
+    // Newer commits clear the id; documents saved before that keep the -1 draft
+    // sentinel, so treat it as message-backed too rather than stripping them.
+    const threadId = node.getThreadId();
+    if (threadId == null || threadId === -1) return;
 
     const invalidIds = node.getIDs().filter((id) => !validMarkIds.has(id));
     if (invalidIds.length === 0) return;

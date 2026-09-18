@@ -33,7 +33,6 @@ import {
   type Accessor,
   createEffect,
   createMemo,
-  createSignal,
   onCleanup,
   untrack,
   useContext,
@@ -478,36 +477,37 @@ export const MessageCommentsProvider: VoidComponent<{
     }
   });
 
-  const [targetRequest, setTargetRequest] = createSignal(0);
-  let pendingTargetCommentId: string | undefined;
-
+  // Navigate to the comment named by the URL `comment_id`, once, after comments
+  // load. Latched on the raw `comment_id` (not `target.messageId()`, which also
+  // tracks the resolve query) so a settling GET cannot re-arm and steal focus
+  // from a later user action such as opening a thread or starting a draft.
+  let handledComment: string | undefined;
   createEffect(() => {
-    pendingTargetCommentId = target.messageId() ?? undefined;
-    setTargetRequest((request) => request + 1);
-  });
+    const rawComment = props.activeComment?.() ?? undefined;
+    if (!rawComment) {
+      handledComment = undefined;
+      return;
+    }
+    if (rawComment === handledComment) return;
 
-  // Navigate to comment from URL param once comments are loaded.
-  // Keep this one-shot so a persistent `comment_id` does not steal focus from
-  // later user actions, like creating a new comment.
-  createEffect(() => {
-    targetRequest();
-    const commentId = pendingTargetCommentId;
+    // The following reads resolve asynchronously; the effect re-runs and
+    // completes the navigation once they are ready, then latches.
+    const commentId = target.messageId() ?? undefined;
     if (!commentId) return;
-
     if (!commentState.commentMarksInitialized) return;
 
     const commentThreads = commentThreadsData() ?? [];
     const targetThread = commentThreads.find(
       (thread) => thread.id === target.rootId()
     );
-    // Anchor metadata not loaded yet (e.g. a freshly posted root): keep the
-    // one-shot target pending until it resolves rather than dropping the link.
+    // Anchor metadata not loaded yet (e.g. a freshly posted root): wait for it
+    // rather than dropping the link.
     if (targetThread && targetThread.state.anchor === undefined) return;
     if (targetThread && targetThread.state.anchor === null) {
       // Resolved as unanchored (a Discussion root): nothing to open in the margin.
       activeCommentThreadSignal.set(null);
       setHighlightedId(null);
-      pendingTargetCommentId = undefined;
+      handledComment = rawComment;
       return;
     }
 
@@ -521,7 +521,7 @@ export const MessageCommentsProvider: VoidComponent<{
       firstEl?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
     activeCommentThreadSignal.set(comment.threadId);
-    pendingTargetCommentId = undefined;
+    handledComment = rawComment;
   });
 
   autoRegister(
