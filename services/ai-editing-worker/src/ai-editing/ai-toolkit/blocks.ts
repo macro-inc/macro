@@ -6,6 +6,7 @@ import {
 } from '@lexical/rich-text';
 import { $isCustomCodeNode } from '@macro-inc/lexical-core/nodes/CustomCodeNode';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import { $listTextTarget } from '@macro-inc/lexical-core/utils/editor-tree';
 import {
   $createParagraphNode,
   $createTextNode,
@@ -49,6 +50,14 @@ export function $setBlockType(
 
 /** Rewrite a block's inline content to plain text, keeping its type and id. Always strips any inline formatting (bold, italic, underline, etc.) on the kept node. */
 export function $setText(block: ElementNode, text: string): void {
+  if (block.getType() === 'list') {
+    const item = $listTextTarget(block);
+    if (!item) {
+      throw new Error('list has no listitem to set text on');
+    }
+    $setText(item, text);
+    return;
+  }
   // A code block's children are code-highlight nodes (re-tokenized from the
   // block's text by Prism), so we use `setCode`, which splices the whole
   // content in one shot, keeping the language.

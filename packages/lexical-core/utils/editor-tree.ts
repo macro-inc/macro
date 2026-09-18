@@ -59,6 +59,24 @@ const CELL_TEXT_BLOCK_TYPES: ReadonlySet<string> = new Set([
 ]);
 
 /**
+ * A `list` is a legal content block but not a legal `$setText` target —
+ * clearing it and appending text empties the list (Lexical will not keep
+ * `list → text`) and the empty list is then dropped. Lock onto a listitem.
+ */
+export function $listTextTarget(
+  list: ElementNode,
+  edge: 'first' | 'last' = 'first'
+): ElementNode | null {
+  const items = list
+    .getChildren()
+    .filter(
+      (node): node is ElementNode =>
+        node.getType() === 'listitem' && $isElementNode(node)
+    );
+  return (edge === 'last' ? items.at(-1) : items[0]) ?? null;
+}
+
+/**
  * The node `$setText` / `$appendText` may target when the caller handed a
  * `<td>` id. A `list` is a legal cell child but not a legal `$setText`
  * target (that would leave `list → text`). Lock onto a paragraph/heading/
@@ -69,10 +87,8 @@ export function $cellTextTarget(cell: TableCellNode): ElementNode | null {
     if (!$isElementNode(child)) continue;
     if (CELL_TEXT_BLOCK_TYPES.has(child.getType())) return child;
     if (child.getType() === 'list') {
-      const item = child
-        .getChildren()
-        .find((node) => node.getType() === 'listitem');
-      if (item && $isElementNode(item)) return item;
+      const item = $listTextTarget(child);
+      if (item) return item;
     }
   }
   return null;
