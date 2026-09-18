@@ -3,6 +3,10 @@ use github::domain::models::{
     EnrichedGithubPullRequest, GithubPullRequestCheckRun, GithubPullRequestComment,
     GithubPullRequestRef, GithubPullRequestStatus,
 };
+use gtm_invite::inbound::axum_router::dto::{
+    CreateGtmInviteLinkRequest, GtmInviteLink, GtmInviteLinkList, GtmInviteLinkStatus,
+    GtmInviteOffer, GtmInviteOfferStatus, PublicGtmInviteLink, RedeemGtmInviteLinkRequest,
+};
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
 use teams::domain::model::{
     PatchTeamCrmSettingsRequest, PatchTeamCrmSettingsResponse, PatchTeamRequest, PatchTeamUserRole,
@@ -164,6 +168,14 @@ use model::user::{
                 referral::inbound::axum_router::get_referral_code_handler::<crate::api::context::ReferralServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
                 referral::inbound::axum_router::post_referral_invite_handler::<crate::api::context::ReferralServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
 
+                /// /gtm-invite
+                gtm_invite::inbound::axum_router::create_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+                gtm_invite::inbound::axum_router::list_links::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+                gtm_invite::inbound::axum_router::revoke_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+                gtm_invite::inbound::axum_router::resolve_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+                gtm_invite::inbound::axum_router::redeem_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+                gtm_invite::inbound::axum_router::get_offer::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+
                 /// /mobile-welcome-email
                 mobile_welcome_email::handler,
 
@@ -203,6 +215,16 @@ use model::user::{
                         InitOutlookLinkResponse,
                         CursorApiKeyStatus,
                         PutCursorApiKeyRequest,
+
+                        // GTM invite links
+                        GtmInviteLink,
+                        GtmInviteLinkStatus,
+                        GtmInviteLinkList,
+                        CreateGtmInviteLinkRequest,
+                        PublicGtmInviteLink,
+                        RedeemGtmInviteLinkRequest,
+                        GtmInviteOffer,
+                        GtmInviteOfferStatus,
 
                         // GitHub pull requests
                         EnrichGithubPullRequestsProxyRequest,

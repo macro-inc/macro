@@ -68,6 +68,7 @@ import {
 import { threadRepliesQueryOptions } from '@queries/channel/thread-replies';
 import { usePostTypingUpdateMutation } from '@queries/channel/typing';
 import { queryClient } from '@queries/client';
+import { queryReadyGate } from '@queries/gate';
 import { ChannelTypeEnum } from '@service-storage/client';
 import { useBeforeLeave } from '@solidjs/router';
 import {
@@ -237,8 +238,11 @@ export function Channel(props: ChannelProps) {
     )
   );
 
-  const messageIndex = createMessageIndex(
-    () => messagesQuery.data as ChannelMessagesData | undefined
+  // The index reads immediately, before EntityLoadGate's boundary exists.
+  const messageIndex = createMessageIndex(() =>
+    queryReadyGate(messagesQuery)
+      ? (messagesQuery.data as ChannelMessagesData)
+      : undefined
   );
 
   const messages = createMemo(() => [...messageIndex.items]);

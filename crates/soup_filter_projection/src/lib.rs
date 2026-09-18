@@ -1,11 +1,8 @@
 //! Direct-field Soup projection helpers and typed server-fact supplements.
 #![deny(missing_docs)]
 
-use std::str::FromStr;
-
 pub use document_sub_type::DocumentSubType;
 use item_filter_index::vocabulary;
-use model_file_type::FileType;
 #[cfg(feature = "models")]
 use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
 use predicate_index::{
@@ -36,15 +33,12 @@ pub use wire::{
 /// Maximum authoritative task Status options accepted in one complete projection.
 pub const MAX_TASK_STATUS_OPTION_IDS: usize = 64;
 
-#[cfg(test)]
+#[cfg(all(test, feature = "models"))]
 mod test;
 
 /// Failure to project an authoritative Soup item.
 #[derive(Debug, Error, PartialEq, Eq)]
 pub enum ProjectionError {
-    /// The authoritative document contained an unknown file-type value.
-    #[error("invalid authoritative Soup document file type `{0}`")]
-    InvalidFileType(String),
     /// Document server facts do not match the accompanying item variant.
     #[error("document server facts do not match Soup item variant")]
     SourceMismatch,
@@ -154,7 +148,8 @@ pub struct DirectProjectionInput {
     pub owner: String,
     /// Project or parent UUID, when present.
     pub project_id: Option<uuid::Uuid>,
-    /// Document file type, when present. Ignored for other kinds.
+    /// Raw document file type, when present. Ignored for other kinds.
+    /// Preserve the stored spelling: Soup's SQL compares this text literally.
     pub file_type: Option<String>,
     /// Creation timestamp.
     pub created_at: chrono::DateTime<chrono::Utc>,
@@ -173,7 +168,8 @@ pub struct DirectProjectionPatchInput {
     pub owner: Option<String>,
     /// Replacement project/parent value. Outer `None` means unchanged.
     pub project_id: Option<Option<uuid::Uuid>>,
-    /// Replacement document file type. Outer `None` means unchanged.
+    /// Replacement raw document file type. Outer `None` means unchanged;
+    /// `Some(None)` removes the fact for a SQL NULL.
     pub file_type: Option<Option<String>>,
     /// Replacement creation timestamp when supplied.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
@@ -192,10 +188,7 @@ pub fn project_direct_fields(
     if input.kind == SoupFlatEntityKind::Document
         && let Some(file_type) = input.file_type
     {
-        let canonical = FileType::from_str(&file_type)
-            .map_err(|_| ProjectionError::InvalidFileType(file_type))?
-            .to_string();
-        exact_facts.push(utf8_fact(vocabulary::file_type(), canonical)?);
+        exact_facts.push(utf8_fact(vocabulary::file_type(), file_type)?);
     }
     projection(
         input.record_key,
@@ -308,12 +301,7 @@ pub fn patch_direct_fields(
         && let Some(file_type) = input.file_type
     {
         let values = file_type
-            .map(|file_type| -> Result<ExactValue, ProjectionError> {
-                let canonical = FileType::from_str(&file_type)
-                    .map_err(|_| ProjectionError::InvalidFileType(file_type))?
-                    .to_string();
-                Ok(ExactValue::utf8(canonical)?)
-            })
+            .map(ExactValue::utf8)
             .transpose()?
             .into_iter()
             .collect();

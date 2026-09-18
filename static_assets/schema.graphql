@@ -124,6 +124,10 @@ type CompleteMutationRoot {
 	"""
 	markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!
 	"""
+	Mark an accessible email thread unread and return its authoritative cache record.
+	"""
+	markEmailThreadUnread(input: MarkEmailThreadUnreadInput!): GraphqlSoupEmailThread!
+	"""
 	Add or remove one label from an accessible email thread and return its authoritative cache record.
 	"""
 	updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!
@@ -1401,13 +1405,15 @@ type GraphqlCommentedOnDocumentMetadata {
 	"""
 	subType: GraphqlNotificationDocumentSubType
 	"""
-	Comment identifier.
+	Comment identifier: a legacy numeric comment id, or the message id in
+	the shared message store.
 	"""
-	commentId: Int!
+	commentId: String!
 	"""
-	Comment thread identifier.
+	Comment thread identifier: a legacy numeric thread id, or the root
+	message id in the shared message store.
 	"""
-	threadId: Int!
+	threadId: String!
 	"""
 	Comment text.
 	"""
@@ -1416,6 +1422,10 @@ type GraphqlCommentedOnDocumentMetadata {
 	Sender profile-picture URL.
 	"""
 	senderProfilePictureUrl: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
 }
 
 """
@@ -1674,6 +1684,10 @@ enum GraphqlDocumentSubType {
 	The skill option.
 	"""
 	SKILL
+	"""
+	The initiative description option.
+	"""
+	INITIATIVE_DESCRIPTION
 }
 
 """
@@ -2964,6 +2978,16 @@ type GraphqlInboxReauthRequiredMetadata {
 }
 
 """
+represents the initiative description subtype fields
+"""
+type GraphqlInitiativeDescriptionSubType {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
 Metadata for a team invitation.
 """
 type GraphqlInviteToTeamMetadata {
@@ -3077,13 +3101,15 @@ type GraphqlMentionedInDocumentCommentMetadata {
 	"""
 	mentionId: String!
 	"""
-	Comment identifier.
+	Comment identifier: a legacy numeric comment id, or the message id in
+	the shared message store.
 	"""
-	commentId: Int!
+	commentId: String!
 	"""
-	Comment thread identifier.
+	Comment thread identifier: a legacy numeric thread id, or the root
+	message id in the shared message store.
 	"""
-	threadId: Int!
+	threadId: String!
 	"""
 	Comment text.
 	"""
@@ -3092,6 +3118,10 @@ type GraphqlMentionedInDocumentCommentMetadata {
 	Sender profile-picture URL.
 	"""
 	senderProfilePictureUrl: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
 }
 
 """
@@ -3247,6 +3277,10 @@ enum GraphqlNotificationDocumentSubType {
 	Skill document.
 	"""
 	SKILL
+	"""
+	The description document of an initiative.
+	"""
+	INITIATIVE_DESCRIPTION
 }
 
 """
@@ -3647,13 +3681,15 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 	"""
 	subType: GraphqlNotificationDocumentSubType
 	"""
-	Comment identifier.
+	Comment identifier: a legacy numeric comment id, or the message id in
+	the shared message store.
 	"""
-	commentId: Int!
+	commentId: String!
 	"""
-	Comment thread identifier.
+	Comment thread identifier: a legacy numeric thread id, or the root
+	message id in the shared message store.
 	"""
-	threadId: Int!
+	threadId: String!
 	"""
 	Reply text.
 	"""
@@ -3662,6 +3698,10 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 	Sender profile-picture URL.
 	"""
 	senderProfilePictureUrl: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
 }
 
 """
@@ -4698,7 +4738,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 """
 GraphQL representation of the soup document sub type.
 """
-union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType | GraphqlSkillSubType
+union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType | GraphqlSkillSubType | GraphqlInitiativeDescriptionSubType
 
 """
 GraphQL representation of the soup email attachment.
@@ -5830,6 +5870,16 @@ Input for marking an email thread as seen.
 input MarkEmailThreadSeenInput {
 	"""
 	Email thread to mark as seen.
+	"""
+	threadId: ID!
+}
+
+"""
+Input for marking an email thread unread.
+"""
+input MarkEmailThreadUnreadInput {
+	"""
+	Email thread to mark unread; its inbox determines the UNREAD label.
 	"""
 	threadId: ID!
 }

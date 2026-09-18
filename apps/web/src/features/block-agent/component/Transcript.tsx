@@ -18,11 +18,16 @@ import {
 } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import type { AgentMessageTarget } from '../core/search-location';
+import { isLiveTurn, liveTurnMessage } from '../state/live-turn';
 import { Message } from './AgentMessage';
 import { ReplyToSelection } from './ReplyToSelection';
 
 export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
-  const { messages, quoteSelection, sessionId } = useAgentSession();
+  const { messages, quoteSelection, sessionId, working } = useAgentSession();
+  // At most one turn runs, and the block's `working` is the one word on
+  // whether it does — so which message shimmers is decided here, once, not
+  // by each message from its own `stop` (see `state/live-turn`).
+  const liveTurn = () => liveTurnMessage(messages(), working());
   const initialTarget = props.searchTarget;
   const initialSessionId = sessionId();
   const splitPanel = useSplitPanel();
@@ -114,7 +119,10 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
                 classList={{ 'bg-accent/10': highlightedId() === id }}
                 data-search-target={highlightedId() === id ? 'true' : undefined}
               >
-                <Message message={message()} />
+                <Message
+                  message={message()}
+                  inFlight={isLiveTurn(message(), liveTurn())}
+                />
               </div>
             )}
           </Show>

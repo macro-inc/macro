@@ -1,8 +1,8 @@
-import { createBlockSignal } from '@core/block';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { pressedKeys } from '@core/hotkey/state';
 import { batch, untrack } from 'solid-js';
 import { type Anchor, OPERATION_LOGGING, Tools } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import {
   type CanvasEdge,
   type CanvasId,
@@ -49,9 +49,6 @@ export type RescaleOperation = {
   initialFlip: Record<CanvasId, Vector2>;
   proportionalDefault: boolean;
 };
-
-export const currentRescaleOperationSignal =
-  createBlockSignal<RescaleOperation>();
 
 type CoordTuple = [number, number];
 
@@ -200,7 +197,7 @@ export const useRescale = sharedInstance((): Operator => {
   const { setSelectedTool } = useToolManager();
   const history = useCanvasHistory();
   const [currentRescaleOperation, setCurrentRescaleOperation] =
-    currentRescaleOperationSignal;
+    useCanvasDocument().state.signals.currentRescaleOperation;
   const saveCanvasData = useSaveCanvasData();
 
   function applyMousePos(mousePos: Vector2, normalize?: boolean) {

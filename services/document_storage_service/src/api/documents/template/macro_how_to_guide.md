@@ -30,7 +30,7 @@ Sometimes mentioning has special powers. For example, if you mention a user in a
 
 Other tools available wherever you are typing: 
 
-1. `#` to add **tags,** e.g. docs
+1. `#` to add **tags,** e.g. <m-tag>{"optionId":"DOCS_TAG_OPTION_ID","propertyDefinitionId":"DOCS_TAG_DEFINITION_ID","scope":"user","name":"DOCS_TAG_LABEL","color":"DOCS_TAG_COLOR"}</m-tag>
 2. `/` for text formatting and other tools (try typing `/task`)
 3. `:` for emojis 🦋
 

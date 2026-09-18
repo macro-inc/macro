@@ -281,6 +281,11 @@ export const listTypedNotificationsResponse = zod
                                     zod.object({
                                       type: zod.enum(['skill']),
                                     }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
                                   ])
                                   .describe(
                                     'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -297,7 +302,22 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -309,6 +329,12 @@ export const listTypedNotificationsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -324,6 +350,9 @@ export const listTypedNotificationsResponse = zod
                                   zod.object({
                                     type: zod.enum(['skill']),
                                   }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
+                                  }),
                                 ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -333,7 +362,22 @@ export const listTypedNotificationsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                         })
                         .describe(
                           'Notification sent when a user is mentioned in a document comment.'
@@ -345,7 +389,22 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -356,6 +415,12 @@ export const listTypedNotificationsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -371,6 +436,9 @@ export const listTypedNotificationsResponse = zod
                                   zod.object({
                                     type: zod.enum(['skill']),
                                   }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
+                                  }),
                                 ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -380,7 +448,22 @@ export const listTypedNotificationsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                         })
                         .describe(
                           'Notification sent when someone replies to a document comment thread.'
@@ -394,7 +477,22 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -405,6 +503,12 @@ export const listTypedNotificationsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -420,6 +524,9 @@ export const listTypedNotificationsResponse = zod
                                   zod.object({
                                     type: zod.enum(['skill']),
                                   }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
+                                  }),
                                 ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -429,7 +536,22 @@ export const listTypedNotificationsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                         })
                         .describe(
                           'Notification sent when someone comments on a document the user owns.'
@@ -672,6 +794,9 @@ export const listTypedNotificationsResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['skill']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
                                   }),
                                 ])
                                 .describe(
@@ -1429,8 +1554,25 @@ export const listTypedNotificationsResponse = zod
                             .uuid()
                             .nullish()
                             .describe(
-                              'The channel the session was opened from, when it was.'
+                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
                             ),
+                          parent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  id: zod
+                                    .string()
+                                    .describe('The channel or document id.'),
+                                  type: zod
+                                    .string()
+                                    .describe('`channel` or `document`.'),
+                                })
+                                .describe(
+                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                                ),
+                            ])
+                            .optional(),
                           sessionId: zod
                             .uuid()
                             .describe('The session; what a click opens.'),
@@ -1447,7 +1589,7 @@ export const listTypedNotificationsResponse = zod
                             ),
                         })
                         .describe(
-                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                         )
                         .and(
                           zod.object({
@@ -1506,8 +1648,25 @@ export const listTypedNotificationsResponse = zod
                             .uuid()
                             .nullish()
                             .describe(
-                              'The channel the session was opened from, when it was.'
+                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
                             ),
+                          parent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  id: zod
+                                    .string()
+                                    .describe('The channel or document id.'),
+                                  type: zod
+                                    .string()
+                                    .describe('`channel` or `document`.'),
+                                })
+                                .describe(
+                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                                ),
+                            ])
+                            .optional(),
                           sessionId: zod
                             .uuid()
                             .describe('The session; what a click opens.'),
@@ -1524,7 +1683,7 @@ export const listTypedNotificationsResponse = zod
                             ),
                         })
                         .describe(
-                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                         )
                         .and(
                           zod.object({
@@ -1573,8 +1732,25 @@ export const listTypedNotificationsResponse = zod
                             .uuid()
                             .nullish()
                             .describe(
-                              'The channel the session was opened from, when it was.'
+                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
                             ),
+                          parent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  id: zod
+                                    .string()
+                                    .describe('The channel or document id.'),
+                                  type: zod
+                                    .string()
+                                    .describe('`channel` or `document`.'),
+                                })
+                                .describe(
+                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                                ),
+                            ])
+                            .optional(),
                           sessionId: zod
                             .uuid()
                             .describe('The session; what a click opens.'),
@@ -1591,7 +1767,7 @@ export const listTypedNotificationsResponse = zod
                             ),
                         })
                         .describe(
-                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                         )
                         .and(
                           zod.object({
@@ -1860,6 +2036,11 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                     zod.object({
                                       type: zod.enum(['skill']),
                                     }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
                                   ])
                                   .describe(
                                     'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -1876,7 +2057,22 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -1888,6 +2084,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -1903,6 +2105,9 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                   zod.object({
                                     type: zod.enum(['skill']),
                                   }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
+                                  }),
                                 ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -1912,7 +2117,22 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                         })
                         .describe(
                           'Notification sent when a user is mentioned in a document comment.'
@@ -1924,7 +2144,22 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -1935,6 +2170,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -1950,6 +2191,9 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                   zod.object({
                                     type: zod.enum(['skill']),
                                   }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
+                                  }),
                                 ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -1959,7 +2203,22 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                         })
                         .describe(
                           'Notification sent when someone replies to a document comment thread.'
@@ -1973,7 +2232,22 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -1984,6 +2258,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -1999,6 +2279,9 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                   zod.object({
                                     type: zod.enum(['skill']),
                                   }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
+                                  }),
                                 ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -2008,7 +2291,22 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                         })
                         .describe(
                           'Notification sent when someone comments on a document the user owns.'
@@ -2251,6 +2549,9 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['skill']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
                                   }),
                                 ])
                                 .describe(
@@ -3008,8 +3309,25 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .uuid()
                             .nullish()
                             .describe(
-                              'The channel the session was opened from, when it was.'
+                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
                             ),
+                          parent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  id: zod
+                                    .string()
+                                    .describe('The channel or document id.'),
+                                  type: zod
+                                    .string()
+                                    .describe('`channel` or `document`.'),
+                                })
+                                .describe(
+                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                                ),
+                            ])
+                            .optional(),
                           sessionId: zod
                             .uuid()
                             .describe('The session; what a click opens.'),
@@ -3026,7 +3344,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             ),
                         })
                         .describe(
-                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                         )
                         .and(
                           zod.object({
@@ -3085,8 +3403,25 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .uuid()
                             .nullish()
                             .describe(
-                              'The channel the session was opened from, when it was.'
+                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
                             ),
+                          parent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  id: zod
+                                    .string()
+                                    .describe('The channel or document id.'),
+                                  type: zod
+                                    .string()
+                                    .describe('`channel` or `document`.'),
+                                })
+                                .describe(
+                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                                ),
+                            ])
+                            .optional(),
                           sessionId: zod
                             .uuid()
                             .describe('The session; what a click opens.'),
@@ -3103,7 +3438,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             ),
                         })
                         .describe(
-                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                         )
                         .and(
                           zod.object({
@@ -3152,8 +3487,25 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             .uuid()
                             .nullish()
                             .describe(
-                              'The channel the session was opened from, when it was.'
+                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
                             ),
+                          parent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  id: zod
+                                    .string()
+                                    .describe('The channel or document id.'),
+                                  type: zod
+                                    .string()
+                                    .describe('`channel` or `document`.'),
+                                })
+                                .describe(
+                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                                ),
+                            ])
+                            .optional(),
                           sessionId: zod
                             .uuid()
                             .describe('The session; what a click opens.'),
@@ -3170,7 +3522,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                             ),
                         })
                         .describe(
-                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                         )
                         .and(
                           zod.object({
@@ -3433,6 +3785,11 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                     zod.object({
                                       type: zod.enum(['skill']),
                                     }),
+                                    zod.object({
+                                      type: zod.enum([
+                                        'initiative_description',
+                                      ]),
+                                    }),
                                   ])
                                   .describe(
                                     'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -3449,7 +3806,22 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -3461,6 +3833,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -3476,6 +3854,9 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                   zod.object({
                                     type: zod.enum(['skill']),
                                   }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
+                                  }),
                                 ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -3485,7 +3866,22 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                         })
                         .describe(
                           'Notification sent when a user is mentioned in a document comment.'
@@ -3497,7 +3893,22 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -3508,6 +3919,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -3523,6 +3940,9 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                   zod.object({
                                     type: zod.enum(['skill']),
                                   }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
+                                  }),
                                 ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -3532,7 +3952,22 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                         })
                         .describe(
                           'Notification sent when someone replies to a document comment thread.'
@@ -3546,7 +3981,22 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
-                          commentId: zod.number().describe('the comment id'),
+                          commentId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                           documentName: zod
                             .string()
                             .describe('The name of the document.'),
@@ -3557,6 +4007,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           owner: zod
                             .string()
                             .describe('The owner of the document.'),
+                          senderDisplayName: zod
+                            .string()
+                            .nullish()
+                            .describe(
+                              'Public bot name when the author is an agent rather than a Macro user.'
+                            ),
                           senderProfilePictureUrl: zod.string().nullish(),
                           subType: zod
                             .union([
@@ -3572,6 +4028,9 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                   zod.object({
                                     type: zod.enum(['skill']),
                                   }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
+                                  }),
                                 ])
                                 .describe(
                                   'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -3581,7 +4040,22 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           text: zod
                             .string()
                             .describe('the text of the comment'),
-                          threadId: zod.number().describe('the thread id'),
+                          threadId: zod
+                            .union([
+                              zod
+                                .number()
+                                .describe(
+                                  'Legacy `Comment.id` or `Thread.id`.'
+                                ),
+                              zod
+                                .uuid()
+                                .describe(
+                                  'Message or root id in the shared message store.'
+                                ),
+                            ])
+                            .describe(
+                              'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                            ),
                         })
                         .describe(
                           'Notification sent when someone comments on a document the user owns.'
@@ -3824,6 +4298,9 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                                   }),
                                   zod.object({
                                     type: zod.enum(['skill']),
+                                  }),
+                                  zod.object({
+                                    type: zod.enum(['initiative_description']),
                                   }),
                                 ])
                                 .describe(
@@ -4581,8 +5058,25 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .uuid()
                             .nullish()
                             .describe(
-                              'The channel the session was opened from, when it was.'
+                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
                             ),
+                          parent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  id: zod
+                                    .string()
+                                    .describe('The channel or document id.'),
+                                  type: zod
+                                    .string()
+                                    .describe('`channel` or `document`.'),
+                                })
+                                .describe(
+                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                                ),
+                            ])
+                            .optional(),
                           sessionId: zod
                             .uuid()
                             .describe('The session; what a click opens.'),
@@ -4599,7 +5093,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             ),
                         })
                         .describe(
-                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                         )
                         .and(
                           zod.object({
@@ -4658,8 +5152,25 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .uuid()
                             .nullish()
                             .describe(
-                              'The channel the session was opened from, when it was.'
+                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
                             ),
+                          parent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  id: zod
+                                    .string()
+                                    .describe('The channel or document id.'),
+                                  type: zod
+                                    .string()
+                                    .describe('`channel` or `document`.'),
+                                })
+                                .describe(
+                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                                ),
+                            ])
+                            .optional(),
                           sessionId: zod
                             .uuid()
                             .describe('The session; what a click opens.'),
@@ -4676,7 +5187,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             ),
                         })
                         .describe(
-                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                         )
                         .and(
                           zod.object({
@@ -4725,8 +5236,25 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             .uuid()
                             .nullish()
                             .describe(
-                              'The channel the session was opened from, when it was.'
+                              'The channel the session was opened from, when it was opened from a\nchannel thread.'
                             ),
+                          parent: zod
+                            .union([
+                              zod.null(),
+                              zod
+                                .object({
+                                  id: zod
+                                    .string()
+                                    .describe('The channel or document id.'),
+                                  type: zod
+                                    .string()
+                                    .describe('`channel` or `document`.'),
+                                })
+                                .describe(
+                                  "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                                ),
+                            ])
+                            .optional(),
                           sessionId: zod
                             .uuid()
                             .describe('The session; what a click opens.'),
@@ -4743,7 +5271,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                             ),
                         })
                         .describe(
-                          'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                          'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                         )
                         .and(
                           zod.object({
@@ -5005,6 +5533,9 @@ export const getTypedNotificationByIdResponse = zod
                             zod.object({
                               type: zod.enum(['skill']),
                             }),
+                            zod.object({
+                              type: zod.enum(['initiative_description']),
+                            }),
                           ])
                           .describe(
                             'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -5021,7 +5552,20 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
-                  commentId: zod.number().describe('the comment id'),
+                  commentId: zod
+                    .union([
+                      zod
+                        .number()
+                        .describe('Legacy `Comment.id` or `Thread.id`.'),
+                      zod
+                        .uuid()
+                        .describe(
+                          'Message or root id in the shared message store.'
+                        ),
+                    ])
+                    .describe(
+                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                    ),
                   documentName: zod
                     .string()
                     .describe('The name of the document.'),
@@ -5031,6 +5575,12 @@ export const getTypedNotificationByIdResponse = zod
                     .describe('The file type of the document.'),
                   mentionId: zod.string().describe('The mention ID.'),
                   owner: zod.string().describe('The owner of the document.'),
+                  senderDisplayName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Public bot name when the author is an agent rather than a Macro user.'
+                    ),
                   senderProfilePictureUrl: zod.string().nullish(),
                   subType: zod
                     .union([
@@ -5046,6 +5596,9 @@ export const getTypedNotificationByIdResponse = zod
                           zod.object({
                             type: zod.enum(['skill']),
                           }),
+                          zod.object({
+                            type: zod.enum(['initiative_description']),
+                          }),
                         ])
                         .describe(
                           'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -5053,7 +5606,20 @@ export const getTypedNotificationByIdResponse = zod
                     ])
                     .optional(),
                   text: zod.string().describe('the text of the comment'),
-                  threadId: zod.number().describe('the thread id'),
+                  threadId: zod
+                    .union([
+                      zod
+                        .number()
+                        .describe('Legacy `Comment.id` or `Thread.id`.'),
+                      zod
+                        .uuid()
+                        .describe(
+                          'Message or root id in the shared message store.'
+                        ),
+                    ])
+                    .describe(
+                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                    ),
                 })
                 .describe(
                   'Notification sent when a user is mentioned in a document comment.'
@@ -5065,7 +5631,20 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
-                  commentId: zod.number().describe('the comment id'),
+                  commentId: zod
+                    .union([
+                      zod
+                        .number()
+                        .describe('Legacy `Comment.id` or `Thread.id`.'),
+                      zod
+                        .uuid()
+                        .describe(
+                          'Message or root id in the shared message store.'
+                        ),
+                    ])
+                    .describe(
+                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                    ),
                   documentName: zod
                     .string()
                     .describe('The name of the document.'),
@@ -5074,6 +5653,12 @@ export const getTypedNotificationByIdResponse = zod
                     .nullish()
                     .describe('The file type of the document.'),
                   owner: zod.string().describe('The owner of the document.'),
+                  senderDisplayName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Public bot name when the author is an agent rather than a Macro user.'
+                    ),
                   senderProfilePictureUrl: zod.string().nullish(),
                   subType: zod
                     .union([
@@ -5089,6 +5674,9 @@ export const getTypedNotificationByIdResponse = zod
                           zod.object({
                             type: zod.enum(['skill']),
                           }),
+                          zod.object({
+                            type: zod.enum(['initiative_description']),
+                          }),
                         ])
                         .describe(
                           'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -5096,7 +5684,20 @@ export const getTypedNotificationByIdResponse = zod
                     ])
                     .optional(),
                   text: zod.string().describe('the text of the comment'),
-                  threadId: zod.number().describe('the thread id'),
+                  threadId: zod
+                    .union([
+                      zod
+                        .number()
+                        .describe('Legacy `Comment.id` or `Thread.id`.'),
+                      zod
+                        .uuid()
+                        .describe(
+                          'Message or root id in the shared message store.'
+                        ),
+                    ])
+                    .describe(
+                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                    ),
                 })
                 .describe(
                   'Notification sent when someone replies to a document comment thread.'
@@ -5110,7 +5711,20 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
-                  commentId: zod.number().describe('the comment id'),
+                  commentId: zod
+                    .union([
+                      zod
+                        .number()
+                        .describe('Legacy `Comment.id` or `Thread.id`.'),
+                      zod
+                        .uuid()
+                        .describe(
+                          'Message or root id in the shared message store.'
+                        ),
+                    ])
+                    .describe(
+                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                    ),
                   documentName: zod
                     .string()
                     .describe('The name of the document.'),
@@ -5119,6 +5733,12 @@ export const getTypedNotificationByIdResponse = zod
                     .nullish()
                     .describe('The file type of the document.'),
                   owner: zod.string().describe('The owner of the document.'),
+                  senderDisplayName: zod
+                    .string()
+                    .nullish()
+                    .describe(
+                      'Public bot name when the author is an agent rather than a Macro user.'
+                    ),
                   senderProfilePictureUrl: zod.string().nullish(),
                   subType: zod
                     .union([
@@ -5134,6 +5754,9 @@ export const getTypedNotificationByIdResponse = zod
                           zod.object({
                             type: zod.enum(['skill']),
                           }),
+                          zod.object({
+                            type: zod.enum(['initiative_description']),
+                          }),
                         ])
                         .describe(
                           'The sub type of a document in a notification.\nSerializes as `{ \"type\": \"task\" }` matching the storage service pattern.'
@@ -5141,7 +5764,20 @@ export const getTypedNotificationByIdResponse = zod
                     ])
                     .optional(),
                   text: zod.string().describe('the text of the comment'),
-                  threadId: zod.number().describe('the thread id'),
+                  threadId: zod
+                    .union([
+                      zod
+                        .number()
+                        .describe('Legacy `Comment.id` or `Thread.id`.'),
+                      zod
+                        .uuid()
+                        .describe(
+                          'Message or root id in the shared message store.'
+                        ),
+                    ])
+                    .describe(
+                      'Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs.'
+                    ),
                 })
                 .describe(
                   'Notification sent when someone comments on a document the user owns.'
@@ -5370,6 +6006,9 @@ export const getTypedNotificationByIdResponse = zod
                           }),
                           zod.object({
                             type: zod.enum(['skill']),
+                          }),
+                          zod.object({
+                            type: zod.enum(['initiative_description']),
                           }),
                         ])
                         .describe(
@@ -6064,8 +6703,25 @@ export const getTypedNotificationByIdResponse = zod
                     .uuid()
                     .nullish()
                     .describe(
-                      'The channel the session was opened from, when it was.'
+                      'The channel the session was opened from, when it was opened from a\nchannel thread.'
                     ),
+                  parent: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          id: zod
+                            .string()
+                            .describe('The channel or document id.'),
+                          type: zod
+                            .string()
+                            .describe('`channel` or `document`.'),
+                        })
+                        .describe(
+                          "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                        ),
+                    ])
+                    .optional(),
                   sessionId: zod
                     .uuid()
                     .describe('The session; what a click opens.'),
@@ -6080,7 +6736,7 @@ export const getTypedNotificationByIdResponse = zod
                     ),
                 })
                 .describe(
-                  'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                  'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                 )
                 .and(
                   zod.object({
@@ -6139,8 +6795,25 @@ export const getTypedNotificationByIdResponse = zod
                     .uuid()
                     .nullish()
                     .describe(
-                      'The channel the session was opened from, when it was.'
+                      'The channel the session was opened from, when it was opened from a\nchannel thread.'
                     ),
+                  parent: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          id: zod
+                            .string()
+                            .describe('The channel or document id.'),
+                          type: zod
+                            .string()
+                            .describe('`channel` or `document`.'),
+                        })
+                        .describe(
+                          "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                        ),
+                    ])
+                    .optional(),
                   sessionId: zod
                     .uuid()
                     .describe('The session; what a click opens.'),
@@ -6155,7 +6828,7 @@ export const getTypedNotificationByIdResponse = zod
                     ),
                 })
                 .describe(
-                  'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                  'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                 )
                 .and(
                   zod.object({
@@ -6202,8 +6875,25 @@ export const getTypedNotificationByIdResponse = zod
                     .uuid()
                     .nullish()
                     .describe(
-                      'The channel the session was opened from, when it was.'
+                      'The channel the session was opened from, when it was opened from a\nchannel thread.'
                     ),
+                  parent: zod
+                    .union([
+                      zod.null(),
+                      zod
+                        .object({
+                          id: zod
+                            .string()
+                            .describe('The channel or document id.'),
+                          type: zod
+                            .string()
+                            .describe('`channel` or `document`.'),
+                        })
+                        .describe(
+                          "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface."
+                        ),
+                    ])
+                    .optional(),
                   sessionId: zod
                     .uuid()
                     .describe('The session; what a click opens.'),
@@ -6218,7 +6908,7 @@ export const getTypedNotificationByIdResponse = zod
                     ),
                 })
                 .describe(
-                  'The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
+                  'Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.'
                 )
                 .and(
                   zod.object({

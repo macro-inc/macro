@@ -214,6 +214,8 @@ pub enum TeamShareCreation {
     Call,
     /// A new initiative initializes Edit; missing membership is an error.
     Initiative,
+    /// The description document of a new initiative. Resolves like `Initiative`.
+    InitiativeDescription,
 }
 
 impl TeamShareCreation {
@@ -232,7 +234,7 @@ impl TeamShareCreation {
                 team_id,
                 level: TeamShareLevel::View,
             })),
-            Self::Initiative => Ok(Some(TeamShareGrant {
+            Self::Initiative | Self::InitiativeDescription => Ok(Some(TeamShareGrant {
                 team_id: owner_team_id.ok_or(TeamSharePolicyError::MissingTeam)?,
                 level: TeamShareLevel::Edit,
             })),

@@ -21,6 +21,10 @@ use model::project::{
 use models_bulk_upload::{UploadExtractFolderRequest, UploadExtractFolderResponseData};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareLevel, TeamSharePolicyError, TeamShareRequest,
+    authorize_team_share,
+};
 use s3_key::BulkUploadStagingKey;
 use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
@@ -141,6 +145,37 @@ where
                     "unable to update project modified date"
                 );
             });
+    }
+
+    async fn authorize_project_team_share(
+        &self,
+        receipt: &EntityAccessReceipt<EditAccessLevel>,
+        request: TeamShareRequest,
+    ) -> Result<Option<AuthorizedTeamShareCommand>, ProjectError> {
+        if request == TeamShareRequest::default() {
+            return Ok(None);
+        }
+        let facts = self
+            .repo
+            .get_team_share_facts(&receipt.entity().entity_id)
+            .await?;
+        authorize_team_share(
+            receipt.acting_user_id(),
+            &facts,
+            request,
+            TeamShareLevel::Edit,
+        )
+        .map_err(|error| match error {
+            TeamSharePolicyError::MissingActor | TeamSharePolicyError::NotOwner => {
+                ProjectError::Unauthorized
+            }
+            TeamSharePolicyError::InvalidRevision => ProjectError::Conflict(error.to_string()),
+            TeamSharePolicyError::MissingTeam
+            | TeamSharePolicyError::InvalidLevel
+            | TeamSharePolicyError::ContradictoryInputs => {
+                ProjectError::BadRequest(error.to_string())
+            }
+        })
     }
 }
 
@@ -398,6 +433,19 @@ where
             ));
         }
 
+        let team_share = self
+            .authorize_project_team_share(
+                &receipt,
+                TeamShareRequest {
+                    access_level: args
+                        .share_permission
+                        .as_ref()
+                        .and_then(|p| p.team_share_access_level),
+                    legacy_enabled: None,
+                },
+            )
+            .await?;
+
         let new_parent_id = args
             .project_parent_id
             .as_deref()
@@ -438,9 +486,9 @@ where
                 update_parent: args.project_parent_id.is_some(),
                 parent_id: new_parent_id.map(str::to_string),
                 share_permission: args.share_permission,
+                team_share,
             })
-            .await
-            .map_err(|error| internal_error(error, "unable to patch project"))?;
+            .await?;
 
         self.bump_project_modified(&project.id).await;
         let _ = self

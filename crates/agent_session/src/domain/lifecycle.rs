@@ -26,28 +26,27 @@ pub fn session_identity(
     if !audience.contains(&session.owner_id) {
         audience.push(session.owner_id.clone());
     }
-    let origin = match (
-        session.thread_channel_id,
-        session.thread_id,
-        session.originating_message_id,
-    ) {
-        (Some(channel_id), Some(thread_id), Some(originating_message_id)) => Some(ThreadOrigin {
-            channel_id,
-            thread_id,
-            originating_message_id,
-        }),
-        (None, None, None) => None,
-        (channel_id, thread_id, originating_message_id) => {
-            tracing::warn!(
-                session_id = %session.id,
-                ?channel_id,
-                ?thread_id,
-                ?originating_message_id,
-                "agent session has a partial thread origin; reporting none"
-            );
-            None
-        }
-    };
+    let origin =
+        match (
+            session.thread_parent.as_ref(),
+            session.thread_id,
+            session.originating_message_id,
+        ) {
+            (Some(parent), Some(thread_id), Some(originating_message_id)) => Some(
+                ThreadOrigin::new(parent.clone(), thread_id, originating_message_id),
+            ),
+            (None, None, None) => None,
+            (parent, thread_id, originating_message_id) => {
+                tracing::warn!(
+                    session_id = %session.id,
+                    ?parent,
+                    ?thread_id,
+                    ?originating_message_id,
+                    "agent session has a partial thread origin; reporting none"
+                );
+                None
+            }
+        };
     SessionIdentity {
         session_id: session.id,
         session_name: session.name.clone(),

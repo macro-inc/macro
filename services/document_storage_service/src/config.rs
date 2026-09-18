@@ -157,6 +157,14 @@ pub struct Config {
     #[macro_config_default(false)]
     pub calendar_reminder_dispatch_enabled: bool,
 
+    /// Master switch for the legacy document comment writers: comment create,
+    /// edit and delete, and anchor delete, which also deletes the thread.
+    /// Set to `false` for the final pass of the legacy comment importer, before
+    /// the new document discussion UI is enabled; those handlers then answer
+    /// 503 and the importer works from a frozen source.
+    #[macro_config_default(true)]
+    pub legacy_comment_writes_enabled: bool,
+
     /// The number of seconds a signed document or call recording URL is valid for.
     #[macro_config_default(DEFAULT_PRESIGNED_URL_EXPIRY_SECONDS)]
     pub document_storage_service_presigned_url_expiry_seconds: u64,

@@ -5,6 +5,7 @@
 use agent_session::domain::ports::SelectedManagedPersona;
 
 use super::*;
+use crate::domain::model::SessionRepository;
 
 /// External sessions create the row and announce - the magic-chip message
 /// the session's bot posts into the mention's thread, which is where the
@@ -42,7 +43,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
@@ -53,11 +54,35 @@ where
         &self,
         request: agent_session::domain::ports::OpenExternalAgentSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
+        // The thread linkage is the caller's claim: it is honoured only when
+        // the owner can write to that parent and the message sits in it.
+        if let Some(thread) = &request.thread {
+            self.inner
+                .prompt_context
+                .authorize_origin(
+                    &request.owner,
+                    &AnnounceOrigin {
+                        parent: thread.parent.clone(),
+                        thread_id: thread.thread_id,
+                        message_id: thread.message_id,
+                    },
+                )
+                .await
+                .map_err(|error| {
+                    tracing::warn!(
+                        error = ?error,
+                        owner = %request.owner,
+                        "rejecting an external session whose claimed thread its owner may not post in"
+                    );
+                    AgentSessionError::Forbidden
+                })?;
+        }
         let defaults = self.inner.defaults.for_bot(request.bot_id);
         let session = self
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
+                repo_branch: None,
                 id: AgentSessionId::new(),
                 owner_id: request.owner.clone(),
                 bot_id: request.bot_id,
@@ -84,7 +109,7 @@ where
             let announcement = SessionAnnouncement {
                 session_id: session.id,
                 bot_id: request.bot_id,
-                origin_channel_id: thread.channel_id,
+                origin_parent: thread.parent,
                 origin_thread_id: thread.thread_id,
                 origin_message_id: thread.message_id,
                 prompted_message_id: MessageId::first(AuthorKind::User),
@@ -156,6 +181,45 @@ where
                 servers: Vec::new(),
             };
         }
+        // Explicit source choices are a domain decision, before any session or egress grant exists.
+        let selected_repo = if let Some(url) = request.repo_url.as_deref() {
+            if kind != AgentKind::Cursor {
+                return Err(
+                    agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(
+                        "repository selection is supported for Cursor coding agents",
+                    ),
+                );
+            }
+            let repo = SessionRepository::parse(url).ok_or(
+                agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(
+                    "select a valid GitHub repository",
+                ),
+            )?;
+            let repositories = self
+                .repositories
+                .as_ref()
+                .ok_or(agent_session::domain::error::AgentSessionError::Forbidden)?;
+            let reachable = repositories
+                .for_user(&request.owner)
+                .await
+                .map_err(into_session_error)?;
+            if !reachable
+                .iter()
+                .any(|allowed| allowed.eq_ignore_ascii_case(repo.as_str()))
+            {
+                return Err(agent_session::domain::error::AgentSessionError::Forbidden);
+            }
+            Some(repo)
+        } else {
+            if request.repo_branch.is_some() {
+                return Err(
+                    agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(
+                        "select a repository before choosing a branch",
+                    ),
+                );
+            }
+            None
+        };
         let defaults = self.inner.defaults.for_bot(bot_id);
         let sandbox_size = self
             .inner
@@ -176,6 +240,14 @@ where
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
+                repo_branch: selected_repo.as_ref().map(|_| {
+                    request.repo_branch.unwrap_or_else(|| {
+                        agent_session::domain::repository_branch::RepositoryBranch::parse(
+                            "main".to_owned(),
+                        )
+                        .expect("main is a valid branch")
+                    })
+                }),
                 id: session_id,
                 owner_id: request.owner.clone(),
                 bot_id,
@@ -186,9 +258,9 @@ where
                 // Whatever this bot's sessions work in: the deployment's
                 // repository, or nothing for a bot whose sessions work
                 // somewhere this deployment does not name.
-                repo_url: defaults
-                    .repo_url
+                repo_url: selected_repo
                     .as_ref()
+                    .or(defaults.repo_url.as_ref())
                     .map(|repo| repo.as_str().to_owned()),
                 // Managed sandboxes run in the path baked into their image.
                 workspace: agent_session::MANAGED_CONTAINER_WORKSPACE.to_owned(),
@@ -269,13 +341,13 @@ where
         match self
             .inner
             .sessions
-            .find_for_channel(Some(thread_id), Some(bot_id))
+            .find_for_thread(Some(thread_id), Some(bot_id))
             .await?
         {
-            agent_session::domain::model::ChannelSession::CreatedFromThread(session) => {
+            agent_session::domain::model::ThreadSession::CreatedFromThread(session) => {
                 Ok(Some(session.id))
             }
-            agent_session::domain::model::ChannelSession::None => Ok(None),
+            agent_session::domain::model::ThreadSession::None => Ok(None),
         }
     }
 }
@@ -309,7 +381,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
@@ -320,7 +392,7 @@ where
         %session_id,
         bot_id = %command.bot_id,
         message_id = %command.origin.message_id,
-        channel_id = %command.origin.channel_id,
+        parent = ?command.origin.parent,
         thread_id = %command.origin.thread_id,
         agent.trigger.kind = "mention",
         agent.session.id = tracing::field::Empty,
@@ -336,6 +408,18 @@ where
             origin,
         } = command;
         tracing::Span::current().record("agent.session.id", tracing::field::display(session_id));
+        // The mention was observed, but the sender's access is checked now:
+        // a user removed from the parent since posting opens nothing.
+        self.prompt_context
+            .authorize_origin(
+                &origin.sender,
+                &AnnounceOrigin {
+                    parent: origin.parent.clone(),
+                    thread_id: origin.thread_id,
+                    message_id: origin.message_id,
+                },
+            )
+            .await?;
 
         // Asked before anything exists for the session: a row whose spawn is
         // bound to fail would be marked disconnected and leave the thread
@@ -356,7 +440,7 @@ where
                 .decline(DeclinedMention {
                     bot_id,
                     origin: AnnounceOrigin {
-                        channel_id: origin.channel_id,
+                        parent: origin.parent,
                         thread_id: origin.thread_id,
                         message_id: origin.message_id,
                     },
@@ -383,6 +467,7 @@ where
         let session = self
             .sessions
             .create_session(CreateAgentSessionParams {
+                repo_branch: None,
                 id: session_id,
                 owner_id: origin.sender.clone(),
                 bot_id,
@@ -456,7 +541,7 @@ where
                 action: AgentAction::prompt(origin.content),
                 actor: Some(origin.sender),
                 announce: Some(AnnounceOrigin {
-                    channel_id: origin.channel_id,
+                    parent: origin.parent,
                     thread_id: origin.thread_id,
                     message_id: origin.message_id,
                 }),

@@ -37,3 +37,40 @@ describe('chat soup entities', () => {
     }
   );
 });
+
+describe('document soup entities', () => {
+  it.each([
+    [
+      { type: 'task', is_completed: true },
+      { type: 'task', is_completed: true },
+    ],
+    [{ type: 'skill' }, { type: 'skill' }],
+    [{ type: 'initiative_description' }, undefined],
+  ] as const)(
+    'maps the wire sub type %j to the app sub type %j',
+    (subType, expected) => {
+      const item = {
+        tag: 'document',
+        frecency_score: 0,
+        is_favorited: false,
+        data: {
+          id: 'doc-sub-type',
+          name: 'Plan',
+          ownerId: 'macro|owner@example.com',
+          fileType: 'md',
+          subType,
+          documentVersionId: 1,
+          properties: [],
+          createdAt: '2026-09-11T00:00:00Z',
+          updatedAt: '2026-09-11T00:00:00Z',
+        },
+      } satisfies SoupApiItem;
+
+      expect(mapApiSoupItemToEntity(item)).toMatchObject({
+        type: 'document',
+        id: item.data.id,
+        subType: expected,
+      });
+    }
+  );
+});

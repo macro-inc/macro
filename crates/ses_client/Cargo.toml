@@ -10,6 +10,7 @@ local = []
 [dependencies]
 anyhow = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }
+html-escape = { workspace = true }
 # Local-mode SMTP delivery (Mailpit). rustls (no native-tls/openssl); the local
 # transport itself is plaintext via builder_dangerous.
 lettre = { version = "0.11", default-features = false, features = [

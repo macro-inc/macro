@@ -49,7 +49,6 @@ function replyComposer(
           onDraftRemoved() {},
           exitToThread: () => false,
           replyRequest: { replyType: () => undefined, clear() {} },
-          getMarkDoneNavigationTargetId: () => undefined,
         },
       },
       () => editor,
@@ -194,6 +193,11 @@ describe('send and schedule ordering', () => {
         .mocked(composeContext.notices.feedback.success)
         .mock.calls.find(([text]) => text === 'Email sent');
       expect(onMarkDone).toHaveBeenCalledOnce();
+      // Sending marks the thread done in place; only the explicit Mark done
+      // action advances to the next email.
+      expect(onMarkDone).toHaveBeenCalledWith(
+        expect.objectContaining({ silent: true, navigate: false })
+      );
       sentNotice?.[1]?.actions?.[0].onClick();
       await vi.advanceTimersByTimeAsync(0);
       expect(undo).toHaveBeenCalledOnce();

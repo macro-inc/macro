@@ -75,6 +75,35 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    pub(crate) async fn mark_thread_unread_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        let link = self
+            .email_repo
+            .owned_link_for_thread(thread_id, macro_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .ok_or(EmailErr::ThreadNotFound)?;
+
+        // Resolve from the authorized thread's inbox, never the caller's primary
+        // inbox: multi-inbox users have a distinct UNREAD label for each link.
+        let unread_label = self
+            .email_repo
+            .list_labels_by_link_id(link.id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .into_iter()
+            .find(|label| label.provider_label_id == system_labels::UNREAD)
+            .ok_or(EmailErr::LabelNotFound)?;
+
+        self.update_thread_labels_impl(&link, thread_id, unread_label.id, true)
+            .await?;
+        Ok(())
+    }
+
     #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, %label_id, add))]
     pub(crate) async fn update_thread_labels_for_user_impl(
         &self,
@@ -313,9 +342,9 @@ where
         }
     }
 
-    /// Apply a thread label change to the DB: the label rows plus the
-    /// denormalized read/starred state for system labels. The label write is
-    /// a hard error; the denormalized side effects are logged and skipped.
+    /// Apply a thread label change to the DB. UNREAD assignments and read
+    /// flags commit atomically; a failure propagates before provider sync or
+    /// events. Other labels retain their best-effort starred side effect.
     async fn apply_label_db_changes(
         &self,
         link: &Link,
@@ -324,6 +353,14 @@ where
         provider_label_id: &str,
         add: bool,
     ) -> Result<(), EmailErr> {
+        if provider_label_id == system_labels::UNREAD {
+            return self
+                .email_repo
+                .set_thread_read_state(thread_id, link.id, message_ids, !add)
+                .await
+                .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)));
+        }
+
         let db_result = if add {
             self.email_repo
                 .insert_message_labels_batch(message_ids, provider_label_id, link.id)
@@ -340,26 +377,7 @@ where
             return Err(EmailErr::RepoErr(err));
         }
 
-        // Side effects for system labels
-        if provider_label_id == system_labels::UNREAD {
-            if let Err(e) = self
-                .email_repo
-                .update_message_read_status_batch(message_ids, link.id, !add)
-                .await
-            {
-                let err = anyhow::Error::from(e);
-                tracing::error!(error=?err, "failed to update message read status");
-            }
-            // Keep the denormalized thread flag in sync — soup previews read it.
-            if let Err(e) = self
-                .email_repo
-                .update_thread_read_status(thread_id, link.id, !add)
-                .await
-            {
-                let err = anyhow::Error::from(e);
-                tracing::error!(error=?err, "failed to update thread read status");
-            }
-        } else if provider_label_id == system_labels::STARRED
+        if provider_label_id == system_labels::STARRED
             && let Err(e) = self
                 .email_repo
                 .update_message_starred_status_batch(message_ids, link.id, add)

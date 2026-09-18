@@ -59,6 +59,7 @@ export type AgentSessionState = {
   /** The session is still being created — everything else is empty because
    *  there is nothing to show yet, not because the load failed. */
   pending: Accessor<boolean>;
+  startupError: Accessor<string | undefined>;
   /** Session metadata, absent until the load resolves. */
   session: Accessor<AgentSessionResponse | undefined>;
   /** The bot the session runs as, absent until the fold is acquired. */
@@ -129,7 +130,9 @@ export function AgentSessionProvider(
     onSessionId?: (sessionId: string) => void;
   }
 ) {
-  const { sessionId, pending, failed } = resolveSessionId(() => props.blockId);
+  const { sessionId, pending, failed, error } = resolveSessionId(
+    () => props.blockId
+  );
 
   createEffect(() => {
     const id = sessionId();
@@ -198,6 +201,7 @@ export function AgentSessionProvider(
         value={{
           sessionId,
           pending,
+          startupError: error,
           session: feed.session,
           bot: feed.bot,
           metadata: feed.metadata,
@@ -225,7 +229,7 @@ export function AgentSessionProvider(
 }
 
 /**
- * Compensating read for a Cursor session whose provider url arrived after
+ * Compensating read for a cloud session whose provider URL arrived after
  * the feed's snapshot. Lives in its own Suspense so the rest of the block
  * stays mounted while this query's first fetch is in flight.
  */
@@ -234,13 +238,15 @@ function CloudExternalUrlPoll(props: {
   session: Accessor<AgentSessionResponse | undefined>;
   applySnapshot: (session: AgentSessionResponse) => void;
 }) {
-  // Only a loaded Cursor session whose provider url is still missing polls;
+  // Only a loaded cloud session whose provider URL is still missing polls;
   // everything else passes `undefined`, which disables the query.
   const query = useAgentSessionExternalUrlQuery(() => {
     const id = props.sessionId();
     const session = props.session();
     if (!id || !session || session.external?.url) return undefined;
-    return isCursorBotId(session.botId) || isCodexBotId(session.botId)
+    return isCursorBotId(session.botId) ||
+      isCodexBotId(session.botId) ||
+      session.harness === 'claude-cloud'
       ? id
       : undefined;
   });

@@ -174,7 +174,8 @@ function safeDocumentContentToBlockName(
 
 function resolveBlockCommentParamName(type: BlockName | BlockAlias) {
   const resolved = resolveBlockAlias(type);
-  if (resolved === 'md') return MD_URL_PARAMS.commentId;
+  if (resolved === 'md' || resolved === 'spreadsheet')
+    return MD_URL_PARAMS.commentId;
   if (resolved === 'pdf') return PDF_URL_PARAMS.annotationId;
 }
 

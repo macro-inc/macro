@@ -160,6 +160,45 @@ async fn new_session_advertises_the_engine_supported_models() {
 }
 
 #[tokio::test]
+async fn new_session_advertises_its_slash_commands() {
+    let (notifications, _config_options, ()) = with_agent(
+        Arc::new(ScriptedEngine::new(vec![])),
+        async |connection, session| {
+            // A round trip so the advertisement, sent right after the
+            // session/new response, has landed before the client is torn down.
+            connection
+                .send_request(text_prompt(&session, "/compact"))
+                .block_task()
+                .await
+                .expect("compaction should complete");
+        },
+    )
+    .await;
+
+    let advertised = notifications
+        .iter()
+        .find_map(|notification| match &notification.update {
+            SessionUpdate::AvailableCommandsUpdate(update) => Some(update),
+            _ => None,
+        })
+        .expect("session/new is followed by an available_commands_update");
+    let names = advertised
+        .available_commands
+        .iter()
+        .map(|command| command.name.as_str())
+        .collect::<Vec<_>>();
+    assert_eq!(names, vec!["compact", "ask"]);
+    assert!(
+        advertised.available_commands[0].input.is_none(),
+        "/compact takes no argument, so the composer sends it as-is"
+    );
+    assert!(
+        advertised.available_commands[1].input.is_some(),
+        "/ask carries a hint for its question"
+    );
+}
+
+#[tokio::test]
 async fn a_prompt_streams_updates_and_ends_the_turn() {
     let engine = Arc::new(ScriptedEngine::new(vec![
         StreamPart::Thinking("hmm".into()),
@@ -196,12 +235,14 @@ async fn a_prompt_streams_updates_and_ends_the_turn() {
             SessionUpdate::AgentMessageChunk(_) => "message",
             SessionUpdate::ToolCall(_) => "tool_call",
             SessionUpdate::ToolCallUpdate(_) => "tool_call_update",
+            SessionUpdate::AvailableCommandsUpdate(_) => "commands",
             _ => "other",
         })
         .collect();
     assert_eq!(
         kinds,
         vec![
+            "commands",
             "thought",
             "message",
             "tool_call",
@@ -363,7 +404,13 @@ async fn engine_cancellation_is_not_rendered_as_an_error_message() {
         .await;
 
     assert_eq!(response.stop_reason, StopReason::Cancelled);
-    assert!(notifications.is_empty());
+    assert!(
+        notifications.iter().all(|notification| matches!(
+            notification.update,
+            SessionUpdate::AvailableCommandsUpdate(_)
+        )),
+        "only the session-open command advertisement, no error message"
+    );
 }
 
 #[tokio::test]

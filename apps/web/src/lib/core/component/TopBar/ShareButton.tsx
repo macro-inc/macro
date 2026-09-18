@@ -36,8 +36,6 @@ import { idToEmail } from '@core/user';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import type { ResultError } from '@core/util/result';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import UserCircle from '@icon/wide-user-circle.svg';
-import WideUsers from '@icon/wide-users.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import ChevronDownIcon from '@phosphor/caret-down.svg';
 import IconComment from '@phosphor/chat-teardrop.svg';
@@ -47,7 +45,15 @@ import IconEye from '@phosphor/eye.svg';
 import IconLink from '@phosphor/link.svg';
 import IconEdit from '@phosphor/pencil.svg';
 import IconShared from '@phosphor/share.svg';
+import UserCircle from '@phosphor/user-circle.svg';
+import UsersIcon from '@phosphor/users.svg';
 import IconX from '@phosphor/x.svg';
+import {
+  setCallRecordTeamShareCache,
+  sharePermissionFromCallRecord,
+  updateCallTeamShare,
+  useCallRecordQuery,
+} from '@queries/call/call';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import {
@@ -106,9 +112,9 @@ import {
   LINK_SHARE_SCOPE_OPTIONS,
   type LinkSharePayload,
   type LinkShareScope,
-  TEAM_SHARE_SCOPE_OPTIONS,
   type TeamSharePayload,
   type TeamShareScope,
+  teamShareScopeOptionsForItem,
 } from './linkShare';
 
 false && clickOutside;
@@ -117,6 +123,21 @@ const isLinkSharingDisabledForItem = (itemType: ItemType): boolean =>
   itemType === 'email' ||
   itemType === 'project' ||
   itemType === 'agent_session';
+
+async function fetchSharePermissions(id: string, itemType: ItemType) {
+  if (itemType === 'chat') {
+    return cognitionApiServiceClient.getChatPermissions({ id });
+  }
+  if (itemType === 'document') {
+    return storageServiceClient.getDocumentPermissions({ document_id: id });
+  }
+  if (itemType === 'project') {
+    if (id === 'trash') {
+      return;
+    }
+    return storageServiceClient.projects.getPermissions({ id });
+  }
+}
 
 const agentSessionShareDescription = (canShare: boolean) =>
   canShare
@@ -149,16 +170,7 @@ const permissionsBlockResource = createBlockResource(
     const id = useBlockId();
     const blockName = useBlockName();
     const itemType = blockNameToItemType(blockName);
-    if (itemType === 'chat') {
-      return cognitionApiServiceClient.getChatPermissions({ id });
-    } else if (itemType === 'document') {
-      return storageServiceClient.getDocumentPermissions({ document_id: id });
-    } else if (itemType === 'project') {
-      if (id === 'trash') {
-        return;
-      }
-      return storageServiceClient.projects.getPermissions({ id });
-    }
+    return fetchSharePermissions(id, itemType);
   },
   { initialValue: undefined }
 );
@@ -301,6 +313,61 @@ interface TeamShareControls {
   setAccessLevel: (scope: TeamShareScope) => void;
   /** Noun for the copy, e.g. "document" or "chat". */
   itemNoun: string;
+  scopeOptions: ReadonlyArray<{ value: TeamShareScope; label: string }>;
+}
+
+function teamShareOnOwnCard(
+  itemType: ItemType,
+  teamShare: TeamShareControls | undefined
+): TeamShareControls | undefined {
+  return teamShare && isLinkSharingDisabledForItem(itemType)
+    ? teamShare
+    : undefined;
+}
+
+function TeamAccessSection(props: { teamShare: TeamShareControls }) {
+  const teamShareScope = () => getTeamShareScope(props.teamShare.accessLevel);
+
+  return (
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-col gap-1">
+        <span class="font-medium">Team access</span>
+        <p class="text-sm text-ink-muted">
+          Share this {props.teamShare.itemNoun} directly with the owner's team.
+        </p>
+      </div>
+      <Dropdown>
+        <Dropdown.Trigger
+          variant="outline"
+          aria-label="Team access"
+          class="min-w-16.75 py-1 pl-2 pr-1 rounded-md flex items-center gap-1"
+        >
+          {getTeamShareScopeCopy(teamShareScope())}
+          <ChevronDownIcon class="size-4 text-ink-extra-muted" />
+        </Dropdown.Trigger>
+        <Dropdown.Content portalScope="local">
+          <Dropdown.RadioGroup
+            aria-label="Team access level"
+            value={teamShareScope()}
+            onChange={(value) =>
+              props.teamShare.setAccessLevel(value as TeamShareScope)
+            }
+          >
+            <For each={props.teamShare.scopeOptions}>
+              {(option) => (
+                <Dropdown.RadioItem value={option.value}>
+                  <span class="flex-1 truncate">{option.label}</span>
+                  <Dropdown.ItemIndicator>
+                    <CheckIcon class="size-3.5 text-accent" />
+                  </Dropdown.ItemIndicator>
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Content>
+      </Dropdown>
+    </div>
+  );
 }
 
 function LinkSharingControls(props: LinkSharingControlsProps) {
@@ -308,8 +375,6 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
   const scopeCopy = () => getLinkShareScopeCopy(scope());
   const shareStatus = () =>
     getShareStatus(props.linkShare, props.hasExplicitShares);
-  const teamShareScope = () => getTeamShareScope(props.teamShare?.accessLevel);
-  const teamShareNoun = () => props.teamShare?.itemNoun ?? 'item';
 
   return (
     <div class="flex flex-col gap-3 p-4 text-sm text-ink">
@@ -357,44 +422,11 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
         </div>
       </Show>
       <Show when={props.teamShare}>
-        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-edge-muted pt-3">
-          <div class="flex flex-col gap-1">
-            <span class="font-medium">Team access</span>
-            <p class="text-sm text-ink-muted">
-              Share this {teamShareNoun()} directly with the owner's team.
-            </p>
+        {(teamShare) => (
+          <div class="border-t border-edge-muted pt-3">
+            <TeamAccessSection teamShare={teamShare()} />
           </div>
-          <Dropdown>
-            <Dropdown.Trigger
-              variant="outline"
-              aria-label="Team access"
-              class="min-w-16.75 py-1 pl-2 pr-1 rounded-md flex items-center gap-1"
-            >
-              {getTeamShareScopeCopy(teamShareScope())}
-              <ChevronDownIcon class="size-4 text-ink-extra-muted" />
-            </Dropdown.Trigger>
-            <Dropdown.Content portalScope="local">
-              <Dropdown.RadioGroup
-                aria-label="Team access level"
-                value={teamShareScope()}
-                onChange={(value) =>
-                  props.teamShare?.setAccessLevel(value as TeamShareScope)
-                }
-              >
-                <For each={TEAM_SHARE_SCOPE_OPTIONS}>
-                  {(option) => (
-                    <Dropdown.RadioItem value={option.value}>
-                      <span class="flex-1 truncate">{option.label}</span>
-                      <Dropdown.ItemIndicator>
-                        <CheckIcon class="size-3.5 text-accent" />
-                      </Dropdown.ItemIndicator>
-                    </Dropdown.RadioItem>
-                  )}
-                </For>
-              </Dropdown.RadioGroup>
-            </Dropdown.Content>
-          </Dropdown>
-        </div>
+        )}
       </Show>
     </div>
   );
@@ -415,8 +447,7 @@ interface MobileShareDrawerProps {
   formattedOwner: string;
   linkShare: LinkShare | null | undefined;
   linkShareAccessLevel: AccessLevel | null | undefined;
-  teamShareAccessLevel: AccessLevel | null | undefined;
-  setTeamShareAccessLevel?: (scope: TeamShareScope) => void;
+  teamShare?: TeamShareControls;
   refetch: () => void;
   navigateToChannel: (channelId: string) => void;
   removeChannelAccess: (channelId: string) => void;
@@ -452,6 +483,8 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
       !isLinkSharingDisabledForItem(props.itemType)
     )
       tabs.push({ value: 'link', label: 'Link' });
+    if (teamShareOnOwnCard(props.itemType, props.teamShare))
+      tabs.push({ value: 'team', label: 'Team' });
     return tabs;
   });
 
@@ -581,7 +614,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                         props.navigateToChannel(recipient.channel_id)
                       }
                     >
-                      <Switch fallback={<WideUsers class="shrink-0 size-4" />}>
+                      <Switch fallback={<UsersIcon class="shrink-0 size-4" />}>
                         <Match
                           when={
                             props.channelNameMap.get(recipient.channel_id)
@@ -593,7 +626,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
                         <Match
                           when={props.channelNameMap.get(recipient.channel_id)}
                         >
-                          <WideUsers class="shrink-0 size-4" />
+                          <UsersIcon class="shrink-0 size-4" />
                         </Match>
                       </Switch>
                       <div class="font-medium truncate">
@@ -645,16 +678,21 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               setLinkShareScope={props.setLinkShareScope}
               setLinkShareAccessLevel={props.setLinkShareAccessLevel}
               copyLink={props.copyLink}
-              teamShare={
-                props.setTeamShareAccessLevel
-                  ? {
-                      accessLevel: props.teamShareAccessLevel,
-                      setAccessLevel: props.setTeamShareAccessLevel,
-                      itemNoun: getShareItemNoun(props.itemType),
-                    }
-                  : undefined
-              }
+              teamShare={props.teamShare}
             />
+          </Show>
+          <Show
+            when={
+              effectiveActiveTab() === 'team'
+                ? teamShareOnOwnCard(props.itemType, props.teamShare)
+                : undefined
+            }
+          >
+            {(teamShare) => (
+              <div class="p-4 text-sm text-ink">
+                <TeamAccessSection teamShare={teamShare()} />
+              </div>
+            )}
           </Show>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
@@ -666,6 +704,9 @@ export function ShareModal(props: ShareModalProps) {
   const navigate = useNavigate();
   const analytics = useAnalytics();
   const currentTeamQuery = useCurrentTeamQuery();
+  const callRecordQuery = useCallRecordQuery(() =>
+    props.itemType === 'call' ? props.id : ''
+  );
   const isBlockContext = isInBlock() && props.itemType !== 'agent_session';
   const [fallbackPermissionsResource, { refetch: refetchFallback }] =
     createResource(
@@ -676,18 +717,7 @@ export function ShareModal(props: ShareModalProps) {
       async (source) => {
         if (!source) return;
         const { id, itemType } = source;
-        if (itemType === 'chat') {
-          return cognitionApiServiceClient.getChatPermissions({ id });
-        } else if (itemType === 'document') {
-          return storageServiceClient.getDocumentPermissions({
-            document_id: id,
-          });
-        } else if (itemType === 'project') {
-          if (id === 'trash') {
-            return;
-          }
-          return storageServiceClient.projects.getPermissions({ id });
-        }
+        return fetchSharePermissions(id, itemType);
       },
       { initialValue: undefined }
     );
@@ -963,6 +993,12 @@ export function ShareModal(props: ShareModalProps) {
   });
 
   const teamShareAccessLevel = createMemo(() => {
+    if (props.itemType === 'call') {
+      if (!callRecordQuery.isSuccess) return;
+      const record = callRecordQuery.data;
+      if (!record) return;
+      return sharePermissionFromCallRecord(record).teamShareAccessLevel;
+    }
     const currentPermissions = permissionsResource.latest;
     if (!currentPermissions || currentPermissions.isErr()) return;
 
@@ -975,19 +1011,28 @@ export function ShareModal(props: ShareModalProps) {
         return;
       }
       const itemNoun = getShareItemNoun(props.itemType);
+      const shared =
+        getTeamShareScope(sharePermission.teamShareAccessLevel) !== 'NONE';
 
-      // Both endpoints accept the same `sharePermission.teamShareAccessLevel`
-      // patch; the backend authorizes it against the persisted owner.
-      const result =
-        props.itemType === 'chat'
-          ? await cognitionApiServiceClient.updateChatPermissions({
-              sharePermission,
-              chat_id: props.id,
-            })
-          : await storageServiceClient.editDocument({
-              sharePermission,
-              documentId: props.id,
-            });
+      let result: Result<unknown, ResultError<any>[]>;
+      if (props.itemType === 'chat') {
+        result = await cognitionApiServiceClient.updateChatPermissions({
+          sharePermission,
+          chat_id: props.id,
+        });
+      } else if (props.itemType === 'call') {
+        result = await updateCallTeamShare(props.id, shared);
+      } else if (props.itemType === 'project') {
+        result = await storageServiceClient.projects.edit({
+          id: props.id,
+          sharePermission,
+        });
+      } else {
+        result = await storageServiceClient.editDocument({
+          sharePermission,
+          documentId: props.id,
+        });
+      }
       if (result.isErr()) {
         toast.alert('Failed to change team access', {
           subtext: 'Please try again',
@@ -998,6 +1043,9 @@ export function ShareModal(props: ShareModalProps) {
 
       refetch();
       const scope = getTeamShareScope(sharePermission.teamShareAccessLevel);
+      if (props.itemType === 'call') {
+        setCallRecordTeamShareCache(props.id, shared);
+      }
       if (scope === 'NONE') {
         toast.success(`Removed team access for this ${itemNoun}`);
         return;
@@ -1028,6 +1076,7 @@ export function ShareModal(props: ShareModalProps) {
           accessLevel: teamShareAccessLevel(),
           setAccessLevel: setTeamShareAccessLevel,
           itemNoun: getShareItemNoun(props.itemType),
+          scopeOptions: teamShareScopeOptionsForItem(props.itemType),
         }
       : undefined;
 
@@ -1139,8 +1188,7 @@ export function ShareModal(props: ShareModalProps) {
           formattedOwner={formattedOwner()}
           linkShare={linkShare()}
           linkShareAccessLevel={linkShareAccessLevel()}
-          teamShareAccessLevel={teamShareAccessLevel()}
-          setTeamShareAccessLevel={teamShareControls()?.setAccessLevel}
+          teamShare={teamShareControls()}
           refetch={refetch}
           navigateToChannel={navigateToChannel}
           removeChannelAccess={removeChannelAccess}
@@ -1156,7 +1204,7 @@ export function ShareModal(props: ShareModalProps) {
         open={props.isSharePermOpen}
       >
         <Dialog.Portal>
-          <Dialog.Overlay class="z-modal fixed inset-0 bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
+          <Dialog.Overlay class="z-modal fixed inset-0 scrim-glass" />
           <div class="z-modal fixed inset-0">
             <Dialog.Content
               class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope isolate flex flex-col gap-2 *:max-h-[75vh]"
@@ -1278,7 +1326,7 @@ export function ShareModal(props: ShareModalProps) {
                                 >
                                   <Switch
                                     fallback={
-                                      <WideUsers class="shrink-0 size-4" />
+                                      <UsersIcon class="shrink-0 size-4" />
                                     }
                                   >
                                     <Match
@@ -1297,7 +1345,7 @@ export function ShareModal(props: ShareModalProps) {
                                         recipient.channel_id
                                       )}
                                     >
-                                      <WideUsers class="shrink-0 size-4" />
+                                      <UsersIcon class="shrink-0 size-4" />
                                     </Match>
                                   </Switch>
                                   <div class="font-medium truncate">
@@ -1374,6 +1422,19 @@ export function ShareModal(props: ShareModalProps) {
                   </Panel.Body>
                 </Panel>
               </Show>
+              <Show
+                when={teamShareOnOwnCard(props.itemType, teamShareControls())}
+              >
+                {(teamShare) => (
+                  <Panel depth={2} class="rounded-xl bg-dialog">
+                    <Panel.Body>
+                      <div class="p-4 text-sm text-ink">
+                        <TeamAccessSection teamShare={teamShare()} />
+                      </div>
+                    </Panel.Body>
+                  </Panel>
+                )}
+              </Show>
             </Dialog.Content>
           </div>
         </Dialog.Portal>
@@ -1391,10 +1452,18 @@ export function ShareTrigger(props: {
   const shareCtx = useShareDialogContext();
   const isAuthenticated = useIsAuthenticated();
   const inBlock = isInBlock();
-  const contextualBlockType = inBlock
-    ? useBlockAliasedName()
-    : useMaybeBlockAliasedName();
-  const contextualBlockId = inBlock ? useBlockId() : useMaybeBlockId();
+  const contextualBlockType =
+    props.blockType === undefined
+      ? inBlock
+        ? useBlockAliasedName()
+        : useMaybeBlockAliasedName()
+      : undefined;
+  const contextualBlockId =
+    props.id === undefined
+      ? inBlock
+        ? useBlockId()
+        : useMaybeBlockId()
+      : undefined;
   const analytics = useAnalytics();
 
   const blockType = (): BlockName | BlockAlias => {

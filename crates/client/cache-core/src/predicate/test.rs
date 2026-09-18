@@ -71,10 +71,53 @@ fn member_edits_are_idempotent_and_preserve_unknown_coverage() {
 }
 
 #[test]
-fn member_growth_beyond_budget_is_incomplete_not_an_enqueue_failure() {
+fn large_member_edits_preserve_sets_and_are_idempotent() {
     let mut doc = document();
-    doc.exact_facts = (0..predicate_index::MAX_FACTS_PER_DOCUMENT)
-        .map(|i| fact(&i.to_string()))
+    doc.exact_facts
+        .extend((0..10_000).map(|i| fact(&i.to_string())));
+    let removed = doc.exact_facts.clone();
+    let mutation = OptimisticProjectionMutation::PatchExact {
+        record_key: doc.record_key.clone(),
+        profile: doc.profile.clone(),
+        partition: doc.partition.clone(),
+        remove: removed.clone(),
+        // Overlapping removal/insertion keeps the inserted member.
+        insert: vec![fact("a"), fact("new"), fact("new")],
+    };
+    let projection = compose_effective_optimistic_projection(
+        &doc.record_key,
+        Some(&ProjectionState::Complete(doc.clone())),
+        &[ProjectionMutationLayer {
+            owner: 1,
+            mutations: &[mutation.clone(), mutation],
+        }],
+    )
+    .unwrap()
+    .unwrap();
+    let OptimisticProjectionState::Complete(effective) = projection.state else {
+        panic!("large member sets remain complete");
+    };
+    assert_eq!(effective.exact_facts, vec![fact("a"), fact("new")]);
+
+    let state = apply_authoritative_exact_members(
+        Some(&ProjectionState::Complete(doc.clone())),
+        &doc.record_key,
+        &doc.profile,
+        &doc.partition,
+        &removed,
+        &[fact("a"), fact("new")],
+    );
+    assert_eq!(state, ProjectionState::Complete(effective));
+}
+
+#[test]
+fn attribute_growth_beyond_budget_is_incomplete_not_an_enqueue_failure() {
+    let mut doc = document();
+    doc.exact_facts = (0..predicate_index::MAX_ATTRIBUTES_PER_DOCUMENT)
+        .map(|i| ExactFact {
+            attribute: token(&format!("attribute-{i}")),
+            value: ExactValue::utf8("value").unwrap(),
+        })
         .collect();
     let mutation = OptimisticProjectionMutation::PatchExact {
         record_key: doc.record_key.clone(),

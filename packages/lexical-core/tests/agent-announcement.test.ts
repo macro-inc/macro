@@ -58,6 +58,10 @@ describe('composeAgentSessionAnnouncement', () => {
     expect(markdown).toBe(`${replyTargetMarkdown}\n\n${chipMarkdown}`);
   });
 
+  it('announces with the chip alone when there is no reply target', () => {
+    expect(composeAgentSessionAnnouncement({ chip })).toBe(chipMarkdown);
+  });
+
   it('emits only the chip for a blank reply-target preview', () => {
     expect(
       composeAgentSessionAnnouncement({

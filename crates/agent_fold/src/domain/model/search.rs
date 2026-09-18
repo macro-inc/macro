@@ -153,12 +153,25 @@ impl SearchText {
                     self.push(output);
                 }
             }
-            ToolDetail::Other { input, output, .. } => {
+            ToolDetail::Other {
+                input,
+                output,
+                result,
+                error,
+                ..
+            } => {
                 if let Some(input) = input {
                     self.json(input);
                 }
-                if let Some(output) = output {
-                    self.push(output);
+                if let Some(error) = error {
+                    self.push(error);
+                }
+                // The text blocks and the unwrapped result usually carry the
+                // same words; either alone is enough to find the call by.
+                match (result, output) {
+                    (Some(result), _) => self.json(result),
+                    (None, Some(output)) => self.push(output),
+                    (None, None) => {}
                 }
             }
             ToolDetail::Macro {

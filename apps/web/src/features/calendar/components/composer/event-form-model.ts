@@ -50,6 +50,11 @@ function shiftDateValue(value: string, days: number) {
   return format(addDays(parseISO(value), days), DATE_VALUE);
 }
 
+/** Local midnight of a `yyyy-MM-dd` date, as a UTC ISO instant. */
+function localMidnightIso(date: string): string {
+  return new Date(`${date}T00:00`).toISOString();
+}
+
 /** Default editor slot: the next full hour, one hour long. */
 function defaultEditorTimes(reference: Date) {
   const start = addHours(startOfHour(reference), 1);
@@ -258,6 +263,18 @@ export function buildEventTime(
   if (state.allDay) {
     if (!state.start || !state.end || state.end < state.start) {
       return undefined;
+    }
+    // Google has no date-based out-of-office event, so encode an all-day one as
+    // a timed span covering whole days in the editor's time zone. It then reads
+    // and renders as a full-day timed block, the same as Google Calendar shows
+    // its own all-day out-of-office events.
+    if (state.eventType === 'out_of_office') {
+      return {
+        kind: 'timed',
+        startsAt: localMidnightIso(state.start),
+        endsAt: localMidnightIso(shiftDateValue(state.end, 1)),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      };
     }
     return {
       kind: 'allDay',

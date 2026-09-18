@@ -6,6 +6,9 @@ pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// A repository or branch cannot be used by this session.
+    #[error("{0}")]
+    InvalidRepositorySelection(&'static str),
     #[error("agent session {0} already has an active transport")]
     AlreadyConnected(AgentSessionId),
     #[error("agent session {0} is managed by another live replica")]

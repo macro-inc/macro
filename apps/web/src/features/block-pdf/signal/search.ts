@@ -1,5 +1,5 @@
 import type { PDFViewer } from '@block-pdf/PdfViewer';
-import { createBlockSignal } from '@core/block';
+import { usePdfDocument } from '../context/pdf-document-context';
 import {
   FindState,
   type IMatchesCount,
@@ -12,14 +12,6 @@ import {
 } from '../store/tableOfContents';
 import TocUtils from '../util/TocUtils';
 import { generatePhrases } from '../util/wordSearchUtils';
-import {
-  updateFindControlStateSignal,
-  updateFindMatchesCountSignal,
-  useGetRootViewer,
-} from './pdfViewer';
-
-export const searchSignal = createBlockSignal<string>('');
-export const isSearchOpenSignal = createBlockSignal<boolean>(false);
 
 enum SearchMatchType {
   Word = 'word',
@@ -49,12 +41,12 @@ type WordMatch = BaseMatch & {
 type Match = EntityMatch | WordMatch;
 
 function useMergedEventSignal() {
-  const updateFindControlState = updateFindControlStateSignal.get;
-  const updateFindMatchesCount = updateFindMatchesCountSignal.get;
+  const { updateFindControlState, updateFindMatchesCount } =
+    usePdfDocument().state.signals;
 
   return (): IUpdateFindControlStateEvent | null => {
-    const controlStateEvent = updateFindControlState();
-    const matchesCount = updateFindMatchesCount();
+    const controlStateEvent = updateFindControlState[0]();
+    const matchesCount = updateFindMatchesCount[0]();
 
     if (!controlStateEvent) return null;
 
@@ -185,9 +177,9 @@ function getWordMatches(
 }
 
 export function useSearchStart() {
-  const getRootViewer = useGetRootViewer();
+  const [rootViewer] = usePdfDocument().state.signals.rootViewer;
   return (args: Parameters<PDFViewer['search']>[0]) => {
-    getRootViewer()?.search(args);
+    rootViewer()?.search(args);
   };
 }
 
@@ -230,7 +222,7 @@ export function useSearchResults() {
 }
 
 export function useJumpToResult() {
-  const getRootViewer = useGetRootViewer();
+  const [rootViewer] = usePdfDocument().state.signals.rootViewer;
   const mergedEvent = useMergedEventSignal();
 
   return (match: Match) => {
@@ -240,7 +232,7 @@ export function useJumpToResult() {
         matchIndex: match.matchNumber,
       });
     } else {
-      getRootViewer()?.scrollTo({
+      rootViewer()?.scrollTo({
         pageNumber: match.page + 1,
         yPos: match.yPos,
       });
@@ -249,8 +241,8 @@ export function useJumpToResult() {
 }
 
 export function useSearchClose() {
-  const getRootViewer = useGetRootViewer();
+  const [rootViewer] = usePdfDocument().state.signals.rootViewer;
   return () => {
-    getRootViewer()?.findBarClose();
+    rootViewer()?.findBarClose();
   };
 }

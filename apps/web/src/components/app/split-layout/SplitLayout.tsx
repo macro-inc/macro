@@ -70,6 +70,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const panelRefs = new Map<SplitId, HTMLDivElement>();
 
   const splits = createMemo(splitManager.splits);
+  const useBentoLayout = () => !isTouchDevice() && splits().length > 1;
 
   // Drop refs for departed splits by reconciling against the live list:
   // batched mutations can remove several splits in one flush (e.g. closing
@@ -109,16 +110,15 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      {/* Desktop panes are flush with the window and each other: the resize
-          gutter between them is the 1px divider. Touch keeps its own layout. */}
-      <div class="size-full">
+      <div class="size-full" classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}>
         <Show
           when={isNativeMobilePlatform() && mobileSwipeLayout}
           fallback={
             // Desktop: side-by-side resizable splits.
             <Resize.Zone
               direction="horizontal"
-              gutter={1}
+              gutter={useBentoLayout() ? 6 : 1}
+              showDividers={!useBentoLayout()}
               captureResizeCtx={splitManager.setResizeContext}
             >
               <For each={ids()}>

@@ -36,7 +36,7 @@ import {
   openFilePicker,
   openFolderPicker,
 } from '@core/util/upload';
-import IconGear from '@icon/macro-gear.svg';
+import IconGear from '@phosphor/gear.svg';
 import Plus from '@phosphor/plus.svg';
 import LogoutIcon from '@phosphor/sign-out.svg';
 import Upload from '@phosphor/upload.svg';

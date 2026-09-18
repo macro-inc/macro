@@ -96,45 +96,35 @@ function TaskFavorites(props: {
     fallbackName: string,
     event: MouseEvent
   ) => {
-    if (event.shiftKey) {
-      layout.openWithSplit(favoriteSplitContent(favorite), {
-        referredFrom: 'sidebar',
-        preferNewSplit: true,
-      });
+    if (openTask({ id: favorite.entityId, fallbackName }, { event })) return;
 
-      return;
-    }
-
-    openTask({
-      id: favorite.entityId,
-      fallbackName,
+    layout.openWithSplit(favoriteSplitContent(favorite), {
+      referredFrom: 'sidebar',
+      preferNewSplit: event.shiftKey,
     });
   };
 
   return (
-    <CollapsibleSection.Root
-      open={props.open}
-      onOpenChange={props.onOpenChange}
-    >
-      <CollapsibleSection.Trigger class="text-xs">
-        <span class="min-w-0 truncate">Favorites</span>
-        <CollapsibleSection.Indicator />
-      </CollapsibleSection.Trigger>
-      <CollapsibleSection.Content>
-        <ViewSidebar.Nav aria-label="Favorite tasks">
-          <For each={favorites()}>
-            {(favorite) => (
-              <FavoriteRow favorite={favorite} onOpen={openFavorite} />
-            )}
-          </For>
-          <Show when={favorites().length === 0}>
-            <p class="px-3 py-2 text-sm text-ink-extra-muted">
-              No favorites yet
-            </p>
-          </Show>
-        </ViewSidebar.Nav>
-      </CollapsibleSection.Content>
-    </CollapsibleSection.Root>
+    <Show when={favorites().length > 0}>
+      <CollapsibleSection.Root
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+      >
+        <CollapsibleSection.Trigger>
+          <span class="min-w-0 truncate">Favorites</span>
+          <CollapsibleSection.Indicator />
+        </CollapsibleSection.Trigger>
+        <CollapsibleSection.Content>
+          <ViewSidebar.Nav aria-label="Favorite tasks">
+            <For each={favorites()}>
+              {(favorite) => (
+                <FavoriteRow favorite={favorite} onOpen={openFavorite} />
+              )}
+            </For>
+          </ViewSidebar.Nav>
+        </CollapsibleSection.Content>
+      </CollapsibleSection.Root>
+    </Show>
   );
 }
 
@@ -158,7 +148,7 @@ export function TasksSidebar() {
   });
 
   return (
-    <ViewSidebar.Root aria-label="Tasks navigation" class="gap-4 bg-panel">
+    <ViewSidebar.Root aria-label="Tasks navigation">
       <SidebarCreateHeader
         title="Tasks"
         label="New task"
@@ -167,7 +157,7 @@ export function TasksSidebar() {
         }
       />
 
-      <ViewSidebar.Content class="flex flex-col gap-6">
+      <ViewSidebar.Content>
         <TasksNavigation />
 
         <TaskFavorites

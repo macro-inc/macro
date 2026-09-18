@@ -7,10 +7,10 @@
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::events::AgentSessionLifecycleEvent;
 use crate::domain::model::{
-    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
-    AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence, ReplicaAddress, ReplicaId, SandboxSize,
-    SessionBot, SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
+    ClaimOutcome, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, LogAppended, ManagerFence,
+    ReplicaAddress, ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager,
+    SessionPreviewCandidate, SessionStatus, StoredAgentSessionLog, ThreadSession,
 };
 use crate::domain::ports::{
     AgentSessionLifecyclePublisher, AgentSessionLogRepo, AgentSessionRealtime, AgentSessionRepo,
@@ -129,13 +129,14 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
     async fn create(&self, params: CreateAgentSessionParams) -> Result<AgentSession> {
         let now = chrono::Utc::now();
         let session = AgentSession {
+            repo_branch: params.repo_branch,
             pull_request_url: None,
             id: params.id,
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             owner_id: params.owner_id,
             thread_id: params.thread_id,
             // The in-memory repo has no comms rows to derive a channel from.
-            thread_channel_id: None,
+            thread_parent: None,
             originating_message_id: params.originating_message_id,
             bot_id: params.bot_id,
             model: params.model,
@@ -165,28 +166,29 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         &self,
         viewer: &MacroUserIdStr<'static>,
         ids: &[AgentSessionId],
-    ) -> Result<Vec<AgentSessionPreview>> {
+    ) -> Result<Vec<SessionPreviewCandidate>> {
         // No `entity_access` rows to consult here: the owner is the one grant
-        // `create` always writes, so ownership stands in for access.
+        // `create` always writes, so ownership stands in for a grant.
         let sessions = self
             .sessions
             .lock()
             .expect("in-memory session store is not poisoned");
         Ok(ids
             .iter()
-            .map(|id| match sessions.get(id) {
-                None => AgentSessionPreview::DoesNotExist(*id),
-                Some(session) if session.owner_id != *viewer => AgentSessionPreview::NoAccess(*id),
-                Some(session) => AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
+            .filter_map(|id| sessions.get(id))
+            .map(|session| SessionPreviewCandidate {
+                data: AgentSessionPreviewData {
                     bot: None,
-                    id: *id,
+                    id: session.id,
                     name: session.name.clone(),
                     owner_id: session.owner_id.clone(),
                     bot_id: session.bot_id,
                     status: session.status.clone(),
                     created_at: session.created_at,
                     modified_at: session.modified_at,
-                })),
+                },
+                has_grant: session.owner_id == *viewer,
+                thread_parent: session.thread_parent.clone(),
             })
             .collect())
     }
@@ -235,11 +237,11 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
         Ok(found)
     }
 
-    async fn find_for_channel(
+    async fn find_for_thread(
         &self,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
-    ) -> Result<ChannelSession> {
+    ) -> Result<ThreadSession> {
         let sessions = self
             .sessions
             .lock()
@@ -251,8 +253,8 @@ impl AgentSessionRepo for InMemoryAgentSessionRepo {
                 && Some(session.bot_id) == bot_id
         });
         Ok(match matched {
-            Some(session) => ChannelSession::CreatedFromThread(session.clone()),
-            None => ChannelSession::None,
+            Some(session) => ThreadSession::CreatedFromThread(session.clone()),
+            None => ThreadSession::None,
         })
     }
 
@@ -690,13 +692,14 @@ impl agent_fold::domain::ports::LogRepo for InMemoryAgentSessionRepo {
 pub fn test_agent_session(id: AgentSessionId) -> AgentSession {
     let now = chrono::Utc::now();
     AgentSession {
+        repo_branch: None,
         pull_request_url: None,
         id,
         name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
         owner_id: macro_user_id::user_id::MacroUserIdStr::try_from_email("owner@example.com")
             .expect("valid macro user id"),
         thread_id: None,
-        thread_channel_id: None,
+        thread_parent: None,
         originating_message_id: None,
         bot_id: BotId::new_from_uuid(Uuid::from_u128(0xb07)),
         model: "claude-sonnet-5".to_string(),

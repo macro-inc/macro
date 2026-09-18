@@ -161,6 +161,12 @@ export const createAppViteConfig = (): UserConfigFn => {
           'vscode-oniguruma',
           // 'solid-devtools/setup',
           'libheif-js/wasm-bundle',
+          // Prebundle lazy spreadsheet worker dependencies before the first
+          // use, which would otherwise reload the page and discard its draft.
+          '@ironcalc/wasm',
+          'exceljs',
+          'fflate',
+          'saxes',
         ],
         // loro-crdt is a wasm singleton. The app imports it directly (esbuild
         // pre-bundles a copy) while the linked `@loro-mirror/core` workspace

@@ -1,5 +1,8 @@
 //! Outbound adapters for the documents domain.
 
+#[cfg(feature = "service")]
+pub mod document_sync;
+
 #[cfg(feature = "document_create_adapters")]
 pub mod document_bytes_upload;
 #[cfg(feature = "ai_tools")]

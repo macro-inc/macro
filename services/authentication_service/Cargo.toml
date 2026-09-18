@@ -73,6 +73,7 @@ foreign_entity = { path = "../../crates/foreign_entity" }
 favorites = { path = "../../crates/favorites", features = ["postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
+gtm_invite = { path = "../../crates/gtm_invite" }
 github = { path = "../../crates/github", default-features = false, features = [
   "axum",
   "inbound",
@@ -104,6 +105,7 @@ macro_db_client = { path = "../../crates/macro_db_client", default-features = fa
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
 macro_event_broker = { path = "../../crates/macro_event_broker" }
+messages = { path = "../../crates/messages", features = ["broker", "delivery"] }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_queues = { path = "../../crates/macro_queues" }
 macro_middleware = { path = "../../crates/macro_middleware", default-features = false, features = [

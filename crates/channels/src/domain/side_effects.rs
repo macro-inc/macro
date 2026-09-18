@@ -12,8 +12,7 @@ use crate::domain::{
     mention_events::{EntityRef, MentionMacroEvent, MentionMetadata},
     models::{
         BotId, BotSenderProfile, ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction,
-        MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, SimpleMention,
-        TypingAction,
+        MutatedAttachment, MutatedMessage, TypingAction,
     },
     ports::{
         ChannelContactsDispatcher, ChannelEventDispatcher, ChannelEventHandler,
@@ -23,6 +22,7 @@ use crate::domain::{
 use bot_id::BotIdStr;
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use messages::domain::models::{PostMessageNotificationPolicy, SimpleMention};
 use std::collections::HashSet;
 use tokio::sync::mpsc::UnboundedSender;
 use tracing::Instrument as _;
@@ -127,6 +127,13 @@ fn is_bot_user_mention(mention: &SimpleMention) -> bool {
 /// Realtime update requested by the channel domain.
 #[derive(Debug, Clone)]
 pub enum ChannelRealtimeEffect {
+    /// Invalidate a channel picture after a durable change.
+    PictureChanged {
+        /// Recipients whose picture caches should be refreshed.
+        recipients: Vec<MacroUserIdStr<'static>>,
+        /// Channel whose picture changed.
+        channel_id: Uuid,
+    },
     /// A message was created or changed.
     Message {
         /// Recipients that should receive the update.
@@ -485,6 +492,22 @@ where
         let mention_broker_events = mention_broker_events_for_event(&event);
 
         match event {
+            ChannelEvent::PictureChanged {
+                channel_id,
+                recipients,
+            } => {
+                if let Err(error) = self
+                    .realtime
+                    .publish(ChannelRealtimeEffect::PictureChanged {
+                        channel_id,
+                        recipients,
+                    })
+                    .await
+                {
+                    let error: anyhow::Error = error.into();
+                    tracing::error!(error=?error, "unable to publish channel picture change");
+                }
+            }
             ChannelEvent::ChannelCreated { .. } => {}
             ChannelEvent::ChannelUpdated { .. } => {}
             ChannelEvent::ParticipantsRemoved { .. } => {}
@@ -1464,7 +1487,9 @@ fn broker_events_for_event(event: &ChannelEvent) -> Vec<ChannelMacroEvent> {
                 removed_user_ids: removed_user_ids.clone(),
             },
         )],
-        ChannelEvent::ReactionChanged { .. } | ChannelEvent::TypingChanged { .. } => Vec::new(),
+        ChannelEvent::ReactionChanged { .. }
+        | ChannelEvent::TypingChanged { .. }
+        | ChannelEvent::PictureChanged { .. } => Vec::new(),
         ChannelEvent::EntityMentionCreated { .. } | ChannelEvent::EntityMentionDeleted { .. } => {
             Vec::new()
         }

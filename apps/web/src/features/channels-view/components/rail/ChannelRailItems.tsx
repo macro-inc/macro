@@ -210,7 +210,7 @@ export function ChannelAvatar(props: {
   size?: 'sm' | 'md';
 }) {
   const sizeClass = () =>
-    props.size === 'md' ? 'size-9 [&_svg]:size-4.5' : 'size-6 [&_svg]:size-3.5';
+    props.size === 'md' ? 'size-9 [&_svg]:size-4.5' : 'size-5 [&_svg]:size-4';
 
   return (
     <Switch>

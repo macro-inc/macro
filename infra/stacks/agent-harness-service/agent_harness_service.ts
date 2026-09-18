@@ -197,6 +197,49 @@ export class AgentHarnessService extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    const claudeOauthKey = new aws.kms.Key(
+      `${BASE_NAME}-claude-oauth-key`,
+      {
+        description:
+          'Encrypt per-user Claude OAuth grants and browser sign-in state',
+        enableKeyRotation: true,
+        deletionWindowInDays: 30,
+        tags,
+      },
+      { parent: this }
+    );
+    new aws.kms.Alias(
+      `${BASE_NAME}-claude-oauth-alias`,
+      {
+        name: `alias/agent-harness-service-claude-oauth-${stack}`,
+        targetKeyId: claudeOauthKey.keyId,
+      },
+      { parent: this }
+    );
+    const claudeOauthPolicy = new aws.iam.RolePolicy(
+      `${BASE_NAME}-claude-oauth-policy`,
+      {
+        role: this.role.name,
+        policy: pulumi.jsonStringify({
+          Version: '2012-10-17',
+          Statement: [
+            {
+              Effect: 'Allow',
+              Action: ['kms:Encrypt', 'kms:Decrypt'],
+              Resource: claudeOauthKey.arn,
+              Condition: {
+                StringEquals: {
+                  'kms:EncryptionContext:purpose': 'claude-cloud-oauth',
+                },
+                Null: { 'kms:EncryptionContext:user_id': 'false' },
+              },
+            },
+          ],
+        }),
+      },
+      { parent: this }
+    );
+
     // Producer/consumer access to the macro event Kafka cluster: the harness
     // consumes `macro.channels` and `macro.agent_sessions`, publishes agent
     // triggers, and publishes channel side effects.
@@ -335,6 +378,7 @@ export class AgentHarnessService extends pulumi.ComponentResource {
               memory: 2048,
               environment: [
                 ...containerEnvVars,
+                { name: 'CLAUDE_OAUTH_KMS_KEY_ID', value: claudeOauthKey.arn },
                 {
                   name: 'BASE_URL',
                   value: this.domain,
@@ -385,7 +429,11 @@ export class AgentHarnessService extends pulumi.ComponentResource {
         // ECS refuses a service whose target group is not yet associated
         // with a load balancer; it is the listener rule that creates that
         // association.
-        dependsOn: [gatewayTargetGroup.listener_rule, egress.listener_rule],
+        dependsOn: [
+          gatewayTargetGroup.listener_rule,
+          egress.listener_rule,
+          claudeOauthPolicy,
+        ],
       }
     );
 

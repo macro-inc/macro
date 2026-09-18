@@ -202,7 +202,7 @@ export function ComposeLayout(props: {
     >
       <div class="pb-1 w-full h-max shrink-0">
         <div
-          class="mb-4 h-6 flex items-center justify-between gap-3"
+          class="min-h-12 flex items-center justify-between gap-2 border-b border-edge-muted"
           classList={{ hidden: ctx.isMobile() && !props.header }}
         >
           <Show
@@ -210,25 +210,27 @@ export function ComposeLayout(props: {
             fallback={
               <Suspense
                 fallback={
-                  <div class="flex gap-1 items-center">
+                  <div class="flex gap-1 items-center py-3">
                     <CircleSpinner class="size-4 animate-spin" />
-                    <span class="text-ink-extra-muted/50 text-xs">
+                    <span class="text-ink-placeholder text-sm">
                       Processing...
                     </span>
                   </div>
                 }
               >
                 <Show when={ctx.fromAddress?.()}>
-                  <div class="text-xs text-ink-extra-muted/50 flex items-center gap-2 min-w-0 flex-1">
-                    <span class="w-14 shrink-0">from</span>
-                    <div class="min-w-0">
-                      <FromInboxSelector
-                        disabled={ctx.disabled()}
-                        links={ctx.fromInboxes?.() ?? []}
-                        activeInboxId={ctx.selectedInboxId?.()}
-                        onSelect={(id) => ctx.onSelectInbox?.(id)}
-                      />
-                    </div>
+                  <div class="flex items-center gap-2 min-w-0 flex-1 py-3">
+                    <span class="w-14 shrink-0 text-sm text-ink-placeholder">
+                      From
+                    </span>
+                    <FromInboxSelector
+                      pill
+                      class="min-w-0"
+                      disabled={ctx.disabled()}
+                      links={ctx.fromInboxes?.() ?? []}
+                      activeInboxId={ctx.selectedInboxId?.()}
+                      onSelect={(id) => ctx.onSelectInbox?.(id)}
+                    />
                   </div>
                 </Show>
               </Suspense>

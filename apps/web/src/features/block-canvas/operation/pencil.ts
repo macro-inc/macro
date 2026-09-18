@@ -1,12 +1,12 @@
-import { createBlockSignal } from '@core/block';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { unwrap } from 'solid-js/store';
 import { OPERATION_LOGGING } from '../constants';
+import { useCanvasDocument } from '../context/canvas-document-context';
 import type { PencilNode } from '../model/CanvasModel';
 import { useCachedStyle } from '../signal/cachedStyle';
 import { useCanvasHistory } from '../signal/canvasHistory';
 import { useSelection } from '../signal/selection';
-import { highestOrderSignal, useCanvasNodes } from '../store/canvasData';
+import { useCanvasNodes } from '../store/canvasData';
 import { useRenderState } from '../store/RenderState';
 import { sharedInstance } from '../util/sharedInstance';
 import { simplify } from '../util/simplify';
@@ -31,9 +31,6 @@ function cleanUpLine(coords: Coords): [number, number][] {
   return simplified.map(({ x, y }) => [x, y]);
 }
 
-export const currentPencilOperationSignal =
-  createBlockSignal<PencilOperation>();
-
 export const usePencil = sharedInstance((): Operator => {
   const { pageToCanvas } = useRenderState();
   const { deselectNode } = useSelection();
@@ -41,8 +38,8 @@ export const usePencil = sharedInstance((): Operator => {
   const history = useCanvasHistory();
   const cachedStyle = useCachedStyle();
   const [currentPencilOperation, setCurrentPencilOperation] =
-    currentPencilOperationSignal;
-  const highestOrder = highestOrderSignal.get;
+    useCanvasDocument().state.signals.currentPencilOperation;
+  const highestOrder = useCanvasDocument().state.signals.highestOrder[0];
 
   function _calculateDimensions(coords: [number, number][]) {
     let minX = Infinity;

@@ -19,6 +19,8 @@ pub enum ModelHarness {
     InMemory,
     /// The caller's Cursor account.
     Cursor,
+    /// The caller's allowlisted Claude subscription demo.
+    ClaudeCloud,
     /// A paired macrod runtime.
     Macrod,
 }
@@ -142,6 +144,15 @@ pub trait CursorModelProbe: Send + Sync + 'static {
     ) -> impl Future<Output = Result<RawModelProbe, ModelProbeError>> + Send;
 }
 
+/// Optional demo provider; disabled deployments advertise no Claude models.
+pub trait ClaudeModelProbe: Send + Sync + 'static {
+    /// Discover availability for this caller, never another user's subscription.
+    fn probe<'a>(
+        &'a self,
+        caller: &'a MacroUserIdStr<'static>,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<RawModelProbe, ModelProbeError>> + Send + 'a>>;
+}
+
 /// Fresh paired-macrod model probe.
 pub trait MacrodModelProbe: Send + Sync + 'static {
     /// Probe the live runtime connection for `harness`.
@@ -168,6 +179,7 @@ pub struct AgentModelsServiceImpl<Access, InMemory, Cursor, Macrod> {
     cursor: Cursor,
     macrod: Macrod,
     timeout: Duration,
+    claude: Option<std::sync::Arc<dyn ClaudeModelProbe>>,
 }
 
 impl<Access, InMemory, Cursor, Macrod> AgentModelsServiceImpl<Access, InMemory, Cursor, Macrod> {
@@ -185,7 +197,14 @@ impl<Access, InMemory, Cursor, Macrod> AgentModelsServiceImpl<Access, InMemory, 
             cursor,
             macrod,
             timeout,
+            claude: None,
         }
+    }
+
+    /// Enable owner-scoped discovery for the demo cloud provider.
+    pub fn with_claude(mut self, probe: std::sync::Arc<dyn ClaudeModelProbe>) -> Self {
+        self.claude = Some(probe);
+        self
     }
 }
 
@@ -203,6 +222,12 @@ where
         request: LoadAgentModels,
     ) -> Result<AgentModels, LoadAgentModelsError> {
         let probe = match (request.harness, request.harness_id) {
+            (ModelHarness::ClaudeCloud, None) => match &self.claude {
+                Some(probe) => tokio::time::timeout(self.timeout, probe.probe(&caller))
+                    .await
+                    .map_err(|_| LoadAgentModelsError::Timeout)?,
+                None => Ok(RawModelProbe::Unsupported),
+            },
             (ModelHarness::InMemory, None) => {
                 tokio::time::timeout(self.timeout, self.in_memory.probe())
                     .await

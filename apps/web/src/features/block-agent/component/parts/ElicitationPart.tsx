@@ -176,6 +176,7 @@ function ResolvedElicitation(props: { part: ElicitationPartData }) {
           common={{
             id: props.part.toolCall ?? String(props.part.requestId),
             label: reviewed().request.tool,
+            server: undefined,
             status:
               reviewed().toolOutcome.kind === 'failed' ? 'failed' : 'completed',
             muted: reviewed().toolOutcome.kind === 'failed',

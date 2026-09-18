@@ -496,8 +496,8 @@ export function mapGraphqlEntityProperties(
   entityId: string
 ): SoupProperty[] | undefined {
   if (!data) return undefined;
-  const item = data.user.soup.items.find(
-    (candidate) => candidate.id === entityId
-  );
+  const items = data.user?.soup?.items;
+  if (!items) return undefined;
+  const item = items.find((candidate) => candidate.id === entityId);
   return mapGraphqlProperties(item?.properties ?? []);
 }

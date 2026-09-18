@@ -30,11 +30,13 @@ export {
 export {
   ViewBreadcrumbs,
   type ViewBreadcrumbsButtonProps,
+  type ViewBreadcrumbsEntry,
   type ViewBreadcrumbsItemProps,
   type ViewBreadcrumbsItemState,
   type ViewBreadcrumbsOutletProps,
   type ViewBreadcrumbsRootProps,
   type ViewBreadcrumbsSeparatorProps,
+  type ViewBreadcrumbsSeparatorState,
 } from './ViewBreadcrumbs';
 export {
   useViewShell,

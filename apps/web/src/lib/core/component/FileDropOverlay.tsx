@@ -7,13 +7,13 @@ export const FileDropOverlay = (props: ParentProps<{ valid?: boolean }>) => {
   const valid = () => props.valid !== false;
   return (
     <div
-      class="absolute size-full inset-0 rounded-xl z-modal bg-modal-overlay pattern-diagonal-4 flex items-center justify-center"
+      class="absolute size-full inset-0 rounded-xl z-modal flex items-center justify-center"
       classList={{
-        'pattern-edge-muted': valid(),
-        'pattern-failure-bg': !valid(),
+        'bg-modal-overlay': valid(),
+        'bg-failure-bg/80': !valid(),
       }}
     >
-      <div class="max-w-[min(28rem,calc(100%-3rem))] min-w-0 bg-surface border border-edge rounded-lg shadow-lg shadow-drop-shadow px-4 py-3 flex items-center gap-2 text-sm text-ink">
+      <div class="max-w-[min(28rem,calc(100%-3rem))] min-w-0 bg-surface border border-edge rounded-full shadow-lg shadow-drop-shadow px-4 py-2 flex items-center gap-2 font-sans text-xs text-ink">
         {props.children}
       </div>
     </div>

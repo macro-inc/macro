@@ -4,6 +4,7 @@ import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useCodexStatusQuery } from '@queries/auth/codex';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
+import { queryReadyGate } from '@queries/gate';
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { type Accessor, createMemo } from 'solid-js';
@@ -72,8 +73,8 @@ export function useChannelBotMentionUsers(
 
   return createMemo(() =>
     availableBotMentionUsers(
-      channelBots.isSuccess ? channelBots.data : [],
-      agents.isSuccess ? agents.data : [],
+      queryReadyGate(channelBots) ? channelBots.data : [],
+      queryReadyGate(agents) ? agents.data : [],
       canUseCodex() &&
         codexStatus.isSuccess &&
         codexStatus.data.connected &&

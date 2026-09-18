@@ -5,14 +5,20 @@
  * OpenAPI spec version: 0.1.0
  */
 
+import type { MessageParent } from './messageParent';
+import type { ThreadOriginChannelId } from './threadOriginChannelId';
+
 /**
- * The channel thread a session was opened from, when it was.
+ * The thread a session was opened from, when it was.
  */
 export interface ThreadOrigin {
-  /** Channel the thread lives in. */
-  channel_id: string;
+  /** Channel the thread lives in, for channel parents only. Kept beside
+`parent` for consumers written when every origin was a channel. */
+  channel_id?: ThreadOriginChannelId;
   /** The message whose mention opened the session. */
   originating_message_id: string;
+  /** Entity owning the thread: the channel or document it was posted in. */
+  parent: MessageParent;
   /** Root message of the thread. */
   thread_id: string;
 }

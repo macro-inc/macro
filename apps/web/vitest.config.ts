@@ -167,12 +167,36 @@ export default defineConfig({
         },
       },
       {
+        // Keep transition primitives on the same browser runtime as their callers.
+        // Optimizing the CommonJS entry otherwise bundles a second Solid instance.
+        extends: './src/lib/core/vitest.config.ts',
+        resolve: {
+          alias: {
+            'solid-transition-group': fileURLToPath(
+              new URL(
+                '../../node_modules/solid-transition-group/dist/index.js',
+                import.meta.url
+              )
+            ),
+          },
+        },
+        ssr: {
+          resolve: { conditions: ['browser', 'development'] },
+        },
+        test: {
+          deps: { optimizer: { web: { enabled: false } } },
+          include: ['src/components/view-shell/**/*.{test,spec}.{ts,tsx}'],
+          name: 'view-shell',
+        },
+      },
+      {
         // App-shell and feature tests without a specialized environment.
         extends: './src/lib/core/vitest.config.ts',
         test: {
           environment: 'jsdom',
           exclude: [
             ...configDefaults.exclude,
+            'src/components/view-shell/**/*',
             'src/features/{theme,block-channel,block-call,block-pr,block-md,channel,notifications,block-email,email-message,email-thread,email-compose}/**/*',
           ],
           include: [

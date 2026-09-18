@@ -1,56 +1,15 @@
-import { useBlockId, useBlockOwner } from '@core/block';
-import { type Owner, onCleanup, runWithOwner } from 'solid-js';
+import { usePdfDocument } from '../context/pdf-document-context';
 import Term from '../model/Term';
 import { cleanQuery } from '../util/StringUtils';
 import { XMLUtils } from '../util/XMLUtils';
 
 /**
  * Returns a singleton instance of TermDataStore per document id
- * @throws if called outside of a block context
+ * @throws if called outside of a PDF document context
  */
-export const keyedTermDataStore = () => {
-  const documentId = useBlockId();
-  const blockOwner = useBlockOwner();
-  if (!blockOwner) {
-    throw new Error('term data store has no owner in block context');
-  }
+export const keyedTermDataStore = () => usePdfDocument().state.termDataStore;
 
-  const owners = documentIdToOwners.get(documentId);
-  if (!owners) {
-    documentIdToOwners.set(documentId, new Set([blockOwner]));
-  } else {
-    owners.add(blockOwner);
-  }
-
-  // This keeps the singleton TermDataStore alive for the lifetime of the block.
-  // If there are multiple block references to the same TermDataStore, it will be
-  // garbage collected when the last reference is removed.
-  return runWithOwner(blockOwner, () => {
-    onCleanup(() => {
-      const owners = documentIdToOwners.get(documentId);
-      owners?.delete(blockOwner);
-
-      if (!owners || owners.size === 0) {
-        documentIdToTermDataStore.delete(documentId);
-        documentIdToOwners.delete(documentId);
-      }
-    });
-
-    const instance = documentIdToTermDataStore.get(documentId);
-    if (instance) {
-      return instance;
-    }
-
-    const store = new TermDataStore();
-    documentIdToTermDataStore.set(documentId, store);
-    return store;
-  });
-};
-
-const documentIdToOwners = new Map<string, Set<Owner>>();
-const documentIdToTermDataStore = new Map<string, TermDataStore>();
-
-class TermDataStore {
+export class TermDataStore {
   terms: Term[] = [];
   idToTerm: Map<string, Term> = new Map();
   allTerms: Term[] = [];

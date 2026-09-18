@@ -231,6 +231,7 @@ fn call_record(
         channel_name: None,
         custom_name: None,
         summary: None,
+        team_share_access_level: None,
         share_with_team: false,
         is_active: true,
         status: None,

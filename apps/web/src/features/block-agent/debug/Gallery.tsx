@@ -149,7 +149,7 @@ function ReplyToSelectionDemo() {
         Select any of the message text, then click Reply to this.
       </p>
       <div ref={setContainer} class="relative">
-        <Message message={FIXTURE_MESSAGE} />
+        <Message message={FIXTURE_MESSAGE} inFlight={false} />
         <ReplyToSelection
           container={container()}
           onReply={(text) => quoteInsert?.(text)}
@@ -303,6 +303,75 @@ const FIXTURE_MESSAGE: FoldedMessage = {
         error: null,
       },
     },
+    // An MCP call the fold has no model for - a Cursor session reaching
+    // Macro's server, whose exchange is the request and response JSON.
+    {
+      kind: 'tool_use',
+      id: 'demo-mcp-macro',
+      name: { kind: 'mcp', server: 'macro', tool: 'ReadChannelThread' },
+      status: 'completed',
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        output: null,
+        input: {
+          channelId: '0195d2dd-5de9-71f2-9d59-5d9734f1adb7',
+          threadId: '01a0b102-3e01-7166-92ca-e5a4b11dace6',
+          limit: 20,
+        },
+        result: {
+          channelName: 'feature-requests',
+          messages: [
+            {
+              id: '01a0b16e-95d9-79a8-ace0-2dc075b7d49f',
+              sender: 'macro|gab@macro.com',
+              text: 'references for agents so i know where they were dispatched from',
+              sentAt: '2026-09-17T22:41:03Z',
+            },
+            {
+              id: '01a0b17a-db3f-75d1-86d9-0d8e86b5106b',
+              sender: 'macro|gab@macro.com',
+              text: 'would be nice to be able to scroll context/copy the entire thing',
+              sentAt: '2026-09-17T22:47:19Z',
+            },
+          ],
+          hasMore: false,
+        },
+        error: null,
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-mcp-deepwiki',
+      name: { kind: 'mcp', server: 'deepwiki', tool: 'ask_question' },
+      status: 'completed',
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        output: null,
+        input: {
+          repoName: 'sst/opencode',
+          question: 'How are tool calls rendered in the session UI?',
+        },
+        result:
+          'Tool calls render through `basic-tool-v2.tsx`: one collapsible row per call, with the tool-specific body mounted on expansion.',
+        error: null,
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-mcp-refused',
+      name: { kind: 'mcp', server: 'ops', tool: 'deploy' },
+      status: 'failed',
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        output: null,
+        input: { environment: 'production', service: 'agent-fold' },
+        result: null,
+        error: 'user declined',
+      },
+    },
     {
       kind: 'tool_use',
       id: 'demo-email',
@@ -365,6 +434,108 @@ const FIXTURE_MESSAGE: FoldedMessage = {
     },
   ],
 };
+
+/** A live Cursor-shaped turn: earlier reasoning has settled, the tail has not. */
+const FIXTURE_IN_FLIGHT: FoldedMessage = {
+  agentSessionId: 'demo',
+  requestId: null,
+  turn: 1,
+  author: { kind: 'agent' },
+  stop: null,
+  parts: [
+    {
+      kind: 'thought',
+      text: 'The batch fold re-derives every message per frame; switch to the incremental machine.',
+    },
+    {
+      kind: 'tool_use',
+      id: 'live-read',
+      name: { kind: 'native', name: 'Read' },
+      status: 'completed',
+      detail: { kind: 'read', paths: ['crates/agent_fold/src/domain/fold.rs'] },
+    },
+    {
+      kind: 'tool_use',
+      id: 'live-search',
+      name: { kind: 'native', name: 'Search' },
+      status: 'completed',
+      detail: {
+        kind: 'search',
+        paths: ['crates/agent_fold/src'],
+        output: 'fold.rs:12: fn fold(log: &[Frame]) -> Vec<Message>',
+      },
+    },
+    {
+      kind: 'thought',
+      text: 'The incremental machine already handles this. Next I will edit fold.rs.',
+    },
+  ],
+};
+
+/**
+ * A turn the log never closed: `stop: null`, a call still `running`, a
+ * trailing thought. The fold leaves a superseded turn exactly like this, and
+ * so does a runtime that died mid-turn. Whether it reads as live is the
+ * transcript's call, not the message's.
+ */
+const FIXTURE_UNCLOSED: FoldedMessage = {
+  agentSessionId: 'demo',
+  requestId: null,
+  turn: 2,
+  author: { kind: 'agent' },
+  stop: null,
+  parts: [
+    {
+      kind: 'thought',
+      text: 'The tests pin the snapshot, so the fixture has to change with the fold.',
+    },
+    {
+      kind: 'tool_use',
+      id: 'unclosed-read',
+      name: { kind: 'native', name: 'Read' },
+      status: 'completed',
+      detail: { kind: 'read', paths: ['crates/agent_fold/src/domain/test.rs'] },
+    },
+    {
+      kind: 'tool_use',
+      id: 'unclosed-bash',
+      name: { kind: 'native', name: 'Bash' },
+      status: 'running',
+      detail: {
+        kind: 'terminal',
+        command: 'cargo insta test -p agent_fold',
+        output: null,
+        exitCode: null,
+      },
+    },
+    {
+      kind: 'thought',
+      text: 'Waiting on the snapshot run before touching the fixture.',
+    },
+  ],
+};
+
+/**
+ * The same unclosed turn, live or settled at the flip of a switch: the
+ * active ? done transition every shimmer in a message goes through when the
+ * session's `working` drops, whatever the message's own `stop` says.
+ */
+function LiveTurnDemo() {
+  const [inFlight, setInFlight] = createSignal(true);
+  return (
+    <div class="flex flex-col gap-3">
+      <label class="flex items-center gap-2 text-xs text-ink-muted">
+        <input
+          type="checkbox"
+          checked={inFlight()}
+          onChange={(event) => setInFlight(event.currentTarget.checked)}
+        />
+        Turn in flight
+      </label>
+      <Message message={FIXTURE_UNCLOSED} inFlight={inFlight()} />
+    </div>
+  );
+}
 
 /**
  * The Claude Code colour question after the fold collapsed its custom pair,
@@ -772,7 +943,19 @@ export default function AgentUiGallery() {
           </Item>
 
           <Item label="AgentMessage (end-to-end)">
-            <Message message={FIXTURE_MESSAGE} />
+            <Message message={FIXTURE_MESSAGE} inFlight={false} />
+          </Item>
+
+          <Item label="AgentMessage (Cursor turn in flight)">
+            <p class="text-xs text-ink-muted">
+              Earlier reasoning has settled. Only the trailing thought still
+              says Thinking.
+            </p>
+            <Message message={FIXTURE_IN_FLIGHT} inFlight />
+          </Item>
+
+          <Item label="AgentMessage (turn settles)">
+            <LiveTurnDemo />
           </Item>
         </div>
       </div>

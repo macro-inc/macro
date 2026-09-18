@@ -1,4 +1,8 @@
 import { LIST_VIEW_ID, type ListView } from '@app/constants/list-views';
+import {
+  agentsRouteSegments,
+  parseAgentsRoute,
+} from '@app/features/agents-view/core/route';
 import type {
   BlockAlias,
   BlockAliasContext,
@@ -9,6 +13,7 @@ import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { toast } from '@core/component/Toast/Toast';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
+import { sameContentIdentity } from '@core/contentInstanceRegistry';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type {
   BlockInstanceHandle,
@@ -22,6 +27,7 @@ import {
   createMemo,
   createSignal,
   type JSXElement,
+  onCleanup,
 } from 'solid-js';
 import { createStore, produce, reconcile, type Store } from 'solid-js/store';
 import { match } from 'ts-pattern';
@@ -114,6 +120,10 @@ function getAliasOrType(content: SplitContent): string {
  * to keep the tab out of the URL.
  */
 function contentUrlSegments(content: SplitContent): string[] {
+  if (content.type === 'component') {
+    const agentsRoute = agentsRouteSegments(content.id);
+    if (agentsRoute) return agentsRoute;
+  }
   if (content.type === 'component' && content.id === 'settings') {
     return ['settings', settingsTabToSlug(activeTabId())];
   }
@@ -188,6 +198,7 @@ export type SplitState = {
 export type CreateNewSplitOptions = {
   content?: SplitContent;
   activate?: boolean;
+  /** Shell components only; entity blocks are always single-instance. */
   allowDuplicate?: boolean;
   referredFrom: ReferredFrom;
   insertIndex?: number;
@@ -202,6 +213,7 @@ export type OpenWithSplitOptions = {
   mergeHistory?: boolean;
   activate?: boolean;
   referredFrom?: ReferredFrom;
+  /** Shell components only; entity blocks are always single-instance. */
   allowDuplicate?: boolean;
   replaceWhenFull?: boolean;
   /** If true, prefers opening in a new split. May still replace if layout is at capacity. */
@@ -328,7 +340,7 @@ export type SplitManager = {
   canSwapSplit: (id: SplitId, direction: 'left' | 'right') => boolean;
 
   /** Create a new split with the provided initial content and activate it */
-  createNewSplit: (options: CreateNewSplitOptions) => SplitHandle;
+  createNewSplit: (options: CreateNewSplitOptions) => SplitHandle | undefined;
 
   openWithSplit: (
     content: SplitContent,
@@ -363,7 +375,7 @@ export type SplitManager = {
   replaceAllSplits: (
     content: SplitContent,
     options?: { referredFrom?: ReferredFrom }
-  ) => SplitHandle;
+  ) => SplitHandle | undefined;
 
   /** Check if a split exists by its split id */
   hasSplit: (type: SplitContentType, id: string) => boolean;
@@ -387,7 +399,9 @@ export type SplitManager = {
   setResizeContext: (cts: ResizeZoneCtx) => void;
 
   /** Create a temporary popover split that renders content in a modal dialog */
-  createPopoverSplit: (options: PopoverSplitOptions) => PopoverSplitHandle;
+  createPopoverSplit: (
+    options: PopoverSplitOptions
+  ) => PopoverSplitHandle | undefined;
 
   /** Get all active popover splits */
   getActivePopovers: () => PopoverSplitHandle[];
@@ -491,7 +505,7 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
     referredFrom?: ReferredFrom;
   }) => void;
   /**
-   * Point this split at a new id for the same block *without* remounting it.
+   * Point this split at a new id for the same mounted surface without remounting it.
    *
    * `replace` tears the mount down and builds a new one, which is right when
    * the user navigates somewhere else. This is the other case: the block is
@@ -500,12 +514,16 @@ export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
    * session id when the create resolves, with the composer the user is typing
    * into left untouched.
    *
-   * Only the id moves — same block type, same mount, same history entry
+   * Components may also adopt a resolved route id, as the Agents workspace does.
+   * Only the id moves — same content type, same mount, same history entry
    * (rewritten in place, so Back still goes where it did and the URL swaps
-   * without a new entry). A no-op unless the split currently shows a block of
+   * without a new entry). A no-op unless the split currently shows content of
    * `type`.
    */
-  adoptContentId: (options: { type: BlockName; nextId: string }) => void;
+  adoptContentId: (options: {
+    type: BlockName | 'component';
+    nextId: string;
+  }) => void;
   removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
@@ -629,11 +647,22 @@ function sameIdentity(a: SplitContent, b: SplitContent): boolean {
   return a.id === b.id;
 }
 
-function sameNonComponentIdentity(a: SplitContent, b: SplitContent): boolean {
-  if (a.type === 'component' || b.type === 'component') return false;
-  // check on the resolved block so you cannot open `/md/{ID}/task{ID}`
-  if (resolveBlockAlias(a.type) !== resolveBlockAlias(b.type)) return false;
-  return a.id === b.id;
+function contentIdentity(content: SplitContent) {
+  const route =
+    content.type === 'component' ? parseAgentsRoute(content.id) : undefined;
+  return route
+    ? {
+        type:
+          route.conversation.type === 'agent_session'
+            ? ('agent' as const)
+            : ('chat' as const),
+        id: route.conversation.id,
+      }
+    : content;
+}
+
+function sameEntityContent(a: SplitContent, b: SplitContent): boolean {
+  return sameContentIdentity(contentIdentity(a), contentIdentity(b));
 }
 
 function isDuplicateSplit(
@@ -643,7 +672,7 @@ function isDuplicateSplit(
 ): boolean {
   return splits
     .filter((s) => !isExcluded(s))
-    .some((split) => sameNonComponentIdentity(split.content, content));
+    .some((split) => sameEntityContent(split.content, content));
 }
 
 export function createSplitLayout(
@@ -684,6 +713,27 @@ export function createSplitLayout(
     previewPairs: {},
     popovers: new Map(),
   });
+
+  const contentInstances = orchestrator.contentInstances;
+  const unregisterContentInstances = contentInstances.register(() => [
+    ...state.splits.map((split) => ({
+      owner: split.id,
+      content: contentIdentity(split.content),
+    })),
+    ...[...state.popovers.values()]
+      .filter((popover) => popover.isOpen)
+      .map((popover) => ({
+        owner: popover.id,
+        content: contentIdentity(popover.content),
+      })),
+  ]);
+  onCleanup(unregisterContentInstances);
+  const canOpenContent = (content: SplitContent, owner?: SplitId) => {
+    if (!contentInstances.isOpenElsewhere(contentIdentity(content), owner))
+      return true;
+    toast.alert('Content already open');
+    return false;
+  };
 
   const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
 
@@ -901,6 +951,8 @@ export function createSplitLayout(
 
     const split = state.splits[i];
     if (!split.history.canGoBack()) return;
+    if (!canOpenContent(split.history.items[split.history.index - 1], id))
+      return;
 
     batch(() => {
       captureCurrentEntryState(split);
@@ -943,7 +995,9 @@ export function createSplitLayout(
       // on to an entry that can actually be shown.
       const prev = split.history.backTo(
         (content) =>
-          predicate(content) && !isDuplicateSplit(otherSplits, content)
+          predicate(content) &&
+          !isDuplicateSplit(otherSplits, content) &&
+          !contentInstances.isOpenElsewhere(contentIdentity(content), id)
       );
       if (!prev) return;
 
@@ -961,6 +1015,8 @@ export function createSplitLayout(
 
     const split = state.splits[i];
     if (!split.history.canGoForward()) return;
+    if (!canOpenContent(split.history.items[split.history.index + 1], id))
+      return;
 
     batch(() => {
       captureCurrentEntryState(split);
@@ -981,7 +1037,9 @@ export function createSplitLayout(
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
     const split = state.splits[i];
-    const next = split.history.remove(predicate);
+    const next = split.history.remove(predicate, (content) =>
+      canOpenContent(content, id)
+    );
     if (!next) return;
 
     reattach(split, next, undefined, 'replace');
@@ -1003,6 +1061,7 @@ export function createSplitLayout(
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
     const content = attachAliasContext(next);
+    if (!canOpenContent(content, id)) return;
 
     const split = state.splits[i];
     batch(() => {
@@ -1031,7 +1090,11 @@ export function createSplitLayout(
    * cause is `replace`, so the URL sync swaps the path in place instead of
    * adding a back step to a placeholder the user can never return to.
    */
-  function adoptContentId(id: SplitId, type: BlockName, nextId: string) {
+  function adoptContentId(
+    id: SplitId,
+    type: BlockName | 'component',
+    nextId: string
+  ) {
     const i = splitIndexById(id);
     if (i < 0) return;
 
@@ -1051,6 +1114,7 @@ export function createSplitLayout(
     }
 
     const next: SplitContent = { ...current, id: nextId, params: undefined };
+    if (!canOpenContent(next, id)) return;
 
     batch(() => {
       split.history.replaceCurrent(next);
@@ -1069,11 +1133,13 @@ export function createSplitLayout(
           lastNavigationCause: 'replace',
         });
       });
-      orchestrator.rekeyBlockInstance(
-        resolveBlockAlias(type),
-        current.id,
-        nextId
-      );
+      if (type !== 'component') {
+        orchestrator.rekeyBlockInstance(
+          resolveBlockAlias(type),
+          current.id,
+          nextId
+        );
+      }
     });
   }
 
@@ -1309,31 +1375,26 @@ export function createSplitLayout(
     };
   };
 
-  function createNewSplit(options: CreateNewSplitOptions): SplitHandle {
-    const {
-      content,
-      activate,
-      referredFrom,
-      allowDuplicate,
-      initialHistory,
-      insertIndex,
-    } = options;
+  function createNewSplit(
+    options: CreateNewSplitOptions
+  ): SplitHandle | undefined {
+    const { content, activate, referredFrom, initialHistory, insertIndex } =
+      options;
     const initialContent = content ?? DEFAULT_SPLIT_CONTENT;
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
-    if (
-      !allowDuplicate &&
-      isDuplicateSplit(state.splits, initialContent, isExcluded)
-    ) {
+    if (isDuplicateSplit(state.splits, initialContent, isExcluded)) {
       const existingSplit = state.splits.find(
-        (s) =>
-          s.content.type === initialContent.type &&
-          s.content.id === initialContent.id
+        (s) => !isExcluded(s) && sameEntityContent(s.content, initialContent)
       );
 
-      return getSplit(existingSplit!.id)!;
+      const handle = getSplit(existingSplit!.id)!;
+      if (activate) handle.activate();
+      toast.alert('Content already open');
+      return handle;
     }
 
+    if (!canOpenContent(initialContent)) return;
     const split = buildSplit({
       initialContent,
       isDefault,
@@ -1753,7 +1814,10 @@ export function createSplitLayout(
     id: string
   ): SplitHandle | undefined {
     const match = state.splits.find(
-      (s) => s.content.type === type && s.content.id === id && !isExcluded(s)
+      (s) =>
+        (sameEntityContent(s.content, { type, id }) ||
+          (s.content.type === type && s.content.id === id)) &&
+        !isExcluded(s)
     );
     if (!match) return;
     return getSplit(match.id);
@@ -1818,6 +1882,17 @@ export function createSplitLayout(
         continue;
       }
 
+      if (
+        isDuplicateSplit(resultSplits, newSplits[i]) ||
+        !canOpenContent(newSplits[i])
+      ) {
+        const previous = visibleSplits[i];
+        if (previous && !usedIds.has(previous.id)) {
+          resultSplits.push(previous);
+          usedIds.add(previous.id);
+        }
+        continue;
+      }
       const newSplit = buildSplit({
         initialContent: newSplits[i],
         referredFrom: null,
@@ -1888,7 +1963,8 @@ export function createSplitLayout(
   // Popover split functions
   function createPopoverSplit(
     options: PopoverSplitOptions
-  ): PopoverSplitHandle {
+  ): PopoverSplitHandle | undefined {
+    if (!canOpenContent(options.content)) return;
     const id = `popover-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Acquire focus lock BEFORE any state updates to capture the correct element
@@ -2011,16 +2087,12 @@ export function createSplitLayout(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
   ): SplitHandle | undefined {
-    // Inline previews register with the orchestrator without owning a split.
-    // Preserve that mount instead of attaching its shared handle a second time.
-    if (
-      content.type !== 'component' &&
-      !getSplitByContent(content.type, content.id) &&
-      orchestrator.isBlockMounted(resolveBlockAlias(content.type), content.id)
-    ) {
-      toast.alert('Content already open.');
-      return undefined;
-    }
+    // Include the mobile background split: its navigation interceptor promotes
+    // an existing mount instead of opening another instance.
+    const current = state.splits.find((split) =>
+      sameEntityContent(split.content, content)
+    );
+    if (!canOpenContent(content, current?.id)) return;
 
     if (options.reopen === 'latest') {
       // Fire-and-forget so it covers every open path (fresh mount, duplicate
@@ -2097,7 +2169,11 @@ export function createSplitLayout(
         ? previewPair
         : undefined;
 
-    if (!options.allowDuplicate && existingSplit && !promotedPreviewPair) {
+    if (
+      existingSplit &&
+      !promotedPreviewPair &&
+      (contentIdentity(content).type !== 'component' || !options.allowDuplicate)
+    ) {
       // A controller selection can resolve to content already mounted in its
       // own viewer (notably two rows from one channel). Refresh the viewer's
       // merged history entry so per-entry source metadata follows the latest
@@ -2172,7 +2248,11 @@ export function createSplitLayout(
   function replaceAllSplits(
     content: SplitContent,
     options: { referredFrom?: ReferredFrom } = {}
-  ): SplitHandle {
+  ): SplitHandle | undefined {
+    if (
+      !canOpenContent(content, getSplitByContent(content.type, content.id)?.id)
+    )
+      return;
     const visibleSplits = state.splits.filter((split) => !isExcluded(split));
     const splitToKeep =
       visibleSplits.find((split) => sameContent(split.content, content)) ??

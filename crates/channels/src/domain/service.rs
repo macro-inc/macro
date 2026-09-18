@@ -8,24 +8,26 @@ use crate::domain::{
         ChannelPreviewData, ChannelType, CreateEntityMentionOptions, DeleteMessageQuery,
         EntityMention, GetOrCreateAction, GetOrCreateChannelResponse, GetOrCreateDmRequest,
         GetOrCreatePrivateRequest, MessagePageDirection, NewChannelAttachment, ParticipantRole,
-        PatchChannelRequest, PatchMessageNotificationPolicy, PatchMessageRequest,
-        PostMessageRequest, PostMessageResponse, PostReactionRequest, PostTypingRequest,
-        ReactionAction, ReferencedShareItem, RemoveParticipantsRequest, ResolvedChannelMessage,
-        Sender, SimpleMention, ThreadInfo, ThreadReply, ThreadReplyRow, TopLevelMessageRow,
-        WithChannelId,
+        PatchChannelRequest, PatchMessageRequest, PostMessageRequest, PostMessageResponse,
+        PostReactionRequest, PostTypingRequest, ReactionAction, ReferencedShareItem,
+        RemoveParticipantsRequest, ResolvedChannelMessage, Sender, ThreadInfo, ThreadReply,
+        ThreadReplyRow, TopLevelMessageRow, WithChannelId,
     },
     ports::{
         ChannelAttachmentsPage, ChannelEventDispatcher, ChannelMentionExtractor,
-        ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr,
-        ChannelReferenceSharePermissions, ChannelRepo, ChannelService,
+        ChannelMessagesErr, ChannelMessagesQueryResult, ChannelMutationErr, ChannelPictureFile,
+        ChannelPictureFiles, ChannelReferenceSharePermissions, ChannelRepo, ChannelService,
     },
     side_effects::bot_mention_ids,
 };
 use bot_id::BotIdStr;
 use bot_id::cowlike::CowLike;
 use channel_sender::ChannelSender;
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
+use entity_access::domain::models::{
+    AdminParticipantRole, EntityAccessReceipt, EntityType, MemberParticipantRole,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::{PatchMessageNotificationPolicy, SimpleMention};
 use models_pagination::{CreatedAt, PaginateOn, Query};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -43,11 +45,23 @@ pub struct ChannelServiceImpl<
     E = NoopChannelEventDispatcher,
     P = NoopChannelReferenceSharePermissions,
     M = NoopChannelMentionExtractor,
+    F = UnavailableChannelPictureFiles,
 > {
     repo: R,
     events: E,
     reference_share_permissions: P,
     mention_extractor: M,
+    picture_files: F,
+}
+
+/// Fail-closed picture metadata source for contexts that do not wire uploads.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct UnavailableChannelPictureFiles;
+
+impl ChannelPictureFiles for UnavailableChannelPictureFiles {
+    async fn get_picture_file(&self, _file_id: Uuid) -> anyhow::Result<Option<ChannelPictureFile>> {
+        anyhow::bail!("channel picture uploads are not configured")
+    }
 }
 
 /// No-op event dispatcher used by read-only contexts.
@@ -99,6 +113,7 @@ where
             events: NoopChannelEventDispatcher,
             reference_share_permissions: NoopChannelReferenceSharePermissions,
             mention_extractor: NoopChannelMentionExtractor,
+            picture_files: UnavailableChannelPictureFiles,
         }
     }
 }
@@ -111,27 +126,43 @@ impl<R, E, P> ChannelServiceImpl<R, E, P> {
             events,
             reference_share_permissions,
             mention_extractor: NoopChannelMentionExtractor,
+            picture_files: UnavailableChannelPictureFiles,
         }
     }
 }
 
-impl<R, E, P, M> ChannelServiceImpl<R, E, P, M> {
+impl<R, E, P, M, F> ChannelServiceImpl<R, E, P, M, F> {
+    /// Wire the static-file metadata source used to authorize channel pictures.
+    pub fn with_picture_files<F2: ChannelPictureFiles>(
+        self,
+        picture_files: F2,
+    ) -> ChannelServiceImpl<R, E, P, M, F2> {
+        ChannelServiceImpl {
+            repo: self.repo,
+            events: self.events,
+            reference_share_permissions: self.reference_share_permissions,
+            mention_extractor: self.mention_extractor,
+            picture_files,
+        }
+    }
+
     /// Replace the mention extractor used to derive mentions from
     /// bot-authored message content.
     pub fn with_mention_extractor<M2>(
         self,
         mention_extractor: M2,
-    ) -> ChannelServiceImpl<R, E, P, M2> {
+    ) -> ChannelServiceImpl<R, E, P, M2, F> {
         ChannelServiceImpl {
             repo: self.repo,
             events: self.events,
             reference_share_permissions: self.reference_share_permissions,
             mention_extractor,
+            picture_files: self.picture_files,
         }
     }
 }
 
-impl<R, E, P, M> ChannelServiceImpl<R, E, P, M>
+impl<R, E, P, M, F> ChannelServiceImpl<R, E, P, M, F>
 where
     R: ChannelRepo,
     anyhow::Error: From<R::Err>,
@@ -319,12 +350,13 @@ fn is_admin_or_owner(role: ParticipantRole) -> bool {
     matches!(role, ParticipantRole::Owner | ParticipantRole::Admin)
 }
 
-impl<R, E, P, M> ChannelServiceImpl<R, E, P, M>
+impl<R, E, P, M, F> ChannelServiceImpl<R, E, P, M, F>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
     P: ChannelReferenceSharePermissions,
     M: ChannelMentionExtractor,
+    F: ChannelPictureFiles,
 {
     #[tracing::instrument(err, skip(self, req))]
     async fn create_channel(
@@ -501,11 +533,10 @@ where
         .await
     }
 
-    #[tracing::instrument(err, skip(self, req))]
+    #[tracing::instrument(err, skip(self, access, req))]
     async fn patch_channel(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         mut req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
         if req.channel_name.is_none()
@@ -515,7 +546,28 @@ where
             return Ok(());
         }
 
-        let actor = require_user_actor(&actor)?;
+        if (req.convert_to_team_channel.is_some() || req.auto_join_team.is_some())
+            && !access
+                .entity_permission()
+                .satisfies::<AdminParticipantRole>()
+        {
+            return Err(ChannelMutationErr::Forbidden(
+                "converting a channel or changing auto-join requires channel admin access"
+                    .to_string(),
+            ));
+        }
+
+        if access.entity().entity_type != EntityType::Channel {
+            return Err(ChannelMutationErr::BadRequest(
+                "channel access receipt required".into(),
+            ));
+        }
+        let actor = access
+            .get_authenticated_user()
+            .cloned()
+            .map_err(|_| ChannelMutationErr::Unauthorized("authenticated user required".into()))?;
+        let channel_id = Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| ChannelMutationErr::BadRequest(error.to_string()))?;
         let info = self
             .repo
             .get_channel_info(channel_id)
@@ -1307,12 +1359,13 @@ where
     }
 }
 
-impl<R, E, P, M> ChannelServiceImpl<R, E, P, M>
+impl<R, E, P, M, F> ChannelServiceImpl<R, E, P, M, F>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
     P: ChannelReferenceSharePermissions,
     M: ChannelMentionExtractor,
+    F: ChannelPictureFiles,
 {
     async fn ensure_one_dm(
         &self,
@@ -1556,14 +1609,83 @@ fn center_window(
     }
 }
 
-impl<R, E, P, M> ChannelService for ChannelServiceImpl<R, E, P, M>
+impl<R, E, P, M, F> ChannelService for ChannelServiceImpl<R, E, P, M, F>
 where
     R: ChannelRepo,
     E: ChannelEventDispatcher,
     P: ChannelReferenceSharePermissions,
     M: ChannelMentionExtractor,
+    F: ChannelPictureFiles,
     anyhow::Error: From<R::Err>,
 {
+    #[tracing::instrument(err, skip(self, access))]
+    async fn set_channel_picture(
+        &self,
+        access: EntityAccessReceipt<entity_access::domain::models::AdminParticipantRole>,
+        picture_id: Option<Uuid>,
+    ) -> Result<(), ChannelMutationErr> {
+        if access.entity().entity_type != EntityType::Channel {
+            return Err(ChannelMutationErr::BadRequest(
+                "channel access receipt required".into(),
+            ));
+        }
+        let actor = access
+            .get_authenticated_user()
+            .map_err(|_| ChannelMutationErr::Unauthorized("authenticated user required".into()))?;
+        let channel_id = Uuid::parse_str(&access.entity().entity_id)
+            .map_err(|error| ChannelMutationErr::BadRequest(error.to_string()))?;
+        let info = self
+            .repo
+            .get_channel_info(channel_id)
+            .await
+            .map_err(|error| ChannelMutationErr::Repo(error.into()))?;
+        if info.channel_type == ChannelType::DirectMessage {
+            return Err(ChannelMutationErr::BadRequest(
+                "direct messages use the participant's profile picture".into(),
+            ));
+        }
+        if let Some(picture_id) = picture_id {
+            let file = self
+                .picture_files
+                .get_picture_file(picture_id)
+                .await
+                .map_err(ChannelMutationErr::Repo)?
+                .ok_or_else(|| ChannelMutationErr::BadRequest("picture is unavailable".into()))?;
+            if file.owner_id != actor.as_ref() {
+                return Err(ChannelMutationErr::Forbidden(
+                    "picture must belong to the caller".into(),
+                ));
+            }
+            if !file.is_uploaded {
+                return Err(ChannelMutationErr::BadRequest(
+                    "picture upload is not complete".into(),
+                ));
+            }
+            if !matches!(
+                file.content_type.as_str(),
+                "image/jpeg" | "image/png" | "image/webp" | "image/gif"
+            ) {
+                return Err(ChannelMutationErr::BadRequest(
+                    "unsupported picture format".into(),
+                ));
+            }
+        }
+        let participants = self
+            .repo
+            .get_participants(channel_id)
+            .await
+            .map_err(|error| ChannelMutationErr::Repo(error.into()))?;
+        self.repo
+            .set_channel_picture(channel_id, picture_id)
+            .await
+            .map_err(|error| ChannelMutationErr::Repo(error.into()))?;
+        self.events.dispatch(ChannelEvent::PictureChanged {
+            channel_id,
+            recipients: participant_ids(&participants),
+        });
+        Ok(())
+    }
+
     #[tracing::instrument(err, skip(self))]
     async fn get_channel_messages(
         &self,
@@ -1683,6 +1805,7 @@ where
                 .await
                 .map_err(anyhow::Error::from)?;
             previews.push(ChannelPreview::Access(ChannelPreviewData {
+                profile_picture_id: row.has_access.then_some(row.profile_picture_id).flatten(),
                 channel_id: channel_id_str,
                 channel_name,
                 channel_type,
@@ -1956,11 +2079,10 @@ where
 
     async fn patch_channel(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
-        ChannelServiceImpl::patch_channel(self, actor, channel_id, req).await
+        ChannelServiceImpl::patch_channel(self, access, req).await
     }
 
     async fn delete_channel(

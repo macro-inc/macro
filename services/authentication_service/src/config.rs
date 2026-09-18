@@ -3,6 +3,7 @@ use std::sync::LazyLock;
 use anyhow::Context;
 use authentication_service::service::signup_policy::SignupPolicy;
 use database_env_vars::{DatabaseUrl, RedisUri};
+use gtm_invite::domain::models::{GtmInviteConfig, PromoCode};
 use macro_auth::InternalApiKey;
 pub use macro_env::Environment;
 use macro_env_var::{env_vars, maybe_env_vars};
@@ -65,6 +66,10 @@ maybe_env_vars! {
     pub struct LoopsApiKey;
     /// JSON array of exact email addresses allowed to sign up in Develop.
     pub struct DevelopmentSignupAllowlistJson;
+    /// Stripe promotion code GTM invite links grant at checkout. Defaults to `1MF`.
+    pub struct GtmInvitePromoCode;
+    /// Hours a GTM invite link stays openable after creation. Defaults to 48.
+    pub struct GtmInviteLinkTtlHours;
 }
 
 /// The configuration parameters for the application.
@@ -151,6 +156,11 @@ pub struct Config {
     ///
     /// All `@macro.com` email addresses are allowed by the Develop policy automatically.
     pub development_signup_allowlist_json: DevelopmentSignupAllowlistJson,
+    /// Stripe promotion code applied at checkout for accounts that signed up
+    /// through a GTM invite link (optional, defaults to `1MF`).
+    pub gtm_invite_promo_code: GtmInvitePromoCode,
+    /// Hours a GTM invite link can be opened and redeemed (optional, defaults to 48).
+    pub gtm_invite_link_ttl_hours: GtmInviteLinkTtlHours,
     /// The stripe price id
     pub stripe_price_id: StripePriceId,
     /// The internal api key
@@ -233,6 +243,11 @@ impl Config {
     ) -> anyhow::Result<SignupPolicy> {
         resolve_signup_policy(environment, &self.development_signup_allowlist_json)
     }
+
+    /// Resolves the offer GTM invite links carry.
+    pub(crate) fn gtm_invite_config(&self) -> anyhow::Result<GtmInviteConfig> {
+        resolve_gtm_invite_config(&self.gtm_invite_promo_code, &self.gtm_invite_link_ttl_hours)
+    }
 }
 
 fn resolve_microsoft_credentials(
@@ -278,6 +293,39 @@ fn resolve_signup_policy(
                 .context("DEVELOPMENT_SIGNUP_ALLOWLIST_JSON is invalid")
         }
     }
+}
+
+/// The promotion code applied when `GTM_INVITE_PROMO_CODE` is unset: 100% off
+/// the first month, created in Stripe for exactly this program.
+const DEFAULT_GTM_INVITE_PROMO_CODE: &str = "1MF";
+/// How long an invite link stays usable when `GTM_INVITE_LINK_TTL_HOURS` is unset.
+const DEFAULT_GTM_INVITE_LINK_TTL_HOURS: i64 = 48;
+/// Free months the default promotion grants, for user-facing copy.
+const GTM_INVITE_FREE_MONTHS: u8 = 1;
+
+fn resolve_gtm_invite_config(
+    promo_code: &GtmInvitePromoCode,
+    link_ttl_hours: &GtmInviteLinkTtlHours,
+) -> anyhow::Result<GtmInviteConfig> {
+    let promo_code: PromoCode = nonblank_value(promo_code.value())
+        .unwrap_or(DEFAULT_GTM_INVITE_PROMO_CODE)
+        .parse()
+        .context("GTM_INVITE_PROMO_CODE is invalid")?;
+    let link_ttl_hours: i64 = match nonblank_value(link_ttl_hours.value()) {
+        Some(hours) => hours
+            .trim()
+            .parse()
+            .context("GTM_INVITE_LINK_TTL_HOURS must be a whole number of hours")?,
+        None => DEFAULT_GTM_INVITE_LINK_TTL_HOURS,
+    };
+    if link_ttl_hours <= 0 {
+        anyhow::bail!("GTM_INVITE_LINK_TTL_HOURS must be positive");
+    }
+    Ok(GtmInviteConfig {
+        promo_code,
+        link_ttl: chrono::Duration::hours(link_ttl_hours),
+        free_months: GTM_INVITE_FREE_MONTHS,
+    })
 }
 
 fn nonblank_value(value: Option<&str>) -> Option<&str> {

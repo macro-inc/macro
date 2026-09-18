@@ -262,6 +262,47 @@ describe('GraphQL Soup chat models', () => {
   );
 });
 
+describe('GraphQL Soup document sub types', () => {
+  it.each([
+    [
+      { __typename: 'GraphqlTaskSubType', isCompleted: true },
+      { type: 'task', is_completed: true },
+    ],
+    [{ __typename: 'GraphqlSkillSubType' }, { type: 'skill' }],
+    [{ __typename: 'GraphqlInitiativeDescriptionSubType' }, undefined],
+  ] as const)(
+    'maps %j to the shared soup sub type %j',
+    async (subType, expected) => {
+      const { mapGraphqlSoupItem } = await import('./graphql-soup');
+      const item = {
+        __typename: 'GraphqlSoupDocument',
+        id: 'doc-sub-type',
+        entityType: 'DOCUMENT' as GraphqlSoupEntityType,
+        displayName: 'Plan',
+        documentName: 'Plan',
+        ownerId: 'macro|owner@example.com',
+        fileType: 'md',
+        projectId: null,
+        viewedAt: null,
+        deletedAt: null,
+        cacheProjection: null,
+        frecencyScore: null,
+        isFavorited: false,
+        createdAt: '2026-09-11T00:00:00Z',
+        updatedAt: '2026-09-11T00:00:00Z',
+        subType,
+        properties: [],
+        notifications: [],
+      } satisfies SoupItemFieldsFragment;
+
+      expect(mapGraphqlSoupItem(item)).toMatchObject({
+        tag: 'document',
+        data: { id: item.id, subType: expected },
+      });
+    }
+  );
+});
+
 describe('GraphQL Soup browser cache session gate', () => {
   beforeEach(() => {
     vi.resetModules();

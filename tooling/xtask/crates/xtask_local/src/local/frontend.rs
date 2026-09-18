@@ -164,12 +164,39 @@ pub fn wait_backend_ready(stage: &Stage, instance: &Instance) -> Result<()> {
 /// A running frontend dev server plus its captured output, so an unexpected
 /// exit can be explained (the output is otherwise suppressed).
 pub struct Frontend {
+    pub process: FrontendProcess,
+    command: Command,
+    port: u16,
+}
+
+/// One dev-server process and its captured output, replaced on restart.
+pub struct FrontendProcess {
     pub child: Child,
     captured: Arc<Mutex<Vec<u8>>>,
     drains: Vec<JoinHandle<()>>,
 }
 
 impl Frontend {
+    /// Restart only Vite, preserving the command, environment, and instance port.
+    /// Killing the old process group also recovers a stuck in-process reload.
+    pub fn restart(&mut self, stage: &Stage) -> Result<()> {
+        self.shutdown();
+        self.process = spawn(stage, &mut self.command, self.port)?;
+        Ok(())
+    }
+
+    /// Stop the current dev-server process group.
+    pub fn shutdown(&mut self) {
+        self.process.shutdown();
+    }
+
+    /// Return the last output from an exited dev server.
+    pub fn tail_output(&mut self, lines: usize) -> String {
+        self.process.tail_output(lines)
+    }
+}
+
+impl FrontendProcess {
     /// Stop the dev server and all its children. `bun run dev` spawns Vite (and
     /// friends), which we put in their own process group at spawn — so signal the
     /// GROUP (negative pid). SIGKILL is enough: the kernel releases the port the
@@ -201,7 +228,7 @@ impl Frontend {
     }
 }
 
-impl Drop for Frontend {
+impl Drop for FrontendProcess {
     fn drop(&mut self) {
         self.shutdown();
     }
@@ -275,6 +302,15 @@ pub fn start(
     for (k, v) in dev_env(instance, mode, traces_enabled, enable_onboarding) {
         cmd.env(k, v);
     }
+    let process = spawn(stage, &mut cmd, port)?;
+    Ok(Some(Frontend {
+        process,
+        command: cmd,
+        port,
+    }))
+}
+
+fn spawn(stage: &Stage, cmd: &mut Command, port: u16) -> Result<FrontendProcess> {
     let mut child = cmd.spawn().context("launching `bun run dev`")?;
 
     // Drain stdout+stderr into a buffer on their own threads (a full pipe would
@@ -334,11 +370,11 @@ pub fn start(
         anyhow::bail!("{error}\nfrontend output (last lines):\n{out}");
     }
 
-    Ok(Some(Frontend {
+    Ok(FrontendProcess {
         child,
         captured,
         drains,
-    }))
+    })
 }
 
 /// Copy a child pipe into the shared capture buffer until EOF.
@@ -353,3 +389,6 @@ fn drain_into(reader: &mut impl Read, buf: &Mutex<Vec<u8>>) {
         }
     }
 }
+
+#[cfg(test)]
+mod test;

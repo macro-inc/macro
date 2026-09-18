@@ -78,6 +78,31 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                                 "max_results": Number(5),
                             },
                         ),
+                        result: Some(
+                            Array [
+                                Object {
+                                    "type": String("tool_reference"),
+                                    "tool_name": String("TaskList"),
+                                },
+                                Object {
+                                    "type": String("tool_reference"),
+                                    "tool_name": String("CronList"),
+                                },
+                                Object {
+                                    "type": String("tool_reference"),
+                                    "tool_name": String("ListMcpResourcesTool"),
+                                },
+                                Object {
+                                    "type": String("tool_reference"),
+                                    "tool_name": String("mcp__macro__ListEntities"),
+                                },
+                                Object {
+                                    "type": String("tool_reference"),
+                                    "tool_name": String("mcp__macro__ListCompanies"),
+                                },
+                            ],
+                        ),
+                        error: None,
                     },
                 },
                 ToolUse {
@@ -99,6 +124,19 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
                                 "max_results": Number(3),
                             },
                         ),
+                        result: Some(
+                            Array [
+                                Object {
+                                    "type": String("tool_reference"),
+                                    "tool_name": String("TaskCreate"),
+                                },
+                                Object {
+                                    "type": String("tool_reference"),
+                                    "tool_name": String("TaskUpdate"),
+                                },
+                            ],
+                        ),
+                        error: None,
                     },
                 },
                 Plan {

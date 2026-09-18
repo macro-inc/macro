@@ -24,3 +24,6 @@ pub mod sidecar;
 pub mod acp_pipe;
 /// Per-owner Codex cloud runtime.
 pub mod codex;
+
+/// Claude cloud container and model adapters.
+pub mod claude;

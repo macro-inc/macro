@@ -172,22 +172,6 @@ export function SplitPanel(props: SplitPanelProps) {
   const splitUnfocusedStyling = () =>
     !isTouchDevice() && !props.active && multipleSplits();
 
-  const gutterSize = () =>
-    globalSplitManager()?.resizeContext()?.gutterSize() ?? 0;
-
-  /**
-   * This split is a Viewer sitting immediately right of its Controller: the
-   * pane slides left across the gutter so it sits flush against the
-   * Controller, reading as tucked behind it.
-   */
-  const tuckedBehindController = createMemo(() => {
-    return (
-      !isTouchDevice() &&
-      !props.handle.isSpotLight() &&
-      props.handle.isViewerSplit()
-    );
-  });
-
   const usesComposableLayout = () =>
     props.split.mount.kind === 'component' &&
     props.split.mount.meta.splitPanelLayout === 'composable';
@@ -262,15 +246,14 @@ export function SplitPanel(props: SplitPanelProps) {
         <SplitDrawerGroup panelSize={panelSize}>
           <Show when={props.handle.isSpotLight()}>
             <div
-              class="fixed inset-0 w-screen h-screen z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
+              class="fixed inset-0 w-screen h-screen z-modal-overlay scrim-glass"
               onClick={() => props.handle.toggleSpotlight(false)}
             />
-            <div class="fixed inset-16 bg-surface shadow-xl" />
           </Show>
 
           <div
             classList={{
-              'fixed inset-16 z-modal-overlay isolate opacity-50':
+              'fixed inset-16 z-modal-overlay isolate rounded-xl bg-surface shadow-xl':
                 props.handle.isSpotLight(),
               'opacity-100': props.active || props.handle.isSpotLight(),
               // touch:isolate contains the floating SplitHeader within the panel's own stacking context, so the root-level mobile/tablet
@@ -285,14 +268,6 @@ export function SplitPanel(props: SplitPanelProps) {
               // mobile/tablet: status bar + floating header strip.
               '--mobile-content-inset-top':
                 'calc(var(--safe-top, 0px) + var(--split-header-height, 0px))',
-              // Slide the preview pane left across the gutter so it sits
-              // flush against the controller, keeping its right edge in
-              // place. The gutter's drag hit-area still paints (and
-              // hit-tests) above this extension, so resizing works.
-              ...(tuckedBehindController() && {
-                'margin-left': `-${gutterSize()}px`,
-                width: `calc(100% + ${gutterSize()}px)`,
-              }),
             }}
             ref={(ref) => {
               setPanelRef(ref);
@@ -306,7 +281,12 @@ export function SplitPanel(props: SplitPanelProps) {
           >
             <Panel
               class={cn(
-                'rounded-none touch:rounded-none touch:after:hidden touch:border-0! bg-panel transition-none',
+                'touch:rounded-none touch:after:hidden touch:border-0! bg-panel transition-none',
+                props.handle.isSpotLight()
+                  ? 'rounded-xl'
+                  : multipleSplits()
+                    ? 'rounded-md'
+                    : 'rounded-none',
                 splitUnfocusedStyling() && 'split-panel-inactive',
                 {
                   'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
@@ -314,12 +294,12 @@ export function SplitPanel(props: SplitPanelProps) {
                 }
               )}
               depth={isTouchDevice() ? 0 : 1}
-              hideBorder
+              hideBorder={!props.handle.isSpotLight() && !multipleSplits()}
             >
               <Show when={!usesComposableLayout()}>
                 <Panel.Header
                   class={cn(
-                    'relative block min-h-10.25 touch:min-h-11.25 p-0 overflow-visible border-b-0!',
+                    'relative block min-h-12 p-0 overflow-visible border-b-0!',
                     'z-split-panel-chrome',
                     // On mobile/tablet the header collapses to a zero-height grid row;
                     // SplitHeader overlays the body as floating islands.

@@ -1,37 +1,17 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { PDFPopup } from '@block-pdf/component/PDFPopup';
 import {
-  disableOverlayClickSignal,
-  disablePageViewClickSignal,
-  disableViewerTextSelectionSignal,
-} from '@block-pdf/signal/click';
-import { pdfModificationDataStore } from '@block-pdf/signal/document';
-import {
-  useCanEditModificationData,
   useOwnedCommentPlaceableSelector,
   useOwnedHighlightSelector,
 } from '@block-pdf/signal/permissions';
-import {
-  activePlaceableIdSignal,
-  newPlaceableSignal,
-  placeableModeSignal,
-} from '@block-pdf/signal/placeables';
 import { useDoEdit } from '@block-pdf/signal/save';
-import {
-  activeCommentThreadSignal,
-  useIsActiveThreadSelector,
-} from '@block-pdf/store/comments/commentStore';
-import { commentPlaceables } from '@block-pdf/store/comments/freeComments';
+import { useCommentPlaceables } from '@block-pdf/store/comments/freeComments';
 import { useCreateHighlightCommentAtSelection } from '@block-pdf/store/comments/highlightComments';
 import { useCreatePlaceable } from '@block-pdf/store/placeables';
 import { PayloadMode, type PayloadType } from '@block-pdf/type/placeables';
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
 import { useIsAuthenticated } from '@core/auth';
-import { createBlockSignal, useBlockId, useIsNestedBlock } from '@core/block';
-import type { Completion } from '@core/client/completion';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
-import { blockElementSignal } from '@core/signal/blockElement';
-import { useCanComment, useIsDocumentOwner } from '@core/signal/permissions';
 import { cn } from '@ui';
 import { detect } from 'detect-browser';
 import type { PageViewport } from 'pdfjs-dist';
@@ -46,40 +26,21 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { usePdfDocument } from '../context/pdf-document-context';
 import type { IColor } from '../model/Color';
 import { Highlight, HighlightType } from '../model/Highlight';
 import { PageModel } from '../model/Page';
 import type Term from '../model/Term';
-import { keyedTermDataStore } from '../PdfViewer/TermDataStore';
-import {
-  generalPopupLocationSignal,
-  LocationType,
-  useCreateShareUrl,
-} from '../signal/location';
-import {
-  popupOpen,
-  useCurrentPageViewport,
-  useGetPopupViewer,
-  useGetRootViewer,
-  useIsPopup,
-} from '../signal/pdfViewer';
+import { LocationType, useCreateShareUrl } from '../signal/location';
+import { useIsPopup } from '../signal/pdfViewer';
 import { usePopupContextUpdate, usePopupStore } from '../store/definitionPopup';
-import {
-  highlightStore,
-  selectionStore,
-  useAddNewHighlights,
-  useRemoveHighlight,
-} from '../store/highlight';
+import { useAddNewHighlights, useRemoveHighlight } from '../store/highlight';
 import { useGetIdToSectionMap } from '../store/tableOfContents';
 import TocUtils from '../util/TocUtils';
 import { AbsoluteDefinitionLookups } from './AbsoluteDefinitionLookups';
 import { Placeable } from './Placeable';
 import { RightMarginLayout } from './RightMarginLayout';
-import {
-  activeHighlightSignal,
-  UserHighlight,
-  useResetUserHighlights,
-} from './UserHighlight';
+import { UserHighlight, useResetUserHighlights } from './UserHighlight';
 
 export interface IPageOverlayProps {
   pageIndex: number;
@@ -100,29 +61,22 @@ export interface IHighlightObj {
   isActive: boolean;
 }
 
-export const PDFPopupSelectedTextSignal = createBlockSignal<
-  string | undefined
->();
-
-export const PDFPopupCompletionSignal = createBlockSignal<
-  Completion | undefined
->();
-
 // This is where all the page-specifc overlays should reside, like placeables, etc.
 export function PageOverlay(props: IPageOverlayProps) {
   const analytics = useAnalytics();
 
-  const isNestedBlock = useIsNestedBlock();
+  const pdf = usePdfDocument();
+  const { signals, stores, derived } = pdf.state;
   let pageOverlayRef!: HTMLDivElement;
   const pageViewDivProp = () => props.pageViewDiv;
 
-  const modificationPlaceablesAccess = useCanEditModificationData();
-  const commentAccess = useCanComment();
-  const isDocumentOwner = useIsDocumentOwner();
+  const modificationPlaceablesAccess = pdf.permissions.canEdit;
+  const commentAccess = pdf.permissions.canComment;
+  const isDocumentOwner = pdf.permissions.isOwner;
 
-  const [mode, setMode] = placeableModeSignal;
-  const getPopupViewer = useGetPopupViewer();
-  const getRootViewer = useGetRootViewer();
+  const [mode, setMode] = signals.placeableMode;
+  const getPopupViewer = signals.popupViewer[0];
+  const getRootViewer = signals.rootViewer[0];
   const getIdToSectionMap = useGetIdToSectionMap();
   const isPopup = useIsPopup();
   const popupDispatchCtx = usePopupContextUpdate(isPopup);
@@ -130,10 +84,11 @@ export function PageOverlay(props: IPageOverlayProps) {
   const resetUserHighlights = useResetUserHighlights();
   const isAuth = useIsAuthenticated();
   const createPlaceable = useCreatePlaceable();
-  const disableOverlayClick = disableOverlayClickSignal.get;
-  const setActiveThreadId = activeCommentThreadSignal.set;
-  const disablePageViewClick = disablePageViewClickSignal.get;
-  const termDataStore = keyedTermDataStore();
+  const commentPlaceables = useCommentPlaceables();
+  const disableOverlayClick = signals.disableOverlayClick[0];
+  const setActiveThreadId = signals.activeCommentThread[1];
+  const disablePageViewClick = signals.disablePageViewClick[0];
+  const termDataStore = pdf.state.termDataStore;
 
   const onClick = (e: MouseEvent) => {
     if (disablePageViewClick()) return;
@@ -277,7 +232,7 @@ export function PageOverlay(props: IPageOverlayProps) {
       pageViewDiv.removeEventListener('click', onClick);
     });
 
-    if (isNestedBlock) return;
+    if (pdf.isNested()) return;
     pageViewDiv.addEventListener('paste', onPaste);
     pageViewDiv.addEventListener('keydown', onKeyDown);
     onCleanup(() => {
@@ -286,7 +241,7 @@ export function PageOverlay(props: IPageOverlayProps) {
     });
   });
 
-  const disableSelect = disableViewerTextSelectionSignal.get;
+  const disableSelect = signals.disableViewerTextSelection[0];
   createEffect(() => {
     const pageViewDiv = pageViewDivProp();
     if (!pageViewDiv) return;
@@ -297,13 +252,12 @@ export function PageOverlay(props: IPageOverlayProps) {
     }
   });
 
-  const blockElement = blockElementSignal.get;
   onMount(() => {
     const resetMode = (_e: MouseEvent) => {
       setActiveThreadId(null);
       setMode(PayloadMode.NoMode);
     };
-    const el = blockElement();
+    const el = pdf.rootElement();
     if (!el) return;
     el.addEventListener('click', resetMode);
     onCleanup(() => el.removeEventListener('click', resetMode));
@@ -322,12 +276,23 @@ export function PageOverlay(props: IPageOverlayProps) {
     return textModes.includes(mode) ? 'pointer' : 'text';
   };
 
-  const [selectionStoreValue, setSelectionStore] = selectionStore;
+  const [selectionStoreValue, setSelectionStore] = stores.selection;
 
   const addNewHighlights = useAddNewHighlights();
   const doEdit = useDoEdit();
-  const setActiveHighlightId = activeHighlightSignal.set;
-  const currentPageViewport = useCurrentPageViewport();
+  const setActiveHighlightId = signals.activeHighlight[1];
+  const currentPageViewport = () => {
+    const pageNumber = isPopup
+      ? derived.popupCurrentPageNumber()
+      : derived.currentPageNumber();
+    const viewer = isPopup ? getPopupViewer() : getRootViewer();
+    return (
+      viewer?.pageViewport(pageNumber - 1) ?? {
+        pageWidth: 0,
+        pageHeight: 0,
+      }
+    );
+  };
 
   const addHighlight = () => {
     if (!selectionStoreValue.selection) return;
@@ -427,24 +392,23 @@ export function PageOverlay(props: IPageOverlayProps) {
     },
   });
 
-  const documentId = useBlockId();
   const aiProps = {
-    attachmentId: documentId,
+    attachmentId: pdf.documentId(),
   };
 
-  const newPlaceable = newPlaceableSignal.get;
+  const newPlaceable = signals.newPlaceable[0];
   const newPlaceableId = () => newPlaceable()?.internalId;
   const isNewPlaceableSelector = createSelector(newPlaceableId);
-  const activePlaceableId = activePlaceableIdSignal.get;
+  const activePlaceableId = signals.activePlaceableId[0];
   const isActivePlaceableSelector = createSelector(activePlaceableId);
   const ownedCommentSelector = useOwnedCommentPlaceableSelector();
 
   const showPopup = createMemo(() => {
     const shouldshow =
-      !isPopup && !popupOpen() && !!generalPopupLocationSignal();
+      !isPopup && !derived.popupOpen() && !!signals.generalPopupLocation[0]();
     if (!shouldshow) {
-      PDFPopupSelectedTextSignal.set(undefined);
-      PDFPopupCompletionSignal.set(undefined);
+      signals.popupSelectedText[1](undefined);
+      signals.popupCompletion[1](undefined);
     }
     return shouldshow;
   });
@@ -468,7 +432,7 @@ export function PageOverlay(props: IPageOverlayProps) {
         }}
         class="bg-transparent top-0 left-0 absolute"
       >
-        <Show when={showPopup() && generalPopupLocationSignal()}>
+        <Show when={showPopup() && signals.generalPopupLocation[0]()}>
           {(generalPopupLocation) => (
             <Show when={generalPopupLocation().pageIndex === props.pageIndex}>
               <PDFPopup
@@ -513,9 +477,9 @@ export function PageOverlay(props: IPageOverlayProps) {
             'transform-origin': '0% 0%',
           }}
           class="top-0 left-0 absolute bg-transparent"
-          inert={isNestedBlock}
+          inert={pdf.isNested()}
         >
-          <For each={pdfModificationDataStore.get.placeables}>
+          <For each={stores.modificationData[0].placeables}>
             {(placeable) => {
               return (
                 <Show
@@ -570,14 +534,17 @@ function UserHighlightNodes(props: {
   pageIndex: number;
   viewport: PageViewport;
 }) {
+  const { signals, stores } = usePdfDocument().state;
   const thisPageHighlights = createMemo(() =>
-    Object.values(highlightStore.get[props.pageIndex] ?? {}).filter((h) => !!h)
+    Object.values(stores.highlights[0][props.pageIndex] ?? {}).filter(
+      (h) => !!h
+    )
   );
 
   const viewportHeight = createMemo(() => props.viewport.height);
   const viewportWidth = createMemo(() => props.viewport.width);
-  const isActiveHighlightSelector = createSelector(activeHighlightSignal);
-  const isActiveThreadSelector = useIsActiveThreadSelector();
+  const isActiveHighlightSelector = createSelector(signals.activeHighlight[0]);
+  const isActiveThreadSelector = createSelector(signals.activeCommentThread[0]);
 
   return (
     <For each={thisPageHighlights()}>

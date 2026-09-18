@@ -25,7 +25,7 @@ where
         VALUES ($1, $2, $3, $4, $5)
         RETURNING
             id,
-            channel_id,
+            channel_id AS "channel_id!",
             sender_id,
             content,
             created_at,

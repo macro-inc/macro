@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomeChatInput } from './home-chat-input';
 
 const mocks = vi.hoisted(() => ({
+  agentsEnabled: false,
   onSend: undefined as ((request: ChatSendInput) => Promise<void>) | undefined,
   draft: '',
   attached: [] as ChatSendInput['attachments'],
@@ -20,6 +21,13 @@ const mocks = vi.hoisted(() => ({
   invalidateSoup: vi.fn(),
 }));
 
+vi.mock('./home-agent-composer', () => ({
+  HomeAgentComposer: () => <div data-testid="agent-composer" />,
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: mocks.agentsEnabled }),
+}));
+vi.mock('@core/constant/featureFlags', () => ({ enableChatV3Agents: {} }));
 vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { replace: mocks.replace } }),
 }));
@@ -79,6 +87,7 @@ const request: ChatSendInput = {
 
 beforeEach(() => {
   vi.resetAllMocks();
+  mocks.agentsEnabled = false;
   // ChatInput clears the editor and attachments before invoking onSend.
   mocks.draft = '';
   mocks.attached = [];
@@ -177,4 +186,20 @@ describe('Home chat creation', () => {
       }
     }
   );
+});
+
+describe('Home Agent V3 mounting', () => {
+  it('mounts the shared agent composer instead of the legacy input when enabled', () => {
+    cleanup();
+    mocks.agentsEnabled = true;
+    mocks.onSend = undefined;
+    const view = render(() => <HomeChatInput />);
+    expect(view.getByTestId('agent-composer')).toBeTruthy();
+    expect(mocks.onSend).toBeUndefined();
+    expect(mocks.createChat).not.toHaveBeenCalled();
+  });
+  it('keeps the legacy input when disabled', () => {
+    expect(mocks.onSend).toBeDefined();
+    expect(document.querySelector('[data-testid="agent-composer"]')).toBeNull();
+  });
 });

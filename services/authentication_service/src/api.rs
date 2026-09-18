@@ -140,6 +140,16 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
                 },
             ),
         )
+        .nest(
+            "/gtm-invite",
+            gtm_invite::inbound::axum_router::gtm_invite_router(
+                gtm_invite::inbound::axum_router::GtmInviteRouterState {
+                    service: state.gtm_invite_service.clone(),
+                    rate_limiter: state.rate_limit_service.clone(),
+                    authorization_state: state.authorization_state.clone(),
+                },
+            ),
+        )
         .nest("/jwt", jwt::router())
         .nest("/session", session::router())
         .merge(mobile_welcome_email::router(state.clone()))

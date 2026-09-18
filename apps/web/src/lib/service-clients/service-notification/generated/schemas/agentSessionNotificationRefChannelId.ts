@@ -6,6 +6,7 @@
  */
 
 /**
- * The channel the session was opened from, when it was.
+ * The channel the session was opened from, when it was opened from a
+channel thread.
  */
 export type AgentSessionNotificationRefChannelId = string | null;

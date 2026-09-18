@@ -384,6 +384,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             update_parent: false,
             parent_id: None,
             share_permission: None,
+            team_share: None,
         })
         .await?;
     assert_eq!(unchanged.parent_id.as_deref(), Some(ROOT_ID));
@@ -395,6 +396,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             update_parent: true,
             parent_id: Some("10000000-0000-0000-0000-000000000005".to_owned()),
             share_permission: None,
+            team_share: None,
         })
         .await?;
     assert_eq!(
@@ -414,6 +416,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
                 team_share_access_level: None,
                 channel_share_permissions: None,
             }),
+            team_share: None,
         })
         .await?;
     assert!(updated.parent_id.is_none());
@@ -436,6 +439,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
     })
     .await?;
     assert_eq!(
@@ -457,6 +461,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
     })
     .await?;
     let before_omitted_update = project_share_permission_columns(&pool, ROOT_ID).await;
@@ -479,6 +484,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
     })
     .await?;
     assert_eq!(
@@ -497,6 +503,7 @@ async fn edit_supports_parent_flags_and_sharing(pool: Pool<Postgres>) -> anyhow:
             team_share_access_level: None,
             channel_share_permissions: None,
         }),
+        team_share: None,
     })
     .await?;
     assert_eq!(
@@ -797,6 +804,10 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
         assert_eq!(entity.owner_id, "macro|owner@test.com");
         assert_eq!(entity.entity_type, "project");
     }
+    let document_entity = fetch_entity_row(&pool, &result.documents[0].document_id).await;
+    assert_eq!(document_entity.owner_type, "user");
+    assert_eq!(document_entity.owner_id, "macro|owner@test.com");
+    assert_eq!(document_entity.entity_type, "document");
 
     repo.delete_uploaded_tree(&result.project_ids, &document_ids)
         .await?;
@@ -818,6 +829,7 @@ async fn upload_folder_preserves_tree_metadata_and_compensates(
         count_entity_rows_for_ids(&pool, &result.project_ids).await,
         0
     );
+    assert_eq!(count_entity_rows_for_ids(&pool, &document_ids).await, 0);
     Ok(())
 }
 

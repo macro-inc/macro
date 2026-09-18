@@ -10,7 +10,7 @@ export function selectEntityActivity(
   data: EntityActivityQuery,
   entityId: string
 ): EntityActivityResult {
-  const item = data.user.soup.items.find((entry) => entry.id === entityId);
+  const item = data.user?.soup?.items?.find((entry) => entry.id === entityId);
   if (!item) return { kind: 'entity-missing' };
   return {
     kind: 'found',

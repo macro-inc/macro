@@ -5,18 +5,37 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 // `call.ts` reads the app-wide query client and service client at module
 // load; swap in an isolated client and stubs so the tests exercise only the
 // cache-writer logic.
+const callClient = vi.hoisted(() => ({
+  getCallRecord: vi.fn(),
+  editCallRecord: vi.fn(),
+}));
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
   return { queryClient: new QueryClient() };
 });
-vi.mock('@service-call/client', () => ({ callServiceClient: {} }));
+vi.mock('@service-call/client', () => ({
+  callServiceClient: {
+    getCallRecord: (...args: unknown[]) => callClient.getCallRecord(...args),
+    editCallRecord: (...args: unknown[]) => callClient.editCallRecord(...args),
+  },
+}));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { alert: vi.fn(), failure: vi.fn(), success: vi.fn() },
 }));
 vi.mock('@core/constant/featureFlags', () => ({ ENABLE_CALLS: true }));
 
 import { queryClient } from '@queries/client';
-import { setActiveCallEndedCache, setActiveCallStartedCache } from './call';
+import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import {
+  buildCallTeamSharePayload,
+  fetchCallSharePermission,
+  isCallSharedWithTeam,
+  setActiveCallEndedCache,
+  setActiveCallStartedCache,
+  setCallRecordTeamShareCache,
+  sharePermissionFromCallRecord,
+  updateCallTeamShare,
+} from './call';
 import { callKeys } from './keys';
 
 const summary = (over: Partial<ActiveCallSummary>): ActiveCallSummary => ({
@@ -83,5 +102,209 @@ describe('active call cache writers', () => {
     expect(
       queryClient.getQueryData(callKeys.active('channel-1').queryKey)
     ).toBeNull();
+  });
+});
+
+const record = (over: Partial<CallRecord>): CallRecord => ({
+  callId: 'call-1',
+  channelId: 'channel-1',
+  createdBy: 'macro|a@test.com',
+  isActive: false,
+  participants: [],
+  roomName: 'room',
+  startedAt: '2026-08-21T09:00:00.000Z',
+  transcript: [],
+  teamShareAccessLevel: null,
+  shareWithTeam: false,
+  ...over,
+});
+
+describe('call team sharing helpers', () => {
+  beforeEach(() => {
+    queryClient.clear();
+    callClient.getCallRecord.mockReset();
+    callClient.editCallRecord.mockReset();
+  });
+
+  it('buildCallTeamSharePayload maps the checkbox to view or an explicit clear', () => {
+    // Calls only ever share at `view`; `null` (not an omitted field) revokes.
+    expect(buildCallTeamSharePayload(true)).toEqual({
+      teamShareAccessLevel: 'view',
+    });
+    expect(buildCallTeamSharePayload(false)).toEqual({
+      teamShareAccessLevel: null,
+    });
+  });
+
+  it('sharePermissionFromCallRecord maps the team toggle to view or null', () => {
+    expect(
+      sharePermissionFromCallRecord(
+        record({
+          callId: 'call-live',
+          createdBy: 'macro|owner@test.com',
+          isActive: true,
+          shareWithTeam: true,
+          teamShareAccessLevel: null,
+        })
+      )
+    ).toEqual({
+      id: 'call-live',
+      owner: 'macro|owner@test.com',
+      teamShareAccessLevel: 'view',
+    });
+    expect(
+      sharePermissionFromCallRecord(
+        record({
+          shareWithTeam: false,
+          teamShareAccessLevel: null,
+        })
+      )
+    ).toEqual({
+      id: 'call-1',
+      owner: 'macro|a@test.com',
+      teamShareAccessLevel: null,
+    });
+  });
+
+  it('fetchCallSharePermission maps a live shared call to view', async () => {
+    const { ok } = await import('neverthrow');
+    callClient.getCallRecord.mockResolvedValue(
+      ok(
+        record({
+          callId: 'call-live',
+          createdBy: 'macro|owner@test.com',
+          isActive: true,
+          shareWithTeam: true,
+          teamShareAccessLevel: null,
+        })
+      )
+    );
+
+    const result = await fetchCallSharePermission('call-live');
+
+    expect(callClient.getCallRecord).toHaveBeenCalledWith('call-live');
+    expect(result.isOk()).toBe(true);
+    if (result.isOk()) {
+      expect(result.value).toEqual({
+        id: 'call-live',
+        owner: 'macro|owner@test.com',
+        teamShareAccessLevel: 'view',
+      });
+    }
+  });
+
+  it('updateCallTeamShare patches view or an explicit null', async () => {
+    callClient.editCallRecord.mockResolvedValue({ isErr: () => false });
+
+    await updateCallTeamShare('call-1', true);
+    expect(callClient.editCallRecord).toHaveBeenCalledWith({
+      callId: 'call-1',
+      sharePermission: { teamShareAccessLevel: 'view' },
+    });
+
+    await updateCallTeamShare('call-1', false);
+    expect(callClient.editCallRecord).toHaveBeenCalledWith({
+      callId: 'call-1',
+      sharePermission: { teamShareAccessLevel: null },
+    });
+  });
+
+  it('isCallSharedWithTeam covers the live toggle and the archived canonical grant', () => {
+    // Live: the pending toggle, no canonical level yet.
+    expect(
+      isCallSharedWithTeam(
+        record({
+          isActive: true,
+          shareWithTeam: true,
+          teamShareAccessLevel: null,
+        })
+      )
+    ).toBe(true);
+    // Archived: the boolean mirrors the canonical level.
+    expect(
+      isCallSharedWithTeam(
+        record({
+          isActive: false,
+          shareWithTeam: true,
+          teamShareAccessLevel: 'view',
+        })
+      )
+    ).toBe(true);
+    expect(
+      isCallSharedWithTeam(
+        record({
+          isActive: false,
+          shareWithTeam: false,
+          teamShareAccessLevel: null,
+        })
+      )
+    ).toBe(false);
+  });
+
+  it('setCallRecordTeamShareCache updates the level and flag together for archived calls', () => {
+    const key = callKeys.record('call-1').queryKey;
+    queryClient.setQueryData(key, record({}));
+
+    setCallRecordTeamShareCache('call-1', true);
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      teamShareAccessLevel: 'view',
+      shareWithTeam: true,
+    });
+
+    setCallRecordTeamShareCache('call-1', false);
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      teamShareAccessLevel: null,
+      shareWithTeam: false,
+    });
+  });
+
+  it('setCallRecordTeamShareCache only flips the toggle for live calls', () => {
+    const key = callKeys.record('call-live').queryKey;
+    queryClient.setQueryData(
+      key,
+      record({ callId: 'call-live', isActive: true, shareWithTeam: false })
+    );
+
+    setCallRecordTeamShareCache('call-live', true);
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      shareWithTeam: true,
+      teamShareAccessLevel: null,
+    });
+  });
+
+  it('setCallRecordTeamShareCache leaves an unloaded record alone', () => {
+    setCallRecordTeamShareCache('missing', true);
+    expect(
+      queryClient.getQueryData(callKeys.record('missing').queryKey)
+    ).toBeUndefined();
+  });
+
+  it('setCallRecordTeamShareCache drops a late record fetch', async () => {
+    const key = callKeys.record('call-live').queryKey;
+    queryClient.setQueryData(
+      key,
+      record({ callId: 'call-live', isActive: true, shareWithTeam: false })
+    );
+
+    let resolveFetch: (value: CallRecord) => void = () => {};
+    const pending = new Promise<CallRecord>((resolve) => {
+      resolveFetch = resolve;
+    });
+    const fetchResult = queryClient.fetchQuery({
+      queryKey: key,
+      staleTime: 0,
+      retry: false,
+      queryFn: () => pending,
+    });
+
+    setCallRecordTeamShareCache('call-live', true);
+    resolveFetch(
+      record({ callId: 'call-live', isActive: true, shareWithTeam: false })
+    );
+    await fetchResult.catch(() => undefined);
+
+    expect(queryClient.getQueryData<CallRecord>(key)).toMatchObject({
+      shareWithTeam: true,
+    });
   });
 });

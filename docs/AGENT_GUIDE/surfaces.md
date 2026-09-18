@@ -59,19 +59,30 @@ that entity's last operation in the batch. Emitted `SoupUpdated` items are non-n
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
 
-## Home — `/app/component/inbox`
+## Home (desktop) / Notifications (mobile) — `/app/component/inbox`
 
-With the new app views enabled, Home defaults to a Signal feed merging
+Touch devices render the legacy Notifications view without waiting for the new app
+views feature flag. Desktop waits for flag readiness before choosing the new Home
+view or its legacy fallback.
+
+GraphQL-attached notification rows share the global feed's local seen/done
+overrides: Mark Done and Undo reflect local intent without waiting for an older
+cached notification snapshot to be replaced. These display overrides do not turn
+incomplete predicate-index facts into authoritative membership evidence.
+
+On desktop with the new app views enabled, Home defaults to a Signal feed merging
 notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
 action. On desktop, the funnel button to the right of **Home** opens **Filter Home**.
-The first menu row is an **Unread only** toggle: on shows unread items; off shows
-all items. Entity type checkboxes start checked. Unchecking **Email** hides received
+The menu shares the legacy compact submenus: **Status** offers **Unread**, **Read**,
+and **All**, and **Type** contains the entity checkboxes. Status closes the menu
+after selection; type selections leave it open. Press **f** to open the menu.
+Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
 both channels and reply threads; **Chats** and **Agents** have separate toggles.
 Unchecking every type shows an empty feed. **Reset filters** shows every type and
 both read states again. A badge counts hidden types plus an active status filter.
-Older saved read-only selections restore as All. The mobile drawer uses the same toggle.
+Read status and type selections persist.
 There are no desktop Signal/Noise tabs. A **Home** heading
 labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, and
 **Agents** sidebar headings. The full-width **New chat** plus pill below the heading clears the preview and returns to the Home
@@ -84,7 +95,7 @@ split history restores that entry's filter selection. An explicit facet selectio
 overrides saved filters. Returning through split history resets navigation to Signal.
 
 Channel thread replies remain separate Home entries from their parent channel,
-using single-line rows and a reply arrow icon on desktop and touch devices, labeled
+using single-line rows and a reply arrow icon on desktop, labeled
 with the sender and channel (for example, **Peter in #battlefield**). Channel names
 prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
@@ -121,7 +132,13 @@ are isolated from the input. If generation stalls for 45 seconds, the shimmer
 is replaced with a retry action; a late result still appears automatically.
 Generation status updates do not extend that deadline. Retry starts a fresh
 45-second wait. Shift+Enter adds a line. Selecting a Home row replaces
-the composer with its preview. Mobile continues to show the activity list alone.
+the composer with its preview. Home uses the shared 256px sidebar and collapses
+navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
+slide-over. Activating a row or **New chat** closes that overlay to show content;
+arrow-key browsing keeps it open. Preview headers start with **Home >**. Clicking
+**Home** clears the preview and returns to the starting pane without changing
+sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
+show the activity list alone.
 
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
 Desktop AI chats, agents, and channel composers share Home's rounded composer
@@ -156,8 +173,13 @@ source shows a retry notice while the other source stays usable. Document typing
 alone is not yet attributed by Activity; Home reflects the actions the existing
 Activity system records.
 
-On mobile, Signal/Noise tabs and filters float above the full-height scrolling list. On iOS, rows
-fade underneath the filters and status bar using the shared top edge gradient.
+On mobile, this route always renders the original Notifications soup view,
+regardless of the new-app-views flag. The dock and search scope use the bell icon
+and **Notifications** label; Home is desktop-only. Notifications uses the existing
+Inbox presets, Signal/Noise tabs, notification cards, read/type filters, swipe
+actions, and pull-to-refresh, without Home's merged own-activity feed or chat
+starting pane. Opening a row navigates to its entity. On iOS, rows fade underneath
+the filters and status bar using the shared top edge gradient.
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
 unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`
@@ -188,8 +210,9 @@ selecting it again clears that tag filter. Favorite rows open their tasks.
 Normal row and favorite activation replaces the list with the editable task
 document; its originating-tab breadcrumb returns to the list and its
 header exposes Share and the task Details/Properties panel. Shift-click opens
-the task in a new split instead. Keyboard navigation moves list focus without
-opening a task until activation.
+the task in a new split instead. While the list is visible, `J` and `K` move
+focus without opening a task until activation. In an open task detail, they
+replace it with the next or previous task in the same filtered order.
 
 The desktop `Create` → `Task` modal uses the standard dialog panel, circular
 icon controls, and a pill-shaped `Create Task` button with 16px outer padding.
@@ -197,10 +220,38 @@ The mobile task drawer retains its existing layout.
 
 ## Email — `/app/component/mail`
 
+Email's Tags sidebar uses the same [nested tag tree as Tasks](tasks.md#nested-sidebar-tags).
+Carets and folder-only parents expand branches; actual tags select their exact ID
+and switch the mailbox to All. Parent selection does not include descendant tags.
+
 Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `Shared` /
 `All`. Compose via the `Email` button (or `Create` → `Email E`). On a fresh local user it
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
+
+The new views reuse the legacy filter option rows and searchable submenus.
+Their triggers are icon-only buttons matching the surrounding view controls;
+Clear/Reset filters and the mobile Clear all action use destructive text styling.
+Both layouts show a small accent dot beside categories with active refinements;
+default All selections are not marked.
+Email Status and Done are single choices that close the menu; attachment filters
+stay open for multiple selections. Tags supports search, pins selected tags first
+on opening, and is omitted when no tags exist. **f** opens the filter menu.
+
+### Read state and trash
+
+With GraphQL Soup enabled, **Mark read/unread** updates the normalized email row
+optimistically. Permanent server errors roll it back; retryable transport failures
+can leave the action in the durable queue. Mark unread sends only the thread ID;
+the server resolves that inbox's UNREAD label and returns the canonical thread
+(`__typename`, `id`, `isRead`) to reconcile the cache. The row should flip immediately
+even when the client labels cache is missing or stale—no label fetch precedes the
+optimistic update. Queued read/unread writes retain revalidation descriptors for
+active flat and grouped lists, including loaded continuation pages. Once replay
+commits (even after a reload), those queries refresh from the server; they should
+not refetch over the optimistic state merely because a write was queued. Trash
+and its Undo refresh mounted GraphQL lists after the server operation finishes.
+The GraphQL-disabled REST path is unchanged.
 
 ### Cached Mail filtering
 
@@ -262,9 +313,13 @@ The first scenario covers Signal → Noise → All after disconnecting both nati
 HTTP and WebSockets. iOS shares the native cache code but is not yet covered by
 that driver.
 
-Threads open at `/app/email/<thread-id>`. Click a message header to expand or
-collapse it; `Show N hidden messages` reveals the collapsed middle of a longer
-conversation. A link with `?email_message_id=<message-id>` reveals that message.
+In the new Email view, ordinary row activation opens the thread inside
+`/app/component/mail`; the Email breadcrumb returns to the filtered list.
+Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
+the destination for direct links and legacy surfaces. Click a message header to
+expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
+a longer conversation. A standalone link with
+`?email_message_id=<message-id>` reveals that message.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop
@@ -296,6 +351,8 @@ Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
 open shadow root: Playwright text locators can reach them, but a card's ordinary
 `innerText` or `querySelector` does not traverse that root.
 
+Sending a reply from an inbox thread marks that thread done but stays on it;
+only the explicit Mark done action opens the next email.
 After a successful send, the `Email sent` notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
 a slow background refresh must not keep the restored editor disabled. A rejected
@@ -356,24 +413,60 @@ just client-side row filtering. Cached inserts enforce the same rule before a
 refetch, including expanded groups and inactive cached Shared queries. Until
 viewer identity is available, document inserts into Shared are rejected.
 
-With `enable-new-app-views` enabled, Files opens **Drive** using the same
-shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
-`Shared with me`, collapsible Favorites, and a searchable folder hierarchy.
+On touch devices (phones and tablets), Files keeps the original tabbed view and
+mobile navigation even when `enable-new-app-views` is enabled.
+
+On desktop, with `enable-new-app-views` enabled, Files opens **Drive** using the
+same shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
+`Shared with me`, collapsible Favorites, a searchable folder hierarchy, and a
+collapsible Tags section beneath the folders. Tags lists every tag you can apply,
+nested by `/` in the tag name, with a `New tag` action in its header. Choosing a
+tag shows only that tag's files within the current tab or folder and exits any
+inline file detail; choosing the highlighted tag again clears it, and the same
+selection appears under the **Filter** menu's Tags submenu. Navigating to another
+tab or folder clears tag filters. A folder with no files matching the active tag
+shows the list's no-match state rather than `This folder is empty`.
+Drive omits split-history back/forward buttons in both wide and narrow layouts;
+the split close button remains available when multiple splits are open.
+Files opened in place from Drive show a return link labeled with their originating
+subview (such as `My Files`, `Recent`, or `Shared with me`) or folder name. The text-only
+label's font weight matches the file title. The link
+restores the originating Drive view.
 The `Drive` folder row opens the folder overview. Click a folder name to browse
 its contents in the main pane; its separate expand/collapse button reveals child
-folders without navigating. Folder breadcrumbs in the top bar use `/` separators
-and navigate to ancestors. Empty folders show `This folder is empty` and a
-`Back to Drive` action that returns to the folder overview. Folder
-search retains matching descendants' ancestors and reveals their branches.
+folders without navigating. The top bar keeps the full folder and file detail
+path in one breadcrumb trail. Folder containment uses `/` separators, while the
+transition to a file detail and nested detail navigation use the default `>`
+separator. Choosing a folder breadcrumb returns to that folder and clears newer
+file details. Empty folders show `This folder is empty` and a `Back to Drive`
+action that returns to the folder overview. Folder search retains matching
+descendants' ancestors and reveals their branches.
 
-`Search Drive` searches the current tab or folder. `Filter files` includes all-files
-and email-attachment scopes; `Sort files` offers modified, created, and viewed dates.
+`Search Drive` searches the current tab or folder overview; search within a folder
+is temporarily hidden, including its Cmd+F shortcut. The sidebar's folder-name
+search remains available. Right-click any Drive view, the Drive folder overview,
+or a folder at any depth for **Open in new split**, **Open in current split**, and
+**Open fullscreen** (when multiple splits are open). Folder menus also offer
+Favorite/Unfavorite, Move to folder, Copy Link, and owner-only Rename and Delete.
+A folder's Share dialog, when the owner belongs to a team, has Team access
+(None, View, Comment, or Edit) without a Link sharing card or Link tab.
+Favorites use the same open actions and **Remove from favorites** menu as Tasks.
+The **Filter** menu reuses the
+legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**
+for Default, All files, and Email attachments. Created by is hidden while My Files
+is restricted to your own files. Recent offers only file-scope filtering.
+`Sort files` offers modified, created, and viewed dates.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,
-while modified clicks retain existing split navigation. On narrow layouts, use
-`Select Drive view` for tabs, favorites, and folders. Navigation state and expanded
-folders are restored when returning from an opened file.
+while Markdown, code/CSV, image, video, PDF/DOCX, canvas, and unrecognized file
+clicks and Enter replace the list with a breadcrumbed detail. Choose the current location
+breadcrumb to return to the list; choosing an ancestor file drops newer detail
+entries. Opening a list row or sidebar favorite starts a new detail path; only
+navigation originating inside a detail appends to that path. Modified clicks
+retain existing split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
+folders, and tags. Navigation state and expanded folders are restored when returning
+from an opened file.
 
 ## Calendar — `/app/calendar/view`
 
@@ -449,10 +542,88 @@ and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
 
+### Sharing a call
+
+A call's **Share** dialog has a `Team access` control (None or View) for the same canonical
+team share. The side panel has a `Sharing` section with one `Share with team` checkbox, and the
+in-call controls carry the same checkbox while a call is live. It is canonical team sharing (the
+same `Team access` model documents and AI chats use), fixed at **view**. While the call is **live**
+the checkbox is a pending toggle (on by default) that any participant with edit access can flip;
+other participants see it update live. When the call ends it is applied: with the toggle on,
+everyone on the creator's team can open the recorded call, read the transcript and AI summary,
+and find it under Calls and in search; off means nothing is shared. Afterwards only the call's
+**creator** can change it — everyone else sees the checkbox read-only with a note saying so.
+Team sharing is independent of channel access and of link sharing.
+
 ## Customers (CRM) — `/app/component/companies`
 
-Board/List views, `Company` create button. Requires a team ("Join a team to enable CRM" →
-`Open team settings`).
+The 216px local sidebar uses the same navigation primitives as Email and Tasks.
+Board and List share a horizontal segmented toggle at the top of the sidebar; the
+main header has no layout toggle. People is not available. Views include All companies, My companies
+(Owner = current user), Needs follow-up (has a stage other than Churned and last
+interaction at least 14 days ago),
+Recently active (team email activity within 7 days), and Unassigned (no Owner). Existing personal/team
+saved views also appear under Views. Stages remain board columns or list properties.
+Board/List switches the representation without changing the selected set.
+Recently active uses the CRM last-interaction timestamp, advanced by sent and received
+email. It does not count company @mentions or chat discussions. Manually created
+companies initialize that timestamp to creation time, so newly added companies may
+also appear before any email; the sidebar hover tooltip discloses this limitation.
+View descriptions appear in sidebar tooltips, not above the main board or list.
+The `Search companies` field uses the shared Email/Tasks search bar. Command-F
+focuses it, `Clear search` resets it, and Escape leaves the field.
+
+Clicking a company in Board or List (or pressing Enter on a focused list row)
+opens its details inside the CRM workspace, keeping the left navigation visible.
+The top breadcrumb reads `<current view or list> > <company>`; click the first
+segment to return with the same filters, layout, and list scroll position. Selecting
+another sidebar view or switching Board/List closes the company details.
+Shift-click still opens the company in a separate split. Direct company links use
+the standalone company page.
+Clicking a contact in an embedded company's Contacts section appends a third
+breadcrumb: `<current view or list> > <company> > <contact>`. The CRM sidebar stays
+visible. Click the company breadcrumb or the contact's Company link to return to
+the company; click the first breadcrumb to return directly to the originating
+view. Shift-click still opens a contact in a separate split. Direct contact links
+use the standalone contact page.
+Company and contact headers have `Copy link` beside the side-panel toggle.
+It copies the record's direct URL and shows a confirmation toast; this is also
+available in the embedded company and contact breadcrumb header.
+
+`Collapse CRM sidebar` persists across visits; `Expand CRM sidebar` restores it.
+At narrow widths, `Show CRM navigation` opens the same navigation in a menu.
+The sidebar's Views and Lists sections can also collapse independently.
+
+CRM lists are currently disabled by `enableCrmLists` (default `false`). The sidebar
+Lists section, list editor, and company membership controls only mount when enabled.
+Existing list data is preserved; a restored list view returns to All companies while
+disabled. Board/List layout and saved filter views remain available.
+
+When enabled, lists are personal, team-scoped collections of explicit company IDs, persisted through
+saved-view storage separately from saved filter views. `New list` opens a name and
+company picker; `Edit list` changes membership or deletes the collection. An empty list
+must not show every company. The picker browses up to 500 recent companies. Canceling
+never saves the draft. Saving only closes the dialog after the server succeeds.
+
+Company detail pages show a **Lists** section in the right panel, with current
+personal list memberships as chips. **Manage lists** expands a searchable checkbox
+picker. Checking or unchecking saves immediately and refreshes the CRM sidebar's
+membership counts. Changes are disabled while saving; failures show an inline retry
+message and keep the last saved membership. With no lists, create one in the CRM sidebar.
+
+`New company` uses the existing creation dialog. `Import` previews a CSV with `name`
+and `domain` columns (1–100 rows, at most 1 MB). The explicit Import button writes the
+previewed companies. Partial failures retain only failed rows for retry. Use preview
+and cancel for browser checks against hosted dev data. `CRM settings` opens the existing
+settings panel. Requires a team with CRM enabled.
+
+`Export` opens options for companies. Choose Current view
+(respects filters/search) or All records across views (each visible record once), then
+select CSV columns. Company exports include Stage, Owner, Revenue and optional custom
+properties. `Prepare export` fetches every page and shows a count and three-row preview;
+it does not download. `Download CSV` saves the prepared snapshot using the selected
+columns. Changing scope requires preparing again. Cancel stops preparation. CSV uses UTF-8,
+quoted fields, original date timestamps and spreadsheet formula escaping.
 
 ## Activity — `/app/component/activity`
 
@@ -588,13 +759,15 @@ without comment permission have no comment composer, so Ask AI remains visible.
 On touch devices, an email thread's floating action bar has Previous email and
 Next email arrows beside the larger Mark done checkmark. The arrows follow the
 source list's filtered order, skip non-email items, and disable at its ends.
-They do not wrap; a thread opened without a source list has disabled arrows.
+`J` and `K` use that same order in the Email view. They do not wrap; a thread
+opened without a source list has disabled arrows.
 Mark done archives the current thread and opens the next email in that same
 filtered list, loading pages until another email is found or the list ends.
 On native mobile, stepping replaces the current email while preserving the
-filtered list behind it for swipe-back. This works with both the legacy mobile
-list and the newer app views. To verify, open the first email from Signal or
-Noise, tap Next and then Previous, and swipe back to the same filtered list.
+filtered list behind it for swipe-back. In the newer Email view it retargets the
+view-owned detail stack instead of opening another block. To verify, open the
+first email from Signal or Noise, tap Next and then Previous, and return to the
+same filtered list.
 Leaving the email cancels pending
 navigation and archiving while a page loads. At the end it opens the previous
 email; with no neighboring email it stays on the archived thread. Mark as not done

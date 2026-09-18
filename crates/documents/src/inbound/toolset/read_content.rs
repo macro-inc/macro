@@ -160,48 +160,72 @@ where
             });
         };
 
-        let content: Content = match file_type.macro_app_path() {
-            FileAssociation::Pdf(_) | FileAssociation::Write(_) => Content::Text(
-                service_context
-                    .service
-                    .get_document_text(entity_access_receipt.clone())
-                    .await
-                    .map_err(|e| ToolCallError {
-                        description: "unable to get document text".to_string(),
-                        internal_error: e.into(),
-                    })?,
-            ),
-            FileAssociation::Md(_) => Content::Markdown(
-                service_context
-                    .lexical_client
-                    .parse_cognition_v2(&self.document_id.to_string())
-                    .await
-                    .map_err(|e| ToolCallError {
-                        description: "unable to parse markdown".to_string(),
-                        internal_error: e,
-                    })?
-                    .data
-                    .into_iter()
-                    .map(|i| i.into())
-                    .collect(),
-            ),
-            FileAssociation::Code(_) | FileAssociation::Document(_) => Content::Text(
-                get_document_content_from_location(
-                    service_context.clone(),
-                    &document_context,
+        let content: Content = if file_type == FileType::Spreadsheet {
+            let result = service_context
+                .spreadsheet
+                .read(
                     entity_access_receipt.clone(),
+                    &request_context.user_id,
+                    service_context.actor.into_storage_id().as_ref(),
+                    crate::domain::spreadsheet::SpreadsheetRequest::Read {
+                        sheet_id: None,
+                        ranges: None,
+                        include_styles: None,
+                    },
                 )
                 .await
                 .map_err(|e| ToolCallError {
-                    description: "unable to get document content using location".to_string(),
+                    description: e.to_string(),
                     internal_error: e,
-                })?,
-            ),
-            _ => {
-                return Err(ToolCallError {
-                    description: format!("unsupported file type {file_type}"),
-                    internal_error: anyhow::anyhow!("unsupported file type"),
-                });
+                })?;
+            Content::Text(serde_json::to_string(&result).map_err(|e| ToolCallError {
+                description: "unable to serialize spreadsheet overview".to_string(),
+                internal_error: e.into(),
+            })?)
+        } else {
+            match file_type.macro_app_path() {
+                FileAssociation::Pdf(_) | FileAssociation::Write(_) => Content::Text(
+                    service_context
+                        .service
+                        .get_document_text(entity_access_receipt.clone())
+                        .await
+                        .map_err(|e| ToolCallError {
+                            description: "unable to get document text".to_string(),
+                            internal_error: e.into(),
+                        })?,
+                ),
+                FileAssociation::Md(_) => Content::Markdown(
+                    service_context
+                        .lexical_client
+                        .parse_cognition_v2(&self.document_id.to_string())
+                        .await
+                        .map_err(|e| ToolCallError {
+                            description: "unable to parse markdown".to_string(),
+                            internal_error: e,
+                        })?
+                        .data
+                        .into_iter()
+                        .map(|i| i.into())
+                        .collect(),
+                ),
+                FileAssociation::Code(_) | FileAssociation::Document(_) => Content::Text(
+                    get_document_content_from_location(
+                        service_context.clone(),
+                        &document_context,
+                        entity_access_receipt.clone(),
+                    )
+                    .await
+                    .map_err(|e| ToolCallError {
+                        description: "unable to get document content using location".to_string(),
+                        internal_error: e,
+                    })?,
+                ),
+                _ => {
+                    return Err(ToolCallError {
+                        description: format!("unsupported file type {file_type}"),
+                        internal_error: anyhow::anyhow!("unsupported file type"),
+                    });
+                }
             }
         };
 

@@ -9,6 +9,9 @@ use std::str::FromStr;
 use strum::EnumIter;
 use thiserror::Error;
 
+#[cfg(test)]
+mod test;
+
 /// Indicates we eoncountered an unknown string value while attempting to construct type T
 #[derive(Debug, Error)]
 #[error("{0} is not a supported {t}", t = std::any::type_name::<T>())]
@@ -256,6 +259,12 @@ generate_file_types!(
     ),
     (Pdf, "pdf", "application/pdf", Pdf),
     (Md, "md", "text/markdown", Md),
+    (
+        Spreadsheet,
+        "spreadsheet",
+        "application/x-macro-spreadsheet",
+        Document
+    ),
     (Canvas, "canvas", "application/x-macro-canvas", Canvas),
     // Code block: generated from VS Code extensions {
     (Coffee, "coffee", "text/plain", Code),

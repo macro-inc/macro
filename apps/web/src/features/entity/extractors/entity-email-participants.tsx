@@ -9,7 +9,7 @@ import {
   highlightTermsInText,
   mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
-import WideCopy from '@icon/wide-copy.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import { Surface } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import type { EmailEntity, EmailThreadParticipants } from '../types/entity';
@@ -162,7 +162,7 @@ function HiddenParticipantsTooltip(props: { hidden: ResolvedParticipant[] }) {
                 onClick={[copyEmail, r.participant.email]}
               >
                 <span class="truncate">{r.participant.email}</span>
-                <WideCopy class="size-3 shrink-0 opacity-60" />
+                <CopyIcon class="size-3 shrink-0 opacity-60" />
               </div>
             )}
           </For>

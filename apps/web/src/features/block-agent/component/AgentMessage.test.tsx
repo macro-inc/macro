@@ -45,8 +45,10 @@ vi.mock('./parts/ElicitationPart', () => ({ ElicitationPart: () => null }));
 vi.mock('../ui', () => ({
   isToolActive: (status: string) =>
     status === 'pending' || status === 'running',
-  Thought: (props: { text: string }) => (
-    <div data-testid="thought">{props.text}</div>
+  Thought: (props: { text: string; active?: boolean }) => (
+    <div data-active={String(props.active ?? false)} data-testid="thought">
+      {props.text}
+    </div>
   ),
   WorkingLine: () => <div data-testid="working" />,
   ActionLine: (props: { label: string }) => <div>{props.label}</div>,
@@ -118,6 +120,7 @@ describe('Message tool grouping', () => {
           }),
           text('Done.'),
         ])}
+        inFlight={false}
       />
     ));
     const group = view.getByTestId('group');
@@ -137,7 +140,10 @@ describe('Message tool grouping', () => {
 
   it('leaves a lone tool call as its own card', () => {
     const view = render(() => (
-      <Message message={message([text('Looking.'), tool('read')])} />
+      <Message
+        message={message([text('Looking.'), tool('read')])}
+        inFlight={false}
+      />
     ));
     expect(view.queryByTestId('group')).toBeNull();
     expect(view.getByTestId('tool').dataset.index).toBe('1');
@@ -153,6 +159,7 @@ describe('Message tool grouping', () => {
           tool('c'),
           tool('d'),
         ])}
+        inFlight={false}
       />
     ));
     expect(view.getAllByTestId('group').map((el) => el.dataset.count)).toEqual([
@@ -166,16 +173,30 @@ describe('Message tool grouping', () => {
     const view = render(() => (
       <Message
         message={message([tool('a'), tool('b', { status: 'running' })], null)}
+        inFlight
       />
     ));
     expect(view.getByTestId('group').dataset.active).toBe('true');
+  });
+
+  it('settles a run the log left running once the turn is no longer live', () => {
+    // A superseded turn keeps `stop: null` and its last call `running`
+    // forever; a dead runtime leaves the tail the same way.
+    const view = render(() => (
+      <Message
+        message={message([tool('a'), tool('b', { status: 'running' })], null)}
+        inFlight={false}
+      />
+    ));
+    expect(view.getByTestId('group').dataset.active).toBe('false');
+    expect(view.queryByTestId('working')).toBeNull();
   });
 
   it('keeps the group mounted as streamed calls extend the run', () => {
     const [store, setStore] = createStore({
       message: message([text('Looking.'), tool('a'), tool('b')], null),
     });
-    const view = render(() => <Message message={store.message} />);
+    const view = render(() => <Message message={store.message} inFlight />);
     const group = view.getByTestId('group');
     expect(group.dataset.count).toBe('2');
 
@@ -199,7 +220,7 @@ describe('Message tool grouping', () => {
     const [store, setStore] = createStore({
       message: message([text('Looking.'), tool('a')], null),
     });
-    const view = render(() => <Message message={store.message} />);
+    const view = render(() => <Message message={store.message} inFlight />);
     expect(view.queryByTestId('group')).toBeNull();
     const prose = view.getByTestId('text');
 
@@ -209,5 +230,115 @@ describe('Message tool grouping', () => {
     );
     expect(view.getByTestId('group').dataset.count).toBe('2');
     expect(view.getByTestId('text')).toBe(prose);
+  });
+});
+
+describe('Message thought shimmer', () => {
+  const thought = (value: string): MessagePart => ({
+    kind: 'thought',
+    text: value,
+  });
+
+  it('keeps grouped thoughts at their real indices when the group opens', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [thought('why this file'), tool('read'), tool('edit')],
+          null
+        )}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('thought').dataset.active).toBe('false');
+    expect(view.getByTestId('thought').textContent).toBe('why this file');
+    expect(view.getAllByTestId('tool').map((el) => el.dataset.index)).toEqual([
+      '1',
+      '2',
+    ]);
+  });
+
+  it('shimmers only the trailing thought of an open turn', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [
+            thought('already decided'),
+            tool('read'),
+            thought('still weighing this'),
+          ],
+          null
+        )}
+        inFlight
+      />
+    ));
+    const rows = view.getAllByTestId('thought');
+    expect(rows.map((el) => el.textContent)).toEqual([
+      'already decided',
+      'still weighing this',
+    ]);
+    expect(rows.map((el) => el.dataset.active)).toEqual(['false', 'true']);
+  });
+
+  it('settles the trailing thought of an unclosed turn the session is not working on', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [thought('already decided'), tool('read'), thought('cut off here')],
+          null
+        )}
+        inFlight={false}
+      />
+    ));
+    expect(
+      view.getAllByTestId('thought').map((el) => el.dataset.active)
+    ).toEqual(['false', 'false']);
+  });
+
+  it('moves the tail thought from Thinking to Thought when the turn settles', () => {
+    const [state, setState] = createStore({ inFlight: true });
+    const view = render(() => (
+      <Message
+        message={message([tool('read'), thought('wrapping up')], null)}
+        inFlight={state.inFlight}
+      />
+    ));
+    expect(view.getByTestId('thought').dataset.active).toBe('true');
+
+    setState('inFlight', false);
+    expect(view.getByTestId('thought').dataset.active).toBe('false');
+  });
+
+  it('drops the working row when the turn settles with a call still open', () => {
+    const [state, setState] = createStore({ inFlight: true });
+    const view = render(() => (
+      <Message
+        message={message([tool('read', { status: 'running' })], null)}
+        inFlight={state.inFlight}
+      />
+    ));
+    expect(view.getByTestId('working')).toBeTruthy();
+
+    setState('inFlight', false);
+    expect(view.queryByTestId('working')).toBeNull();
+  });
+
+  it('settles a thought once prose follows it', () => {
+    const view = render(() => (
+      <Message
+        message={message(
+          [thought('weighing'), text('Here is the answer.')],
+          null
+        )}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('thought').dataset.active).toBe('false');
+  });
+
+  it('settles every thought once the turn has a stop reason', () => {
+    const view = render(() => (
+      <Message message={message([thought('done thinking')])} inFlight={false} />
+    ));
+    expect(view.getByTestId('thought').dataset.active).toBe('false');
   });
 });

@@ -670,3 +670,70 @@ async fn replace_property_options_rejects_foreign_ids(pool: Pool<Postgres>) -> a
     assert_eq!(repo.get_property_options(property_id).await?.len(), 4);
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("properties"))
+)]
+async fn get_or_create_option_converges_under_concurrency(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = PropertiesPgRepo::new(pool);
+    let property_id = PRIORITY_PROPERTY_ID.parse()?;
+    let create = || {
+        repo.get_or_create_property_option(
+            property_id,
+            4,
+            PropertyOptionValue::String("docs".into()),
+            Some("#0091FF".into()),
+        )
+    };
+    let (first, second) = tokio::join!(create(), create());
+    let first = first?;
+    let second = second?;
+    assert_eq!(first.option.id, second.option.id);
+    assert_ne!(first.created, second.created);
+    let repeated = repo
+        .get_or_create_property_option(
+            property_id,
+            99,
+            PropertyOptionValue::String("docs".into()),
+            Some("#FF0000".into()),
+        )
+        .await?;
+    assert!(!repeated.created);
+    assert_eq!(repeated.option.id, first.option.id);
+    assert_eq!(repeated.option.display_order, 4);
+    assert_eq!(repeated.option.color.as_deref(), Some("#0091FF"));
+    assert_eq!(
+        repo.get_property_options(property_id)
+            .await?
+            .iter()
+            .filter(|option| option.value == PropertyOptionValue::String("docs".into()))
+            .count(),
+        1
+    );
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn get_or_create_option_propagates_non_duplicate_errors(pool: Pool<Postgres>) {
+    let repo = PropertiesPgRepo::new(pool);
+    let error = repo
+        .get_or_create_property_option(
+            Uuid::nil(),
+            0,
+            PropertyOptionValue::String("docs".into()),
+            None,
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        error
+            .downcast_ref::<sqlx::Error>()
+            .unwrap()
+            .as_database_error()
+            .unwrap()
+            .is_foreign_key_violation()
+    );
+}

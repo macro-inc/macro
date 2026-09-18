@@ -9,7 +9,7 @@ version = "0.1.0"
 # models_search → models_soup → notification → rdkafka, and the self-hosted
 # daemon only needs domain events from this crate. Services that construct
 # the adapters enable this; do not add it to coding_agent_worker.
-outbound = ["dep:agent", "dep:ai_usage", "dep:lexical_client"]
+outbound = ["dep:agent", "dep:ai_usage", "dep:lexical_client", "dep:sqlx", "channels/ports"]
 
 [dependencies]
 agent = { path = "../agent", optional = true }
@@ -17,9 +17,9 @@ agent_session = { path = "../agent_session", default-features = false }
 ai_usage = { path = "../ai_usage", optional = true }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 bots = { path = "../bots", default-features = false, features = ["ports"] }
 lexical_client = { path = "../lexical_client", optional = true }
-channels = { path = "../channels", features = ["ports"] }
 chrono = { workspace = true }
 # Only the domain vocabulary (`Event`, `MacroEvent`, `TopicEvent`). Asking for
 # `outbound` here would pull rdkafka — and so librdkafka and openssl — into
@@ -30,7 +30,12 @@ macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 channel_sender = { path = "../channel_sender" }
 macro_uuid = { path = "../macro_uuid" }
+messages = { path = "../messages", features = ["broker", "ports"] }
+# Domain vocabulary: channel-parent trigger events keep the channel-only post
+# shape, and the channel topic's `message_posted` can still feed the trigger.
+channels = { path = "../channels", default-features = false }
 serde = { workspace = true }
+sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
@@ -39,6 +44,7 @@ tokio = { workspace = true, features = ["rt"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+messages = { path = "../messages", features = ["test-utils"] }
 agent_session = { path = "../agent_session", features = ["test-utils"] }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 mockall = { workspace = true }

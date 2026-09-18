@@ -37,7 +37,7 @@ function ConnectPipedreamApp(props: ConnectAppDecoratorProps) {
       }
       icon={<PipedreamConnectorIcon appSlug={props.appSlug} class="size-3.5" />}
       onConnect={() => {
-        // The Connections page picks this up and starts the Connect flow.
+        // The Integrations tab picks this up and starts the Connect flow.
         requestConnectApp(props.appSlug);
         openSettings('Connected');
       }}

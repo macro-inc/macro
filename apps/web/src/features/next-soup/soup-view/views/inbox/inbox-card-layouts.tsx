@@ -41,7 +41,7 @@ import ChatTextIcon from '@phosphor-icons/core/regular/chat-text.svg?component-s
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
 import PhoneIcon from '@phosphor-icons/core/regular/phone.svg?component-solid';
 import QuestionIcon from '@phosphor-icons/core/regular/question.svg?component-solid';
-import RobotIcon from '@phosphor-icons/core/regular/robot.svg?component-solid';
+import AgentIcon from '@phosphor-icons/core/regular/sparkle.svg?component-solid';
 import UserPlusIcon from '@phosphor-icons/core/regular/user-plus.svg?component-solid';
 import {
   PropertiesProvider,
@@ -286,7 +286,7 @@ const tagBubbleIcon = (tag: NotificationTag) =>
     ))
     .with('call_started', () => () => <PhoneIcon class={AVATAR_GLYPH_CLASS} />)
     .with('agent_session_settled', () => () => (
-      <RobotIcon class={AVATAR_GLYPH_CLASS} />
+      <AgentIcon class={AVATAR_GLYPH_CLASS} />
     ))
     .with('agent_session_waiting_for_input', () => () => (
       <QuestionIcon class={AVATAR_GLYPH_CLASS} />

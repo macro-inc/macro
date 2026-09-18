@@ -17,6 +17,7 @@ impl StubRepositories {
     }
 }
 
+#[async_trait::async_trait]
 impl ReachableRepositories for StubRepositories {
     async fn for_user(
         &self,
@@ -47,6 +48,9 @@ fn candidates() -> Vec<String> {
 async fn no_reachable_repository_chooses_none_without_asking_the_model() {
     let session_id = AgentSessionId::new();
     let mut sessions = MockAgentSessionRepo::new();
+    sessions.expect_get().returning(|id| {
+        Box::pin(async move { Ok(agent_session::testing::test_agent_session(id)) })
+    });
     sessions.expect_recent_for_owner().never();
     sessions
         .expect_set_repo_url()
@@ -152,6 +156,7 @@ async fn history_excludes_the_current_session_without_crowding_out_prior_work() 
                 Ok(std::iter::once(current)
                     .chain(prior)
                     .map(|id| AgentSession {
+                        repo_branch: None,
                         id,
                         name: "session".into(),
                         harness: "cursor".into(),
@@ -173,4 +178,42 @@ async fn history_excludes_the_current_session_without_crowding_out_prior_work() 
         recent.iter().map(|session| session.id).collect::<Vec<_>>(),
         expected
     );
+}
+
+#[tokio::test]
+async fn explicit_repository_bypasses_automatic_selection() {
+    let session_id = AgentSessionId::new();
+    let mut sessions = MockAgentSessionRepo::new();
+    sessions.expect_get().returning(|id| {
+        Box::pin(async move {
+            let mut session = agent_session::testing::test_agent_session(id);
+            session.repo_url = Some("https://github.com/macro-inc/infra".into());
+            session.repo_branch = Some(
+                agent_session::domain::repository_branch::RepositoryBranch::parse(
+                    "feature/home".into(),
+                )
+                .unwrap(),
+            );
+            Ok(session)
+        })
+    });
+    sessions.expect_set_repo_url().never();
+    sessions.expect_recent_for_owner().never();
+    let repositories = StubRepositories::with(&[]);
+    let chooser = HaikuRepositoryChooser::new(
+        Arc::clone(&repositories),
+        sessions,
+        Arc::new(ai_usage::NoOpUsageRecorder),
+        owner(),
+        session_id,
+    );
+    let result = chooser
+        .choose("fix home", std::path::Path::new(""))
+        .await
+        .unwrap();
+    assert_eq!(
+        result.repository.as_ref().map(RepoUrl::as_str),
+        Some("https://github.com/macro-inc/infra")
+    );
+    assert!(repositories.asked_for.lock().unwrap().is_empty());
 }
