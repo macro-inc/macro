@@ -62,7 +62,9 @@ function upsertPendingHistoryRow(payload: StartedPayload) {
     (current: ActionExecutionRecord[] | undefined) => {
       const synthetic: ActionExecutionRecord = {
         action_id: payload.action_id,
-        resource_id: payload.chat_id,
+        // `chat_id` was only ever published by the retired in-process
+        // executor, so a live update is a legacy chat by definition.
+        transcript: { kind: 'legacy_chat', id: payload.chat_id },
         start_time: new Date().toISOString(),
         // `end_time` is not nullable on the server record, but the stop event
         // triggers a refetch which replaces this synthetic row with the real
@@ -76,7 +78,7 @@ function upsertPendingHistoryRow(payload: StartedPayload) {
       };
       if (!current) return [synthetic];
       const existingIdx = current.findIndex(
-        (r) => !r.id && r.resource_id === payload.chat_id
+        (r) => !r.id && r.transcript?.id === payload.chat_id
       );
       if (existingIdx !== -1) {
         const next = [...current];
@@ -93,7 +95,7 @@ function removePendingHistoryRow(chatId: string, scheduleId: string) {
     scheduledActionKeys.history({ scheduleId }).queryKey,
     (current: ActionExecutionRecord[] | undefined) => {
       if (!current) return current;
-      return current.filter((r) => !(!r.id && r.resource_id === chatId));
+      return current.filter((r) => !(!r.id && r.transcript?.id === chatId));
     }
   );
 }

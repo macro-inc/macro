@@ -6,8 +6,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ActionExecutionRecordId } from './actionExecutionRecordId';
-import type { ActionExecutionRecordResourceId } from './actionExecutionRecordResourceId';
 import type { ActionExecutionRecordResult } from './actionExecutionRecordResult';
+import type { ActionExecutionRecordTranscript } from './actionExecutionRecordTranscript';
 
 export interface ActionExecutionRecord {
   action_id: string;
@@ -15,8 +15,7 @@ export interface ActionExecutionRecord {
   end_time: string;
   id?: ActionExecutionRecordId;
   is_success: boolean;
-  /** ID of the primary resource produced by this run. Opaque to the scheduler. */
-  resource_id?: ActionExecutionRecordResourceId;
   result: ActionExecutionRecordResult;
   start_time: string;
+  transcript?: ActionExecutionRecordTranscript;
 }

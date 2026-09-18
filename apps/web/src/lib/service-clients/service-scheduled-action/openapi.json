@@ -398,16 +398,23 @@
           "is_success": {
             "type": "boolean"
           },
-          "resource_id": {
-            "type": ["string", "null"],
-            "description": "ID of the primary resource produced by this run. Opaque to the scheduler."
-          },
           "result": {
             "type": "object"
           },
           "start_time": {
             "type": "string",
             "format": "date-time"
+          },
+          "transcript": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/RunTranscript",
+                "description": "`null` when the run produced nothing, e.g. the run request never reached\nthe broker."
+              }
+            ]
           }
         }
       },
@@ -471,6 +478,38 @@
             "type": ["string", "null"]
           }
         }
+      },
+      "RunTranscript": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["legacy_chat"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["id", "kind"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid"
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["agent_session"]
+              }
+            }
+          }
+        ],
+        "description": "The transcript a run left behind, named by the entity type that renders it.\n\nRows written by the retired in-process executor point at cognition chats;\nrows written by the Kafka executor point at harness agent sessions. Both ids\nare UUID-shaped, so the kind travels with the id. A run that produced no\ntranscript has none at all rather than a third kind, so a kind never exists\nwithout an id."
       },
       "Schedule": {
         "type": "string"

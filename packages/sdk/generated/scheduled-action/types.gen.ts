@@ -10,14 +10,11 @@ export type ActionExecutionRecord = {
     end_time: string;
     id?: string | null;
     is_success: boolean;
-    /**
-     * ID of the primary resource produced by this run. Opaque to the scheduler.
-     */
-    resource_id?: string | null;
     result: {
         [key: string]: unknown;
     };
     start_time: string;
+    transcript?: null | RunTranscript;
 };
 
 export type ActionKind = 'Agent';
@@ -54,6 +51,23 @@ export type EmptyResponse = {
 export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
+};
+
+/**
+ * The transcript a run left behind, named by the entity type that renders it.
+ *
+ * Rows written by the retired in-process executor point at cognition chats;
+ * rows written by the Kafka executor point at harness agent sessions. Both ids
+ * are UUID-shaped, so the kind travels with the id. A run that produced no
+ * transcript has none at all rather than a third kind, so a kind never exists
+ * without an id.
+ */
+export type RunTranscript = {
+    id: string;
+    kind: 'legacy_chat';
+} | {
+    id: string;
+    kind: 'agent_session';
 };
 
 export type Schedule = string;

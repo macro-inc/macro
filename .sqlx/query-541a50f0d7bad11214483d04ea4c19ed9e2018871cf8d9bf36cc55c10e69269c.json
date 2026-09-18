@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, action_id, resource_id, start_time, end_time, is_success, result, created_at\n            FROM action_execution_record\n            WHERE action_id = $1\n            ORDER BY start_time DESC\n            ",
+  "query": "\n            SELECT id, action_id, resource_id, transcript_kind, start_time, end_time, is_success, result, created_at\n            FROM action_execution_record\n            WHERE action_id = $1\n            ORDER BY start_time DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -20,26 +20,31 @@
       },
       {
         "ordinal": 3,
+        "name": "transcript_kind",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
         "name": "start_time",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 4,
+        "ordinal": 5,
         "name": "end_time",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 5,
+        "ordinal": 6,
         "name": "is_success",
         "type_info": "Bool"
       },
       {
-        "ordinal": 6,
+        "ordinal": 7,
         "name": "result",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -53,6 +58,7 @@
       false,
       false,
       true,
+      true,
       false,
       false,
       false,
@@ -60,5 +66,5 @@
       false
     ]
   },
-  "hash": "0d9d272f0886376c4a756a4296517b933697934a2b3d52e931bcb2f1dc64ac87"
+  "hash": "541a50f0d7bad11214483d04ea4c19ed9e2018871cf8d9bf36cc55c10e69269c"
 }

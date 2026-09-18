@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod test;
+
 use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
@@ -13,8 +16,8 @@ use sqlx::PgPool;
 use std::str::FromStr;
 
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, AlreadyRunningError, MAX_ACTION_TIME, Schedule,
-    ScheduledAction,
+    ActionExecutionRecord, ActionKind, AlreadyRunningError, MAX_ACTION_TIME, RunTranscript,
+    Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionRepo;
 
@@ -42,6 +45,38 @@ fn parse_kind(s: &str) -> Result<ActionKind> {
 fn kind_to_str(kind: &ActionKind) -> &'static str {
     match kind {
         ActionKind::Agent => "Agent",
+    }
+}
+
+const LEGACY_CHAT_KIND: &str = "legacy_chat";
+const AGENT_SESSION_KIND: &str = "agent_session";
+
+/// Split a transcript into the `(resource_id, transcript_kind)` column pair.
+fn transcript_to_columns(
+    transcript: Option<&RunTranscript>,
+) -> (Option<String>, Option<&'static str>) {
+    match transcript {
+        None => (None, None),
+        Some(RunTranscript::LegacyChat(id)) => (Some(id.clone()), Some(LEGACY_CHAT_KIND)),
+        Some(RunTranscript::AgentSession(id)) => (Some(id.to_string()), Some(AGENT_SESSION_KIND)),
+    }
+}
+
+/// Fold the column pair back into the domain type. A row with no id has no
+/// transcript whatever its kind column says: pre-column rows carry the
+/// `'legacy_chat'` default beside a NULL id.
+fn transcript_from_columns(
+    resource_id: Option<String>,
+    transcript_kind: Option<String>,
+) -> Result<Option<RunTranscript>> {
+    let Some(id) = resource_id else {
+        return Ok(None);
+    };
+    match transcript_kind.as_deref() {
+        Some(LEGACY_CHAT_KIND) => Ok(Some(RunTranscript::LegacyChat(id))),
+        Some(AGENT_SESSION_KIND) => Ok(Some(RunTranscript::AgentSession(Uuid::parse_str(&id)?))),
+        Some(other) => bail!("unknown transcript kind: {other}"),
+        None => bail!("transcript id {id} has no kind"),
     }
 }
 
@@ -285,13 +320,18 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
     }
 
     async fn create_execution_record(&self, record: ActionExecutionRecord) -> Result<()> {
+        let (resource_id, transcript_kind) = transcript_to_columns(record.transcript.as_ref());
+
+        // `transcript_kind` is named explicitly so the column default (which
+        // classifies rows from writers that predate it) never applies here.
         sqlx::query!(
             r#"
-            INSERT INTO action_execution_record (action_id, resource_id, start_time, end_time, is_success, result)
-            VALUES ($1, $2, $3, $4, $5, $6)
+            INSERT INTO action_execution_record (action_id, resource_id, transcript_kind, start_time, end_time, is_success, result)
+            VALUES ($1, $2, $3, $4, $5, $6, $7)
             "#,
             record.action_id,
-            record.resource_id,
+            resource_id,
+            transcript_kind,
             record.start_time,
             record.end_time,
             record.is_success,
@@ -306,7 +346,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
     async fn get_execution_records(&self, action_id: &Uuid) -> Result<Vec<ActionExecutionRecord>> {
         let rows = sqlx::query!(
             r#"
-            SELECT id, action_id, resource_id, start_time, end_time, is_success, result, created_at
+            SELECT id, action_id, resource_id, transcript_kind, start_time, end_time, is_success, result, created_at
             FROM action_execution_record
             WHERE action_id = $1
             ORDER BY start_time DESC
@@ -316,19 +356,20 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows
-            .into_iter()
-            .map(|row| ActionExecutionRecord {
-                id: Some(row.id),
-                action_id: row.action_id,
-                resource_id: row.resource_id,
-                start_time: row.start_time,
-                end_time: row.end_time,
-                is_success: row.is_success,
-                result: row.result,
-                created_at: row.created_at,
+        rows.into_iter()
+            .map(|row| {
+                Ok(ActionExecutionRecord {
+                    id: Some(row.id),
+                    action_id: row.action_id,
+                    transcript: transcript_from_columns(row.resource_id, row.transcript_kind)?,
+                    start_time: row.start_time,
+                    end_time: row.end_time,
+                    is_success: row.is_success,
+                    result: row.result,
+                    created_at: row.created_at,
+                })
             })
-            .collect())
+            .collect()
     }
 
     async fn update_next_run_at(&self, id: &Uuid) -> Result<()> {

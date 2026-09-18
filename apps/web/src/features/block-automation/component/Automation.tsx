@@ -27,10 +27,14 @@ import {
   useUpdateScheduleMutation,
 } from '@queries/agent-schedule/schedules';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
+import { useChatQuery } from '@queries/chat';
 import { queryReadyGate } from '@queries/gate';
+import type { ActionExecutionRecord } from '@service-scheduled-action/generated/schemas';
 import { debounce } from '@solid-primitives/scheduled';
+import type { UseQueryResult } from '@tanstack/solid-query';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
+import { match, P } from 'ts-pattern';
 import { AutomationPromptEditor } from './AutomationPromptEditor';
 import { AutomationRenameModal } from './AutomationRenameModal';
 import { AutomationTimePicker } from './AutomationTimePicker';
@@ -45,25 +49,57 @@ import {
   isValidTime,
   WEEKDAY_OPTIONS,
 } from './automationUtils';
+import { transcriptTarget } from './runTranscript';
 import type { ScheduleDraft } from './types';
 
-type HistoryRecord = {
-  id?: string | null;
-  resource_id?: string | null;
-  start_time?: string | null;
-  is_success?: boolean | null;
-};
+type HistoryRecord = Pick<
+  ActionExecutionRecord,
+  'id' | 'transcript' | 'start_time' | 'is_success'
+>;
+
+/** Gated read (FE-29): never suspends the History panel while a title loads. */
+function settledTitle<T>(
+  query: UseQueryResult<T>,
+  pick: (data: T) => string | null | undefined
+): string {
+  if (queryReadyGate(query)) return pick(query.data)?.trim() || 'Untitled run';
+  return query.isLoading ? '' : 'Untitled run';
+}
 
 function HistoryRow(props: { record: HistoryRecord }) {
   const { openWithSplit } = useSplitLayout();
-  const sessionId = () => props.record.resource_id ?? '';
-  const sessionQuery = useAgentSessionQuery(sessionId);
-  const session = () =>
-    queryReadyGate(sessionQuery) ? sessionQuery.data : undefined;
-  const name = () =>
-    session()?.name?.trim() || (sessionQuery.isLoading ? '' : 'Untitled run');
+  const target = () => transcriptTarget(props.record.transcript);
 
-  const clickable = () => Boolean(sessionId());
+  // Both title queries are always created (hooks cannot be conditional); the
+  // one that does not match the target is disabled through an empty id.
+  const chatQuery = useChatQuery(() => {
+    const t = target();
+    return t?.type === 'chat' ? t.id : undefined;
+  });
+  const sessionQuery = useAgentSessionQuery(() => {
+    const t = target();
+    return t?.type === 'agent' ? t.id : '';
+  });
+
+  const view = () =>
+    match(target())
+      .with({ type: 'chat' }, (split) => ({
+        split,
+        icon: 'chat' as const,
+        title: settledTitle(chatQuery, (data) => data.chat.name),
+      }))
+      .with({ type: 'agent' }, (split) => ({
+        split,
+        icon: 'agent' as const,
+        title: settledTitle(sessionQuery, (data) => data.name),
+      }))
+      .with(P.nullish, () => ({
+        split: undefined,
+        icon: 'automation' as const,
+        title: 'Run did not start',
+      }))
+      .exhaustive();
+
   // Synthetic pending rows (no id) are inserted by the websocket sync on
   // `started` and replaced on `stopped`. Treat them as neutral rather than
   // failures — the panel header already surfaces running state.
@@ -73,21 +109,21 @@ function HistoryRow(props: { record: HistoryRecord }) {
     <div
       class={cn(
         'flex items-center gap-2 border-b border-edge-muted px-3 py-2 text-sm',
-        clickable() ? 'cursor-default hover:bg-hover' : 'cursor-default'
+        view().split ? 'cursor-default hover:bg-hover' : 'cursor-default'
       )}
       onClick={(event) => {
-        const id = sessionId();
-        if (id)
-          openWithSplit(
-            { type: 'agent', id },
-            { activate: true, preferNewSplit: event.shiftKey }
-          );
+        const { split } = view();
+        if (split)
+          openWithSplit(split, {
+            activate: true,
+            preferNewSplit: event.shiftKey,
+          });
       }}
     >
       <div class="size-4 shrink-0">
-        <EntityIcon targetType="agent" size="xs" />
+        <EntityIcon targetType={view().icon} size="xs" />
       </div>
-      <span class="min-w-0 flex-1 truncate">{name()}</span>
+      <span class="min-w-0 flex-1 truncate">{view().title}</span>
       <span
         class={cn(
           'ml-auto shrink-0 text-xs font-mono uppercase font-light',
@@ -96,7 +132,7 @@ function HistoryRow(props: { record: HistoryRecord }) {
             : 'text-failure'
         )}
       >
-        {formatDateAndTime(props.record.start_time ?? new Date())}
+        {formatDateAndTime(props.record.start_time)}
       </span>
     </div>
   );

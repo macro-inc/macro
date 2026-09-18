@@ -21,7 +21,7 @@ use serde_json::json;
 
 use crate::domain::models::{
     ActionExecutionRecord, ActionKind, AgentTask, AlreadyRunningError, InProgressExecution,
-    MAX_ACTION_TIME, ScheduledAction,
+    MAX_ACTION_TIME, RunTranscript, ScheduledAction,
 };
 use crate::domain::ports::{ScheduledActionExecutor, ScheduledActionRepo};
 
@@ -56,15 +56,16 @@ fn try_claim(action: &ScheduledAction, id: macro_uuid::Uuid) -> Result<()> {
     Ok(())
 }
 
+/// Only a successful publish ever yields an `AgentSession` transcript, so the
+/// transcript alone says whether this due slot was already dispatched.
 fn already_published_this_firing(
     records: &[ActionExecutionRecord],
     next_run_at: chrono::DateTime<Utc>,
 ) -> Option<&ActionExecutionRecord> {
     records.iter().find(|record| {
         record.is_success
-            && record.result.get("status").and_then(|value| value.as_str()) == Some("dispatched")
             && record.start_time >= next_run_at
-            && record.resource_id.is_some()
+            && matches!(record.transcript, Some(RunTranscript::AgentSession(_)))
     })
 }
 
@@ -138,7 +139,9 @@ where
         let record = ActionExecutionRecord {
             id: None,
             action_id: id,
-            resource_id: published.is_ok().then(|| session_id.to_string()),
+            transcript: published
+                .is_ok()
+                .then(|| RunTranscript::AgentSession(session_id)),
             start_time,
             end_time,
             is_success: published.is_ok(),

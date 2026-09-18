@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 use chrono::{DateTime, Utc};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -268,3 +269,106 @@ async fn delete_action_succeeds_when_entity_row_is_missing(pool: PgPool) {
     assert_eq!(entity_row_count(&pool, id).await, 0);
     assert_eq!(scheduled_action_row_count(&pool, id).await, 0);
 }
+=======
+use macro_uuid::{Uuid, generate_uuid_v7};
+
+use super::{transcript_from_columns, transcript_to_columns};
+use crate::domain::models::RunTranscript;
+
+fn columns(resource_id: Option<&str>, kind: Option<&str>) -> (Option<String>, Option<String>) {
+    (resource_id.map(str::to_owned), kind.map(str::to_owned))
+}
+
+#[test]
+fn legacy_rows_default_to_chats() {
+    let (id, kind) = columns(Some("b7e3c0a2-chat"), Some("legacy_chat"));
+
+    let transcript = transcript_from_columns(id, kind).expect("a legacy pair maps");
+
+    assert_eq!(
+        transcript,
+        Some(RunTranscript::LegacyChat("b7e3c0a2-chat".to_owned()))
+    );
+}
+
+#[test]
+fn dispatched_rows_are_sessions() {
+    let session_id = generate_uuid_v7();
+    let (id, kind) = columns(Some(&session_id.to_string()), Some("agent_session"));
+
+    let transcript = transcript_from_columns(id, kind).expect("a session pair maps");
+
+    assert_eq!(transcript, Some(RunTranscript::AgentSession(session_id)));
+}
+
+#[test]
+fn rows_without_an_id_have_no_transcript() {
+    let (id, kind) = columns(None, Some("legacy_chat"));
+    assert_eq!(
+        transcript_from_columns(id, kind).expect("a defaulted kind beside a NULL id maps"),
+        None,
+        "pre-column rows carry the default kind next to a NULL id"
+    );
+
+    let (id, kind) = columns(None, None);
+    assert_eq!(
+        transcript_from_columns(id, kind).expect("a NULL pair maps"),
+        None
+    );
+}
+
+#[test]
+fn an_id_without_a_kind_is_an_error() {
+    let (id, kind) = columns(Some("orphan-id"), None);
+
+    let error = transcript_from_columns(id, kind).expect_err("no writer produces this pair");
+
+    assert!(error.to_string().contains("orphan-id"), "{error}");
+}
+
+#[test]
+fn an_unknown_kind_is_an_error() {
+    let (id, kind) = columns(Some("some-id"), Some("email_thread"));
+
+    let error = transcript_from_columns(id, kind).expect_err("kinds are a closed set");
+
+    assert!(error.to_string().contains("email_thread"), "{error}");
+}
+
+#[test]
+fn a_session_id_that_is_not_a_uuid_is_an_error() {
+    let (id, kind) = columns(Some("not-a-uuid"), Some("agent_session"));
+
+    transcript_from_columns(id, kind).expect_err("session ids are minted as UUIDs");
+}
+
+#[test]
+fn columns_round_trip() {
+    let session_id: Uuid = generate_uuid_v7();
+    let transcripts = [
+        None,
+        Some(RunTranscript::LegacyChat("chat-42".to_owned())),
+        Some(RunTranscript::AgentSession(session_id)),
+    ];
+
+    let written: Vec<_> = transcripts
+        .iter()
+        .map(|transcript| transcript_to_columns(transcript.as_ref()))
+        .collect();
+
+    assert_eq!(
+        written,
+        vec![
+            (None, None),
+            (Some("chat-42".to_owned()), Some("legacy_chat")),
+            (Some(session_id.to_string()), Some("agent_session")),
+        ]
+    );
+
+    for (transcript, (resource_id, kind)) in transcripts.into_iter().zip(written) {
+        let read = transcript_from_columns(resource_id, kind.map(str::to_owned))
+            .expect("what the repo writes, it reads");
+        assert_eq!(read, transcript);
+    }
+}
+>>>>>>> 9a1ae7514 (feat(routines): tag run transcripts as chat or agent session)

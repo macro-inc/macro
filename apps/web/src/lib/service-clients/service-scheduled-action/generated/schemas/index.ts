@@ -8,8 +8,8 @@
 
 export * from './actionExecutionRecord';
 export * from './actionExecutionRecordId';
-export * from './actionExecutionRecordResourceId';
 export * from './actionExecutionRecordResult';
+export * from './actionExecutionRecordTranscript';
 export * from './actionKind';
 export * from './agentTask';
 export * from './createScheduledAction';
@@ -17,6 +17,11 @@ export * from './createScheduledActionTask';
 export * from './emptyResponse';
 export * from './inProgressExecution';
 export * from './inProgressExecutionChatId';
+export * from './runTranscript';
+export * from './runTranscriptOneOf';
+export * from './runTranscriptOneOfKind';
+export * from './runTranscriptOneOfThree';
+export * from './runTranscriptOneOfThreeKind';
 export * from './schedule';
 export * from './scheduledAction';
 export * from './scheduledActionClaimed';

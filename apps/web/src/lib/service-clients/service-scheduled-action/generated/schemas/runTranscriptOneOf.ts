@@ -5,8 +5,9 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { RunTranscriptOneOfKind } from './runTranscriptOneOfKind';
 
-/**
- * ID of the primary resource produced by this run. Opaque to the scheduler.
- */
-export type ActionExecutionRecordResourceId = string | null;
+export type RunTranscriptOneOf = {
+  id: string;
+  kind: RunTranscriptOneOfKind;
+};

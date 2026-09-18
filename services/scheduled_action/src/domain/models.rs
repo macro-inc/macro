@@ -122,14 +122,32 @@ pub struct InProgressExecution {
     pub chat_id: Option<String>,
 }
 
+/// The transcript a run left behind, named by the entity type that renders it.
+///
+/// Rows written by the retired in-process executor point at cognition chats;
+/// rows written by the Kafka executor point at harness agent sessions. Both ids
+/// are UUID-shaped, so the kind travels with the id. A run that produced no
+/// transcript has none at all rather than a third kind, so a kind never exists
+/// without an id.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, ToSchema)]
+#[serde(tag = "kind", content = "id", rename_all = "snake_case")]
+pub enum RunTranscript {
+    // An opaque `String`, not a `Uuid`: legacy ids are never parsed on read, and
+    // a strict parse would make one odd historical row fail the whole history GET.
+    LegacyChat(String),
+    #[schema(value_type = String, format = Uuid)]
+    AgentSession(Uuid),
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct ActionExecutionRecord {
     #[schema(value_type = Option<String>, format = Uuid)]
     pub id: Option<Uuid>,
     #[schema(value_type = String, format = Uuid)]
     pub action_id: Uuid,
-    /// ID of the primary resource produced by this run. Opaque to the scheduler.
-    pub resource_id: Option<String>,
+    /// `null` when the run produced nothing, e.g. the run request never reached
+    /// the broker.
+    pub transcript: Option<RunTranscript>,
     pub start_time: DateTime<Utc>,
     pub end_time: DateTime<Utc>,
     pub is_success: bool,
@@ -201,3 +219,6 @@ impl std::fmt::Display for AlreadyRunningError {
 }
 
 impl std::error::Error for AlreadyRunningError {}
+
+#[cfg(test)]
+mod test;

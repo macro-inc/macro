@@ -11,7 +11,8 @@ use serde_json::{Value, json};
 
 use super::KafkaRoutineExecutor;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionKind, AlreadyRunningError, Schedule, ScheduledAction,
+    ActionExecutionRecord, ActionKind, AlreadyRunningError, RunTranscript, Schedule,
+    ScheduledAction,
 };
 use crate::domain::ports::{ScheduledActionExecutor, ScheduledActionRepo};
 
@@ -215,6 +216,7 @@ async fn a_due_action_is_published_and_its_schedule_advanced() {
     assert_eq!(metadata["trigger"], "schedule");
     let session_id = metadata["session_id"]
         .as_str()
+        .and_then(|raw| Uuid::parse_str(raw).ok())
         .expect("a firing names the session it opens");
 
     let calls = repo.calls();
@@ -226,7 +228,11 @@ async fn a_due_action_is_published_and_its_schedule_advanced() {
     let record = &calls.records[0];
     assert_eq!(record.action_id, id);
     assert!(record.is_success);
-    assert_eq!(record.resource_id.as_deref(), Some(session_id));
+    assert_eq!(
+        record.transcript,
+        Some(RunTranscript::AgentSession(session_id)),
+        "the record points at the session the firing opened"
+    );
     assert_eq!(record.result["status"], "dispatched");
     assert_eq!(record.result["event_id"], json!(event.payload["event_id"]));
 }
@@ -278,7 +284,7 @@ async fn a_failed_publish_is_recorded_and_the_claim_released() {
     assert_eq!(calls.records.len(), 1);
     let record = &calls.records[0];
     assert!(!record.is_success);
-    assert_eq!(record.resource_id, None);
+    assert_eq!(record.transcript, None);
     assert_eq!(record.result["status"], "dispatch_failed");
     assert!(
         record.result["error"]
