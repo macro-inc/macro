@@ -15,7 +15,7 @@ use macro_user_id::user_id::MacroUserIdStr;
 use super::error::{HarnessError, Result};
 use super::model::{
     AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, HarnessCommand, PriorMessage,
-    ProvisionedEgress, SandboxEgress, SessionAnnouncement, SpawnContainer,
+    ProvisionedEgress, ReachableRepository, SandboxEgress, SessionAnnouncement, SpawnContainer,
 };
 use super::notifications::PlannedNotification;
 use super::sandbox::SandboxResizeEffect;
@@ -32,13 +32,13 @@ pub enum CommandTarget {
 /// The repositories a user can reach through Macro's GitHub App.
 ///
 /// A port rather than the `github` crate's service directly, so the harness
-/// states what it needs - a list of repository urls for one user - without the
-/// installation records, App credentials and HTTP client that answering it
-/// takes. Reaching nothing is an empty list, not an error.
+/// states what it needs - each repository's url and default branch, for one
+/// user - without the installation records, App credentials and HTTP client
+/// that answering it takes. Reaching nothing is an empty list, not an error.
 #[async_trait::async_trait]
 pub trait ReachableRepositories: Send + Sync + 'static {
-    /// Every repository `user` reaches, as `https://github.com/owner/name`.
-    async fn for_user(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<String>>;
+    /// Every repository `user` reaches, sorted by `owner/name`.
+    async fn for_user(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<ReachableRepository>>;
 }
 
 /// Forwards commands to the replica currently responsible for execution.

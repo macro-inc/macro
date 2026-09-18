@@ -412,7 +412,10 @@ struct NoRepositories;
 
 #[async_trait::async_trait]
 impl ReachableRepositories for NoRepositories {
-    async fn for_user(&self, _user: &MacroUserIdStr<'_>) -> Result<Vec<String>> {
+    async fn for_user(
+        &self,
+        _user: &MacroUserIdStr<'_>,
+    ) -> Result<Vec<crate::domain::model::ReachableRepository>> {
         Ok(Vec::new())
     }
 }

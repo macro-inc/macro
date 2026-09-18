@@ -3189,10 +3189,29 @@ async fn codex_channel_mention_provisions_egress_without_advertising_mcp() {
 
 mod reopen;
 
-struct SelectedRepositories(Vec<String>);
+/// The owner's reachable repositories, as the GitHub App would list them.
+struct SelectedRepositories(Vec<crate::domain::model::ReachableRepository>);
+
+impl SelectedRepositories {
+    /// Repositories whose clones start on `main`.
+    fn urls(urls: &[&str]) -> Self {
+        Self(
+            urls.iter()
+                .map(|url| crate::domain::model::ReachableRepository {
+                    url: (*url).to_owned(),
+                    default_branch: Some("main".to_owned()),
+                })
+                .collect(),
+        )
+    }
+}
+
 #[async_trait::async_trait]
 impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
-    async fn for_user(&self, _: &MacroUserIdStr<'_>) -> crate::domain::error::Result<Vec<String>> {
+    async fn for_user(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> crate::domain::error::Result<Vec<crate::domain::model::ReachableRepository>> {
         Ok(self.0.clone())
     }
 }
@@ -3219,7 +3238,7 @@ fn explicit_cursor_request() -> OpenManagedSession {
 #[tokio::test]
 async fn selected_repository_requires_owner_access_before_provisioning() {
     let (service, _, containers, _, _) = harness();
-    let service = service.with_repositories(Arc::new(SelectedRepositories(vec![])));
+    let service = service.with_repositories(Arc::new(SelectedRepositories::urls(&[])));
     let result = service
         .open_managed_session(explicit_cursor_request())
         .await;
@@ -3234,8 +3253,8 @@ async fn selected_repository_requires_owner_access_before_provisioning() {
 #[tokio::test]
 async fn selected_repository_and_branch_are_persisted_for_cursor() {
     let (service, repo, containers, _, _) = harness();
-    let service = service.with_repositories(Arc::new(SelectedRepositories(vec![
-        "https://github.com/macro-inc/macro".into(),
+    let service = service.with_repositories(Arc::new(SelectedRepositories::urls(&[
+        "https://github.com/macro-inc/macro",
     ])));
     let open = service.open_managed_session(explicit_cursor_request());
     let drive = async {
@@ -3255,6 +3274,80 @@ async fn selected_repository_and_branch_are_persisted_for_cursor() {
         session.repo_branch.as_ref().map(|branch| branch.as_str()),
         Some("feature/home")
     );
+}
+
+/// Opens `request` against a listing that reaches `macro-inc/macro` with the
+/// given default branch, and reads back the branch the row was given.
+async fn branch_persisted_for(
+    default_branch: Option<&str>,
+    request: OpenManagedSession,
+) -> Option<String> {
+    let (service, repo, containers, _, _) = harness();
+    let service = service.with_repositories(Arc::new(SelectedRepositories(vec![
+        crate::domain::model::ReachableRepository {
+            url: "https://github.com/macro-inc/macro".to_owned(),
+            default_branch: default_branch.map(str::to_owned),
+        },
+    ])));
+    let open = service.open_managed_session(request);
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    session
+        .repo_branch
+        .as_ref()
+        .map(|branch| branch.as_str().to_owned())
+}
+
+#[tokio::test]
+async fn selected_repository_without_branch_starts_on_its_default_branch() {
+    let mut request = explicit_cursor_request();
+    request.repo_branch = None;
+    assert_eq!(
+        branch_persisted_for(Some("develop"), request)
+            .await
+            .as_deref(),
+        Some("develop")
+    );
+}
+
+#[tokio::test]
+async fn selected_repository_without_a_default_branch_starts_on_main() {
+    let mut request = explicit_cursor_request();
+    request.repo_branch = None;
+    assert_eq!(
+        branch_persisted_for(None, request).await.as_deref(),
+        Some("main")
+    );
+}
+
+#[tokio::test]
+async fn explicit_branch_wins_over_the_repository_default() {
+    assert_eq!(
+        branch_persisted_for(Some("develop"), explicit_cursor_request())
+            .await
+            .as_deref(),
+        Some("feature/home")
+    );
+}
+
+#[test]
+fn starting_branch_falls_back_to_main_for_an_unusable_default() {
+    assert_eq!(
+        super::open::starting_branch(Some("release")).as_str(),
+        "release"
+    );
+    assert_eq!(
+        super::open::starting_branch(Some("bad..name")).as_str(),
+        "main"
+    );
+    assert_eq!(super::open::starting_branch(None).as_str(), "main");
 }
 
 #[tokio::test]

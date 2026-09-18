@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  AgentRepositoriesResponse,
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
@@ -107,6 +108,63 @@ export const loadAgentModelsHandler = async (
     status: res.status,
     headers: res.headers,
   } as loadAgentModelsHandlerResponse;
+};
+
+/**
+ * @summary List the GitHub repositories the caller can select for a coding session.
+ */
+export type listAgentRepositoriesResponse200 = {
+  data: AgentRepositoriesResponse;
+  status: 200;
+};
+
+export type listAgentRepositoriesResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type listAgentRepositoriesResponse502 = {
+  data: void;
+  status: 502;
+};
+
+export type listAgentRepositoriesResponseSuccess =
+  listAgentRepositoriesResponse200 & {
+    headers: Headers;
+  };
+export type listAgentRepositoriesResponseError = (
+  | listAgentRepositoriesResponse401
+  | listAgentRepositoriesResponse502
+) & {
+  headers: Headers;
+};
+
+export type listAgentRepositoriesResponse =
+  | listAgentRepositoriesResponseSuccess
+  | listAgentRepositoriesResponseError;
+
+export const getListAgentRepositoriesUrl = () => {
+  return `/agent-repositories`;
+};
+
+export const listAgentRepositories = async (
+  options?: RequestInit
+): Promise<listAgentRepositoriesResponse> => {
+  const res = await fetch(getListAgentRepositoriesUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listAgentRepositoriesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listAgentRepositoriesResponse;
 };
 
 /**
