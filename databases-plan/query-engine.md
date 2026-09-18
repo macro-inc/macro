@@ -25,9 +25,10 @@ For `SELECT p.email FROM guests g JOIN people p ON p.id = g.guest WHERE g.status
    - magic tables: their blessed queries (see [magic-tables.md](magic-tables.md)),
      projected to only the referenced columns.
    Bulk-insert in one transaction. Human-scale tables → single-digit ms.
-5. **Execute with guardrails**: read-only connection; authorizer denies everything except
-   SELECT on the materialized set; `sqlite3_interrupt` on a ~100ms timeout; row and
-   result-size caps.
+5. **Execute with guardrails**: authorizer allows SELECT on every materialized table and
+   INSERT/UPDATE/DELETE only on tables the viewer holds `Edit` on; DDL, ATTACH, and
+   non-introspection pragmas are denied; `sqlite3_interrupt` on a 250ms timeout; row,
+   byte, change-count, and SQL-length caps (`ExecutorLimits`).
 6. **Return typed results**: column provenance from the prepare step tags result columns
    ("came from `people.id`" → entity type `user`) so the frontend hydrates chips.
 7. **Drop it.** Nothing persists.
@@ -79,13 +80,23 @@ Ruthlessly minimal — AI writes the long tail, sugar is for queries humans read
 Applied as a text-level rewrite before prepare; the readout always shows the sugared form,
 "expand" shows the desugared form.
 
-## Writes
+## Writes (shipped)
 
-Rejected in v1 at the authorizer, with an error pointing to SDK helpers
-(`macro.dbs.byName(...).insert(...)`) that go through the normal Rust mutation path
-(activity, permissions, notifications, version bumps). Later: updatable-view semantics
-using the Postgres traceability rule — a result column is writable iff it maps to a single
-base column with no expressions/aggregates. Same rule powers write-through view blocks.
+The SQL interface is the *only* row-mutation API — there are no row/cell CRUD endpoints.
+Writes run against the scratch database inside a SQLite session; the session changeset is
+translated back into typed `RowChange`s (`Insert`/`Update`/`Delete`/`Link`/`Unlink`) whose
+cells go through the same `SetPropertyValue::validate_compatibility` path as properties,
+then applied to Postgres in one transaction with compare-and-set on the per-table
+`version` (`base_versions` in the request; `VersionConflict` on mismatch). Rules:
+
+- Writable tables are the viewer's `Edit`/`Owner` user tables; magic tables and junction
+  mirrors of tables you can only view are read-only at the authorizer.
+- `row_id` is server-assigned: SQLite defaults it to a `new:`-prefixed placeholder that the
+  translator swaps for a real UUID; supplying your own `row_id` is rejected.
+- Multi-valued columns are JSON arrays; junction inserts/deletes become `Link`/`Unlink`.
+- Compiled schema is `STRICT` with `CHECK`s on select options and FK/PK on junctions, so
+  bad writes fail in SQLite with SQLite's own message, before anything touches Postgres.
+- A statement batch is atomic: any error rolls back the whole batch, nothing publishes.
 
 ## Caching (deferred until profiling says so)
 
@@ -97,9 +108,11 @@ base column with no expressions/aggregates. Same rule powers write-through view 
 
 ## Where it runs
 
-CPU-bound, stateless → start inside document_storage_service (one new route:
-`POST /databases/query` with `{sql}` → `{columns: [{name, type, entityType?}], rows,
-deps, versions}`), trivially extractable to its own service later.
+CPU-bound, stateless → inside document_storage_service: `POST /databases/exec` with
+`{sql, params?, base_versions?}` → `{results: [{columns: [{name, type, entity_type?}],
+rows}], changes_applied, inserted_row_ids, new_versions, read_tables, truncated_tables}`,
+plus `GET /databases/{id}/sqlite` for a serialized snapshot. Trivially extractable to its
+own service later.
 
 ## Not doing
 

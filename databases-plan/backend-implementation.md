@@ -107,16 +107,19 @@ pub trait SqlExecutor: Send + Sync {
     /// Prepare against a schema-only catalog; returns referenced tables+columns
     /// (authorizer callback) or the SQLite error verbatim.
     fn analyze(&self, catalog: &Catalog, sql: &str) -> Result<TableDeps, QueryError>;
-    /// Load materialized tables, execute read-only with timeout/row caps,
-    /// return typed rows + per-column provenance.
-    fn execute(&self, tables: Vec<MaterializedTable>, sql: &str, limits: Limits)
-        -> Result<QueryResult, QueryError>;
+    /// Load materialized tables, execute under the authorizer with timeout/row/byte
+    /// caps, return typed result sets + the session changeset as raw row changes.
+    fn execute(&self, catalog: &Catalog, tables: Vec<MaterializedTable>, request: &ExecRequest)
+        -> Result<(Vec<QueryResult>, Vec<RawRowChange>), QueryError>;
+    /// Serialize a materialized snapshot to SQLite bytes (`GET /databases/{id}/sqlite`).
+    fn serialize_snapshot(&self, tables: Vec<MaterializedTable>) -> Result<Vec<u8>, QueryError>;
 }
 
-/// Liveness fan-out. Implemented by redis_event_publisher.
-#[async_trait]
+/// Liveness fan-out. Implemented by gateway_event_publisher (connection gateway
+/// `send_message` on the Database entity, message `database_table_changed`).
 pub trait TableEventPublisher {
-    async fn table_changed(&self, table_id: &TableId, version: TableVersion) -> Result<(), DatabaseError>;
+    fn table_changed(&self, database_id: DatabaseId, table_id: TableId, version: TableVersion)
+        -> impl Future<Output = ()> + Send;
 }
 ```
 
@@ -169,14 +172,19 @@ Routes (nested in DSS at `/databases`):
 
 | route | receipt | service call |
 |---|---|---|
-| `POST /databases` | authenticated identity | `create_database` |
+| `GET /databases` | authenticated identity | `list_databases` |
+| `POST /databases` | authenticated identity | `create_database` (owner grant + starter table) |
 | `GET /databases/:id` | `View` | `get_database` (tables+columns+defs) |
-| `GET /databases/:id/tables/:tid/rows` | `View` | `fetch_rows` (paginated) |
-| `POST …/tables` `PATCH …/tables/:tid` | `Edit` | table CRUD |
-| `POST …/columns` `PATCH/DELETE …/columns/:cid` | `Edit` | column ops (definition create/bind/promote) |
-| `POST …/rows` `PATCH …/rows/:rid/cells` `DELETE …/rows/:rid` | `Edit` | row ops |
-| `POST/DELETE …/links` | `Edit` | link ops |
-| `POST /databases/query` | identity only (catalog is the authz) | `run_query` |
+| `GET /databases/:id/sqlite` | `View` | `sqlite_snapshot` (serialized scratch DB) |
+| `POST …/tables` | `Edit` | `create_table` |
+| `POST …/tables/:tid/columns` | `Edit` | `create_column` (definition create or bind) |
+| `POST /databases/exec` | identity only (catalog is the authz) | `exec_sql` — reads **and writes** |
+
+Decision (shipped): there are no row/cell/link CRUD endpoints. All row mutation goes
+through `POST /databases/exec`; the changeset translator turns the SQLite session into
+typed `RowChange`s that are validated and applied to Postgres with compare-and-set on
+table versions (see [query-engine.md](query-engine.md) → Writes). Schema operations
+(tables, columns) stay structured.
 
 Handlers: extract receipt via the new database extractor, parse DTO, call service, map
 errors. No policy, no persistence, per the hexagonal guard. Rename/trash/share/move come
@@ -184,10 +192,11 @@ free from implementing the `entity_mutation` capability traits
 (`RenameEntity`, `TrashEntity`, …) registered in
 `services/document_storage_service/src/service/entity_mutation.rs`.
 
-AI tools (`inbound/toolset/`, via the create-ai-tool skill): `describe_database_schema`,
-`query_database` (returns typed rows for the model), `add_rows`, `update_cells`,
-`create_database`. These are thin wrappers over the same domain services with the actor's
-receipt.
+AI tools (`inbound/toolset/`, via the create-ai-tool skill): `ListDatabases`,
+`DescribeDatabase`, `QueryDatabase` (SQL, reads and writes, returns typed rows),
+`CreateDatabase`, `CreateTable`, `AddColumn`. Thin wrappers over the same domain service
+with the actor's receipt; wired into `crates/ai_tools` so the MCP service, cognition
+service, and memory host all expose them.
 
 ## Entity plumbing (the ~26-file checklist)
 
@@ -234,10 +243,10 @@ Steps 3–6 are independent enough to parallelize after 2.
 
 ## Open implementation questions
 
-- Does `run_query` execution belong on a `spawn_blocking` pool (rusqlite is sync/CPU) —
-  yes, decide pool sizing/limits.
-- Pagination + max row counts for `fetch_rows` and materialization caps (env-var'd).
-- Whether `database_rows.position` uses the existing fractional-index helper (find what
-  soup/tasks ordering uses) or we vendor one.
-- Cell-write batching shape (`PATCH …/cells` takes a map of column→SetPropertyValue —
-  one version bump per request).
+- Resolved: `exec_sql` runs on `spawn_blocking`; limits live in `ExecutorLimits`
+  (250ms, 10k result rows, 16MiB, 10k changes, 256KiB SQL) and `MAX_MATERIALIZED_ROWS`
+  (200k) / `MAGIC_ROW_CAP` (20k, reported via `truncated_tables`).
+- Resolved: `database_rows.position` is a plain integer computed once per table per batch
+  (append-only); switch to a fractional index only if reordering ships.
+- Resolved: one version bump per written table per `exec` batch.
+- Open: making limits env-var configurable once we see production shapes.
