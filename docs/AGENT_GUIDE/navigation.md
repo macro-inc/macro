@@ -68,7 +68,11 @@ Narrow navigation overlays use the same brief width and opacity animation.
 Visibility is a sticky preference per app type (Home, Email, Chat, Tasks, Drive,
 Agents, Customers), independent of other apps and restored on reload. Narrow
 workspaces reopen navigation as an overlay; the backdrop or **Hide navigation**
-closes it. The overlay never contains the split's **Close** button. Mobile keeps
+closes it temporarily. Opening or closing the narrow overlay never changes the
+saved wide-layout preference. Widening restores that preference, including in
+Home and Chat: navigation returns unless explicitly hidden at desktop width.
+Shrinking again starts with the overlay closed.
+The overlay never contains the split's **Close** button. Mobile keeps
 its existing navigation controls. Block detail panels (including Calendar) have
 **Hide side panel** in their own header and a hamburger **Show side panel** beside
 the main title when hidden, with separate preferences per block type.
