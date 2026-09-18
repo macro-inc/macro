@@ -308,6 +308,8 @@ export function DatabaseGrid(props: DatabaseGridProps) {
                                 column={detail()}
                                 rowId={row().rowId}
                                 value={row().cells[column.index] ?? null}
+                                databaseId={props.databaseId}
+                                tableId={props.table.table.id}
                                 canEdit={props.canEdit && detail().writable}
                                 onWrite={(value) =>
                                   writeCell(detail(), row().rowId, value)

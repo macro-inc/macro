@@ -11,6 +11,7 @@ import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type {
   CreateColumnRequest,
+  DatabaseColumnDetail,
   DatabaseDetail,
   ExecErrorCode,
   ExecOutcome,
@@ -160,6 +161,53 @@ export async function createDatabaseColumn(params: {
 
   await invalidateDatabase(params.databaseId);
   return result.value.columnId;
+}
+
+/**
+ * Add select option labels to a column and return the column as it now stands.
+ *
+ * Returns `undefined` if the service refused. The updated column is folded
+ * into the cached schema rather than refetched, so the dropdown that asked for
+ * the option can offer it on the very next open; the table's rows are
+ * invalidated because the option list is a CHECK on what they may hold.
+ */
+export async function addDatabaseColumnOptions(params: {
+  databaseId: string;
+  tableId: string;
+  columnId: string;
+  labels: string[];
+}): Promise<DatabaseColumnDetail | undefined> {
+  const result = await storageServiceClient.databases.addColumnOptions({
+    id: params.databaseId,
+    tableId: params.tableId,
+    columnId: params.columnId,
+    request: { labels: params.labels },
+  });
+  if (result.isErr()) return undefined;
+
+  const updated = result.value;
+  queryClient.setQueryData(
+    databasesKeys.detail(params.databaseId).queryKey,
+    (previous: DatabaseDetail | undefined): DatabaseDetail | undefined => {
+      if (!previous) return previous;
+      return {
+        ...previous,
+        tables: previous.tables.map((table) =>
+          table.table.id === params.tableId
+            ? {
+                ...table,
+                columns: table.columns.map((column) =>
+                  column.column.id === params.columnId ? updated : column
+                ),
+              }
+            : table
+        ),
+      };
+    }
+  );
+  await invalidateDatabaseRows(params.databaseId, params.tableId);
+
+  return updated;
 }
 
 /** Fetch a database's SQLite snapshot as a blob. */

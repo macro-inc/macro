@@ -208,16 +208,35 @@ export const createTableHandler = createToolRenderer({
   ),
 });
 
+/**
+ * `AddColumn`'s initial select options.
+ *
+ * Spelled out here because the generated tool schema does not carry the field
+ * yet; drop this once `AddColumn` in `generated/tools/types.ts` has `options`.
+ */
+type AddColumnCallWithOptions = NamedTool<'AddColumn', 'call'>['data'] & {
+  options?: string[];
+};
+
 export const addColumnHandler = createToolRenderer({
   name: 'AddColumn',
-  render: (ctx) => (
-    <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
-      <span class="min-w-0 truncate">
-        Add column <span class="text-ink">{ctx.tool.data.name}</span>
-        <span class="pl-1.5 text-ink-extra-muted">
-          {ctx.tool.data.dataType}
+  render: (ctx) => {
+    const options = () =>
+      (ctx.tool.data as AddColumnCallWithOptions).options ?? [];
+
+    return (
+      <BaseTool icon={TableIcon} renderContext={ctx.renderContext} type="call">
+        <span class="min-w-0 truncate">
+          Add column <span class="text-ink">{ctx.tool.data.name}</span>
+          <span class="pl-1.5 text-ink-extra-muted">
+            {ctx.tool.data.dataType}
+            <Show when={options().length > 0}>
+              {' · '}
+              {options().join(', ')}
+            </Show>
+          </span>
         </span>
-      </span>
-    </BaseTool>
-  ),
+      </BaseTool>
+    );
+  },
 });

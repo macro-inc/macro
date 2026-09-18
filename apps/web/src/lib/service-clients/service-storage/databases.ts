@@ -178,6 +178,14 @@ export type ColumnBindingRequest =
       // the variant's own fields stay snake_case on the wire.
       data_type: DataType;
       is_multi_select: boolean;
+      /**
+       * Initial option labels, for the select data types.
+       *
+       * Select columns store the option's display label in SQL and the
+       * materialization CHECKs writes against the option list, so a select
+       * column created without options can only ever hold `NULL`.
+       */
+      options?: string[];
     }
   | { kind: 'existing'; property_definition_id: string };
 
@@ -191,6 +199,15 @@ export interface CreateColumnRequest {
 /** Response of the column route. */
 export interface CreateColumnResponse {
   columnId: string;
+}
+
+/**
+ * Body of `POST /databases/{id}/tables/{tableId}/columns/{columnId}/options`.
+ *
+ * Labels that already exist are a no-op, so the same call is safe to repeat.
+ */
+export interface AddColumnOptionsRequest {
+  labels: string[];
 }
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
@@ -301,6 +318,29 @@ export const databasesClient = {
   }) {
     return await databasesFetch<CreateColumnResponse>(
       `/databases/${id}/tables/${tableId}/columns`,
+      { method: 'POST', body: JSON.stringify(request) }
+    );
+  },
+
+  /**
+   * Add select options to an existing column.
+   *
+   * Answers with the column as it now stands, so the caller can fold the new
+   * labels straight into the cached schema.
+   */
+  async addColumnOptions({
+    id,
+    tableId,
+    columnId,
+    request,
+  }: {
+    id: string;
+    tableId: string;
+    columnId: string;
+    request: AddColumnOptionsRequest;
+  }) {
+    return await databasesFetch<DatabaseColumnDetail>(
+      `/databases/${id}/tables/${tableId}/columns/${columnId}/options`,
       { method: 'POST', body: JSON.stringify(request) }
     );
   },
