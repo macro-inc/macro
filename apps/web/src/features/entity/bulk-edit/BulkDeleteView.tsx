@@ -17,37 +17,33 @@ export const BulkDeleteView = (props: {
   onCancel: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
-  onPendingChange?: (pending: boolean) => void;
 }) => {
   const mutation = createBulkDeleteDssItemsMutation();
-  const [pending, setPending] = createSignal(false);
-  const [error, setError] = createSignal('');
   const [remainingEntities, setRemainingEntities] =
     createSignal<EntityData[]>();
   const [partialMessage, setPartialMessage] = createSignal<string>();
   const entities = () => remainingEntities() ?? props.entities;
   const multi = () => entities().length > 1;
   const handleDelete = async () => {
-    if (pending() || entities().length === 0) return;
-    // Keep progress attached to the caller that submitted this attempt.
+    // Keep the completion attached to the caller that submitted this attempt,
+    // even if another modal replaces this one while the request is in flight.
     const onPartialDelete = props.onPartialDelete;
     setPartialMessage(undefined);
-    setPending(true);
-    props.onPendingChange?.(true);
-    setError('');
     try {
       await mutation.mutateAsync(entities());
-    } catch (cause) {
+      props.onFinish();
+    } catch (error) {
       if (
-        cause instanceof BulkDeleteFailure &&
-        cause.deletedEntities.length > 0
+        error instanceof BulkDeleteFailure &&
+        error.deletedEntities.length > 0
       ) {
-        setRemainingEntities(cause.failedEntities);
-        setPartialMessage(cause.message);
+        setRemainingEntities(error.failedEntities);
+        setPartialMessage(error.message);
         try {
-          onPartialDelete?.(cause.deletedEntities, cause.failedEntities);
+          onPartialDelete?.(error.deletedEntities, error.failedEntities);
         } catch (cleanupError) {
-          // Confirmed deletes must stay excluded from retries even if cleanup fails.
+          // A caller cleanup failure must not turn confirmed deletes into
+          // retry targets or suppress the partial-success feedback.
           console.error(
             'Failed to clean up partially deleted entities:',
             cleanupError
@@ -55,15 +51,11 @@ export const BulkDeleteView = (props: {
         }
         return;
       }
-      setError('Some items could not be deleted. Please try again.');
-      props.onError?.(cause);
-      return;
-    } finally {
-      setPending(false);
-      props.onPendingChange?.(false);
+      console.error('Failed to delete entities:', error);
+      props.onError?.(error);
     }
-    props.onFinish();
   };
+
   return (
     <>
       <ActionDialogShell.Body>
@@ -77,7 +69,7 @@ export const BulkDeleteView = (props: {
               : 'This item will be permanently deleted. This cannot be undone.'}
           </ActionDialogShell.Description>
         </ActionDialogShell.Header>
-        <EntityActionSelection entities={entities()} disabled={pending()} />
+        <EntityActionSelection entities={entities()} />
         <Show when={partialMessage()}>
           {(message) => (
             <p role="status" class="text-sm text-ink-muted">
@@ -85,26 +77,13 @@ export const BulkDeleteView = (props: {
             </p>
           )}
         </Show>
-        <Show when={error()}>
-          <p role="alert" class="text-sm text-failure">
-            {error()}
-          </p>
-        </Show>
       </ActionDialogShell.Body>
       <ActionDialogShell.Footer>
-        <Button variant="ghost" disabled={pending()} onClick={props.onCancel}>
+        <Button variant="ghost" onClick={props.onCancel}>
           Cancel
         </Button>
-        <Button
-          variant="danger"
-          disabled={pending() || entities().length === 0}
-          onClick={() => void handleDelete()}
-        >
-          {pending()
-            ? 'Deleting…'
-            : multi()
-              ? `Delete ${entities().length} items`
-              : 'Delete item'}
+        <Button variant="danger" onClick={() => void handleDelete()}>
+          {multi() ? `Delete ${entities().length} items` : 'Delete item'}
         </Button>
       </ActionDialogShell.Footer>
     </>

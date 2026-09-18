@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import type { EntityData } from '@entity';
 import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import {
   reminderTarget,
@@ -7,7 +8,7 @@ import {
 import { refetchSoupEntity } from '@queries/soup/cache';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
 import { ActionDialogShell, Dialog } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { ReminderForm } from './ReminderForm';
 import {
   closeReminderComposer,
@@ -38,44 +39,79 @@ export function ReminderComposerModal() {
   const entity = () => reminderComposerState.entity;
   const standalone = () => reminderComposerState.standalone === true;
 
-  const [error, setError] = createSignal('');
-  const close = () => {
-    if (createReminder.isPending) return;
-    setError('');
+  const submitCreate = async (
+    schedule: ReminderSchedule,
+    target: EntityData,
+    input: string
+  ) => {
+    const resolved = resolveReminderDescription(input, target);
+    const attachTo = reminderTarget(target);
+    // Taken before the close, which clears it.
+    const onCreated = takeReminderCreatedHandler();
     closeReminderComposer();
+
+    try {
+      await createReminder.mutateAsync({
+        description: resolved,
+        schedule,
+        // Both or neither: the API rejects one without the other.
+        ...(attachTo ?? undefined),
+      });
+      toast.success('Reminder set');
+    } catch {
+      toast.failure('Failed to create reminder');
+      return;
+    }
+
+    // Whatever the invoking surface does with its row now that the reminder
+    // will bring it back — marking it done, in every soup list. Runs only once
+    // the reminder exists, so a failed create leaves the row alone.
+    await onCreated?.();
   };
 
-  const handleSubmit = async (values: {
+  /**
+   * Create a reminder attached to nothing.
+   *
+   * Sends no entity at all rather than an empty one — the API rejects an
+   * `entityType` without an `entityId` — and the description is whatever was
+   * typed, since there is nothing to derive one from.
+   */
+  const submitStandalone = async (
+    schedule: ReminderSchedule,
+    input: string
+  ) => {
+    const resolved = resolveStandaloneDescription(input);
+    // Unreachable: Save is disabled without a description. Kept as the last word
+    // on it rather than a `!` on the value above.
+    if (!resolved) return;
+
+    // Taken before the close, which clears it. Nothing passes one today, but
+    // taking it is what keeps a handler from leaking into the next open.
+    const onCreated = takeReminderCreatedHandler();
+    closeReminderComposer();
+
+    try {
+      await createReminder.mutateAsync({ description: resolved, schedule });
+      toast.success('Reminder set');
+    } catch {
+      toast.failure('Failed to create reminder');
+      return;
+    }
+
+    await onCreated?.();
+  };
+
+  const handleSubmit = (values: {
     description: string;
     schedule: ReminderSchedule;
   }) => {
-    if (createReminder.isPending) return;
     const target = entity();
-    if (!target && !standalone()) return;
-    const description = target
-      ? resolveReminderDescription(values.description, target)
-      : resolveStandaloneDescription(values.description);
-    if (!description) return;
-    setError('');
-    try {
-      await createReminder.mutateAsync({
-        description,
-        schedule: values.schedule,
-        ...(target ? reminderTarget(target) : undefined),
-      });
-    } catch {
-      setError('Could not set the reminder. Please try again.');
+    if (target) {
+      void submitCreate(values.schedule, target, values.description);
       return;
     }
-    const onCreated = takeReminderCreatedHandler();
-    closeReminderComposer();
-    toast.success('Reminder set');
-    // The reminder is already saved; a follow-up failure must not offer to create it again.
-    try {
-      await onCreated?.();
-    } catch {
-      toast.failure('Reminder set, but the item could not be updated');
-    }
+    if (standalone())
+      void submitStandalone(values.schedule, values.description);
   };
 
   // Both targets are cleared on close, so this unmounts the form while the
@@ -87,7 +123,7 @@ export function ReminderComposerModal() {
     <Dialog
       open={reminderComposerOpen()}
       onOpenChange={(open) => {
-        if (!open) close();
+        if (!open) closeReminderComposer();
       }}
       position="center"
       class="w-110"
@@ -111,8 +147,6 @@ export function ReminderComposerModal() {
             }
             descriptionRequired={standalone()}
             submitLabel="Set reminder"
-            pending={createReminder.isPending}
-            error={error()}
             reference={
               <Show when={entity()}>
                 {(target) => (
@@ -122,7 +156,7 @@ export function ReminderComposerModal() {
                 )}
               </Show>
             }
-            onCancel={close}
+            onCancel={closeReminderComposer}
             onSubmit={(values) => void handleSubmit(values)}
           />
         </Show>

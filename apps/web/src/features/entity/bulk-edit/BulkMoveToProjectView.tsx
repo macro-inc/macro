@@ -31,7 +31,6 @@ export const BulkMoveToProjectView = (props: {
   onFinish: () => void;
   onCancel: () => void;
   onError?: (error: unknown) => void;
-  onPendingChange?: (pending: boolean) => void;
 }) => {
   let listRef!: HTMLDivElement;
   let searchInputRef: HTMLInputElement | undefined;
@@ -400,10 +399,8 @@ export const BulkMoveToProjectView = (props: {
   };
 
   const finishEditing = async () => {
-    if (bulkMoveToProjectMutation.isPending) return;
     const selected = selectedProject();
     if (selected) {
-      props.onPendingChange?.(true);
       try {
         const projectId = selected.id;
         const projectName = selected.name;
@@ -433,8 +430,6 @@ export const BulkMoveToProjectView = (props: {
       } catch (error) {
         console.error('Failed to move entities to folder:', error);
         props.onError?.(error);
-      } finally {
-        props.onPendingChange?.(false);
       }
     }
   };
@@ -454,10 +449,7 @@ export const BulkMoveToProjectView = (props: {
             {entityCount() === 1 ? 'this item' : 'these items'}.
           </ActionDialogShell.Description>
         </ActionDialogShell.Header>
-        <EntityActionSelection
-          entities={props.entities}
-          disabled={bulkMoveToProjectMutation.isPending}
-        />
+        <EntityActionSelection entities={props.entities} />
         <div class="min-w-0">
           <Input
             ref={searchInputRef}
@@ -631,20 +623,16 @@ export const BulkMoveToProjectView = (props: {
         </div>
       </ActionDialogShell.Body>
       <ActionDialogShell.Footer>
-        <Button
-          variant="ghost"
-          disabled={bulkMoveToProjectMutation.isPending}
-          onClick={props.onCancel}
-        >
+        <Button variant="ghost" onClick={props.onCancel}>
           Cancel
         </Button>
         <Button
           type="button"
           variant="strong"
           onClick={() => void finishEditing()}
-          disabled={!selectedProject() || bulkMoveToProjectMutation.isPending}
+          disabled={!selectedProject()}
         >
-          {bulkMoveToProjectMutation.isPending ? 'Moving…' : 'Move'}
+          Move
         </Button>
       </ActionDialogShell.Footer>
     </div>

@@ -22,13 +22,11 @@ const BulkEditEntityModalContent = (props: {
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
 }) => {
-  const [pending, setPending] = createSignal(false);
   const handleFinish = () => {
     props.setIsOpen(false);
     props.onFinish?.();
   };
   const handleCancel = () => {
-    if (pending()) return;
     props.setIsOpen(false);
     props.onCancel?.();
   };
@@ -42,7 +40,6 @@ const BulkEditEntityModalContent = (props: {
       position="center"
       class={props.view === 'moveToProject' ? 'w-120' : 'w-110'}
       onOpenChange={(open) => {
-        if (pending()) return;
         if (!open) {
           handleCancel();
         }
@@ -56,7 +53,6 @@ const BulkEditEntityModalContent = (props: {
             onFinish={handleFinish}
             onCancel={handleCancel}
             onError={handleError}
-            onPendingChange={setPending}
           />
         </Show>
         <Show when={props.view === 'moveToProject'}>
@@ -65,7 +61,6 @@ const BulkEditEntityModalContent = (props: {
             onFinish={handleFinish}
             onCancel={handleCancel}
             onError={handleError}
-            onPendingChange={setPending}
           />
         </Show>
         <Show when={props.view === 'delete'}>
@@ -75,7 +70,6 @@ const BulkEditEntityModalContent = (props: {
             onFinish={handleFinish}
             onCancel={handleCancel}
             onError={handleError}
-            onPendingChange={setPending}
           />
         </Show>
       </ActionDialogShell>

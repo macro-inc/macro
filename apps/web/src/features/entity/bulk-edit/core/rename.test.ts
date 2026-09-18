@@ -18,10 +18,8 @@ describe('bulk rename names used for preview and submission', () => {
       renamedEntityName('Launch notes', 'replace', '', 'spec', 'plan')
     ).toBe('Launch notes');
   });
-  it('does not insert text everywhere when Find is empty', () => {
-    expect(renamedEntityName('Launch notes', 'replace', '', '', 'draft')).toBe(
-      'Launch notes'
-    );
+  it('preserves existing replaceAll behavior when Find is empty', () => {
+    expect(renamedEntityName('ab', 'replace', '', '', '-')).toBe('-a-b-');
   });
   it('supports removing matched text and replacing the entire name', () => {
     expect(

@@ -12,20 +12,15 @@ export const BulkRenameEntitiesView = (props: {
   onFinish: () => void;
   onCancel: () => void;
   onError?: (error: unknown) => void;
-  onPendingChange?: (pending: boolean) => void;
 }) => {
   const mutation = createBulkRenameDssEntityMutation();
   const multi = () => props.entities.length > 1;
-  const [value, setValue] = createSignal(
-    multi() ? '' : (props.entities[0]?.name ?? '')
-  );
+  const [value, setValue] = createSignal(props.entities[0]?.name ?? '');
   const [find, setFind] = createSignal('');
   const [replacement, setReplacement] = createSignal('');
   const [mode, setMode] = createSignal<RenameMode>(
     multi() ? 'append' : 'total'
   );
-  const [pending, setPending] = createSignal(false);
-  const [error, setError] = createSignal('');
   const updates = () =>
     props.entities.map((entity) => ({
       entity,
@@ -39,9 +34,6 @@ export const BulkRenameEntitiesView = (props: {
     }));
   const changes = () =>
     updates().filter(({ entity, newName }) => newName !== (entity.name ?? ''));
-  const valid = () =>
-    changes().length > 0 &&
-    updates().every(({ newName }) => newName.trim().length > 0);
   const preview = () => updates()[0];
   const label = () =>
     !multi()
@@ -53,23 +45,17 @@ export const BulkRenameEntitiesView = (props: {
           .with('total', () => 'New name for all items')
           .exhaustive();
   const finishEditing = async () => {
-    if (pending() || !valid()) return;
-    setPending(true);
-    props.onPendingChange?.(true);
-    setError('');
     try {
-      const results = await mutation.mutateAsync(changes());
-      if (results.some((result) => !result.success))
-        throw new Error('Some items could not be renamed.');
-    } catch (cause) {
-      setError('Some items could not be renamed. Please try again.');
-      props.onError?.(cause);
-      return;
-    } finally {
-      setPending(false);
-      props.onPendingChange?.(false);
+      const results = await mutation.mutateAsync(updates());
+      if (results.some((result) => !result.success)) {
+        props.onError?.(new Error('Some entities could not be renamed'));
+        return;
+      }
+      props.onFinish();
+    } catch (error) {
+      console.error('Failed to rename entities:', error);
+      props.onError?.(error);
     }
-    props.onFinish();
   };
   return (
     <form
@@ -90,13 +76,12 @@ export const BulkRenameEntitiesView = (props: {
               : 'Give this item a name that’s easy to find.'}
           </ActionDialogShell.Description>
         </ActionDialogShell.Header>
-        <EntityActionSelection entities={props.entities} disabled={pending()} />
+        <EntityActionSelection entities={props.entities} />
         <Show when={multi()}>
           <Tabs
             aria-label="Rename mode"
             value={mode()}
             fullWidth
-            disabled={pending()}
             onChange={(next) => {
               if (
                 next === 'prepend' ||
@@ -117,7 +102,7 @@ export const BulkRenameEntitiesView = (props: {
         <Show
           when={mode() === 'replace'}
           fallback={
-            <TextField value={value()} onChange={setValue} disabled={pending()}>
+            <TextField value={value()} onChange={setValue}>
               <TextField.Label>{label()}</TextField.Label>
               <TextField.Input
                 placeholder="Enter text…"
@@ -127,15 +112,11 @@ export const BulkRenameEntitiesView = (props: {
           }
         >
           <div class="grid grid-cols-2 gap-3">
-            <TextField value={find()} onChange={setFind} disabled={pending()}>
+            <TextField value={find()} onChange={setFind}>
               <TextField.Label>Find</TextField.Label>
               <TextField.Input placeholder="Text to replace" />
             </TextField>
-            <TextField
-              value={replacement()}
-              onChange={setReplacement}
-              disabled={pending()}
-            >
+            <TextField value={replacement()} onChange={setReplacement}>
               <TextField.Label>Replace with</TextField.Label>
               <TextField.Input placeholder="New text" />
             </TextField>
@@ -177,27 +158,15 @@ export const BulkRenameEntitiesView = (props: {
             </div>
           )}
         </Show>
-        <Show when={error()}>
-          <p role="alert" class="text-sm text-failure">
-            {error()}
-          </p>
-        </Show>
       </ActionDialogShell.Body>
       <ActionDialogShell.Footer>
-        <Button
-          type="button"
-          variant="ghost"
-          disabled={pending()}
-          onClick={props.onCancel}
-        >
+        <Button type="button" variant="ghost" onClick={props.onCancel}>
           Cancel
         </Button>
-        <Button type="submit" variant="strong" disabled={pending() || !valid()}>
-          {pending()
-            ? 'Renaming…'
-            : multi()
-              ? `Rename ${changes().length} ${changes().length === 1 ? 'item' : 'items'}`
-              : 'Save name'}
+        <Button type="submit" variant="strong">
+          {multi()
+            ? `Rename ${props.entities.length} ${props.entities.length === 1 ? 'item' : 'items'}`
+            : 'Save name'}
         </Button>
       </ActionDialogShell.Footer>
     </form>

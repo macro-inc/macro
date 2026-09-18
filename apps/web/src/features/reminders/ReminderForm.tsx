@@ -71,7 +71,6 @@ export interface ReminderFormProps {
   pending?: boolean;
   /** Dialog hosts provide their heading and use a padded body with a fixed footer. */
   header?: JSX.Element;
-  error?: string;
   layout?: 'dialog' | 'inline';
   autofocus?: boolean;
   /**
@@ -336,7 +335,6 @@ export function ReminderForm(props: ReminderFormProps) {
   };
 
   const submit = () => {
-    if (!canSubmit()) return;
     // Editing without touching the schedule keeps the stored one verbatim, so
     // the caller's diff omits it — which is what lets an overdue reminder be
     // renamed, and keeps a description-only edit from clearing its done flag.
@@ -414,10 +412,7 @@ export function ReminderForm(props: ReminderFormProps) {
             submit();
           }}
         >
-          <fieldset
-            disabled={props.pending}
-            class="flex min-w-0 flex-col gap-4"
-          >
+          <fieldset class="flex min-w-0 flex-col gap-4">
             <Input
               ref={titleRef}
               type="text"
@@ -439,7 +434,6 @@ export function ReminderForm(props: ReminderFormProps) {
                 labelClass="whitespace-nowrap px-2"
                 value={repeat()}
                 fullWidth
-                disabled={props.pending}
                 onChange={(value) => {
                   if (value === 'once' || value === 'week' || value === 'month')
                     setRepeatKind(value);
@@ -550,11 +544,6 @@ export function ReminderForm(props: ReminderFormProps) {
             </Show>
           </fieldset>
         </form>
-        <Show when={props.error}>
-          <p role="alert" class="text-sm text-failure">
-            {props.error}
-          </p>
-        </Show>
       </Dynamic>
       <Dynamic
         component={props.layout === 'dialog' ? ActionDialogShell.Footer : 'div'}
@@ -570,13 +559,7 @@ export function ReminderForm(props: ReminderFormProps) {
             Unsaved changes
           </span>
         </Show>
-        <Button
-          type="button"
-          variant="ghost"
-          class="ml-auto"
-          disabled={props.pending}
-          onClick={cancel}
-        >
+        <Button type="button" variant="ghost" class="ml-auto" onClick={cancel}>
           Cancel
         </Button>
         <Button
@@ -585,7 +568,7 @@ export function ReminderForm(props: ReminderFormProps) {
           variant="strong"
           disabled={!canSubmit() || (isEdit && !isDirty())}
         >
-          {props.pending ? 'Saving…' : props.submitLabel}
+          {props.submitLabel}
         </Button>
       </Dynamic>
     </div>

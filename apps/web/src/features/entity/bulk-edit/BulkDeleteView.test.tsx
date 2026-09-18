@@ -49,7 +49,6 @@ function mount() {
   const onError = vi.fn();
   const onCancel = vi.fn();
   const onPartialDelete = vi.fn();
-  const onPendingChange = vi.fn();
   render(() => (
     <Dialog open modal={false}>
       <Dialog.Content>
@@ -59,12 +58,11 @@ function mount() {
           onError={onError}
           onCancel={onCancel}
           onPartialDelete={onPartialDelete}
-          onPendingChange={onPendingChange}
         />
       </Dialog.Content>
     </Dialog>
   ));
-  return { onFinish, onError, onCancel, onPartialDelete, onPendingChange };
+  return { onFinish, onError, onCancel, onPartialDelete };
 }
 
 beforeEach(() => {
@@ -81,36 +79,6 @@ afterEach(() => {
 });
 
 describe('BulkDeleteView partial failure', () => {
-  it('disables actions while deleting and restores them after partial failure', async () => {
-    let rejectAttempt!: (reason: unknown) => void;
-    mutateAsync.mockImplementationOnce(
-      () =>
-        new Promise((_, reject) => {
-          rejectAttempt = reject;
-        })
-    );
-    const { onPendingChange, onCancel } = mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Delete 2 items' }));
-    expect(
-      screen.getByRole('button', { name: 'Deleting…' }).hasAttribute('disabled')
-    ).toBe(true);
-    const cancel = screen.getByRole('button', { name: 'Cancel' });
-    expect(cancel.hasAttribute('disabled')).toBe(true);
-    fireEvent.click(cancel);
-    expect(onCancel).not.toHaveBeenCalled();
-    expect(onPendingChange).toHaveBeenLastCalledWith(true);
-    rejectAttempt(new BulkDeleteFailure([failed, deleted], [false, true]));
-    await vi.waitFor(() =>
-      expect(onPendingChange).toHaveBeenLastCalledWith(false)
-    );
-    expect(
-      screen
-        .getByRole('button', { name: 'Delete item' })
-        .hasAttribute('disabled')
-    ).toBe(false);
-    expect(cancel.hasAttribute('disabled')).toBe(false);
-  });
-
   it('reports partial completion and retries only the failed items', async () => {
     mutateAsync
       .mockRejectedValueOnce(

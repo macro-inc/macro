@@ -13,6 +13,6 @@ export function renamedEntityName(
     .with('total', () => value)
     .with('prepend', () => value + name)
     .with('append', () => name + value)
-    .with('replace', () => (find ? name.replaceAll(find, replacement) : name))
+    .with('replace', () => name.replaceAll(find, replacement))
     .exhaustive();
 }

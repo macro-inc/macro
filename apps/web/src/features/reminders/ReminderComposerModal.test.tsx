@@ -47,10 +47,7 @@ vi.mock('@ui', () => {
   };
 });
 vi.mock('./ReminderForm', () => ({
-  ReminderForm: (props: {
-    error?: string;
-    onSubmit: (values: unknown) => void;
-  }) => (
+  ReminderForm: (props: { onSubmit: (values: unknown) => void }) => (
     <div>
       <button
         type="button"
@@ -63,7 +60,6 @@ vi.mock('./ReminderForm', () => ({
       >
         Submit
       </button>
-      <p role="alert">{props.error}</p>
     </div>
   ),
 }));
@@ -77,44 +73,31 @@ afterEach(() => {
   cleanup();
   closeReminderComposer();
 });
-it('retains the failed draft and callback until a successful retry', async () => {
+it('dismisses before saving and calls the captured handler after success', async () => {
+  let resolve!: (value: object) => void;
+  mocks.save.mockReturnValueOnce(
+    new Promise((done) => {
+      resolve = done;
+    })
+  );
   const onCreated = vi.fn();
-  mocks.save
-    .mockRejectedValueOnce(new Error('offline'))
-    .mockResolvedValueOnce({});
+  openStandaloneReminderComposer({ onCreated });
+  render(() => <ReminderComposerModal />);
+  fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
+  expect(reminderComposerOpen()).toBe(false);
+  expect(onCreated).not.toHaveBeenCalled();
+  resolve({});
+  await waitFor(() => expect(onCreated).toHaveBeenCalledOnce());
+});
+it('reports a failed save by toast without reopening or calling the handler', async () => {
+  mocks.save.mockRejectedValueOnce(new Error('offline'));
+  const onCreated = vi.fn();
   openStandaloneReminderComposer({ onCreated });
   render(() => <ReminderComposerModal />);
   fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
   await waitFor(() =>
-    expect(screen.getByRole('alert').textContent).toContain('Please try again')
+    expect(mocks.failure).toHaveBeenCalledWith('Failed to create reminder')
   );
-  expect(reminderComposerOpen()).toBe(true);
+  expect(reminderComposerOpen()).toBe(false);
   expect(onCreated).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
-  await waitFor(() => expect(onCreated).toHaveBeenCalledOnce());
-  expect(reminderComposerOpen()).toBe(false);
-});
-it('blocks repeat submission while pending', () => {
-  mocks.pending = true;
-  openStandaloneReminderComposer();
-  render(() => <ReminderComposerModal />);
-  fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
-  expect(mocks.save).not.toHaveBeenCalled();
-});
-it('does not reopen a saved reminder when the follow-up fails', async () => {
-  mocks.save.mockResolvedValueOnce({});
-  openStandaloneReminderComposer({
-    onCreated: async () => {
-      throw new Error('failed');
-    },
-  });
-  render(() => <ReminderComposerModal />);
-  fireEvent.click(screen.getByRole('button', { name: 'Submit' }));
-  await waitFor(() =>
-    expect(mocks.failure).toHaveBeenCalledWith(
-      'Reminder set, but the item could not be updated'
-    )
-  );
-  expect(reminderComposerOpen()).toBe(false);
-  expect(mocks.save).toHaveBeenCalledOnce();
 });
