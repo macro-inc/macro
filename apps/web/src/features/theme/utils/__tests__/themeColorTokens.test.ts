@@ -8,6 +8,7 @@ import {
   getDefaultSemanticColorTokens,
   legacyThemeToVNextTokens,
   normalizeThemeColorTokens,
+  themeCssVars,
 } from '../themeColorTokens';
 import { convertThemev2v3 } from '../themeMigrations';
 
@@ -225,5 +226,59 @@ describe('ThemeV2 to ThemeV3 migration', () => {
     expect(result.colorTokens.accent).toBe('#ff0000');
     expect(result.colorTokens['surface-0']).toBe('oklch(0.1 0 0deg)');
     expect(result.colorTokens.ink).toBe('var(--color-content-0)');
+  });
+});
+
+describe('retired token references', () => {
+  it('repoints stored assignments at the token that replaced lift', () => {
+    const result = normalizeThemeColorTokens(
+      {
+        lift: 'var(--layer-lift)',
+        message: 'var(--color-lift)',
+        'input-focus': 'var(--color-lift)',
+        hover: 'color-mix(in oklch, var(--color-lift) 3%, transparent)',
+        extension: 'var(--layer-lift)',
+      },
+      'dark'
+    );
+
+    expect(result.lift).toBeUndefined();
+    expect(result.message).toBe('var(--color-surface-1)');
+    expect(result['input-focus']).toBe('var(--color-surface-1)');
+    expect(result.hover).toBe(
+      'color-mix(in oklch, var(--color-surface-1) 3%, transparent)'
+    );
+    expect(result.extension).toBe('var(--color-surface-1)');
+  });
+
+  it('leaves assignments without retired references untouched', () => {
+    const result = normalizeThemeColorTokens(
+      {
+        message: 'oklch(0.2 0 0deg)',
+        'input-focus':
+          'color-mix(in oklch, var(--color-surface-2) 50%, transparent)',
+      },
+      'dark'
+    );
+
+    expect(result.message).toBe('oklch(0.2 0 0deg)');
+    expect(result['input-focus']).toBe(
+      'color-mix(in oklch, var(--color-surface-2) 50%, transparent)'
+    );
+  });
+
+  it('renders a theme saved with lift references as resolvable CSS vars', () => {
+    const vars = themeCssVars({
+      id: 'stale',
+      name: 'Stale',
+      version: 3,
+      mode: 'dark',
+      colorTokens: { message: 'var(--color-lift)' },
+    });
+
+    expect(vars['--color-message']).toBe('var(--color-surface-1)');
+    expect(Object.values(vars).some((value) => value.includes('lift'))).toBe(
+      false
+    );
   });
 });

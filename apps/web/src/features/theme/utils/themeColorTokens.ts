@@ -112,8 +112,35 @@ export function getDefaultSemanticColorTokens(
   };
 }
 
-/** Fills optional semantic assignments from the central defaults and drops
- * tokens removed from the V3 registry while preserving extension keys. */
+/** Tokens removed from the V3 registry, mapped to the token that took over
+ * their role (`null` when nothing did). A stored theme may still carry a
+ * retired token as a key and may reference it from other assignments: a theme
+ * saved while `lift` existed holds `message: 'var(--color-lift)'`. Once the
+ * CSS stops defining `--color-lift`, that reference makes every `bg-message`
+ * invalid at computed-value time, which paints it transparent. */
+const RETIRED_TOKENS: Record<string, string | null> = {
+  'surface-5': null,
+  'edge-subtle': null,
+  lift: 'surface-1',
+};
+
+/** Points `var(--color-<retired>)` and `var(--layer-<retired>)` at the
+ * replacement token so an authored value keeps resolving. */
+function rewriteRetiredTokenReferences(value: string): string {
+  let next = value;
+  for (const [retired, replacement] of Object.entries(RETIRED_TOKENS)) {
+    if (!replacement) continue;
+    next = next.replace(
+      new RegExp(`var\\(--(?:color|layer)-${retired}\\)`, 'g'),
+      tokenReference(replacement)
+    );
+  }
+  return next;
+}
+
+/** Fills optional semantic assignments from the central defaults, drops
+ * tokens removed from the V3 registry, and repoints references to them, while
+ * preserving extension keys. */
 export function normalizeThemeColorTokens(
   tokens: ThemeColorTokens,
   mode: ThemeColorMode
@@ -122,9 +149,12 @@ export function normalizeThemeColorTokens(
     ...getDefaultSemanticColorTokens(mode),
     ...tokens,
   };
-  delete next['surface-5'];
-  delete next['edge-subtle'];
-  delete next.lift;
+  for (const retired of Object.keys(RETIRED_TOKENS)) {
+    delete next[retired];
+  }
+  for (const [token, value] of Object.entries(next)) {
+    next[token] = rewriteRetiredTokenReferences(value);
+  }
   return next;
 }
 
