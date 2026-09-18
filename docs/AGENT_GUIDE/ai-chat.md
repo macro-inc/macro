@@ -514,7 +514,11 @@ must stay hidden; subsequent live messages must still appear.
   the command or affected file separate from the actions. The transcript does
   not repeat the pending request.
   `Allow once` and `Deny` answer immediately; `More options` contains remembered
-  choices with the agent's full rule text. Viewers see a waiting notice without
+  choices with the agent's full rule text. Channel Magic Chips expose the same
+  approval card in place of their loading state, alongside existing questions.
+  Only authenticated users with **Edit** or **Owner** session access may answer;
+  bot, harness, and internal-service credentials cannot approve on their behalf.
+  Viewers and commenters see a waiting notice without
   action buttons. Stopping a turn cancels open requests; answered requests show
   a compact outcome such as `Allowed once` or `Denied` in the transcript.
   Permission requests and questions both put the agent in a waiting state.

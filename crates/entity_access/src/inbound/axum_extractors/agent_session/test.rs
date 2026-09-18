@@ -17,6 +17,7 @@ async fn permission_approval_access_accepts_editors_and_owners_but_not_viewers()
         (Some(AccessLevel::Edit), StatusCode::NO_CONTENT),
         (Some(AccessLevel::Owner), StatusCode::NO_CONTENT),
         (Some(AccessLevel::View), StatusCode::UNAUTHORIZED),
+        (Some(AccessLevel::Comment), StatusCode::UNAUTHORIZED),
         (None, StatusCode::UNAUTHORIZED),
     ] {
         let state = TestState::new(level);

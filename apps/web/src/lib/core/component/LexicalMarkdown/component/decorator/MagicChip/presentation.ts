@@ -2,7 +2,7 @@ import type { MagicChipStatus } from '@macro-inc/lexical-core';
 import type {
   FoldedMessage,
   MessagePart,
-  PendingElicitation,
+  PendingInteraction,
   ToolName,
 } from '@service-agent-fold/generated/types';
 import { match } from 'ts-pattern';
@@ -29,12 +29,15 @@ export type MagicChipHeader = {
 };
 
 /**
- * A question the agent is waiting on, as the chip offers it: the live slot
+ * A permission or question the agent is waiting on: the live interaction
  * from the session's metadata, and whether this viewer may answer (edit
  * access on the session) or is watching someone else be asked.
  */
-export type MagicChipQuestion = {
-  question: PendingElicitation;
+export type MagicChipInteraction = {
+  request: PendingInteraction;
+  answering: boolean;
+  action?: string;
+  detail?: string;
   canAnswer: boolean;
 };
 
@@ -50,17 +53,17 @@ export type MagicChipQuestion = {
 export type MagicChipPresentation =
   | { kind: 'working'; activity: MagicChipActivity }
   | { kind: 'answering'; markdown: string; activity: MagicChipActivity }
-  | { kind: 'asking'; markdown: string; asking: MagicChipQuestion }
+  | { kind: 'asking'; markdown: string; asking: MagicChipInteraction }
   | { kind: 'settled'; markdown: string };
 
 export type MagicChipPresentationInput = {
   persistedStatus: MagicChipStatus;
   /**
-   * The question the session is blocked on, when it belongs to this chip's
-   * turn. The chip is a turn's surface, so a question asked in a later turn
+   * The interaction the session is blocked on, when it belongs to this chip's
+   * turn. The chip is a turn's surface, so a request made in a later turn
    * is that turn's chip's to show.
    */
-  asking?: MagicChipQuestion;
+  asking?: MagicChipInteraction;
   /**
    * Freshest lifecycle event seen on the live log stream, as its wire string.
    * A stopgap for {@link persistedStatus} being a snapshot from when the chip
@@ -365,7 +368,11 @@ export function presentationStatus(
   return match(presentation)
     .with({ kind: 'working' }, { kind: 'answering' }, (p) => p.activity)
     .with({ kind: 'asking' }, ({ asking }) => ({
-      label: asking.canAnswer ? 'Waiting for you' : 'Waiting for an editor',
+      label: asking.answering
+        ? 'Sending answer'
+        : asking.canAnswer
+          ? 'Waiting for you'
+          : 'Waiting for an editor',
       busy: false,
     }))
     .with({ kind: 'settled' }, () => ({ label: 'Done', busy: false }))
