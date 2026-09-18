@@ -4,11 +4,12 @@
 //!
 //! - `POST /exec` — run SQL (reads and writes) as the caller; the viewer's
 //!   catalog is the authorization boundary, enforced in the domain service.
+//! - `GET /` — list the caller's databases; `POST /` — create one.
+//! - `GET /{id}` — schema detail (tables, columns, definitions, SQL names).
 //! - `GET /{id}/sqlite` — download a database as a SQLite file (takeout).
-//! - `POST /` — create a database; `POST /{id}/tables`,
-//!   `POST /{id}/tables/{table_id}/columns` — schema operations, which stay
-//!   structured because property definitions carry configuration DDL cannot
-//!   express.
+//! - `POST /{id}/tables`, `POST /{id}/tables/{table_id}/columns` — schema
+//!   operations, which stay structured because property definitions carry
+//!   configuration DDL cannot express.
 //!
 //! Handlers are thin: extract identity/receipts, convert DTOs, call the
 //! service, map errors. No policy, no persistence.
@@ -18,73 +19,102 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, State},
-    http::StatusCode,
+    extract::{FromRef, Path, State},
+    http::{StatusCode, header},
     response::IntoResponse,
     routing::{get, post},
 };
+use entity_access::domain::models::{EditAccessLevel, ViewAccessLevel};
+use entity_access::domain::ports::EntityAccessService;
+use entity_access::inbound::axum_extractors::DatabaseAccessLevelExtractor;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
+use models_properties::shared::DataType;
 use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    CreateDatabase, DatabaseError, ExecOutcome, ExecRequest, QueryError, TableVersion, Viewer,
+    ColumnBinding, ColumnConfig, ColumnId, CreateColumn, CreateDatabase, CreateTable, Database,
+    DatabaseDetail, DatabaseError, ExecOutcome, ExecRequest, ListedDatabase, QueryError, Table,
+    TableVersion, Viewer,
 };
 use crate::domain::ports::DatabasesService;
 
 /// Router state for databases endpoints.
-pub struct DatabasesRouterState<S, Auth> {
+pub struct DatabasesRouterState<S, Eas, Auth> {
     service: Arc<S>,
+    entity_access_service: Arc<Eas>,
     authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<S, Auth> Clone for DatabasesRouterState<S, Auth> {
+impl<S, Eas, Auth> Clone for DatabasesRouterState<S, Eas, Auth> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            entity_access_service: self.entity_access_service.clone(),
             authorization_state: self.authorization_state.clone(),
         }
     }
 }
 
-impl<S, Auth> DatabasesRouterState<S, Auth>
+impl<S, Eas, Auth> DatabasesRouterState<S, Eas, Auth>
 where
     S: DatabasesService,
+    Eas: EntityAccessService,
 {
-    /// Create router state from the service and authorization state.
-    pub fn new(service: Arc<S>, authorization_state: MacroAuthorizationState<Auth>) -> Self {
+    /// Create router state from shared service references and authorization state.
+    pub fn new(
+        service: Arc<S>,
+        entity_access_service: Arc<Eas>,
+        authorization_state: MacroAuthorizationState<Auth>,
+    ) -> Self {
         Self {
             service,
+            entity_access_service,
             authorization_state,
         }
     }
 }
 
-impl<S, Auth> FromRef<DatabasesRouterState<S, Auth>> for MacroAuthorizationState<Auth> {
-    fn from_ref(state: &DatabasesRouterState<S, Auth>) -> Self {
+impl<S, Eas, Auth> FromRef<DatabasesRouterState<S, Eas, Auth>> for Arc<Eas> {
+    fn from_ref(state: &DatabasesRouterState<S, Eas, Auth>) -> Self {
+        state.entity_access_service.clone()
+    }
+}
+
+impl<S, Eas, Auth> FromRef<DatabasesRouterState<S, Eas, Auth>> for MacroAuthorizationState<Auth> {
+    fn from_ref(state: &DatabasesRouterState<S, Eas, Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
 
 /// Build the databases router.
-pub fn databases_router<S, Auth, T>(state: DatabasesRouterState<S, Auth>) -> Router<T>
+pub fn databases_router<S, Eas, Auth, T>(state: DatabasesRouterState<S, Eas, Auth>) -> Router<T>
 where
     S: DatabasesService,
+    Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
     T: Send + Sync + 'static,
 {
     Router::new()
-        .route("/", post(create_database_handler::<S, Auth>))
-        .route("/exec", post(exec_handler::<S, Auth>))
-        .route("/{id}/sqlite", get(sqlite_snapshot_handler::<S, Auth>))
-        .route("/{id}/tables", post(create_table_handler::<S, Auth>))
+        .route("/", get(list_databases_handler::<S, Eas, Auth>))
+        .route("/", post(create_database_handler::<S, Eas, Auth>))
+        .route("/exec", post(exec_handler::<S, Eas, Auth>))
+        .route("/{id}", get(get_database_handler::<S, Eas, Auth>))
+        .route("/{id}/sqlite", get(sqlite_snapshot_handler::<S, Eas, Auth>))
+        .route("/{id}/tables", post(create_table_handler::<S, Eas, Auth>))
         .route(
             "/{id}/tables/{table_id}/columns",
-            post(create_column_handler::<S, Auth>),
+            post(create_column_handler::<S, Eas, Auth>),
         )
         .with_state(state)
+}
+
+fn viewer_of<Auth>(user: &MacroAuthorizationExtractor<Auth, UserOrInternal>) -> Viewer {
+    Viewer {
+        user_id: user.authorization.user.macro_user_id.clone(),
+    }
 }
 
 /// Request body for creating a database.
@@ -93,6 +123,49 @@ where
 pub struct CreateDatabaseRequest {
     /// Display name.
     pub name: String,
+}
+
+/// Request body for creating a table.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateTableRequest {
+    /// Display name.
+    pub name: String,
+}
+
+/// How a new column obtains its definition.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase", tag = "kind")]
+pub enum ColumnBindingRequest {
+    /// Create a fresh definition scoped to the database.
+    New {
+        /// Column display name.
+        name: String,
+        /// Value type.
+        data_type: DataType,
+        /// Whether the column holds multiple values.
+        #[serde(default)]
+        is_multi_select: bool,
+    },
+    /// Bind an existing user/team/system definition.
+    Existing {
+        /// The definition to bind.
+        property_definition_id: Uuid,
+    },
+}
+
+/// Request body for creating a column.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateColumnRequest {
+    /// Definition source.
+    pub binding: ColumnBindingRequest,
+    /// Link this column to another table (many-to-many).
+    #[schema(nullable = false)]
+    pub link_to_table_id: Option<Uuid>,
+    /// Database of the linked table (defaults to this database).
+    #[schema(nullable = false)]
+    pub link_to_database_id: Option<Uuid>,
 }
 
 /// Request body for `POST /exec`.
@@ -107,14 +180,45 @@ pub struct ExecRequestBody {
     pub base_versions: Option<HashMap<Uuid, i64>>,
 }
 
-/// Create a database owned by the caller.
-pub async fn create_database_handler<S, Auth>(
-    State(state): State<DatabasesRouterState<S, Auth>>,
+/// Path params for the single-database routes.
+#[derive(Debug, Deserialize)]
+pub struct DatabasePath {
+    /// Database id.
+    pub id: Uuid,
+}
+
+/// Path params for the column route.
+#[derive(Debug, Deserialize)]
+pub struct ColumnPath {
+    /// Database id.
+    pub id: Uuid,
+    /// Table id.
+    pub table_id: Uuid,
+}
+
+/// List the caller's databases.
+pub async fn list_databases_handler<S, Eas, Auth>(
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-    Json(req): Json<CreateDatabaseRequest>,
-) -> Result<(StatusCode, Json<crate::domain::models::Database>), DatabaseError>
+) -> Result<Json<Vec<ListedDatabase>>, DatabaseError>
 where
     S: DatabasesService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let databases = state.service.list_databases(viewer_of(&user)).await?;
+    Ok(Json(databases))
+}
+
+/// Create a database owned by the caller.
+pub async fn create_database_handler<S, Eas, Auth>(
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Json(req): Json<CreateDatabaseRequest>,
+) -> Result<(StatusCode, Json<Database>), DatabaseError>
+where
+    S: DatabasesService,
+    Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
     let owner_id = user.authorization.user.macro_user_id.clone();
@@ -128,23 +232,39 @@ where
     Ok((StatusCode::CREATED, Json(database)))
 }
 
+/// Schema detail of one database.
+pub async fn get_database_handler<S, Eas, Auth>(
+    access: DatabaseAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<DatabaseDetail>, DatabaseError>
+where
+    S: DatabasesService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let detail = state
+        .service
+        .get_database(access.entity_access_receipt, viewer_of(&user))
+        .await?;
+    Ok(Json(detail))
+}
+
 /// Execute SQL as the caller. The whole read/write surface.
-pub async fn exec_handler<S, Auth>(
-    State(state): State<DatabasesRouterState<S, Auth>>,
+pub async fn exec_handler<S, Eas, Auth>(
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<ExecRequestBody>,
 ) -> Result<Json<ExecOutcome>, QueryError>
 where
     S: DatabasesService,
+    Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let viewer = Viewer {
-        user_id: user.authorization.user.macro_user_id.clone(),
-    };
     let outcome = state
         .service
         .exec_sql(
-            viewer,
+            viewer_of(&user),
             ExecRequest {
                 sql: req.sql,
                 base_versions: req.base_versions.map(|versions| {
@@ -160,49 +280,112 @@ where
 }
 
 /// Download a database as a SQLite file.
-pub async fn sqlite_snapshot_handler<S, Auth>(
-    State(_state): State<DatabasesRouterState<S, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+pub async fn sqlite_snapshot_handler<S, Eas, Auth>(
+    access: DatabaseAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(DatabasePath { id }): Path<DatabasePath>,
 ) -> Result<impl IntoResponse, QueryError>
 where
     S: DatabasesService,
+    Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    // TODO: mint an EntityAccessReceipt<ViewAccessLevel> for the database via
-    // a DatabaseAccessExtractor (blocked on EntityType::Database landing in
-    // model-entity + entity_access), then call service.sqlite_snapshot and
-    // stream the bytes as application/vnd.sqlite3.
-    todo!("snapshot handler blocked on EntityType::Database receipt extractor");
-    #[allow(unreachable_code)]
-    Ok(StatusCode::NOT_IMPLEMENTED)
+    let snapshot = state
+        .service
+        .sqlite_snapshot(access.entity_access_receipt, viewer_of(&user))
+        .await?;
+    Ok((
+        [
+            (header::CONTENT_TYPE, "application/vnd.sqlite3".to_string()),
+            (
+                header::CONTENT_DISPOSITION,
+                format!("attachment; filename=\"database-{id}.sqlite\""),
+            ),
+        ],
+        snapshot.bytes,
+    ))
 }
 
 /// Create a table in a database.
-pub async fn create_table_handler<S, Auth>(
-    State(_state): State<DatabasesRouterState<S, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-) -> Result<StatusCode, DatabaseError>
+pub async fn create_table_handler<S, Eas, Auth>(
+    access: DatabaseAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
+    Path(DatabasePath { id }): Path<DatabasePath>,
+    Json(req): Json<CreateTableRequest>,
+) -> Result<(StatusCode, Json<Table>), DatabaseError>
 where
     S: DatabasesService,
+    Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    // TODO: EntityAccessReceipt<EditAccessLevel> via DatabaseAccessExtractor,
-    // then service.create_table.
-    todo!("create_table handler blocked on EntityType::Database receipt extractor")
+    let table = state
+        .service
+        .create_table(
+            access.entity_access_receipt,
+            CreateTable {
+                database_id: id,
+                name: req.name,
+            },
+        )
+        .await?;
+    Ok((StatusCode::CREATED, Json(table)))
+}
+
+/// Response for a created column.
+#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct CreateColumnResponse {
+    /// Identifier of the new column placement.
+    #[schema(value_type = String, format = Uuid)]
+    pub column_id: ColumnId,
 }
 
 /// Add a column to a table.
-pub async fn create_column_handler<S, Auth>(
-    State(_state): State<DatabasesRouterState<S, Auth>>,
-    _user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
-) -> Result<StatusCode, DatabaseError>
+pub async fn create_column_handler<S, Eas, Auth>(
+    access: DatabaseAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
+    Path(ColumnPath { id, table_id }): Path<ColumnPath>,
+    Json(req): Json<CreateColumnRequest>,
+) -> Result<(StatusCode, Json<CreateColumnResponse>), DatabaseError>
 where
     S: DatabasesService,
+    Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    // TODO: EntityAccessReceipt<EditAccessLevel> via DatabaseAccessExtractor,
-    // then service.create_column (binding + link/lookup config DTOs).
-    todo!("create_column handler blocked on EntityType::Database receipt extractor")
+    let binding = match req.binding {
+        ColumnBindingRequest::New {
+            name,
+            data_type,
+            is_multi_select,
+        } => ColumnBinding::NewDefinition {
+            name,
+            data_type,
+            is_multi_select,
+        },
+        ColumnBindingRequest::Existing {
+            property_definition_id,
+        } => ColumnBinding::ExistingDefinition(property_definition_id),
+    };
+    let config = req.link_to_table_id.map(|target| ColumnConfig::Link {
+        database_id: req.link_to_database_id.unwrap_or(id),
+        table_id: target,
+    });
+    let column_id = state
+        .service
+        .create_column(
+            access.entity_access_receipt,
+            CreateColumn {
+                table_id,
+                binding,
+                config,
+            },
+        )
+        .await?;
+    Ok((
+        StatusCode::CREATED,
+        Json(CreateColumnResponse { column_id }),
+    ))
 }
 
 impl IntoResponse for DatabaseError {

@@ -189,8 +189,67 @@ pub struct TableSchema {
     pub sql_name: String,
     /// What this table is backed by.
     pub source: TableSource,
-    /// Typed columns in declaration order.
+    /// Typed columns in declaration order. For user tables the first column
+    /// is always `row_id`.
     pub columns: Vec<ColumnSchema>,
+    /// Columns forming the primary key (compiled into the SQLite DDL).
+    pub primary_key: Vec<String>,
+    /// Foreign keys compiled into the SQLite DDL (junction integrity).
+    pub foreign_keys: Vec<ForeignKey>,
+    /// Whether SQL may write to this table at all (Edit grant on a user table
+    /// or its junctions). Magic tables and View-grant tables are read-only.
+    pub writable: bool,
+}
+
+/// A foreign-key constraint compiled into the scratch schema.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ForeignKey {
+    /// Column on this table.
+    pub column: String,
+    /// Referenced table's SQL name.
+    pub references_table: String,
+    /// Referenced column.
+    pub references_column: String,
+}
+
+/// SQLite storage class for a materialized column (STRICT table types).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SqlType {
+    /// INTEGER (also booleans as 0/1).
+    Integer,
+    /// REAL.
+    Real,
+    /// TEXT (ids, dates as ISO-8601, JSON arrays for multi-valued cells).
+    Text,
+}
+
+impl SqlType {
+    /// The storage class a property data type materializes as.
+    pub fn for_data_type(data_type: DataType, is_multi_select: bool) -> Self {
+        if is_multi_select {
+            return SqlType::Text;
+        }
+        match data_type {
+            DataType::Boolean => SqlType::Integer,
+            DataType::Number => SqlType::Real,
+            DataType::Date
+            | DataType::String
+            | DataType::Link
+            | DataType::SelectNumber
+            | DataType::SelectString
+            | DataType::Tag
+            | DataType::Entity => SqlType::Text,
+        }
+    }
+
+    /// The type name used in `CREATE TABLE … STRICT`.
+    pub fn ddl_name(self) -> &'static str {
+        match self {
+            SqlType::Integer => "INTEGER",
+            SqlType::Real => "REAL",
+            SqlType::Text => "TEXT",
+        }
+    }
 }
 
 /// What a catalog table is backed by.
@@ -214,13 +273,26 @@ pub enum TableSource {
 pub struct ColumnSchema {
     /// SQL-visible column name.
     pub sql_name: String,
+    /// SQLite storage class.
+    pub sql_type: SqlType,
     /// The property data type behind it, when property-backed.
     pub data_type: Option<DataType>,
+    /// Whether the property holds multiple values (materialized as a JSON
+    /// array, with a companion junction view).
+    pub is_multi_select: bool,
+    /// The property definition behind a user-table column, for translating
+    /// changeset values back into cells.
+    pub definition_id: Option<PropertyDefinitionId>,
     /// Entity type carried by id values in this column, for chip hydration
     /// and join type-checking.
     pub entity_type: Option<EntityType>,
     /// Whether SQL writes to this column are translatable to a domain command.
     pub writable: bool,
+    /// Allowed values for select/tag columns, compiled into a `CHECK`
+    /// constraint so SQLite rejects unknown options.
+    pub allowed_values: Option<Vec<String>>,
+    /// Whether NULL is rejected (`row_id`, junction columns).
+    pub not_null: bool,
 }
 
 /// The viewer's whole queryable world: used to prepare statements and as the
@@ -249,8 +321,9 @@ pub struct ReferencedTable {
 }
 
 /// A value in the SQLite materialization, kept engine-agnostic so the domain
-/// never depends on rusqlite types.
-#[derive(Debug, Clone, PartialEq)]
+/// never depends on rusqlite types. Serializes as a plain JSON scalar.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(untagged)]
 pub enum SqlValue {
     /// SQL NULL.
     Null,
@@ -277,8 +350,7 @@ pub struct MaterializedTable {
 pub struct QueryResult {
     /// Result columns.
     pub columns: Vec<ResultColumn>,
-    /// Row values (serialized as JSON scalars).
-    #[serde(skip)]
+    /// Row values as JSON scalars.
     pub rows: Vec<Vec<SqlValue>>,
 }
 
@@ -294,9 +366,37 @@ pub struct ResultColumn {
     pub origin: Option<(String, String)>,
 }
 
+/// A row-level change exactly as SQLite's session changeset reports it —
+/// SQL names and storage-class values, before the domain service translates
+/// it into typed cells ([`RowChange`]).
+#[derive(Debug, Clone, PartialEq)]
+pub struct RawRowChange {
+    /// SQL name of the table written.
+    pub table: String,
+    /// What happened.
+    pub op: RawOp,
+    /// Primary-key values of the affected row, by column name. For an insert
+    /// these are the values SQLite assigned or defaulted.
+    pub primary_key: Vec<(String, SqlValue)>,
+    /// New values by column name (inserts: every column; updates: only the
+    /// columns that changed).
+    pub new_values: Vec<(String, SqlValue)>,
+}
+
+/// The kind of a [`RawRowChange`].
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RawOp {
+    /// Row inserted.
+    Insert,
+    /// Row updated.
+    Update,
+    /// Row deleted.
+    Delete,
+}
+
 /// The row-level changes a statement made, extracted from the SQLite session
 /// changeset and expressed in domain terms.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum RowChange {
     /// A row inserted into a user table.
     Insert {
@@ -311,8 +411,8 @@ pub enum RowChange {
         table_id: TableId,
         /// Row written.
         row_id: RowId,
-        /// Changed cells only.
-        cells: HashMap<PropertyDefinitionId, SetPropertyValue>,
+        /// Changed cells only; `None` clears the cell (SQL `NULL`).
+        cells: HashMap<PropertyDefinitionId, Option<SetPropertyValue>>,
     },
     /// A row deleted (membership removed; referenced entities untouched).
     Delete {
@@ -367,6 +467,87 @@ pub struct SqliteSnapshot {
     pub bytes: Vec<u8>,
     /// Versions of the contained tables at snapshot time.
     pub versions: HashMap<TableId, TableVersion>,
+}
+
+// ===== Access & rendering models =====
+
+/// The access a viewer holds on a database, from its `entity_access` rows.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AccessGrant {
+    /// Read rows and run read-only SQL.
+    View,
+    /// View plus comments (no additional database rights).
+    Comment,
+    /// Write rows/links and change the schema.
+    Edit,
+    /// Everything, including sharing and deletion.
+    Owner,
+}
+
+impl AccessGrant {
+    /// Whether SQL may write to the database's tables.
+    pub fn can_write(self) -> bool {
+        matches!(self, AccessGrant::Edit | AccessGrant::Owner)
+    }
+
+    /// Parse the `AccessLevel` enum text stored in `entity_access`.
+    pub fn parse(level: &str) -> Option<Self> {
+        match level.to_ascii_lowercase().as_str() {
+            "view" => Some(AccessGrant::View),
+            "comment" => Some(AccessGrant::Comment),
+            "edit" => Some(AccessGrant::Edit),
+            "owner" => Some(AccessGrant::Owner),
+            _ => None,
+        }
+    }
+}
+
+/// A database as listed for a viewer.
+#[derive(Debug, Clone, Serialize)]
+pub struct ListedDatabase {
+    /// The database.
+    pub database: Database,
+    /// The viewer's access.
+    pub grant: AccessGrant,
+}
+
+/// Everything a client needs to render and edit one database: tables,
+/// column placements with their definitions, and the SQL names the query
+/// surface exposes them under.
+#[derive(Debug, Clone, Serialize)]
+pub struct DatabaseDetail {
+    /// The database.
+    pub database: Database,
+    /// The viewer's access.
+    pub grant: AccessGrant,
+    /// Tables in tab order.
+    pub tables: Vec<TableDetail>,
+}
+
+/// One table with its columns and SQL name.
+#[derive(Debug, Clone, Serialize)]
+pub struct TableDetail {
+    /// The table.
+    pub table: Table,
+    /// Name to use in SQL (`FROM guests`).
+    pub sql_name: String,
+    /// Columns in display order.
+    pub columns: Vec<ColumnDetail>,
+}
+
+/// One column placement with the definition behind it.
+#[derive(Debug, Clone, Serialize)]
+pub struct ColumnDetail {
+    /// The placement.
+    pub column: Column,
+    /// Name to use in SQL.
+    pub sql_name: String,
+    /// The bound definition (name, type, options).
+    pub definition:
+        models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions,
+    /// Whether SQL may write this column.
+    pub writable: bool,
 }
 
 // ===== Errors =====

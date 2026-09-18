@@ -65,6 +65,8 @@ pub enum GraphqlEntityType {
     Skill,
     /// AI coding agent session entity.
     AgentSession,
+    /// Macro Database entity (a collection of user-defined tables).
+    Database,
 }
 
 impl GraphqlSoupEntityType {
@@ -133,6 +135,7 @@ impl GraphqlEntityType {
             EntityType::Reminder => Self::Reminder,
             EntityType::Skill => Self::Skill,
             EntityType::AgentSession => Self::AgentSession,
+            EntityType::Database => Self::Database,
         }
     }
 
@@ -161,6 +164,7 @@ impl GraphqlEntityType {
             Self::Reminder => EntityType::Reminder,
             Self::Skill => EntityType::Skill,
             Self::AgentSession => EntityType::AgentSession,
+            Self::Database => EntityType::Database,
         }
     }
 }

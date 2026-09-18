@@ -2042,6 +2042,10 @@ enum GraphqlEntityType {
 	AI coding agent session entity.
 	"""
 	AGENT_SESSION
+	"""
+	Macro Database entity (a collection of user-defined tables).
+	"""
+	DATABASE
 }
 
 """

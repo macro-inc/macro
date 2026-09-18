@@ -189,7 +189,9 @@ fn favoritable(entity_type: EntityType) -> bool {
         | EntityType::Reminder
         | EntityType::Skill
         // Agent sessions are not entity-mutation targets.
-        | EntityType::AgentSession => false,
+        | EntityType::AgentSession
+        // Databases are not favoritable yet.
+        | EntityType::Database => false,
     }
 }
 
@@ -463,7 +465,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            // Database rename/trash is not implemented yet.
+            | EntityType::Database => {
                 return unsupported(requested, "rename");
             }
         };
@@ -509,7 +513,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            // Database rename/trash is not implemented yet.
+            | EntityType::Database => {
                 return unsupported(requested, "move");
             }
         };
@@ -557,7 +563,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            // Database rename/trash is not implemented yet.
+            | EntityType::Database => {
                 return unsupported(requested, "share policy updates");
             }
         };
@@ -608,7 +616,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            // Database rename/trash is not implemented yet.
+            | EntityType::Database => {
                 return unsupported(requested, "trash");
             }
         };
@@ -638,7 +648,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            // Database rename/trash is not implemented yet.
+            | EntityType::Database => {
                 return unsupported(requested, "restore");
             }
         };
@@ -688,7 +700,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            // Database rename/trash is not implemented yet.
+            | EntityType::Database => {
                 return unsupported(requested, "permanent deletion");
             }
         };
@@ -748,7 +762,9 @@ where
             | EntityType::CalendarEvent
             | EntityType::Reminder
             | EntityType::Skill
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            // Database rename/trash is not implemented yet.
+            | EntityType::Database => {
                 return unsupported(requested, "duplication");
             }
         };

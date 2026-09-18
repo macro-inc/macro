@@ -68,7 +68,8 @@ pub async fn delete_user_entity_access_bulk(
         | EntityType::Document
         | EntityType::EmailThread
         | EntityType::Call
-        | EntityType::AgentSession => {
+        | EntityType::AgentSession
+        | EntityType::Database => {
             sqlx::query!(
                 r#"
         DELETE FROM "entity_access"

@@ -68,6 +68,9 @@ pub enum EntityType {
     /// The entity is an AI coding agent session (see the `agent_session`
     /// crate)
     AgentSession,
+    /// The entity is a Macro Database: a collection of user-defined tables
+    /// (see the `databases` crate)
+    Database,
 }
 
 impl EntityType {
@@ -105,6 +108,10 @@ impl EntityType {
             // owner, the channel the bot was mentioned in as editor - but
             // are not something you file into a project.
             EntityType::AgentSession => false,
+            // A database's permissions are `entity_access` rows: the creator
+            // as owner, plus whoever it is later shared with. Databases are
+            // not filed into projects.
+            EntityType::Database => true,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

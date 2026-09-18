@@ -245,7 +245,7 @@ fn to_tool_property(info: EntityPropertyInfo) -> ToolPropertyItem {
         .then_some(match info.owner {
             PropertyOwner::User { .. } => Some(TagScope::Personal),
             PropertyOwner::Team { .. } => Some(TagScope::Team),
-            PropertyOwner::System => None,
+            PropertyOwner::Database { .. } | PropertyOwner::System => None,
         })
         .flatten();
 

@@ -5,11 +5,14 @@ use std::collections::HashMap;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use crate::domain::models::{
-    AppliedChanges, Catalog, ColumnBinding, ColumnId, CreateColumn, CreateDatabase, CreateTable,
-    Database, DatabaseError, DatabaseId, ExecOutcome, ExecRequest, MaterializedTable,
-    PropertyDefinitionId, QueryError, QueryResult, Row, RowChange, RowId, SqliteSnapshot, Table,
-    TableDeps, TableId, TableVersion, Viewer,
+    AccessGrant, AppliedChanges, Catalog, Column, ColumnBinding, ColumnId, CreateColumn,
+    CreateDatabase, CreateTable, Database, DatabaseDetail, DatabaseError, DatabaseId, ExecOutcome,
+    ExecRequest, ListedDatabase, MaterializedTable, PropertyDefinitionId, QueryError, QueryResult,
+    RawRowChange, Row, RowChange, RowId, SqliteSnapshot, Table, TableDeps, TableId, TableVersion,
+    Viewer,
 };
 
 /// Outbound persistence port for databases, tables, column placements, rows,
@@ -73,6 +76,45 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         &self,
         table_ids: &[TableId],
     ) -> impl Future<Output = Result<HashMap<TableId, TableVersion>, Self::Err>> + Send;
+
+    /// Databases by id (missing ids are skipped).
+    fn databases_by_ids(
+        &self,
+        ids: &[DatabaseId],
+    ) -> impl Future<Output = Result<Vec<Database>, Self::Err>> + Send;
+
+    /// Every table of the given databases, ordered by database then position.
+    fn tables_for_databases(
+        &self,
+        database_ids: &[DatabaseId],
+    ) -> impl Future<Output = Result<Vec<Table>, Self::Err>> + Send;
+
+    /// Every column placement of the given tables, ordered by table then position.
+    fn columns_for_tables(
+        &self,
+        table_ids: &[TableId],
+    ) -> impl Future<Output = Result<Vec<Column>, Self::Err>> + Send;
+}
+
+/// Which databases a viewer can reach, and the grant written at creation.
+/// Backed by the shared `entity_access` table; the domain treats it as the
+/// authorization boundary for SQL (the catalog is built from it).
+pub trait AccessDirectory: Send + Sync + 'static {
+    /// The error type returned by directory operations.
+    type Err: std::error::Error + Send + Sync + 'static;
+
+    /// Every database the viewer holds a grant on, with the highest grant.
+    fn accessible_databases(
+        &self,
+        viewer: &Viewer,
+    ) -> impl Future<Output = Result<Vec<(DatabaseId, AccessGrant)>, Self::Err>> + Send;
+
+    /// Record the creator as owner of a new database.
+    fn grant_owner(
+        &self,
+        database_id: DatabaseId,
+        owner: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Column definitions live in the properties system; this port wraps creating
@@ -143,7 +185,7 @@ pub trait SqlExecutor: Send + Sync + 'static {
         catalog: &Catalog,
         tables: Vec<MaterializedTable>,
         sql: &str,
-    ) -> Result<(Vec<QueryResult>, Vec<RowChange>), QueryError>;
+    ) -> Result<(Vec<QueryResult>, Vec<RawRowChange>), QueryError>;
 
     /// Serialize a set of materialized tables into a complete SQLite database
     /// file (the takeout snapshot).
@@ -173,11 +215,18 @@ pub trait DatabasesService: Send + Sync + 'static {
         cmd: CreateDatabase,
     ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
 
-    /// Fetch a database with tables, columns, and definitions for rendering.
+    /// Every database the viewer can reach.
+    fn list_databases(
+        &self,
+        viewer: Viewer,
+    ) -> impl Future<Output = Result<Vec<ListedDatabase>, DatabaseError>> + Send;
+
+    /// Fetch a database with tables, columns, definitions, and SQL names.
     fn get_database(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-    ) -> impl Future<Output = Result<(Database, Vec<Table>), DatabaseError>> + Send;
+        viewer: Viewer,
+    ) -> impl Future<Output = Result<DatabaseDetail, DatabaseError>> + Send;
 
     /// Create a table.
     fn create_table(

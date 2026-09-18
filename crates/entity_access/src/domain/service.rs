@@ -53,6 +53,7 @@ where
             EntityType::AgentSession => {
                 self.repo.get_agent_session_access(entity_id, user_id).await
             }
+            EntityType::Database => self.repo.get_database_access(entity_id, user_id).await,
             EntityType::CalendarEvent => {
                 self.repo
                     .get_calendar_event_access(entity_id, user_id)
@@ -181,7 +182,8 @@ where
             | EntityType::Project
             | EntityType::EmailThread
             | EntityType::Call
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::Database => {
                 let access_level = self
                     .repo
                     .get_team_entity_access(bot_id, team_id, entity_id, entity_type)
@@ -416,7 +418,8 @@ where
             | EntityType::EmailThread
             | EntityType::Call
             | EntityType::CalendarEvent
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::Database => {
                 self.get_optimized_access(entity_id, user_id, entity_type)
                     .await
             }
@@ -491,7 +494,8 @@ where
             | EntityType::EmailThread
             | EntityType::Call
             | EntityType::CalendarEvent
-            | EntityType::AgentSession => {
+            | EntityType::AgentSession
+            | EntityType::Database => {
                 let access = self
                     .get_optimized_access(entity_id, user_id, entity_type)
                     .await?;

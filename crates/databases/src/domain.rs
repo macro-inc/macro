@@ -1,6 +1,11 @@
-//! Domain layer: models, ports, and the service implementation.
+//! Domain layer: models, ports, catalog/materialization/translation logic,
+//! and the service implementation.
 
+pub mod catalog;
+pub mod materialize;
 pub mod models;
+pub mod sugar;
+pub mod translate;
 
 #[cfg(feature = "ports")]
 pub mod ports;
