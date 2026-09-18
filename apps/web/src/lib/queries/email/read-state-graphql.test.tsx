@@ -33,7 +33,8 @@ vi.mock('../soup/cache', () => ({
   optimisticUpdateSoupEntity: mocks.legacyPatch,
   refetchSoupEntity: vi.fn(),
 }));
-vi.mock('../soup/graphql/active-queries', () => ({
+vi.mock('../soup/graphql/active-queries', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../soup/graphql/active-queries')>()),
   refreshActiveGraphqlSoupQueries: mocks.refresh,
 }));
 vi.mock('../soup/normalized-cache', () => ({ invalidateAllSoup: vi.fn() }));
@@ -58,7 +59,10 @@ vi.mock('@service-storage/graphql-soup', () => ({
 import {
   MarkEmailThreadSeenDocument,
   MarkEmailThreadUnreadDocument,
+  SoupDocument,
 } from '@service-storage/graphql/generated/graphql';
+import { stringifyDocument } from '@urql/core';
+import { registerGraphqlSoupRevalidations } from '../soup/graphql/active-queries';
 import { emailKeys } from './keys';
 import {
   useMarkThreadAsSeenMutation,
@@ -239,8 +243,12 @@ describe('email read state with GraphQL Soup', () => {
   );
 
   it.each([useMarkThreadAsSeenMutation, useMarkThreadAsUnreadMutation])(
-    'does not refetch server membership over a queued offline read-state update',
+    'queues membership revalidation without refetching over offline optimism',
     async (useMutation) => {
+      const variables = { input: { initial: { limit: 50 } } };
+      const unregister = registerGraphqlSoupRevalidations(() => [
+        { document: SoupDocument, variables },
+      ]);
       mocks.graphqlMutation.mockReturnValue({
         toPromise: async () => ({
           extensions: {
@@ -251,10 +259,24 @@ describe('email read state with GraphQL Soup', () => {
           },
         }),
       });
-      const mutation = mountEmailMutation(useMutation, client);
-      await mutation.mutateAsync({ threadId: 'thread' });
-      expect(mocks.refresh).not.toHaveBeenCalled();
-      expect(mocks.markSeen).not.toHaveBeenCalled();
+      try {
+        const mutation = mountEmailMutation(useMutation, client);
+        await mutation.mutateAsync({ threadId: 'thread' });
+        expect(
+          mocks.graphqlMutation.mock.calls[0][2].normalizedCacheOptimistic
+            .revalidations
+        ).toEqual([
+          {
+            query: stringifyDocument(SoupDocument),
+            operationName: 'Soup',
+            variablesJson: JSON.stringify(variables),
+          },
+        ]);
+        expect(mocks.refresh).not.toHaveBeenCalled();
+        expect(mocks.markSeen).not.toHaveBeenCalled();
+      } finally {
+        unregister();
+      }
     }
   );
 });

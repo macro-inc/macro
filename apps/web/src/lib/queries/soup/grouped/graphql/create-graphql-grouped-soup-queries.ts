@@ -38,6 +38,7 @@ import {
   onCleanup,
 } from 'solid-js';
 
+import { registerGraphqlSoupRevalidations } from '../../graphql/active-queries';
 import {
   usePendingGraphqlSoupDeleteIds,
   withoutPendingSoupEntities,
@@ -192,7 +193,7 @@ export function createGraphqlGroupedSoupQueries(
             GroupSoupQuery,
             GroupSoupQueryVariables,
             string,
-            GroupQueryData
+            GroupQueryData & { pageParams: readonly string[] }
           >(() => {
             const config = getConfig();
             return {
@@ -210,7 +211,8 @@ export function createGraphqlGroupedSoupQueries(
               },
               getNextPageParam: (lastPage) =>
                 groupPage(lastPage, config.group)?.group.nextCursor,
-              select: ({ pages }) => ({
+              select: ({ pages, pageParams }) => ({
+                pageParams,
                 entities: pages.flatMap((page) => {
                   const selected = groupPage(page, config.group);
                   return selected
@@ -227,6 +229,27 @@ export function createGraphqlGroupedSoupQueries(
               keepPreviousData: false,
             };
           });
+
+          onCleanup(
+            registerGraphqlSoupRevalidations(() => {
+              if (!query.isEnabled) return [];
+              const config = getConfig();
+              const cursors = new Set([
+                firstCursor,
+                ...(query.data?.pageParams ?? []),
+              ]);
+              return [...cursors].map((cursor) => ({
+                document: GroupSoupDocument,
+                variables: {
+                  input: makeGraphqlGroupedSoupContinuationInput({
+                    groupBy: config.field,
+                    groupKey: config.key,
+                    cursor,
+                  }),
+                },
+              }));
+            })
+          );
 
           createComputed(() => {
             if (!activated()) return;

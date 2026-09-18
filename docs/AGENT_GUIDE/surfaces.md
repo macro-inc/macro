@@ -246,8 +246,12 @@ can leave the action in the durable queue. Mark unread sends only the thread ID;
 the server resolves that inbox's UNREAD label and returns the canonical thread
 (`__typename`, `id`, `isRead`) to reconcile the cache. The row should flip immediately
 even when the client labels cache is missing or stale—no label fetch precedes the
-optimistic update. Trash and its Undo refresh mounted GraphQL lists after the
-server operation finishes. The GraphQL-disabled REST path is unchanged.
+optimistic update. Queued read/unread writes retain revalidation descriptors for
+active flat and grouped lists, including loaded continuation pages. Once replay
+commits (even after a reload), those queries refresh from the server; they should
+not refetch over the optimistic state merely because a write was queued. Trash
+and its Undo refresh mounted GraphQL lists after the server operation finishes.
+The GraphQL-disabled REST path is unchanged.
 
 ### Cached Mail filtering
 

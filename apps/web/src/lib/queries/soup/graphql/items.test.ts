@@ -74,6 +74,7 @@ vi.mock('@queries/client', async () => {
 });
 
 import { queryClient } from '@queries/client';
+import { getActiveGraphqlSoupRevalidations } from './active-queries';
 import { createGraphqlSoupAstItemsQuery } from './items';
 import {
   createGraphqlSoupDeletion,
@@ -165,6 +166,46 @@ describe('createGraphqlSoupAstItemsQuery', () => {
     makeGraphqlSoupInputMock.mockReturnValue({
       initial: { limit: 50, sortMethod: 'UPDATED_AT' },
     });
+  });
+
+  it('registers enabled flat pages for durable replay and drops reset or unmounted pages', async () => {
+    const fake = makeFakeClient();
+    getGraphqlSoupClientMock.mockReturnValue(fake.client);
+    makeGraphqlSoupInputMock.mockImplementation(({ cursor }) =>
+      cursor ? { continuation: { cursor } } : { initial: { limit: 50 } }
+    );
+    const [enabled, setEnabled] = createSignal(true);
+    let query!: ReturnType<typeof createGraphqlSoupAstItemsQuery>;
+    const dispose = createRoot((dispose) => {
+      query = createGraphqlSoupAstItemsQuery(
+        () => ({ params: {}, body: {} }),
+        () => ({ enabled: enabled() })
+      );
+      return dispose;
+    });
+    try {
+      expect(
+        getActiveGraphqlSoupRevalidations().map((query) => query.variables)
+      ).toEqual([fake.executions[0].variables]);
+      fake.executions[0].next(
+        graphqlSoupPage({ items: [], next_cursor: 'next' })
+      );
+      const next = query.fetchNextPage();
+      fake.executions[1].next(
+        graphqlSoupPage({ items: [], next_cursor: null })
+      );
+      await next;
+      expect(
+        getActiveGraphqlSoupRevalidations().map((query) => query.variables)
+      ).toEqual(fake.executions.map((execution) => execution.variables));
+      query.resetToInitialPage();
+      expect(getActiveGraphqlSoupRevalidations()).toHaveLength(1);
+      setEnabled(false);
+      expect(getActiveGraphqlSoupRevalidations()).toEqual([]);
+    } finally {
+      dispose();
+    }
+    expect(getActiveGraphqlSoupRevalidations()).toEqual([]);
   });
 
   it.each([

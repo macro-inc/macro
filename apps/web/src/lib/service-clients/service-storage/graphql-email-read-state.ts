@@ -1,6 +1,7 @@
 import {
   executeOptimisticMutation,
   optimisticMutationDispositionOf,
+  type QueryRevalidation,
 } from '@graphql-cache/exchange/optimistic';
 import type { AnyVariables, Client, OperationResult } from '@urql/core';
 import { v4 as uuidv4 } from 'uuid';
@@ -27,7 +28,8 @@ function readStateDisposition<T, V extends AnyVariables>(
 /** The cache exchange owns optimistic commit/rollback, including offline replay. */
 export async function markGraphqlEmailThreadSeen(
   client: Client,
-  threadId: string
+  threadId: string,
+  revalidations: readonly QueryRevalidation[] = []
 ): Promise<EmailReadStateDisposition> {
   const result = await executeOptimisticMutation(
     client,
@@ -42,7 +44,7 @@ export async function markGraphqlEmailThreadSeen(
     },
     // Keep distinct read/unread intents ordered; a newer action must not be
     // rolled back by a previous request's failure.
-    { uuid: uuidv4() }
+    { uuid: uuidv4(), revalidations }
   ).toPromise();
   return readStateDisposition(
     result,
@@ -53,7 +55,8 @@ export async function markGraphqlEmailThreadSeen(
 /** Resolve the inbox's UNREAD label server-side so optimism never waits on labels. */
 export async function markGraphqlEmailThreadUnread(
   client: Client,
-  threadId: string
+  threadId: string,
+  revalidations: readonly QueryRevalidation[] = []
 ): Promise<EmailReadStateDisposition> {
   const result = await executeOptimisticMutation(
     client,
@@ -66,7 +69,7 @@ export async function markGraphqlEmailThreadUnread(
         isRead: false,
       },
     },
-    { uuid: uuidv4() }
+    { uuid: uuidv4(), revalidations }
   ).toPromise();
   return readStateDisposition(
     result,

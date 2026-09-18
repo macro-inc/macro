@@ -51,6 +51,7 @@ vi.mock('@queries/client', async () => {
 });
 
 import { queryClient } from '@queries/client';
+import { getActiveGraphqlSoupRevalidations } from '@queries/soup/graphql/active-queries';
 import { createGraphqlGroupedSoupAstItemsQuery } from '@queries/soup/graphql/grouped-items';
 import {
   createGraphqlSoupDeletion,
@@ -199,6 +200,30 @@ function setup() {
 }
 
 describe('createGraphqlGroupedSoupQueries', () => {
+  it('registers the parent and every loaded continuation for durable replay', async () => {
+    const { fake, grouped } = setup();
+    expect(
+      getActiveGraphqlSoupRevalidations().map((query) => query.variables)
+    ).toEqual([fake.executions[0].variables]);
+    fake.executions[0].next(page([group('a', ['a-1'], 'next')], [item('a-1')]));
+    const a = grouped.map().get('a')!;
+    const next = a.fetchNextPage();
+    fake.executions[1].next(page([group('a', ['a-2'], 'more')], [item('a-2')]));
+    await next;
+    const more = a.fetchNextPage();
+    fake.executions[2].next(page([group('a', ['a-3'], null)], [item('a-3')]));
+    await more;
+    expect(
+      getActiveGraphqlSoupRevalidations().map((query) => query.variables)
+    ).toEqual(fake.executions.map((execution) => execution.variables));
+    grouped.resetToInitialPage();
+    expect(
+      getActiveGraphqlSoupRevalidations().map((query) => query.variables)
+    ).toEqual([fake.executions[0].variables]);
+    disposals.pop()?.();
+    expect(getActiveGraphqlSoupRevalidations()).toEqual([]);
+  });
+
   it('hides pending deletes from both initial and continuation pages without changing pagination', async () => {
     const { fake, grouped } = setup();
     fake.executions[0].next(page([group('a', ['a-1'], 'next')], [item('a-1')]));

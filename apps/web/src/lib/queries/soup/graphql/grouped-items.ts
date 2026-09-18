@@ -22,9 +22,16 @@ import {
   mapGraphqlGroupedSoupPage,
 } from '@service-storage/graphql-soup';
 import type { CombinedError } from '@urql/core';
-import { type Accessor, createComputed, createMemo, on } from 'solid-js';
+import {
+  type Accessor,
+  createComputed,
+  createMemo,
+  on,
+  onCleanup,
+} from 'solid-js';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { mapSoupPageToEntityList } from '../transform-utils';
+import { registerGraphqlSoupRevalidations } from './active-queries';
 import { makeGraphqlGroupedSoupInput } from './ast';
 import type { GraphqlSoupAstItemsQuery } from './items';
 import {
@@ -132,6 +139,15 @@ export function createGraphqlGroupedSoupAstItemsQuery(
       enabled: true,
     };
   });
+
+  onCleanup(
+    registerGraphqlSoupRevalidations(() => {
+      const queryInput = input();
+      return query.isEnabled && queryInput
+        ? [{ document: GroupSoupDocument, variables: { input: queryInput } }]
+        : [];
+    })
+  );
 
   const error = (): CombinedError | undefined => query.error ?? undefined;
   createComputed(

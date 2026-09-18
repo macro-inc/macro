@@ -1,9 +1,32 @@
+import type { QueryRevalidation } from '@graphql-cache/exchange/optimistic';
+import { createRequest } from '@urql/core';
+
 type ActiveGraphqlSoupQuery = {
   isEnabled: () => boolean;
   refresh: () => Promise<void>;
 };
 
 const activeQueries = new Set<ActiveGraphqlSoupQuery>();
+const revalidationSources = new Set<() => readonly QueryRevalidation[]>();
+
+/** Each reader supplies its enabled, loaded pages for durable mutation replay. */
+export function registerGraphqlSoupRevalidations(
+  queries: () => readonly QueryRevalidation[]
+): () => void {
+  revalidationSources.add(queries);
+  return () => revalidationSources.delete(queries);
+}
+
+/** Snapshot query descriptors without fetching or waiting on the cache. */
+export function getActiveGraphqlSoupRevalidations(): QueryRevalidation[] {
+  const queries = new Map<number, QueryRevalidation>();
+  for (const source of revalidationSources) {
+    for (const query of source()) {
+      queries.set(createRequest(query.document, query.variables).key, query);
+    }
+  }
+  return [...queries.values()];
+}
 
 /** Registers a mounted GraphQL Soup query for mutation-driven revalidation. */
 export function registerActiveGraphqlSoupQuery(

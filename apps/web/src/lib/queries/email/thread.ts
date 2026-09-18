@@ -30,7 +30,10 @@ import { err, ok } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { optimisticUpdateSoupEntity, refetchSoupEntity } from '../soup/cache';
-import { refreshActiveGraphqlSoupQueries } from '../soup/graphql/active-queries';
+import {
+  getActiveGraphqlSoupRevalidations,
+  refreshActiveGraphqlSoupQueries,
+} from '../soup/graphql/active-queries';
 import { invalidateAllSoup } from '../soup/normalized-cache';
 import { type UndoHandle, useUndoableMutation } from '../undo';
 import { type MutationCallbacks, withCallbacks } from '../utils';
@@ -294,7 +297,8 @@ export function useMarkThreadAsSeenMutation(
       if (isFeatureEnabled(enableGraphqlSoup)) {
         const disposition = await markGraphqlEmailThreadSeen(
           getGraphqlSoupClient(),
-          params.threadId
+          params.threadId,
+          getActiveGraphqlSoupRevalidations()
         );
         if (disposition === 'committed')
           await refreshActiveGraphqlSoupQueries();
@@ -376,7 +380,8 @@ export function useMarkThreadAsUnreadMutation(
       if (isFeatureEnabled(enableGraphqlSoup)) {
         const disposition = await markGraphqlEmailThreadUnread(
           getGraphqlSoupClient(),
-          params.threadId
+          params.threadId,
+          getActiveGraphqlSoupRevalidations()
         );
         if (disposition === 'committed')
           await refreshActiveGraphqlSoupQueries();
