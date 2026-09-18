@@ -1,7 +1,4 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useCodexAgentsAccess } from '@core/codex/flag';
 import { toast } from '@core/component/Toast/Toast';
-import { claudeCloud } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { ThrownResultError } from '@core/util/result';
 import MacroLogo from '@icon/macro-logo.svg';
@@ -49,8 +46,6 @@ export function Harness() {
 }
 
 function RuntimeSettings() {
-  const canUseCodex = useCodexAgentsAccess();
-  const claudeCloudFlag = useFeatureFlag(claudeCloud);
   const harnessesQuery = useHarnessesQuery();
   const deleteHarnessMutation = useDeleteHarnessMutation();
   const userId = useUserId();
@@ -110,13 +105,9 @@ function RuntimeSettings() {
             status="Built in"
             connected
           />
-          <Show when={claudeCloudFlag().enabled}>
-            <ClaudeConnection />
-          </Show>
+          <ClaudeConnection />
           <CursorRuntime />
-          <Show when={canUseCodex()}>
-            <CodexHarness />
-          </Show>
+          <CodexHarness />
         </SettingsCard>
       </SettingsSection>
 

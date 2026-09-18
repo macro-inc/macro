@@ -1,6 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { isMacroAgentId } from '@core/constant/macroAgent';
-import { senderFromStorageId } from '@queries/channel/message-sender';
+import { senderFromStorageId } from '@queries/messages/message-sender';
 import type { ApiMessageSender } from '@service-storage/generated/schemas/apiMessageSender';
 import { cn } from '@ui';
 import { Show } from 'solid-js';

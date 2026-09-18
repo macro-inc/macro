@@ -863,6 +863,11 @@ impl AgentSessionRealtime for NoOpRealtime {
 pub struct ControlEvent {
     /// What the agent was asked to do.
     pub action: AgentAction,
+    /// The id the caller already speculated this action under, when it minted
+    /// one. Adopted as the accepted id so the caller's optimistic entry is
+    /// promoted in place rather than retracted and reissued; `None` leaves
+    /// the recipient to mint one.
+    pub action_id: Option<AgentActionId>,
     /// The user responsible, absent when a bot acted on nobody's behalf.
     ///
     /// `None` means "no user is responsible", not "unknown" - a bot's own
@@ -921,6 +926,11 @@ pub trait AgentSessionNotificationRecipient: Send + Sync + 'static {
     /// A control operation the live connection has to be told about. Returns
     /// the action id the caller correlates against the fold stream, and
     /// whether the action went out or waits in the session's queue.
+    ///
+    /// A caller-supplied [`ControlEvent::action_id`] is adopted as that id.
+    /// Re-sending an action under an id the session still has queued or in
+    /// flight reports what became of the first one instead of accepting a
+    /// second, so a retried request cannot double-prompt.
     fn control_event(
         &self,
         id: AgentSessionId,

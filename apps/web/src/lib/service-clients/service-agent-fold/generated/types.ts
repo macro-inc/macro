@@ -426,6 +426,12 @@ export type FoldedMessage = {
   parts: MessagePart[];
   /**  How the turn ended, absent while it remains in flight. */
   stop: StopReason | null;
+  /**
+   *  Derived from an action this client issued that the log has not yet
+   *  confirmed. A reader shows it as sending; it flips off in place when
+   *  the confirmed frame arrives.
+   */
+  pending: boolean;
 };
 
 /**
@@ -501,6 +507,28 @@ export type MessagePart =
       kind: 'text';
       /**  The prose. */
       text: string;
+    }
+  /**
+   *  A file the user attached to their prompt, by where it can be fetched.
+   *
+   *  Read off the prompt's `resource_link` blocks - the only shape this
+   *  side sends files in, since bytes never ride the log. Rendering decides
+   *  from `mime_type` whether that is a thumbnail or a chip.
+   */
+  | {
+      kind: 'attachment';
+      /**  Where the file can be fetched - a static file service URL. */
+      uri: string;
+      /**  Display name, typically the original file name. */
+      name: string;
+      /**  The file's media type, when the sender knew it. */
+      mimeType: string | null;
+      /**
+       *  Size in bytes, when the sender knew it. A double on the wire:
+       *  specta refuses 64-bit integers, and no file this renders is
+       *  anywhere near the precision limit.
+       */
+      size: number | null;
     }
   /**  The agent's reasoning, which a reader may want to hide by default. */
   | {
@@ -753,6 +781,12 @@ export type SessionMetadata = {
    *  connection that asked is gone - the request id dies with it.
    */
   pendingElicitation: PendingElicitation | null;
+  /**
+   *  Where the newest turn stands, as one value. Readers used to derive it
+   *  from the transcript's tail, the status, and their own record of what
+   *  they had posted; this is that derivation done once, in the fold.
+   */
+  turn: TurnState;
 };
 
 /**
@@ -1100,6 +1134,24 @@ export type ToolStatus =
 
 /**  A tool call within a turn, identified by its ACP `toolCallId`. */
 export type ToolUseId = string;
+
+/**  Where the newest turn stands. */
+export type TurnState =
+  /**  No turn is open. */
+  | 'idle'
+  /**
+   *  A prompt this client issued is on the wire, unconfirmed, and the agent
+   *  has produced nothing. Only a speculative fold reports this.
+   */
+  | 'starting'
+  /**  A turn is open and the agent is working. */
+  | 'running'
+  /**  A stop was issued against the open turn and no stop reason has arrived. */
+  | 'stopping'
+  /**  The open turn is waiting on the user to answer an elicitation. */
+  | 'blocked'
+  /**  The runtime reported `disconnected`; whatever was open is not moving. */
+  | 'disconnected';
 
 /**
  *  How far a user tool has got - the fold's reading of the backend's

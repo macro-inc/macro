@@ -33,9 +33,12 @@ impl FoldState {
                 outcome: ControlOutcome::Accepted,
             }),
             stop: None,
+            pending: self.speculative,
         });
         self.turn = Some(Turn {
             id,
+            prompt_pending: self.speculative,
+            stop_requested: false,
             prompt_id: Some(prompt_id.clone()),
             agent: None,
             permission_positions: HashMap::new(),
@@ -71,6 +74,7 @@ impl FoldState {
             request_id: request_id.and_then(AgentActionId::from_request_id),
             parts: NonEmpty::one(MessagePart::Control { control, outcome }),
             stop: None,
+            pending: self.speculative,
         });
         Some(Changed::new(message))
     }

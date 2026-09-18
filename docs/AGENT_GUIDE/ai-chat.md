@@ -60,9 +60,20 @@
   behind it throughout the transition, keeping its existing edge-muted border.
   Selecting a chat agent retracts it. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
-  offers **Choose automatically**, recent repositories, or GitHub `owner/repo` /
-  URL entry confirmed with **Use repository**. Once selected, **Branch** opens
-  a starting-branch field confirmed with **Use branch** (initially `main`).
+  (**Choose repository** until one is picked) opens a searchable list:
+  **Choose automatically**, then the repositories the signed-in user reaches
+  through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
+  recently used ones first. Typing filters the list; an unlisted GitHub
+  `owner/repo` or URL adds a **Use owner/repo** row. Arrow keys move the
+  highlight and Enter or a click picks it; there is no separate confirm
+  button. Someone who reaches no repository sees a hint with **Connect
+  GitHub**, which opens Settings → Connected. The last repository picked is
+  remembered per user in local storage and preselected next time. Once
+  selected, **Branch** shows the repository's default branch (`main` when it
+  has none) and opens a starting-branch field confirmed with **Use branch**;
+  picking a different repository resets the branch to that repository's
+  default. Omitting the branch on the create-session API likewise starts on
+  the repository's default branch.
   Both controls open above the drawer without clipping. The selections survive
   agent changes and are sent only to coding agents. Cursor honors the explicit
   repository and branch instead of choosing a repository from the prompt;
@@ -100,8 +111,9 @@
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
   choose another. Stop, queued-message advancement, and quoting remain available.
-- Users outside the flag retain the Owned / Running / Shared / Automations /
-  Skills list. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
+- Touch devices and users outside the flag retain the Owned / Running / Shared /
+  Automations / Skills list. On touch devices, conversation links open standalone
+  agent sessions or legacy chats instead of the desktop Agents workspace. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
   is `/app/md/<doc>/chat/<chat>` (split view).
 
 ## Start a standalone chat
@@ -302,6 +314,20 @@ latest turn.
 `@mention` a person in a prompt and, if you can edit the session, they are granted edit
 access and get an `agent_session_mentioned` notification that opens the session; a viewer's
 mention only notifies people who could already open it.
+
+In Home, a new Agents conversation, and an existing agent session, files can be
+attached to a prompt three ways: drop them anywhere on the composer (a
+"Drop files here to send them to the agent" overlay appears), paste them from the
+clipboard, or use the paperclip **`Attach files`** button. Every file uploads to the
+static file service and shows as a chip above the text (media thumbnails, document
+pills with a remove `×`); **Send** is disabled while an upload is pending. The agent
+receives each file as an ACP `resource_link` (a URL it can fetch) after the prompt text,
+and the sent prompt renders its files in the transcript (image thumbnails, video
+previews, file chips that open the file). A prompt may be files only, including the
+first message in a new conversation. Uploading attachments survive switching the
+agent or opening repository settings; sending clears the attachment previews.
+Queued prompts
+list their attached file names under the text; editing a queued prompt keeps them.
 
 On mobile the composer (and any queued prompts above it) floats in the bottom
 accessory region above the dock — same placement as channel and AI chat — so it

@@ -336,6 +336,15 @@ impl FoldState {
         self.clear_pending_elicitation_if(|_| true)
     }
 
+    /// Whether the question asked under `request_id` has an outcome. See
+    /// [`FoldMachineImpl::elicitation_answered`](super::FoldMachineImpl::elicitation_answered).
+    pub(super) fn elicitation_answered(&self, request_id: &ElicitationRequestId) -> bool {
+        self.messages
+            .iter()
+            .flat_map(|message| message.parts.iter())
+            .any(|part| answered(part, request_id))
+    }
+
     /// Forget everything about outstanding elicitations: the connection that
     /// asked is gone and its request ids with it.
     pub(super) fn forget_elicitations(&mut self) -> bool {
@@ -343,6 +352,22 @@ impl FoldState {
         self.completable_elicitations.clear();
         self.clear_pending_elicitation_if(|_| true)
     }
+}
+
+/// Whether `part`, or anything nested under it, is the question asked under
+/// `request_id` and has stopped being pending.
+fn answered(part: &MessagePart, request_id: &ElicitationRequestId) -> bool {
+    if let MessagePart::Elicitation {
+        request_id: asked,
+        outcome,
+        ..
+    } = part
+    {
+        return asked == request_id && !matches!(outcome, ElicitationOutcome::Pending);
+    }
+    part.children()
+        .iter()
+        .any(|child| answered(child, request_id))
 }
 
 /// The tool call (if any) and the renderable request, decoded from ACP's

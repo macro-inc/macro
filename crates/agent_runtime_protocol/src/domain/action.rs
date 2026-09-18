@@ -6,9 +6,9 @@
 use std::collections::BTreeMap;
 
 use agent_client_protocol::schema::v1::{
-    CancelNotification, ClientRequest, CreateElicitationResponse, ElicitationAcceptAction,
-    ElicitationAction, ElicitationContentValue as AcpContentValue, PromptRequest, RequestId,
-    SessionId, SetSessionConfigOptionRequest,
+    CancelNotification, ClientRequest, ContentBlock, CreateElicitationResponse,
+    ElicitationAcceptAction, ElicitationAction, ElicitationContentValue as AcpContentValue,
+    PromptRequest, RequestId, ResourceLink, SessionId, SetSessionConfigOptionRequest,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use macro_uuid::Uuid;
@@ -27,11 +27,12 @@ pub const MODEL_CONFIG_ID: &str = "model";
 /// frame, and read back off that frame as `request_id` on the folded message
 /// it derives.
 ///
-/// Minted only by the server at accept time, as a v7 uuid so ids sort by mint
-/// time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
-/// request id is the whole ownership test: the server is the only writer of
-/// runtime-bound frames. The machine's own handshake request ids
-/// (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+/// A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+/// or by a client that speculated the action and named it in the control
+/// request - either way the server is the only writer of runtime-bound
+/// frames, so a uuid-shaped request id remains the whole ownership test. The
+/// machine's own handshake request ids (`agent_session:{session}:{n}`) are
+/// not uuids and stay `None`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -92,6 +93,81 @@ pub enum ActionError {
     Acp(String),
 }
 
+/// A file the prompt refers to, by where the agent can fetch it.
+///
+/// Mirrors ACP's `resource_link` content block, which every agent must
+/// accept: bytes never ride the prompt, only a URI (a static file service URL
+/// in practice) with enough metadata for a client to render a chip and for
+/// the agent to decide whether to fetch it. Keeping the wire shape ACP-native
+/// means the harness translates without resolving anything, and the fold
+/// reads the same fields back off the logged frame.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
+#[serde(rename_all = "camelCase")]
+pub struct PromptAttachment {
+    /// Where the agent can fetch the file.
+    pub uri: String,
+    /// Display name, typically the original file name.
+    pub name: String,
+    /// The file's media type, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mime_type: Option<String>,
+    /// Size in bytes, when known.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub size: Option<i64>,
+}
+
+impl PromptAttachment {
+    /// An attachment at `uri` shown as `name`.
+    pub fn new(uri: impl Into<String>, name: impl Into<String>) -> Self {
+        Self {
+            uri: uri.into(),
+            name: name.into(),
+            mime_type: None,
+            size: None,
+        }
+    }
+
+    /// Record the file's media type.
+    #[must_use]
+    pub fn mime_type(mut self, mime_type: impl Into<String>) -> Self {
+        self.mime_type = Some(mime_type.into());
+        self
+    }
+
+    /// Record the file's size in bytes.
+    #[must_use]
+    pub fn size(mut self, size: i64) -> Self {
+        self.size = Some(size);
+        self
+    }
+
+    /// The ACP content block this attachment travels as.
+    #[must_use]
+    pub fn to_content_block(&self) -> ContentBlock {
+        ContentBlock::ResourceLink(
+            ResourceLink::new(self.name.clone(), self.uri.clone())
+                .mime_type(self.mime_type.clone())
+                .size(self.size),
+        )
+    }
+
+    /// Read an attachment back off a prompt's content block. `None` for the
+    /// text and any block this side never sends.
+    #[must_use]
+    pub fn from_content_block(block: &ContentBlock) -> Option<Self> {
+        let ContentBlock::ResourceLink(link) = block else {
+            return None;
+        };
+        Some(Self {
+            uri: link.uri.clone(),
+            name: link.name.clone(),
+            mime_type: link.mime_type.clone(),
+            size: link.size,
+        })
+    }
+}
+
 /// Ask the agent to work on something.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
@@ -99,6 +175,10 @@ pub enum ActionError {
 pub struct AgentPromptAction {
     /// What to tell the agent.
     pub prompt: String,
+    /// Files the prompt refers to, in the order the user attached them.
+    /// Delivered after the text as one `resource_link` block each.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub attachments: Vec<PromptAttachment>,
     /// Raw user text used for a visible session name when `prompt` is enriched.
     #[serde(skip)]
     name_source: Option<String>,
@@ -289,8 +369,17 @@ pub enum AgentAction {
 impl AgentAction {
     /// Ask the agent to work on a text prompt.
     pub fn prompt(prompt: impl Into<String>) -> Self {
+        Self::prompt_with_attachments(prompt, Vec::new())
+    }
+
+    /// Ask the agent to work on a text prompt that refers to `attachments`.
+    pub fn prompt_with_attachments(
+        prompt: impl Into<String>,
+        attachments: Vec<PromptAttachment>,
+    ) -> Self {
         Self::Prompt(AgentPromptAction {
             prompt: prompt.into(),
+            attachments,
             name_source: None,
         })
     }
@@ -329,17 +418,14 @@ impl AgentAction {
             {
                 let params = request.params.clone()?.into_value();
                 let request: PromptRequest = serde_json::from_value(params).ok()?;
-                let text = request
-                    .prompt
-                    .into_iter()
-                    .filter_map(|content| match content {
-                        agent_client_protocol::schema::v1::ContentBlock::Text(text) => {
-                            Some(text.text)
-                        }
-                        _ => None,
-                    })
-                    .collect::<String>();
-                (text.trim() == COMPACT_COMMAND).then_some(Self::Compact)
+                // The compaction control travels as text and nothing else.
+                // A prompt that also carries a resource link is a real prompt
+                // with a file attached, and reading it as the control would
+                // drop that file on the way to the agent.
+                let [ContentBlock::Text(text)] = request.prompt.as_slice() else {
+                    return None;
+                };
+                (text.text.trim() == COMPACT_COMMAND).then_some(Self::Compact)
             }
             RawJsonRpcMessage::Notification(notification)
                 if CancelNotification::matches_method(&notification.method) =>
@@ -373,8 +459,24 @@ impl AgentAction {
     ) -> Result<ToRuntimeMessage, ActionError> {
         match self {
             Self::Prompt(action) => {
-                let payload =
-                    PromptRequest::new(session_id.clone(), vec![action.prompt.clone().into()]);
+                // Text first, then one link per attachment: agents read the
+                // prompt in order, and the text is what the links are about.
+                // A file-only send carries no text block at all: an empty one
+                // reads as an empty prompt to some runtimes, and the fold
+                // drops it, so sending one would make the wire and the
+                // transcript disagree.
+                let text =
+                    (!action.prompt.is_empty()).then(|| ContentBlock::from(action.prompt.clone()));
+                let blocks = text
+                    .into_iter()
+                    .chain(
+                        action
+                            .attachments
+                            .iter()
+                            .map(PromptAttachment::to_content_block),
+                    )
+                    .collect();
+                let payload = PromptRequest::new(session_id.clone(), blocks);
                 let params = serde_json::to_value(&payload)
                     .map_err(|error| ActionError::Acp(error.to_string()))?;
                 let frame =

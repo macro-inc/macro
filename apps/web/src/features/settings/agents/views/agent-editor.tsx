@@ -59,15 +59,14 @@ export function AgentEditorView(props: {
     return apps.scope === 'selected' ? apps.servers : [];
   });
   const selectedChannelIds = createMemo(() => editor.draft().channelIds);
+  const runtimeOptions = createMemo(() => props.source.runtimes());
   const runtimes = () =>
-    props.source
-      .runtimes()
-      .filter(
-        (runtime) =>
-          runtime.id !== 'claude-cloud' ||
-          props.source.catalog(runtime.id).state === 'available' ||
-          runtime.id === props.initial.runtimeId
-      );
+    runtimeOptions().filter(
+      (runtime) =>
+        runtime.id !== 'claude-cloud' ||
+        props.source.catalog(runtime.id).state === 'available' ||
+        runtime.id === editor.draft().runtimeId
+    );
   const uploadAvatar = (file: File | undefined) => {
     if (!file) return;
     if (!file.type.startsWith('image/')) return;

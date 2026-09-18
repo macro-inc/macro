@@ -1,5 +1,5 @@
 //! The daemon's one input: a TOML file describing the Macro deployment it
-//! streams from and the harness it runs per session. See
+//! streams from and the harness it runs. See
 //! `config.example.toml` at the crate root.
 //!
 //! Pairing (press `p` in the control panel) adds the harness credential to
@@ -30,7 +30,7 @@ pub struct Config {
     #[serde(default)]
     #[expect(dead_code, reason = "accepted only so existing configs still parse")]
     server: Option<LegacyServer>,
-    /// The harness process spawned per session.
+    /// The harness process shared by every session.
     pub harness: Harness,
     /// The workspace every session runs against.
     pub workspace: Workspace,
@@ -87,7 +87,7 @@ pub struct MacroApi {
 }
 
 impl MacroApi {
-    /// The dial-in URL for a session on this deployment's runtime gateway:
+    /// The dial-in URL for this deployment's runtime gateway:
     /// the API base with a websocket scheme.
     pub fn gateway_url(&self) -> String {
         let base = self.api_url.trim_end_matches('/');
@@ -145,7 +145,7 @@ struct LegacyServer {
     signing_secret: Option<String>,
 }
 
-/// The harness process spawned per session. Generic on purpose: any binary
+/// The harness process shared by every session. Generic on purpose: any binary
 /// speaking ACP over stdio fits here - opencode, claude, hermes - so a new
 /// harness is a config change, not code.
 #[derive(Debug, Clone, Deserialize)]

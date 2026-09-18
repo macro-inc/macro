@@ -26,9 +26,12 @@ const NOT_CONNECTED: CursorApiKeyStatus = {
  * enough to render "connected" or "not connected" — which is all the settings
  * surface needs.
  */
-export function useCursorApiKeyStatusQuery() {
+export function useCursorApiKeyStatusQuery(
+  enabled: () => boolean = () => true
+) {
   return useQuery(() => ({
     queryKey: authKeys.cursorApiKeyStatus.queryKey,
+    enabled: enabled(),
     queryFn: async () =>
       throwOnErr(async () => await authServiceClient.getCursorApiKeyStatus()),
     placeholderData: NOT_CONNECTED,

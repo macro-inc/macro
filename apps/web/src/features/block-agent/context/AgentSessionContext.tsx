@@ -1,22 +1,29 @@
 import { isCodexBotId } from '@core/constant/codexAgent';
+
 /**
  * Block-level state for the agent block, following the chat block's
  * `ChatInputProvider`/`useChatInputContext` convention: the provider owns the
- * session data and controllers, composer/container components consume them
+ * session and its controllers, composer/container components consume them
  * from context, and the `ui/` leaves stay dumb — they only ever receive
  * derived props.
  *
- * The value is assembled from `create*` factories (CHANNEL_BLOCK_NOTES.md §3)
- * so each stateful concern stays a composable unit as wiring grows.
+ * The session itself is `createAgentSession`, the Solid face of the shared
+ * `AgentSession` class: one machine per session, speculation inside it, so
+ * everything about "what is the agent doing" is read off the fold's
+ * `metadata.turn` and the messages' `pending` marks rather than kept here.
  */
 
+import type { IssueResult } from '@core/agent-session/AgentSession';
 import { isCursorBotId } from '@core/constant/cursorAgent';
+import { useUserId } from '@core/context/user';
 import { useAgentSessionExternalUrlQuery } from '@queries/agent-session/session';
 import type {
   FoldedMessage,
   SessionMetadata,
+  TurnState,
 } from '@service-agent-fold/generated/types';
 import type {
+  AgentAction,
   AgentSessionResponse,
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
@@ -28,13 +35,8 @@ import {
   Suspense,
   useContext,
 } from 'solid-js';
-import { controlOutcome } from '../state/control-message';
 import type { QuoteInsert } from '../ui';
-import { createAgentSessionFeed } from './create-agent-session-feed';
-import {
-  type ComposerController,
-  createComposerController,
-} from './create-composer-controller';
+import { createAgentSession } from './create-agent-session';
 import {
   createElicitationController,
   type ElicitationController,
@@ -43,11 +45,6 @@ import {
   createQueueController,
   type QueueController,
 } from './create-queue-controller';
-import {
-  createSessionStatusController,
-  isDisconnected,
-  type SessionStatus,
-} from './create-session-status-controller';
 import { resolveSessionId } from './resolve-session-id';
 
 export type AgentSessionState = {
@@ -64,7 +61,7 @@ export type AgentSessionState = {
   session: Accessor<AgentSessionResponse | undefined>;
   /** The bot the session runs as, absent until the fold is acquired. */
   bot: Accessor<SessionBot | undefined>;
-  /** The fold's session metadata (title, model, …), followed live. */
+  /** The fold's session metadata (title, model, turn, …), followed live. */
   metadata: Accessor<SessionMetadata | undefined>;
   /** The folded transcript, ordered by turn, live-following the session. */
   messages: Accessor<FoldedMessage[]>;
@@ -77,33 +74,27 @@ export type AgentSessionState = {
   /** Re-runs a failed load. */
   retryLoad: () => void;
   /**
-   * The block's one answer to "is the agent working": the fold's
-   * turn-in-flight signal, cut off when the runtime is known to be gone.
-   * Every consumer — composer, shimmer, header — reads this, never
-   * `feed.working` or `status` directly, so the block cannot disagree with
-   * itself about whether a turn is running.
+   * Where the newest turn stands, as the fold reports it: the block's one
+   * answer to "what is the agent doing". Every consumer — composer, working
+   * line, chrome — reads this discriminant, never the transcript's tail or
+   * its own record of what it posted, so the block cannot disagree with
+   * itself. `idle` until the fold has loaded.
    */
-  working: Accessor<boolean>;
-  /** The runtime's status: the GET snapshot, followed live over the log. */
-  status: Accessor<SessionStatus>;
+  turn: Accessor<TurnState>;
   /**
-   * The runtime is gone and the user has asked it for something anyway, so
-   * the service is bringing its sandbox back before it can deliver.
-   *
-   * There is no signal for this on the wire: the resume happens inside the
-   * service, and the session log stays silent until the container answers.
-   * It is inferred instead, from the one thing the block does know — the
-   * runtime was disconnected, and a request it must wait on is outstanding.
+   * Do something to the agent: prompt, stop, change model. The fold shows
+   * the action at once and the log settles it. `undefined` while the block
+   * has no session to act on.
    */
-  resuming: Accessor<boolean>;
+  issue: (action: AgentAction) => Promise<IssueResult> | undefined;
   /**
-   * The agent is mid-turn but waiting on the user, not generating: the
-   * fold's metadata names a question to answer. Presentational only -
-   * `working` stays true so queued prompts keep waiting behind the question.
+   * Send the next queued message now: stop the running turn, and show the
+   * queue head as sent under the id the server already holds it by. The
+   * server dispatches it when the turn actually ends, and that row promotes
+   * the speculation in place. No-op with nothing queued.
    */
-  blockedOnUser: Accessor<boolean>;
-  composer: ComposerController;
-  /** The live question, and the one POST that answers it. */
+  sendNext: () => void;
+  /** The live question, and the action that answers it. */
   elicitation: ElicitationController;
   /**
    * The session's server-side action queue: prompts sent mid-turn wait
@@ -139,35 +130,47 @@ export function AgentSessionProvider(
     if (id && id !== props.blockId) props.onSessionId?.(id);
   });
 
-  const feed = createAgentSessionFeed(sessionId);
-  const status = createSessionStatusController({
+  const userId = useUserId();
+  const live = createAgentSession(sessionId, { userId });
+  const turn = () => live.metadata()?.turn ?? 'idle';
+  const served = createQueueController({
     sessionId,
-    seed: () => feed.session()?.status,
+    messages: live.messages,
   });
-  // A last message with no stop reason reads as an open turn forever; the
-  // status stream knows when the runtime disconnected without closing it.
-  // Combining them here is what keeps "working" a single truth.
-  const working = () => feed.working() && !isDisconnected(status.status());
-  const queue = createQueueController({
-    sessionId,
-    messages: feed.messages,
-  });
-  const composer = createComposerController({
-    sessionId,
-    working,
-    model: () => feed.metadata()?.model,
-    controlOutcome: (requestId) => controlOutcome(feed.messages(), requestId),
-  });
+  // A row the user removes may be one `sendNext` already showed as sent;
+  // the fold has to forget it too, or it stays a bubble the log never fills.
+  const queue: QueueController = {
+    ...served,
+    remove: (actionId) => {
+      live.retract(actionId);
+      return served.remove(actionId);
+    },
+  };
+  const sendNext = () => {
+    const head = queue.entries()[0];
+    if (!head) return;
+    const action: AgentAction | undefined =
+      head.kind === 'prompt' && head.prompt != null
+        ? { type: 'prompt', prompt: head.prompt }
+        : head.kind === 'compact'
+          ? { type: 'compact' }
+          : undefined;
+    void live.issue({ type: 'stop' })?.then((result) => {
+      if (result.isErr()) live.retract(head.actionId);
+    });
+    if (action) live.expect(head.actionId, action);
+  };
+  // A question the connection that asked is gone cannot be answered; the
+  // fold keeps the part but the slot is dead.
   const pendingElicitation = () =>
-    isDisconnected(status.status())
+    turn() === 'disconnected'
       ? undefined
-      : (feed.metadata()?.pendingElicitation ?? undefined);
+      : (live.metadata()?.pendingElicitation ?? undefined);
   const elicitation = createElicitationController({
-    sessionId,
     pending: pendingElicitation,
-    canEdit: () => feed.session()?.canEdit,
+    canEdit: () => live.session()?.canEdit,
+    issue: live.issue,
   });
-  const blockedOnUser = () => working() && pendingElicitation() !== undefined;
 
   // The transcript's "Reply to this" chip hands selected text to the
   // composer through here. A plain variable, not a signal: it is only read
@@ -178,12 +181,6 @@ export function AgentSessionProvider(
   };
   const quoteSelection: QuoteInsert = (text) => quoteInsert?.(text);
 
-  // Anything the service can only deliver over a live transport: a prompt on
-  // the wire, or a model change waiting to be seen in the fold.
-  const awaitingRuntime = () =>
-    composer.sending() || composer.changingModel() !== undefined;
-  const resuming = () => isDisconnected(status.status()) && awaitingRuntime();
-
   return (
     <>
       {/* Nested so a pending poll cannot take the block orchestrator's
@@ -193,8 +190,8 @@ export function AgentSessionProvider(
       <Suspense fallback={null}>
         <CloudExternalUrlPoll
           sessionId={sessionId}
-          session={feed.session}
-          applySnapshot={feed.applySnapshot}
+          session={live.session}
+          applySnapshot={live.applySnapshot}
         />
       </Suspense>
       <AgentSessionCtx.Provider
@@ -202,20 +199,18 @@ export function AgentSessionProvider(
           sessionId,
           pending,
           startupError: error,
-          session: feed.session,
-          bot: feed.bot,
-          metadata: feed.metadata,
-          messages: feed.messages,
+          session: live.session,
+          bot: live.bot,
+          metadata: live.metadata,
+          messages: live.messages,
           // A create that failed leaves the block with nothing to load, which
           // is the same dead end for the reader as a load that failed.
-          loadFailed: () => feed.loadFailed() || failed(),
-          loadRetryable: feed.loadFailed,
-          retryLoad: feed.retry,
-          working,
-          status: status.status,
-          resuming,
-          blockedOnUser,
-          composer,
+          loadFailed: () => live.loadFailed() || failed(),
+          loadRetryable: live.loadFailed,
+          retryLoad: live.retry,
+          turn,
+          issue: live.issue,
+          sendNext,
           elicitation,
           queue,
           quoteSelection,

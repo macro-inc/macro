@@ -40,6 +40,11 @@ vi.mock('./parts/PermissionPart', () => ({
   PermissionPart: () => <div data-testid="permission" />,
 }));
 vi.mock('./parts/PlanPart', () => ({ PlanPart: () => null }));
+vi.mock('./parts/AttachmentPart', () => ({
+  AttachmentPart: (props: { part: { name: string } }) => (
+    <div data-testid="attachment">{props.part.name}</div>
+  ),
+}));
 vi.mock('./parts/ControlPart', () => ({ ControlPart: () => null }));
 vi.mock('./parts/ElicitationPart', () => ({ ElicitationPart: () => null }));
 vi.mock('../ui', () => ({
@@ -50,7 +55,9 @@ vi.mock('../ui', () => ({
       {props.text}
     </div>
   ),
-  WorkingLine: () => <div data-testid="working" />,
+  WorkingLine: (props: { label?: string }) => (
+    <div data-testid="working">{props.label}</div>
+  ),
   ActionLine: (props: { label: string }) => <div>{props.label}</div>,
   ToolGroup: (props: {
     count: number;
@@ -95,6 +102,7 @@ const message = (
 ): FoldedMessage => ({
   agentSessionId: 'session',
   requestId: null,
+  pending: false,
   turn: 0,
   author: { kind: 'agent' },
   parts,
@@ -230,6 +238,18 @@ describe('Message tool grouping', () => {
     );
     expect(view.getByTestId('group').dataset.count).toBe('2');
     expect(view.getByTestId('text')).toBe(prose);
+  });
+});
+
+describe('Message working tail', () => {
+  it('names the work after the last part of an open turn', () => {
+    const view = render(() => (
+      <Message
+        message={message([text('Looking.'), tool('a')], null)}
+        inFlight
+      />
+    ));
+    expect(view.getByTestId('working').textContent).toBe('Running tools');
   });
 });
 

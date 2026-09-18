@@ -4,7 +4,8 @@ use agent_harness::inbound::model_load::{
     self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
     ModelHarnessDto,
 };
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_harness::inbound::repositories::{self, AgentRepositoriesResponse, AgentRepositoryDto};
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_session::domain::model::{SandboxSize, SessionBot};
 use agent_session::inbound::axum_router::{
     self, AgentSessionLogEntryDto, AgentSessionLogResponse, AgentSessionPreviewData,
@@ -56,6 +57,7 @@ impl Modify for SecurityAddon {
         axum_router::get_agent_sandbox_size_handler,
         axum_router::put_agent_sandbox_size_handler,
         model_load::load_agent_models_handler,
+        repositories::list_agent_repositories_handler,
     ),
     components(schemas(
         claude_auth::StatusResponse,
@@ -73,6 +75,7 @@ impl Modify for SecurityAddon {
         EditQueuedActionRequest,
         AgentAction,
         AgentActionId,
+        PromptAttachment,
         AgentSessionResponse,
         PreviewAgentSessionsRequest,
         PreviewAgentSessionsResponse,
@@ -93,10 +96,13 @@ impl Modify for SecurityAddon {
         AgentModelDto,
         AgentModelsStatusDto,
         ModelHarnessDto,
+        AgentRepositoriesResponse,
+        AgentRepositoryDto,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),
-        (name = "agent-models", description = "Fresh provider model discovery")
+        (name = "agent-models", description = "Fresh provider model discovery"),
+        (name = "agent-repositories", description = "Repositories a coding session can work on")
     )
 )]
 pub struct ApiDoc;

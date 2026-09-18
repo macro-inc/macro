@@ -1,25 +1,37 @@
 import { Dialog } from '@kobalte/core/dialog';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
+import { For, type JSX, type ParentProps } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BulkDeleteFailure } from '../queries/bulk-delete-result';
 import type { EntityData } from '../types/entity';
 import { BulkDeleteView } from './BulkDeleteView';
 
 const mutateAsync = vi.hoisted(() => vi.fn());
-vi.mock('@entity', () => ({
+vi.mock('../queries/dss', () => ({
   createBulkDeleteDssItemsMutation: () => ({ mutateAsync }),
-  InlineEntity: (props: { entity: EntityData }) => (
-    <span data-testid={props.entity.id}>{props.entity.name}</span>
+}));
+vi.mock('./components/EntityActionSelection', () => ({
+  EntityActionSelection: (props: { entities: EntityData[] }) => (
+    <For each={props.entities}>
+      {(entity) => <span data-testid={entity.id}>{entity.name}</span>}
+    </For>
   ),
 }));
-vi.mock('@ui', () => ({
-  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
-    <button {...props} />
-  ),
-  cn: (...values: unknown[]) =>
-    values.filter((value) => typeof value === 'string').join(' '),
-}));
+vi.mock('@ui', () => {
+  const Slot = (props: ParentProps) => <div>{props.children}</div>;
+  return {
+    Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
+      <button {...props} />
+    ),
+    ActionDialogShell: Object.assign(Slot, {
+      Body: Slot,
+      Header: Slot,
+      Title: Slot,
+      Description: Slot,
+      Footer: Slot,
+    }),
+  };
+});
 
 const failed = {
   id: 'failed',
@@ -78,7 +90,9 @@ describe('BulkDeleteView partial failure', () => {
       )
       .mockResolvedValueOnce([true]);
     const { onFinish, onError, onPartialDelete } = mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Delete (item|\d+ items)$/ })
+    );
     await vi.waitFor(() =>
       expect(screen.getByRole('status').textContent).toContain(
         'Deleted 1 of 2 items; 1 failed'
@@ -88,7 +102,9 @@ describe('BulkDeleteView partial failure', () => {
     expect(screen.queryByTestId('deleted')).toBeNull();
     expect(onFinish).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled(); // no second, misleading full-failure callback
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Delete (item|\d+ items)$/ })
+    );
     await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
     expect(mutateAsync).toHaveBeenNthCalledWith(1, [failed, deleted]);
     expect(mutateAsync).toHaveBeenNthCalledWith(2, [failed]);
@@ -103,7 +119,9 @@ describe('BulkDeleteView partial failure', () => {
       new BulkDeleteFailure([failed, deleted], [false, true])
     );
     const { onFinish, onError, onCancel, onPartialDelete } = mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Delete (item|\d+ items)$/ })
+    );
     await vi.waitFor(() =>
       expect(onPartialDelete).toHaveBeenCalledExactlyOnceWith(
         [deleted],
@@ -129,10 +147,14 @@ describe('BulkDeleteView partial failure', () => {
     onPartialDelete.mockImplementation(() => {
       throw new Error('cleanup failed');
     });
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Delete (item|\d+ items)$/ })
+    );
     await vi.waitFor(() => expect(onPartialDelete).toHaveBeenCalledOnce());
     expect(screen.queryByTestId('deleted')).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Delete (item|\d+ items)$/ })
+    );
     await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
     expect(mutateAsync).toHaveBeenNthCalledWith(2, [failed]);
     expect(onError).not.toHaveBeenCalled();
@@ -143,7 +165,9 @@ describe('BulkDeleteView partial failure', () => {
     const error = new Error('all failed');
     mutateAsync.mockRejectedValueOnce(error);
     const { onFinish, onError } = mount();
-    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: /^Delete (item|\d+ items)$/ })
+    );
     await vi.waitFor(() => expect(onError).toHaveBeenCalledWith(error));
     expect(onFinish).not.toHaveBeenCalled();
     expect(screen.getByTestId('failed')).toBeTruthy();

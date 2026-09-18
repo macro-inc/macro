@@ -1,8 +1,8 @@
-import {
-  type ChannelMessagesData,
-  getChannelMessagesQueryKey,
-} from '@queries/channel/channel-messages';
 import { queryClient } from '@queries/client';
+import {
+  getMessageTimelineQueryKey,
+  type MessageTimelineData,
+} from '@queries/messages/timeline';
 import { type Accessor, createEffect, on, onCleanup } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
@@ -207,9 +207,15 @@ export function restoreDefaultChannelPaginationAfterTargetLoad(
 ) {
   if (!loadAroundMessageId) return false;
 
-  const aroundKey = getChannelMessagesQueryKey(channelId, loadAroundMessageId);
-  const defaultKey = getChannelMessagesQueryKey(channelId, null);
-  const aroundData = queryClient.getQueryData<ChannelMessagesData>(aroundKey);
+  const aroundKey = getMessageTimelineQueryKey(
+    { type: 'channel', id: channelId },
+    loadAroundMessageId
+  );
+  const defaultKey = getMessageTimelineQueryKey(
+    { type: 'channel', id: channelId },
+    null
+  );
+  const aroundData = queryClient.getQueryData<MessageTimelineData>(aroundKey);
   if (!aroundData) return false;
 
   queryClient.setQueryData(defaultKey, aroundData);
@@ -227,8 +233,11 @@ export function restoreDefaultChannelPaginationAfterTargetLoad(
  * centered on an old target — remove it so the query fetches from the bottom.
  */
 export function clearStaleRestoredChannelData(channelId: string) {
-  const defaultKey = getChannelMessagesQueryKey(channelId, null);
-  const cached = queryClient.getQueryData<ChannelMessagesData>(defaultKey);
+  const defaultKey = getMessageTimelineQueryKey(
+    { type: 'channel', id: channelId },
+    null
+  );
+  const cached = queryClient.getQueryData<MessageTimelineData>(defaultKey);
   if (!cached?.pages.length) return;
 
   // Check both the page cursor AND pageParams[0]. After fetchPreviousPage,

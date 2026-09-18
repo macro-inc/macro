@@ -64,6 +64,20 @@ fn rejects_non_bot_storage_string() {
 }
 
 #[test]
+fn claude_is_a_global_system_agent_with_a_distinct_identity() {
+    let claude = system_bot(CLAUDE_BOT_ID).unwrap();
+    assert_eq!(claude.handle, "claude");
+    assert_eq!(claude.name, "Claude");
+    assert!(claude.has_agent);
+    assert_eq!(
+        CLAUDE_BOT_ID.to_string(),
+        "00000000-0000-0000-0000-00000000c1a0"
+    );
+    let ids: std::collections::HashSet<_> = SYSTEM_BOTS.iter().map(|bot| bot.id).collect();
+    assert_eq!(ids.len(), SYSTEM_BOTS.len());
+}
+
+#[test]
 fn rejects_trailing_storage_content() {
     let uuid = Uuid::new_v4();
 

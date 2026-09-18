@@ -37,6 +37,31 @@ fn chip_carries_the_announcement_identity() {
 }
 
 #[test]
+fn declined_mentions_target_their_harness_settings() {
+    for (blocker, slug, name) in [
+        (SessionBlocker::CursorNotConnected, "cursor", "Cursor"),
+        (SessionBlocker::CodexNotConnected, "codex-cloud", "Codex"),
+        (
+            SessionBlocker::CodexEnvironmentNotConfigured,
+            "codex-cloud",
+            "Codex",
+        ),
+        (SessionBlocker::ClaudeNotConnected, "claude-cloud", "Claude"),
+    ] {
+        let prompt = connection_prompt(blocker);
+        assert_eq!(
+            prompt.chip,
+            AgentConnectionChip {
+                app_slug: slug.to_owned(),
+                name: name.to_owned(),
+                target: "harness".to_owned(),
+            }
+        );
+        assert!(prompt.message.contains("mention me again"));
+    }
+}
+
+#[test]
 fn reply_target_carries_the_originating_channel_message() {
     assert_eq!(
         announcement_reply_target(&announcement()),

@@ -3,6 +3,7 @@
 //! where there is a sandbox to give it to, and attaches the runtime.
 
 use agent_session::domain::ports::SelectedManagedPersona;
+use agent_session::domain::repository_branch::RepositoryBranch;
 
 use super::*;
 use crate::domain::model::SessionRepository;
@@ -203,13 +204,16 @@ where
                 .for_user(&request.owner)
                 .await
                 .map_err(into_session_error)?;
-            if !reachable
+            let listed = reachable
                 .iter()
-                .any(|allowed| allowed.eq_ignore_ascii_case(repo.as_str()))
-            {
-                return Err(agent_session::domain::error::AgentSessionError::Forbidden);
-            }
-            Some(repo)
+                .find(|allowed| allowed.url.eq_ignore_ascii_case(repo.as_str()))
+                .ok_or(agent_session::domain::error::AgentSessionError::Forbidden)?;
+            // The caller's branch, or the one the repository's own clones start on.
+            let branch = request
+                .repo_branch
+                .clone()
+                .unwrap_or_else(|| starting_branch(listed.default_branch.as_deref()));
+            Some((repo, branch))
         } else {
             if request.repo_branch.is_some() {
                 return Err(
@@ -240,14 +244,7 @@ where
             .inner
             .sessions
             .create_session(CreateAgentSessionParams {
-                repo_branch: selected_repo.as_ref().map(|_| {
-                    request.repo_branch.unwrap_or_else(|| {
-                        agent_session::domain::repository_branch::RepositoryBranch::parse(
-                            "main".to_owned(),
-                        )
-                        .expect("main is a valid branch")
-                    })
-                }),
+                repo_branch: selected_repo.as_ref().map(|(_, branch)| branch.clone()),
                 id: session_id,
                 owner_id: request.owner.clone(),
                 bot_id,
@@ -260,6 +257,7 @@ where
                 // somewhere this deployment does not name.
                 repo_url: selected_repo
                     .as_ref()
+                    .map(|(repo, _)| repo)
                     .or(defaults.repo_url.as_ref())
                     .map(|repo| repo.as_str().to_owned()),
                 // Managed sandboxes run in the path baked into their image.
@@ -420,6 +418,37 @@ where
                 },
             )
             .await?;
+
+        // Asked before anything exists for the session: a row whose spawn is
+        // bound to fail would be marked disconnected and leave the thread
+        // with a chip that never answers. Declining is the bot's reply
+        // instead - what the mentioner has to connect, where to do it.
+        if let Some(blocker) = self
+            .containers
+            .preflight(runtime.kind, &origin.sender)
+            .await?
+        {
+            tracing::info!(
+                bot_id = %bot_id,
+                sender = %origin.sender,
+                ?blocker,
+                "declining a mention its sender is not set up for"
+            );
+            self.announcer
+                .decline(DeclinedMention {
+                    bot_id,
+                    origin: AnnounceOrigin {
+                        parent: origin.parent,
+                        thread_id: origin.thread_id,
+                        message_id: origin.message_id,
+                    },
+                    triggered_by: origin.sender,
+                    blocker,
+                })
+                .await?;
+            return Ok(());
+        }
+
         let defaults = self.defaults.for_bot(bot_id);
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
 
@@ -507,7 +536,7 @@ where
             session_id,
             DeliverAction {
                 id: AgentActionId::mint(),
-                action: AgentAction::prompt(origin.content),
+                action: AgentAction::prompt_with_attachments(origin.content, origin.attachments),
                 actor: Some(origin.sender),
                 announce: Some(AnnounceOrigin {
                     parent: origin.parent,
@@ -519,4 +548,17 @@ where
         .await?;
         Ok(())
     }
+}
+
+/// The branch a session starts on when its caller selected a repository but
+/// no branch: the repository's own default branch, or `main` for an empty
+/// repository. GitHub reports the default branch's name as git holds it, so
+/// one that fails to parse belongs to a repository nothing could check out
+/// anyway - `main` is as good a guess as any there.
+pub(super) fn starting_branch(default_branch: Option<&str>) -> RepositoryBranch {
+    default_branch
+        .and_then(|branch| RepositoryBranch::parse(branch.to_owned()).ok())
+        .unwrap_or_else(|| {
+            RepositoryBranch::parse("main".to_owned()).expect("main is a valid branch")
+        })
 }

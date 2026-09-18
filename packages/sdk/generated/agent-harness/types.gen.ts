@@ -25,11 +25,12 @@ export type AgentAction = (AgentPromptAction & {
  * frame, and read back off that frame as `request_id` on the folded message
  * it derives.
  *
- * Minted only by the server at accept time, as a v7 uuid so ids sort by mint
- * time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
- * request id is the whole ownership test: the server is the only writer of
- * runtime-bound frames. The machine's own handshake request ids
- * (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+ * A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+ * or by a client that speculated the action and named it in the control
+ * request - either way the server is the only writer of runtime-bound
+ * frames, so a uuid-shaped request id remains the whole ownership test. The
+ * machine's own handshake request ids (`agent_session:{session}:{n}`) are
+ * not uuids and stay `None`.
  */
 export type AgentActionId = string;
 
@@ -65,9 +66,43 @@ export type AgentModelsStatusDto = 'available' | 'unsupported';
  */
 export type AgentPromptAction = {
     /**
+     * Files the prompt refers to, in the order the user attached them.
+     * Delivered after the text as one `resource_link` block each.
+     */
+    attachments?: Array<PromptAttachment>;
+    /**
      * What to tell the agent.
      */
     prompt: string;
+};
+
+/**
+ * Response body for `GET /agent-repositories`.
+ */
+export type AgentRepositoriesResponse = {
+    /**
+     * Every repository the caller reaches through Macro's GitHub App, sorted
+     * by `owner/name`. Empty when the App is installed nowhere the caller
+     * has a claim to.
+     */
+    repositories: Array<AgentRepositoryDto>;
+};
+
+/**
+ * One repository the caller can select for a coding session.
+ */
+export type AgentRepositoryDto = {
+    /**
+     * The branch a clone checks out, and where a session starts when its
+     * request selects this repository without a `repoBranch`. Absent for a
+     * repository with no commits.
+     */
+    defaultBranch?: string | null;
+    /**
+     * The canonical `https://github.com/owner/name` url, in the form
+     * `POST /agent-sessions` accepts as `repoUrl`.
+     */
+    url: string;
 };
 
 /**
@@ -329,9 +364,18 @@ export type CompleteRequest = {
 };
 
 /**
- * The operation to perform.
+ * Request body for a control operation on a live session.
+ *
+ * A wrapper around the operation rather than the bare enum so that fields
+ * which are about the request rather than the operation have somewhere to go.
+ * The acting user is deliberately not one of them: it comes from the caller's
+ * credentials, so that a caller cannot attribute an operation to someone else.
+ *
+ * Clients serialize this, so both derives are used.
  */
-export type ControlRequest = AgentAction;
+export type ControlRequest = AgentAction & {
+    actionId?: null | AgentActionId;
+};
 
 /**
  * Response body for a control operation.
@@ -341,7 +385,8 @@ export type ControlRequest = AgentAction;
 export type ControlResponse = {
     /**
      * Matches `requestId` on the folded message this action derives once it
-     * dispatches, and names the queue entry until then.
+     * dispatches, and names the queue entry until then. The caller's own
+     * `actionId` when it supplied one; a freshly minted id otherwise.
      */
     actionId: AgentActionId;
     /**
@@ -406,12 +451,14 @@ export type CreateAgentSessionRequest = {
     prompt?: string | null;
     /**
      * Starting branch for a managed coding session's selected repository.
+     * Omitted, the session starts on the repository's default branch.
      */
     repoBranch?: string | null;
     /**
-     * Explicit GitHub repository for a managed Cursor session. Access is
-     * checked for the session owner. For external sessions this is
-     * informational: cloning it is the runtime operator's job.
+     * Explicit GitHub repository for a managed Cursor session, as one of the
+     * urls `GET /agent-repositories` lists for the caller. Access is checked
+     * for the session owner. For external sessions this is informational:
+     * cloning it is the runtime operator's job.
      */
     repoUrl?: string | null;
     thread?: null | CreateSessionThread;
@@ -654,6 +701,35 @@ export type PreviewAgentSessionsResponse = {
 };
 
 /**
+ * A file the prompt refers to, by where the agent can fetch it.
+ *
+ * Mirrors ACP's `resource_link` content block, which every agent must
+ * accept: bytes never ride the prompt, only a URI (a static file service URL
+ * in practice) with enough metadata for a client to render a chip and for
+ * the agent to decide whether to fetch it. Keeping the wire shape ACP-native
+ * means the harness translates without resolving anything, and the fold
+ * reads the same fields back off the logged frame.
+ */
+export type PromptAttachment = {
+    /**
+     * The file's media type, when known.
+     */
+    mimeType?: string | null;
+    /**
+     * Display name, typically the original file name.
+     */
+    name: string;
+    /**
+     * Size in bytes, when known.
+     */
+    size?: number | null;
+    /**
+     * Where the agent can fetch the file.
+     */
+    uri: string;
+};
+
+/**
  * One action waiting in a session's queue.
  *
  * Clients deserialize this, so both derives are used.
@@ -667,6 +743,11 @@ export type QueuedActionDto = {
      * The user who queued it, absent when a bot acted on nobody's behalf.
      */
     actorUserId?: string | null;
+    /**
+     * Files the prompt refers to, for prompts only. Kept through an edit,
+     * which replaces the text alone.
+     */
+    attachments?: Array<PromptAttachment>;
     /**
      * When it was accepted.
      */
@@ -839,6 +920,33 @@ export type LoadAgentModelsHandlerResponses = {
 };
 
 export type LoadAgentModelsHandlerResponse = LoadAgentModelsHandlerResponses[keyof LoadAgentModelsHandlerResponses];
+
+export type ListAgentRepositoriesData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/agent-repositories';
+};
+
+export type ListAgentRepositoriesErrors = {
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+    /**
+     * GitHub could not be asked which repositories the caller reaches
+     */
+    502: unknown;
+};
+
+export type ListAgentRepositoriesResponses = {
+    /**
+     * The caller's reachable repositories
+     */
+    200: AgentRepositoriesResponse;
+};
+
+export type ListAgentRepositoriesResponse = ListAgentRepositoriesResponses[keyof ListAgentRepositoriesResponses];
 
 export type GetAgentSandboxSizeData = {
     body?: never;

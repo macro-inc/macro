@@ -1,21 +1,22 @@
 /**
- * Demo for `LinkedConversation`: point it at any channel thread by entering a
- * channel id + message id (or pasting a copied message link). Mounted at
+ * Demo for `LinkedConversation`: point it at a channel or document thread by
+ * entering its parent + root message id (or pasting a channel link). Mounted at
  * `/component/linked-conversation`.
  */
 
 import { URL_PARAMS } from '@channel/Channel/link';
 import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
+import type { MessageParent } from '@service-storage/messages';
 import { createSignal, Show, Suspense } from 'solid-js';
-import { createChannelThreadSource } from '../channel-thread-source';
 import { LinkedConversation } from '../LinkedConversation';
 import { LinkedConversationDrawer } from '../LinkedConversationDrawer';
+import { createMessageThreadSource } from '../message-thread-source';
 
 const DEMO_DRAWER_ID = 'linked-conversation-demo';
 
-const STORAGE_KEY = 'linked-conversation-demo-target';
+const STORAGE_KEY = 'linked-conversation-demo-parent-target';
 
-type Target = { channelId: string; messageId: string };
+type Target = { parent: MessageParent; messageId: string };
 
 function loadSavedTarget(): Target {
   try {
@@ -24,7 +25,7 @@ function loadSavedTarget(): Target {
   } catch {
     // fall through to the empty target
   }
-  return { channelId: '', messageId: '' };
+  return { parent: { type: 'channel', id: '' }, messageId: '' };
 }
 
 /**
@@ -40,7 +41,8 @@ function parseMessageLink(link: string): Target | undefined {
     const messageId =
       url.searchParams.get(URL_PARAMS.thread) ??
       url.searchParams.get(URL_PARAMS.message);
-    if (channelId && messageId) return { channelId, messageId };
+    if (channelId && messageId)
+      return { parent: { type: 'channel', id: channelId }, messageId };
   } catch {
     // not a URL
   }
@@ -49,17 +51,19 @@ function parseMessageLink(link: string): Target | undefined {
 
 export default function LinkedConversationDemo() {
   const saved = loadSavedTarget();
-  const [channelIdInput, setChannelIdInput] = createSignal(saved.channelId);
+  const [parentType, setParentType] = createSignal(saved.parent.type);
+  const [parentIdInput, setParentIdInput] = createSignal(saved.parent.id);
   const [messageIdInput, setMessageIdInput] = createSignal(saved.messageId);
   const [target, setTarget] = createSignal<Target>();
+  const [showPreview, setShowPreview] = createSignal(false);
 
   const load = (event: Event) => {
     event.preventDefault();
     const next = {
-      channelId: channelIdInput().trim(),
+      parent: { type: parentType(), id: parentIdInput().trim() },
       messageId: messageIdInput().trim(),
     };
-    if (!next.channelId || !next.messageId) return;
+    if (!next.parent.id || !next.messageId) return;
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
     setTarget(next);
   };
@@ -67,7 +71,8 @@ export default function LinkedConversationDemo() {
   const handleLinkPaste = (value: string) => {
     const parsed = parseMessageLink(value);
     if (!parsed) return;
-    setChannelIdInput(parsed.channelId);
+    setParentType(parsed.parent.type);
+    setParentIdInput(parsed.parent.id);
     setMessageIdInput(parsed.messageId);
   };
 
@@ -80,8 +85,8 @@ export default function LinkedConversationDemo() {
         <h1 class="text-xl font-bold text-ink mb-2">LinkedConversation</h1>
         <p class="text-sm text-ink-muted">
           Read-only rendering of a conversation (root message + reply chain)
-          from a <code>LinkedConversationSource</code>, here backed by a channel
-          thread via <code>createChannelThreadSource</code>.
+          from a channel or document using{' '}
+          <code>createMessageThreadSource</code>.
         </p>
       </div>
 
@@ -95,11 +100,24 @@ export default function LinkedConversationDemo() {
           />
         </label>
         <label class="flex flex-col gap-1 text-xs text-ink-muted">
-          Channel id
+          Parent type
+          <select
+            class={inputClass}
+            value={parentType()}
+            onChange={(e) =>
+              setParentType(e.currentTarget.value as MessageParent['type'])
+            }
+          >
+            <option value="channel">Channel</option>
+            <option value="document">Document</option>
+          </select>
+        </label>
+        <label class="flex flex-col gap-1 text-xs text-ink-muted">
+          Parent id
           <input
             class={inputClass}
-            value={channelIdInput()}
-            onInput={(e) => setChannelIdInput(e.currentTarget.value)}
+            value={parentIdInput()}
+            onInput={(e) => setParentIdInput(e.currentTarget.value)}
           />
         </label>
         <label class="flex flex-col gap-1 text-xs text-ink-muted">
@@ -113,7 +131,7 @@ export default function LinkedConversationDemo() {
         <button
           type="submit"
           class="w-fit rounded border border-edge-muted bg-surface px-3 py-1 text-sm text-ink hover:bg-hover"
-          disabled={!channelIdInput().trim() || !messageIdInput().trim()}
+          disabled={!parentIdInput().trim() || !messageIdInput().trim()}
         >
           Load conversation
         </button>
@@ -123,16 +141,26 @@ export default function LinkedConversationDemo() {
         {(t) => (
           <>
             <DrawerToggle />
-            <div class="max-w-2xl rounded-md border border-edge-muted p-3">
-              <Suspense
-                fallback={<p class="text-sm text-ink-muted">Loading…</p>}
-              >
-                <ConversationViewer target={t} />
-              </Suspense>
-            </div>
+            <label class="flex items-center gap-2 text-sm text-ink-muted">
+              <input
+                type="checkbox"
+                checked={showPreview()}
+                onChange={(e) => setShowPreview(e.currentTarget.checked)}
+              />
+              Show inline preview
+            </label>
+            <Show when={showPreview()}>
+              <div class="max-w-2xl rounded-md border border-edge-muted p-3">
+                <Suspense
+                  fallback={<p class="text-sm text-ink-muted">Loading…</p>}
+                >
+                  <ConversationViewer target={t} />
+                </Suspense>
+              </div>
+            </Show>
             <LinkedConversationDrawer
               id={DEMO_DRAWER_ID}
-              channelId={t.channelId}
+              parent={t.parent}
               messageId={t.messageId}
             />
           </>
@@ -156,17 +184,17 @@ function DrawerToggle() {
 }
 
 function ConversationViewer(props: { target: Target }) {
-  const source = createChannelThreadSource({
-    channelId: () => props.target.channelId,
-    messageId: () => props.target.messageId,
-  });
+  const source = createMessageThreadSource(
+    () => props.target.parent,
+    () => props.target.messageId
+  );
 
   return (
     <Show
       when={source.root()}
       fallback={
         <p class="text-sm text-ink-muted">
-          No message found — check the channel id and message id.
+          No message found — check the parent and message ids.
         </p>
       }
     >

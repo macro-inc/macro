@@ -27,6 +27,7 @@ input_file: crates/agent_fold/fixtures/real/subagent_claude_code.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -50,6 +51,7 @@ input_file: crates/agent_fold/fixtures/real/subagent_claude_code.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -147,5 +149,6 @@ input_file: crates/agent_fold/fixtures/real/subagent_claude_code.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
 ]

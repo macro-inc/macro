@@ -45,9 +45,9 @@ const failedOf = (part: Control) => {
 };
 
 describe('a model change', () => {
-  it('reads as done only once it is accepted', () => {
-    expect(lineOf(setModel({ kind: 'pending' }))).toContain(
-      'Setting model to openai/gpt-5'
+  it('reads as done the moment it is issued', () => {
+    expect(lineOf(setModel({ kind: 'pending' }))).toBe(
+      'Model set to openai/gpt-5'
     );
     expect(lineOf(setModel({ kind: 'accepted' }))).toBe(
       'Model set to openai/gpt-5'

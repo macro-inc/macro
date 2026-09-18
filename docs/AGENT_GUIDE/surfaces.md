@@ -1,5 +1,13 @@
 # Other Surfaces
 
+## Canvas colors
+
+To check the default canvas color, create a rectangle and a text box without
+changing the swatch. The rectangle should have a light neutral fill and a dark
+outline; the text should be dark and visible. Also check the neutral swatch after
+selecting another color. Neutral colors use an OKLCH `none` hue, which must render
+as gray rather than transparent.
+
 ## Live updates in flat Soup lists
 
 With browser or native Tauri GraphQL caching enabled, locally supported flat lists reconcile their
@@ -75,7 +83,8 @@ notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
 action. On desktop, the funnel button to the right of **Home** opens **Filter Home**.
 The menu shares the legacy compact submenus: **Status** offers **Unread**, **Read**,
-and **All**, and **Type** contains the entity checkboxes. Status closes the menu
+and **All** as single-select radio items with a checkmark on the right of the selected
+option, and **Type** contains the entity checkboxes. Status closes the menu
 after selection; type selections leave it open. Press **f** to open the menu.
 Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
@@ -557,7 +566,7 @@ Team sharing is independent of channel access and of link sharing.
 
 ## Customers (CRM) — `/app/component/companies`
 
-The 216px local sidebar uses the same navigation primitives as Email and Tasks.
+On desktop, the local sidebar uses the same navigation primitives as Email and Tasks.
 Board and List share a horizontal segmented toggle at the top of the sidebar; the
 main header has no layout toggle. People is not available. Views include All companies, My companies
 (Owner = current user), Needs follow-up (has a stage other than Churned and last
@@ -573,7 +582,14 @@ View descriptions appear in sidebar tooltips, not above the main board or list.
 The `Search companies` field uses the shared Email/Tasks search bar. Command-F
 focuses it, `Clear search` resets it, and Escape leaves the field.
 
-Clicking a company in Board or List (or pressing Enter on a focused list row)
+On touch devices, Customers uses the same full-frame list layout as the other
+mobile views: floating CRM-navigation and filter buttons with Board/List pills,
+List as the fresh default, and the global **+ Company** action above the dock.
+The navigation button opens the CRM views and lists; the desktop toolbar and
+embedded detail stack stay out of the mobile flow, so selecting a row navigates
+in place.
+
+On desktop, clicking a company in Board or List (or pressing Enter on a focused list row)
 opens its details inside the CRM workspace, keeping the left navigation visible.
 The top breadcrumb reads `<current view or list> > <company>`; click the first
 segment to return with the same filters, layout, and list scroll position. Selecting
@@ -723,12 +739,14 @@ If a session needs an unconnected app, its reply can show `Connect <app>`, which
 opens that app in Settings → Connections.
 
 Runtime cards show Macro, connected cloud providers, and paired computers with
-online/offline status. Model discovery runs independently per runtime. A pending
-catalog shows `Loading models…`; failures offer Retry. A runtime that chooses its
-own model says so. Saved models missing from the current catalog are retained and
+online/offline status. The selected runtime stays selected when the list refreshes.
+A paired macrod connects on startup, so models can load before any agents are bound.
+Model discovery runs independently per runtime. A pending catalog shows
+`Loading models…`; failures offer Retry. A runtime that chooses its own model says so. Saved models missing from the current catalog are retained and
 marked `saved, unavailable`. Removed runtimes require choosing another runtime or
 reconnecting before saving. A disconnected computer must come online before an
-agent can run. The existing discovery timeout is 10 seconds for macrod.
+agent can run. The existing discovery timeout is 10 seconds for macrod; use Retry
+after reconnecting it.
 
 Save failures keep the editor and draft open. Saving disables further changes
 and duplicate submissions. Closing an edited draft offers `Keep editing` and
@@ -736,8 +754,10 @@ and duplicate submissions. Closing an edited draft offers `Keep editing` and
 `?createAgent=true` still opens creation directly.
 
 `Runtimes` shows compact cloud-provider rows and a `Your computers` section.
-Macro is built in. Cursor, Claude Cloud, and Codex expose their connection or
-configuration controls on demand; feature flags continue to gate providers.
+Macro is built in. Every user can open this page to configure Cursor, Claude
+Cloud, Codex, and their paired macrod runtimes. Cloud providers expose connection
+or configuration controls on demand. Connection chips in agent replies open this page, including
+before any account is connected.
 Cursor's default-model selector uses live model discovery and saves changes.
 `Pair a runtime` walks through code entry, review, naming, and Private/Team
 ownership. Pairing approval is distinct from the machine actually connecting;

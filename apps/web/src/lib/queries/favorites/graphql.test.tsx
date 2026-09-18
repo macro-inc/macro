@@ -1,5 +1,5 @@
 import { type Client, CombinedError } from '@urql/core';
-import type { JSX } from 'solid-js';
+import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fromValue, makeSubject } from 'wonka';
@@ -97,6 +97,76 @@ describe('GraphQL favorites queries', () => {
     dispose = undefined;
     document.body.replaceChildren();
     vi.clearAllMocks();
+  });
+
+  it('preserves mounted favorite identities through additions, removals, and reordering', async () => {
+    const subject = makeSubject<ReturnType<typeof favoritesResult>>();
+    executeQuery.mockReturnValue(subject.source);
+    function FavoritesFixture() {
+      const data = useFavoritesData({ entityType: ['document'] });
+      const favorites = createMemo(() => data()?.favorites ?? []);
+      const section = createMemo(() => ({ items: favorites() }));
+      return (
+        <Show when={section().items.length > 0}>
+          <For each={section().items}>
+            {(favorite) => {
+              // Favorite rows bind their preview and avatar to this entity at mount.
+              const entityId = favorite.entityId;
+              return <span data-entity-id={entityId}>{entityId}</span>;
+            }}
+          </For>
+        </Show>
+      );
+    }
+    dispose = render(
+      () => (
+        <Suspense fallback={<span>Loading favorites</span>}>
+          <FavoritesFixture />
+        </Suspense>
+      ),
+      document.body
+    );
+    await vi.waitFor(() => expect(executeQuery).toHaveBeenCalledOnce());
+
+    subject.next(favoritesResult([]));
+    expect(document.body.textContent).toBe('');
+    subject.next(favoritesResult([graphqlFavorite('document-1', 0)]));
+    expect(document.body.textContent).toBe('document-1');
+    subject.next(
+      favoritesResult([
+        graphqlFavorite('document-1', 0),
+        graphqlFavorite('document-2', 1),
+      ])
+    );
+    expect(document.body.textContent).toBe('document-1document-2');
+    const secondRow = document.querySelector('[data-entity-id="document-2"]');
+    subject.next(favoritesResult([graphqlFavorite('document-2', 1)]));
+    expect(document.body.textContent).toBe('document-2');
+    expect(document.querySelector('[data-entity-id="document-2"]')).toBe(
+      secondRow
+    );
+
+    subject.next(
+      favoritesResult([
+        graphqlFavorite('document-1', 0),
+        graphqlFavorite('document-2', 1),
+      ])
+    );
+    expect(document.body.textContent).toBe('document-1document-2');
+    subject.next(
+      favoritesResult([
+        graphqlFavorite('document-1', 1),
+        graphqlFavorite('document-2', 0),
+      ])
+    );
+    expect(document.body.textContent).toBe('document-2document-1');
+    expect(document.querySelector('[data-entity-id="document-2"]')).toBe(
+      secondRow
+    );
+
+    subject.next(favoritesResult([graphqlFavorite('document-2', 0)]));
+    subject.next(favoritesResult([]));
+    expect(document.body.textContent).toBe('');
   });
 
   it('retains cached favorites through a background offline failure', async () => {

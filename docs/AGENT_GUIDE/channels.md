@@ -66,7 +66,8 @@ shorten it and resize the pane. It should expand when the text no longer fits
 beside the buttons and collapse when it fits again, without flickering between
 layouts. Also add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
-should remain usable in both layouts, including when editing an existing message.
+should remain usable in both layouts. Existing message and reply edit inputs show
+only the send control, with no format or discard button; Escape cancels the edit.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
 Check this arrangement at both phone and tablet widths.
 
@@ -110,7 +111,7 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` open
+bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` / `@claude` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 A follow-up sent while that session is still working stops the current turn,
@@ -129,15 +130,29 @@ cropped at the chip's height with a fade at its foot; clicking it expands it in 
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
 
-`@codex` requires both `enable-chat-v3-agents` and `enable-codex-agents`.
-It appears when the mentioning user has connected ChatGPT and saved a
-cloud environment in Settings → Runtimes. New sessions use that environment on
+`@codex` and `@claude` are offered to every user before account setup. The built-in
+`@cursor` entry requires the `enable-cursor-agents` rollout flag (local override:
+`VITE_ENABLE_CURSOR_AGENTS`). Custom agents keep their channel visibility rules
+regardless of which runtime they use.
+A mention without a connected account creates no session and replies in the thread
+with a **Connect Cursor**, **Connect Codex**, or **Connect Claude** chip. Each chip
+opens Settings → Runtimes, where all three connection cards are visible. The same
+chip reads **connected** after setup; mention the bot again to start a session.
+Codex also prompts for a cloud environment when ChatGPT is connected but no
+environment has been saved. New sessions use that environment on
 `main`; there is no automatic repository selection. Follow-up mentions continue the same agent session. When
 the provider URL arrives, the session header offers **Open in Codex**. Codex
 assistant text appears as complete messages while tool activity and thinking
 can continue updating during the turn. Mention
 eligibility is covered by component/query tests; the channel interaction requires
 a configured backend for end-to-end verification.
+
+Within the Cursor rollout, `@cursor` is offered whether connected or not. A mention from someone with
+no Cursor API key opens no session: the Cursor bot replies in the thread that
+`@cursor` runs on their own account and is not connected yet, followed by a
+**Connect Cursor** chip. Clicking the chip opens Settings → Runtimes; once a key
+is saved the same chip reads **Cursor connected** and stops navigating. The
+original mention is not replayed - mention `@cursor` again after connecting.
 
 Cursor sessions choose a repository from the mentioning user's linked GitHub App
 installations on their first prompt. A session without a repository can still use
@@ -245,12 +260,22 @@ messages and composer visible. Expand a thread while its replies are still
 loading: existing preview replies should remain visible until the full list
 arrives. Repeat after reopening the channel to cover both cold and cached data.
 
+Channel messages, thread replies, reactions, edits, deletions, and typing go
+through the shared message API at `GET|POST /dss/messages/channel/<id>` and its
+`items`, `threads`, and `typing` subroutes; the `/dss/channels/<id>/message*`
+routes are no longer called by the web app. Live updates arrive as one
+`message_update` websocket payload per committed change (`posted`, `edited`,
+`message_deleted`, `reaction_changed`, `thread_updated`, `typing`); the older
+`comms_message`, `comms_reaction`, `comms_attachment`, and `comms_typing`
+frames are ignored. Documents share the same client, cache, and components
+behind `enable-unified-document-discussions` (see documents.md).
+
 Reopening a channel already loaded this session requests
-`GET /dss/channels/<id>/messages/catch-up?after=<newest cached created_at>&limit=50`
+`GET /dss/messages/channel/<id>?selection=<cursor of the newest cached root, direction newer, limit 50>`
 and merges the result into the cached first page. A first open, a message link,
-a channel cached away from its latest page, and a delta longer than one page use
-`GET /dss/channels/<id>/messages`. The `channel_messages_load` event records
-`path` (`catch_up` or `full`) and `reason`
+a channel cached away from its latest page, and a delta longer than one page load
+the latest page with the default selection. The `channel_messages_load` event
+records `path` (`catch_up` or `full`) and `reason`
 (`watermark`, `list_ahead`, `no_cache`, `cache_not_at_latest`, `load_around`,
 `delta_overflow`, or `catch_up_error`).
 

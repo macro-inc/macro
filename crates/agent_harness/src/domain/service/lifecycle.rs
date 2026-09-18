@@ -61,12 +61,10 @@ where
         id: AgentSessionId,
         event: ControlEvent,
     ) -> agent_session::domain::error::Result<AcceptedControl> {
-        let action_id = AgentActionId::mint();
+        let action = DeliverAction::control(event);
+        let action_id = action.id;
         let outcome = self
-            .execute(
-                id,
-                HarnessCommand::Deliver(DeliverAction::control(action_id, event)),
-            )
+            .execute(id, HarnessCommand::Deliver(action))
             .await
             .map_err(into_session_error)?;
         Ok(AcceptedControl {

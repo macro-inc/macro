@@ -48,3 +48,13 @@ describe('session request errors', () => {
     expect(error.message).toBe('Agent request failed (HTTP 502).');
   });
 });
+
+describe('repository listing', () => {
+  it("asks the harness for the caller's repositories", () => {
+    agentHarnessServiceClient.listRepositories();
+    expect(fetchWithToken).toHaveBeenCalledWith(
+      'https://harness.example.com/agent-repositories',
+      { method: 'GET' }
+    );
+  });
+});

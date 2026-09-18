@@ -20,8 +20,14 @@ export function getNotificationAction(n: UnifiedNotification): string {
 
         return 'sent a document';
       })
-      .with('mentioned_in_document_comment', () => 'mentioned you in')
-      .with('replied_to_document_comment_thread', () => 'replied in')
+      .with(
+        'mentioned_in_document_comment',
+        () => 'mentioned you in a comment on'
+      )
+      .with(
+        'replied_to_document_comment_thread',
+        () => 'replied to a comment on'
+      )
       .with('commented_on_document', () => 'commented on')
       .with('channel_message_send', () => 'sent a message in')
       .with('ai_response', () => 'AI responded')

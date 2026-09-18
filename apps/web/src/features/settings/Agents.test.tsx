@@ -4,7 +4,9 @@
 
 import { Model } from '@core/component/AI/constant/model';
 import { useAgentModelsQueries } from '@queries/agents/models';
+import { useHarnessesQuery } from '@queries/harnesses/harnesses';
 import type { LoadAgentModelsResponse } from '@service-agent-harness/generated/schemas';
+import type { Harness } from '@service-storage/client';
 import {
   fireEvent,
   render,
@@ -160,7 +162,7 @@ const harnessMocks = vi.hoisted(() => ({
 }));
 
 vi.mock('@queries/harnesses/harnesses', () => ({
-  useHarnessesQuery: () => harnessMocks.query,
+  useHarnessesQuery: vi.fn(() => harnessMocks.query),
 }));
 
 vi.mock('@queries/agents/agents', () => ({
@@ -313,7 +315,7 @@ const MACROD_HARNESS = {
   updated_at: '2026-08-27T12:00:00Z',
   connected: true,
   last_connected_at: '2026-08-27T12:34:00Z',
-};
+} satisfies Harness;
 
 describe('Agents', () => {
   it('opens Runtimes within the existing settings surface', () => {
@@ -453,6 +455,88 @@ describe('Agents', () => {
       client.clear();
     }
   );
+
+  it('keeps a saved Claude runtime selected while discovery loads and scopes Fable to it', async () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'claude-cloud',
+        default_model: 'claude-fable-5-1',
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+    let resolveModels!: (models: LoadAgentModelsResponse) => void;
+    const response = new Promise<LoadAgentModelsResponse>((resolve) => {
+      resolveModels = resolve;
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    vi.mocked(useAgentModelsQueries).mockImplementationOnce((targets) =>
+      targets().map((target) =>
+        useQuery(() => ({
+          queryKey: ['pending-models', target.harness],
+          queryFn: () =>
+            target.harness === 'claude-cloud'
+              ? response
+              : Promise.resolve(modelMocks.queries['in-memory:'].data!),
+        }))
+      )
+    );
+    const view = render(() => (
+      <QueryClientProvider client={client}>
+        <Suspense fallback={<p>Settings suspended</p>}>
+          <Agents />
+        </Suspense>
+      </QueryClientProvider>
+    ));
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      const harness = screen.getByRole('radio', { name: 'Claude Cloud' });
+      expect(harness).toHaveProperty('checked', true);
+      expect(screen.getByText('Loading models…')).toBeTruthy();
+      resolveModels({
+        status: 'available',
+        currentModel: 'claude-fable-5-1',
+        models: [{ id: 'claude-fable-5-1', name: 'Fable 5.1' }],
+      });
+      await waitFor(() =>
+        expect(screen.getByRole('option', { name: 'Fable 5.1' })).toBeTruthy()
+      );
+      expect(harness).toHaveProperty('checked', true);
+      fireEvent.click(screen.getByRole('radio', { name: 'Macro' }));
+      await waitFor(() =>
+        expect(
+          screen.getByRole('combobox', { name: 'Default model' })
+        ).toHaveProperty('value', Model.sonnet5)
+      );
+      expect(screen.queryByRole('option', { name: /Fable/i })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+      await waitFor(() =>
+        expect(agentMocks.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentId: 'agent-1',
+            harness: 'in-memory',
+            defaultModel: Model.sonnet5,
+          })
+        )
+      );
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  });
 
   it('lists the built-in global Macro agent as a team agent', () => {
     render(() => <Agents />);
@@ -927,6 +1011,66 @@ describe('Agents', () => {
     ).toBeTruthy();
   });
 
+  it('preserves the selected runtime and submission when the runtime list refetches', async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    const queryKey = ['refreshed-harnesses'];
+    const fetchHarnesses = vi.fn(
+      async (): Promise<Harness[]> => [{ ...MACROD_HARNESS }]
+    );
+    vi.mocked(useHarnessesQuery).mockImplementationOnce(() =>
+      useQuery(() => ({
+        queryKey,
+        queryFn: fetchHarnesses,
+        initialData: [MACROD_HARNESS],
+      }))
+    );
+    modelMocks.queries[`macrod:${MACROD_HARNESS.id}`] = successfulModels([
+      { id: 'codex-model', name: 'Codex model' },
+    ]);
+    const view = render(() => (
+      <QueryClientProvider client={client}>
+        <Suspense>
+          <Agents />
+        </Suspense>
+      </QueryClientProvider>
+    ));
+    await waitFor(() => expect(fetchHarnesses).toHaveBeenCalledOnce());
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    const dialog = screen.getByRole('dialog');
+    const harness = within(dialog).getByRole('radio', { name: 'Dev box' });
+    fireEvent.click(harness);
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Coding agent' },
+    });
+
+    for (let refresh = 0; refresh < 2; refresh++) {
+      await client.refetchQueries({ queryKey });
+      expect(
+        within(dialog).getByRole('radio', { name: 'Dev box' })
+      ).toHaveProperty('checked', true);
+      expect(
+        within(dialog).getByRole('combobox', { name: 'Default model' })
+      ).toHaveProperty('value', 'codex-model');
+    }
+    expect(fetchHarnesses).toHaveBeenCalledTimes(3);
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+    await waitFor(() =>
+      expect(agentMocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          harness: 'macrod',
+          harnessId: MACROD_HARNESS.id,
+          defaultModel: 'codex-model',
+        })
+      )
+    );
+    view.unmount();
+    client.clear();
+  });
+
   it('keeps loading, error, and unsupported states independent per runtime', () => {
     cursorMocks.status.data = {
       registered: true,
@@ -1284,6 +1428,53 @@ describe('Agents', () => {
     );
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(agentMocks.create).not.toHaveBeenCalled();
+  });
+
+  it('keeps a saved Claude runtime visible when model discovery fails', async () => {
+    modelMocks.queries['claude-cloud:'] = {
+      isPending: false,
+      isError: true,
+      isSuccess: false,
+      refetch: vi.fn(),
+    };
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'claude-cloud',
+        default_model: 'saved-claude-model',
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+
+    const dialog = screen.getByRole('dialog');
+    expect(
+      within(dialog).getByRole('radio', { name: 'Claude Cloud' })
+    ).toHaveProperty('checked', true);
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Save changes' })
+    );
+    await waitFor(() => {
+      expect(agentMocks.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          harness: 'claude-cloud',
+          defaultModel: 'saved-claude-model',
+        })
+      );
+    });
   });
 
   it('preselects the bound macrod runtime when editing', () => {

@@ -43,7 +43,7 @@ use tracing::Instrument as _;
 
 use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
-use crate::domain::session::{HistoryEntry, SessionStore, messages_for_turn};
+use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
 use crate::domain::user_input::{
     SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
     UserInputRequester,
@@ -197,7 +197,7 @@ impl AgentState {
 
     /// Everything from the session's state that a turn answering `prompt`
     /// runs from.
-    fn turn_input(&self, prompt: &str) -> TurnInput {
+    fn turn_input(&self, prompt: &UserPrompt) -> TurnInput {
         self.store.get(&self.session_id).map_or_else(
             || TurnInput {
                 messages: messages_for_turn(&[], prompt),
@@ -214,7 +214,7 @@ impl AgentState {
         )
     }
 
-    fn push_turn(&self, prompt: String, parts: Vec<AssistantMessagePart>) {
+    fn push_turn(&self, prompt: UserPrompt, parts: Vec<AssistantMessagePart>) {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
             state.history.push(HistoryEntry::User(prompt));
             if !parts.is_empty() {
@@ -567,8 +567,8 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         gen_ai.conversation.id = %state.session_id,
                     );
                     genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
-                    let prompt = prompt_text(&request);
-                    if prompt.trim() == COMPACT_COMMAND {
+                    let prompt = UserPrompt::from_request(&request);
+                    if prompt.is_compact_command() {
                         state.clear_history();
                         let _ = connection.send_notification(SessionNotification::new(
                             request.session_id,
@@ -581,7 +581,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         return responder.respond(PromptResponse::new(StopReason::EndTurn));
                     }
                     if state.enable_dev_commands
-                        && let Some(question) = prompt.trim().strip_prefix(ASK_COMMAND)
+                        && let Some(question) = prompt.text.trim().strip_prefix(ASK_COMMAND)
                     {
                         let question = question.trim().to_owned();
                         let cancel = state.begin_turn();
@@ -674,7 +674,7 @@ async fn run_turn(
     state: &AgentState,
     connection: &ConnectionTo<Client>,
     acp_session_id: SessionId,
-    prompt: String,
+    prompt: UserPrompt,
     cancel: CancellationToken,
 ) -> StopReason {
     let _turn = state.turn_lock.lock().await;
@@ -778,7 +778,7 @@ async fn run_ask(
     state: &AgentState,
     connection: &ConnectionTo<Client>,
     acp_session_id: SessionId,
-    prompt: String,
+    prompt: UserPrompt,
     question: String,
     cancel: CancellationToken,
 ) -> StopReason {
@@ -961,18 +961,6 @@ fn tool_kind(name: &str) -> ToolKind {
     } else {
         ToolKind::Other
     }
-}
-
-/// The prompt's text content, other block types ignored.
-fn prompt_text(request: &PromptRequest) -> String {
-    request
-        .prompt
-        .iter()
-        .filter_map(|block| match block {
-            ContentBlock::Text(text) => Some(text.text.as_str()),
-            _ => None,
-        })
-        .collect()
 }
 
 /// Close tool calls that never got a response - a cancelled or failed turn
