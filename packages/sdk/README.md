@@ -100,6 +100,29 @@ await doc.setProperty(macro.properties.byId('prop_status'), {
 const props = await doc.properties();
 ```
 
+### Databases
+
+Databases are collections of tables you query with SQL. Tables and columns are
+parts of a database, not entities of their own, so they come back as handles
+that resolve through the database's schema.
+
+```ts
+const db = await macro.databases.create({ name: 'Events' });
+const guests = await db.createTable({ name: 'Guests' });
+await guests.addColumn({ name: 'Email', dataType: 'STRING' });
+
+// SQL addresses tables by their SQL names, across every database you can see.
+const [result] = await db.query(`SELECT * FROM ${await guests.sqlName()}`);
+
+// Writes go through exec, which reports what changed and hands back the
+// versions to pass as baseVersions for a compare-and-set follow-up.
+const outcome = await macro.databases.exec({
+  sql: "INSERT INTO guests (email) VALUES ('ada@example.com')",
+});
+
+const sqlite = await db.downloadSqlite(); // Uint8Array
+```
+
 ### Rich message helper
 
 Use the `msg` tagged template to build rich message bodies for channel messages
