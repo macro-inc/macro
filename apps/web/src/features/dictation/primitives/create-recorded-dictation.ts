@@ -4,6 +4,7 @@ import type {
   RecorderHandle,
   TranscribeAudio,
 } from '../core/recording';
+import type { DictationOutcome, DictationTrace } from '../core/telemetry';
 import {
   ACTIVE_PHASES,
   type DictationController,
@@ -17,6 +18,7 @@ import { appendLevel, type VolumeLevel } from '../core/volume';
  */
 export function createRecordedDictation(options: {
   supported: boolean;
+  startTrace: () => DictationTrace;
   createRecorder: CreateRecorder;
   transcribe: TranscribeAudio;
   onConfirm: (text: string) => void;
@@ -36,6 +38,13 @@ export function createRecordedDictation(options: {
   let limitReached = false;
   let pendingConfirm: (() => void) | undefined;
   let disposed = false;
+  let trace: DictationTrace | undefined;
+  let attempt = 0;
+
+  const endTrace = (outcome: DictationOutcome) => {
+    trace?.end(outcome);
+    trace = undefined;
+  };
 
   const active = () => ACTIVE_PHASES.includes(phase());
 
@@ -62,10 +71,16 @@ export function createRecordedDictation(options: {
     upload = current;
     setPhase('finishing');
     setMessage('Transcribing with OpenAI…');
+    trace?.event('upload_started', {
+      attempt: ++attempt,
+      audioBytes: blob.size,
+    });
     try {
-      const text = (await options.transcribe(blob, current.signal)).trim();
+      const request = () => options.transcribe(blob, current.signal);
+      const text = (await (trace ? trace.run(request) : request())).trim();
       if (current.signal.aborted || disposed) return;
       upload = undefined;
+      endTrace(text ? 'success' : 'empty_transcript');
       reset('idle');
       setMessage(text ? '' : 'No speech was detected. Try again.');
       if (text) options.onConfirm(text);
@@ -73,6 +88,7 @@ export function createRecordedDictation(options: {
     } catch (error) {
       if (current.signal.aborted || disposed) return;
       upload = undefined;
+      trace?.event('upload_failed', { attempt });
       setMessage(
         error instanceof Error
           ? error.message
@@ -88,7 +104,9 @@ export function createRecordedDictation(options: {
   const onRecording = (blob: Blob) => {
     recorder = undefined;
     if (disposed) return;
+    trace?.event('recording_stopped', { audioBytes: blob.size });
     if (!blob.size) {
+      endTrace('empty_audio');
       reset('idle');
       setMessage('No audio was recorded. Please try again.');
       settleConfirm();
@@ -110,6 +128,8 @@ export function createRecordedDictation(options: {
 
   const start = async () => {
     if (phase() !== 'idle' || disposed) return;
+    trace = options.startTrace();
+    attempt = 0;
     setVolumeHistory([]);
     setPhase('starting');
     setMessage('Audio is sent to OpenAI Whisper only when you confirm.');
@@ -122,16 +142,21 @@ export function createRecordedDictation(options: {
         if (recorder === current) onRecording(blob);
       },
       onLimit: () => {
-        if (recorder === current) limitReached = true;
+        if (recorder === current) {
+          limitReached = true;
+          trace?.event('recording_limit');
+        }
       },
       onError: (error) => {
         if (recorder !== current) return;
+        endTrace('recording_error');
         reset('idle');
         setMessage(error.message);
         settleConfirm();
       },
       onInterrupted: () => {
         if (recorder !== current) return;
+        endTrace('interrupted');
         reset('idle');
         setMessage('Dictation moved to another composer.');
         settleConfirm();
@@ -145,8 +170,10 @@ export function createRecordedDictation(options: {
         return;
       }
       setPhase('listening');
+      trace?.event('recording_started');
     } catch {
       if (disposed || recorder !== current) return;
+      endTrace('microphone_error');
       reset('idle');
       setMessage(
         'Could not access your microphone. Check permissions and try again.'
@@ -157,11 +184,13 @@ export function createRecordedDictation(options: {
   const confirm = () =>
     new Promise<void>((resolve) => {
       if (phase() === 'review' && audio) {
+        trace?.event('confirmed');
         pendingConfirm = resolve;
         void transcribe(audio);
         return;
       }
       if (phase() === 'listening' && recorder) {
+        trace?.event('confirmed');
         pendingConfirm = resolve;
         commitOnStop = true;
         setPhase('finishing');
@@ -173,6 +202,7 @@ export function createRecordedDictation(options: {
 
   const cancel = () => {
     if (!active()) return;
+    endTrace('cancelled');
     reset('idle');
     setMessage('');
     options.onCancel?.();
@@ -181,6 +211,7 @@ export function createRecordedDictation(options: {
 
   onCleanup(() => {
     disposed = true;
+    endTrace('disposed');
     reset('idle');
     settleConfirm();
   });

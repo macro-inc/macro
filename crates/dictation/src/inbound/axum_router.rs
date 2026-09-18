@@ -85,7 +85,13 @@ where
         key: RateLimitKey,
         config: RateLimitConfig,
     ) -> Result<RateLimitResult, Report> {
-        self.rate_limiter.check_rate_limit(key, config).await
+        let limit = config.max_count;
+        let window_seconds = config.window.as_secs();
+        let result = self.rate_limiter.check_rate_limit(key, config).await?;
+        if result.is_err() {
+            tracing::warn!(limit, window_seconds, "dictation rate limit exceeded");
+        }
+        Ok(result)
     }
 
     async fn rollback_ticket(&self, ticket: RateLimitOk) -> Result<(), Report> {
@@ -133,6 +139,11 @@ where
             .extract_with_state(state)
             .await
             .map_err(IntoResponse::into_response)?;
+        // This runs before the body is buffered and before rate-limit rejection.
+        tracing::Span::current().record(
+            "user_id",
+            authorization.authorization.macro_user_id.as_ref(),
+        );
         Ok(Self(authorization))
     }
 }
@@ -148,7 +159,19 @@ where
     Router::new()
         .route("/transcribe", post(transcribe_handler::<S, R, Auth>))
         .layer(DefaultBodyLimit::max(MAX_AUDIO_BYTES))
+        .layer(axum::middleware::from_fn(trace_request))
         .with_state(state)
+}
+
+/// Covers extractor failures as well as the handler, under the shared HTTP span.
+#[tracing::instrument(name = "dictation.request", skip_all, fields(
+    user_id = tracing::field::Empty,
+    http.response.status_code = tracing::field::Empty,
+))]
+async fn trace_request(request: axum::extract::Request, next: axum::middleware::Next) -> Response {
+    let response = next.run(request).await;
+    tracing::Span::current().record("http.response.status_code", response.status().as_u16());
+    response
 }
 
 /// Query parameters for transcription.
@@ -219,7 +242,8 @@ where
         .language
         .as_deref()
         .map(str::parse::<LanguageHint>)
-        .transpose()?;
+        .transpose()
+        .inspect_err(|error| tracing::warn!(error = ?error, "invalid dictation language hint"))?;
     let transcript = service
         .transcribe(user.authorization.macro_user_id, audio, language)
         .await?;
