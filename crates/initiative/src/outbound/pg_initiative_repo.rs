@@ -125,7 +125,7 @@ impl InitiativeRepo for PgInitiativeRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn delete(&self, id: InitiativeId) -> Result<Option<DescriptionDocumentId>, Self::Err> {
+    async fn delete(&self, id: InitiativeId) -> Result<DescriptionDocumentId, Self::Err> {
         create::delete(&self.pool, id).await
     }
 }
@@ -173,7 +173,7 @@ impl GrantTargets {
 struct InitiativeRecord {
     id: uuid::Uuid,
     name: String,
-    description_document_id: Option<String>,
+    description_document_id: String,
     owner_user_id: String,
     created_at: chrono::DateTime<chrono::Utc>,
     updated_at: chrono::DateTime<chrono::Utc>,
@@ -201,9 +201,9 @@ impl InitiativeRecord {
         Ok(InitiativeDetail {
             id: InitiativeId::from_uuid(self.id),
             name: self.name,
-            description_document_id: require_description_document_id(
+            description_document_id: parse_description_document_id(
                 self.id,
-                self.description_document_id,
+                &self.description_document_id,
             )?,
             owner_id,
             member_ids: parse_members(self.member_ids)?,
@@ -214,19 +214,6 @@ impl InitiativeRecord {
             updated_at: self.updated_at,
         })
     }
-}
-
-/// A NULL is a deploy-window artifact. Fail here so callers never treat it as optional.
-fn require_description_document_id(
-    initiative: uuid::Uuid,
-    raw: Option<String>,
-) -> Result<DescriptionDocumentId, InitiativeError> {
-    let raw = raw.ok_or_else(|| {
-        InitiativeError::Internal(report!(
-            "initiative {initiative} has no description document; backfill required"
-        ))
-    })?;
-    parse_description_document_id(initiative, &raw)
 }
 
 fn parse_description_document_id(

@@ -844,6 +844,8 @@ async fn bot_document_has_no_saved_user_view_location() {
 #[tokio::test]
 async fn bot_lifecycle_event_has_no_actor_user_id() {
     let mut repo = make_mock_repo();
+    repo.expect_get_document_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .return_once(|_| Box::pin(std::future::ready(Ok(()))));
@@ -1872,6 +1874,8 @@ async fn content_uploaded_maps_an_immediate_broker_failure_to_internal() {
 #[tokio::test]
 async fn test_delete_document_publishes_document_deleted_event() {
     let mut repo = make_mock_repo();
+    repo.expect_get_document_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .returning(|_| Box::pin(std::future::ready(Ok(()))));
@@ -1910,6 +1914,8 @@ async fn test_delete_document_publishes_document_deleted_event() {
 #[tokio::test]
 async fn test_delete_document_publishes_no_event_when_repo_fails() {
     let mut repo = make_mock_repo();
+    repo.expect_get_document_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .returning(|_| Box::pin(std::future::ready(Err(anyhow!("db is down")))));
@@ -1919,6 +1925,22 @@ async fn test_delete_document_publishes_no_event_when_repo_fails() {
     let result = service.delete_document(owner_receipt("doc-1"), None).await;
 
     assert!(result.is_err());
+    assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_document_rejects_initiative_description() {
+    let mut repo = make_mock_repo();
+    let mut metadata = make_test_metadata();
+    metadata.sub_type = Some(DocumentSubType::InitiativeDescription);
+    repo.expect_get_document_metadata()
+        .return_once(move |_| Box::pin(std::future::ready(Ok(metadata))));
+    repo.expect_soft_delete_document().times(0);
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+    let result = service.delete_document(owner_receipt("doc-1"), None).await;
+
+    assert!(matches!(result, Err(DocumentError::BadRequest(_))));
     assert!(event_broker.published().lock().unwrap().is_empty());
 }
 

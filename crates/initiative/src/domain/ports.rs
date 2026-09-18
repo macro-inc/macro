@@ -101,12 +101,11 @@ pub trait InitiativeRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Delete the initiative and clean up its own rows in one transaction, returning the
-    /// description document id for the caller to purge afterwards. `None` only for a row
-    /// written before the column existed.
+    /// description document id for the caller to purge afterwards.
     fn delete(
         &self,
         id: InitiativeId,
-    ) -> impl Future<Output = Result<Option<DescriptionDocumentId>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<DescriptionDocumentId, Self::Err>> + Send;
 }
 
 /// Inbound service port: the initiative API used by drivers (HTTP).

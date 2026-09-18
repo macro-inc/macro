@@ -399,14 +399,6 @@ async fn create_links_description_document_and_mirrors_member_and_team_grants_as
     );
     assert_eq!(detail.user_access_level, AccessLevel::View);
 
-    let still_empty = sqlx::query_scalar!(
-        r#"SELECT description FROM initiative WHERE id = $1"#,
-        id.as_uuid(),
-    )
-    .fetch_one(&pool)
-    .await?;
-    assert_eq!(still_empty, "");
-
     let owner = Some("owner".to_string());
     let edit = Some("edit".to_string());
     assert_eq!(
@@ -864,35 +856,56 @@ async fn update_rejects_lockstep_commands_naming_another_initiative(
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn reads_fail_loudly_when_description_document_id_is_null(
+async fn description_document_cannot_be_nulled_or_deleted_while_the_initiative_exists(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
     let repo = repo(pool.clone());
     let created = repo
         .create(
-            create_args(&pool, OWNER, "Pre-expand", &[]).await?,
+            create_args(&pool, OWNER, "Launch", &[]).await?,
             share_off(),
             TeamShareCreation::Unshared,
         )
         .await?;
-    sqlx::query!(
+    let document_id = created.description_document_id.to_string();
+
+    let null_error = sqlx::query!(
         r#"UPDATE initiative SET description_document_id = NULL WHERE id = $1"#,
         created.id.as_uuid(),
     )
     .execute(&pool)
-    .await?;
+    .await
+    .expect_err("column is NOT NULL");
+    assert_eq!(
+        null_error.as_database_error().unwrap().code().as_deref(),
+        Some("23502")
+    );
 
-    assert!(matches!(
-        repo.get_detail(created.id).await,
-        Err(InitiativeError::Internal(_))
-    ));
-    assert!(matches!(
-        repo.list_accessible(&user(OWNER)).await,
-        Err(InitiativeError::Internal(_))
-    ));
-    assert!(repo.get_basic(created.id).await?.is_some());
-    assert_eq!(repo.delete(created.id).await?, None);
+    let delete_error = sqlx::query!(r#"DELETE FROM "Document" WHERE id = $1"#, document_id,)
+        .execute(&pool)
+        .await
+        .expect_err("FK is ON DELETE RESTRICT");
+    assert!(
+        delete_error
+            .as_database_error()
+            .unwrap()
+            .is_foreign_key_violation()
+    );
+
+    let detail = repo.get_detail(created.id).await?.expect("still readable");
+    assert_eq!(detail.description_document_id.to_string(), document_id);
+    let listed = repo.list_accessible(&user(OWNER)).await?;
+    assert_eq!(
+        listed
+            .initiatives
+            .iter()
+            .map(|summary| summary.description_document_id.to_string())
+            .collect::<Vec<_>>(),
+        vec![document_id.clone()]
+    );
+    let updated = repo.update(update_args(created.id)).await?;
+    assert_eq!(updated.description_document_id.to_string(), document_id);
     Ok(())
 }
 
@@ -1024,7 +1037,7 @@ async fn delete_returns_the_document_id_and_leaves_no_initiative_rows(
     let initiative_id = created.id.as_uuid();
     let document_id = created.description_document_id;
 
-    assert_eq!(repo.delete(created.id).await?, Some(document_id));
+    assert_eq!(repo.delete(created.id).await?, document_id);
 
     let leftover_share = sqlx::query_scalar!(
         r#"SELECT EXISTS(SELECT 1 FROM "SharePermission" WHERE id = $1) AS "exists!""#,

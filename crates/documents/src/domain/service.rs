@@ -1103,8 +1103,20 @@ impl<
         entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project_id: Option<String>,
     ) -> Result<(), DocumentError> {
+        let document_id = entity_access_receipt.entity().entity_id.clone();
+        let metadata = self
+            .repo
+            .get_document_metadata(&document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if metadata.sub_type == Some(DocumentSubType::InitiativeDescription) {
+            return Err(DocumentError::BadRequest(
+                "initiative description documents cannot be deleted".to_string(),
+            ));
+        }
+
         self.repo
-            .soft_delete_document(&entity_access_receipt.entity().entity_id.clone())
+            .soft_delete_document(&document_id)
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 

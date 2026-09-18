@@ -9,7 +9,7 @@ use share_permission_db_utils::{InsertChannelSharePermissionResult, team_share};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
-use super::{AdapterError, GrantTargets, map_sqlx, require_description_document_id};
+use super::{AdapterError, GrantTargets, map_sqlx, parse_description_document_id};
 use crate::domain::models::{
     DescriptionDocumentId, InitiativeError, InitiativeId, LockstepTeamShareFacts,
 };
@@ -272,7 +272,7 @@ pub(super) async fn get_lockstep_team_share_facts(
     .ok_or(InitiativeError::NotFound)?;
     let targets = GrantTargets::new(
         id,
-        require_description_document_id(id.as_uuid(), description_document_id)?,
+        parse_description_document_id(id.as_uuid(), &description_document_id)?,
     );
     let initiative = team_share::load_facts(&mut tx, &targets.initiative_entity())
         .await

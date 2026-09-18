@@ -306,17 +306,15 @@ where
             .map_err(Into::into)
     }
 
-    /// Initiative rows first, then the document. The FK's `ON DELETE SET NULL` means
-    /// the other order can leave an initiative with no description after a half-failure.
+    /// Initiative rows first, then the document. The FK's `ON DELETE RESTRICT`
+    /// would reject a document-first purge while the initiative still names it.
     #[tracing::instrument(err, skip_all)]
     async fn delete(
         &self,
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
     ) -> Result<(), InitiativeError> {
         let id = initiative_id_from_receipt(&receipt)?;
-        let Some(description_document_id) = self.repo.delete(id).await.map_err(Into::into)? else {
-            return Ok(());
-        };
+        let description_document_id = self.repo.delete(id).await.map_err(Into::into)?;
         self.description_documents
             .purge(description_document_id)
             .await

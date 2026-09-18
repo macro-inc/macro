@@ -634,7 +634,7 @@ async fn delete_purges_the_document_after_the_initiative_is_gone() {
         .withf(|id| *id == initiative_id())
         .times(1)
         .in_sequence(&mut sequence)
-        .return_once(|_| Box::pin(async { Ok(Some(description_document_id())) }));
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
     documents
         .expect_purge()
         .withf(|id| *id == description_document_id())
@@ -649,23 +649,11 @@ async fn delete_purges_the_document_after_the_initiative_is_gone() {
 }
 
 #[tokio::test]
-async fn delete_skips_the_purge_for_a_row_without_a_document() {
-    let mut repo = MockInitiativeRepo::new();
-    repo.expect_delete()
-        .return_once(|_| Box::pin(async { Ok(None) }));
-
-    service(repo)
-        .delete(owner_receipt())
-        .await
-        .expect("deleted");
-}
-
-#[tokio::test]
 async fn delete_surfaces_a_failed_purge_after_the_initiative_is_gone() {
     let mut repo = MockInitiativeRepo::new();
     let mut documents = MockInitiativeDescriptionDocuments::new();
     repo.expect_delete()
-        .return_once(|_| Box::pin(async { Ok(Some(description_document_id())) }));
+        .return_once(|_| Box::pin(async { Ok(description_document_id()) }));
     documents.expect_purge().return_once(|_| {
         Box::pin(async { Err(InitiativeError::Internal(rootcause::report!("sync down"))) })
     });

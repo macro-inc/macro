@@ -1,7 +1,7 @@
 use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
-use super::{AdapterError, map_sqlx, require_description_document_id};
+use super::{AdapterError, map_sqlx, parse_description_document_id};
 use crate::domain::models::{InitiativeError, InitiativeId, InitiativeList, InitiativeSummary};
 
 pub(super) async fn list_accessible(
@@ -59,9 +59,9 @@ pub(super) async fn list_accessible(
             Ok(InitiativeSummary {
                 id: InitiativeId::from_uuid(row.id),
                 name: row.name,
-                description_document_id: require_description_document_id(
+                description_document_id: parse_description_document_id(
                     row.id,
-                    row.description_document_id,
+                    &row.description_document_id,
                 )?,
                 updated_at: row.updated_at,
             })

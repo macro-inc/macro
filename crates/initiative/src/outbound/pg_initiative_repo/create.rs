@@ -10,10 +10,7 @@ use models_permissions::share_permission::team_share::{
 use share_permission_db_utils::team_share;
 use sqlx::{PgPool, Postgres, Transaction};
 
-use super::{
-    AdapterError, GrantTargets, map_sqlx, parse_description_document_id,
-    require_description_document_id, require_detail,
-};
+use super::{AdapterError, GrantTargets, map_sqlx, parse_description_document_id, require_detail};
 use crate::domain::models::{
     CreateInitiativeRepoArgs, DescriptionDocumentId, InitiativeDetail, InitiativeError,
     InitiativeId, UpdateInitiativeRepoArgs,
@@ -193,7 +190,7 @@ pub(super) async fn update(
 pub(super) async fn delete(
     pool: &PgPool,
     id: InitiativeId,
-) -> Result<Option<DescriptionDocumentId>, InitiativeError> {
+) -> Result<DescriptionDocumentId, InitiativeError> {
     let mut tx = pool
         .begin()
         .await
@@ -237,11 +234,7 @@ pub(super) async fn delete(
         .map_err(AdapterError::Sqlx)
         .map_err(map_sqlx)?;
 
-    deleted
-        .description_document_id
-        .as_deref()
-        .map(|raw| parse_description_document_id(uuid, raw))
-        .transpose()
+    parse_description_document_id(uuid, &deleted.description_document_id)
 }
 
 struct PatchedRow {
@@ -273,9 +266,9 @@ async fn patch_initiative_row(
     .ok_or(InitiativeError::NotFound)?;
     Ok(PatchedRow {
         share_permission_id: row.share_permission_id,
-        description_document_id: require_description_document_id(
+        description_document_id: parse_description_document_id(
             args.id.as_uuid(),
-            row.description_document_id,
+            &row.description_document_id,
         )?,
     })
 }
