@@ -1894,6 +1894,7 @@ async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
     assert!(input.contains("what time is it?"), "{input}");
 }
 
+mod initial_model;
 mod owner_binding;
 
 /// The live writer's fold says what each appended frame meant for the turn;

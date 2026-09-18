@@ -28,13 +28,17 @@ mod test;
 use std::sync::Arc;
 
 use agent_client_protocol::RawJsonRpcMessage;
-use agent_client_protocol::schema::v1::{Response, SessionId, SetSessionConfigOptionResponse};
+use agent_client_protocol::schema::v1::{
+    RequestId, Response, SessionId, SetSessionConfigOptionResponse,
+};
 use agent_fold::domain::lifecycle::LifecycleFold;
 use agent_fold::domain::model::TurnSignal;
 use agent_fold::domain::model_selection::model_selection;
 use agent_fold::domain::ports::FoldedMessageRepo;
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent, ToServerMessage};
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, AgentSetModelAction};
+use agent_runtime_protocol::domain::schema::v0::{
+    AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
+};
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
@@ -1111,6 +1115,7 @@ pub struct LiveSessionLogWriter<R, Rt> {
     /// Keep the saved selection until the runtime confirms it. Otherwise the
     /// default reported by session/new replaces it even when selection fails.
     initial_model: Option<String>,
+    initial_model_request: Option<RequestId>,
 }
 
 impl<R, Rt> LiveSessionLogWriter<R, Rt> {
@@ -1127,6 +1132,7 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             fold: None,
             claim: None,
             initial_model: None,
+            initial_model_request: None,
         }
     }
 
@@ -1139,6 +1145,7 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             fold: None,
             claim: Some(claim),
             initial_model: None,
+            initial_model_request: None,
         }
     }
 
@@ -1213,18 +1220,31 @@ where
             .fold
             .as_ref()
             .and_then(|fold| fold.inner().metadata().model.clone());
-        // Only a fresh config response can confirm startup. Catching up the
-        // fold may report the same model from a previous, failed connection.
+        // Track this connection's selection request. A session/new reply or an
+        // unrelated config response must not release the saved-model guard.
+        if let Some(expected) = &self.initial_model
+            && self.initial_model_request.is_none()
+            && let Message::ToRuntime(message) = &log.content
+            && let Some((_, selection)) = AgentSetModelAction::from_runtime(message)
+            && selection.model == *expected
+            && let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = message
+        {
+            self.initial_model_request = Some(request.id.clone());
+        }
+        // Catching up the fold may report a previous connection's model, so
+        // only the matching fresh response can confirm startup.
         if let Some(expected) = &self.initial_model
             && let Message::ToServer(ToServerMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(
-                Response::Result { result, .. },
+                Response::Result { id, result, .. },
             )))) = &log.content
+            && self.initial_model_request.as_ref() == Some(id)
             && let Ok(response) =
                 serde_json::from_value::<SetSessionConfigOptionResponse>(result.clone())
             && model_selection(&response.config_options)
                 .is_some_and(|selection| selection.current == *expected)
         {
             self.initial_model = None;
+            self.initial_model_request = None;
         }
         if self.initial_model.is_none()
             && let Some(model) = model
