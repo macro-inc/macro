@@ -111,6 +111,14 @@ const db = await macro.databases.create({ name: 'Events' });
 const guests = await db.createTable({ name: 'Guests' });
 await guests.addColumn({ name: 'Email', dataType: 'STRING' });
 
+// A select column only accepts labels you give it, at creation or later.
+const rsvp = await guests.addColumn({
+  name: 'RSVP',
+  dataType: 'SELECT_STRING',
+  options: ['Yes', 'No'],
+});
+await rsvp.addOptions(['Maybe']);
+
 // SQL addresses tables by their SQL names, across every database you can see.
 const [result] = await db.query(`SELECT * FROM ${await guests.sqlName()}`);
 

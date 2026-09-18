@@ -57,6 +57,16 @@ export type ActiveCallsResponse = {
 export type ActivityType = 'view' | 'interact';
 
 /**
+ * Request body for adding options to a select column.
+ */
+export type AddColumnOptionsRequest = {
+    /**
+     * Display labels to add. Labels the column already has are ignored.
+     */
+    labels: Array<string>;
+};
+
+/**
  * Request body for favoriting an entity.
  */
 export type AddFavoriteRequest = {
@@ -2650,6 +2660,11 @@ export type ColumnBindingRequest = {
      * Column display name.
      */
     name: string;
+    /**
+     * For a select or tag column, the labels SQL will accept. A select
+     * column created without any accepts nothing until options are added.
+     */
+    options?: Array<string>;
 } | {
     kind: 'existing';
     /**
@@ -8383,6 +8398,15 @@ export type SoupThreadReply = {
 export type SqlValue = null | number | number | string;
 
 /**
+ * The bytes of a SQLite database file.
+ *
+ * Its only job is to make the response body binary in the OpenAPI document;
+ * `Vec<u8>` would be described as an array of integers and generate clients
+ * that parse the file as JSON.
+ */
+export type SqliteFile = Blob | File;
+
+/**
  * The deterministic starter document ids for the current user.
  */
 export type StarterDocumentsResponse = {
@@ -11429,7 +11453,7 @@ export type DownloadDatabaseSqliteResponses = {
     /**
      * A SQLite database file
      */
-    200: Array<number>;
+    200: SqliteFile;
 };
 
 export type DownloadDatabaseSqliteResponse = DownloadDatabaseSqliteResponses[keyof DownloadDatabaseSqliteResponses];
@@ -11504,6 +11528,51 @@ export type CreateDatabaseColumnResponses = {
 };
 
 export type CreateDatabaseColumnResponse = CreateDatabaseColumnResponses[keyof CreateDatabaseColumnResponses];
+
+export type AddDatabaseColumnOptionsData = {
+    body: AddColumnOptionsRequest;
+    path: {
+        /**
+         * Database id
+         */
+        id: string;
+        /**
+         * Table id
+         */
+        table_id: string;
+        /**
+         * Column id
+         */
+        column_id: string;
+    };
+    query?: never;
+    url: '/databases/{id}/tables/{table_id}/columns/{column_id}/options';
+};
+
+export type AddDatabaseColumnOptionsErrors = {
+    /**
+     * Not a select column, or an invalid label
+     */
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * No edit access to the database
+     */
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type AddDatabaseColumnOptionsError = AddDatabaseColumnOptionsErrors[keyof AddDatabaseColumnOptionsErrors];
+
+export type AddDatabaseColumnOptionsResponses = {
+    200: ColumnDetail;
+};
+
+export type AddDatabaseColumnOptionsResponse = AddDatabaseColumnOptionsResponses[keyof AddDatabaseColumnOptionsResponses];
 
 export type GetUserDocumentsHandlerData = {
     body?: never;

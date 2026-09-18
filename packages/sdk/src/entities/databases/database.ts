@@ -1,4 +1,5 @@
 import type {
+  ColumnDetail,
   CreateColumnRequest,
   DatabaseDetail,
   DataType,
@@ -23,6 +24,12 @@ export type ColumnBinding =
       dataType: DataType;
       /** Whether the column holds multiple values. Defaults to false. */
       multiSelect?: boolean;
+      /**
+       * For a select or tag column, the labels SQL will accept. A select
+       * column created without any accepts nothing until options are added
+       * with {@link DatabaseColumn.addOptions}.
+       */
+      options?: string[];
     }
   | {
       /** An existing property definition to bind the column to. */
@@ -185,6 +192,7 @@ export class Database extends MacroEntity<DatabaseDetail> {
             ...(opts.multiSelect !== undefined
               ? { is_multi_select: opts.multiSelect }
               : {}),
+            ...(opts.options !== undefined ? { options: opts.options } : {}),
           };
     const { columnId } = await this.mutate((c) =>
       c.storage.createDatabaseColumn({
@@ -201,6 +209,29 @@ export class Database extends MacroEntity<DatabaseDetail> {
       }),
     );
     return DatabaseColumn.byId(table, columnId);
+  }
+
+  /**
+   * Add select options to one of the database's columns. Labels the column
+   * already has are ignored, so the call is safe to repeat. Only select and
+   * tag columns accept options.
+   */
+  async addColumnOptions(
+    column: DatabaseColumn,
+    labels: string[],
+  ): Promise<ColumnDetail> {
+    const table = column.table;
+    if (table.database.id !== this.id) {
+      throw new MacroError(
+        `column ${column.id} belongs to database ${table.database.id}, not ${this.id}`,
+      );
+    }
+    return this.mutate((c) =>
+      c.storage.addDatabaseColumnOptions({
+        path: { id: this.id, table_id: table.id, column_id: column.id },
+        body: { labels },
+      }),
+    );
   }
 
   /**
