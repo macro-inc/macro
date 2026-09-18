@@ -181,7 +181,7 @@ fn opaque_spans(sql: &str) -> Vec<&str> {
     while i < bytes.len() {
         let start = i;
         let end = match bytes[i] {
-            q @ (b'\'' | b'"') => {
+            q @ (b'\'' | b'"' | b'`') => {
                 let mut k = i + 1;
                 loop {
                     match bytes.get(k) {
@@ -197,6 +197,10 @@ fn opaque_spans(sql: &str) -> Vec<&str> {
                     }
                 }
             }
+            b'[' => match sql[i + 1..].find(']') {
+                Some(n) => i + 1 + n + 1,
+                None => bytes.len(),
+            },
             b'-' if bytes.get(i + 1) == Some(&b'-') => match sql[i..].find('\n') {
                 Some(n) => i + n + 1,
                 None => bytes.len(),
@@ -264,6 +268,10 @@ fn random_token(rng: &mut rand::rngs::StdRng) -> String {
         "'日 HAS 本'",
         "\"a HAS b\"",
         "\"quoted\"",
+        "`a HAS b`",
+        "`back tick`",
+        "[a HAS b]",
+        "[bracketed]",
         "-- a HAS b\n",
         "-- don't\n",
         "/* x HAS 'y */",

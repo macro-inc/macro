@@ -19,8 +19,9 @@ use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};
 use model_entity::EntityType;
 
 use crate::domain::models::{
-    ApplyOutcome, Column, ColumnId, CreateColumn, CreateDatabase, CreateTable, Database,
-    DatabaseId, PropertyDefinitionId, Row, RowChange, RowId, Table, TableId, TableVersion, Viewer,
+    ApplyOutcome, Column, ColumnConfig, ColumnId, CreateColumn, CreateDatabase, CreateTable,
+    Database, DatabaseId, PropertyDefinitionId, Row, RowChange, RowId, Table, TableId,
+    TableVersion, Viewer,
 };
 use crate::domain::ports::DatabasesRepo;
 
@@ -121,19 +122,34 @@ impl PgDatabasesRepo {
         Self { pool }
     }
 
-    /// The table a link column belongs to — the table whose version a link
-    /// change bumps.
-    async fn link_column_table(
+    /// The tables whose versions a change to `column_id`'s edges bumps: the
+    /// table the link column sits on, and the table it points at.
+    ///
+    /// Both ends move because both ends read the edge — the target table's
+    /// rows expose the reverse ("linked from") side, which is computed at read
+    /// time, so a viewer of the target sees stale data until its version says
+    /// otherwise. Returns just the source table when the placement carries no
+    /// link config or points at itself.
+    async fn link_column_tables(
         transaction: &mut Transaction<'_, Postgres>,
         column_id: ColumnId,
-    ) -> Result<TableId, PgDatabasesRepoError> {
-        sqlx::query_scalar!(
-            r#"SELECT table_id FROM database_columns WHERE id = $1"#,
+    ) -> Result<Vec<TableId>, PgDatabasesRepoError> {
+        let row = sqlx::query!(
+            r#"SELECT table_id, config FROM database_columns WHERE id = $1"#,
             column_id
         )
         .fetch_optional(&mut **transaction)
         .await?
-        .ok_or(PgDatabasesRepoError::ColumnNotFound(column_id))
+        .ok_or(PgDatabasesRepoError::ColumnNotFound(column_id))?;
+
+        let mut tables = vec![row.table_id];
+        let config: Option<ColumnConfig> = row.config.map(serde_json::from_value).transpose()?;
+        if let Some(ColumnConfig::Link { table_id, .. }) = config
+            && table_id != row.table_id
+        {
+            tables.push(table_id);
+        }
+        Ok(tables)
     }
 
     /// Insert one row at the end of its table, returning the minted id.
@@ -425,7 +441,7 @@ impl DatabasesRepo for PgDatabasesRepo {
     }
 
     #[tracing::instrument(err, skip(self))]
-    async fn fetch_rows(&self, table_id: TableId) -> Result<Vec<Row>, Self::Err> {
+    async fn fetch_rows(&self, table_id: TableId, limit: usize) -> Result<Vec<Row>, Self::Err> {
         // One sequential scan: cells are dense and always read together.
         sqlx::query!(
             r#"
@@ -433,8 +449,10 @@ impl DatabasesRepo for PgDatabasesRepo {
             FROM database_rows
             WHERE table_id = $1
             ORDER BY position
+            LIMIT $2
             "#,
-            table_id
+            table_id,
+            limit as i64,
         )
         .fetch_all(&self.pool)
         .await?
@@ -481,25 +499,25 @@ impl DatabasesRepo for PgDatabasesRepo {
 
         // Every table this changeset writes, resolved up front (links name a
         // column, not a table) so the version rows can be locked in one go.
-        let mut link_tables: HashMap<ColumnId, TableId> = HashMap::new();
+        let mut link_tables: HashMap<ColumnId, Vec<TableId>> = HashMap::new();
         for change in changes {
             if let RowChange::Link { column_id, .. } | RowChange::Unlink { column_id, .. } = change
                 && !link_tables.contains_key(column_id)
             {
-                let table_id = Self::link_column_table(&mut transaction, *column_id).await?;
-                link_tables.insert(*column_id, table_id);
+                let tables = Self::link_column_tables(&mut transaction, *column_id).await?;
+                link_tables.insert(*column_id, tables);
             }
         }
         // Sorted so concurrent changesets lock version rows in the same order
         // and cannot deadlock on each other.
         let written_tables: BTreeSet<TableId> = changes
             .iter()
-            .map(|change| match change {
+            .flat_map(|change| match change {
                 RowChange::Insert { table_id, .. }
                 | RowChange::Update { table_id, .. }
-                | RowChange::Delete { table_id, .. } => *table_id,
+                | RowChange::Delete { table_id, .. } => vec![*table_id],
                 RowChange::Link { column_id, .. } | RowChange::Unlink { column_id, .. } => {
-                    link_tables[column_id]
+                    link_tables[column_id].clone()
                 }
             })
             .collect();
@@ -671,7 +689,6 @@ impl DatabasesRepo for PgDatabasesRepo {
         Ok(ApplyOutcome::Applied((inserted_row_ids, new_versions)))
     }
 
-    #[tracing::instrument(err, skip(self))]
     #[tracing::instrument(skip(self), err)]
     async fn databases_by_ids(&self, ids: &[DatabaseId]) -> Result<Vec<Database>, Self::Err> {
         let rows = sqlx::query!(

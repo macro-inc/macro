@@ -507,7 +507,13 @@ impl IntoResponse for DatabaseError {
             }
             other => other.to_string(),
         };
-        (status, message).into_response()
+        (
+            status,
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
+        )
+            .into_response()
     }
 }
 
@@ -519,7 +525,9 @@ impl IntoResponse for QueryError {
             QueryError::Sql(_) | QueryError::UntranslatableChange(_) => StatusCode::BAD_REQUEST,
             QueryError::ReadOnly(_) => StatusCode::FORBIDDEN,
             QueryError::VersionConflict { .. } => StatusCode::CONFLICT,
-            QueryError::BudgetExceeded => StatusCode::UNPROCESSABLE_ENTITY,
+            QueryError::BudgetExceeded | QueryError::TruncatedDependency(_) => {
+                StatusCode::UNPROCESSABLE_ENTITY
+            }
             QueryError::Infrastructure(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         let message = match &self {
@@ -529,6 +537,12 @@ impl IntoResponse for QueryError {
             }
             other => other.to_string(),
         };
-        (status, message).into_response()
+        (
+            status,
+            Json(ErrorResponse {
+                message: message.into(),
+            }),
+        )
+            .into_response()
     }
 }

@@ -31,10 +31,10 @@ CREATE TABLE database_tables (
     version BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     -- Tab names are the basis of SQL table names; keep them unambiguous.
+    -- Also the lookup index for "every table of a database": the unique
+    -- constraint's btree leads with database_id.
     UNIQUE (database_id, name)
 );
-
-CREATE INDEX idx_database_tables_database ON database_tables(database_id);
 
 -- Placement of a property definition as a column of one table. The definition
 -- (owned by the database via property_definitions ownership, or bound to a
@@ -49,10 +49,14 @@ CREATE TABLE database_columns (
     -- lookup {via_column_id, target}, display width, etc.
     config JSONB,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Leads with table_id, so it doubles as the "columns of a table" index.
     UNIQUE (table_id, property_definition_id)
 );
 
-CREATE INDEX idx_database_columns_table ON database_columns(table_id);
+-- Reverse lookup: which columns bind a definition (definition deletes,
+-- shared user/team property renames).
+CREATE INDEX idx_database_columns_property_definition
+    ON database_columns(property_definition_id);
 
 -- One row per user row; cells are a JSONB object keyed by
 -- property_definition_id whose values are models_properties PropertyValue
@@ -66,7 +70,10 @@ CREATE TABLE database_rows (
     -- Fractional index for manual row ordering.
     position TEXT NOT NULL,
     cells JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_by TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE ON UPDATE CASCADE,
+    -- Provenance only. Deleting a user must not delete rows other people are
+    -- still using (`User` rows are hard-deleted), so the attribution is
+    -- dropped and the row survives.
+    created_by TEXT REFERENCES "User"(id) ON DELETE SET NULL ON UPDATE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -84,4 +91,7 @@ CREATE TABLE database_row_links (
     PRIMARY KEY (link_column_id, source_row_id, target_row_id)
 );
 
+-- The primary key leads with link_column_id, so neither foreign key on the
+-- row ids is covered by it; both cascades need their own index.
+CREATE INDEX idx_database_row_links_source ON database_row_links(source_row_id);
 CREATE INDEX idx_database_row_links_target ON database_row_links(target_row_id);

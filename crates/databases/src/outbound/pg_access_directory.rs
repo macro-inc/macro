@@ -1,9 +1,16 @@
 //! Which databases a viewer can reach, from the shared `entity_access` table.
 //!
-//! Source ids follow the same rule as every other entity listing in MacroDB
-//! (`list_documents_with_access`): the user themself, their teams, and the
-//! channels they participate in. The highest grant wins.
+//! Which source ids stand for a viewer is `entity_access`'s own question, so
+//! it is asked there ([`entity_access::outbound::get_user_source_ids`]) rather
+//! than re-derived here: a second copy of that rule is a permission bug
+//! waiting to happen, and the copy this replaced had already drifted. The
+//! highest grant wins.
 
+#[cfg(test)]
+mod test;
+
+use entity_access::outbound::get_user_source_ids;
+use rootcause::compat::IntoRootcause;
 use sqlx::PgPool;
 
 use crate::domain::models::{AccessGrant, DatabaseId, Viewer};
@@ -15,6 +22,9 @@ pub enum PgAccessDirectoryError {
     /// Underlying database failure.
     #[error("database error")]
     Sqlx(#[from] sqlx::Error),
+    /// The viewer's `entity_access` source ids could not be resolved.
+    #[error("failed to resolve viewer source ids: {0:?}")]
+    SourceIds(rootcause::Report),
 }
 
 /// [`AccessDirectory`] over MacroDB's `entity_access`.
@@ -38,25 +48,18 @@ impl AccessDirectory for PgAccessDirectory {
         &self,
         viewer: &Viewer,
     ) -> Result<Vec<(DatabaseId, AccessGrant)>, Self::Err> {
-        let user_id: &str = viewer.user_id.as_ref();
+        let source_ids = get_user_source_ids(&self.pool, Some(&viewer.user_id))
+            .await
+            .map_err(|e| PgAccessDirectoryError::SourceIds(e.into_rootcause()))?;
         let rows = sqlx::query!(
             r#"
-            WITH user_source_ids AS (
-                SELECT cp.channel_id::text AS source_id FROM comms_channel_participants cp
-                    WHERE cp.user_id = $1 AND cp.left_at IS NULL
-                UNION ALL
-                SELECT t.team_id::text FROM team_user t
-                    WHERE t.user_id = $1
-                UNION ALL
-                SELECT $1
-            )
             SELECT DISTINCT ON (ea.entity_id)
                 ea.entity_id AS "entity_id!",
                 ea.access_level::text AS "access_level!"
             FROM entity_access ea
             JOIN databases d ON d.id = ea.entity_id AND d.trashed_at IS NULL
             WHERE ea.entity_type = 'database'
-              AND ea.source_id = ANY(SELECT source_id FROM user_source_ids)
+              AND ea.source_id = ANY($1)
             ORDER BY ea.entity_id,
                 CASE ea.access_level::text
                     WHEN 'owner' THEN 4
@@ -66,7 +69,7 @@ impl AccessDirectory for PgAccessDirectory {
                     ELSE 0
                 END DESC
             "#,
-            user_id,
+            &source_ids.0,
         )
         .fetch_all(&self.pool)
         .await?;

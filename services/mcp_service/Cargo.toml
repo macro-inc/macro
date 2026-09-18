@@ -31,7 +31,10 @@ chat = { path = "../../crates/chat", features = ["ai_tools", "outbound"] }
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 crm = { path = "../../crates/crm" }
 database_env_vars = { path = "../../crates/database_env_vars" }
-databases = { path = "../../crates/databases", default-features = false, features = ["gateway", "postgres", "sqlite"] }
+# The AI-tool host build: `ai_tools` for the toolset this service serves,
+# `gateway` for the table-changed fan-out it wires, and `postgres`/`sqlite`
+# for the adapters behind the service it builds.
+databases = { path = "../../crates/databases", features = ["ai_tools", "gateway", "postgres", "sqlite"] }
 documents = { path = "../../crates/documents", features = ["ai_tools"] }
 doppler-config = { workspace = true }
 email = { path = "../../crates/email", features = ["outbound"] }

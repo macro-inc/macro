@@ -53,6 +53,10 @@ struct World {
     grants: HashMap<String, Vec<(DatabaseId, AccessGrant)>>,
     published: Vec<(TableId, TableVersion)>,
     applied: Vec<RowChange>,
+    /// Row limits `fetch_rows` was called with, newest last.
+    fetch_row_limits: Vec<usize>,
+    /// When set, the fake magic table reports itself truncated.
+    magic_truncated: bool,
 }
 
 type Shared = Arc<Mutex<World>>;
@@ -62,7 +66,7 @@ struct FakeRepo(Shared);
 #[derive(Clone)]
 struct FakeDefs(Shared);
 #[derive(Clone)]
-struct FakeMagic;
+struct FakeMagic(Shared);
 #[derive(Clone)]
 struct FakeEvents(Shared);
 #[derive(Clone)]
@@ -187,15 +191,15 @@ impl DatabasesRepo for FakeRepo {
         w.columns.push(column.clone());
         Ok(column.id)
     }
-    async fn fetch_rows(&self, table_id: TableId) -> Result<Vec<Row>, FakeError> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .rows
-            .get(&table_id)
-            .cloned()
-            .unwrap_or_default())
+    async fn fetch_rows(&self, table_id: TableId, limit: usize) -> Result<Vec<Row>, FakeError> {
+        // Honours `limit` like the real `LIMIT $2`, so the domain's over-cap
+        // check is exercised against a truncated read, not a full one.
+        let mut world = self.0.lock().unwrap();
+        world.fetch_row_limits.push(limit);
+        let mut rows = world.rows.get(&table_id).cloned().unwrap_or_default();
+        drop(world);
+        rows.truncate(limit);
+        Ok(rows)
     }
     async fn fetch_links(&self, column_id: ColumnId) -> Result<Vec<(RowId, RowId)>, FakeError> {
         Ok(self
@@ -477,7 +481,7 @@ impl MagicTables for FakeMagic {
                     SqlValue::Text("me@macro.com".into()),
                 ]],
             },
-            false,
+            self.0.lock().unwrap().magic_truncated,
         ))
     }
 }
@@ -519,7 +523,7 @@ fn service(world: &Shared) -> Service {
     DatabasesServiceImpl::new(
         FakeRepo(world.clone()),
         FakeDefs(world.clone()),
-        FakeMagic,
+        FakeMagic(world.clone()),
         RusqliteExecutor::new(ExecutorLimits::default()),
         FakeEvents(world.clone()),
         FakeAccess(world.clone()),
@@ -991,6 +995,23 @@ async fn schema_reads_name_tables_against_the_whole_catalog() {
         .await
         .unwrap();
     assert_eq!(snapshot.versions.len(), 1);
+
+    // …and a snapshot is a standalone file containing that database alone, so
+    // its tables are named against it and not against the viewer's catalog:
+    // the name that is ambiguous online is unambiguous, and bare, in here.
+    let path = std::env::temp_dir().join(format!("databases-naming-{}.sqlite", Uuid::new_v4()));
+    std::fs::write(&path, &snapshot.bytes).unwrap();
+    let conn = rusqlite::Connection::open(&path).unwrap();
+    let names: Vec<String> = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name")
+        .unwrap()
+        .query_map([], |r| r.get(0))
+        .unwrap()
+        .collect::<Result<_, _>>()
+        .unwrap();
+    assert_eq!(names, vec!["table_1".to_string()], "{names:?}");
+    drop(conn);
+    let _ = std::fs::remove_file(path);
 }
 
 #[tokio::test]
@@ -1615,4 +1636,115 @@ async fn failed_batches_apply_nothing() {
     assert_eq!(w.applied.len(), applied_before);
     assert_eq!(w.published.len(), published_before);
     assert_eq!(w.rows.values().map(Vec::len).sum::<usize>(), 1);
+}
+
+#[tokio::test]
+async fn exec_reports_the_version_of_every_table_it_read() {
+    let (world, svc, _db, guests) = seeded().await;
+
+    // A pure read reports the version it materialized, and writes nothing.
+    let outcome = exec(&svc, OWNER, "SELECT name FROM guests").await.unwrap();
+    assert_eq!(outcome.read_tables, vec![guests]);
+    assert_eq!(
+        outcome.read_versions.get(&guests),
+        Some(&TableVersion(1)),
+        "the read must report the version it saw"
+    );
+    assert!(outcome.new_versions.is_empty());
+
+    // Handing those versions straight back is an accurate compare-and-set:
+    // nothing moved in between, so the write lands.
+    let outcome = svc
+        .exec_sql(
+            viewer(OWNER),
+            ExecRequest {
+                sql: "UPDATE guests SET name = 'Sam K'".into(),
+                base_versions: Some(outcome.read_versions.clone()),
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(outcome.changes_applied, 1);
+    // A write reports both: the version its read saw, and the one it left.
+    assert_eq!(outcome.read_versions.get(&guests), Some(&TableVersion(1)));
+    assert_eq!(outcome.new_versions.get(&guests), Some(&TableVersion(2)));
+
+    // The same base versions are now stale, and the second attempt conflicts —
+    // which is the whole point of handing them to the client.
+    let stale = HashMap::from([(guests, TableVersion(1))]);
+    let err = svc
+        .exec_sql(
+            viewer(OWNER),
+            ExecRequest {
+                sql: "UPDATE guests SET name = 'Sam L'".into(),
+                base_versions: Some(stale),
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, QueryError::VersionConflict { table_id } if table_id == guests),
+        "{err:?}"
+    );
+
+    // Omitting them is still allowed and still last-write-wins.
+    let _ = world;
+    exec(&svc, OWNER, "UPDATE guests SET name = 'Sam M'")
+        .await
+        .expect("a write with no base versions commits blind");
+}
+
+#[tokio::test]
+async fn a_truncated_magic_table_may_be_read_but_never_written_from() {
+    let (world, svc, _db, _guests) = seeded().await;
+    {
+        let mut w = world.lock().unwrap();
+        w.applied.clear();
+        w.magic_truncated = true;
+    }
+
+    // Reading one is merely incomplete, and says so.
+    let outcome = exec(&svc, OWNER, "SELECT email FROM people").await.unwrap();
+    assert_eq!(outcome.truncated_tables, vec!["people".to_string()]);
+
+    // Writing from one is wrong: the statement never saw the missing rows.
+    let err = exec(
+        &svc,
+        OWNER,
+        "INSERT INTO guests (name) SELECT email FROM people",
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(err, QueryError::TruncatedDependency(ref tables) if tables.contains("people")),
+        "{err:?}"
+    );
+    assert!(
+        world.lock().unwrap().applied.is_empty(),
+        "nothing may reach the repo"
+    );
+
+    // The same write is fine once the table fits.
+    world.lock().unwrap().magic_truncated = false;
+    exec(
+        &svc,
+        OWNER,
+        "INSERT INTO guests (name) SELECT email FROM people",
+    )
+    .await
+    .expect("an untruncated dependency is writable");
+}
+
+#[tokio::test]
+async fn rows_are_fetched_one_over_the_materialization_cap() {
+    let (world, svc, _db, _guests) = seeded().await;
+    world.lock().unwrap().fetch_row_limits.clear();
+
+    exec(&svc, OWNER, "SELECT name FROM guests").await.unwrap();
+
+    assert_eq!(
+        world.lock().unwrap().fetch_row_limits,
+        vec![MAX_MATERIALIZED_ROWS + 1],
+        "the cap is pushed into the query, not applied after loading everything"
+    );
 }

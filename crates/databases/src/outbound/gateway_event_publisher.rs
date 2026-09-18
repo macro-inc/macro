@@ -78,3 +78,46 @@ impl TableEventPublisher for NoOpTableEventPublisher {
         Ok(())
     }
 }
+
+/// The publisher for hosts that may or may not have gateway credentials.
+///
+/// A host that configures the connection gateway publishes for real, so a
+/// table an agent writes invalidates the query chips watching it exactly as a
+/// user's own write does. Hosts without credentials drop the event: the write
+/// has already committed, and clients refresh on their own.
+#[derive(Debug, Clone)]
+pub enum MaybeGatewayTableEventPublisher {
+    /// Publish through the connection gateway.
+    Gateway(GatewayTableEventPublisher),
+    /// Drop liveness events in hosts that do not configure the gateway.
+    NoOp(NoOpTableEventPublisher),
+}
+
+impl From<GatewayTableEventPublisher> for MaybeGatewayTableEventPublisher {
+    fn from(publisher: GatewayTableEventPublisher) -> Self {
+        Self::Gateway(publisher)
+    }
+}
+
+impl TableEventPublisher for MaybeGatewayTableEventPublisher {
+    type Err = PublishError;
+
+    async fn table_changed(
+        &self,
+        database_id: DatabaseId,
+        table_id: TableId,
+        version: TableVersion,
+    ) -> Result<(), Self::Err> {
+        match self {
+            Self::Gateway(publisher) => {
+                publisher
+                    .table_changed(database_id, table_id, version)
+                    .await
+            }
+            Self::NoOp(publisher) => publisher
+                .table_changed(database_id, table_id, version)
+                .await
+                .map_err(|never| match never {}),
+        }
+    }
+}

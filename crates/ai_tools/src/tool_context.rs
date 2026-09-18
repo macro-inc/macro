@@ -856,54 +856,17 @@ pub fn build_reminders_tool_context(
 
 /// Table-changed fan-out for AI tool hosts.
 ///
-/// A host that configures the connection gateway publishes for real, so a
-/// table an agent writes invalidates the query chips watching it exactly as a
-/// user's own write does. Hosts without gateway credentials drop the event:
-/// the write has already committed, and clients refresh on their own.
-#[derive(Debug, Clone)]
-pub enum ToolTableEventPublisher {
-    /// Publish through the connection gateway.
-    Gateway(databases::outbound::gateway_event_publisher::GatewayTableEventPublisher),
-    /// Drop liveness events in hosts that do not configure the gateway.
-    NoOp(databases::outbound::gateway_event_publisher::NoOpTableEventPublisher),
-}
-
-impl databases::domain::ports::TableEventPublisher for ToolTableEventPublisher {
-    type Err = databases::outbound::gateway_event_publisher::PublishError;
-
-    async fn table_changed(
-        &self,
-        database_id: uuid::Uuid,
-        table_id: uuid::Uuid,
-        version: databases::domain::models::TableVersion,
-    ) -> Result<(), Self::Err> {
-        match self {
-            Self::Gateway(publisher) => {
-                publisher
-                    .table_changed(database_id, table_id, version)
-                    .await
-            }
-            Self::NoOp(publisher) => publisher
-                .table_changed(database_id, table_id, version)
-                .await
-                .map_err(|never| match never {}),
-        }
-    }
-}
+/// Owned by the databases crate, where the HTTP roots reach it too; re-exported
+/// under the tool-host name the AI tool wiring uses.
+pub use databases::outbound::gateway_event_publisher::MaybeGatewayTableEventPublisher as ToolTableEventPublisher;
 
 /// Type alias for the databases service implementation used by AI tools.
 ///
 /// The same port implementations the HTTP surface runs on: Postgres for
 /// storage and the embedded rusqlite sandbox for SQL, so an agent's SQL is
 /// scoped by the acting user's catalog exactly as the HTTP surface's is.
-pub type ToolDatabasesService = databases::domain::service::DatabasesServiceImpl<
-    databases::outbound::pg_databases_repo::PgDatabasesRepo,
-    databases::outbound::pg_definition_store::PgDefinitionStore,
-    databases::outbound::magic::MagicTableRegistry,
-    databases::outbound::rusqlite_executor::RusqliteExecutor,
-    ToolTableEventPublisher,
-    databases::outbound::pg_access_directory::PgAccessDirectory,
->;
+pub type ToolDatabasesService =
+    databases::outbound::build::PgDatabasesService<ToolTableEventPublisher>;
 
 /// Type alias for the databases tool context.
 pub type ToolDatabasesToolContext =
@@ -920,16 +883,7 @@ pub fn build_databases_tool_context(
     events: ToolTableEventPublisher,
 ) -> ToolDatabasesToolContext {
     DatabasesToolContext::new(
-        databases::domain::service::DatabasesServiceImpl::new(
-            databases::outbound::pg_databases_repo::PgDatabasesRepo::new(pool.clone()),
-            databases::outbound::pg_definition_store::PgDefinitionStore::new(pool.clone()),
-            databases::outbound::magic::MagicTableRegistry::new(pool.clone()),
-            databases::outbound::rusqlite_executor::RusqliteExecutor::new(
-                databases::outbound::rusqlite_executor::ExecutorLimits::default(),
-            ),
-            events,
-            databases::outbound::pg_access_directory::PgAccessDirectory::new(pool),
-        ),
+        databases::outbound::build_service(pool, events),
         entity_access_service,
     )
 }

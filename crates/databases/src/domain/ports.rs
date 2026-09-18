@@ -82,10 +82,16 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         cmd: &CreateColumn,
     ) -> impl Future<Output = Result<ColumnId, Self::Err>> + Send;
 
-    /// Fetch every row of a table.
+    /// Fetch a table's rows in position order, at most `limit` of them.
+    ///
+    /// The cap is the domain's materialization budget plus one: the service
+    /// refuses a table that comes back over the budget, and the extra row is
+    /// how it tells "exactly at the budget" from "more than the budget"
+    /// without loading the rest.
     fn fetch_rows(
         &self,
         table_id: TableId,
+        limit: usize,
     ) -> impl Future<Output = Result<Vec<Row>, Self::Err>> + Send;
 
     /// Fetch the link edges for a link column.

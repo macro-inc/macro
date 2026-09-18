@@ -43,6 +43,9 @@ macro_rules! sql_guide {
          - **Writes are plain `INSERT` / `UPDATE` / `DELETE`** against the user table and are \
          validated against the column schema; an unknown select option or a wrong type is \
          rejected by the statement, not silently coerced.\n\
+         - **Write to a table's own name**, the one `DescribeDatabase` reports as its \
+         `sql_name`. A table may also answer to a second, database-qualified name; that alias \
+         is a view and reads only, so writing through it is rejected.\n\
          - Tables you only hold view access on are read-only, and magic tables always are."
     };
 }
@@ -215,9 +218,17 @@ pub(crate) fn database_error(error: DatabaseError) -> ToolCallError {
         DatabaseError::Repo(_) => "The databases service failed.".to_string(),
     };
 
+    // The error is handed over whole rather than rendered to a string: a
+    // `Repo` failure carries a rootcause report, and flattening it here throws
+    // away the chain the logs are for.
+    let internal_error = match error {
+        DatabaseError::Repo(report) => report.into(),
+        other => anyhow::Error::new(other),
+    };
+
     ToolCallError {
         description,
-        internal_error: anyhow::Error::msg(format!("{error:?}")),
+        internal_error,
     }
 }
 
@@ -243,6 +254,10 @@ pub(crate) fn query_error(error: QueryError) -> ToolCallError {
             "The statement exceeded the query budget. Narrow it with a WHERE clause or a LIMIT."
                 .to_string()
         }
+        QueryError::TruncatedDependency(tables) => format!(
+            "This write reads {tables}, which is too large to load in full, so the statement \
+             did not see all of it. Narrow the write to specific rows, or split it up."
+        ),
         QueryError::UntranslatableChange(message) => format!(
             "That write could not be applied: {message}. Write to the user table's own columns \
              with plain INSERT/UPDATE/DELETE."
@@ -250,9 +265,15 @@ pub(crate) fn query_error(error: QueryError) -> ToolCallError {
         QueryError::Infrastructure(_) => "The databases service failed.".to_string(),
     };
 
+    // As in [`database_error`]: keep the report, not a rendering of it.
+    let internal_error = match error {
+        QueryError::Infrastructure(report) => report.into(),
+        other => anyhow::Error::new(other),
+    };
+
     ToolCallError {
         description,
-        internal_error: anyhow::Error::msg(format!("{error:?}")),
+        internal_error,
     }
 }
 

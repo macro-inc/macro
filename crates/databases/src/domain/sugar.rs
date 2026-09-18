@@ -57,7 +57,9 @@ pub fn desugar(sql: &str) -> String {
 /// if one does — content the rewrite must copy untouched.
 fn opaque_span_end(bytes: &[u8], i: usize) -> Option<usize> {
     match bytes[i] {
-        quote @ (b'\'' | b'"') => {
+        // SQLite also accepts MySQL backticks and SQL Server brackets as
+        // identifier quoting; a `HAS` inside either is a name, not an operator.
+        quote @ (b'\'' | b'"' | b'`') => {
             let mut k = i + 1;
             while k < bytes.len() {
                 if bytes[k] == quote {
@@ -71,6 +73,13 @@ fn opaque_span_end(bytes: &[u8], i: usize) -> Option<usize> {
             }
             Some(bytes.len())
         }
+        // Bracket quoting has no escape: the first `]` closes it.
+        b'[' => Some(
+            bytes[i + 1..]
+                .iter()
+                .position(|&b| b == b']')
+                .map_or(bytes.len(), |close| i + 1 + close + 1),
+        ),
         b'-' if bytes.get(i + 1) == Some(&b'-') => Some(
             bytes[i..]
                 .iter()

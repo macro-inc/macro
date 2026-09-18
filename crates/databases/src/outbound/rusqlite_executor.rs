@@ -468,6 +468,11 @@ impl RusqliteExecutor {
         let mut iter = changeset.iter().map_err(infra)?;
         let mut changes = Vec::new();
         while let Some(item) = FallibleStreamingIterator::next(&mut iter).map_err(infra)? {
+            // Checked before the change is decoded, so the cap is exact and no
+            // work is done on the change that breaks it.
+            if changes.len() >= max_changes {
+                return Err(QueryError::BudgetExceeded);
+            }
             let op = item.op().map_err(infra)?;
             let table_name = op.table_name().to_string();
             let Some(schema) = by_name.get(table_name.as_str()) else {
@@ -536,9 +541,6 @@ impl RusqliteExecutor {
                 primary_key,
                 new_values,
             });
-            if changes.len() > max_changes {
-                return Err(QueryError::BudgetExceeded);
-            }
         }
         Ok(changes)
     }

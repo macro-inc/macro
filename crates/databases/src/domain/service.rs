@@ -155,9 +155,15 @@ where
     }
 
     /// Build catalog entries for a set of databases the viewer holds grants on.
+    ///
+    /// `reserved` are the SQL names bare table names may not claim — the magic
+    /// tables, for anything that shares a namespace with `exec_sql`. A
+    /// self-contained artefact with no magic tables in it (the SQLite
+    /// snapshot) passes an empty list so its tables keep their bare names.
     async fn entries_for(
         &self,
         grants: &HashMap<DatabaseId, AccessGrant>,
+        reserved: &[String],
     ) -> Result<Vec<TableEntry>, QueryError> {
         let database_ids: Vec<DatabaseId> = grants.keys().copied().collect();
         let mut databases = self
@@ -192,20 +198,23 @@ where
             .into_iter()
             .map(|d| (d.definition.id, d))
             .collect();
-        let reserved: Vec<String> = self
-            .magic
-            .schemas()
-            .into_iter()
-            .map(|s| s.sql_name)
-            .collect();
         Ok(catalog::build_user_tables(
             &databases,
             &tables,
             &columns,
             &definitions,
             grants,
-            &reserved,
+            reserved,
         ))
+    }
+
+    /// The magic-table names bare user-table names must not shadow.
+    fn reserved_names(&self) -> Vec<String> {
+        self.magic
+            .schemas()
+            .into_iter()
+            .map(|s| s.sql_name)
+            .collect()
     }
 
     /// Every grant the viewer holds, with `grant` on `database_id` (the one a
@@ -245,7 +254,7 @@ where
             .map_err(infra)?
             .into_iter()
             .collect();
-        let entries = self.entries_for(&grants).await?;
+        let entries = self.entries_for(&grants, &self.reserved_names()).await?;
         let mut tables: Vec<TableSchema> = catalog::schemas(&entries).collect();
         tables.extend(self.magic.schemas());
         Ok(ViewerCatalog {
@@ -257,7 +266,13 @@ where
     /// Load rows and link edges for one table entry (rows once per table).
     async fn load_table(&self, entry: &TableEntry, loaded: &mut Loaded) -> Result<(), QueryError> {
         if let std::collections::hash_map::Entry::Vacant(slot) = loaded.rows.entry(entry.table.id) {
-            let fetched = self.repo.fetch_rows(entry.table.id).await.map_err(infra)?;
+            // One over the cap is enough to know the cap was broken, and stops
+            // an oversized table being pulled into memory just to be refused.
+            let fetched = self
+                .repo
+                .fetch_rows(entry.table.id, MAX_MATERIALIZED_ROWS + 1)
+                .await
+                .map_err(infra)?;
             if fetched.len() > MAX_MATERIALIZED_ROWS {
                 return Err(QueryError::BudgetExceeded);
             }
@@ -676,7 +691,7 @@ where
             .await
             .map_err(repo_err)?;
         let entries = self
-            .entries_for(&grants)
+            .entries_for(&grants, &self.reserved_names())
             .await
             .map_err(|e| DatabaseError::Repo(rootcause::Report::new(e).into_dynamic()))?;
         Ok(Self::detail(
@@ -871,6 +886,35 @@ where
         let changes = translate(raw_changes, &entries)?;
         self.validate_links(&changes, &entries, &mut loaded).await?;
 
+        // A truncated magic table is a partial view of the world. Reading one
+        // is merely incomplete (and reported as such); writing from one is
+        // wrong — the statement's WHERE clause never saw the missing rows.
+        if !written_tables.is_empty() && !truncated_tables.is_empty() {
+            return Err(QueryError::TruncatedDependency(truncated_tables.join(", ")));
+        }
+
+        // A link edge belongs to both ends: the target table's rows gain (or
+        // lose) a backlink, so its version moves too and compare-and-set
+        // covers it.
+        for change in &changes {
+            let (RowChange::Link { column_id, .. } | RowChange::Unlink { column_id, .. }) = change
+            else {
+                continue;
+            };
+            let target = entries
+                .iter()
+                .find_map(|e| e.columns.iter().find(|c| c.column.id == *column_id))
+                .and_then(|c| match &c.column.config {
+                    Some(ColumnConfig::Link { table_id, .. }) => Some(*table_id),
+                    _ => None,
+                });
+            if let Some(target) = target
+                && !written_tables.contains(&target)
+            {
+                written_tables.push(target);
+            }
+        }
+
         let expected_versions: HashMap<TableId, TableVersion> = req
             .base_versions
             .unwrap_or_default()
@@ -898,7 +942,7 @@ where
             .collect();
         self.publish(&database_of, &new_versions).await;
 
-        let read_tables = deps
+        let read_tables: Vec<TableId> = deps
             .tables
             .keys()
             .filter_map(|name| {
@@ -916,12 +960,26 @@ where
             .into_iter()
             .collect();
 
+        // The version each read table was at when this statement materialized
+        // it. A client that re-sends these as `base_versions` gets a real
+        // compare-and-set on everything it looked at, not only what it wrote.
+        let read_versions: HashMap<TableId, TableVersion> = read_tables
+            .iter()
+            .filter_map(|table_id| {
+                entries
+                    .iter()
+                    .find(|e| e.table.id == *table_id)
+                    .map(|e| (*table_id, e.table.version))
+            })
+            .collect();
+
         Ok(ExecOutcome {
             results,
             changes_applied: changes.len(),
             inserted_row_ids,
             new_versions,
             read_tables,
+            read_versions,
             truncated_tables,
         })
     }
@@ -930,19 +988,16 @@ where
     async fn sqlite_snapshot(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-        viewer: Viewer,
+        _viewer: Viewer,
     ) -> Result<SqliteSnapshot, QueryError> {
         let database_id = receipt_database_id(&receipt)
             .map_err(|_| QueryError::Sql("database not found".to_string()))?;
-        let grants = self
-            .viewer_grants(
-                &viewer,
-                database_id,
-                receipt_grant(&receipt, AccessGrant::View),
-            )
-            .await
-            .map_err(infra)?;
-        let entries = Self::entries_of(self.entries_for(&grants).await?, database_id);
+        // A snapshot is a standalone SQLite file containing exactly one
+        // database and no magic tables, so — unlike the query surface, which
+        // must name tables against the viewer's whole catalog — its tables are
+        // named against that database alone and keep their bare names.
+        let grants = HashMap::from([(database_id, receipt_grant(&receipt, AccessGrant::View))]);
+        let entries = Self::entries_of(self.entries_for(&grants, &[]).await?, database_id);
         let versions = entries
             .iter()
             .map(|e| (e.table.id, e.table.version))

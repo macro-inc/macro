@@ -145,9 +145,9 @@ pub fn format_number(n: f64) -> String {
 }
 
 /// Map a property entity type to the platform entity type chips hydrate.
-pub fn entity_type_for(property_type: PropertyEntityType) -> Option<model_entity::EntityType> {
+pub fn entity_type_for(property_type: PropertyEntityType) -> model_entity::EntityType {
     use model_entity::EntityType as E;
-    Some(match property_type {
+    match property_type {
         PropertyEntityType::User => E::User,
         PropertyEntityType::Document | PropertyEntityType::Task => E::Document,
         PropertyEntityType::Company => E::CrmCompany,
@@ -157,7 +157,7 @@ pub fn entity_type_for(property_type: PropertyEntityType) -> Option<model_entity
         PropertyEntityType::Project => E::Project,
         PropertyEntityType::Thread => E::EmailThread,
         PropertyEntityType::CalendarEvent => E::CalendarEvent,
-    })
+    }
 }
 
 fn unique_name(base: &str, taken: &mut HashSet<String>, disambiguator: &str) -> String {
@@ -225,7 +225,7 @@ fn column_schema(
         is_multi_select: multi,
         definition_id: Some(def.id),
         entity_type: match def.data_type {
-            DataType::Entity => def.specific_entity_type.and_then(entity_type_for),
+            DataType::Entity => def.specific_entity_type.map(entity_type_for),
             _ => None,
         },
         // Link cells are edges: written through the junction, read as JSON.
@@ -302,7 +302,11 @@ pub fn qualified_table_name(database: &Database, table_sql: &str) -> String {
 ///   and statements using it fail loudly with "no such table" rather than
 ///   picking one.
 ///
-/// Whichever form is not the physical table is compiled as a read-only view.
+/// Whichever form is not the physical table is compiled as a `CREATE VIEW`,
+/// so **writes must name [`TableSchema::sql_name`]**; a statement writing
+/// through an alias in [`TableSchema::aliases`] is rejected as read-only
+/// rather than applied. Reads may use either name.
+///
 /// Lookup columns are derived and not materialized in this version; columns
 /// whose definition is missing are skipped.
 pub fn build_user_tables(

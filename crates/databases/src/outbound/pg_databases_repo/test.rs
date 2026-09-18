@@ -302,7 +302,10 @@ async fn insert_then_update_merges_cells_and_bumps_version_once(pool: PgPool) {
     // Two changes, one table: exactly one bump off the column's version of 1.
     assert_eq!(versions, HashMap::from([(table.id, TableVersion(2))]));
 
-    let rows = repo.fetch_rows(table.id).await.expect("rows should fetch");
+    let rows = repo
+        .fetch_rows(table.id, 100)
+        .await
+        .expect("rows should fetch");
     assert_eq!(rows.len(), 2);
     // Positions append, so fetch order matches insert order.
     assert_eq!(rows[0].id, inserted[0]);
@@ -333,7 +336,10 @@ async fn insert_then_update_merges_cells_and_bumps_version_once(pool: PgPool) {
     assert!(minted.is_empty());
     assert_eq!(versions, HashMap::from([(table.id, TableVersion(3))]));
 
-    let rows = repo.fetch_rows(table.id).await.expect("rows should fetch");
+    let rows = repo
+        .fetch_rows(table.id, 100)
+        .await
+        .expect("rows should fetch");
     let updated = &rows[0];
     // A merge, not a replace: the untouched cell survives.
     assert_eq!(
@@ -447,7 +453,9 @@ async fn links_are_inserted_idempotently_and_removed(pool: PgPool) {
         .applied()
         .expect("no version conflict");
 
-    // A link change bumps the link column's own table, exactly once.
+    // A link change bumps the link column's own table, exactly once. The
+    // column here points back at that same table, so there is nothing else to
+    // bump; see `a_link_bumps_both_ends` for the cross-table case.
     assert_eq!(
         versions,
         HashMap::from([(table.id, TableVersion(before.0 + 1))])
@@ -544,7 +552,7 @@ async fn deleting_a_row_cascades_its_links(pool: PgPool) {
     .expect("delete should apply");
 
     assert_eq!(
-        repo.fetch_rows(table.id)
+        repo.fetch_rows(table.id, 100)
             .await
             .expect("rows should fetch")
             .len(),
@@ -555,5 +563,133 @@ async fn deleting_a_row_cascades_its_links(pool: PgPool) {
             .await
             .expect("links should fetch")
             .is_empty()
+    );
+}
+
+/// A link edge is read from both ends — the target table exposes the reverse
+/// side — so both tables' versions move and compare-and-set covers both.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_link_bumps_both_ends(pool: PgPool) {
+    let (repo, guests, guest_name) = fixture(&pool).await;
+
+    let sessions = repo
+        .create_table(&CreateTable {
+            database_id: guests.database_id,
+            name: "Sessions".to_string(),
+        })
+        .await
+        .expect("table should insert");
+    let session_name = insert_definition(&pool, "Session name").await;
+    repo.create_column(
+        sessions.id,
+        session_name,
+        &CreateColumn {
+            table_id: sessions.id,
+            binding: ColumnBinding::ExistingDefinition(session_name),
+            config: None,
+        },
+    )
+    .await
+    .expect("column should insert");
+
+    let link_definition_id = insert_definition(&pool, "Attending").await;
+    let link_column_id = repo
+        .create_column(
+            guests.id,
+            link_definition_id,
+            &CreateColumn {
+                table_id: guests.id,
+                binding: ColumnBinding::ExistingDefinition(link_definition_id),
+                config: Some(ColumnConfig::Link {
+                    database_id: guests.database_id,
+                    table_id: sessions.id,
+                }),
+            },
+        )
+        .await
+        .expect("link column should insert");
+
+    let (guest_rows, _) = repo
+        .apply_changes(
+            &viewer(),
+            &[RowChange::Insert {
+                table_id: guests.id,
+                cells: cells(vec![(guest_name, text("Priya"))]),
+            }],
+            &HashMap::new(),
+        )
+        .await
+        .expect("insert should apply")
+        .applied()
+        .expect("no version conflict");
+    let (session_rows, _) = repo
+        .apply_changes(
+            &viewer(),
+            &[RowChange::Insert {
+                table_id: sessions.id,
+                cells: cells(vec![(session_name, text("Keynote"))]),
+            }],
+            &HashMap::new(),
+        )
+        .await
+        .expect("insert should apply")
+        .applied()
+        .expect("no version conflict");
+
+    let before = repo
+        .table_versions(&[guests.id, sessions.id])
+        .await
+        .expect("versions should fetch");
+
+    let (_, versions) = repo
+        .apply_changes(
+            &viewer(),
+            &[RowChange::Link {
+                column_id: link_column_id,
+                source_row_id: guest_rows[0],
+                target_row_id: session_rows[0],
+            }],
+            &HashMap::new(),
+        )
+        .await
+        .expect("link should apply")
+        .applied()
+        .expect("no version conflict");
+
+    assert_eq!(
+        versions,
+        HashMap::from([
+            (guests.id, TableVersion(before[&guests.id].0 + 1)),
+            (sessions.id, TableVersion(before[&sessions.id].0 + 1)),
+        ]),
+        "both ends of the edge move"
+    );
+
+    // And because the target is a written table, a stale base version for it
+    // refuses the write.
+    let conflict = repo
+        .apply_changes(
+            &viewer(),
+            &[RowChange::Unlink {
+                column_id: link_column_id,
+                source_row_id: guest_rows[0],
+                target_row_id: session_rows[0],
+            }],
+            &HashMap::from([(sessions.id, before[&sessions.id])]),
+        )
+        .await
+        .expect("apply should not error");
+    assert_eq!(
+        conflict,
+        ApplyOutcome::VersionConflict {
+            table_id: sessions.id
+        }
+    );
+    assert_eq!(
+        repo.fetch_links(link_column_id)
+            .await
+            .expect("links should fetch"),
+        vec![(guest_rows[0], session_rows[0])],
+        "the refused unlink committed nothing"
     );
 }

@@ -1,6 +1,17 @@
 -- Reverse the database owner scope. Database-owned definitions have no other
--- owner to fall back to, so they are discarded (their options and any entity
--- values cascade).
+-- owner to fall back to, so they are discarded.
+--
+-- The DELETE below is not confined to `property_definitions`. Its
+-- `ON DELETE CASCADE` foreign keys take these with it, irreversibly:
+--   * `property_options` — every select/tag option of a discarded definition.
+--   * `entity_properties` — every value any entity holds for one, which for a
+--     database column means every cell recorded through the EAV surface.
+--   * `database_columns` — the placements binding a discarded definition,
+--     which empties the affected tables of all but their `row_id` (the
+--     `database_rows.cells` JSONB is keyed by definition id and is left
+--     behind, addressing nothing).
+-- Reverting this migration therefore destroys Macro Databases column data;
+-- it exists to unwind an unshipped migration, not to roll back production.
 
 DELETE FROM property_definitions WHERE database_id IS NOT NULL;
 

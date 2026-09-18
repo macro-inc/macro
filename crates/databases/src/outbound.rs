@@ -18,3 +18,9 @@ pub mod magic;
 
 #[cfg(feature = "gateway")]
 pub mod gateway_event_publisher;
+
+#[cfg(all(feature = "postgres", feature = "sqlite"))]
+pub mod build;
+
+#[cfg(all(feature = "postgres", feature = "sqlite"))]
+pub use build::{build_service, build_service_with_limits, executor_limits_from_env};

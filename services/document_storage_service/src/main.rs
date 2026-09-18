@@ -1010,17 +1010,11 @@ async fn run() -> anyhow::Result<()> {
     let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
 
     // Shared by the databases router and the unified entity-mutation router.
-    let databases_service = Arc::new(databases::domain::service::DatabasesServiceImpl::new(
-        databases::outbound::pg_databases_repo::PgDatabasesRepo::new(db.clone()),
-        databases::outbound::pg_definition_store::PgDefinitionStore::new(db.clone()),
-        databases::outbound::magic::MagicTableRegistry::new(db.clone()),
-        databases::outbound::rusqlite_executor::RusqliteExecutor::new(
-            databases::outbound::rusqlite_executor::ExecutorLimits::default(),
-        ),
+    let databases_service = Arc::new(databases::outbound::build_service(
+        db.clone(),
         databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
             conn_gateway_client.as_ref().clone(),
         ),
-        databases::outbound::pg_access_directory::PgAccessDirectory::new(db.clone()),
     ));
 
     let collab_surface_service = CollabSurfaceServiceImpl::new(

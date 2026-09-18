@@ -188,8 +188,19 @@ pub struct Viewer {
 pub struct ExecRequest {
     /// The statements to run, executed in one transaction.
     pub sql: String,
-    /// When set, writes are rejected unless every written table is still at
-    /// this version (compare-and-swap). When unset, cell-level last-write-wins.
+    /// Compare-and-set, **opt in per table**. A written table named here is
+    /// refused (nothing commits) unless it is still at the given version;
+    /// entries for tables the statement does not write are ignored.
+    ///
+    /// A written table that is *not* named — including the case where the
+    /// whole field is omitted — is committed blind: cell-level
+    /// last-write-wins, with no check that the table moved underneath the
+    /// caller. Omission is therefore a deliberate choice, correct for a
+    /// human typing ad-hoc SQL into the console or for an agent tool, and
+    /// wrong for a client re-sending a statement it built from data it
+    /// already read. Such a client should send back the
+    /// [`ExecOutcome::read_versions`] of the previous run, which covers every
+    /// table the statement looked at, not only the ones it wrote.
     pub base_versions: Option<HashMap<TableId, TableVersion>>,
 }
 
@@ -476,6 +487,12 @@ pub struct ExecOutcome {
     /// Dependency set of the statement, for liveness subscription.
     #[schema(value_type = Vec<Uuid>)]
     pub read_tables: Vec<TableId>,
+    /// The version every user table in [`ExecOutcome::read_tables`] was at
+    /// when this statement materialized it. Send these back as
+    /// [`ExecRequest::base_versions`] on the follow-up write to get a real
+    /// compare-and-set over everything the statement read.
+    #[schema(value_type = HashMap<String, TableVersion>)]
+    pub read_versions: HashMap<TableId, TableVersion>,
     /// Magic tables whose materialization hit its row cap; aggregates over
     /// them are incomplete.
     pub truncated_tables: Vec<String>,
@@ -636,6 +653,13 @@ pub enum QueryError {
     /// The statement exceeded the execution budget (time or row caps).
     #[error("query budget exceeded")]
     BudgetExceeded,
+    /// A write depended on a magic table whose materialization hit its row
+    /// cap, so the statement could not have seen the whole table.
+    #[error(
+        "cannot write from a truncated table: {0} was cut off at its row cap, \
+         so this statement did not see all of it"
+    )]
+    TruncatedDependency(String),
     /// A changeset row could not be translated to a domain command.
     #[error("untranslatable change: {0}")]
     UntranslatableChange(String),

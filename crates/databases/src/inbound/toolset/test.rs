@@ -248,6 +248,7 @@ impl DatabasesService for FakeService {
             inserted_row_ids: vec![Uuid::nil()],
             new_versions: std::collections::HashMap::from([(TABLE_ID, TableVersion(4))]),
             read_tables: vec![TABLE_ID],
+            read_versions: std::collections::HashMap::from([(TABLE_ID, TableVersion(3))]),
             truncated_tables: Vec::new(),
         })
     }

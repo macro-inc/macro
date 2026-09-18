@@ -258,7 +258,7 @@ rmcp = "1.6.0"
 rootcause = { version = "0.12", features = ["compat-anyhow1"] }
 # Embedded SQLite for the databases query engine: per-query in-memory
 # materializations, never persistent storage. `session` records changesets for
-# write-through, `column_metadata` gives result provenance, `limits`/`functions`
+# write-through, `column_decltype` gives result provenance, `limits`/`functions`
 # support sandboxing and HAS desugar.
 # Pinned to 0.32 so its libsqlite3-sys (0.30.x) unifies with sqlx-sqlite's —
 # cargo allows only one package linking the native `sqlite3`.

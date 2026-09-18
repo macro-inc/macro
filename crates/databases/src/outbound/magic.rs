@@ -11,7 +11,9 @@
 //! - `people(id, name, email)` — the viewer and everyone sharing a team with
 //!   them.
 
+use entity_access::outbound::get_user_source_ids;
 use model_entity::EntityType;
+use rootcause::compat::IntoRootcause;
 use sqlx::PgPool;
 
 use crate::domain::models::{
@@ -28,6 +30,9 @@ pub enum MagicTablesError {
     /// A backing store failed.
     #[error("magic table backend error")]
     Backend(#[from] sqlx::Error),
+    /// The viewer's `entity_access` source ids could not be resolved.
+    #[error("failed to resolve viewer source ids: {0:?}")]
+    SourceIds(rootcause::Report),
 }
 
 /// The registry of every magic-table source, dispatched by SQL name.
@@ -129,24 +134,20 @@ impl MagicTableRegistry {
         Self { pool }
     }
 
-    async fn documents(&self, viewer: &Viewer) -> Result<Vec<Vec<SqlValue>>, sqlx::Error> {
+    async fn documents(&self, viewer: &Viewer) -> Result<Vec<Vec<SqlValue>>, MagicTablesError> {
         let user_id: &str = viewer.user_id.as_ref();
+        // Source ids come from `entity_access` itself; see the note on
+        // [`crate::outbound::pg_access_directory`].
+        let source_ids = get_user_source_ids(&self.pool, Some(&viewer.user_id))
+            .await
+            .map_err(|e| MagicTablesError::SourceIds(e.into_rootcause()))?;
         let rows = sqlx::query!(
             r#"
-            WITH user_source_ids AS (
-                SELECT cp.channel_id::text AS source_id FROM comms_channel_participants cp
-                    WHERE cp.user_id = $1 AND cp.left_at IS NULL
-                UNION ALL
-                SELECT t.team_id::text FROM team_user t
-                    WHERE t.user_id = $1
-                UNION ALL
-                SELECT $1
-            ),
-            accessible AS (
+            WITH accessible AS (
                 SELECT DISTINCT entity_id
                 FROM entity_access
                 WHERE entity_type = 'document'
-                  AND source_id = ANY(SELECT source_id FROM user_source_ids)
+                  AND source_id = ANY($3)
             )
             SELECT
                 d.id AS "id!",
@@ -162,6 +163,7 @@ impl MagicTableRegistry {
             "#,
             user_id,
             (MAGIC_ROW_CAP + 1) as i64,
+            &source_ids.0,
         )
         .fetch_all(&self.pool)
         .await?;
