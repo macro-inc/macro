@@ -114,8 +114,11 @@ export function getEntityNotifications<T extends EntityData>(
 ): UnifiedNotification[] {
   const attached = entity.notifications;
   const read = (): UnifiedNotification[] => {
-    if (typeof attached === 'function') return attached();
-    if (Array.isArray(attached)) return attached;
+    const raw = typeof attached === 'function' ? attached() : attached;
+    if (Array.isArray(raw)) {
+      const applyOverrides = source.withLocalOverrides;
+      return applyOverrides ? raw.map(applyOverrides) : raw;
+    }
     return (
       source.notificationsByEntity()[
         compositeEntity(toNotificationEntity(entity))

@@ -12,6 +12,19 @@
       min-height: 48.75px;
       padding: 7.5px;
       --input-editor-padding: 4.6875px 3.75px;
+
+      /* On touch this row replaces the CollapsedInput pill, so it keeps the
+         pill's height, gutter, and gap (h-12.5, px-2, gap-1.5) rather than
+         growing when the editor takes over. The single line (with the
+         markdown theme's paragraph margins) is shorter than the row, so the
+         row centers it instead of padding around it. */
+      :global(html[data-touch-device='true']) & {
+        align-items: center;
+        gap: calc(var(--spacing) * 1.5);
+        min-height: calc(var(--spacing) * 12.5);
+        padding: 0 calc(var(--spacing) * 2);
+        --input-editor-padding: 0 calc(var(--spacing) * 1.5);
+      }
     }
 
     &[data-composer-compact='false'] {

@@ -35,6 +35,7 @@ import {
 } from '../core/spreadsheet-document';
 import type { SpreadsheetCursor } from '../core/spreadsheet-presence';
 import type { CompleteFormula } from '../primitives/create-formula-assistance';
+import { cellBorderColor, cellForeground } from './cell-colors';
 import { FormulaInput } from './FormulaInput';
 import { type CellAction, SpreadsheetCellMenu } from './SpreadsheetCellMenu';
 import {
@@ -117,7 +118,11 @@ export function SpreadsheetGrid(props: {
   showGridlines?: boolean;
   showFormulas?: boolean;
   onResizeColumn?: (column: number, width: number) => void;
-  onFill?: (source: CellSelection, target: CellSelection) => void;
+  onResizeRow?: (row: number, height: number | undefined) => void;
+  onFill?: (
+    source: CellSelection,
+    target: CellSelection
+  ) => void | Promise<void>;
   onCopyMetadata?: (cut?: boolean) => string;
   values: Record<string, GridValue>;
   remoteCursors: SpreadsheetCursor[];
@@ -164,7 +169,14 @@ export function SpreadsheetGrid(props: {
     width: number;
   }>();
   let fillSource: CellSelection | undefined;
+  let fillGeneration = 0;
   let resizeStart: { x: number; width: number } | undefined;
+  const [resizingRow, setResizingRow] = createSignal<{
+    row: number;
+    height: number;
+  }>();
+  let rowResizeStart: { y: number; height: number } | undefined;
+  let headerDrag: { axis: 'row' | 'column'; anchor: number } | undefined;
   let touchGesture:
     | {
         kind: 'tap';
@@ -193,11 +205,17 @@ export function SpreadsheetGrid(props: {
       ? resizing()!.width
       : (props.columnWidths?.[column] ?? DEFAULT_COLUMN_WIDTH);
   const width = (column: number) => `${columnWidth(column) * scale()}px`;
-  const display = (address: string) =>
-    props.showFormulas && props.cells[address]?.value.startsWith('=')
-      ? props.cells[address].value
-      : (props.values[address]?.display ??
-        cellPlainText(props.cells[address]?.value ?? ''));
+  const display = (address: string) => {
+    const cell = props.cells[address];
+    const formula = cell?.value.startsWith('=') && cell.format !== 'text';
+    if (props.showFormulas && formula) return cell.value;
+    // Newly filled formulas have no cached result yet. Keep them blank until
+    // calculation finishes instead of briefly flashing the formula expression.
+    return (
+      props.values[address]?.display ??
+      (formula ? '' : cellPlainText(cell?.value ?? ''))
+    );
+  };
   const rootStyle = getComputedStyle(document.documentElement);
   const fontFamilies = {
     sans: rootStyle.getPropertyValue('--font-sans') || 'sans-serif',
@@ -216,13 +234,20 @@ export function SpreadsheetGrid(props: {
       : document.createElement('canvas').getContext('2d');
   const rowHeights = createMemo(() => {
     const heights = Array.from({ length: rowCount() }, (_, row) =>
-      Math.max(ROW_HEIGHT, ((props.rowHeights?.[row] ?? 0) * 4) / 3)
+      resizingRow()?.row === row
+        ? resizingRow()!.height
+        : Math.max(ROW_HEIGHT, ((props.rowHeights?.[row] ?? 0) * 4) / 3)
     );
     // Gridlines stay one CSS pixel wide when the workbook is zoomed.
     const borderInset = 1 / scale();
     for (const [address, cell] of Object.entries(props.cells)) {
       const position = parseCellAddress(address);
       if (!position || position.row >= heights.length) continue;
+      if (
+        props.rowHeights?.[position.row] !== undefined ||
+        resizingRow()?.row === position.row
+      )
+        continue;
       const pixels = fontPixels(cell);
       const lineHeight = pixels * CELL_LINE_HEIGHT;
       const verticalInset = CELL_PADDING_Y * 2 + borderInset;
@@ -369,29 +394,44 @@ export function SpreadsheetGrid(props: {
       tapCell(gesture.tapPosition, event.timeStamp);
     }
     dragging = false;
+    headerDrag = undefined;
     props.onReferenceEnd?.();
     const target = fillTarget();
-    if (fillSource && target && !props.readonly)
-      props.onFill?.(fillSource, target);
+    const source = fillSource;
     fillSource = undefined;
-    setFillTarget(undefined);
+    if (source && target && !props.readonly) {
+      const generation = ++fillGeneration;
+      // Keep the preview until formula relocation has committed the new cells.
+      void Promise.resolve(props.onFill?.(source, target)).finally(() => {
+        if (generation === fillGeneration) setFillTarget(undefined);
+      });
+    }
     const resize = resizing();
     if (resize && !props.readonly)
       props.onResizeColumn?.(resize.column, resize.width);
     setResizing(undefined);
     resizeStart = undefined;
+    const rowResize = resizingRow();
+    if (rowResize && !props.readonly)
+      props.onResizeRow?.(rowResize.row, rowResize.height);
+    setResizingRow(undefined);
+    rowResizeStart = undefined;
   }
 
   function cancelPointer() {
     stopTouchGesture();
     lastTap = undefined;
     dragging = false;
+    headerDrag = undefined;
     keepReferenceFocus = false;
     props.onReferenceEnd?.();
     fillSource = undefined;
+    fillGeneration++;
     setFillTarget(undefined);
     setResizing(undefined);
     resizeStart = undefined;
+    setResizingRow(undefined);
+    rowResizeStart = undefined;
   }
 
   function previewFill(position: CellPosition) {
@@ -459,6 +499,34 @@ export function SpreadsheetGrid(props: {
     target instanceof HTMLTextAreaElement ||
     (target instanceof HTMLElement && !!target.closest('[contenteditable]'));
   const focusGrid = () => grid.focus({ preventScroll: true });
+  const selectHeaderRange = (
+    axis: 'row' | 'column',
+    index: number,
+    anchor = index
+  ) => {
+    if (axis === 'row')
+      props.onSelectRange(
+        { row: anchor, column: 0 },
+        { row: index, column: GRID_COLUMNS - 1 }
+      );
+    else
+      props.onSelectRange(
+        { row: 0, column: anchor },
+        { row: rowCount() - 1, column: index }
+      );
+    focusGrid();
+  };
+  const startHeader = (
+    event: PointerEvent,
+    axis: 'row' | 'column',
+    index: number
+  ) => {
+    if (event.button !== 0 || event.ctrlKey) return;
+    event.preventDefault();
+    const anchor = event.shiftKey ? props.selection.anchor[axis] : index;
+    headerDrag = { axis, anchor };
+    selectHeaderRange(axis, index, anchor);
+  };
 
   function positionAtPoint(x: number, y: number): CellPosition {
     const rect = grid.getBoundingClientRect();
@@ -504,6 +572,15 @@ export function SpreadsheetGrid(props: {
   }
 
   function movePointer(event: PointerEvent) {
+    if (headerDrag && event.buttons === 1) {
+      const position = positionAtPoint(event.clientX, event.clientY);
+      selectHeaderRange(
+        headerDrag.axis,
+        position[headerDrag.axis],
+        headerDrag.anchor
+      );
+      return;
+    }
     const gesture = touchGesture;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     if (gesture.kind === 'tap') {
@@ -734,6 +811,7 @@ export function SpreadsheetGrid(props: {
             setScrollElement(element);
           }}
           role="grid"
+          data-keyboard-input
           aria-label="Spreadsheet"
           aria-rowcount={rowCount() + 1}
           aria-colcount={GRID_COLUMNS + 1}
@@ -792,8 +870,14 @@ export function SpreadsheetGrid(props: {
               openCellMenu(rect.left + Math.min(rect.width, 24), rect.bottom);
               return;
             }
+            const previous = props.selection.focus;
             props.onKeyDown(event);
-            if (!props.editing) revealSelection();
+            if (
+              !props.editing &&
+              (previous.row !== props.selection.focus.row ||
+                previous.column !== props.selection.focus.column)
+            )
+              revealSelection();
           }}
           onCopy={(event) => {
             if (isInput(event.target)) return;
@@ -899,12 +983,18 @@ export function SpreadsheetGrid(props: {
                         tabIndex={-1}
                         aria-label={`Select column ${String.fromCharCode(65 + column)}`}
                         class="size-full hover:bg-hover"
-                        onClick={() => {
-                          props.onSelectRange(
-                            { row: 0, column },
-                            { row: rowCount() - 1, column }
-                          );
-                          focusGrid();
+                        onPointerDown={(event) =>
+                          startHeader(event, 'column', column)
+                        }
+                        onClick={(event) => {
+                          if (event.detail === 0)
+                            selectHeaderRange(
+                              'column',
+                              column,
+                              event.shiftKey
+                                ? props.selection.anchor.column
+                                : column
+                            );
                         }}
                       >
                         {String.fromCharCode(65 + column)}
@@ -1016,17 +1106,89 @@ export function SpreadsheetGrid(props: {
                         tabIndex={-1}
                         aria-label={`Select row ${row + 1}`}
                         class="size-full hover:bg-hover"
-                        onClick={() => {
-                          props.onSelectRange(
-                            { row, column: 0 },
-                            { row, column: GRID_COLUMNS - 1 }
-                          );
-                          focusGrid();
+                        onPointerDown={(event) =>
+                          startHeader(event, 'row', row)
+                        }
+                        onClick={(event) => {
+                          if (event.detail === 0)
+                            selectHeaderRange(
+                              'row',
+                              row,
+                              event.shiftKey ? props.selection.anchor.row : row
+                            );
                         }}
                       >
                         {row + 1}
                       </button>
                     </SpreadsheetHeaderMenu>
+                    <Show when={!props.readonly && props.onResizeRow}>
+                      <div
+                        role="separator"
+                        aria-label={`Resize row ${row + 1}`}
+                        aria-orientation="horizontal"
+                        aria-valuenow={rowHeights()[row] / scale()}
+                        aria-valuemin={ROW_HEIGHT}
+                        aria-valuemax={1000}
+                        tabIndex={0}
+                        title="Drag to resize · Double-click to fit"
+                        class="absolute -bottom-1 left-0 z-[1] h-2 w-full touch-none cursor-row-resize hover:bg-accent/30 focus-visible:bg-accent/30 outline-none"
+                        onPointerDown={(event) => {
+                          if (event.button !== 0) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          rowResizeStart = {
+                            y: event.clientY,
+                            height: rowHeights()[row] / scale(),
+                          };
+                          setResizingRow({
+                            row,
+                            height: rowResizeStart.height,
+                          });
+                          event.currentTarget.setPointerCapture(
+                            event.pointerId
+                          );
+                        }}
+                        onPointerMove={(event) => {
+                          if (!rowResizeStart || resizingRow()?.row !== row)
+                            return;
+                          setResizingRow({
+                            row,
+                            height: Math.max(
+                              ROW_HEIGHT,
+                              Math.min(
+                                1000,
+                                rowResizeStart.height +
+                                  (event.clientY - rowResizeStart.y) / scale()
+                              )
+                            ),
+                          });
+                        }}
+                        onDblClick={() => props.onResizeRow?.(row, undefined)}
+                        onKeyDown={(event) => {
+                          event.stopPropagation();
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            props.onResizeRow?.(row, undefined);
+                          } else if (
+                            event.key === 'ArrowUp' ||
+                            event.key === 'ArrowDown'
+                          ) {
+                            event.preventDefault();
+                            props.onResizeRow?.(
+                              row,
+                              Math.max(
+                                ROW_HEIGHT,
+                                Math.min(
+                                  1000,
+                                  rowHeights()[row] / scale() +
+                                    (event.key === 'ArrowDown' ? 8 : -8)
+                                )
+                              )
+                            );
+                          }
+                        }}
+                      />
+                    </Show>
                   </div>
                   <For each={columns()}>
                     {(column) => {
@@ -1055,7 +1217,7 @@ export function SpreadsheetGrid(props: {
                               : style === 'dotted'
                                 ? 'dotted'
                                 : 'solid';
-                        return `${width}px ${line} ${cell()?.[`border${edge}Color`] || 'var(--color-ink)'}`;
+                        return `${width}px ${line} ${cellBorderColor(cell()?.[`border${edge}Color`], cell()?.fillColor)}`;
                       };
                       const horizontalAlign = () => {
                         const align = cell()?.horizontalAlign;
@@ -1129,7 +1291,10 @@ export function SpreadsheetGrid(props: {
                                 : undefined),
                             'border-left': border('Left'),
                             'background-color': cell()?.fillColor || undefined,
-                            color: cell()?.textColor || undefined,
+                            color: cellForeground(
+                              cell()?.textColor,
+                              cell()?.fillColor
+                            ),
                             'font-family': fontFamily(cell()),
                             'font-size': `${fontPixels(cell()) * scale()}px`,
                             'font-style': cell()?.italic ? 'italic' : undefined,
@@ -1251,7 +1416,9 @@ export function SpreadsheetGrid(props: {
                               value={props.draft}
                               onInput={props.onDraft}
                               onKeyDown={editKeyDown}
-                              onBlur={props.onCommit}
+                              onBlur={() => {
+                                if (props.editing) props.onCommit();
+                              }}
                             />
                           </Show>
                           <Show when={props.comments?.hasComment(address)}>
@@ -1376,6 +1543,7 @@ export function SpreadsheetGrid(props: {
                   event.preventDefault();
                   event.stopPropagation();
                   props.onCommit();
+                  fillGeneration++;
                   fillSource = props.selection;
                   setFillTarget(props.selection);
                   focusGrid();

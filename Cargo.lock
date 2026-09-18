@@ -295,6 +295,7 @@ dependencies = [
  "tokio",
  "tokio-tungstenite 0.28.0",
  "tokio-util",
+ "tower 0.5.3",
  "tracing",
  "tracing-opentelemetry",
  "url",
@@ -3182,6 +3183,53 @@ dependencies = [
 ]
 
 [[package]]
+name = "calendar_service"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "authentication_service_client",
+ "aws-sdk-secretsmanager",
+ "aws-sdk-sqs",
+ "axum",
+ "calendar_events",
+ "chrono",
+ "connection_gateway_client",
+ "email_db_client",
+ "email_utils",
+ "futures",
+ "google_token",
+ "macro_auth",
+ "macro_authorization",
+ "macro_aws_config",
+ "macro_config",
+ "macro_cors",
+ "macro_entrypoint",
+ "macro_env",
+ "macro_env_var",
+ "macro_event_broker",
+ "macro_queues",
+ "macro_service_urls",
+ "models_email",
+ "redis",
+ "reqwest 0.13.4",
+ "secretsmanager_client",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "sqs_worker",
+ "subtle",
+ "tokio",
+ "tokio-util",
+ "tower 0.5.3",
+ "tower-http",
+ "tracing",
+ "utoipa",
+ "utoipa-swagger-ui",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "call"
 version = "0.1.0"
 dependencies = [
@@ -5552,6 +5600,7 @@ version = "0.1.0"
 dependencies = [
  "schemars 1.2.1",
  "serde",
+ "serde_json",
  "sqlx",
  "strum 0.27.2",
  "thiserror 2.0.18",
@@ -5950,6 +5999,7 @@ dependencies = [
  "filter_ast",
  "frecency",
  "futures",
+ "google_token",
  "item_filters",
  "lexical_client",
  "lol_html",
@@ -6148,6 +6198,7 @@ dependencies = [
  "frecency",
  "futures",
  "gmail_client",
+ "google_token",
  "html-escape",
  "http-body-util",
  "infer 0.19.0",
@@ -7374,6 +7425,18 @@ dependencies = [
  "tokio",
  "tracing",
  "wiremock",
+ "workspace-hack",
+]
+
+[[package]]
+name = "google_token"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "authentication_service_client",
+ "email_utils",
+ "redis",
+ "tracing",
  "workspace-hack",
 ]
 

@@ -26,6 +26,7 @@ import {
 } from '../components/SpreadsheetWorkbookDialogs';
 import type { SpreadsheetCommentsCapability } from '../context/spreadsheet-comments';
 import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
+import { cellEditValue } from '../core/cell-input';
 import { encodeCsv } from '../core/csv-export';
 import { formulaRangeReference } from '../core/formula-reference';
 import {
@@ -34,6 +35,7 @@ import {
   positionFromAddress,
   selectionBounds,
 } from '../core/grid-selection';
+import { selectionToggleStyles } from '../core/selection-formatting';
 import type { SpreadsheetCommentAnchor } from '../core/spreadsheet-comments';
 import { SPREADSHEET_MAX_ROWS } from '../core/spreadsheet-document';
 import { spreadsheetCursors } from '../core/spreadsheet-presence';
@@ -57,6 +59,7 @@ export function SpreadsheetEditor(props: {
   onExportXlsx: (bytes: Uint8Array) => void;
 }) {
   let gridElement: HTMLDivElement | undefined;
+  let editorElement!: HTMLElement;
   let importInput!: HTMLInputElement;
   const [zoom, setZoom] = createSignal(100);
   const [showGridlines, setShowGridlines] = createSignal(true);
@@ -167,8 +170,14 @@ export function SpreadsheetEditor(props: {
         'textarea, [contenteditable=true]'
       );
       editor?.focus({ preventScroll: true });
+    } else if (grid.editing() === 'formula') {
+      const editor = editorElement.querySelector<HTMLElement>(
+        '[aria-label="Formula bar"]'
+      );
+      editor?.focus({ preventScroll: true });
+      if (editor instanceof HTMLTextAreaElement)
+        editor.setSelectionRange(editor.value.length, editor.value.length);
     } else focusGrid();
-    revealSelection();
   };
   const menuCommand = (action: SpreadsheetCommand) => {
     // Create a new focus owner only after the menu's focus trap has closed.
@@ -442,6 +451,7 @@ export function SpreadsheetEditor(props: {
 
   return (
     <section
+      ref={editorElement}
       class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden bg-surface text-ink"
       aria-label={`${props.name} spreadsheet`}
       onKeyDown={(event) => {
@@ -534,7 +544,10 @@ export function SpreadsheetEditor(props: {
         readonly={!editable() || actions.pending() || !!workbookActions.busy()}
         canUndo={props.store.canUndo()}
         canRedo={props.store.canRedo()}
-        cell={activeCell()}
+        cell={{
+          ...activeCell(),
+          ...selectionToggleStyles(props.store.cells(), grid.selection()),
+        }}
         zoom={zoom()}
         showGridlines={showGridlines()}
         showFormulaBar={showFormulaBar()}
@@ -559,7 +572,13 @@ export function SpreadsheetEditor(props: {
           void importFile(file);
         }}
       />
-      <Show when={showFormulaBar() || (isTouchDevice() && !!grid.editing())}>
+      <Show
+        when={
+          showFormulaBar() ||
+          grid.editing() === 'formula' ||
+          (isTouchDevice() && !!grid.editing())
+        }
+      >
         <FormulaBar
           mentions={props.mentions}
           editing={!!grid.editing()}
@@ -570,8 +589,12 @@ export function SpreadsheetEditor(props: {
             (isTouchDevice() && !!grid.referenceSelection())
           }
           onSelectionChange={grid.setTextSelection}
-          address={formulaRangeReference(grid.selection())}
-          value={grid.editing() ? grid.draft() : (activeCell()?.value ?? '')}
+          address={
+            grid.editing()
+              ? grid.editingAddress()
+              : formulaRangeReference(grid.selection())
+          }
+          value={grid.editing() ? grid.draft() : cellEditValue(activeCell())}
           readonly={!editable()}
           onNavigate={(address) => {
             const parts = address.split(':');
@@ -618,6 +641,15 @@ export function SpreadsheetEditor(props: {
           rowCount={props.store.rowCount()}
           columnWidths={props.store.layout().columnWidths}
           rowHeights={props.store.activeSheet().metadata?.rowHeights}
+          onResizeRow={(row, height) => {
+            if (!editable()) return;
+            const metadata = props.store.activeSheet().metadata;
+            const rowHeights = { ...metadata?.rowHeights };
+            if (height === undefined) delete rowHeights[row];
+            else rowHeights[row] = height * 0.75;
+            props.store.setMetadata({ ...metadata, rowHeights });
+            focusGrid();
+          }}
           hiddenRows={props.store.activeSheet().metadata?.hiddenRows}
           hiddenColumns={props.store.activeSheet().metadata?.hiddenColumns}
           canChangeStructure={props.store.canChangeStructure()}
@@ -630,8 +662,11 @@ export function SpreadsheetEditor(props: {
           remoteCursors={remoteCursors()}
           comments={props.comments}
           selection={grid.selection()}
-          editing={grid.editing() === 'cell'}
-          formulaEditing={grid.editing() === 'formula'}
+          editing={grid.editing() === 'cell' && grid.isEditingActiveSheet()}
+          formulaEditing={
+            !!grid.editing() &&
+            (grid.editing() === 'formula' || !grid.isEditingActiveSheet())
+          }
           editorSelection={grid.editorSelection()}
           referenceSelection={grid.referenceSelection()}
           pickingReference={grid.pickingReference()}
@@ -694,13 +729,18 @@ export function SpreadsheetEditor(props: {
         <SpreadsheetSheetTabs
           sheets={props.store.sheets()}
           activeSheetId={props.store.activeSheetId()}
+          preserveEditorFocus={grid.canPickReference()}
           readonly={!editable()}
           canAdd={props.store.sheets().length < SPREADSHEET_MAX_SHEETS}
           onSelect={(id) => {
-            workbookActions.selectSheet(id);
+            grid.switchSheet(id);
             actions.clearNotice();
-            focusGrid();
-            queueMicrotask(revealSelection);
+            workbookActions.clearNotice();
+            if (grid.editing()) queueMicrotask(restoreEditorFocus);
+            else {
+              focusGrid();
+              queueMicrotask(revealSelection);
+            }
           }}
           onAdd={() => {
             workbookActions.addSheet();
@@ -817,7 +857,7 @@ export function SpreadsheetEditor(props: {
                 <Show when={statistics().count <= 1}>
                   <span class="hidden sm:inline">
                     {editable()
-                      ? 'Double-click to edit · Shift + click to select'
+                      ? 'Type to edit · Shift + click to select'
                       : 'Select cells to explore'}
                   </span>
                 </Show>

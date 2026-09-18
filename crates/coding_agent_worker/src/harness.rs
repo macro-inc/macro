@@ -37,7 +37,7 @@ pub async fn bridge(
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
     };
-    let (runtime, acp) = RuntimeConnection::connect_with_model_probe_handler(channel, probes);
+    let (mut runtime, acp) = RuntimeConnection::connect_with_model_probe_handler(channel, probes);
 
     let agent = AcpAgent::new(AcpAgentConfig::new(&harness.command).args(harness.args.clone()))
         // The wire tap: every ndjson line crossing the child's stdio, plus
@@ -50,7 +50,10 @@ pub async fn bridge(
         .system_event(SystemEvent::AcpReady)
         .map_err(BridgeError::Announce)?;
 
-    let outcome = ConnectTo::<Client>::connect_to(agent, acp).await;
+    let outcome = tokio::select! {
+        outcome = ConnectTo::<Client>::connect_to(agent, acp) => outcome,
+        () = runtime.closed() => Ok(()),
+    };
 
     // Best effort: a transport that has already failed cannot carry news of
     // its own failure, and that is not itself worth failing the worker over.

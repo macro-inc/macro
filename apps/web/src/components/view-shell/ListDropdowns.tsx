@@ -204,6 +204,7 @@ export function ListFilterDropdown<
                 fallback={
                   <FilterSubmenu
                     label={group.label}
+                    selectionMode={group.selectionMode}
                     active={isGroupActive(group)}
                     options={group.options}
                     isSelected={(id) => props.isSelected(group.id, id)}

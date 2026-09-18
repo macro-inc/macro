@@ -96,6 +96,7 @@ fn production_documents_membership_literals_require_and_compile_in_v2() {
         DocumentLiteral::SubType(DocumentSubType::Task),
         DocumentLiteral::SubType(DocumentSubType::Snippet),
         DocumentLiteral::SubType(DocumentSubType::Skill),
+        DocumentLiteral::SubType(DocumentSubType::InitiativeDescription),
     ] {
         let mut ast = excluded_deferred_partitions();
         ast.document_filter = Some(Arc::new(Expr::val(literal)));

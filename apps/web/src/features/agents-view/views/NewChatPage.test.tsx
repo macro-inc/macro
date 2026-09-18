@@ -16,6 +16,7 @@ import { NewChatPage } from './NewChatPage';
 const mocks = vi.hoisted(() => ({
   openSettings: vi.fn(),
   recentIds: [] as string[],
+  repositories: [] as { url: string; defaultBranch?: string }[],
 }));
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@core/constant/SettingsState', () => ({
@@ -29,6 +30,14 @@ vi.mock('@app/features/block-agent/context/recent-agent-selections', () => ({
 }));
 vi.mock('../primitives/recent-repositories', () => ({
   createRecentRepositories: () => ({ urls: () => [], remember: vi.fn() }),
+}));
+vi.mock('../queries/reachable-repositories', () => ({
+  createReachableRepositories: () => ({
+    repositories: () => mocks.repositories,
+    loading: () => false,
+    error: () => false,
+    retry: vi.fn(),
+  }),
 }));
 vi.mock('../components/AgentGlyph', () => ({ AgentIcon: () => <span /> }));
 
@@ -140,6 +149,9 @@ describe('agent-led new conversation', () => {
   let motionStyles: HTMLStyleElement;
   beforeEach(() => {
     mocks.recentIds = [MACRO_CODER_BOT_ID];
+    mocks.repositories = [
+      { url: 'https://github.com/macro-inc/macro', defaultBranch: 'develop' },
+    ];
     vi.clearAllMocks();
     motionStyles = document.createElement('style');
     motionStyles.textContent =
@@ -185,10 +197,11 @@ describe('agent-led new conversation', () => {
     ).toBeTruthy();
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
     fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
-    fireEvent.input(screen.getByRole('textbox', { name: 'Add repository' }), {
-      target: { value: 'macro-inc/macro' },
-    });
-    fireEvent.click(screen.getByRole('button', { name: 'Use repository' }));
+    fireEvent.click(screen.getByRole('option', { name: 'macro-inc/macro' }));
+    // The listed repository's own default branch, until one is chosen.
+    expect(
+      screen.getByRole('button', { name: 'Branch' }).textContent
+    ).toContain('develop');
     fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
     fireEvent.input(screen.getByRole('textbox', { name: 'Starting branch' }), {
       target: { value: 'feature/home' },
@@ -214,6 +227,51 @@ describe('agent-led new conversation', () => {
       prompt: 'Shared draft',
       repoUrl: 'https://github.com/macro-inc/macro',
       repoBranch: 'feature/home',
+    });
+  });
+  it('starts a typed repository on main and a listed one on its default branch', async () => {
+    const send = page();
+    await selectAgent(/Cursor/);
+    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
+    fireEvent.input(
+      screen.getByRole('combobox', { name: 'Search repositories' }),
+      {
+        target: { value: 'macro-inc/other' },
+      }
+    );
+    expect(
+      screen.queryByRole('option', { name: 'Choose automatically' })
+    ).toBeNull();
+    fireEvent.click(
+      screen.getByRole('option', { name: 'Use macro-inc/other' })
+    );
+    expect(
+      screen.getByRole('button', { name: 'Branch' }).textContent
+    ).toContain('main');
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Starting branch' }), {
+      target: { value: 'feature/other' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      prompt: 'Prompt',
+      repoUrl: 'https://github.com/macro-inc/other',
+      repoBranch: 'feature/other',
+    });
+    // Another repository drops the chosen branch for its own default.
+    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
+    fireEvent.click(screen.getByRole('option', { name: 'macro-inc/macro' }));
+    expect(
+      screen.getByRole('button', { name: 'Branch' }).textContent
+    ).toContain('develop');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(send).toHaveBeenLastCalledWith({
+      botId: CURSOR_BOT_ID,
+      prompt: 'Prompt',
+      repoUrl: 'https://github.com/macro-inc/macro',
+      repoBranch: 'develop',
     });
   });
   it('uses a saved agent without sending a per-session model override', async () => {
@@ -249,10 +307,7 @@ describe('agent-led new conversation', () => {
       ]);
       await selectAgent(/Cursor/);
       fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
-      fireEvent.input(screen.getByRole('textbox', { name: 'Add repository' }), {
-        target: { value: 'macro-inc/macro' },
-      });
-      fireEvent.click(screen.getByRole('button', { name: 'Use repository' }));
+      fireEvent.click(screen.getByRole('option', { name: 'macro-inc/macro' }));
       await selectAgent(/Cloud reviewer/);
       expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
       expect(screen.getByRole('button', { name: 'Repository' })).toBeTruthy();

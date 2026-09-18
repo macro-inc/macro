@@ -138,9 +138,9 @@ export function ChatComposer(props: {
         <div
           ref={setLayout}
           data-composer-compact={isCompact()}
-          class="group/composer flex min-w-0 data-[composer-compact=false]:flex-col data-[composer-compact=false]:items-stretch items-end gap-2 px-4 py-3"
+          class="group/composer flex min-w-0 data-[composer-compact=false]:flex-col data-[composer-compact=false]:items-stretch items-end gap-2 p-[7.5px]"
         >
-          <div class="max-h-60 min-w-0 flex-1 self-center group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:self-stretch overflow-y-auto px-1">
+          <div class="max-h-60 min-w-0 flex-1 self-center group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:self-stretch overflow-y-auto px-[9.375px]">
             <MarkdownShell
               class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
               config={editor}

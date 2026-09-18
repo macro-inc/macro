@@ -9,6 +9,7 @@ import type {
   DatabaseAction,
   DatabaseActionProof,
   EngineOpenOutcome,
+  EngineStartupPhase,
   OwnerEpoch,
   RouteId,
 } from './coordinator-protocol';
@@ -20,6 +21,7 @@ export type CoordinatorState =
       tabId: string;
       ownerEpoch: OwnerEpoch;
       databaseAction: DatabaseAction;
+      phase: EngineStartupPhase;
     }
   | { kind: 'active'; tabId: string; ownerEpoch: OwnerEpoch }
   | { kind: 'draining'; tabId: string; ownerEpoch: OwnerEpoch }
@@ -28,9 +30,10 @@ export type CoordinatorState =
       previousTabId: string;
       previousEpoch: OwnerEpoch;
       nextEpoch: OwnerEpoch;
+      databaseAction: DatabaseAction;
       reason: string;
     }
-  | { kind: 'failed'; reason: string };
+  | { kind: 'failed'; reason: string; storageUntouched?: true };
 
 export type CoordinatorSnapshot = {
   scope: string;
@@ -91,7 +94,7 @@ export type CoordinatorAction =
       reason: 'stale-epoch' | 'unknown-route' | 'inactive-engine';
     }
   | { kind: 'protocol-violation'; error: string }
-  | { kind: 'terminal-failure'; error: string };
+  | { kind: 'terminal-failure'; error: string; storageUntouched?: true };
 
 export type EngineReady = {
   tabId: string;
@@ -147,7 +150,15 @@ export class CoordinatorCore {
     if (this.tabs.includes(tabId)) return [];
     this.tabs.push(tabId);
     if (this.stateValue.kind === 'failed') {
-      return [{ kind: 'terminal-failure', error: this.stateValue.reason }];
+      return [
+        {
+          kind: 'terminal-failure',
+          error: this.stateValue.reason,
+          ...(this.stateValue.storageUntouched
+            ? { storageUntouched: true as const }
+            : {}),
+        },
+      ];
     }
     if (this.stateValue.kind !== 'waiting-for-tab') return [];
     return this.activateNext(this.stateValue.nextDatabaseAction);
@@ -174,12 +185,29 @@ export class CoordinatorCore {
     return [this.route(queued, this.stateValue)];
   }
 
+  /** Grant storage access only after assets have loaded. Before this grant an
+   * abandoned worker cannot have changed OPFS, so its successor preserves it.
+   */
+  beginEngineOpen(tabId: string, ownerEpoch: OwnerEpoch): boolean {
+    const state = this.stateValue;
+    if (
+      state.kind !== 'activating' ||
+      state.tabId !== tabId ||
+      state.ownerEpoch !== ownerEpoch ||
+      state.phase !== 'loading-assets'
+    )
+      return false;
+    this.stateValue = { ...state, phase: 'opening-database' };
+    return true;
+  }
+
   engineReady(ready: EngineReady): CoordinatorAction[] {
     const state = this.stateValue;
     if (
       state.kind !== 'activating' ||
       state.tabId !== ready.tabId ||
-      state.ownerEpoch !== ready.ownerEpoch
+      state.ownerEpoch !== ready.ownerEpoch ||
+      state.phase !== 'opening-database'
     ) {
       return this.recordProtocolViolation(
         `unexpected engine-ready from ${ready.tabId} at epoch ${ready.ownerEpoch}`
@@ -314,11 +342,24 @@ export class CoordinatorCore {
   /** Stops owner recovery and fails every current or future page connection. */
   terminalFailure(reason: string): CoordinatorAction[] {
     if (this.stateValue.kind === 'failed') return [];
+    const storageUntouched =
+      this.stateValue.kind === 'resetting-after-loss' &&
+      this.stateValue.databaseAction === 'open-existing';
     this.queuedRequests.length = 0;
     this.inFlight.clear();
-    this.stateValue = { kind: 'failed', reason };
+    this.stateValue = {
+      kind: 'failed',
+      reason,
+      ...(storageUntouched ? { storageUntouched: true as const } : {}),
+    };
     this.assertInvariants();
-    return [{ kind: 'terminal-failure', error: reason }];
+    return [
+      {
+        kind: 'terminal-failure',
+        error: reason,
+        ...(storageUntouched ? { storageUntouched: true as const } : {}),
+      },
+    ];
   }
 
   departForNavigation(
@@ -392,7 +433,7 @@ export class CoordinatorCore {
     if (!candidate) {
       this.stateValue = {
         kind: 'waiting-for-tab',
-        nextDatabaseAction: 'wipe-before-open',
+        nextDatabaseAction: state.databaseAction,
       };
       return [];
     }
@@ -401,14 +442,15 @@ export class CoordinatorCore {
       kind: 'activating',
       tabId: candidate,
       ownerEpoch: state.nextEpoch,
-      databaseAction: 'wipe-before-open',
+      databaseAction: state.databaseAction,
+      phase: 'loading-assets',
     };
     return [
       {
         kind: 'elect-owner',
         tabId: candidate,
         ownerEpoch: state.nextEpoch,
-        databaseAction: 'wipe-before-open',
+        databaseAction: state.databaseAction,
       },
     ];
   }
@@ -451,6 +493,10 @@ export class CoordinatorCore {
       previousTabId: tabId,
       previousEpoch: ownerEpoch,
       nextEpoch: this.currentEpoch + 1,
+      databaseAction:
+        state.kind === 'activating' && state.phase === 'loading-assets'
+          ? state.databaseAction
+          : 'wipe-before-open',
       reason,
     };
     this.assertInvariants();
@@ -488,6 +534,7 @@ export class CoordinatorCore {
       tabId: candidate,
       ownerEpoch: this.currentEpoch,
       databaseAction,
+      phase: 'loading-assets',
     };
     return [
       {

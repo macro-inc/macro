@@ -54,11 +54,13 @@ bot's say-so. */
 only - an external runtime sends its own first prompt through the
 control endpoint. Omitted, the session opens idle. */
   prompt?: CreateAgentSessionRequestPrompt;
-  /** Starting branch for a managed coding session's selected repository. */
+  /** Starting branch for a managed coding session's selected repository.
+Omitted, the session starts on the repository's default branch. */
   repoBranch?: CreateAgentSessionRequestRepoBranch;
-  /** Explicit GitHub repository for a managed Cursor session. Access is
-checked for the session owner. For external sessions this is
-informational: cloning it is the runtime operator's job. */
+  /** Explicit GitHub repository for a managed Cursor session, as one of the
+urls `GET /agent-repositories` lists for the caller. Access is checked
+for the session owner. For external sessions this is informational:
+cloning it is the runtime operator's job. */
   repoUrl?: CreateAgentSessionRequestRepoUrl;
   thread?: CreateAgentSessionRequestThread;
   /** Absolute directory the bot's harness runs in on its runtime. Present

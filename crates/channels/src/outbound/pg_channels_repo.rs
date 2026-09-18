@@ -3091,6 +3091,8 @@ impl ChannelRepo for PgChannelsRepo {
             anyhow::bail!("team id is required to patch team channel settings");
         }
 
+        let requires_admin = convert_to_team_channel.is_some() || auto_join_team.is_some();
+
         let mut transaction = self.pool.begin().await?;
         let row = sqlx::query_as!(
             ExistsRow,
@@ -3100,22 +3102,35 @@ impl ChannelRepo for PgChannelsRepo {
                 FROM comms_channel_participants
                 WHERE channel_id = $1
                   AND user_id = $2
-                  AND role IN (
-                      'admin'::comms_participant_role,
-                      'owner'::comms_participant_role
+                  AND left_at IS NULL
+                  AND (
+                      role IN (
+                          'admin'::comms_participant_role,
+                          'owner'::comms_participant_role
+                      )
+                      OR (
+                          NOT $3
+                          AND role = 'member'::comms_participant_role
+                      )
                   )
             ) AS "exists!"
             "#,
             channel_id,
             user_id,
+            requires_admin,
         )
         .fetch_one(&mut *transaction)
         .await
         .context("failed to check user authorization")?;
 
         if !row.exists {
+            if requires_admin {
+                anyhow::bail!(
+                    "User is not authorized to perform this action, to patch channel settings you must be an admin or owner"
+                );
+            }
             anyhow::bail!(
-                "User is not authorized to perform this action, to patch a channel you must be an admin or owner"
+                "User is not authorized to perform this action, to rename a channel you must be a member"
             );
         }
 

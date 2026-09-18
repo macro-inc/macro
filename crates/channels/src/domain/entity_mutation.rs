@@ -1,7 +1,7 @@
 //! Unified entity-mutation capability impls for channels.
 
 use entity_access::domain::models::{
-    AdminParticipantRole, EntityAccessReceipt, OwnerParticipantRole, RequiredPermission,
+    EntityAccessReceipt, MemberParticipantRole, OwnerParticipantRole, RequiredPermission,
 };
 use entity_mutation::{
     DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
@@ -49,7 +49,7 @@ impl<R, E, P, M, F> RenameEntity for ChannelServiceImpl<R, E, P, M, F>
 where
     Self: ChannelService,
 {
-    type Receipt = AdminParticipantRole;
+    type Receipt = MemberParticipantRole;
 
     async fn rename_entity(
         &self,
@@ -57,11 +57,8 @@ where
         receipt: EntityAccessReceipt<Self::Receipt>,
         display_name: String,
     ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
-        let channel_id = channel_uuid(&entity)?;
-        let sender = sender_from_receipt(&receipt)?;
         self.patch_channel(
-            sender,
-            channel_id,
+            receipt,
             PatchChannelRequest {
                 channel_name: Some(display_name),
                 convert_to_team_channel: None,

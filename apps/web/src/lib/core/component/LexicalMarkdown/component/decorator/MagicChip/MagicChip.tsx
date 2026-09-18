@@ -17,10 +17,7 @@ export const MagicChip: Component<
       presentation={model.presentation()}
       header={model.header()}
       onCollapse={props.onCollapse}
-      answer={{
-        answering: model.elicitation.answering(),
-        respond: model.elicitation.respond,
-      }}
+      answer={{ respond: model.elicitation.respond }}
       onOpen={() => insertSplit({ type: 'agent', id: props.agentSessionId })}
     />
   );

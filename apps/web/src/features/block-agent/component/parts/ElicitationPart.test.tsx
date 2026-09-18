@@ -25,7 +25,6 @@ vi.mock('../../context/AgentSessionContext', () => ({
     elicitation: {
       pending: () => pending,
       canAnswer: () => canAnswer,
-      answering: () => false,
       respond,
     },
   }),

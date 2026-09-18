@@ -1154,9 +1154,25 @@ async fn run() -> anyhow::Result<()> {
     // Held by value here and behind an `Arc` in the router state: the impl is a
     // pool handle, so cloning is cheap and `SoupImpl` needs an owned service.
     let reminders_service = RemindersServiceImpl::new(PgRemindersRepo::new(db.clone()));
-    let initiative_service = Arc::new(InitiativeServiceImpl::new(PgInitiativeRepo::new(
-        db.clone(),
-    )));
+
+    let document_creator = documents_hex::domain::create::DocumentCreator::new(
+        document_service.clone(),
+        markdown_initializer,
+        documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
+        documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker::new(
+            db.clone(),
+            lexical_client.clone(),
+        ),
+    );
+    let initiative_service = Arc::new(InitiativeServiceImpl::new(
+        PgInitiativeRepo::new(db.clone()),
+        outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter::new(
+            document_creator.clone(),
+            db.clone(),
+            sqs_client.clone(),
+            macro_event_broker.clone(),
+        ),
+    ));
 
     let collab_surface_service = CollabSurfaceServiceImpl::new(
         Arc::new(PgCollabSurfaceRepo::new(db.clone())),
@@ -1489,21 +1505,13 @@ async fn run() -> anyhow::Result<()> {
             authorization_state: authorization_state.clone(),
         },
         documents_state: DocumentRouterState {
-            service: document_service.clone(),
+            service: document_service,
             access_service: entity_access_service.clone(),
             authorization_state: authorization_state.clone(),
             pool: db.clone(),
             task_dedup_service,
             lexical_client: lexical_client.clone(),
-            creator: documents_hex::domain::create::DocumentCreator::new(
-                document_service,
-                markdown_initializer,
-                documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader::default(),
-                documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker::new(
-                    db.clone(),
-                    lexical_client.clone(),
-                ),
-            ),
+            creator: document_creator,
             document_permission_jwt_secret: config.document_permission_jwt.as_ref().to_string(),
         },
         config: Arc::new(config),

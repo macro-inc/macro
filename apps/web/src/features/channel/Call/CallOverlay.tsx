@@ -44,7 +44,7 @@ function ParticipantTileWrapper(props: {
   return (
     <div
       class={cn(
-        'relative flex items-center justify-center rounded-lg overflow-hidden bg-message min-h-30 border border-edge-muted',
+        'relative flex items-center justify-center rounded-lg overflow-hidden bg-panel min-h-30 border border-edge-muted',
         props.isSpeaking && 'ring-inset ring-2 ring-accent',
         props.isConnecting && 'animate-pulse',
         props.class
@@ -211,7 +211,7 @@ function ScreenShareTile(props: { participant: RemoteParticipant }) {
   };
 
   return (
-    <div class="relative size-full flex items-center justify-center rounded-lg overflow-hidden bg-message border border-edge-muted">
+    <div class="relative size-full flex items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted">
       <TrackView track={screenTrack()} fit="contain" />
 
       <VideoTag variant="truncated">{displayName()}'s screen</VideoTag>

@@ -294,6 +294,7 @@ struct CountingEmailService {
     user_link_calls: Arc<AtomicUsize>,
     user_catalog_identities: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     seen_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
+    unread_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
     label_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, Uuid, bool)>>>,
 }
 
@@ -450,6 +451,18 @@ impl EmailService for CountingEmailService {
         self.seen_mutation_calls
             .lock()
             .expect("seen mutation calls lock")
+            .push((macro_id, thread_id));
+        Ok(())
+    }
+
+    async fn mark_thread_unread(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        self.unread_mutation_calls
+            .lock()
+            .expect("unread mutation calls lock")
             .push((macro_id, thread_id));
         Ok(())
     }
@@ -2045,7 +2058,29 @@ async fn email_mutations_return_the_canonical_thread_for_normalized_cache_update
     assert_eq!(label_thread["id"], thread_id.to_string());
     assert_eq!(label_thread["isRead"], true);
 
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_email_thread_with_read_status(thread_id, false)]);
+    let unread_response = harness
+        .execute_authenticated_mutation(&format!(
+            r#"mutation {{ markEmailThreadUnread(input: {{threadId: "{thread_id}"}}) {{ __typename id isRead }} }}"#
+        ))
+        .await;
+    assert!(
+        unread_response.errors.is_empty(),
+        "{:?}",
+        unread_response.errors
+    );
+    let unread_thread = &unread_response.data.into_json().unwrap()["markEmailThreadUnread"];
+    assert_eq!(unread_thread["__typename"], "GraphqlSoupEmailThread");
+    assert_eq!(unread_thread["id"], thread_id.to_string());
+    assert_eq!(unread_thread["isRead"], false);
+
     let expected_user = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
+    assert_eq!(
+        *harness.email_service.unread_mutation_calls.lock().unwrap(),
+        vec![(expected_user.clone(), thread_id)]
+    );
     assert_eq!(
         *harness
             .email_service

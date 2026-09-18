@@ -264,7 +264,11 @@ export function SplitPanel(props: SplitPanelProps) {
             <Panel
               class={cn(
                 'touch:rounded-none touch:after:hidden touch:border-0! bg-panel transition-none',
-                props.handle.isSpotLight() ? 'rounded-xl' : 'rounded-none',
+                props.handle.isSpotLight()
+                  ? 'rounded-xl'
+                  : multipleSplits()
+                    ? 'rounded-md'
+                    : 'rounded-none',
                 splitUnfocusedStyling() && 'split-panel-inactive',
                 {
                   'shadow-sm shadow-drop-shadow/50': splitUnfocusedStyling(),
@@ -272,7 +276,7 @@ export function SplitPanel(props: SplitPanelProps) {
                 }
               )}
               depth={isTouchDevice() ? 0 : 1}
-              hideBorder={!props.handle.isSpotLight()}
+              hideBorder={!props.handle.isSpotLight() && !multipleSplits()}
             >
               <Show when={!usesComposableLayout()}>
                 <Panel.Header

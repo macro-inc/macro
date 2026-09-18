@@ -20,6 +20,7 @@ use crate::domain::{
 };
 use channel_sender::ChannelSender;
 use chrono::Utc;
+use entity_access::domain::models::ParticipantRole as AccessRole;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use std::{
     collections::HashMap,
@@ -991,6 +992,23 @@ fn macro_id(user_id: &str) -> MacroUserIdStr<'static> {
 
 fn sender(user_id: &str) -> Sender {
     Sender::new_from_user(macro_id(user_id))
+}
+
+fn patch_receipt(
+    user_id: &str,
+    channel_id: Uuid,
+    role: AccessRole,
+) -> EntityAccessReceipt<MemberParticipantRole> {
+    use entity_access::domain::models::{Entity, EntityPermission};
+    EntityAccessReceipt::<MemberParticipantRole>::try_new_authenticated_user(
+        macro_id(user_id),
+        Entity {
+            entity_id: channel_id.to_string(),
+            entity_type: EntityType::Channel,
+        },
+        EntityPermission::ChannelRole { role },
+    )
+    .unwrap()
 }
 
 #[tokio::test]
@@ -2843,8 +2861,7 @@ async fn patch_channel_dispatches_channel_updated() {
     let svc = mutation_service(repo, events.clone(), FakeReferenceSharing::default());
 
     svc.patch_channel(
-        sender("macro|sender@test.com"),
-        channel_id,
+        patch_receipt("macro|sender@test.com", channel_id, AccessRole::Member),
         PatchChannelRequest {
             channel_name: Some("Renamed".to_string()),
             convert_to_team_channel: None,
@@ -2874,8 +2891,7 @@ async fn noop_patch_channel_dispatches_nothing() {
     );
 
     svc.patch_channel(
-        sender("macro|sender@test.com"),
-        channel_id,
+        patch_receipt("macro|sender@test.com", channel_id, AccessRole::Member),
         PatchChannelRequest {
             channel_name: None,
             convert_to_team_channel: None,
@@ -2904,8 +2920,7 @@ async fn patch_channel_conversion_uses_the_users_team() {
     );
 
     svc.patch_channel(
-        sender("macro|sender@test.com"),
-        channel_id,
+        patch_receipt("macro|sender@test.com", channel_id, AccessRole::Admin),
         PatchChannelRequest {
             channel_name: None,
             convert_to_team_channel: Some(true),
@@ -2942,8 +2957,7 @@ async fn patch_channel_conversion_names_an_unnamed_private_channel() {
     );
 
     svc.patch_channel(
-        sender("macro|sender@test.com"),
-        channel_id,
+        patch_receipt("macro|sender@test.com", channel_id, AccessRole::Admin),
         PatchChannelRequest {
             channel_name: None,
             convert_to_team_channel: Some(true),
@@ -2978,8 +2992,7 @@ async fn patch_team_channel_conversion_to_private_clears_team_settings() {
     );
 
     svc.patch_channel(
-        sender("macro|sender@test.com"),
-        channel_id,
+        patch_receipt("macro|sender@test.com", channel_id, AccessRole::Admin),
         PatchChannelRequest {
             channel_name: None,
             convert_to_team_channel: Some(false),
@@ -3012,8 +3025,7 @@ async fn patch_channel_conversion_requires_the_user_to_have_a_team() {
 
     let err = svc
         .patch_channel(
-            sender("macro|sender@test.com"),
-            channel_id,
+            patch_receipt("macro|sender@test.com", channel_id, AccessRole::Admin),
             PatchChannelRequest {
                 channel_name: None,
                 convert_to_team_channel: Some(true),
@@ -3041,8 +3053,7 @@ async fn patch_channel_rejects_enabling_auto_join_on_a_non_team_channel() {
 
     let err = svc
         .patch_channel(
-            sender("macro|sender@test.com"),
-            channel_id,
+            patch_receipt("macro|sender@test.com", channel_id, AccessRole::Admin),
             PatchChannelRequest {
                 channel_name: None,
                 convert_to_team_channel: None,
@@ -3075,8 +3086,7 @@ async fn patch_team_channel_auto_join_uses_its_existing_team() {
     );
 
     svc.patch_channel(
-        sender("macro|sender@test.com"),
-        channel_id,
+        patch_receipt("macro|sender@test.com", channel_id, AccessRole::Admin),
         PatchChannelRequest {
             channel_name: None,
             convert_to_team_channel: None,
@@ -3104,8 +3114,7 @@ async fn patch_channel_allows_disabling_auto_join_without_a_team() {
     );
 
     svc.patch_channel(
-        sender("macro|sender@test.com"),
-        channel_id,
+        patch_receipt("macro|sender@test.com", channel_id, AccessRole::Admin),
         PatchChannelRequest {
             channel_name: None,
             convert_to_team_channel: None,
@@ -3120,6 +3129,89 @@ async fn patch_channel_allows_disabling_auto_join_without_a_team() {
     assert_eq!(state.channel_patches.len(), 1);
     assert_eq!(state.channel_patches[0].1, None);
     assert_eq!(state.channel_patches[0].0.auto_join_team, Some(false));
+}
+
+#[tokio::test]
+async fn patch_channel_member_can_rename() {
+    let channel_id = Uuid::new_v4();
+    let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+    let events = FakeEvents::default();
+    let svc = mutation_service(
+        repo.clone(),
+        events.clone(),
+        FakeReferenceSharing::default(),
+    );
+
+    svc.patch_channel(
+        patch_receipt("macro|sender@test.com", channel_id, AccessRole::Member),
+        PatchChannelRequest {
+            channel_name: Some("Member Name".to_string()),
+            convert_to_team_channel: None,
+            auto_join_team: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let state = repo.state.lock().unwrap();
+    assert_eq!(state.channel_patches.len(), 1);
+    assert_eq!(
+        state.channel_patches[0].0.channel_name.as_deref(),
+        Some("Member Name")
+    );
+    assert_eq!(state.channel_patches[0].0.convert_to_team_channel, None);
+    assert_eq!(state.channel_patches[0].0.auto_join_team, None);
+    let events = events.events.lock().unwrap();
+    assert!(matches!(
+        events.as_slice(),
+        [ChannelEvent::ChannelUpdated { channel_name: Some(name), .. }]
+            if name == "Member Name"
+    ));
+}
+
+#[tokio::test]
+async fn patch_channel_member_cannot_convert_or_change_auto_join() {
+    let requests = [
+        PatchChannelRequest {
+            channel_name: None,
+            convert_to_team_channel: Some(true),
+            auto_join_team: None,
+        },
+        PatchChannelRequest {
+            channel_name: Some("Still Member".to_string()),
+            convert_to_team_channel: None,
+            auto_join_team: Some(false),
+        },
+    ];
+    for req in requests {
+        let channel_id = Uuid::new_v4();
+        let repo = FakeMutationRepo::new(channel_id, "macro|sender@test.com");
+        repo.state.lock().unwrap().user_team_id = Some(Uuid::new_v4());
+        let events = FakeEvents::default();
+        let svc = mutation_service(
+            repo.clone(),
+            events.clone(),
+            FakeReferenceSharing::default(),
+        );
+
+        let err = svc
+            .patch_channel(
+                patch_receipt("macro|sender@test.com", channel_id, AccessRole::Member),
+                req,
+            )
+            .await
+            .unwrap_err();
+
+        assert!(matches!(
+            err,
+            ChannelMutationErr::Forbidden(message)
+                if message == "converting a channel or changing auto-join requires channel admin access"
+        ));
+        let state = repo.state.lock().unwrap();
+        assert!(state.channel_patches.is_empty());
+        assert_eq!(state.user_team_id_lookups, 0);
+        assert!(events.events.lock().unwrap().is_empty());
+    }
 }
 
 #[tokio::test]

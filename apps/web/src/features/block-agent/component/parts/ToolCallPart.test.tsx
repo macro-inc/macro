@@ -96,6 +96,24 @@ vi.mock('../../ui', async () => ({
   FoldedOutput: (props: { text: string }) => (
     <pre data-testid="output">{props.text}</pre>
   ),
+  FoldedExchange: (props: {
+    request?: unknown;
+    response?: unknown;
+    responseText?: string | null;
+    error?: string | null;
+  }) => (
+    <div data-testid="exchange">
+      <pre data-testid="request">
+        {props.request == null ? '' : JSON.stringify(props.request, null, 2)}
+      </pre>
+      <pre data-testid="response">
+        {props.response == null
+          ? (props.responseText ?? '')
+          : JSON.stringify(props.response, null, 2)}
+      </pre>
+      <pre data-testid="error">{props.error ?? ''}</pre>
+    </div>
+  ),
   FoldedPathList: (props: { paths: string[] }) => (
     <div data-testid="path-list">{props.paths.join(',')}</div>
   ),
@@ -155,7 +173,7 @@ describe('ToolCallPart routing', () => {
     );
   });
 
-  it('shows an MCP tool by its own name, without the server namespace', () => {
+  it('shows an MCP tool by its own name, with the server beside it', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={{
@@ -164,12 +182,66 @@ describe('ToolCallPart routing', () => {
             acpKind: 'other',
             output: null,
             input: null,
+            result: null,
+            error: null,
           }),
           name: { kind: 'mcp', server: 'deepwiki', tool: 'ask' },
         }}
       />
     ));
     expect(rendered.getByTestId('title').textContent).toBe('ask');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('deepwiki');
+  });
+
+  it('shows an MCP call as its request and response', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={{
+          ...toolUse({
+            kind: 'other',
+            acpKind: 'other',
+            output: null,
+            input: { documentId: '4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46' },
+            result: { content: { text: 'Q3 plan' }, comments: [] },
+            error: null,
+          }),
+          name: { kind: 'mcp', server: 'macro', tool: 'ReadContent' },
+        }}
+      />
+    ));
+    expect(rendered.getByTestId('title').textContent).toBe('ReadContent');
+    expect(rendered.getByTestId('request').textContent).toContain(
+      '"documentId": "4a4886d8-9f4b-4f7e-a5a3-3f5c8b6c0e46"'
+    );
+    expect(rendered.getByTestId('response').textContent).toContain(
+      '"text": "Q3 plan"'
+    );
+    expect(rendered.getByTestId('error').textContent).toBe('');
+  });
+
+  it('shows a failed MCP call faded, with the error as subtitle and in the body', () => {
+    const rendered = render(() => (
+      <ToolCallPart
+        part={{
+          ...toolUse(
+            {
+              kind: 'other',
+              acpKind: 'other',
+              output: null,
+              input: {},
+              result: null,
+              error: 'user declined',
+            },
+            { status: 'failed' }
+          ),
+          name: { kind: 'mcp', server: 'ops', tool: 'deploy' },
+        }}
+      />
+    ));
+    expect(rendered.getByTestId('tool-card').dataset.muted).toBe('true');
+    expect(rendered.getByTestId('subtitle').textContent).toBe('user declined');
+    expect(rendered.getByTestId('error').textContent).toBe('user declined');
+    expect(rendered.getByTestId('trailing').textContent).toBe('Failed');
   });
 
   it('renders an edit with computed +/− counts and the diff body', () => {
@@ -200,7 +272,7 @@ describe('ToolCallPart routing', () => {
     expect(rendered.getByTestId('path-list').textContent).toBe('a.rs,b.rs');
   });
 
-  it('routes unmodeled kinds to the output fallback', () => {
+  it('routes unmodeled kinds to the exchange card, with reported text as the response', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse({
@@ -208,10 +280,21 @@ describe('ToolCallPart routing', () => {
           acpKind: 'custom_tool',
           output: 'raw result',
           input: null,
+          result: null,
+          error: null,
         })}
       />
     ));
-    expect(rendered.getByTestId('body').textContent).toContain('raw result');
+    expect(rendered.getByTestId('request').textContent).toBe('');
+    expect(rendered.getByTestId('response').textContent).toBe('raw result');
+  });
+
+  it('routes fetch and think to the plain output card', () => {
+    const rendered = render(() => (
+      <ToolCallPart part={toolUse({ kind: 'fetch', output: 'page body' })} />
+    ));
+    expect(rendered.getByTestId('output').textContent).toBe('page body');
+    expect(rendered.queryByTestId('exchange')).toBeNull();
   });
 });
 
@@ -281,7 +364,10 @@ describe('ToolCallPart Macro tools', () => {
     ));
     expect(rendered.queryByTestId('macro-tool')).toBeNull();
     expect(rendered.getByTestId('title').textContent).toBe('BrandNewTool');
-    expect(rendered.getByTestId('body').textContent).toContain(
+    expect(rendered.getByTestId('request').textContent).toContain(
+      '"anything": 1'
+    );
+    expect(rendered.getByTestId('response').textContent).toContain(
       '"result": "ok"'
     );
   });

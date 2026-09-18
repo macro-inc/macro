@@ -76,8 +76,13 @@ export function toGraphqlFavoriteEntityType(
 }
 
 /** Convert one GraphQL favorite into the shared favorites-list shape. */
-export function mapGraphqlFavorite(favorite: FavoriteFieldsFragment): Favorite {
+export function mapGraphqlFavorite(
+  favorite: FavoriteFieldsFragment
+): Favorite & { id: string } {
   return {
+    // urql-solid reconciles lists by id. Preserve it so a mounted row's
+    // preview/avatar subscriptions keep pointing at the same entity.
+    id: favorite.id,
     channelId: favorite.channelId,
     channelType: favorite.channelType,
     createdAt: favorite.createdAt,

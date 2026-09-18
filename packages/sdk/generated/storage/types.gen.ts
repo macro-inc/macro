@@ -127,11 +127,12 @@ export type Agent = {
  * frame, and read back off that frame as `request_id` on the folded message
  * it derives.
  *
- * Minted only by the server at accept time, as a v7 uuid so ids sort by mint
- * time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
- * request id is the whole ownership test: the server is the only writer of
- * runtime-bound frames. The machine's own handshake request ids
- * (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+ * A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+ * or by a client that speculated the action and named it in the control
+ * request - either way the server is the only writer of runtime-bound
+ * frames, so a uuid-shaped request id remains the whole ownership test. The
+ * machine's own handshake request ids (`agent_session:{session}:{n}`) are
+ * not uuids and stay `None`.
  */
 export type AgentActionId = string;
 
@@ -1283,6 +1284,8 @@ export type BasicDocumentSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 export type BomPart = {
@@ -3469,7 +3472,8 @@ export type CreateEntityMentionResponse = {
  */
 export type CreateInitiativeRequest = {
     /**
-     * Optional description.
+     * Initial markdown for the description document. Not stored on the initiative; later
+     * edits happen in the document editor.
      */
     description?: string | null;
     /**
@@ -4329,6 +4333,11 @@ export type DeleteUnthreadedPdfAnchorRequest = {
 };
 
 /**
+ * Id of the markdown document that holds an initiative's description.
+ */
+export type DescriptionDocumentId = string;
+
+/**
  * Returns basic information of a document used for some db queries
  */
 export type DocumentBasic = {
@@ -4712,6 +4721,8 @@ export type DocumentPreviewDataSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 /**
@@ -4823,8 +4834,11 @@ export type DocumentStorageServiceApiVersion = 'v1' | 'v2';
 /**
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
+ *
+ * Wire, database, and `Display` spellings are all `snake_case` so a
+ * multi-word variant serializes identically in every system.
  */
-export type DocumentSubType = 'task' | 'snippet' | 'skill';
+export type DocumentSubType = 'task' | 'snippet' | 'skill' | 'initiative_description';
 
 /**
  * Metadata for [`DocumentTopicEvent::SyncContentUpdated`].
@@ -6428,9 +6442,9 @@ export type InitiativeDetail = {
      */
     createdAt: string;
     /**
-     * Optional description.
+     * The markdown document holding the description; open it in the editor.
      */
-    description?: string | null;
+    descriptionDocumentId: DescriptionDocumentId;
     /**
      * Opaque identifier.
      */
@@ -6485,9 +6499,9 @@ export type InitiativeList = {
  */
 export type InitiativeSummary = {
     /**
-     * Optional description.
+     * The markdown document holding the description; open it in the editor.
      */
-    description?: string | null;
+    descriptionDocumentId: DescriptionDocumentId;
     /**
      * Opaque identifier.
      */
@@ -9005,6 +9019,8 @@ export type SoupDocumentSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 /**
@@ -10161,13 +10177,9 @@ export type UpdateCrmTeamSettingsRequest = {
 
 /**
  * Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`
- * present is a full replace.
+ * present is a full replace. The description is edited in its document, not here.
  */
 export type UpdateInitiativeRequest = {
-    /**
-     * Replacement description. `Some("")` clears it after trim.
-     */
-    description?: string | null;
     /**
      * Full replacement member list when present.
      */

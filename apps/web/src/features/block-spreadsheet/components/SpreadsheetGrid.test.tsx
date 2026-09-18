@@ -784,6 +784,31 @@ describe('spreadsheet presentation', () => {
     );
   });
 
+  it('waits for new formula results without flashing expressions or hiding literal text', () => {
+    const [values, setValues] = createSignal<
+      ComponentProps<typeof SpreadsheetGrid>['values']
+    >({});
+    const view = renderGrid(
+      {
+        A1: { value: '=SUM(B1:B3)' },
+        A2: { value: '=literal', format: 'text' },
+      },
+      {
+        get values() {
+          return values();
+        },
+      }
+    );
+    const cell = view.container.querySelector('[data-address="A1"]')!;
+    expect(cell.textContent).toBe('');
+    expect(
+      view.container.querySelector('[data-address="A2"]')?.textContent
+    ).toBe('=literal');
+    setValues({ A1: { display: '6', number: 6 } });
+    expect(cell.textContent).toBe('6');
+    expect(view.cells().A1.value).toBe('=SUM(B1:B3)');
+  });
+
   it('shows formulas without changing their values or numeric alignment in the normal view', () => {
     const [showFormulas, setShowFormulas] = createSignal(false);
     const view = renderGrid(

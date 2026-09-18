@@ -10,6 +10,36 @@ import type { MacroClient } from '../../utils/client';
 import { MacroEntity } from '../entity';
 import { QueuedAction } from './queued-action';
 
+/** A GitHub repository the caller can point a managed session at. */
+export type SelectableRepository = {
+  /** The canonical `https://github.com/owner/name` URL, as `createManaged` takes it. */
+  url: string;
+  /**
+   * The branch its clones check out, and where a session starts unless
+   * `createManaged` names another. Absent for a repository with no commits.
+   */
+  defaultBranch?: string;
+};
+
+/** What a managed session is created with. */
+export type CreateManagedSessionOptions = {
+  /** First prompt to deliver once the session is running. */
+  prompt?: string;
+  /** Instructions the session's runtime works under, fixed for its life. */
+  instructions?: string;
+  /**
+   * The repository the session works on, as one of the URLs
+   * {@link AgentSession.repositories} lists for the caller. Omitted, the
+   * runtime chooses from the prompt. Honored for Cursor sessions.
+   */
+  repoUrl?: string;
+  /**
+   * The branch the session starts on; needs `repoUrl`. Omitted, the
+   * repository's default branch.
+   */
+  repoBranch?: string;
+};
+
 /** A managed or externally hosted coding-agent session. */
 export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** A handle to an agent session by id. Details load on first access. */
@@ -20,21 +50,44 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Create a managed session, optionally delivering its first prompt. */
   static async createManaged(
     client: MacroClient,
-    opts?: { prompt?: string; instructions?: string },
+    opts?: CreateManagedSessionOptions
   ): Promise<AgentSession> {
     const { session } = unwrap(
       await client.agentHarness.createAgentSession({
-        body: { prompt: opts?.prompt, instructions: opts?.instructions },
-      }),
+        body: {
+          prompt: opts?.prompt,
+          instructions: opts?.instructions,
+          repoUrl: opts?.repoUrl,
+          repoBranch: opts?.repoBranch,
+        },
+      })
     );
     return new AgentSession(client, session.id, session);
+  }
+
+  /**
+   * The GitHub repositories the caller can hand a managed session: every
+   * repository under an installation of Macro's GitHub App they or their
+   * teams made, sorted by `owner/name`. Empty when the App is installed
+   * nowhere they reach.
+   */
+  static async repositories(
+    client: MacroClient
+  ): Promise<SelectableRepository[]> {
+    const { repositories } = unwrap(
+      await client.agentHarness.listAgentRepositories()
+    );
+    return repositories.map((repository) => ({
+      url: repository.url,
+      defaultBranch: repository.defaultBranch ?? undefined,
+    }));
   }
 
   protected async fetch(): Promise<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSession({
         path: { session_id: this.id },
-      }),
+      })
     );
   }
 
@@ -77,7 +130,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.renameAgentSession({
         path: { session_id: this.id },
         body: { name },
-      }),
+      })
     );
   }
 
@@ -87,7 +140,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.putAgentSessionSandboxSize({
         path: { session_id: this.id },
         body: { size },
-      }),
+      })
     );
     return next;
   }
@@ -100,12 +153,12 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
   /** Set the caller's default sandbox size for the next `@coder` mention. */
   static async setDefaultSandboxSize(
     client: MacroClient,
-    size: SandboxSize,
+    size: SandboxSize
   ): Promise<SandboxSize> {
     return unwrap(
       await client.agentHarness.putAgentSandboxSize({
         body: { size },
-      }),
+      })
     ).size;
   }
 
@@ -122,7 +175,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       client.agentHarness.controlAgentSession({
         path: { session_id: this.id },
         body: action,
-      }),
+      })
     );
   }
 
@@ -139,10 +192,10 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     const { entries } = unwrap(
       await this.client.agentHarness.getAgentSessionQueue({
         path: { session_id: this.id },
-      }),
+      })
     );
     return entries.map((entry) =>
-      QueuedAction.from(this.client, this.id, entry),
+      QueuedAction.from(this.client, this.id, entry)
     );
   }
 
@@ -151,7 +204,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return unwrap(
       await this.client.agentHarness.getAgentSessionLog({
         path: { session_id: this.id },
-      }),
+      })
     );
   }
 
@@ -160,7 +213,7 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     await this.mutate((client) =>
       client.agentHarness.deleteAgentSession({
         path: { session_id: this.id },
-      }),
+      })
     );
   }
 }

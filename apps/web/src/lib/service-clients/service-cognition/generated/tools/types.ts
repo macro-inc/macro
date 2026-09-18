@@ -239,8 +239,15 @@ export type TaggedSearchResult1 =
 /**
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
+ *
+ * Wire, database, and `Display` spellings are all `snake_case` so a
+ * multi-word variant serializes identically in every system.
  */
-export type DocumentSubType = 'task' | 'snippet' | 'skill';
+export type DocumentSubType =
+  | 'task'
+  | 'snippet'
+  | 'skill'
+  | 'initiative_description';
 /**
  * Viewer-relative attendance status for a call record.
  * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
@@ -584,7 +591,7 @@ export type EntityItem =
       fileType?: string | null;
       /**
        * The document's sub type: "task" for Macro tasks, "snippet" for snippets,
-       * "skill" for skills.
+       * "skill" for skills, "initiative_description" for an initiative's description.
        */
       subType?: string | null;
       /**
@@ -5503,7 +5510,7 @@ export interface ReadSpreadsheet {
   includeStyles?: boolean | null;
 }
 /**
- * Rename an existing channel. Requires the current user to be a channel admin or owner. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
+ * Rename an existing channel. Requires the current user to be an active channel participant. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
  */
 export interface RenameChannel {
   /**

@@ -24,6 +24,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { enableCrmLists } from '@core/constant/featureFlags';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { type EntityData, isCrmCompanyEntity } from '@entity';
 import ListIcon from '@phosphor/list.svg';
 import { fetchCrmExportCompanies } from '@queries/crm/export';
@@ -73,9 +74,11 @@ function NavigationToggle(props: {
             <Dropdown.Trigger
               variant="ghost"
               size="icon-sm"
+              depth={isTouchDevice() ? 3 : undefined}
+              class="touch:island touch:pointer-events-auto touch:size-10 touch:shrink-0 touch:rounded-full touch:bg-chrome"
               aria-label="Show CRM navigation"
             >
-              <ListIcon class="size-4" />
+              <ListIcon class="size-4 touch:size-6" />
             </Dropdown.Trigger>
           </Tooltip>
           <Dropdown.Content class="w-55 max-h-[80vh] overflow-auto p-0">
@@ -153,7 +156,10 @@ function CrmFilterChips(props: { onReset: () => void }) {
 }
 
 export function CrmWorkspace(props: {
-  children: (onOpenEntity: (entity: EntityData) => boolean) => JSX.Element;
+  children: (options: {
+    onOpenEntity?: (entity: EntityData) => boolean;
+    mobileHeaderLeading?: JSX.Element;
+  }) => JSX.Element;
 }) {
   const view = useSoupView();
   const panel = useSplitPanelOrThrow();
@@ -284,11 +290,7 @@ export function CrmWorkspace(props: {
     />
   );
   return (
-    <ViewShell.Root
-      class="touch:pt-(--safe-top) touch:pb-(--mobile-content-inset-bottom)"
-      aside={collapsed() ? false : {}}
-      main={{ min: 320 }}
-    >
+    <ViewShell.Root aside={collapsed() ? false : {}} main={{ min: 320 }}>
       <ViewShell.Aside>
         <Suspense
           fallback={<div class="p-4 text-sm text-ink-muted">Loading CRM…</div>}
@@ -312,53 +314,62 @@ export function CrmWorkspace(props: {
           )}
         </Show>
         <Show when={!selectedCompany()}>
-          <div class="flex h-12 shrink-0 items-center gap-3 border-b border-edge-muted px-4">
-            <NavigationToggle onExpand={() => setCollapsed(false)}>
-              <Suspense>{sidebar()}</Suspense>
-            </NavigationToggle>
-            <h1
-              class="flex h-7 min-w-0 flex-1 items-center px-1 text-sm font-semibold tracking-[-0.03em]"
-              title={title()}
-            >
-              <span class="truncate">{title()}</span>
-            </h1>
-          </div>
-          <ViewShell.Header>
-            <div class="flex min-w-0 items-center justify-between gap-3">
-              <CrmSearchBar />
-              <div class="ml-auto flex shrink-0 items-center gap-2 [&_button]:h-8 [&_button]:min-w-8 [&_button]:rounded-lg [&_button>svg]:size-4!">
-                <SoupViewContextSort />
-                <SoupViewContextGroup hideLabel />
-                <UnifiedFilterDropdown hideLabel />
-                <CompanyDisplayMenu />
-                <Suspense>
-                  <CompanyViewsMenu hideLabel />
-                </Suspense>
-                <Show when={listsFlag().enabled && activeList()}>
-                  {(list) => (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() =>
-                        setEditing({
-                          id: list().id,
-                          name: list().name,
-                          companyIds: [...list().config.companyIds],
-                        })
-                      }
-                    >
-                      Edit list
-                    </Button>
-                  )}
-                </Show>
-              </div>
+          <Show when={!isTouchDevice()}>
+            <div class="flex h-12 shrink-0 items-center gap-3 border-b border-edge-muted px-4">
+              <NavigationToggle onExpand={() => setCollapsed(false)}>
+                <Suspense>{sidebar()}</Suspense>
+              </NavigationToggle>
+              <h1
+                class="flex h-7 min-w-0 flex-1 items-center px-1 text-sm font-semibold tracking-[-0.03em]"
+                title={title()}
+              >
+                <span class="truncate">{title()}</span>
+              </h1>
             </div>
-          </ViewShell.Header>
-          <Suspense>
-            <CrmFilterChips onReset={() => navigate(active())} />
-          </Suspense>
+            <ViewShell.Header>
+              <div class="flex min-w-0 items-center justify-between gap-3">
+                <CrmSearchBar />
+                <div class="ml-auto flex shrink-0 items-center gap-2 [&_button]:h-8 [&_button]:min-w-8 [&_button]:rounded-lg [&_button>svg]:size-4!">
+                  <SoupViewContextSort />
+                  <SoupViewContextGroup hideLabel />
+                  <UnifiedFilterDropdown hideLabel />
+                  <CompanyDisplayMenu />
+                  <Suspense>
+                    <CompanyViewsMenu hideLabel />
+                  </Suspense>
+                  <Show when={listsFlag().enabled && activeList()}>
+                    {(list) => (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setEditing({
+                            id: list().id,
+                            name: list().name,
+                            companyIds: [...list().config.companyIds],
+                          })
+                        }
+                      >
+                        Edit list
+                      </Button>
+                    )}
+                  </Show>
+                </div>
+              </div>
+            </ViewShell.Header>
+            <Suspense>
+              <CrmFilterChips onReset={() => navigate(active())} />
+            </Suspense>
+          </Show>
           <div class="min-h-0 min-w-0 flex-1">
-            {props.children(openCompany)}
+            {props.children({
+              onOpenEntity: isTouchDevice() ? undefined : openCompany,
+              mobileHeaderLeading: isTouchDevice() ? (
+                <NavigationToggle onExpand={() => setCollapsed(false)}>
+                  <Suspense>{sidebar()}</Suspense>
+                </NavigationToggle>
+              ) : undefined,
+            })}
           </div>
         </Show>
       </ViewShell.Main>

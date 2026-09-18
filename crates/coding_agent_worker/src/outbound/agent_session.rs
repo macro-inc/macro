@@ -106,7 +106,10 @@ impl HarnessApi {
             .post(format!("{}/agent-sessions/{session}/control", self.base))
             .header(HARNESS_TOKEN_HEADER, &self.token)
             .header(HARNESS_ACTING_USER_HEADER, actor.as_ref())
-            .json(&ControlRequest { action })
+            .json(&ControlRequest {
+                action_id: None,
+                action,
+            })
             .send()
             .await?;
         refuse_errors(response).await?;

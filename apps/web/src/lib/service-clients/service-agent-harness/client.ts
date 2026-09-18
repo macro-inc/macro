@@ -2,6 +2,7 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ErrorResponseHandler } from '@core/util/safeFetch';
 import type {
+  AgentRepositoriesResponse,
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
@@ -68,6 +69,17 @@ export const agentHarnessServiceClient = {
         body: JSON.stringify(request),
         errorResponseHandler: sessionError,
       }
+    );
+  },
+
+  /**
+   * The GitHub repositories the caller can select for a coding session, with
+   * the branch each one's sessions start on by default.
+   */
+  listRepositories() {
+    return fetchWithToken<AgentRepositoriesResponse>(
+      `${agentHarnessHost}/agent-repositories`,
+      { method: 'GET' }
     );
   },
 

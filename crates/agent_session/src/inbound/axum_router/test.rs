@@ -794,6 +794,60 @@ async fn an_external_open_carries_its_instructions() {
 
 mod read;
 
+/// The client speculates under an id it mints and sends it alongside the
+/// action's own flattened fields, which are tagged under `type`.
+#[test]
+fn a_control_request_carries_the_callers_action_id() {
+    let action_id = AgentActionId::mint();
+    let request: ControlRequest = serde_json::from_value(serde_json::json!({
+        "type": "prompt",
+        "prompt": "hello",
+        "actionId": action_id,
+    }))
+    .expect("a control request with an action id parses");
+
+    assert_eq!(request.action_id, Some(action_id));
+    assert_eq!(request.action, AgentAction::prompt("hello"));
+}
+
+#[test]
+fn a_control_request_without_an_action_id_names_none() {
+    let request: ControlRequest = serde_json::from_value(serde_json::json!({
+        "type": "compact",
+    }))
+    .expect("a control request without an action id parses");
+
+    assert_eq!(request.action_id, None);
+    assert_eq!(request.action, AgentAction::Compact);
+}
+
+/// A caller that names no id must not put `actionId: null` on the wire: the
+/// field is absent, so an older reader sees exactly what it saw before.
+#[test]
+fn an_unnamed_control_request_omits_the_field() {
+    let body = serde_json::to_value(ControlRequest {
+        action_id: None,
+        action: AgentAction::Stop,
+    })
+    .expect("a control request serializes");
+
+    assert_eq!(body, serde_json::json!({ "type": "stop" }));
+}
+
+/// A client that speculates an action sends the id it speculated under. The
+/// action's own fields are flattened in beside it, so this pins that the
+/// named id survives that flatten rather than being swallowed by the enum.
+#[test]
+fn a_control_request_keeps_the_client_minted_action_id() {
+    let body =
+        r#"{"type":"prompt","prompt":"hi","actionId":"01a0acab-5eff-72d6-91ca-16997a26d13a"}"#;
+    let request: ControlRequest = serde_json::from_str(body).expect("the body parses");
+    assert_eq!(
+        request.action_id.map(|id| id.to_string()).as_deref(),
+        Some("01a0acab-5eff-72d6-91ca-16997a26d13a")
+    );
+}
+
 #[tokio::test]
 async fn managed_repository_and_branch_reach_the_domain() {
     let opener = Arc::new(RecordingOpener::default());
