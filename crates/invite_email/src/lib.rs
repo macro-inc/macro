@@ -238,6 +238,10 @@ impl NotificationExtIos for ChannelInviteMetadata {
             push_notification_data: PushNotificationData {
                 notification_id,
                 sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+                notification_type: Some(Self::TYPE_NAME.to_string()),
+                communication_title: None,
+                group_name: None,
+                conversation_id: None,
             },
         })
     }

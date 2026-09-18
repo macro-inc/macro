@@ -717,6 +717,11 @@ export type MentionedInDocumentCommentMetadata = {
 
 export type NewEmailMetadata = {
     sender?: string | null;
+    /**
+     * Profile photo of the sender (Macro profile picture or the recipient's
+     * synced contact photo), when known.
+     */
+    senderPhotoUrl?: string | null;
     snippet: string;
     subject: string;
     threadId: string;
@@ -902,9 +907,32 @@ export type NotificationTypeName = string;
 
 export type PushNotificationData = {
     /**
+     * Sender line for the communication-notification layout, without any
+     * channel suffix (e.g. `hutch mentioned you`). The Notification Service
+     * Extension falls back to the alert title when absent.
+     */
+    communicationTitle?: string | null;
+    /**
+     * Stable conversation identifier (channel or email-thread id) for
+     * `INSendMessageIntent.conversationIdentifier`.
+     */
+    conversationId?: string | null;
+    /**
+     * Conversation group name (e.g. `#bug-reports`) rendered as the second
+     * line of a group communication notification. Only set for non-DM
+     * channel notifications.
+     */
+    groupName?: string | null;
+    /**
      * The id of the notification record (UserNotification.id)
      */
     notificationId: string;
+    /**
+     * The notification type name (e.g. `new_email`), used by the Notification
+     * Service Extension to pick per-type rendering such as the generic email
+     * avatar fallback.
+     */
+    notificationType?: string | null;
     /**
      * The sender's profile picture URL, used by the Notification Service Extension
      * to download and attach as a rich notification image.

@@ -206,4 +206,28 @@ pub struct PushNotificationData {
     #[serde(skip_serializing_if = "Option::is_none")]
     #[serde(default)]
     pub sender_profile_picture_url: Option<String>,
+    /// The notification type name (e.g. `new_email`), used by the Notification
+    /// Service Extension to pick per-type rendering such as the generic email
+    /// avatar fallback.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub notification_type: Option<String>,
+    /// Sender line for the communication-notification layout, without any
+    /// channel suffix (e.g. `hutch mentioned you`). The Notification Service
+    /// Extension falls back to the alert title when absent.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub communication_title: Option<String>,
+    /// Conversation group name (e.g. `#bug-reports`) rendered as the second
+    /// line of a group communication notification. Only set for non-DM
+    /// channel notifications.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub group_name: Option<String>,
+    /// Stable conversation identifier (channel or email-thread id) for
+    /// `INSendMessageIntent.conversationIdentifier`, so messages in one
+    /// conversation group together regardless of their alert titles.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(default)]
+    pub conversation_id: Option<String>,
 }

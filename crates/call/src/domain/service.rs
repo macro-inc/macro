@@ -452,11 +452,18 @@ impl NotificationExtIos for CallStartedNotification {
                     )),
                     ..Default::default()
                 })),
+                // Run the Notification Service Extension so it can attach the
+                // caller's avatar via the communication-notification layout.
+                mutable_content: self.sender_profile_picture_url.as_ref().map(|_| 1),
                 ..Default::default()
             },
             push_notification_data: PushNotificationData {
                 notification_id,
                 sender_profile_picture_url: self.sender_profile_picture_url.clone(),
+                notification_type: Some(Self::TYPE_NAME.to_string()),
+                communication_title: None,
+                group_name: None,
+                conversation_id: None,
             },
         })
     }
