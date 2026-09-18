@@ -99,23 +99,37 @@ Behaves exactly like Macro Coder: mention it, a session opens, the bot posts the
 magic-chip announcement into the thread, the mention text becomes the first
 prompt, follow-up mentions in the thread route to the same session.
 
-Gated on key registration. A user with no Cursor key registered should not see
-`@cursor` in the mention autocomplete, and a mention that somehow arrives anyway
-must fail with a message telling them to register a key — never silently drop.
+The `enable-cursor-agents` frontend rollout flag controls the built-in `@cursor`
+mention (local override: `VITE_ENABLE_CURSOR_AGENTS`). Custom agents keep their
+channel visibility rules. Within the rollout,
+mentions are offered before key registration. A mention from someone with no
+key must be answered, never silently dropped or turned into a session that
+cannot spawn. The rollout flag is not a backend authorization boundary.
 
-**How the gate works.** The mention autocomplete reads
-`useChannelBotsQuery` → `GET /channels/{id}/bots`
-(`apps/web/src/lib/queries/channel/channel-bots.ts:31`). That endpoint already
-authenticates the caller, so the filter belongs there: omit `@cursor` from the
-response when the caller has no row in `cursor_api_key`. One `LEFT JOIN` on the
-authenticated user.
+**How the keyless mention is handled.** Before `open` creates anything, the
+domain asks `ContainerManager::preflight(kind, owner)`. The Cursor manager
+resolves the owner's configuration through `CursorApiKeys::resolve`: a missing
+key yields `SessionBlocker::CursorNotConnected`, while read/decryption failures
+remain errors. A successful preflight decrypts the key, and spawn resolves it
+again. Codex and Claude perform the same account preflight; providers requiring no user connection take the default `Ok(None)`.
+On a blocker the domain calls `SessionAnnouncer::decline` with a
+`DeclinedMention` and returns without a session row, an egress token, or an
+announcement. `MessageAnnouncer::decline` posts as the bot with the sender's
+current write access into the mention's
+thread. The lexical service composes the explanation and connection chip from real Lexical nodes. The Cursor chip payload is
+`{"appSlug":"cursor","name":"Cursor","target":"harness"}`. The frontend's
+`ConnectAppNode` reads `target: "harness"` as "open Settings → Harness, and
+show connected once this reader's own key status says so".
 
-No new endpoint, no new frontend query, no client-side join, and no window where
-the autocomplete offers a bot that would fail. The check mirrors
-`is_managed_bot` — a hardcoded `CURSOR_BOT_ID` comparison in the channel-bots
-read. When there is a second credential-gated bot, this becomes a
-`requires_user_credential` column on `bots` and the filter goes declarative; for
-one bot that is premature.
+The original design hid `@cursor` until a key existed. That is why nobody
+found it: discovery *is* the feature. Hiding was also never enforcement — a
+mention can arrive from a copied message or another client — so the refusal
+had to live in the harness regardless. The create composer keeps its own
+**Connect Cursor** button for the same reason; it never posts anything.
+
+`CursorContainerManager::spawn` still resolves the key and still fails with
+`HarnessError::CursorNotConnected` when it is gone: sessions opened from the
+create menu, and rows written before the preflight existed, reach it.
 
 Settings needs its own small surface regardless, for the connections tab:
 `GET /me/cursor-key` → `{ registered: bool }`, `PUT` to set, `DELETE` to revoke.
@@ -649,14 +663,13 @@ reported as bugs:
   without a frame in either direction closes the pipe, reclaiming its tasks
   and its poll; the session parks on a clean disconnect and the next prompt
   resumes it. A parked session mirrors nothing until then.
-- **A provisioning failure does not reach the thread.** The open path
-  announces the session before it spawns, so when spawn fails — most often
-  because the mentioning user has not registered a Cursor key — the session
-  is marked disconnected and the reason goes to a log. What the user sees is
-  a session chip that never answers. `SessionAnnouncer` announces sessions
-  and nothing else, so closing this needs a way to post a failure back to
-  the originating thread. `HarnessError::CursorNotConnected` already carries
-  the sentence to post; it has nowhere to go yet.
+- **A provisioning failure does not reach the thread.** When spawn fails
+  after the session row exists, the session is marked disconnected and the
+  reason goes to a log. The most common cause — the mentioning user has no
+  Cursor key — no longer gets this far: `ContainerManager::preflight` catches
+  it before the row and `SessionAnnouncer::decline` answers in the thread.
+  Other spawn failures (Cursor API down, a key that no longer decrypts) still
+  end in a log rather than a reply.
 - **One run at a time per agent.** Cursor returns `409 agent_busy`. Already
   matched by the service's sequential-turn rule, so this surfaces as a clean
   error rather than a race.
@@ -670,7 +683,8 @@ reported as bugs:
 3. **`CursorContainerManager` + routing** — the manager, `RoutedTransport`,
    `bot_id` on `SpawnContainer`, `is_managed_bot` as a set, composition root.
 4. **Settings + `@cursor` gating** — the connections UI, key validation via
-   `GET /v1/me`, mention-autocomplete filtering.
+   `GET /v1/me`, mention-autocomplete filtering (since replaced by the
+   preflight-and-decline reply above).
 5. **Sessions page link** — the joined read and the provider logo.
 
 Steps 1 and 2 are independent and can go in parallel.
@@ -694,7 +708,8 @@ Steps 1 and 2 are independent and can go in parallel.
 
 Resolved in review: the external table alone (no `agent_session` column), one
 global seeded `@cursor` system bot, channel-bots server-side filtering for the
-mention gate, hardcoded `macro-inc/macro` repo, and omitted model.
+mention gate (later replaced by the in-thread decline, so `@cursor` is offered to
+everyone), hardcoded `macro-inc/macro` repo, and omitted model.
 
 1. **Do we store user keys at all in v1?** **Yes.** Sub-tokens were the
    alternative, and they lose the property that makes this feature legible: the
@@ -702,7 +717,7 @@ mention gate, hardcoded `macro-inc/macro` repo, and omitted model.
    and their repo access. There is no deployment-wide `CURSOR_API_KEY` — the
    manager resolves the session owner's key from `cursor_api_keys` at every
    spawn, resume, and teardown, and a user who has not connected Cursor gets
-   `HarnessError::CursorNotConnected` in the channel rather than a silent skip.
+   the bot's connect reply in the channel rather than a silent skip.
 2. **Lazy or eager agent creation?** **Lazy**, as leaned. `RecordingCursor`
    decorates `CursorAgents` and writes the `external_agent_session` row inside
    `create_agent`, before it returns — so no prompt can be answered by an agent

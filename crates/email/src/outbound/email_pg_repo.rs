@@ -284,6 +284,14 @@ impl EmailRepo for EmailPgRepo {
         draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
     }
 
+    async fn revert_sent_message_to_draft(
+        &self,
+        message_id: Uuid,
+        link_id: Uuid,
+    ) -> Result<(), Self::Err> {
+        draft::revert_sent_message_to_draft(&self.pool, message_id, link_id).await
+    }
+
     async fn get_label_by_id(
         &self,
         label_id: Uuid,

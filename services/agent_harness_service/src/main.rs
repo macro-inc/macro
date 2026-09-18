@@ -41,6 +41,7 @@ use agent_harness::domain::trigger_router::{
     RoutedTrigger, agent_trigger_bot_id, route_agent_trigger,
 };
 use agent_harness::inbound::model_load::AgentModelsRouterState;
+use agent_harness::inbound::repositories::AgentRepositoriesRouterState;
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
 use agent_harness::outbound::channel_announcer::MessageAnnouncer;
@@ -614,6 +615,18 @@ async fn run() -> anyhow::Result<()> {
             },
         },
     ));
+    fixed_runtimes.push((
+        bot_id::CLAUDE_BOT_ID,
+        AgentRuntimeConfig {
+            kind: AgentKind::ClaudeCloud,
+            model: claude_cloud_agents::domain::models::Model::default()
+                .id()
+                .to_owned(),
+            harness: "claude-cloud".into(),
+            instructions: String::new(),
+            mcp_servers: AgentMcpServers::OwnerConnections,
+        },
+    ));
     let runtime_directory =
         PgAgentRuntimeDirectory::new(PgBotsRepo::new(pool.clone()), fixed_runtimes.clone());
     // Logged because the failure mode this replaced was silent: a harness that
@@ -772,10 +785,25 @@ async fn run() -> anyhow::Result<()> {
             repo_url: None,
         },
     )
+    .with_bot(
+        bot_id::CLAUDE_BOT_ID,
+        SessionDefaults {
+            bot_id: bot_id::CLAUDE_BOT_ID,
+            model: claude_cloud_agents::domain::models::Model::default()
+                .id()
+                .to_owned(),
+            harness: "claude-cloud".into(),
+            repo_url: None,
+        },
+    )
     // Sessions nothing names a bot for (the create menu's) run in-process;
     // explicitly selected coding agents keep their configured runtimes.
     .with_managed_bot(inmem_bot);
 
+    // The open path authorizes explicit repositories against the same listing
+    // the repository route below serves, so what the app offers is exactly
+    // what a session may select.
+    let open_repositories = Arc::clone(&reachable_repositories);
     let harness = Arc::new(
         AgentHarnessService::new(
             sessions,
@@ -797,7 +825,7 @@ async fn run() -> anyhow::Result<()> {
             // notification ingress channel messages use.
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
         )
-        .with_repositories(reachable_repositories),
+        .with_repositories(open_repositories),
     );
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.
@@ -910,6 +938,11 @@ async fn run() -> anyhow::Result<()> {
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    // Served to the app by `GET /agent-repositories`; see `open_repositories`.
+    let repositories_state = AgentRepositoriesRouterState::new(
+        reachable_repositories,
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let http_runtime_commands_readiness = runtime_commands_readiness.clone();
     let claude_auth = claude_cloud_agents::inbound::auth::router(
         claude_cloud_agents::inbound::auth::ClaudeAuthState::new(
@@ -930,6 +963,7 @@ async fn run() -> anyhow::Result<()> {
                 create_state,
                 gateway_state,
                 model_state,
+                repositories_state,
             )
             .with_claude_auth(claude_auth),
             http_runtime_commands_readiness,

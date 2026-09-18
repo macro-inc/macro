@@ -105,10 +105,17 @@ where
         fields(agent.session.id = %self.session_id)
     )]
     async fn reachable_repositories(&self) -> Result<Vec<String>, rootcause::Report> {
-        self.repositories
+        // The model chooses between urls: they are what the session row is
+        // pinned to, and a candidate's default branch is no help in deciding
+        // which repository a prompt belongs to.
+        Ok(self
+            .repositories
             .for_user(&self.owner)
             .await
-            .map_err(|error| rootcause::report!("could not list reachable repositories: {error}"))
+            .map_err(|error| rootcause::report!("could not list reachable repositories: {error}"))?
+            .into_iter()
+            .map(|repository| repository.url)
+            .collect())
     }
 
     /// The five prior sessions, excluding the placeholder being initialized.

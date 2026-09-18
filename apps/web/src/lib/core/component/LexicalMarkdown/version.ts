@@ -21,5 +21,6 @@
  * Version 4.0 - Sep 2026. Added AgentSessionMentionNode.
  * Version 3.1 - Sep 2026. Added ConnectAppNode (agent "connect this app" chip).
  * Version 4.1 - Sep 2026. Expandable session mentions reuse Magic Chip with a null message lock for the latest turn.
+ * Version 4.2 - Sep 2026. ConnectAppNode: optional `target` (connections | harness) so the chip can connect Cursor.
  */
-export const MARKDOWN_VERSION_COUNTER = 4.1;
+export const MARKDOWN_VERSION_COUNTER = 4.2;

@@ -37,7 +37,11 @@ export function AttachFilesAction(props: { accept?: string | null }) {
         type="file"
         class="hidden"
         multiple
-        accept={props.accept === null ? undefined : (props.accept ?? CHANNEL_FILE_PICKER_ACCEPT)}
+        accept={
+          props.accept === null
+            ? undefined
+            : (props.accept ?? CHANNEL_FILE_PICKER_ACCEPT)
+        }
         onChange={onAttachFiles}
         data-input-attach-file-picker
       />

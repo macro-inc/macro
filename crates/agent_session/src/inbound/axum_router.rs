@@ -1407,11 +1407,13 @@ pub struct CreateAgentSessionRequest {
     /// only - an external runtime sends its own first prompt through the
     /// control endpoint. Omitted, the session opens idle.
     pub prompt: Option<String>,
-    /// Explicit GitHub repository for a managed Cursor session. Access is
-    /// checked for the session owner. For external sessions this is
-    /// informational: cloning it is the runtime operator's job.
+    /// Explicit GitHub repository for a managed Cursor session, as one of the
+    /// urls `GET /agent-repositories` lists for the caller. Access is checked
+    /// for the session owner. For external sessions this is informational:
+    /// cloning it is the runtime operator's job.
     pub repo_url: Option<String>,
     /// Starting branch for a managed coding session's selected repository.
+    /// Omitted, the session starts on the repository's default branch.
     pub repo_branch: Option<String>,
     /// The user who owns the session. Ignored for user callers, who always
     /// own their own sessions, and for harness callers, whose verified acting

@@ -39,9 +39,9 @@ use super::AgentHarnessService;
 use super::into_session_error;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeliverAction, HarnessCommand,
-    HarnessDefaults, MentionOrigin, OpenSession, PriorMessage, SessionDefaults, SessionRepository,
-    SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeclinedMention, DeliverAction,
+    HarnessCommand, HarnessDefaults, MentionOrigin, OpenSession, PriorMessage, SessionBlocker,
+    SessionDefaults, SessionRepository, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ContainerManager as _, MessagePromptContext, NoPeers,
@@ -689,6 +689,29 @@ async fn revoked_origin_access_blocks_open_before_anything_is_provisioned() {
 }
 
 #[tokio::test]
+async fn revoked_origin_access_blocks_the_connect_cursor_reply() {
+    let (service, repo, containers, announcer, _runtimes) = harness_with_edges(
+        PromptContextMock::unauthorized("removed from the channel"),
+        PromptComposerMock::default(),
+    );
+    containers.block_with(SessionBlocker::CursorNotConnected);
+    let mut command = open_command();
+    command.bot_id = bot_id::CURSOR_BOT_ID;
+    command.runtime.kind = AgentKind::Cursor;
+    command.runtime.harness = "cursor".to_owned();
+    let id = AgentSessionId::new();
+
+    let result = service.execute(id, HarnessCommand::Open(command)).await;
+
+    assert!(matches!(result, Err(HarnessError::PromptContext(_))));
+    assert!(repo.get(id).await.is_err());
+    assert_eq!(containers.spawned(), 0);
+    assert!(service.inner.egress.provisioned().is_empty());
+    assert!(announcer.announced().is_empty());
+    assert!(announcer.declined().is_empty());
+}
+
+#[tokio::test]
 async fn context_failure_still_calls_composer_with_empty_messages_and_delivers() {
     let composer = PromptComposerMock::default();
     let context = PromptContextMock::failing("messages unavailable");
@@ -796,6 +819,91 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
         prompts(&container.agent()),
         [vec![ContentBlock::from(context_prompt(&raw))]]
     );
+}
+
+/// A provider mention from someone missing account setup: the bot answers in
+/// the thread with what to connect, and nothing is created for a session
+/// that could never spawn - no row, no egress token, no chip.
+#[tokio::test]
+async fn a_mention_its_sender_is_not_set_up_for_is_declined_in_the_thread() {
+    for (bot_id, kind, harness_slug, blocker) in [
+        (
+            bot_id::CURSOR_BOT_ID,
+            AgentKind::Cursor,
+            "cursor",
+            SessionBlocker::CursorNotConnected,
+        ),
+        (
+            bot_id::CODEX_BOT_ID,
+            AgentKind::CodexCloud,
+            "codex-cloud",
+            SessionBlocker::CodexNotConnected,
+        ),
+        (
+            bot_id::CODEX_BOT_ID,
+            AgentKind::CodexCloud,
+            "codex-cloud",
+            SessionBlocker::CodexEnvironmentNotConfigured,
+        ),
+        (
+            bot_id::CLAUDE_BOT_ID,
+            AgentKind::ClaudeCloud,
+            "claude-cloud",
+            SessionBlocker::ClaudeNotConnected,
+        ),
+    ] {
+        let (service, repo, containers, announcer, _runtimes) = harness();
+        let id = AgentSessionId::new();
+        containers.block_with(blocker);
+        let mut command = open_command();
+        command.bot_id = bot_id;
+        command.runtime.kind = kind;
+        command.runtime.harness = harness_slug.to_owned();
+        let origin = command.origin.clone();
+
+        let outcome = service
+            .execute(id, HarnessCommand::Open(command))
+            .await
+            .expect("a declined mention is handled, not failed");
+
+        assert_eq!(outcome, CommandOutcome::Completed);
+        assert!(repo.get(id).await.is_err(), "no session row is created");
+        assert_eq!(containers.spawned(), 0);
+        assert!(service.inner.egress.provisioned().is_empty());
+        assert!(announcer.announced().is_empty());
+        assert_eq!(
+            announcer.declined(),
+            [DeclinedMention {
+                bot_id,
+                origin: AnnounceOrigin {
+                    parent: origin.parent,
+                    thread_id: origin.thread_id,
+                    message_id: origin.message_id,
+                },
+                triggered_by: origin.sender,
+                blocker,
+            }]
+        );
+    }
+}
+
+/// The decline is the whole answer, so failing to post it is the open's
+/// failure - the same way a session that cannot be announced is.
+#[tokio::test]
+async fn a_decline_that_cannot_be_posted_fails_the_open() {
+    let (service, repo, containers, announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    containers.block_with(SessionBlocker::CursorNotConnected);
+    announcer.fails("channel unavailable");
+
+    let error = service
+        .execute(id, HarnessCommand::Open(open_command()))
+        .await
+        .expect_err("the decline could not reach the thread");
+
+    assert!(matches!(error, HarnessError::Announce(_)));
+    assert!(repo.get(id).await.is_err(), "still no session row");
+    assert_eq!(containers.spawned(), 0);
 }
 
 #[tokio::test]
@@ -3308,10 +3416,29 @@ async fn codex_channel_mention_provisions_egress_without_advertising_mcp() {
 
 mod reopen;
 
-struct SelectedRepositories(Vec<String>);
+/// The owner's reachable repositories, as the GitHub App would list them.
+struct SelectedRepositories(Vec<crate::domain::model::ReachableRepository>);
+
+impl SelectedRepositories {
+    /// Repositories whose clones start on `main`.
+    fn urls(urls: &[&str]) -> Self {
+        Self(
+            urls.iter()
+                .map(|url| crate::domain::model::ReachableRepository {
+                    url: (*url).to_owned(),
+                    default_branch: Some("main".to_owned()),
+                })
+                .collect(),
+        )
+    }
+}
+
 #[async_trait::async_trait]
 impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
-    async fn for_user(&self, _: &MacroUserIdStr<'_>) -> crate::domain::error::Result<Vec<String>> {
+    async fn for_user(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> crate::domain::error::Result<Vec<crate::domain::model::ReachableRepository>> {
         Ok(self.0.clone())
     }
 }
@@ -3338,7 +3465,7 @@ fn explicit_cursor_request() -> OpenManagedSession {
 #[tokio::test]
 async fn selected_repository_requires_owner_access_before_provisioning() {
     let (service, _, containers, _, _) = harness();
-    let service = service.with_repositories(Arc::new(SelectedRepositories(vec![])));
+    let service = service.with_repositories(Arc::new(SelectedRepositories::urls(&[])));
     let result = service
         .open_managed_session(explicit_cursor_request())
         .await;
@@ -3353,8 +3480,8 @@ async fn selected_repository_requires_owner_access_before_provisioning() {
 #[tokio::test]
 async fn selected_repository_and_branch_are_persisted_for_cursor() {
     let (service, repo, containers, _, _) = harness();
-    let service = service.with_repositories(Arc::new(SelectedRepositories(vec![
-        "https://github.com/macro-inc/macro".into(),
+    let service = service.with_repositories(Arc::new(SelectedRepositories::urls(&[
+        "https://github.com/macro-inc/macro",
     ])));
     let open = service.open_managed_session(explicit_cursor_request());
     let drive = async {
@@ -3374,6 +3501,80 @@ async fn selected_repository_and_branch_are_persisted_for_cursor() {
         session.repo_branch.as_ref().map(|branch| branch.as_str()),
         Some("feature/home")
     );
+}
+
+/// Opens `request` against a listing that reaches `macro-inc/macro` with the
+/// given default branch, and reads back the branch the row was given.
+async fn branch_persisted_for(
+    default_branch: Option<&str>,
+    request: OpenManagedSession,
+) -> Option<String> {
+    let (service, repo, containers, _, _) = harness();
+    let service = service.with_repositories(Arc::new(SelectedRepositories(vec![
+        crate::domain::model::ReachableRepository {
+            url: "https://github.com/macro-inc/macro".to_owned(),
+            default_branch: default_branch.map(str::to_owned),
+        },
+    ])));
+    let open = service.open_managed_session(request);
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    session
+        .repo_branch
+        .as_ref()
+        .map(|branch| branch.as_str().to_owned())
+}
+
+#[tokio::test]
+async fn selected_repository_without_branch_starts_on_its_default_branch() {
+    let mut request = explicit_cursor_request();
+    request.repo_branch = None;
+    assert_eq!(
+        branch_persisted_for(Some("develop"), request)
+            .await
+            .as_deref(),
+        Some("develop")
+    );
+}
+
+#[tokio::test]
+async fn selected_repository_without_a_default_branch_starts_on_main() {
+    let mut request = explicit_cursor_request();
+    request.repo_branch = None;
+    assert_eq!(
+        branch_persisted_for(None, request).await.as_deref(),
+        Some("main")
+    );
+}
+
+#[tokio::test]
+async fn explicit_branch_wins_over_the_repository_default() {
+    assert_eq!(
+        branch_persisted_for(Some("develop"), explicit_cursor_request())
+            .await
+            .as_deref(),
+        Some("feature/home")
+    );
+}
+
+#[test]
+fn starting_branch_falls_back_to_main_for_an_unusable_default() {
+    assert_eq!(
+        super::open::starting_branch(Some("release")).as_str(),
+        "release"
+    );
+    assert_eq!(
+        super::open::starting_branch(Some("bad..name")).as_str(),
+        "main"
+    );
+    assert_eq!(super::open::starting_branch(None).as_str(), "main");
 }
 
 #[tokio::test]

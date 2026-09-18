@@ -71,3 +71,80 @@ export function validRepositoryBranch(branch: string): boolean {
       )
   );
 }
+
+/** A repository the signed-in user can hand a coder, as the harness lists it. */
+export type ReachableRepository = {
+  /** The canonical https URL, the form the create-session API accepts. */
+  url: string;
+  /** The branch its clones check out; absent for a repository with no commits. */
+  defaultBranch?: string;
+};
+
+/** The branch a coder starts on when the repository has none to offer. */
+const FALLBACK_BRANCH = 'main';
+
+/** GitHub treats owner and repository names case-insensitively, so two spellings are one repository. */
+export function sameRepository(left: string, right: string): boolean {
+  return left.toLowerCase() === right.toLowerCase();
+}
+
+/**
+ * The repositories to offer: recents first, in their own order, then every
+ * other reachable repository as the harness sorted it. A recent the listing
+ * no longer carries stays offered - the service, not this list, decides what
+ * a session may use, and it says so when it refuses.
+ */
+export function orderRepositories(
+  reachable: readonly ReachableRepository[],
+  recents: readonly string[]
+): ReachableRepository[] {
+  const ordered: ReachableRepository[] = [];
+  const seen = new Set<string>();
+  const add = (repository: ReachableRepository) => {
+    const key = repository.url.toLowerCase();
+    if (seen.has(key)) return;
+    seen.add(key);
+    ordered.push(repository);
+  };
+  for (const url of recents) {
+    add(
+      reachable.find((repository) => sameRepository(repository.url, url)) ?? {
+        url,
+      }
+    );
+  }
+  for (const repository of reachable) add(repository);
+  return ordered;
+}
+
+/**
+ * Repositories whose `owner/repo` label or URL contains `search`, ignoring
+ * case; every repository for blank text.
+ */
+export function filterRepositories(
+  repositories: readonly ReachableRepository[],
+  search: string
+): ReachableRepository[] {
+  const needle = search.trim().toLowerCase();
+  if (!needle) return [...repositories];
+  return repositories.filter(
+    (repository) =>
+      repositoryLabel(repository.url).toLowerCase().includes(needle) ||
+      repository.url.toLowerCase().includes(needle)
+  );
+}
+
+/**
+ * The branch a coder starts on for `url` when none was chosen: the
+ * repository's own default branch, or `main` when it is unknown or unlisted.
+ */
+export function defaultBranchFor(
+  repositories: readonly ReachableRepository[],
+  url: string | undefined
+): string {
+  if (!url) return FALLBACK_BRANCH;
+  return (
+    repositories.find((repository) => sameRepository(repository.url, url))
+      ?.defaultBranch ?? FALLBACK_BRANCH
+  );
+}

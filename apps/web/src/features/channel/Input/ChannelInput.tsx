@@ -1,4 +1,3 @@
-import { useCodexAgentsAccess } from '@core/codex/flag';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { DragInsertIndicator } from '@core/component/LexicalMarkdown/component/misc/DragInsertIndicator';
@@ -13,6 +12,7 @@ import {
   insertDocumentMentionAtDragCoordinates,
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
+import { isClaudeBotId } from '@core/constant/claudeAgent';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
 import {
@@ -31,8 +31,6 @@ import {
   uploadFile,
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
-import { useCodexStatusQuery } from '@queries/auth/codex';
-import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { CollapsedInput, ComposerSurface } from '@ui';
 import { $getRoot } from 'lexical';
 import {
@@ -44,6 +42,7 @@ import {
   Switch,
 } from 'solid-js';
 import {
+  claudeMentionUser,
   codexMentionUser,
   cursorMentionUser,
   isMacroAiId,
@@ -259,30 +258,15 @@ export function ChannelInput(props: ChannelInputProps) {
   };
 
   const canUseCursor = useCursorAgentsAccess();
-  const cursorApiKey = useCursorApiKeyStatusQuery();
-  const canUseCodex = useCodexAgentsAccess();
-  const codexStatus = useCodexStatusQuery(canUseCodex);
 
-  // Macro AI and Macro Coder (flag-gated) are mentionable in every channel,
-  // and any bot added to the channel is mentionable too. All are surfaced
-  // through the same `@`-mention typeahead as participants and re-tagged as
-  // bot mentions at send time.
+  // Global agents and channel bots share the participant mention typeahead.
+  // Cursor, Macro New, and Macro Coder follow their respective rollout flags.
+  // Mentions are re-tagged as bot mentions at send time.
   const mentionUsers: Accessor<IUser[]> = () => {
-    const cursorEnabled =
-      canUseCursor() && (cursorApiKey.data?.registered ?? false);
-    const codexEnabled =
-      canUseCodex() &&
-      codexStatus.isSuccess &&
-      codexStatus.data.connected &&
-      !!codexStatus.data.environmentId?.trim();
     const base = [
       ...(props.participants?.() ?? []),
       ...(props.bots?.() ?? []),
-    ].filter(
-      (user) =>
-        (cursorEnabled || !isCursorBotId(user.id)) &&
-        (codexEnabled || !isCodexBotId(user.id))
-    );
+    ].filter((user) => canUseCursor() || !isCursorBotId(user.id));
     if (
       isFeatureEnabled(enableChatV3Agents) &&
       !base.some((user) => isMacroCoderId(user.id))
@@ -295,16 +279,16 @@ export function ChannelInput(props: ChannelInputProps) {
     ) {
       base.unshift(macroNewMentionUser());
     }
-    if (
-      cursorEnabled &&
-      // Hiding it is not enforcement — a mention can still arrive from a
-      // copied message or another client — so the harness refuses these too.
-      !base.some((user) => isCursorBotId(user.id))
-    ) {
+    // Account setup does not hide bots included in the user's rollout.
+    // Their replies link to Settings → Harness when a connection is needed.
+    if (canUseCursor() && !base.some((user) => isCursorBotId(user.id))) {
       base.unshift(cursorMentionUser());
     }
-    if (codexEnabled && !base.some((user) => isCodexBotId(user.id))) {
+    if (!base.some((user) => isCodexBotId(user.id))) {
       base.unshift(codexMentionUser());
+    }
+    if (!base.some((user) => isClaudeBotId(user.id))) {
+      base.unshift(claudeMentionUser());
     }
     if (!base.some((user) => isMacroAiId(user.id))) {
       base.unshift(macroAiMentionUser());
