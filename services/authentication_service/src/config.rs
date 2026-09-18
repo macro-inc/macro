@@ -70,6 +70,10 @@ maybe_env_vars! {
     pub struct GtmInvitePromoCode;
     /// Hours a GTM invite link stays openable after creation. Defaults to 48.
     pub struct GtmInviteLinkTtlHours;
+    /// Stripe price id for the Max plan seat. Optional so the service can
+    /// deploy before the price exists in Stripe; until it is set, Max checkout
+    /// and plan changes answer 400 and every subscription maps to Premium.
+    pub struct StripeMaxPriceId;
 }
 
 /// The configuration parameters for the application.
@@ -161,8 +165,11 @@ pub struct Config {
     pub gtm_invite_promo_code: GtmInvitePromoCode,
     /// Hours a GTM invite link can be opened and redeemed (optional, defaults to 48).
     pub gtm_invite_link_ttl_hours: GtmInviteLinkTtlHours,
-    /// The stripe price id
+    /// The stripe price id for the Premium plan seat
     pub stripe_price_id: StripePriceId,
+    /// The stripe price id for the Max plan seat (optional, see
+    /// [`StripeMaxPriceId`])
+    pub stripe_max_price_id: StripeMaxPriceId,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// Comma-separated Kafka bootstrap servers for the macro event broker.

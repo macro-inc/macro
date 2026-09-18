@@ -39,6 +39,9 @@ export async function clearLocalAuthSession() {
   queryClient.setQueryData(authKeys.userInfo.queryKey, unauthenticatedUserInfo);
   queryClient.removeQueries({ queryKey: emailKeys.links.queryKey });
   queryClient.removeQueries({ queryKey: propertiesKeys._def });
+  // The billing position (usage, credits, overage settings) belongs to the
+  // account that fetched it; never let it render for the next sign-in.
+  queryClient.removeQueries({ queryKey: authKeys.aiBillingSummary.queryKey });
 
   // Queued mutations are user intent; never allow them to replay under a
   // subsequent account sharing this anonymous device cache scope.
