@@ -4,6 +4,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { WebsocketEvent } from '@macro-inc/collaboration/websocket';
+import { handleAgentSessionPreview } from '@queries/agent-session/preview';
 import { handleAgentSessionQueue } from '@queries/agent-session/queue-sync';
 import {
   AGENT_SESSION_LOG_EVENT,
@@ -88,6 +89,13 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         withParsedWebsocketPayload(data.type, data.data, (payload) => {
           void handlePullRequestUpdated(payload);
         });
+      })
+      .with({ type: 'agent_session_preview' }, () => {
+        withParsedWebsocketPayload<{ agentSessionId: string }>(
+          data.type,
+          data.data,
+          handleAgentSessionPreview
+        );
       })
       .with({ type: 'contacts_invalidation' }, () => {
         invalidateContacts();

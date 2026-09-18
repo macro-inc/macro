@@ -75,6 +75,31 @@ pub fn resolve(
         for (k, v) in local.to_env() {
             env.insert(k, v);
         }
+        // Persistent per-instance SSH host identity; never reuse a production key in local stacks.
+        let key_path = instance.ensure_artifact_dir()?.join("preview_ssh_host_key");
+        if !key_path.exists() {
+            let status = Command::new("ssh-keygen")
+                .args([
+                    "-q",
+                    "-t",
+                    "ed25519",
+                    "-N",
+                    "",
+                    "-C",
+                    "macro-local-preview",
+                    "-f",
+                ])
+                .arg(&key_path)
+                .status()
+                .context("generating preview SSH host key (run inside nix develop)")?;
+            if !status.success() {
+                bail!("ssh-keygen failed generating preview host identity");
+            }
+        }
+        env.insert(
+            "PREVIEW_SSH_HOST_KEY".into(),
+            std::fs::read_to_string(key_path).context("reading preview host key")?,
+        );
         // Local telemetry export: point services at the local OTLP collector
         // (docker-network alias `otel-collector`) only when the run asked for
         // tracing AND one answers on the OTLP HTTP port (so services don't

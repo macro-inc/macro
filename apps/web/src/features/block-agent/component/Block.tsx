@@ -24,6 +24,7 @@ import {
 import { forgetPendingSession } from '../context/pending-session';
 import { parseAgentMessageTarget } from '../core/search-location';
 import { AgentComposer } from './AgentComposer';
+import { AgentPreviewBanner } from './AgentPreviewBanner';
 import { AgentSplitHeader } from './AgentSplitHeader';
 import { AgentSidePanelSections } from './sidepanel/AgentSidePanelSections';
 import { Transcript } from './Transcript';
@@ -97,6 +98,7 @@ function AgentBlockContent() {
               title={metadata()?.title ?? undefined}
             />
             <div class="size-full min-w-0 flex flex-col">
+              <AgentPreviewBanner />
               <Transcript searchTarget={searchTarget()} />
               {/* Full-frame mobile: composer + queue float in the bottom
                   accessory region above the dock; desktop stays inline. */}

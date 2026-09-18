@@ -51,8 +51,9 @@ fi
 setsid env \
   PORT="${FRONTEND_PORT}" \
   VITE_LOCAL_SERVERS=ALL \
-  VITE_LOCAL_BACKEND_ORIGIN="${PROXY_ORIGIN}" \
-  VITE_AI_EDITING_WORKER_URL="${PROXY_ORIGIN}/ai-editing" \
+  VITE_LOCAL_BACKEND_ORIGIN="same-origin" \
+  MACRO_LOCAL_BACKEND_PROXY="${PROXY_ORIGIN}" \
+  VITE_AI_EDITING_WORKER_URL="/ai-editing" \
   bun run --bun dev >>"${DEV_LOG}" 2>&1 </dev/null &
 echo "$!" >"${PID_FILE}"
 

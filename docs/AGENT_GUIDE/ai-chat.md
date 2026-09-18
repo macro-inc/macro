@@ -399,6 +399,26 @@ The display choice survives reload and copying; expansion still references the
 same session and does not invoke a bot. Compact mentions do not load transcripts.
 Existing announcement chips remain locked to the turn they announced.
 
+### Live development previews
+
+Coding agents can call the internal **SharePreview** tool with their local HTTP
+server port and execute the returned SSH script in that same environment. Keep
+the server running while editing; ordinary HTTP and WebSocket HMR traffic are
+forwarded. Never paste the script or its credentials into a final chat message.
+
+At `/app/agent/<uuid>`, the banner above the transcript moves from **Agent is
+connecting a preview…** to **Agent is sharing a preview** once HTTP is reachable.
+Click **View preview ↗** to open a new tab. Any viewer of the agent-session entity
+can open it; a copied preview URL alone does not authenticate another browser.
+Allow popups if opening is blocked. The destination is an isolated HTTPS origin
+with normal root paths and no authorization query parameters.
+
+The owner can click **Stop sharing** in the banner; open preview connections
+close. Disconnection and expiry leave a banner asking the agent to share again.
+Leases last up to one hour and expire after 15 minutes without browser requests.
+Continue prompting in the agent session while the preview tab stays open; page
+edits should arrive through the app's own HMR connection.
+
 ### Transcript navigation
 
 Agent sessions reuse the channel's TanStack `ThreadList`. Opening a session lands

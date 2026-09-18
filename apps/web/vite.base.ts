@@ -199,10 +199,22 @@ export const createAppViteConfig = (): UserConfigFn => {
         port: Number(process.env.PORT || 3000),
         host: '0.0.0.0',
         strictPort: true,
-        hmr: {
-          protocol: 'ws',
-          host: process.env.TAURI_DEV_HOST || 'localhost',
-        },
+        // Cursor's local stack is reached through this same origin, including its WebSockets.
+        // The target is server-side configuration, never a browser-supplied forwarding URL.
+        proxy: process.env.MACRO_LOCAL_BACKEND_PROXY
+          ? {
+              '^/(auth|dss|websocket|sync|cognition|connection-gateway|notification|static-file|unfurl|agent-harness|preview|contacts|email|image-proxy|scheduled-action|lexical|ai-editing|i)(/|$)':
+                {
+                  target: process.env.MACRO_LOCAL_BACKEND_PROXY,
+                  ws: true,
+                  changeOrigin: true,
+                },
+            }
+          : undefined,
+        // Use the browser origin through HTTPS preview gateways.
+        hmr: process.env.TAURI_DEV_HOST
+          ? { host: process.env.TAURI_DEV_HOST }
+          : undefined,
         cors: true,
         watch: {
           usePolling: true,

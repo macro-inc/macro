@@ -156,6 +156,8 @@ pub struct Config {
     /// The egress router reads sandbox session tokens from `Authorization`.
     #[macro_config_default(8102)]
     pub egress_port: u16,
+    /// Optional host-reachable egress origin for external runtimes in local stacks.
+    pub external_egress_base_url: Option<String>,
     /// OAuth client ID for the Pipedream API.
     pub pipedream_client_id: PipedreamClientId,
     /// OAuth client secret for the Pipedream API.

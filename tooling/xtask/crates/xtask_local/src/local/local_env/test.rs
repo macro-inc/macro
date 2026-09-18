@@ -430,3 +430,35 @@ fn named_instance_separates_browser_and_container_aws_endpoints() {
         format!("http://localhost:{}", instance.port(Port::LocalStack))
     );
 }
+
+#[test]
+fn external_runtime_egress_respects_instance_host_ports_and_public_tunnels() {
+    let instance = Instance::derive(Some("preview"), None).unwrap();
+    let env = LocalEnv::for_instance(Mode::Local, &instance, false, None).to_env();
+    assert_eq!(
+        env["EXTERNAL_EGRESS_BASE_URL"],
+        format!(
+            "http://localhost:{}",
+            instance.port(Port::AgentHarnessEgress)
+        )
+    );
+    assert_eq!(
+        env["OVERRIDE_AGENT_HARNESS_EGRESS_URL"],
+        "http://agent-harness-service:8102"
+    );
+    let env = LocalEnv::for_instance(
+        Mode::Local,
+        &instance,
+        false,
+        Some("https://egress.example.test"),
+    )
+    .to_env();
+    assert_eq!(
+        env["EXTERNAL_EGRESS_BASE_URL"],
+        "https://egress.example.test"
+    );
+    assert_eq!(
+        env["OVERRIDE_AGENT_HARNESS_EGRESS_URL"],
+        "https://egress.example.test"
+    );
+}

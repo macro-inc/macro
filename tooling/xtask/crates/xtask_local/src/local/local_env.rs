@@ -29,6 +29,9 @@ pub struct LocalEnv {
     /// `http://localhost:{FRONTEND_PORT}`, so this must track the serving
     /// mode or every OAuth signup dead-ends on an unused port.
     frontend_port: u16,
+    external_egress_url: String,
+    preview_ssh_port: u16,
+    preview_https_port: u16,
     /// Browser-facing route to document cognition's MCP OAuth callback.
     mcp_public_url: String,
     /// Browser-facing base the static file service stamps into permalinks.
@@ -72,6 +75,14 @@ impl LocalEnv {
             } else {
                 instance.port(Port::Frontend)
             },
+            external_egress_url: egress_public_url.map(str::to_owned).unwrap_or_else(|| {
+                format!(
+                    "http://localhost:{}",
+                    instance.port(Port::AgentHarnessEgress)
+                )
+            }),
+            preview_ssh_port: instance.port(Port::PreviewSsh),
+            preview_https_port: instance.port(Port::PreviewHttps),
             mcp_public_url: format!("http://localhost:{}/cognition", instance.port(Port::Proxy)),
             static_file_public_url: format!(
                 "http://localhost:{}/static-file",
@@ -115,6 +126,32 @@ impl LocalEnv {
         // Calendar search ships dark too: off in deployed envs until each has
         // its calendar index created and backfilled.
         env.insert("CALENDAR_SEARCH_ENABLED".into(), "true".into());
+        env.insert(
+            "OVERRIDE_PREVIEW_GATEWAY_URL".into(),
+            "http://preview-gateway:8080".into(),
+        );
+        env.insert(
+            "EXTERNAL_EGRESS_BASE_URL".into(),
+            self.external_egress_url.clone(),
+        );
+        env.insert("PREVIEW_DOMAIN".into(), "preview.localhost".into());
+        env.insert("PREVIEW_SSH_HOST".into(), "localhost".into());
+        env.insert(
+            "PREVIEW_SSH_PUBLIC_PORT".into(),
+            self.preview_ssh_port.to_string(),
+        );
+        env.insert(
+            "PREVIEW_HTTPS_PORT".into(),
+            self.preview_https_port.to_string(),
+        );
+        env.insert(
+            "PREVIEW_APP_ORIGIN".into(),
+            format!("http://localhost:{}", self.frontend_port),
+        );
+        env.insert(
+            "PREVIEW_CONTROL_HOSTS".into(),
+            "localhost,127.0.0.1,preview-gateway".into(),
+        );
         self.infra.write(&mut env);
         self.storage.write(&mut env);
         self.queues.write(&mut env);
