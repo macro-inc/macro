@@ -14,8 +14,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{HarnessError, Result};
 use super::model::{
-    AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, HarnessCommand, PriorMessage,
-    ProvisionedEgress, ReachableRepository, SandboxEgress, SessionAnnouncement, SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, DeclinedMention,
+    HarnessCommand, PriorMessage, ProvisionedEgress, ReachableRepository, SandboxEgress,
+    SessionAnnouncement, SessionBlocker, SpawnContainer,
 };
 use super::notifications::PlannedNotification;
 use super::sandbox::SandboxResizeEffect;
@@ -227,6 +228,13 @@ pub trait SessionAnnouncer: Send + Sync + 'static {
         &self,
         announcement: SessionAnnouncement,
     ) -> impl Future<Output = Result<AnnouncedMessage>> + Send;
+
+    /// Tell a thread why its mention opened no session.
+    ///
+    /// The other thing the bot can say into a thread: not "here is your
+    /// session" but "here is what you need first". Same channel, same
+    /// sender, no session to point at.
+    fn decline(&self, declined: DeclinedMention) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// Where a session finds its bot's live runtime connection.
@@ -310,6 +318,24 @@ pub trait SandboxEgressProvisioner: Send + Sync + 'static {
 pub trait ContainerManager: Send + Sync + 'static {
     /// Transport returned by this provider.
     type Transport: AgentConnector;
+
+    /// Whether `owner` is set up for a `kind` session, before anything is
+    /// created for one.
+    ///
+    /// `Ok(None)` is the ordinary answer and the default: most providers
+    /// need nothing from the person mentioning them. A provider that runs
+    /// on the owner's own account answers with what they still have to do,
+    /// so the domain can say so in the thread instead of minting a session
+    /// row whose spawn is doomed. An `Err` is an infrastructure failure -
+    /// the question itself could not be asked.
+    fn preflight(
+        &self,
+        kind: AgentKind,
+        owner: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<SessionBlocker>>> + Send {
+        let _ = (kind, owner);
+        async { Ok(None) }
+    }
 
     /// Boot a new container for a session that has never had one.
     fn spawn(

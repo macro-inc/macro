@@ -405,6 +405,14 @@ impl CursorApiKeys for StubKeys {
     }
 }
 
+struct UnavailableKeys;
+
+impl CursorApiKeys for UnavailableKeys {
+    async fn resolve(&self, _owner: &MacroUserIdStr<'_>) -> Result<ResolvedCursorConfig> {
+        Err(HarnessError::Container("key decryption failed".to_owned()))
+    }
+}
+
 /// A user who reaches no repository through the GitHub App: the chooser
 /// short-circuits on an empty listing, so these tests drive the whole spawn
 /// path without a model call.
@@ -427,11 +435,11 @@ fn manager(
     manager_with_keys(base_url, sessions, StubKeys::connected())
 }
 
-fn manager_with_keys(
+fn manager_with_keys<Keys: CursorApiKeys>(
     base_url: String,
     sessions: StubSessions,
-    keys: StubKeys,
-) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories, NoArtifactStore> {
+    keys: Keys,
+) -> CursorContainerManager<StubSessions, Keys, NoRepositories, NoArtifactStore> {
     CursorContainerManager::with_memory_journal(
         keys,
         base_url,
@@ -851,6 +859,44 @@ async fn teardown_archives_and_forgets() {
             .await
             .expect("get"),
         None
+    );
+}
+
+#[tokio::test]
+async fn preflight_only_requests_a_connection_when_no_key_is_saved() {
+    let owner = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    for (keys, expected) in [
+        (StubKeys::connected(), None),
+        (StubKeys::absent(), Some(SessionBlocker::CursorNotConnected)),
+    ] {
+        let manager = manager_with_keys(
+            "http://127.0.0.1:1".to_owned(),
+            StubSessions::default(),
+            keys,
+        );
+        assert_eq!(
+            manager.preflight(AgentKind::Cursor, &owner).await.unwrap(),
+            expected
+        );
+    }
+}
+
+#[tokio::test]
+async fn preflight_propagates_key_errors_instead_of_requesting_a_connection() {
+    let manager = manager_with_keys(
+        "http://127.0.0.1:1".to_owned(),
+        StubSessions::default(),
+        UnavailableKeys,
+    );
+    let owner = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+
+    let error = manager
+        .preflight(AgentKind::Cursor, &owner)
+        .await
+        .unwrap_err();
+
+    assert!(
+        matches!(error, HarnessError::Container(message) if message == "key decryption failed")
     );
 }
 

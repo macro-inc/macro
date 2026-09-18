@@ -610,6 +610,18 @@ async fn run() -> anyhow::Result<()> {
             },
         },
     ));
+    fixed_runtimes.push((
+        bot_id::CLAUDE_BOT_ID,
+        AgentRuntimeConfig {
+            kind: AgentKind::ClaudeCloud,
+            model: claude_cloud_agents::domain::models::Model::default()
+                .id()
+                .to_owned(),
+            harness: "claude-cloud".into(),
+            instructions: String::new(),
+            mcp_servers: AgentMcpServers::OwnerConnections,
+        },
+    ));
     let runtime_directory =
         PgAgentRuntimeDirectory::new(PgBotsRepo::new(pool.clone()), fixed_runtimes.clone());
     // Logged because the failure mode this replaced was silent: a harness that
@@ -765,6 +777,17 @@ async fn run() -> anyhow::Result<()> {
             // environment holds, and records it on the row once that
             // environment resolves. Nothing to seed it with here, and this
             // deployment's own repository would be the wrong guess.
+            repo_url: None,
+        },
+    )
+    .with_bot(
+        bot_id::CLAUDE_BOT_ID,
+        SessionDefaults {
+            bot_id: bot_id::CLAUDE_BOT_ID,
+            model: claude_cloud_agents::domain::models::Model::default()
+                .id()
+                .to_owned(),
+            harness: "claude-cloud".into(),
             repo_url: None,
         },
     )

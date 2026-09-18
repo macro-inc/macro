@@ -418,6 +418,37 @@ where
                 },
             )
             .await?;
+
+        // Asked before anything exists for the session: a row whose spawn is
+        // bound to fail would be marked disconnected and leave the thread
+        // with a chip that never answers. Declining is the bot's reply
+        // instead - what the mentioner has to connect, where to do it.
+        if let Some(blocker) = self
+            .containers
+            .preflight(runtime.kind, &origin.sender)
+            .await?
+        {
+            tracing::info!(
+                bot_id = %bot_id,
+                sender = %origin.sender,
+                ?blocker,
+                "declining a mention its sender is not set up for"
+            );
+            self.announcer
+                .decline(DeclinedMention {
+                    bot_id,
+                    origin: AnnounceOrigin {
+                        parent: origin.parent,
+                        thread_id: origin.thread_id,
+                        message_id: origin.message_id,
+                    },
+                    triggered_by: origin.sender,
+                    blocker,
+                })
+                .await?;
+            return Ok(());
+        }
+
         let defaults = self.defaults.for_bot(bot_id);
         let sandbox_size = self.sessions.user_sandbox_size(&origin.sender).await?;
 

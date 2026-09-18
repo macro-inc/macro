@@ -3,6 +3,7 @@
  */
 
 import { isMobile } from '@core/mobile/isMobile';
+import type { IUser } from '@core/user/types';
 import { render as renderBare, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
@@ -11,8 +12,10 @@ import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const editorMocks = vi.hoisted(() => ({
+  cursorEnabled: false,
   clear: vi.fn(),
   focus: vi.fn(),
+  mentionUsers: undefined as (() => IUser[]) | undefined,
   emitChange: undefined as ((markdown: string) => void) | undefined,
   onEnter: undefined as (() => boolean) | undefined,
 }));
@@ -79,12 +82,11 @@ vi.mock('@core/util/upload', () => ({
   uploadFile: vi.fn(),
 }));
 
-vi.mock('@core/cursor/flag', () => ({
-  useCursorAgentsAccess: () => () => true,
-}));
-
 vi.mock('@core/codex/flag', () => ({
   useCodexAgentsAccess: () => () => false,
+}));
+vi.mock('@core/cursor/flag', () => ({
+  useCursorAgentsAccess: () => () => editorMocks.cursorEnabled,
 }));
 
 // Several service clients in StaticMarkdown's import graph build websocket
@@ -219,7 +221,10 @@ vi.mock(
       };
       const builder: any = {
         namespace: () => builder,
-        withMentions: () => builder,
+        withMentions: (options: { users?: () => IUser[] }) => {
+          editorMocks.mentionUsers = options.users;
+          return builder;
+        },
         withEmojis: () => builder,
         withActions: () => builder,
         withLinks: () => builder,
@@ -274,6 +279,7 @@ vi.mock('../FormatButtons', () => ({
   FormatButtons: () => <div data-testid="format-buttons" />,
 }));
 
+import { cursorMentionUser } from '../../macroAi';
 import { createInputAttachmentTracker } from '../attachment-tracker';
 import { ChannelInput } from '../ChannelInput';
 import { DropOverlay } from '../DropOverlay';
@@ -290,12 +296,7 @@ const baseInput: InputData = {
   attachments: [],
 };
 
-/**
- * `ChannelInput` reads the stored Cursor API key status to decide whether to
- * offer `@cursor` in the mention typeahead, so it needs a query client even
- * though none of these tests care about that entry. Shadowing `render` keeps
- * every call site below unchanged.
- */
+// Provide query context for the composed input and its decorators.
 const testQueryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 });
@@ -308,10 +309,12 @@ function render(ui: () => JSX.Element) {
 
 describe('Input slots', () => {
   beforeEach(() => {
+    editorMocks.cursorEnabled = false;
     editorMocks.clear.mockClear();
     editorMocks.focus.mockClear();
     editorMocks.emitChange = undefined;
     editorMocks.onEnter = undefined;
+    editorMocks.mentionUsers = undefined;
     vi.mocked(isMobile).mockReturnValue(false);
   });
 
@@ -363,6 +366,27 @@ describe('Input slots', () => {
     expect(screen.getByRole('group', { name: 'Dictation' })).toBeTruthy();
     await user.click(screen.getByRole('button', { name: 'Cancel dictation' }));
     expect(screen.queryByRole('group', { name: 'Dictation' })).toBeNull();
+  });
+
+  it('offers Cursor within its rollout before account setup', () => {
+    editorMocks.cursorEnabled = true;
+    render(() => <ChannelInput input={baseInput} />);
+    expect(editorMocks.mentionUsers?.().map((user) => user.name)).toEqual(
+      expect.arrayContaining(['Cursor', 'Claude', 'Codex'])
+    );
+  });
+
+  it('hides Cursor outside its rollout, including supplied bot entries', () => {
+    render(() => (
+      <ChannelInput
+        input={baseInput}
+        participants={() => [cursorMentionUser()]}
+        bots={() => [cursorMentionUser()]}
+      />
+    ));
+    const names = editorMocks.mentionUsers?.().map((user) => user.name);
+    expect(names).not.toContain('Cursor');
+    expect(names).toEqual(expect.arrayContaining(['Claude', 'Codex']));
   });
 
   it('does not start typing when the editor hydrates an empty composer', async () => {

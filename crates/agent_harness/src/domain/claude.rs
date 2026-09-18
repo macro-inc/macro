@@ -1,5 +1,6 @@
 //! Claude conversation lifecycle through owner-bound provider and session ports.
 use crate::domain::error::{HarnessError, Result};
+use crate::domain::model::SessionBlocker;
 use agent_session::domain::{
     model::{AgentSessionId, ExternalSession},
     ports::{AgentSessionRepo, ExternalSessionRepo},
@@ -9,6 +10,7 @@ use claude_cloud_agents::domain::{
     ports::{CloudLifecycle, CloudProvider},
     service::Session,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
 /// Provider identity in the shared external-session store.
@@ -31,6 +33,15 @@ pub struct ClaudeSessions<P, Repo, External> {
 impl<P: CloudProvider, Repo: AgentSessionRepo, External: ExternalSessionRepo>
     ClaudeSessions<P, Repo, External>
 {
+    /// Check the owner's connection before a mention creates any session resources.
+    pub async fn preflight(&self, owner: &MacroUserIdStr<'_>) -> Result<Option<SessionBlocker>> {
+        match self.provider.connect(owner.as_ref()).await {
+            Ok(_) => Ok(None),
+            Err(Error::NotConnected) => Ok(Some(SessionBlocker::ClaudeNotConnected)),
+            Err(error) => Err(cloud_error(error)),
+        }
+    }
+
     /// Mint a fresh egress credential on reattach; persist only its hash, as for
     /// other external runtimes. The saved agent selection remains authoritative.
     pub async fn refresh_egress(

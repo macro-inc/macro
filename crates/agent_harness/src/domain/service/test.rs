@@ -39,9 +39,9 @@ use super::AgentHarnessService;
 use super::into_session_error;
 use crate::domain::error::HarnessError;
 use crate::domain::model::{
-    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeliverAction, HarnessCommand,
-    HarnessDefaults, MentionOrigin, OpenSession, PriorMessage, SessionDefaults, SessionRepository,
-    SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnounceOrigin, CommandOutcome, DeclinedMention, DeliverAction,
+    HarnessCommand, HarnessDefaults, MentionOrigin, OpenSession, PriorMessage, SessionBlocker,
+    SessionDefaults, SessionRepository, SpawnContainer,
 };
 use crate::domain::ports::{
     AgentPromptComposer, ContainerManager as _, MessagePromptContext, NoPeers,
@@ -688,6 +688,29 @@ async fn revoked_origin_access_blocks_open_before_anything_is_provisioned() {
 }
 
 #[tokio::test]
+async fn revoked_origin_access_blocks_the_connect_cursor_reply() {
+    let (service, repo, containers, announcer, _runtimes) = harness_with_edges(
+        PromptContextMock::unauthorized("removed from the channel"),
+        PromptComposerMock::default(),
+    );
+    containers.block_with(SessionBlocker::CursorNotConnected);
+    let mut command = open_command();
+    command.bot_id = bot_id::CURSOR_BOT_ID;
+    command.runtime.kind = AgentKind::Cursor;
+    command.runtime.harness = "cursor".to_owned();
+    let id = AgentSessionId::new();
+
+    let result = service.execute(id, HarnessCommand::Open(command)).await;
+
+    assert!(matches!(result, Err(HarnessError::PromptContext(_))));
+    assert!(repo.get(id).await.is_err());
+    assert_eq!(containers.spawned(), 0);
+    assert!(service.inner.egress.provisioned().is_empty());
+    assert!(announcer.announced().is_empty());
+    assert!(announcer.declined().is_empty());
+}
+
+#[tokio::test]
 async fn context_failure_still_calls_composer_with_empty_messages_and_delivers() {
     let composer = PromptComposerMock::default();
     let context = PromptContextMock::failing("messages unavailable");
@@ -795,6 +818,91 @@ async fn open_sends_context_but_not_agent_instructions_to_the_agent_prompt() {
         prompts(&container.agent()),
         [vec![ContentBlock::from(context_prompt(&raw))]]
     );
+}
+
+/// A provider mention from someone missing account setup: the bot answers in
+/// the thread with what to connect, and nothing is created for a session
+/// that could never spawn - no row, no egress token, no chip.
+#[tokio::test]
+async fn a_mention_its_sender_is_not_set_up_for_is_declined_in_the_thread() {
+    for (bot_id, kind, harness_slug, blocker) in [
+        (
+            bot_id::CURSOR_BOT_ID,
+            AgentKind::Cursor,
+            "cursor",
+            SessionBlocker::CursorNotConnected,
+        ),
+        (
+            bot_id::CODEX_BOT_ID,
+            AgentKind::CodexCloud,
+            "codex-cloud",
+            SessionBlocker::CodexNotConnected,
+        ),
+        (
+            bot_id::CODEX_BOT_ID,
+            AgentKind::CodexCloud,
+            "codex-cloud",
+            SessionBlocker::CodexEnvironmentNotConfigured,
+        ),
+        (
+            bot_id::CLAUDE_BOT_ID,
+            AgentKind::ClaudeCloud,
+            "claude-cloud",
+            SessionBlocker::ClaudeNotConnected,
+        ),
+    ] {
+        let (service, repo, containers, announcer, _runtimes) = harness();
+        let id = AgentSessionId::new();
+        containers.block_with(blocker);
+        let mut command = open_command();
+        command.bot_id = bot_id;
+        command.runtime.kind = kind;
+        command.runtime.harness = harness_slug.to_owned();
+        let origin = command.origin.clone();
+
+        let outcome = service
+            .execute(id, HarnessCommand::Open(command))
+            .await
+            .expect("a declined mention is handled, not failed");
+
+        assert_eq!(outcome, CommandOutcome::Completed);
+        assert!(repo.get(id).await.is_err(), "no session row is created");
+        assert_eq!(containers.spawned(), 0);
+        assert!(service.inner.egress.provisioned().is_empty());
+        assert!(announcer.announced().is_empty());
+        assert_eq!(
+            announcer.declined(),
+            [DeclinedMention {
+                bot_id,
+                origin: AnnounceOrigin {
+                    parent: origin.parent,
+                    thread_id: origin.thread_id,
+                    message_id: origin.message_id,
+                },
+                triggered_by: origin.sender,
+                blocker,
+            }]
+        );
+    }
+}
+
+/// The decline is the whole answer, so failing to post it is the open's
+/// failure - the same way a session that cannot be announced is.
+#[tokio::test]
+async fn a_decline_that_cannot_be_posted_fails_the_open() {
+    let (service, repo, containers, announcer, _runtimes) = harness();
+    let id = AgentSessionId::new();
+    containers.block_with(SessionBlocker::CursorNotConnected);
+    announcer.fails("channel unavailable");
+
+    let error = service
+        .execute(id, HarnessCommand::Open(open_command()))
+        .await
+        .expect_err("the decline could not reach the thread");
+
+    assert!(matches!(error, HarnessError::Announce(_)));
+    assert!(repo.get(id).await.is_err(), "still no session row");
+    assert_eq!(containers.spawned(), 0);
 }
 
 #[tokio::test]

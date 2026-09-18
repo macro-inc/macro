@@ -613,6 +613,12 @@ registerComponent(
       return <RedirectSplit to={{ type: 'component', id: 'inbox' }} />;
     }
     usePageViewTracking('companies');
+    const panel = useSplitPanelOrThrow();
+    createRenderEffect(() => {
+      panel.handle.updateMeta?.({
+        splitPanelLayout: isTouchDevice() ? 'legacy' : 'composable',
+      });
+    });
     const preset = getViewPreset('companies');
     // Share links land here as `/companies?crmView=<encoded config>` — the
     // param carries the full view state (never data), decoded client-side.
@@ -631,8 +637,7 @@ registerComponent(
         initialCrmView={initialCrmView}
       />
     );
-  }),
-  { splitPanelLayout: 'composable' }
+  })
 );
 
 registerComponent(
