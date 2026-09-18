@@ -41,6 +41,7 @@ import { useEntryState } from '@components/app/split-layout/entry-state';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import type { SplitContent } from '@components/app/split-layout/layoutManager';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import {
@@ -371,20 +372,26 @@ function DriveViewContent(props: DriveViewProps) {
             favorite={favorite}
             onOpen={(item, name, event) => {
               const target = favoriteDetailTarget(item, name);
-              if (item.entityType === 'project' && !event.shiftKey)
+              if (item.entityType === 'project' && !event.shiftKey) {
                 selectFolder(item.entityId);
-              else if (
+                return;
+              } else if (
                 target &&
                 navigationStack.shouldNavigate(target, { event })
               ) {
                 navigationStack.reset(target);
                 return;
-              } else
-                layout.openWithSplit(favoriteSplitContent(item), {
-                  notifyOnReuse: true,
-                  referredFrom: 'sidebar',
-                  preferNewSplit: event.shiftKey,
-                });
+              }
+              const result = layout.openWithSplit(favoriteSplitContent(item), {
+                referredFrom: 'sidebar',
+                preferNewSplit: event.shiftKey,
+              });
+              if (
+                result.status === 'reused' &&
+                result.owner !== result.sourceOwner
+              ) {
+                toast.alert('Content already open');
+              }
             }}
           />
         )}

@@ -87,7 +87,7 @@ describe('layoutManager', () => {
         expect(result?.id).toBe(existing.id);
         expect(manager.splits()).toHaveLength(2);
         expect(manager.activeSplitId()).toBe(activate ? existing.id : other.id);
-        expect(toast.alert).toHaveBeenCalledWith('Content already open');
+        expect(toast.alert).not.toHaveBeenCalled();
         dispose();
       });
     }
@@ -143,7 +143,12 @@ describe('layoutManager', () => {
             allowDuplicate: true,
             handle: manager.getSplit(other.id),
           });
-          expect(opened?.id).toBe(existing.id);
+          expect(opened).toMatchObject({
+            status: 'reused',
+            owner: existing.id,
+            sourceOwner: other.id,
+          });
+          expect(opened.split?.id).toBe(existing.id);
           expect(manager.activeSplitId()).toBe(existing.id);
           expect(manager.splits()).toHaveLength(2);
           expect(existing.mount).toBe(mount);
@@ -151,15 +156,15 @@ describe('layoutManager', () => {
           expect(other.content).toEqual({ type: 'component', id: 'inbox' });
           expect(toast.alert).not.toHaveBeenCalled();
 
-          manager.openWithSplit(target, { notifyOnReuse: true });
-          expect(toast.alert).toHaveBeenCalledWith('Content already open');
+          manager.openWithSplit(target);
+          expect(toast.alert).not.toHaveBeenCalled();
           dispose();
         });
       }
     }
   );
 
-  it('reuses content without an activation target and only notifies when requested', () => {
+  it('reports reuse even when the owning view has no activation target', () => {
     createRoot((dispose) => {
       const orchestrator = createMockOrchestrator();
       const manager = createSplitLayout(orchestrator, [
@@ -178,18 +183,18 @@ describe('layoutManager', () => {
           { type: 'channel', id: 'preview-channel' },
           { preferNewSplit: true }
         )
-      ).toBeUndefined();
+      ).toMatchObject({ status: 'reused', owner: 'preview' });
       expect(manager.splits()).toHaveLength(1);
       expect(orchestrator.createBlockInstance).not.toHaveBeenCalled();
       expect(toast.alert).not.toHaveBeenCalled();
 
       manager.openWithSplit(
         { type: 'channel', id: 'preview-channel' },
-        { preferNewSplit: true, notifyOnReuse: true }
+        { preferNewSplit: true }
       );
       expect(manager.splits()).toHaveLength(1);
       expect(orchestrator.createBlockInstance).not.toHaveBeenCalled();
-      expect(toast.alert).toHaveBeenCalledWith('Content already open');
+      expect(toast.alert).not.toHaveBeenCalled();
 
       release();
       manager.openWithSplit(
@@ -223,7 +228,7 @@ describe('layoutManager', () => {
       },
     })),
   ] satisfies { name: string; content: SplitContent; target: SplitContent }[])(
-    'reuses an inline $name preview, notifying only when requested',
+    'reports inline $name reuse without notifications',
     ({ content, target }) => {
       createRoot((dispose) => {
         const orchestrator = createMockOrchestrator();
@@ -237,7 +242,7 @@ describe('layoutManager', () => {
         manager.registerOpenViews(() => [
           { owner: 'preview', content, activate },
         ]);
-        const intercept = vi.fn(() => ({ handled: true }));
+        const intercept = vi.fn(() => ({ status: 'unavailable' as const }));
         manager.setSplitNavigationInterceptor(intercept);
 
         const view = manager.findOpenView(target);
@@ -247,13 +252,14 @@ describe('layoutManager', () => {
         expect(activate).not.toHaveBeenCalled();
 
         vi.mocked(toast.alert).mockClear();
-        manager.openWithSplit(target, {
+        const result = manager.openWithSplit(target, {
           referredFrom: 'kommand-menu',
-          notifyOnReuse: true,
         });
+        expect(result).toMatchObject({ status: 'reused', owner: 'preview' });
+        expect(result.split).toBeUndefined();
         expect(activate).toHaveBeenCalledOnce();
         expect(manager.activeSplitId()).toBe(chat.id);
-        expect(toast.alert).toHaveBeenCalledWith('Content already open');
+        expect(toast.alert).not.toHaveBeenCalled();
 
         vi.mocked(toast.alert).mockClear();
         manager.activateSplit(inbox.id);
@@ -275,7 +281,7 @@ describe('layoutManager', () => {
     }
   );
 
-  it('notifies on requested reuse of a standalone split too', () => {
+  it('reports the owner when reusing a standalone split', () => {
     createRoot((dispose) => {
       const manager = createSplitLayout(createMockOrchestrator(), [
         { type: 'channel', id: 'channel' },
@@ -284,9 +290,9 @@ describe('layoutManager', () => {
       const [channel, inbox] = manager.splits();
       manager.activateSplit(inbox.id);
       vi.mocked(toast.alert).mockClear();
-      manager.openWithSplit(channel.content, { notifyOnReuse: true });
+      manager.openWithSplit(channel.content);
       expect(manager.activeSplitId()).toBe(channel.id);
-      expect(toast.alert).toHaveBeenCalledWith('Content already open');
+      expect(toast.alert).not.toHaveBeenCalled();
       vi.mocked(toast.alert).mockClear();
       manager.activateSplit(inbox.id);
       manager.openWithSplit(channel.content);
@@ -317,12 +323,56 @@ describe('layoutManager', () => {
         preferNewSplit: true,
         allowDuplicate: true,
       });
-      expect(duplicate).toBeDefined();
-      expect(duplicate?.id).not.toBe(channels.id);
+      expect(duplicate.status).toBe('opened');
+      expect(duplicate.split?.id).not.toBe(channels.id);
       expect(manager.splits()).toHaveLength(3);
       expect(manager.findOpenView(content)?.topLevelSplit?.id).toBe(
         channels.id
       );
+      expect(toast.alert).not.toHaveBeenCalled();
+      dispose();
+    });
+  });
+
+  it('distinguishes opening new content from reusing content in the source split', () => {
+    createRoot((dispose) => {
+      const manager = createSplitLayout(createMockOrchestrator(), [
+        { type: 'component', id: 'inbox' },
+      ]);
+      const handle = manager.getSplit(manager.splits()[0].id)!;
+      const content = { type: 'email', id: 'selected' } as const;
+      vi.mocked(toast.alert).mockClear();
+      expect(manager.openWithSplit(content, { handle })).toMatchObject({
+        status: 'opened',
+        split: { id: handle.id },
+      });
+      expect(manager.openWithSplit(content, { handle })).toMatchObject({
+        status: 'reused',
+        owner: handle.id,
+        sourceOwner: handle.id,
+        split: { id: handle.id },
+      });
+      expect(handle.content()).toMatchObject(content);
+      expect(toast.alert).not.toHaveBeenCalled();
+      dispose();
+    });
+  });
+
+  it('restoring occupied content does not focus or notify its owner', () => {
+    createRoot((dispose) => {
+      const manager = createSplitLayout(createMockOrchestrator(), [
+        { type: 'component', id: 'inbox' },
+      ]);
+      const source = manager.splits()[0];
+      const content = { type: 'email', id: 'occupied' } as const;
+      const activate = vi.fn();
+      manager.registerOpenViews(() => [
+        { owner: 'preview', content, activate },
+      ]);
+      vi.mocked(toast.alert).mockClear();
+      manager.reconcile([content]);
+      expect(manager.splits()[0].content).toEqual(source.content);
+      expect(activate).not.toHaveBeenCalled();
       expect(toast.alert).not.toHaveBeenCalled();
       dispose();
     });
@@ -357,6 +407,73 @@ describe('layoutManager', () => {
       dispose();
     });
   });
+
+  it.each(['replace', 'adopt', 'replaceAll', 'popover'] as const)(
+    '%s focuses an inline owner when it refuses duplicate content',
+    (action) => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'email', id: 'pending' },
+          { type: 'component', id: 'mail' },
+        ]);
+        const [source, host] = manager.splits();
+        const handle = manager.getSplit(source.id)!;
+        const target = { type: 'email', id: 'owned' } as const;
+        manager.registerOpenViews(() => [
+          {
+            owner: 'detail',
+            content: target,
+            activate: () => manager.activateSplit(host.id),
+          },
+        ]);
+        handle.activate();
+        vi.mocked(toast.alert).mockClear();
+
+        if (action === 'replace') handle.replace({ next: target });
+        if (action === 'adopt')
+          handle.adoptContentId({ type: 'email', nextId: target.id });
+        if (action === 'replaceAll') manager.replaceAllSplits(target);
+        if (action === 'popover')
+          manager.createPopoverSplit({ content: target });
+
+        expect(manager.activeSplitId()).toBe(host.id);
+        expect(handle.content().id).toBe('pending');
+        expect(handle.history()).toHaveLength(1);
+        expect(manager.splits()).toHaveLength(2);
+        expect(toast.alert).not.toHaveBeenCalled();
+        dispose();
+      });
+    }
+  );
+
+  it.each(['replace', 'adopt'] as const)(
+    '%s focuses an existing block instead of mounting its Agents route',
+    (action) => {
+      createRoot((dispose) => {
+        const orchestrator = createMockOrchestrator();
+        const manager = createSplitLayout(orchestrator, [
+          { type: 'chat', id: 'conversation' },
+          { type: 'component', id: 'agents' },
+        ]);
+        const [owner, source] = manager.splits();
+        const handle = manager.getSplit(source.id)!;
+        const route = agentsRouteId({
+          mode: 'chat',
+          conversation: { type: 'chat', id: 'conversation' },
+        });
+        const mount = source.mount;
+        handle.activate();
+        if (action === 'replace')
+          handle.replace({ next: { type: 'component', id: route } });
+        else handle.adoptContentId({ type: 'component', nextId: route });
+        expect(manager.activeSplitId()).toBe(owner.id);
+        expect(handle.content().id).toBe('agents');
+        expect(manager.splits()[1].mount).toBe(mount);
+        expect(orchestrator.createBlockInstance).toHaveBeenCalledTimes(1);
+        dispose();
+      });
+    }
+  );
 
   it('exposes split ownership before block mount and releases it on close', () => {
     createRoot((dispose) => {
@@ -451,6 +568,47 @@ describe('layoutManager', () => {
   });
 
   describe('reconciler', () => {
+    it('uses the retained split id for history ownership after reconciliation', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        const handle = manager.getSplit(manager.splits()[0].id)!;
+        const content = { type: 'email', id: 'same-entity' } as const;
+        manager.reconcile([content]);
+        expect(manager.splits()[0].id).toBe(handle.id);
+        handle.replace({ next: content });
+        expect(handle.canGoBack()).toBe(true);
+        handle.goBack();
+        expect(handle.history()).toHaveLength(1);
+        expect(handle.canGoForward()).toBe(true);
+        dispose();
+      });
+    });
+
+    it('keeps history availability configured after reset', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        const handle = manager.getSplit(manager.splits()[0].id)!;
+        handle.reset();
+        handle.replace({ next: { type: 'email', id: 'occupied' } });
+        handle.replace({ next: { type: 'email', id: 'current' } });
+        const release = manager.registerOpenViews(() => [
+          { owner: 'preview', content: { type: 'email', id: 'occupied' } },
+        ]);
+        expect(handle.canGoBack()).toBe(false);
+        handle.goBack();
+        expect(handle.content().id).toBe('current');
+        release();
+        expect(handle.canGoBack()).toBe(true);
+        handle.goBack();
+        expect(handle.content().id).toBe('occupied');
+        dispose();
+      });
+    });
+
     it('should reconcile between current state and url changes', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
@@ -643,6 +801,85 @@ describe('layoutManager', () => {
         // The skipped entries stay ahead, so forward still reaches them.
         expect(split.canGoForward()).toBe(true);
 
+        dispose();
+      });
+    });
+
+    it.each(['split', 'inline'] as const)(
+      'back and forward skip content owned by another %s without focusing it',
+      (owner) => {
+        createRoot((dispose) => {
+          const manager = createSplitLayout(createMockOrchestrator(), [
+            { type: 'component', id: 'inbox' },
+          ]);
+          const handle = manager.getSplit(manager.splits()[0].id)!;
+          const occupied = { type: 'email', id: 'occupied' } as const;
+          handle.replace({ next: occupied });
+          handle.replace({ next: { type: 'channel', id: 'end' } });
+          const activate = vi.fn();
+          const release =
+            owner === 'inline'
+              ? manager.registerOpenViews(() => [
+                  { owner: 'detail', content: occupied, activate },
+                ])
+              : (() => {
+                  const split = manager.createNewSplit({
+                    content: occupied,
+                    referredFrom: null,
+                  })!;
+                  return () => manager.removeSplit(split.id);
+                })();
+          handle.activate();
+          vi.mocked(toast.alert).mockClear();
+
+          expect(handle.canGoBack()).toBe(true);
+          handle.goBack();
+          expect(handle.content().id).toBe('inbox');
+          expect(handle.canGoBack()).toBe(false);
+          expect(handle.canGoForward()).toBe(true);
+          handle.goForward();
+          expect(handle.content().id).toBe('end');
+          expect(handle.canGoForward()).toBe(false);
+          expect(handle.history().map((entry) => entry.id)).toEqual([
+            'inbox',
+            'occupied',
+            'end',
+          ]);
+          expect(manager.activeSplitId()).toBe(handle.id);
+          expect(activate).not.toHaveBeenCalled();
+          expect(toast.alert).not.toHaveBeenCalled();
+
+          release();
+          handle.goBack();
+          expect(handle.content().id).toBe('occupied');
+          dispose();
+        });
+      }
+    );
+
+    it('disables history directions with only occupied entries and restores them when released', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'email', id: 'before' },
+        ]);
+        const handle = manager.getSplit(manager.splits()[0].id)!;
+        handle.replace({ next: { type: 'component', id: 'inbox' } });
+        handle.replace({ next: { type: 'email', id: 'after' } });
+        handle.goBack();
+        const release = manager.registerOpenViews(() =>
+          ['before', 'after'].map((id) => ({
+            owner: id,
+            content: { type: 'email', id },
+          }))
+        );
+        expect(handle.canGoBack()).toBe(false);
+        expect(handle.canGoForward()).toBe(false);
+        handle.goBack();
+        handle.goForward();
+        expect(handle.content().id).toBe('inbox');
+        release();
+        expect(handle.canGoBack()).toBe(true);
+        expect(handle.canGoForward()).toBe(true);
         dispose();
       });
     });
@@ -1029,7 +1266,7 @@ describe('layoutManager', () => {
           'unified-list',
           'current',
         ]);
-        expect(manager.activeSplitId()).toBe(inserted?.id);
+        expect(manager.activeSplitId()).toBe(inserted.split?.id);
 
         dispose();
       });
@@ -1037,6 +1274,164 @@ describe('layoutManager', () => {
   });
 
   describe('activation invariant', () => {
+    it.each(['foreground', 'background'] as const)(
+      'reuses the mobile %s conversation across Agents routes and blocks',
+      (position) => {
+        const route: SplitContent = {
+          type: 'component',
+          id: agentsRouteId({
+            mode: 'chat',
+            conversation: { type: 'chat', id: 'conversation' },
+          }),
+        };
+        const block: SplitContent = { type: 'chat', id: 'conversation' };
+        for (const [initial, target] of [
+          [route, block],
+          [block, route],
+          [block, block],
+        ]) {
+          createRoot((dispose) => {
+            const manager = createSplitLayout(createMockOrchestrator(), [
+              position === 'foreground'
+                ? { type: 'component', id: 'inbox' }
+                : initial,
+            ]);
+            const swipe = createMobileSwipeLayout(manager);
+            manager.openWithSplit(
+              position === 'foreground'
+                ? initial
+                : { type: 'component', id: 'inbox' }
+            );
+            const owner = manager.findOpenView(target)!.topLevelSplit!;
+            const mount = manager
+              .splits()
+              .find((split) => split.id === owner.id)!.mount;
+            const ids = manager.splits().map((split) => split.id);
+            vi.mocked(toast.alert).mockClear();
+
+            manager.openWithSplit(target);
+
+            expect(manager.activeSplitId()).toBe(owner.id);
+            expect(manager.splits().map((split) => split.id)).toEqual(ids);
+            expect(
+              manager.splits().find((split) => split.id === owner.id)!.mount
+            ).toBe(mount);
+            expect(swipe.slotASplitId()).not.toBe(swipe.slotBSplitId());
+            expect(swipe.canGoBack()).toBe(true);
+            expect(toast.alert).not.toHaveBeenCalled();
+            swipe.swipeBack();
+            expect(
+              manager.getSplit(manager.activeSplitId()!)!.content().id
+            ).toBe('inbox');
+            dispose();
+          });
+        }
+      }
+    );
+
+    it('reports reuse when mobile navigation promotes an existing pane', () => {
+      createRoot((dispose) => {
+        const content = { type: 'email', id: 'background' } as const;
+        const manager = createSplitLayout(createMockOrchestrator(), [content]);
+        const owner = manager.splits()[0].id;
+        createMobileSwipeLayout(manager);
+        manager.openWithSplit({ type: 'email', id: 'foreground' });
+        vi.mocked(toast.alert).mockClear();
+        const result = manager.openWithSplit(content);
+        expect(result).toMatchObject({
+          status: 'reused',
+          owner,
+          split: { id: owner },
+        });
+        expect(manager.activeSplitId()).toBe(owner);
+        expect(manager.splits()).toHaveLength(2);
+        expect(toast.alert).not.toHaveBeenCalled();
+        dispose();
+      });
+    });
+
+    it.each(['refused', 'reused'] as const)(
+      'preserves mobile slots when creation is %s',
+      (result) => {
+        createRoot((dispose) => {
+          const manager = createSplitLayout(createMockOrchestrator(), [
+            { type: 'component', id: 'inbox' },
+          ]);
+          const swipe = createMobileSwipeLayout(manager);
+          manager.openWithSplit({ type: 'email', id: 'foreground' });
+          const foreground = manager.getSplit(manager.activeSplitId()!)!;
+          const ids = manager.splits().map((split) => split.id);
+          const slots = [
+            swipe.slotASplitId(),
+            swipe.slotBSplitId(),
+            swipe.fgIsSlotA(),
+          ];
+          const animate = vi.fn();
+          swipe.setForwardNavigationTrigger(animate);
+          vi.spyOn(manager, 'createNewSplit').mockReturnValueOnce(
+            result === 'reused' ? foreground : undefined
+          );
+          expect(
+            manager.openWithSplit({ type: 'email', id: 'next' })
+          ).toMatchObject({ status: 'unavailable' });
+          expect(manager.splits().map((split) => split.id)).toEqual(ids);
+          expect([
+            swipe.slotASplitId(),
+            swipe.slotBSplitId(),
+            swipe.fgIsSlotA(),
+          ]).toEqual(slots);
+          expect(manager.activeSplitId()).toBe(foreground.id);
+          expect(animate).not.toHaveBeenCalled();
+          dispose();
+        });
+      }
+    );
+
+    it('promotes an occupied mobile background when direct replacement is refused', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'email', id: 'background' },
+        ]);
+        const owner = manager.splits()[0].id;
+        const swipe = createMobileSwipeLayout(manager);
+        manager.openWithSplit({ type: 'email', id: 'foreground' });
+        const source = manager.getSplit(manager.activeSplitId()!)!;
+        source.replace({ next: { type: 'email', id: 'background' } });
+        expect(manager.activeSplitId()).toBe(owner);
+        expect(source.content().id).toBe('foreground');
+        expect(manager.splits()).toHaveLength(2);
+        expect(swipe.slotASplitId()).not.toBe(swipe.slotBSplitId());
+        dispose();
+      });
+    });
+
+    it('skips already-mounted history when rebuilding the mobile background', () => {
+      createRoot((dispose) => {
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          { type: 'component', id: 'inbox' },
+        ]);
+        const handle = manager.getSplit(manager.splits()[0].id)!;
+        handle.replace({ next: { type: 'chat', id: 'conversation' } });
+        handle.replace({ next: { type: 'chat', id: 'conversation' } });
+        const swipe = createMobileSwipeLayout(manager);
+        manager.openWithSplit({ type: 'email', id: 'next' });
+        vi.mocked(toast.alert).mockClear();
+        swipe.swipeBack();
+        expect(manager.activeSplitId()).toBe(handle.id);
+        expect(swipe.slotASplitId()).not.toBe(swipe.slotBSplitId());
+        expect(manager.splits().map((split) => split.content.id)).toEqual([
+          'conversation',
+          'inbox',
+        ]);
+        expect(toast.alert).not.toHaveBeenCalled();
+        swipe.swipeBack();
+        expect(manager.getSplit(manager.activeSplitId()!)!.content().id).toBe(
+          'inbox'
+        );
+        dispose();
+      });
+    });
+
     it('refreshes the list source when reopening an email already mounted in the native background', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [

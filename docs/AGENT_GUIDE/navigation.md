@@ -352,6 +352,11 @@ create a session before the user sends. Repeating it focuses the existing draft.
 Splits navigate independently. The retired Preview Pair mode no longer creates
 an adjacent viewer, redirects list navigation, or links split sizes and history.
 Inline details in workspaces continue to use their own navigation stack.
+Split back/forward navigation skips entries whose entities are open elsewhere,
+without moving focus or showing a toast. Those entries remain in history and
+become reachable again after their owning view releases them. A direction is
+unavailable when no reachable entries remain. Mobile swipe navigation reuses
+an already-mounted conversation without losing the other pane.
 
 Entity content can be open in only one split or inline preview/detail view at a
 time. Shell components may have duplicate splits when `allowDuplicate` is enabled.
@@ -364,8 +369,8 @@ claim that entity keeps its previous selection and history.
 Opening an entity already in a split focuses that split when activation is
 requested; the sidebar's **Open in new split** also shows a **Content already open** toast.
 Selecting an entity owned by another view from a detail view leaves the current
-detail and navigation history unchanged and shows a **Content already open**
-toast. Close or navigate away
+detail and navigation history unchanged, focuses the owning view, and shows a
+**Content already open** toast. Close or navigate away
 from the owning view before opening it elsewhere. The same rule applies to mouse
 selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
 never render inline previews or detail views: a tap opens the entity in the

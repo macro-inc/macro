@@ -10,7 +10,6 @@ import type {
   BlockName,
 } from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
-import { toast } from '@core/component/Toast/Toast';
 import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import type {
@@ -204,8 +203,6 @@ export type CreateNewSplitOptions = {
 export type OpenWithSplitOptions = {
   mergeHistory?: boolean;
   activate?: boolean;
-  /** Orient users when an explicit selection takes them to an already-open view. */
-  notifyOnReuse?: boolean;
   referredFrom?: ReferredFrom;
   /** Shell components only; entity blocks are always single-instance. */
   allowDuplicate?: boolean;
@@ -224,16 +221,20 @@ export type OpenWithSplitOptions = {
   reopen?: 'latest';
 };
 
-/**
- * A split navigation interceptor registered by, e.g. mobile swipe layout.
- * Called after inline details and popovers have been handled by reuse.
- * Return `{ handled: true }` to consume the navigation, or `{ handled: false }`
- * to let the normal split logic run.
- */
+export type OpenSplitResult = {
+  /** The source panel supplied by the caller, if any. */
+  sourceOwner?: SplitId;
+} & (
+  | { status: 'opened'; split: SplitHandle }
+  | { status: 'reused'; owner: ContentInstance['owner']; split?: SplitHandle }
+  | { status: 'unavailable'; split?: undefined }
+);
+
+/** Return an outcome to consume navigation, or undefined to use normal split navigation. */
 export type SplitNavigationInterceptor = (
   content: SplitContent,
   options: OpenWithSplitOptions
-) => { handled: boolean };
+) => OpenSplitResult | undefined;
 
 function keyOfSplitState(s: SplitState): SplitKey {
   return `${s.content.type}:${s.content.id}`;
@@ -336,7 +337,7 @@ export type SplitManager = {
   openWithSplit: (
     content: SplitContent,
     options?: OpenWithSplitOptions
-  ) => SplitHandle | undefined;
+  ) => OpenSplitResult;
 
   /** Set a split as active by its split id  */
   activateSplit: (id: SplitId) => void;
@@ -652,12 +653,8 @@ export function createSplitLayout(
       })),
   ]);
   onCleanup(unregisterContentInstances);
-  const canOpenContent = (content: SplitContent, owner?: SplitId) => {
-    if (!contentInstances.isOpenElsewhere(contentIdentity(content), owner))
-      return true;
-    toast.alert('Content already open');
-    return false;
-  };
+  const canOpenContent = (content: SplitContent, owner?: SplitId) =>
+    !contentInstances.isOpenElsewhere(contentIdentity(content), owner);
 
   /** Resolve an entity to its owning view, regardless of how that view renders it. */
   function findOpenView(content: SplitContent): OpenView | undefined {
@@ -759,14 +756,17 @@ export function createSplitLayout(
     state.splits.findIndex((s) => s.id === id);
 
   function buildSplit(options: {
+    id?: SplitId;
     initialContent: SplitContent;
     isDefault?: boolean;
     referredFrom?: ReferredFrom;
     initialHistory?: SplitContent[];
   }): SplitState {
     const { initialContent, isDefault, referredFrom, initialHistory } = options;
-    const id = newSplitId();
-    const history = createHistory<SplitContent>();
+    const id = options.id ?? newSplitId();
+    const history = createHistory<SplitContent>({
+      canVisit: (content) => canOpenContent(content, id),
+    });
     const content = attachAliasContext(initialContent);
 
     if (initialHistory && initialHistory.length > 0) {
@@ -894,8 +894,6 @@ export function createSplitLayout(
 
     const split = state.splits[i];
     if (!split.history.canGoBack()) return;
-    if (!canOpenContent(split.history.items[split.history.index - 1], id))
-      return;
 
     batch(() => {
       captureCurrentEntryState(split);
@@ -924,7 +922,6 @@ export function createSplitLayout(
     }
 
     const split = state.splits[i];
-    const otherSplits = state.splits.filter((s) => s.id !== split.id);
     const result = { moved: false };
 
     batch(() => {
@@ -935,12 +932,7 @@ export function createSplitLayout(
       // index on an entry the split never mounted. Skipping them here keeps
       // the index and the mounted content in step, and lets the search carry
       // on to an entry that can actually be shown.
-      const prev = split.history.backTo(
-        (content) =>
-          predicate(content) &&
-          !isDuplicateSplit(otherSplits, content) &&
-          !contentInstances.isOpenElsewhere(contentIdentity(content), id)
-      );
+      const prev = split.history.backTo(predicate);
       if (!prev) return;
 
       result.moved = true;
@@ -956,8 +948,6 @@ export function createSplitLayout(
 
     const split = state.splits[i];
     if (!split.history.canGoForward()) return;
-    if (!canOpenContent(split.history.items[split.history.index + 1], id))
-      return;
 
     batch(() => {
       captureCurrentEntryState(split);
@@ -977,9 +967,7 @@ export function createSplitLayout(
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
     const split = state.splits[i];
-    const next = split.history.remove(predicate, (content) =>
-      canOpenContent(content, id)
-    );
+    const next = split.history.remove(predicate);
     if (!next) return;
 
     reattach(split, next, undefined, 'replace');
@@ -1001,7 +989,10 @@ export function createSplitLayout(
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
     const content = attachAliasContext(next);
-    if (!canOpenContent(content, id)) return;
+    if (!canOpenContent(content, id)) {
+      openWithSplit(content);
+      return;
+    }
 
     const split = state.splits[i];
     batch(() => {
@@ -1041,20 +1032,11 @@ export function createSplitLayout(
     const split = state.splits[i];
     const current = split.content;
     if (current.type !== type || current.id === nextId) return;
-    if (
-      isDuplicateSplit(
-        state.splits.filter((s) => s.id !== id),
-        {
-          ...current,
-          id: nextId,
-        }
-      )
-    ) {
+    const next: SplitContent = { ...current, id: nextId, params: undefined };
+    if (!canOpenContent(next, id)) {
+      openWithSplit(next);
       return;
     }
-
-    const next: SplitContent = { ...current, id: nextId, params: undefined };
-    if (!canOpenContent(next, id)) return;
 
     batch(() => {
       split.history.replaceCurrent(next);
@@ -1087,9 +1069,13 @@ export function createSplitLayout(
     const i = splitIndexById(id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
-    const split = state.splits[i];
-    split.history = createHistory<SplitContent>();
-    reattach(split, DEFAULT_SPLIT_CONTENT, undefined, 'fresh');
+    const history = createHistory<SplitContent>({
+      canVisit: (content) => canOpenContent(content, id),
+    });
+    batch(() => {
+      setState('splits', (splits) => splits.with(i, { ...splits[i], history }));
+      reattach(state.splits[i], DEFAULT_SPLIT_CONTENT, undefined, 'fresh');
+    });
   }
 
   const getUrlSegments = () => {
@@ -1309,7 +1295,6 @@ export function createSplitLayout(
     const existing = findOpenView(initialContent);
     if (existing && existing.content.type !== 'component') {
       if (activate) existing.activate?.();
-      toast.alert('Content already open');
       return existing.topLevelSplit;
     }
     const split = buildSplit({
@@ -1484,19 +1469,24 @@ export function createSplitLayout(
         }
         continue;
       }
+      const splitAtSameIndex = visibleSplits[i];
+      // A true replacement can retain the slot's ID, but never steal an ID
+      // already assigned to content that moved elsewhere. Choose it before
+      // building the history so its availability rule excludes the right owner.
+      const retainedId =
+        splitAtSameIndex && !usedIds.has(splitAtSameIndex.id)
+          ? splitAtSameIndex.id
+          : undefined;
       const newSplit = buildSplit({
+        id: retainedId,
         initialContent: newSplits[i],
         referredFrom: null,
       });
-      const splitAtSameIndex = visibleSplits[i];
 
-      // A true replacement can retain the slot's ID, but never steal an ID
-      // already assigned to content that moved elsewhere.
-      if (splitAtSameIndex && !usedIds.has(splitAtSameIndex.id)) {
-        newSplit.id = splitAtSameIndex.id;
+      if (retainedId) {
         setSplitNamesById(
           produce((map) => {
-            delete map[splitAtSameIndex.id];
+            delete map[retainedId];
             return map;
           })
         );
@@ -1540,7 +1530,10 @@ export function createSplitLayout(
   function createPopoverSplit(
     options: PopoverSplitOptions
   ): PopoverSplitHandle | undefined {
-    if (!canOpenContent(options.content)) return;
+    if (!canOpenContent(options.content)) {
+      openWithSplit(options.content);
+      return;
+    }
     const id = `popover-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
     // Acquire focus lock BEFORE any state updates to capture the correct element
@@ -1626,7 +1619,8 @@ export function createSplitLayout(
   function openWithSplit(
     content: SplitContent,
     options: OpenWithSplitOptions = {}
-  ): SplitHandle | undefined {
+  ): OpenSplitResult {
+    const sourceOwner = options.handle?.id;
     const existing = findOpenView(content);
 
     if (options.reopen === 'latest') {
@@ -1643,7 +1637,7 @@ export function createSplitLayout(
     // splits.
     if (splitNavigationInterceptor && (!existing || existing.topLevelSplit)) {
       const result = splitNavigationInterceptor(content, options);
-      if (result.handled) return undefined;
+      if (result) return { ...result, sourceOwner };
     }
 
     // Entity views are always reused; only shell components may be duplicated.
@@ -1675,13 +1669,12 @@ export function createSplitLayout(
       }
 
       if (options.activate !== false) existing.activate?.();
-      if (
-        options.notifyOnReuse &&
-        (!existingSplit || options.handle?.id !== existingSplit.id)
-      ) {
-        toast.alert('Content already open');
-      }
-      return existingSplit;
+      return {
+        status: 'reused',
+        owner: existing.owner,
+        split: existingSplit,
+        sourceOwner,
+      };
     }
 
     let splitHandle = options.handle;
@@ -1708,15 +1701,18 @@ export function createSplitLayout(
         splitHandle.activate();
       }
 
-      return splitHandle;
+      return { status: 'opened', split: splitHandle, sourceOwner };
     } else {
-      return createNewSplit({
+      const split = createNewSplit({
         content,
         activate: options.activate ?? true,
         referredFrom: options.referredFrom ?? null,
         allowDuplicate: options.allowDuplicate,
         insertIndex: options.insertIndex,
       });
+      return split
+        ? { status: 'opened', split, sourceOwner }
+        : { status: 'unavailable', sourceOwner };
     }
   }
 
@@ -1726,8 +1722,10 @@ export function createSplitLayout(
   ): SplitHandle | undefined {
     if (
       !canOpenContent(content, getSplitByContent(content.type, content.id)?.id)
-    )
+    ) {
+      openWithSplit(content);
       return;
+    }
     const visibleSplits = state.splits.filter((split) => !isExcluded(split));
     const splitToKeep =
       visibleSplits.find((split) => sameContent(split.content, content)) ??
