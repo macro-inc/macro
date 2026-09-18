@@ -65,6 +65,82 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService>
         GithubError::Internal(error)
     }
 
+    /// Turns a "no rows returned" lookup failure into `None` so a missing link
+    /// reads as an absent link rather than an error.
+    fn optional_link(result: Result<GithubLink, R::Err>) -> Result<Option<GithubLink>, GithubError> {
+        match result {
+            Ok(link) => Ok(Some(link)),
+            Err(error) => {
+                let error: anyhow::Error = error.into();
+                if error.to_string().contains("no rows returned") {
+                    Ok(None)
+                } else {
+                    Err(GithubError::Internal(error))
+                }
+            }
+        }
+    }
+
+    /// Stores a freshly issued access token on the FusionAuth grant that
+    /// `fusionauth_user_id` owns, creating the IdP link when it does not exist
+    /// yet and replacing its token when it does.
+    async fn store_access_token(
+        &self,
+        fusionauth_user_id: &uuid::Uuid,
+        github_user_id: &str,
+        github_username: &str,
+        access_token: &str,
+    ) -> Result<(), GithubError> {
+        self.auth
+            .link_user(
+                fusionauth_user_id,
+                &self.config.idp_id,
+                github_user_id,
+                github_username,
+                access_token,
+            )
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))
+    }
+
+    /// Removes a `github_links` row.
+    ///
+    /// The FusionAuth IdP link + token live on the owner's row and are reused by
+    /// every sharer, so the grant is only torn down when this is the last row
+    /// for the GitHub account.
+    async fn retire_link(&self, link: &GithubLink) -> Result<(), GithubError> {
+        let link_count = self
+            .repo
+            .count_github_links_by_github_user_id(&link.github_user_id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        if link_count > 1 {
+            // Other Macro users still share this GitHub account: leave the
+            // FusionAuth grant in place so the remaining sharers keep working.
+            //
+            // Note: if the row being deleted is the OWNER's, the FusionAuth link
+            // becomes orphaned (no row carries the IdP link anymore), but this is
+            // benign — sharers still resolve the grant via the owner's
+            // `fusionauth_user_id` stored on their own rows, and the final row
+            // deletion below (when the last sharer leaves) cleans it up.
+        } else {
+            // This is the last/only row for this GitHub account: unlink
+            // FusionAuth (and clear the Redis cache) before removing the row.
+            self.auth
+                .delete_user_link(link, &self.config.idp_id)
+                .await
+                .map_err(|e| GithubError::Internal(e.into()))?;
+        }
+
+        self.repo
+            .delete_github_link(&link.id)
+            .await
+            .map_err(|e| GithubError::Internal(e.into()))?;
+
+        Ok(())
+    }
+
     async fn get_user_link_for_validation(
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
@@ -249,54 +325,15 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
     ) -> Result<(), GithubError> {
-        // Get link
-        let link = match self.repo.get_github_link_by_user_id(macro_user_id).await {
-            Ok(link) => link,
-            Err(e) => {
-                let e: anyhow::Error = e.into();
-                if e.to_string().contains("no rows returned") {
-                    tracing::trace!("no github link found for user");
-                    return Ok(());
-                }
+        let link =
+            Self::optional_link(self.repo.get_github_link_by_user_id(macro_user_id).await)?;
 
-                return Err(GithubError::Internal(e));
-            }
+        let Some(link) = link else {
+            tracing::trace!("no github link found for user");
+            return Ok(());
         };
 
-        // Count how many Macro users share this GitHub account. The FusionAuth
-        // IdP link + token live on the owner's row and are reused by every
-        // sharer, so we must only tear the grant down when this is the last row.
-        let link_count = self
-            .repo
-            .count_github_links_by_github_user_id(&link.github_user_id)
-            .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
-
-        if link_count > 1 {
-            // Other Macro users still share this GitHub account: leave the
-            // FusionAuth grant in place so the remaining sharers keep working.
-            //
-            // Note: if the row being deleted is the OWNER's, the FusionAuth link
-            // becomes orphaned (no row carries the IdP link anymore), but this is
-            // benign — sharers still resolve the grant via the owner's
-            // `fusionauth_user_id` stored on their own rows, and the final row
-            // deletion below (when the last sharer leaves) cleans it up.
-        } else {
-            // This is the last/only row for this GitHub account: unlink
-            // FusionAuth (and clear the Redis cache) before removing the row.
-            self.auth
-                .delete_user_link(&link, &self.config.idp_id)
-                .await
-                .map_err(|e| GithubError::Internal(e.into()))?;
-        }
-
-        // Delete from repo
-        self.repo
-            .delete_github_link(&link.id)
-            .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
-
-        Ok(())
+        self.retire_link(&link).await
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -330,24 +367,25 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
         let gh_id = user_info.id.to_string();
 
         // 1. Does THIS user already have a link, and to which account?
-        let this_user_link = match self.repo.get_github_link_by_user_id(user_id).await {
-            Ok(l) => Some(l),
-            Err(e) => {
-                let e: anyhow::Error = e.into();
-                if e.to_string().contains("no rows returned") {
-                    None
-                } else {
-                    return Err(GithubError::Internal(e));
-                }
-            }
-        };
+        let this_user_link = Self::optional_link(self.repo.get_github_link_by_user_id(user_id).await)?;
 
         if let Some(existing) = &this_user_link
             && existing.github_user_id == gh_id
         {
-            // Idempotent re-link of the SAME account by the SAME user: skip auth + skip
-            // insert (avoids violating the new (macro_id, github_user_id) unique). Still
-            // clean up the in-progress link, then return the existing link.
+            // Re-running OAuth for the account this user is already linked to is
+            // a re-authentication, so the row is kept (inserting again would
+            // violate the (macro_id, github_user_id) unique) but the freshly
+            // issued token must still replace the stale one. The row's
+            // `fusionauth_user_id` is the grant it resolves through, which for a
+            // sharer is the account owner's shared grant.
+            self.store_access_token(
+                &existing.fusionauth_user_id,
+                &gh_id,
+                &user_info.login,
+                &tokens.access_token,
+            )
+            .await?;
+
             let _ = self
                 .repo
                 .delete_in_progress_user_link(in_progess_link_id)
@@ -355,26 +393,27 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
                 .inspect_err(|e| tracing::error!(error=?e, "unable to delete in progress link id"));
             return Ok(existing.clone());
         }
-        // else: user previously linked a DIFFERENT github account; fall through and link
-        // the new one (frontend is single-valued; not enforced here — matches prior
-        // behavior).
+
+        // The user authorized a DIFFERENT github account than the one they are
+        // linked to. A Macro user carries a single github account, so retire the
+        // stale row before inserting the new one; leaving it behind would make
+        // `get_github_link_by_user_id` resolve to whichever row sorts first.
+        if let Some(stale_link) = &this_user_link {
+            tracing::debug!(
+                stale_github_user_id=%stale_link.github_user_id,
+                github_user_id=%gh_id,
+                "retiring github link for a different account before relinking"
+            );
+            self.retire_link(stale_link).await?;
+        }
 
         // 2. Does anyone already OWN this github account? (owner row = earliest row)
-        let account_owner = match self.repo.get_github_link_by_github_user_id(&gh_id).await {
-            Ok(l) => Some(l),
-            Err(e) => {
-                let e: anyhow::Error = e.into();
-                if e.to_string().contains("no rows returned") {
-                    None
-                } else {
-                    return Err(GithubError::Internal(e));
-                }
-            }
-        };
+        let account_owner =
+            Self::optional_link(self.repo.get_github_link_by_github_user_id(&gh_id).await)?;
 
         let row_fusionauth_user_id = match &account_owner {
             Some(owner) => {
-                // SHARER: reuse the owner's shared FusionAuth grant. Do NOT call auth.link_user.
+                // SHARER: reuse the owner's shared FusionAuth grant.
                 tracing::debug!(
                     owner_fa_id=%owner.fusionauth_user_id,
                     github_user_id=%gh_id,
@@ -382,24 +421,21 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
                 );
                 owner.fusionauth_user_id
             }
-            None => {
-                // OWNER (first linker): create the FusionAuth IdP link/token as before.
-                self.auth
-                    .link_user(
-                        fusionauth_user_id,
-                        &self.config.idp_id,
-                        &gh_id,
-                        &user_info.login,
-                        &tokens.access_token,
-                    )
-                    .await
-                    .map_err(|e| GithubError::Internal(e.into()))?;
-
-                tracing::trace!("linked auth user");
-
-                *fusionauth_user_id
-            }
+            // OWNER (first linker): the grant is created on this user.
+            None => *fusionauth_user_id,
         };
+
+        // Store the token on the grant the new row resolves through. A sharer
+        // just proved control of the same github account, so refreshing the
+        // owner's shared grant re-authenticates everyone resolving through it
+        // rather than stranding them on a token this OAuth round trip replaced.
+        self.store_access_token(
+            &row_fusionauth_user_id,
+            &gh_id,
+            &user_info.login,
+            &tokens.access_token,
+        )
+        .await?;
 
         // create github link
         let link = GithubLink {

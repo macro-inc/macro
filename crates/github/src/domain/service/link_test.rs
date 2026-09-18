@@ -299,8 +299,16 @@ struct StubAuth {
 
 #[derive(Default)]
 struct StubAuthState {
-    link_user_calls: u32,
+    link_user_calls: Vec<LinkUserCall>,
     delete_user_link_calls: u32,
+}
+
+/// A grant write: which FusionAuth user it landed on and the token it stored.
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct LinkUserCall {
+    fusionauth_user_id: uuid::Uuid,
+    github_user_id: String,
+    access_token: String,
 }
 
 impl StubAuth {
@@ -311,8 +319,8 @@ impl StubAuth {
         }
     }
 
-    fn link_user_calls(&self) -> u32 {
-        self.state.lock().unwrap().link_user_calls
+    fn link_user_calls(&self) -> Vec<LinkUserCall> {
+        self.state.lock().unwrap().link_user_calls.clone()
     }
 
     fn delete_user_link_calls(&self) -> u32 {
@@ -325,13 +333,17 @@ impl Auth for StubAuth {
 
     async fn link_user(
         &self,
-        _fusionauth_user_id: &uuid::Uuid,
+        fusionauth_user_id: &uuid::Uuid,
         _idp_id: &str,
-        _github_user_id: &str,
+        github_user_id: &str,
         _username: &str,
-        _access_token: &str,
+        access_token: &str,
     ) -> Result<(), Self::Err> {
-        self.state.lock().unwrap().link_user_calls += 1;
+        self.state.lock().unwrap().link_user_calls.push(LinkUserCall {
+            fusionauth_user_id: *fusionauth_user_id,
+            github_user_id: github_user_id.to_string(),
+            access_token: access_token.to_string(),
+        });
         Ok(())
     }
 
@@ -545,6 +557,23 @@ fn test_link(user_id: &MacroUserId<Lowercase<'static>>) -> GithubLink {
         github_user_id: "1".to_string(),
         created_at: Utc::now(),
         updated_at: Utc::now(),
+    }
+}
+
+/// The access token `StubGithubOauth` hands back from a code exchange, i.e. the
+/// token a re-authentication is expected to store.
+const FRESH_ACCESS_TOKEN: &str = "access-token";
+
+/// A link for `user_id` pointing at an explicit github account and grant.
+fn test_link_for_account(
+    user_id: &MacroUserId<Lowercase<'static>>,
+    github_user_id: &str,
+    fusionauth_user_id: uuid::Uuid,
+) -> GithubLink {
+    GithubLink {
+        github_user_id: github_user_id.to_string(),
+        fusionauth_user_id,
+        ..test_link(user_id)
     }
 }
 
@@ -849,13 +878,13 @@ async fn enrich_pull_requests_returns_enriched_response_when_foreign_entity_patc
 }
 
 #[tokio::test]
-async fn link_user_as_sharer_reuses_owner_grant_without_calling_auth() {
+async fn link_user_as_sharer_reuses_and_refreshes_owner_grant() {
     let user_id = test_user_id();
     let owner_fusionauth_user_id = uuid::Uuid::from_u128(0xAAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA);
     let arg_fusionauth_user_id = uuid::Uuid::from_u128(0xBBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB);
 
     let repo = StubGithubRepo::unlinked().with_account_owner(owner_link(owner_fusionauth_user_id));
-    let auth = StubAuth::new("valid-token");
+    let auth = StubAuth::new("expired-token");
     let service = service(repo.clone(), StubGithubOauth::new(false), auth.clone());
 
     let result = service
@@ -876,37 +905,59 @@ async fn link_user_as_sharer_reuses_owner_grant_without_calling_auth() {
     assert_eq!(inserted[0].fusionauth_user_id, owner_fusionauth_user_id);
     assert_ne!(inserted[0].fusionauth_user_id, arg_fusionauth_user_id);
 
-    assert_eq!(auth.link_user_calls(), 0);
+    // The sharer proved control of the same github account, so the freshly
+    // issued token replaces the shared grant's stale one instead of leaving
+    // every user resolving through it on a dead token.
+    assert_eq!(
+        auth.link_user_calls(),
+        vec![LinkUserCall {
+            fusionauth_user_id: owner_fusionauth_user_id,
+            github_user_id: "1".to_string(),
+            access_token: FRESH_ACCESS_TOKEN.to_string(),
+        }]
+    );
     assert_eq!(repo.delete_in_progress_user_link_calls(), 1);
 }
 
 #[tokio::test]
-async fn link_user_idempotent_relink_same_account_skips_insert() {
+async fn link_user_relink_same_account_refreshes_grant_without_insert() {
     let user_id = test_user_id();
-    let existing = test_link(&user_id);
+    let row_fusionauth_user_id = uuid::Uuid::from_u128(0xAAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA_AAAA);
+    let arg_fusionauth_user_id = uuid::Uuid::from_u128(0xBBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB);
+    let existing = test_link_for_account(&user_id, "1", row_fusionauth_user_id);
 
     let repo = StubGithubRepo::linked(existing.clone());
-    let auth = StubAuth::new("valid-token");
+    let auth = StubAuth::new("expired-token");
     let service = service(repo.clone(), StubGithubOauth::new(false), auth.clone());
 
     let result = service
         .link_user(
             &user_id,
-            &uuid::Uuid::from_u128(0xBBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB),
+            &arg_fusionauth_user_id,
             &uuid::Uuid::nil(),
             "https://redirect.example",
             "code",
         )
         .await;
 
-    let link = result.expect("idempotent relink should succeed");
+    let link = result.expect("relink of the same account should succeed");
     // GithubLink does not derive PartialEq; compare identifying fields.
     assert_eq!(link.id, existing.id);
     assert_eq!(link.github_user_id, existing.github_user_id);
     assert_eq!(link.fusionauth_user_id, existing.fusionauth_user_id);
 
-    assert_eq!(auth.link_user_calls(), 0);
+    // Re-running OAuth for the already-linked account is a re-authentication:
+    // the row stays put but the grant it resolves through takes the new token.
+    assert_eq!(
+        auth.link_user_calls(),
+        vec![LinkUserCall {
+            fusionauth_user_id: row_fusionauth_user_id,
+            github_user_id: "1".to_string(),
+            access_token: FRESH_ACCESS_TOKEN.to_string(),
+        }]
+    );
     assert_eq!(repo.inserted_links().len(), 0);
+    assert_eq!(repo.delete_github_link_calls(), 0);
     assert_eq!(repo.delete_in_progress_user_link_calls(), 1);
 }
 
@@ -937,8 +988,71 @@ async fn link_user_as_owner_creates_grant() {
     // OWNER (first linker) stores the argument's fusionauth grant.
     assert_eq!(inserted[0].fusionauth_user_id, arg_fusionauth_user_id);
 
-    assert_eq!(auth.link_user_calls(), 1);
+    assert_eq!(
+        auth.link_user_calls(),
+        vec![LinkUserCall {
+            fusionauth_user_id: arg_fusionauth_user_id,
+            github_user_id: "1".to_string(),
+            access_token: FRESH_ACCESS_TOKEN.to_string(),
+        }]
+    );
     assert_eq!(repo.delete_in_progress_user_link_calls(), 1);
+}
+
+#[tokio::test]
+async fn link_user_switching_accounts_retires_the_stale_link() {
+    let user_id = test_user_id();
+    let arg_fusionauth_user_id = uuid::Uuid::from_u128(0xBBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB);
+    // Linked to github account "2" while OAuth returns account "1".
+    let stale = test_link_for_account(&user_id, "2", arg_fusionauth_user_id);
+
+    let repo = StubGithubRepo::linked(stale).with_link_count(1);
+    let auth = StubAuth::new("valid-token");
+    let service = service(repo.clone(), StubGithubOauth::new(false), auth.clone());
+
+    let link = service
+        .link_user(
+            &user_id,
+            &arg_fusionauth_user_id,
+            &uuid::Uuid::nil(),
+            "https://redirect.example",
+            "code",
+        )
+        .await
+        .expect("linking a different account should succeed");
+
+    assert_eq!(link.github_user_id, "1");
+    // A Macro user carries a single github account, so the stale row and its
+    // now-unshared grant are torn down rather than left as a second row.
+    assert_eq!(repo.delete_github_link_calls(), 1);
+    assert_eq!(auth.delete_user_link_calls(), 1);
+    assert_eq!(repo.inserted_links().len(), 1);
+}
+
+#[tokio::test]
+async fn link_user_switching_accounts_keeps_a_grant_other_sharers_use() {
+    let user_id = test_user_id();
+    let arg_fusionauth_user_id = uuid::Uuid::from_u128(0xBBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB_BBBB);
+    let stale = test_link_for_account(&user_id, "2", arg_fusionauth_user_id);
+
+    let repo = StubGithubRepo::linked(stale).with_link_count(2);
+    let auth = StubAuth::new("valid-token");
+    let service = service(repo.clone(), StubGithubOauth::new(false), auth.clone());
+
+    let result = service
+        .link_user(
+            &user_id,
+            &arg_fusionauth_user_id,
+            &uuid::Uuid::nil(),
+            "https://redirect.example",
+            "code",
+        )
+        .await;
+
+    assert!(result.is_ok());
+    assert_eq!(repo.delete_github_link_calls(), 1);
+    // Other Macro users still resolve through the stale account's grant.
+    assert_eq!(auth.delete_user_link_calls(), 0);
 }
 
 #[tokio::test]

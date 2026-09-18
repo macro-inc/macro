@@ -51,6 +51,82 @@ impl GithubAuthImpl {
         conn.del::<&str, ()>(&key).await?;
         Ok(())
     }
+
+    /// Replaces the token on an existing GitHub IdP link.
+    ///
+    /// FusionAuth has no update-link API and rejects a second `link_user` for an
+    /// existing pair, so a reconnect has to unlink and recreate the link to
+    /// store the fresh token. The stale token is put back if attaching the
+    /// fresh one fails, otherwise the grant would be left detached and every
+    /// sharer of the account would lose access.
+    async fn replace_grant(
+        &self,
+        fusionauth_user_id: &uuid::Uuid,
+        idp_id: &str,
+        github_user_id: &str,
+        username: &str,
+        access_token: &str,
+    ) -> Result<(), anyhow::Error> {
+        let stale_token = self
+            .fusionauth_client
+            .get_links(&fusionauth_user_id.to_string(), Some(idp_id.to_string()))
+            .await?
+            .into_iter()
+            .find(|link| link.identity_provider_user_id == github_user_id)
+            .map(|link| link.token);
+
+        let Some(stale_token) = stale_token else {
+            // The link exists for a different GitHub account on this FusionAuth
+            // user, so there is nothing to replace for this one.
+            tracing::warn!(
+                fusionauth_user_id=%fusionauth_user_id,
+                "github idp link already exists but no link matches the github account; leaving existing grant"
+            );
+            return Ok(());
+        };
+
+        if stale_token == access_token {
+            return Ok(());
+        }
+
+        self.fusionauth_client
+            .unlink_user(&fusionauth_user_id.to_string(), idp_id, github_user_id)
+            .await?;
+
+        let link_with_token = |token: &str| LinkUserRequest {
+            identity_provider_link: IdentityProviderLink {
+                display_name: username.into(),
+                identity_provider_id: idp_id.into(),
+                identity_provider_user_id: github_user_id.into(),
+                user_id: fusionauth_user_id.to_string().into(),
+                token: token.to_string().into(),
+            },
+        };
+
+        if let Err(error) = self.fusionauth_client.link_user(link_with_token(access_token)).await {
+            tracing::error!(
+                error=?error,
+                fusionauth_user_id=%fusionauth_user_id,
+                "failed to attach refreshed github grant, rolling back to the stale token"
+            );
+
+            if let Err(rollback_error) = self
+                .fusionauth_client
+                .link_user(link_with_token(&stale_token))
+                .await
+            {
+                tracing::error!(
+                    error=?rollback_error,
+                    fusionauth_user_id=%fusionauth_user_id,
+                    "github grant rollback failed, the idp link is detached"
+                );
+            }
+
+            return Err(error.into());
+        }
+
+        Ok(())
+    }
 }
 
 impl Auth for GithubAuthImpl {
@@ -82,8 +158,17 @@ impl Auth for GithubAuthImpl {
             Err(FusionAuthClientError::IdentityProviderLinkAlreadyExists) => {
                 tracing::info!(
                     fusionauth_user_id=%fusionauth_user_id,
-                    "github idp link already exists, proceeding with existing grant"
+                    "github idp link already exists, replacing its grant with the freshly issued token"
                 );
+
+                self.replace_grant(
+                    fusionauth_user_id,
+                    idp_id,
+                    github_user_id,
+                    username,
+                    access_token,
+                )
+                .await?;
             }
             Err(e) => return Err(e.into()),
         }
