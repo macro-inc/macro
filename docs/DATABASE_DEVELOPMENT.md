@@ -110,6 +110,28 @@ The helper in
 workspace scope and the root `.sqlx` directory. Do not run preparation from an
 individual crate or try `just prepare_db --tests`.
 
+## Backfill existing rows
+
+Prefer a SQLx migration for a data backfill when one idempotent SQL pass can do
+the work (`INSERT … SELECT … ON CONFLICT DO NOTHING`, or a bounded `UPDATE`).
+
+Generate it with `sqlx migrate add` like any other MacroDB migration. Do not
+invent a timestamped filename and do not add a one-off `[[bin]]` unless a single
+statement would lock a large table for too long.
+
+The `[[bin]]` pattern
+([`crates/documents/src/bin/backfill_markdown_content_location.rs`](../crates/documents/src/bin/backfill_markdown_content_location.rs))
+is the fallback for keyset-batched, dry-run-default backfills.
+
+Use `ON CONFLICT` so the migration is safe if dual-write already inserted some
+rows (CS-02). Filter source rows that cannot satisfy the target table's
+constraints (for example, a non-UUID TEXT id or an owner that fails a CHECK).
+Keep any `::uuid` cast in the SELECT list, not in WHERE, so the filter drops
+bad ids before the cast runs.
+
+Do not add a down migration that deletes backfilled `entity` (or similar) rows,
+because that would also delete rows the live dual-write path inserted.
+
 ## Troubleshooting
 
 - **Connection or schema errors:** confirm local Postgres is running, test envs

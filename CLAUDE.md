@@ -44,8 +44,10 @@ This file is the shared entry point: `AGENTS.md` symlinks to `CLAUDE.md`. Edit
 - Run Rust tests from the repository root with `cargo test -p <package>` and
   **leave `SQLX_OFFLINE` unset**. Offline mode is for checks/builds/lints, not tests.
 - Generate migrations with `sqlx migrate add`; never invent timestamped filenames.
-  Never hand-edit `.sqlx/query-*.json`. Prepare the workspace cache from the root
-  inside Nix; see the database guide for the workflow and test-query flags.
+  Ship data backfills as SQLx migrations when a single idempotent SQL pass is
+  enough. Never hand-edit `.sqlx/query-*.json`. Prepare the workspace cache from
+  the root inside Nix; see the database guide for the workflow, test-query flags,
+  and the bin fallback for batched backfills.
 - Do not reset databases or wipe stack volumes to troubleshoot without explicit
   approval. Database and Cloud guides distinguish rebuilds from destructive resets.
 - On a local machine, frontend-only work uses `apps/web` against the dev backend;
