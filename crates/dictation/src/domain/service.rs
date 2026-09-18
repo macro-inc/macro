@@ -39,26 +39,47 @@ impl<P: TranscriptionProvider, I: RecordingInspector> DictationServiceImpl<P, I>
 impl<P: TranscriptionProvider, I: RecordingInspector> DictationService
     for DictationServiceImpl<P, I>
 {
-    #[tracing::instrument(skip_all, err, fields(user = %user))]
+    #[tracing::instrument(name = "dictation.transcribe", skip_all, err, fields(
+        user_id = %user,
+        audio.bytes = audio.len(),
+        audio.format = tracing::field::Empty,
+        audio.duration_seconds = tracing::field::Empty,
+        dictation.stage = "validation",
+        dictation.in_flight = tracing::field::Empty,
+    ))]
     async fn transcribe(
         &self,
         user: MacroUserIdStr<'static>,
         audio: Bytes,
         language: Option<LanguageHint>,
     ) -> Result<Transcript, DictationError> {
+        let span = tracing::Span::current();
         let recording = Recording::new(audio, language)?;
-        let _permit = self
-            .capacity
-            .try_acquire()
-            .map_err(|_| DictationError::Busy)?;
+        span.record("audio.format", recording.format().extension());
+        span.record("dictation.stage", "admission");
+        let _permit = self.capacity.try_acquire().map_err(|_| {
+            tracing::warn!(
+                limit = MAX_CONCURRENT_TRANSCRIPTIONS,
+                "dictation capacity exhausted"
+            );
+            DictationError::Busy
+        })?;
+        span.record(
+            "dictation.in_flight",
+            MAX_CONCURRENT_TRANSCRIPTIONS - self.capacity.available_permits(),
+        );
+        span.record("dictation.stage", "inspection");
         let duration = self.inspector.duration(recording.clone()).await?;
+        span.record("audio.duration_seconds", duration.as_secs_f64());
         if duration.is_zero() {
             return Err(DictationError::InvalidAudio);
         }
         if duration > MAX_AUDIO_DURATION {
             return Err(DictationError::TooLong);
         }
+        span.record("dictation.stage", "provider");
         let transcript = self.provider.transcribe(recording).await?;
+        span.record("dictation.stage", "complete");
         // Meter every successful provider call without charging user credits and
         // without recording audio or transcript content.
         tracing::info!(
