@@ -916,3 +916,15 @@ pub trait CalendarReminderDispatchQueue: Send + Sync + 'static {
         receipt_handle: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 }
+
+/// Recovery capability for callers that persist a creation key and its target calendar.
+pub trait CalendarCreationRecoveryService: CalendarMutationService {
+    /// Delete a keyed event even if a previous deletion already retired its local projection.
+    /// The current requester must still own a writable grant to the pinned calendar.
+    fn delete_created_event(
+        &self,
+        requester_id: &str,
+        calendar_id: Uuid,
+        creation_key: Uuid,
+    ) -> impl Future<Output = Result<(), CalendarMutationError>> + Send;
+}

@@ -9,6 +9,7 @@ import { MonthDrawer } from '@app/features/calendar/components/MonthDrawer';
 import { PeriodSelector } from '@app/features/calendar/components/PeriodSelector';
 import { useCalendarHotkeys } from '@app/features/calendar/hooks/use-calendar-hotkeys';
 import { calendarPeriodLabel } from '@app/features/calendar/utils/calendar-label';
+import { CalendarSchedulingActions } from '@app/features/scheduling/calendar-actions';
 import { useSidePanel } from '@components/app/side-panel/SidePanel';
 import { HeaderIsland } from '@components/app/split-layout/components/HeaderIsland';
 import {
@@ -191,6 +192,7 @@ export function Header() {
               </div>
             </Show>
             <CalendarSearch />
+            <CalendarSchedulingActions />
             <CalendarSettingsDropdown isNarrow={sidePanel?.isNarrow()} />
           </div>
         </HeaderIsland>

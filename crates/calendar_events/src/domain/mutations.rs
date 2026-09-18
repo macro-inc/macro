@@ -787,3 +787,50 @@ fn internal(error: rootcause::Report) -> CalendarMutationError {
 
 #[cfg(test)]
 mod test;
+
+impl<R, G, T, B, N> super::ports::CalendarCreationRecoveryService
+    for CalendarMutationServiceImpl<R, G, T, B, N>
+where
+    R: CalendarRepository,
+    G: GoogleCalendarMutationProvider,
+    T: CalendarAccessTokenProvider,
+    B: MacroEventBroker,
+    N: CalendarRefreshNotifier,
+{
+    #[tracing::instrument(skip(self, requester_id), err)]
+    async fn delete_created_event(
+        &self,
+        requester_id: &str,
+        calendar_id: Uuid,
+        creation_key: Uuid,
+    ) -> Result<(), CalendarMutationError> {
+        // Resolve current access rather than interpreting an inaccessible canonical event as gone.
+        let target = self
+            .repository
+            .get_creation_target(requester_id, None, Some(calendar_id))
+            .await
+            .map_err(internal)?
+            .ok_or(CalendarMutationError::NoWritableCalendar)?;
+        if target.is_read_only {
+            return Err(CalendarMutationError::ReadOnly);
+        }
+        let access_token = self.fetch_token(&target.token_identity).await?;
+        let provider_id = super::models::creation_provider_id(creation_key, &target.owner_id);
+        self.provider
+            .delete_event(
+                &access_token,
+                &target.google_target(OccurrenceRange::maintenance_horizon(Utc::now())),
+                &provider_id,
+            )
+            .await
+            .map_err(provider_error)?;
+        let retired = self
+            .repository
+            .remove_google_source(target.account_id, target.calendar_id, &provider_id)
+            .await
+            .map_err(|error| CalendarMutationError::PersistFailed(format!("{error:?}")))?;
+        self.announce_retirements(&target.owner_id, target.email_link_id, retired)
+            .await;
+        Ok(())
+    }
+}

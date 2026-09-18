@@ -3182,6 +3182,29 @@ dependencies = [
 ]
 
 [[package]]
+name = "calendar_scheduling"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "calendar_events",
+ "chrono",
+ "chrono-tz",
+ "macro_authorization",
+ "macro_user_id",
+ "model_user",
+ "reqwest 0.13.4",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "teams",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "call"
 version = "0.1.0"
 dependencies = [
@@ -6130,6 +6153,7 @@ dependencies = [
  "base64 0.22.1",
  "bytes",
  "calendar_events",
+ "calendar_scheduling",
  "chrono",
  "cloudfront_sign",
  "connection_gateway_client",
@@ -6202,6 +6226,7 @@ dependencies = [
  "strum_macros 0.27.2",
  "subtle",
  "system_properties",
+ "teams",
  "thiserror 2.0.18",
  "tokio",
  "tokio-retry",

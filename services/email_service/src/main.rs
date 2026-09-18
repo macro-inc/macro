@@ -41,6 +41,7 @@ use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImp
 use tokio_util::task::TaskTracker;
 
 mod api;
+mod scheduling_recovery;
 mod utils;
 
 #[tokio::main]
@@ -226,6 +227,28 @@ async fn main() -> anyhow::Result<()> {
         macro_event_broker.clone(),
         ConnectionGatewayCalendarRefresh::new(connection_gateway_client, db.clone()),
     ));
+    let scheduling_service = Arc::new(calendar_scheduling::domain::service::Service::new(
+        calendar_scheduling::outbound::postgres::PostgresRepository::new(db.clone()),
+        calendar_scheduling::outbound::macro_services::MacroCalendars::new(
+            calendar_service.clone(),
+            calendar_mutation_service.clone(),
+            match config.environment {
+                Environment::Production => Some("https://macro.com".into()),
+                Environment::Develop => Some("https://dev.macro.com".into()),
+                Environment::Local => None,
+            },
+        ),
+        calendar_scheduling::outbound::macro_services::MacroDirectory(
+            teams::outbound::team_repo::TeamRepositoryImpl::new(db.clone()),
+        ),
+    ));
+    let scheduling_stop = tokio_util::sync::CancellationToken::new();
+    let scheduling_worker = config.calendar_sync_enabled.then(|| {
+        tokio::spawn(scheduling_recovery::run(
+            scheduling_service.clone(),
+            scheduling_stop.clone(),
+        ))
+    });
     let api_result = api::setup_and_serve(ApiContext {
         db,
         internal_api_key: config.internal_api_key.clone(),
@@ -247,10 +270,17 @@ async fn main() -> anyhow::Result<()> {
         gmail_token_state,
         macro_event_broker: Arc::new(macro_event_broker),
         calendar_service,
+        scheduling_service,
         calendar_mutation_service,
     })
     .await;
 
+    scheduling_stop.cancel();
+    if let Some(worker) = scheduling_worker {
+        worker
+            .await
+            .context("scheduling recovery worker stopped unexpectedly")?;
+    }
     tracing::info!("waiting for event broker publishes to drain");
     event_broker_tracker.close();
     match tokio::time::timeout(EVENT_BROKER_DRAIN_TIMEOUT, event_broker_tracker.wait()).await {

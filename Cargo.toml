@@ -15,6 +15,7 @@ members = [
   "crates/bots",
   "crates/broadcast",
   "crates/calendar_events",
+  "crates/calendar_scheduling",
   "crates/channel_bots",
   "crates/client/cache-core",
   "crates/client/cache-turso",

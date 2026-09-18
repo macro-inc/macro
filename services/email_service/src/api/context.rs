@@ -35,6 +35,16 @@ use tokio_util::task::TaskTracker;
 
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 pub(crate) type CalendarGrantService = CalendarService<PgCalendarRepository>;
+pub(crate) type SchedulingService = calendar_scheduling::domain::service::Service<
+    calendar_scheduling::outbound::postgres::PostgresRepository,
+    calendar_scheduling::outbound::macro_services::MacroCalendars<
+        CalendarGrantService,
+        CalendarMutationSvc,
+    >,
+    calendar_scheduling::outbound::macro_services::MacroDirectory<
+        teams::outbound::team_repo::TeamRepositoryImpl,
+    >,
+>;
 pub(crate) type CalendarMutationSvc = CalendarMutationServiceImpl<
     PgCalendarRepository,
     GoogleCalendarClient<RedisCalendarRequestGate>,
@@ -82,5 +92,6 @@ pub(crate) struct ApiContext {
     pub gmail_token_state: GmailTokenState<GmailTokenProviderImpl>,
     pub macro_event_broker: Arc<EmailEventBroker>,
     pub calendar_service: Arc<CalendarGrantService>,
+    pub scheduling_service: Arc<SchedulingService>,
     pub calendar_mutation_service: Arc<CalendarMutationSvc>,
 }

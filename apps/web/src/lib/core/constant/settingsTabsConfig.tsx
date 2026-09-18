@@ -2,6 +2,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import BellIcon from '@phosphor/bell-simple.svg';
 import BugIcon from '@phosphor/bug.svg';
 import BuildingsIcon from '@phosphor/buildings.svg';
+import CalendarIcon from '@phosphor/calendar-blank.svg';
 import CpuIcon from '@phosphor/cpu.svg';
 import CreditCardIcon from '@phosphor/credit-card.svg';
 import DeviceMobileIcon from '@phosphor/device-mobile-speaker.svg';
@@ -66,6 +67,7 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
     label: 'Workspace',
     items: [
       { tab: 'Team', label: 'Team', icon: UsersThreeIcon },
+      { tab: 'Calendar', label: 'Calendar', icon: CalendarIcon },
       { tab: 'Tags', label: 'Tags', icon: TagIcon },
       { tab: 'CRM', label: 'CRM', icon: BuildingsIcon },
       {
@@ -100,6 +102,7 @@ const SETTINGS_TAB_ITEMS = SETTINGS_TAB_GROUPS.flatMap((group) => group.items);
  * existing/bookmarked URLs.
  */
 const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
+  Calendar: 'calendar',
   Account: 'account',
   'API Keys': 'api-keys',
   Notifications: 'notifications',
@@ -168,6 +171,7 @@ export const useSettingsTabAvailable = () => {
     switch (tab) {
       case 'Appearance':
       case 'Account':
+      case 'Calendar':
       case 'API Keys':
       case 'Billing':
         return true;

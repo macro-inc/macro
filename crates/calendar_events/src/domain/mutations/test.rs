@@ -118,6 +118,7 @@ fn echo_upsert(target_owner: &str) -> CalendarEventUpsert {
 
 fn draft() -> CalendarEventDraft {
     CalendarEventDraft {
+        idempotency_key: None,
         title: "New event".to_string(),
         description: None,
         location: None,
@@ -2433,4 +2434,53 @@ async fn disconnecting_an_inbox_the_requester_does_not_own_is_not_found() {
         Err(CalendarMutationError::NotFound)
     ));
     assert!(calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn keyed_deletion_replays_after_the_canonical_event_has_disappeared() {
+    use crate::domain::ports::CalendarCreationRecoveryService;
+    let target = creation_target(false);
+    let calendar_id = target.calendar_id;
+    let key = Uuid::now_v7();
+    let expected = crate::domain::models::creation_provider_id(key, &target.owner_id);
+    let repo = FakeRepo {
+        creation_target: Some(target),
+        mutation_target: None,
+        ..Default::default()
+    };
+    let removed = repo.removed_sources.clone();
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let calls = provider.calls.clone();
+    let svc = service(repo, provider, FakeTokens::ok());
+    svc.delete_created_event("macro|user", calendar_id, key)
+        .await
+        .unwrap();
+    svc.delete_created_event("macro|user", calendar_id, key)
+        .await
+        .unwrap();
+    assert_eq!(
+        calls.lock().unwrap().as_slice(),
+        [format!("delete:{expected}"), format!("delete:{expected}")]
+    );
+    assert_eq!(removed.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn keyed_deletion_requires_current_writable_calendar_access() {
+    use crate::domain::ports::CalendarCreationRecoveryService;
+    for target in [None, Some(creation_target(true))] {
+        let repo = FakeRepo {
+            creation_target: target,
+            ..Default::default()
+        };
+        let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+        let calls = provider.calls.clone();
+        assert!(
+            service(repo, provider, FakeTokens::ok())
+                .delete_created_event("macro|user", Uuid::now_v7(), Uuid::now_v7())
+                .await
+                .is_err()
+        );
+        assert!(calls.lock().unwrap().is_empty());
+    }
 }
