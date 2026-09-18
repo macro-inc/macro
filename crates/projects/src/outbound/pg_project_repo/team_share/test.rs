@@ -101,6 +101,40 @@ async fn stored_team_share(pool: &Pool<Postgres>, project_id: &str) -> StoredTea
     }
 }
 
+async fn inherited_team_rows(
+    pool: &Pool<Postgres>,
+    project_id: &str,
+) -> Vec<(Uuid, String, AccessLevel)> {
+    sqlx::query!(
+        r#"
+        SELECT entity_id, entity_type, access_level AS "access_level: AccessLevel"
+        FROM entity_access
+        WHERE granted_from_project_id = $1 AND source_type = 'team'
+        ORDER BY entity_id
+        "#,
+        project_id,
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.entity_id, row.entity_type, row.access_level))
+    .collect()
+}
+
+async fn insert_folder_document(pool: &Pool<Postgres>, project_id: &str, document_id: Uuid) {
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner, "projectId")
+        VALUES ($1, 'Nested', $2, $3)"#,
+        document_id.to_string(),
+        OWNER,
+        project_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
 async fn direct_team_rows(pool: &Pool<Postgres>, project_id: &str) -> Vec<AccessLevel> {
     sqlx::query_scalar!(
         r#"
@@ -202,6 +236,51 @@ async fn edit_applies_team_share_command_and_inserts_direct_team_entity_access(p
         facts.current.map(|grant| (grant.team_id, grant.level)),
         Some((TEAM_ID, TeamShareLevel::View))
     );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../fixtures", scripts("users", "team"))
+)]
+async fn edit_team_share_copies_and_clears_nested_document_grants(pool: PgPool) {
+    let repo = PgProjectRepo::new(pool.clone());
+    let project_id = create_project(&repo, "Folder").await;
+    let document_id = Uuid::from_u128(0xc3333333_3333_3333_3333_333333333333);
+    insert_folder_document(&pool, &project_id, document_id).await;
+
+    edit_team_share(&repo, &project_id, Some(AccessLevel::Edit))
+        .await
+        .unwrap();
+    assert_eq!(
+        inherited_team_rows(&pool, &project_id).await,
+        [(document_id, "document".to_string(), AccessLevel::Edit)]
+    );
+
+    edit_team_share(&repo, &project_id, Some(AccessLevel::View))
+        .await
+        .unwrap();
+    assert_eq!(
+        inherited_team_rows(&pool, &project_id).await,
+        [(document_id, "document".to_string(), AccessLevel::View)]
+    );
+
+    let later_id = Uuid::from_u128(0xc4444444_4444_4444_4444_444444444444);
+    insert_folder_document(&pool, &project_id, later_id).await;
+    sqlx::query!(
+        r#"INSERT INTO entity_access
+            (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+        VALUES ($1, 'document', $2, 'team', 'view', $3)"#,
+        later_id,
+        TEAM_ID.to_string(),
+        project_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    edit_team_share(&repo, &project_id, None).await.unwrap();
+    assert!(inherited_team_rows(&pool, &project_id).await.is_empty());
+    assert!(direct_team_rows(&pool, &project_id).await.is_empty());
 }
 
 #[sqlx::test(
