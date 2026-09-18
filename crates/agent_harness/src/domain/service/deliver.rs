@@ -32,7 +32,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
@@ -123,9 +123,10 @@ where
 
     /// Compose a prompt in place. Compact and other actions are left as-is.
     ///
-    /// Channel context is loaded when the prompt named an origin; a lookup
-    /// failure still composes, with empty history, so a transient context
-    /// outage cannot eat the prompt.
+    /// Message context is loaded when the prompt named an origin. The actor's
+    /// current access to that origin gates composition; a failed history read
+    /// still composes, with empty history, so a transient context outage
+    /// cannot eat the prompt.
     pub(super) async fn compose_action(
         &self,
         action: &mut AgentAction,
@@ -137,49 +138,51 @@ where
         };
         let raw_prompt = prompt.prompt.clone();
         let prior_messages = if let Some(origin) = announce {
-            Some(
-                self.load_prompt_context(origin.channel_id, origin.message_id, actor)
-                    .await,
-            )
+            Some(self.load_prompt_context(origin, actor).await?)
         } else {
             None
         };
         prompt.prompt = self
             .prompt_composer
-            .compose(&raw_prompt, prior_messages.as_deref())
+            .compose(
+                &raw_prompt,
+                announce.map(|origin| &origin.parent),
+                prior_messages.as_deref(),
+            )
             .await?;
         prompt.set_name_source(raw_prompt);
         Ok(())
     }
 
+    /// Recheck the actor's access to the origin, then read the history before
+    /// it. Authorization is not optional: a prompt that names an origin was
+    /// posted by a user, and one who may no longer write there sends nothing.
     pub(super) async fn load_prompt_context(
         &self,
-        channel_id: macro_uuid::Uuid,
-        message_id: macro_uuid::Uuid,
+        origin: &AnnounceOrigin,
         actor: Option<&MacroUserIdStr<'static>>,
-    ) -> Vec<crate::domain::model::PriorChannelMessage> {
-        async {
-            if let Some(actor) = actor {
-                self.prompt_context
-                    .authorize_member(actor, channel_id)
-                    .await?;
-            }
-            self.prompt_context
-                .preceding_messages(channel_id, message_id)
-                .await
-        }
-        .await
-        .inspect_err(|error| {
-            // Trigger events are admitted at-most-once. Context is useful,
-            // but a transient lookup failure must not discard the prompt.
-            tracing::warn!(
-                error = ?error,
-                %channel_id,
-                %message_id,
-                "sending agent prompt without channel history"
-            );
-        })
-        .unwrap_or_default()
+    ) -> Result<Vec<crate::domain::model::PriorMessage>> {
+        let actor = actor.ok_or_else(|| {
+            HarnessError::PromptContext(rootcause::report!(
+                "message prompts require an acting user"
+            ))
+        })?;
+        self.prompt_context.authorize_origin(actor, origin).await?;
+        Ok(self
+            .prompt_context
+            .preceding_messages(actor, origin)
+            .await
+            .inspect_err(|error| {
+                // Trigger events are admitted at-most-once. Context is useful,
+                // but a transient lookup failure must not discard the prompt.
+                tracing::warn!(
+                    error = ?error,
+                    parent = ?origin.parent,
+                    message_id = %origin.message_id,
+                    "sending agent prompt without conversation history"
+                );
+            })
+            .unwrap_or_default())
     }
 
     /// Who, if anyone, should be told that this landed.
@@ -208,7 +211,7 @@ where
         Ok(Some(SessionAnnouncement {
             session_id,
             bot_id: session.bot_id,
-            origin_channel_id: origin.channel_id,
+            origin_parent: origin.parent,
             origin_thread_id: origin.thread_id,
             origin_message_id: origin.message_id,
             prompted_message_id,

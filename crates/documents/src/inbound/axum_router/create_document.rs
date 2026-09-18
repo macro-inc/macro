@@ -13,7 +13,9 @@ use model::document::{FileType, FileTypeExt};
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
 use super::DocumentRouterState;
-use crate::domain::models::{CreateDocumentRepoArgs, DocumentError, ImportEmailAttachmentRepoArgs};
+use crate::domain::models::{
+    CreateDocumentRepoArgs, DocumentError, ImportEmailAttachmentRepoArgs, InitialLinkShare,
+};
 use crate::domain::ports::DocumentService;
 use crate::domain::response::CreateDocumentResponse;
 
@@ -103,6 +105,7 @@ pub async fn create_document_handler<
             .then_some(document_sub_type::DocumentSubType::Task),
         skip_history: req.skip_history,
         attribution: None,
+        initial_link_share: InitialLinkShare::EntityDefault,
     };
 
     let user_id = user.authorization.user.macro_user_id.clone();

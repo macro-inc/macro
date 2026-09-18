@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT c.id AS channel_id, c.name AS channel_name, root.id AS root_id, root.created_at\n            FROM comms_entity_mentions mention\n            JOIN comms_messages source ON source.id::text = mention.source_entity_id\n            JOIN comms_messages root ON root.id = COALESCE(source.thread_id, source.id)\n            JOIN comms_message_threads state ON state.root_id = root.id\n            JOIN comms_channels c ON c.id::text = root.parent_entity_id\n            WHERE mention.source_entity_type = 'message'\n                AND mention.entity_type IN ('doc', 'document') AND mention.entity_id = $1\n                AND source.parent_entity_type = 'channel' AND root.parent_entity_type = 'channel'\n                AND source.deleted_at IS NULL AND state.deleted_at IS NULL\n                AND ($2::timestamptz IS NULL OR (root.created_at, root.id) > ($2, $3::uuid))\n            ORDER BY root.created_at, root.id LIMIT $4\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "root_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Timestamptz",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "936f41676352d77f1a4ff842e1d60b4b6f2676d5adfad27061968845e7e5e99a"
+}

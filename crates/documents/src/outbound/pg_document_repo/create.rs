@@ -399,6 +399,7 @@ pub async fn insert_new_document(
         sub_type: requested_sub_type,
         skip_history,
         attribution: _,
+        initial_link_share: _,
     } = args;
 
     let now = chrono::Utc::now();

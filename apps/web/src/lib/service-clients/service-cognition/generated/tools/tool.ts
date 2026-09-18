@@ -16,6 +16,10 @@ type ToolParserMap = {
     call: types.BulkSetEntityPropertyOptions;
     response: types.BulkSetEntityPropertyOptionsResponse;
   };
+  CalculateSpreadsheet: {
+    call: types.CalculateSpreadsheet;
+    response: types.SpreadsheetResponse;
+  };
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
@@ -68,6 +72,10 @@ type ToolParserMap = {
   EditDocument: {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
+  };
+  EditSpreadsheet: {
+    call: types.EditSpreadsheet;
+    response: types.SpreadsheetResponse;
   };
   EditTag: { call: types.EditTag; response: types.EditTagResponse };
   GetBotWebhooks: {
@@ -174,6 +182,10 @@ type ToolParserMap = {
     response: types.ReadMetadataResponse;
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
+  ReadSpreadsheet: {
+    call: types.ReadSpreadsheet;
+    response: types.SpreadsheetResponse;
+  };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   RenameChannel: {
     call: types.RenameChannel;
@@ -235,6 +247,10 @@ const toolParserMap = {
     call: schemas.BulkSetEntityPropertyOptions,
     response: schemas.BulkSetEntityPropertyOptionsResponse,
   },
+  CalculateSpreadsheet: {
+    call: schemas.CalculateSpreadsheet,
+    response: schemas.SpreadsheetResponse,
+  },
   ConfigureBot: {
     call: schemas.ConfigureBot,
     response: schemas.ConfigureBotResponse,
@@ -290,6 +306,10 @@ const toolParserMap = {
   EditDocument: {
     call: schemas.EditDocument,
     response: schemas.EditDocumentResponse,
+  },
+  EditSpreadsheet: {
+    call: schemas.EditSpreadsheet,
+    response: schemas.SpreadsheetResponse,
   },
   EditTag: { call: schemas.EditTag, response: schemas.EditTagResponse },
   GetBotWebhooks: {
@@ -417,6 +437,10 @@ const toolParserMap = {
     call: schemas.ReadProject,
     response: schemas.ReadProjectResponse,
   },
+  ReadSpreadsheet: {
+    call: schemas.ReadSpreadsheet,
+    response: schemas.SpreadsheetResponse,
+  },
   ReadThread: { call: schemas.ReadThread, response: schemas.ReadResponse },
   RenameChannel: {
     call: schemas.RenameChannel,
@@ -492,6 +516,10 @@ type ToolDataMap = {
     call: types.BulkSetEntityPropertyOptions;
     response: types.BulkSetEntityPropertyOptionsResponse;
   };
+  CalculateSpreadsheet: {
+    call: types.CalculateSpreadsheet;
+    response: types.SpreadsheetResponse;
+  };
   ConfigureBot: {
     call: types.ConfigureBot;
     response: types.ConfigureBotResponse;
@@ -544,6 +572,10 @@ type ToolDataMap = {
   EditDocument: {
     call: types.EditDocument;
     response: types.EditDocumentResponse;
+  };
+  EditSpreadsheet: {
+    call: types.EditSpreadsheet;
+    response: types.SpreadsheetResponse;
   };
   EditTag: { call: types.EditTag; response: types.EditTagResponse };
   GetBotWebhooks: {
@@ -650,6 +682,10 @@ type ToolDataMap = {
     response: types.ReadMetadataResponse;
   };
   ReadProject: { call: types.ReadProject; response: types.ReadProjectResponse };
+  ReadSpreadsheet: {
+    call: types.ReadSpreadsheet;
+    response: types.SpreadsheetResponse;
+  };
   ReadThread: { call: types.ReadThread; response: types.ReadResponse };
   RenameChannel: {
     call: types.RenameChannel;

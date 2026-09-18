@@ -12,7 +12,10 @@ import { ViewSidebar } from './ViewSidebar';
 
 const measurement = vi.hoisted(() => ({ width: (): number => 1200 }));
 
+vi.mock('@core/hotkey/hotkeys', () => ({ registerHotkey: vi.fn() }));
+
 vi.mock('@solid-primitives/resize-observer', () => ({
+  createResizeObserver: () => {},
   createElementSize: () => ({
     get width() {
       return measurement.width();

@@ -239,6 +239,7 @@ async fn seed(args: &Args) -> Result<(), SeedError> {
     let session = AgentSessionRepo::create(
         &repo,
         CreateAgentSessionParams {
+            repo_branch: None,
             id: session_id,
             owner_id: owner,
             bot_id: BotId::new_from_uuid(args.bot_id),

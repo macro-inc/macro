@@ -473,6 +473,7 @@ impl CursorAgents for FakeCursor {
             return Err(rootcause::report!(
                 crate::domain::error::RepositoryUnavailable {
                     repo: repo.clone(),
+                    reason: crate::domain::error::RepositoryRejection::Inaccessible,
                     detail: r#"{"error":{"code":"repository_access","message":"Repository not accessible"}}"#
                         .into(),
                 }

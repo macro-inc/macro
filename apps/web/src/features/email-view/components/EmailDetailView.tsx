@@ -13,7 +13,6 @@ import {
   useCanAutofocusSplitContent,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { toEntityLoadError } from '@core/component/EntityLoadGate';
 import {
@@ -177,7 +176,6 @@ export function EmailDetailView(props: { thread: EmailThreadTarget }) {
       <SidePanel.Root defaultOpen={false}>
         <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
           <ViewShell.TopBar class="touch:flex">
-            <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
             <ViewBreadcrumbs.Outlet
               class="flex-1"
               aria-label="Email location"

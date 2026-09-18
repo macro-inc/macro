@@ -7,7 +7,9 @@
 //! Ordinary reads may use a short transaction and [`load_facts`] before domain policy.
 
 pub use entity_access_db_utils::team_share::acquire_guard;
-use entity_access_db_utils::team_share::{delete_direct, direct_level, upsert_direct};
+use entity_access_db_utils::team_share::{
+    delete_direct, direct_level, replace_project_contributions, upsert_direct,
+};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use macro_uuid::Uuid;
 use model_entity::{Entity, EntityType};
@@ -425,6 +427,16 @@ async fn write_state(
             entity.entity_type,
             target.team_id,
             target.level.into(),
+        )
+        .await
+        .context(TeamShareError::Infrastructure)?;
+    }
+    if entity.entity_type == EntityType::Project {
+        replace_project_contributions(
+            transaction,
+            &uuid,
+            state.facts.current.map(|grant| grant.team_id),
+            target.map(|grant| (grant.team_id, grant.level.into())),
         )
         .await
         .context(TeamShareError::Infrastructure)?;

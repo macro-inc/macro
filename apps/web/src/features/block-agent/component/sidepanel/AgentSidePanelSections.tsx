@@ -16,6 +16,7 @@ import { openExternalUrl } from '@core/util/url';
 import GitBranch from '@phosphor/git-branch.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { useAgentSession } from '../../context/AgentSessionContext';
+import { sessionStatus } from '../../state/session-status';
 import {
   activityCounts,
   changedFiles,
@@ -31,7 +32,7 @@ import { AgentPullRequestChip } from '../AgentPullRequestChip';
 import { harnessTitle } from '../AgentSplitHeader';
 
 export function AgentSidePanelSections() {
-  const { session, bot, metadata, messages, status } = useAgentSession();
+  const { session, bot, metadata, messages } = useAgentSession();
 
   const plan = createMemo(() => latestPlan(messages()));
   const files = createMemo(() => changedFiles(messages()));
@@ -46,7 +47,7 @@ export function AgentSidePanelSections() {
       <SidePanel.Section id="details" title="Details" defaultOpen order={10}>
         <SidePanel.Grid>
           <SidePanel.Row label="Status">
-            <SessionStatusPill status={status()} />
+            <SessionStatusPill status={sessionStatus(metadata())} />
           </SidePanel.Row>
           <Show when={bot()?.name}>
             {(name) => (

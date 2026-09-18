@@ -1,5 +1,6 @@
 use super::LexicalClient;
 use crate::types::{CognitionResponseData, CognitionV2ResponseData};
+use messages::domain::models::MessageParent;
 
 use crate::types::MarkdownParseResult;
 use agent_fold::domain::model::MessageId;
@@ -55,12 +56,12 @@ struct ExtractReplyRequest<'a> {
 
 /// The leading `ReplyTargetNode` extracted from markdown by the lexical
 /// service `/extract-reply` endpoint, when the markdown is an explicit reply.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtractedExplicitReply {
-    /// Channel containing the targeted message.
-    pub channel_id: String,
-    /// Targeted channel message.
+    /// Entity containing the targeted message.
+    pub parent: MessageParent,
+    /// Targeted message.
     pub target_message_id: String,
     /// Thread containing the targeted message.
     pub target_thread_id: String,
@@ -68,6 +69,40 @@ pub struct ExtractedExplicitReply {
     pub display_text: String,
     /// Sender of the targeted message — who the author replied to.
     pub sender_id: String,
+}
+
+/// Wire shape of an extracted reply target. Reply targets serialized before
+/// message parents existed name only a `channelId`; both shapes decode.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ExtractedExplicitReplyWire {
+    #[serde(default)]
+    parent: Option<MessageParent>,
+    #[serde(default)]
+    channel_id: Option<String>,
+    target_message_id: String,
+    target_thread_id: String,
+    display_text: String,
+    sender_id: String,
+}
+
+impl<'de> serde::Deserialize<'de> for ExtractedExplicitReply {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire = ExtractedExplicitReplyWire::deserialize(deserializer)?;
+        let parent = match (wire.parent, wire.channel_id) {
+            (Some(parent), _) => parent,
+            (None, Some(channel_id)) => MessageParent::parse("channel", &channel_id)
+                .map_err(|_| serde::de::Error::custom("reply target channelId is not a uuid"))?,
+            (None, None) => return Err(serde::de::Error::missing_field("parent")),
+        };
+        Ok(Self {
+            parent,
+            target_message_id: wire.target_message_id,
+            target_thread_id: wire.target_thread_id,
+            display_text: wire.display_text,
+            sender_id: wire.sender_id,
+        })
+    }
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -109,14 +144,18 @@ pub struct AgentAnnouncementChip {
     pub status: String,
 }
 
-/// The channel message targeted by an agent-session announcement, in the
-/// shape the lexical service's `ReplyTargetNode` validates.
+/// The message targeted by an agent-session announcement, in the shape the
+/// lexical service's `ReplyTargetNode` validates.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentAnnouncementReplyTarget {
-    /// Channel containing the targeted message.
-    pub channel_id: String,
-    /// Targeted channel message.
+    /// Entity containing the targeted message.
+    pub parent: MessageParent,
+    /// Channel containing the targeted message, for channel parents. Sent
+    /// beside `parent` for the reply-target shape that predates parents.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<String>,
+    /// Targeted message.
     pub target_message_id: String,
     /// Thread containing the targeted message.
     pub target_thread_id: String,
@@ -151,6 +190,8 @@ pub struct AgentContextMessage<'a> {
 #[serde(rename_all = "camelCase")]
 struct AgentContextRequest<'a> {
     prompt_markdown: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    parent: Option<&'a MessageParent>,
     #[serde(skip_serializing_if = "Option::is_none")]
     messages: Option<&'a [AgentContextMessage<'a>]>,
 }
@@ -393,6 +434,7 @@ impl LexicalClient {
     pub async fn compose_agent_context(
         &self,
         prompt_markdown: &str,
+        parent: Option<&MessageParent>,
         messages: Option<&[AgentContextMessage<'_>]>,
     ) -> Result<String> {
         let url = format!("{}/agent-context", self.url);
@@ -401,6 +443,7 @@ impl LexicalClient {
                 .post(&url)
                 .json(&AgentContextRequest {
                     prompt_markdown,
+                    parent,
                     messages,
                 })
                 .send()
@@ -541,7 +584,7 @@ mod tests {
     fn extract_reply_response_deserializes_a_target() {
         let json = r#"{
             "reply": {
-                "channelId": "channel-1",
+                "parent": {"type": "document", "id": "doc-1"},
                 "targetMessageId": "message-1",
                 "targetThreadId": "thread-1",
                 "displayText": "please fix this",
@@ -551,9 +594,57 @@ mod tests {
 
         let response: ExtractReplyResponse = serde_json::from_str(json).unwrap();
         let reply = response.reply.expect("reply");
-        assert_eq!(reply.channel_id, "channel-1");
+        assert_eq!(
+            reply.parent,
+            MessageParent::parse("document", "doc-1").unwrap()
+        );
         assert_eq!(reply.target_message_id, "message-1");
         assert_eq!(reply.sender_id, "bot|00000000-0000-0000-0000-00000000b07a");
+    }
+
+    #[test]
+    fn extract_reply_response_reads_a_channel_only_target_as_a_channel_parent() {
+        let json = r#"{
+            "reply": {
+                "channelId": "00000000-0000-0000-0000-000000000001",
+                "targetMessageId": "message-1",
+                "targetThreadId": "thread-1",
+                "displayText": "please fix this",
+                "senderId": "macro|user@example.com"
+            }
+        }"#;
+
+        let response: ExtractReplyResponse = serde_json::from_str(json).unwrap();
+        let reply = response.reply.expect("reply");
+        assert_eq!(
+            reply.parent,
+            MessageParent::parse("channel", "00000000-0000-0000-0000-000000000001").unwrap()
+        );
+    }
+
+    #[test]
+    fn announcement_reply_target_names_the_channel_beside_its_parent() {
+        let target = AgentAnnouncementReplyTarget {
+            parent: MessageParent::parse("channel", "00000000-0000-0000-0000-000000000001")
+                .unwrap(),
+            channel_id: Some("00000000-0000-0000-0000-000000000001".to_owned()),
+            target_message_id: "message-1".to_owned(),
+            target_thread_id: "thread-1".to_owned(),
+            display_text: "please fix this".to_owned(),
+            sender_id: "macro|user@example.com".to_owned(),
+        };
+        let value = serde_json::to_value(&target).unwrap();
+        assert_eq!(value["parent"]["type"], "channel");
+        assert_eq!(value["channelId"], "00000000-0000-0000-0000-000000000001");
+
+        let document = AgentAnnouncementReplyTarget {
+            parent: MessageParent::parse("document", "doc-1").unwrap(),
+            channel_id: None,
+            ..target
+        };
+        let value = serde_json::to_value(&document).unwrap();
+        assert!(value.get("channelId").is_none());
+        assert_eq!(value["parent"]["id"], "doc-1");
     }
 
     #[test]

@@ -1,26 +1,30 @@
-//! Domain service for built-in channel bots.
+//! Domain service for the built-in Macro AI agent on channels and documents.
 
 use std::collections::HashSet;
 use std::fmt::Write as _;
 use std::sync::Arc;
 
-use channels::domain::models::{
-    ParticipantRole, PatchMessageNotificationPolicy, PatchMessageRequest,
-    PostMessageNotificationPolicy, PostMessageRequest, Sender,
+use entity_access::domain::models::EntityAccessReceipt;
+use messages::domain::{
+    api::MessageServiceApi,
+    models::{
+        MessageAttribution, MessageParent, PatchMessageNotificationPolicy, PostMessage,
+        PostMessageNotificationPolicy,
+    },
+    ports::{MessageError, MessagePatch},
+    service::MessageView,
 };
-use channels::domain::ports::{ChannelMutationErr, ChannelService};
 use uuid::Uuid;
 
 use super::models::{BotEvent, BotTrigger};
-use super::ports::{AgentResponder, UserTimeZones};
+use super::ports::{AgentResponder, ConversationAccess, UserTimeZones};
 use super::sender_label;
 
-/// How many channel messages to include around the trigger.
+/// How many channel messages preceding the trigger to include as local context.
 ///
 /// Together with the trigger message itself, this yields a bounded nine-message
 /// local context window.
-const CONTEXT_MESSAGES_BEFORE: i64 = 4;
-const CONTEXT_MESSAGES_AFTER: i64 = 4;
+const CONTEXT_MESSAGES_BEFORE: u16 = 8;
 
 /// Inline marker appended to the sender label of the triggering message so the
 /// model can tell it apart from surrounding context.
@@ -127,123 +131,136 @@ fn current_time_block(now: chrono::DateTime<chrono::Utc>, time_zone: Option<&str
 /// In-process handler for the Macro AI system bot.
 ///
 /// Posts an immediate "thinking" reply in a thread, runs the agent loop, then
-/// edits that same message with the final answer.
-pub struct MacroAiHandler<C, R, Z> {
-    channels: Arc<C>,
+/// edits that same message with the final answer. Reads and writes go through
+/// the shared message service under the invoking user's current capability,
+/// so channels and document discussions behave the same way.
+pub struct MacroAiHandler<R, Z> {
+    messages: Arc<dyn MessageServiceApi>,
+    access: Arc<dyn ConversationAccess>,
     responder: Arc<R>,
     time_zones: Arc<Z>,
 }
 
-impl<C, R, Z> MacroAiHandler<C, R, Z>
+impl<R, Z> MacroAiHandler<R, Z>
 where
-    C: ChannelService,
     R: AgentResponder,
     Z: UserTimeZones,
 {
-    /// Create a Macro AI handler.
-    pub fn new(channels: Arc<C>, responder: Arc<R>, time_zones: Arc<Z>) -> Self {
+    /// Create a Macro AI handler over the shared message service.
+    pub fn new(
+        messages: Arc<dyn MessageServiceApi>,
+        access: Arc<dyn ConversationAccess>,
+        responder: Arc<R>,
+        time_zones: Arc<Z>,
+    ) -> Self {
         Self {
-            channels,
+            messages,
+            access,
             responder,
             time_zones,
         }
     }
 
-    /// Load the thread the mention belongs to as prompt lines: the top-level
-    /// parent followed by all replies in order, with the triggering message
-    /// marked inline. Also returns the ids of every message known to belong to
-    /// the thread so they can be excluded from the channel background.
+    /// Load the thread the mention belongs to as prompt lines: the root
+    /// followed by all replies in order, with the triggering message marked
+    /// inline. Also returns the ids of every message known to belong to the
+    /// thread so they can be excluded from the channel background.
     async fn thread_lines(
         &self,
         event: &BotEvent,
-        parent_id: Uuid,
-    ) -> (Vec<PromptLine>, HashSet<Uuid>) {
-        let mut thread_ids = HashSet::from([parent_id, event.message.id]);
+        access: EntityAccessReceipt<MessageView>,
+        root_id: Uuid,
+    ) -> anyhow::Result<(Vec<PromptLine>, HashSet<Uuid>)> {
+        let thread = self.messages.get_thread(access, root_id).await?;
+        let mut thread_ids = HashSet::new();
         let mut lines = Vec::new();
-
-        let parent = self
-            .channels
-            .get_message_context(event.channel_id, parent_id, 0, 0)
-            .await
-            .inspect_err(|err| tracing::warn!(error=?err, "failed to load thread parent"))
-            .unwrap_or_default()
-            .into_iter()
-            .find(|message| message.id == parent_id);
-        if let Some(parent) = parent
-            && parent.deleted_at.is_none()
-            && let Some(content) = trimmed_content(&parent.content)
-        {
-            lines.push(PromptLine {
-                sender: sender_label(&parent.sender_id),
-                content,
-                is_trigger: false,
-            });
-        }
-
-        let replies = self
-            .channels
-            .get_thread_replies(event.channel_id, parent_id)
-            .await
-            .inspect_err(|err| tracing::warn!(error=?err, "failed to load thread replies"))
-            .unwrap_or_default();
-        for reply in replies {
-            thread_ids.insert(reply.id);
-            let Some(content) = trimmed_content(&reply.content) else {
+        for message in std::iter::once(thread.root).chain(thread.replies) {
+            thread_ids.insert(message.id);
+            if message.deleted_at.is_some() {
+                continue;
+            }
+            let Some(content) = trimmed_content(&message.content) else {
                 continue;
             };
             lines.push(PromptLine {
-                sender: sender_label(&reply.sender_id),
+                sender: sender_label(message.sender_id.as_ref()),
                 content,
-                is_trigger: reply.id == event.message.id,
+                is_trigger: message.id == event.message.message_id,
             });
         }
         if !lines.iter().any(|line| line.is_trigger) {
             lines.push(trigger_line(event));
         }
-        (lines, thread_ids)
+        Ok((lines, thread_ids))
     }
 
     /// Build the prompt for a mention.
     ///
-    /// When the mention is a thread reply, the thread (parent + replies) is the
-    /// primary context and nearby channel messages are demoted to a clearly
-    /// labeled background block. For a top-level mention, the chronological
-    /// channel slice is the primary context. In both cases the triggering
-    /// message is marked inline rather than repeated at the end.
-    async fn build_prompt(&self, event: &BotEvent) -> String {
+    /// The invoking user's current access to the parent gates every read, and
+    /// the live trigger must still sit in the thread the event claims. When
+    /// the mention is a thread reply or a document discussion, the thread is
+    /// the primary context and nearby channel messages are demoted to a
+    /// clearly labeled background block. For a top-level channel mention, the
+    /// chronological channel slice is the primary context. In both cases the
+    /// triggering message is marked inline rather than repeated at the end.
+    async fn build_prompt(&self, event: &BotEvent) -> anyhow::Result<String> {
         let mentioner = sender_label(event.requesting_user.as_ref());
-        let trigger_id = event.message.id;
+        let trigger_id = event.message.message_id;
+        let parent = &event.message.parent;
+        let access = self
+            .access
+            .user_write(&event.requesting_user, parent)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
+        let view = access.try_into_requirement::<MessageView>()?;
+        let current = self.messages.get(view.clone(), trigger_id).await?;
+        if current.deleted_at.is_some()
+            || current.root_id() != event.reply_thread_id
+            || current.sender_id.as_user() != Some(&event.requesting_user)
+        {
+            anyhow::bail!("trigger no longer belongs to this conversation");
+        }
 
         let (nearby, time_zone) = futures::join!(
             async {
-                self.channels
-                    .get_message_context(
-                        event.channel_id,
-                        trigger_id,
-                        CONTEXT_MESSAGES_BEFORE,
-                        CONTEXT_MESSAGES_AFTER,
-                    )
-                    .await
-                    .inspect_err(
-                        |err| tracing::warn!(error=?err, "failed to load local channel context"),
-                    )
-                    .unwrap_or_default()
+                if matches!(parent, MessageParent::Channel(_)) {
+                    self.messages
+                        .preceding(view.clone(), trigger_id, CONTEXT_MESSAGES_BEFORE)
+                        .await
+                        .inspect_err(|err| {
+                            tracing::warn!(error=?err, "failed to load local channel context")
+                        })
+                        .unwrap_or_default()
+                } else {
+                    Vec::new()
+                }
             },
             self.time_zones
                 .primary_time_zone(event.requesting_user.as_ref()),
         );
 
-        let mut prompt = String::new();
-        if let Some(parent_id) = event.message.thread_id {
+        let mut prompt = format!("Conversation parent: {}\n", serde_json::to_string(parent)?);
+        // A document discussion is a thread from its root; a top-level channel
+        // message is the channel's own timeline.
+        let thread_root = event
+            .message
+            .thread_id
+            .or_else(|| parent.is_discussion().then_some(trigger_id));
+        if let Some(root_id) = thread_root {
+            let place = if parent.is_discussion() {
+                "a document discussion"
+            } else {
+                "a channel thread"
+            };
             let (intro, thread_instruction, marker) = match event.trigger {
                 BotTrigger::Mention => (
-                    format!("{mentioner} mentioned you (@macro) in a channel thread."),
+                    format!("{mentioner} mentioned you (@macro) in {place}."),
                     MENTION_THREAD_INSTRUCTION,
                     MENTION_TRIGGER_MARKER,
                 ),
                 BotTrigger::Inferred => (
                     format!(
-                        "{mentioner} replied in a channel thread you are part of. They did not \
+                        "{mentioner} replied in {place} you are part of. They did not \
                          @-mention you, but their message appears to be addressed to you."
                     ),
                     INFERRED_THREAD_INSTRUCTION,
@@ -251,7 +268,7 @@ where
                 ),
             };
             let _ = writeln!(prompt, "{intro}");
-            let (thread, thread_ids) = self.thread_lines(event, parent_id).await;
+            let (thread, thread_ids) = self.thread_lines(event, view, root_id).await?;
             append_block(&mut prompt, "thread", thread_instruction, marker, &thread);
 
             let background: Vec<PromptLine> = nearby
@@ -259,11 +276,11 @@ where
                 .filter(|message| {
                     message.deleted_at.is_none()
                         && !thread_ids.contains(&message.id)
-                        && message.thread_id != Some(parent_id)
+                        && message.thread_id != Some(root_id)
                 })
                 .filter_map(|message| {
                     Some(PromptLine {
-                        sender: sender_label(&message.sender_id),
+                        sender: sender_label(message.sender_id.as_ref()),
                         content: trimmed_content(&message.content)?,
                         is_trigger: false,
                     })
@@ -283,7 +300,7 @@ where
                 .filter(|message| message.deleted_at.is_none())
                 .filter_map(|message| {
                     Some(PromptLine {
-                        sender: sender_label(&message.sender_id),
+                        sender: sender_label(message.sender_id.as_ref()),
                         content: trimmed_content(&message.content)?,
                         is_trigger: message.id == trigger_id,
                     })
@@ -307,36 +324,43 @@ where
         ));
 
         let _ = write!(prompt, "\nReply to {mentioner}.");
-        prompt
+        Ok(prompt)
     }
 
     /// React to a Macro AI mention.
-    #[tracing::instrument(skip(self, event), fields(channel_id = %event.channel_id), err)]
+    #[tracing::instrument(skip(self, event), fields(parent = ?event.message.parent), err)]
     pub(crate) async fn handle(&self, event: &BotEvent) -> anyhow::Result<()> {
-        let actor = Sender::new_from_bot(bot_id::MACRO_AI_BOT_ID);
+        let parent = &event.message.parent;
 
         // 1. Gather conversational context (before posting, so our own
-        //    "thinking" message is not included).
-        let prompt = self.build_prompt(event).await;
+        //    "thinking" message is not included). An unreadable or revoked
+        //    conversation stops here: nothing is prompted from the event alone.
+        let prompt = self.build_prompt(event).await?;
 
-        // 2. Post the immediate "thinking" message in the thread.
+        // 2. Post the immediate "thinking" message in the thread. The capability
+        //    carries the requesting user, so the message records who triggered it.
+        let access = self
+            .access
+            .bot_write(&event.requesting_user, parent)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
         let thinking = self
-            .channels
-            .post_message(
-                actor.clone(),
-                event.channel_id,
-                PostMessageRequest {
+            .messages
+            .post(
+                access,
+                PostMessage {
+                    attribution: MessageAttribution::ActingUser,
+                    notification_policy: PostMessageNotificationPolicy::Silent,
                     content: THINKING_MESSAGE.to_string(),
-                    mentions: Vec::new(),
                     thread_id: Some(event.reply_thread_id),
+                    anchor: None,
+                    mentions: Vec::new(),
                     attachments: Vec::new(),
                     nonce: None,
-                    notification_policy: PostMessageNotificationPolicy::Silent,
-                    triggered_by: Some(event.requesting_user.as_ref().to_string()),
                 },
             )
             .await?;
-        let message_id = Uuid::parse_str(&thinking.id)?;
+        let message_id = thinking.id;
 
         // 3. Run the agent loop to produce the reply.
         let reply = match self
@@ -355,26 +379,26 @@ where
         // 4. Replace the "thinking" message with the answer. A NotFound here
         //    means a participant deleted the thinking message while the agent
         //    ran — treat that as the user not wanting a response.
+        let access = self
+            .access
+            .bot_write(&event.requesting_user, parent)
+            .await
+            .map_err(|error| anyhow::anyhow!(error.to_string()))?;
         match self
-            .channels
-            .patch_message(
-                actor,
-                ParticipantRole::Member,
-                event.channel_id,
+            .messages
+            .patch(
+                access,
                 message_id,
-                PatchMessageRequest {
+                MessagePatch {
                     content: Some(reply),
-                    mentions: None,
-                    attachment_ids_to_delete: None,
-                    attachments_to_add: None,
-                    nonce: None,
                     notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                    ..Default::default()
                 },
             )
             .await
         {
-            Ok(()) => Ok(()),
-            Err(ChannelMutationErr::NotFound(_)) => {
+            Ok(_) => Ok(()),
+            Err(MessageError::NotFound) => {
                 tracing::info!(%message_id, "thinking message was deleted; dropping bot response");
                 Ok(())
             }

@@ -187,8 +187,8 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
     <Combobox.Item
       item={props}
       class={cn(
-        'flex flex-row h-9 px-2 rounded-lg justify-between items-center data-highlighted:bg-hover/50',
-        props.disabled && 'hover:bg-hover'
+        'flex flex-row h-9 px-2 rounded-lg justify-between items-center outline-none data-highlighted:bg-ink/5',
+        props.disabled && 'hover:bg-ink/5'
       )}
       onMouseEnter={props.disabled ? handleMouseEnter : undefined}
       onMouseLeave={props.disabled ? handleMouseLeave : undefined}
@@ -214,7 +214,7 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
             const iconId = props.disabled ? '?' : option.id;
 
             return (
-              <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink-muted select-none text-sm">
+              <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink select-none text-sm">
                 <UserIcon id={iconId ?? ''} size="sm" isDeleted={false} />
                 <p
                   class={cn(
@@ -234,7 +234,7 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
         <Match when={matches(props.rawValue, (i) => i.kind === 'channel')}>
           {(item) => {
             return (
-              <Combobox.ItemLabel class="flex flex-row w-full gap-1.5 text-ink-muted select-none text-sm">
+              <Combobox.ItemLabel class="flex flex-row w-full gap-1.5 text-ink select-none text-sm">
                 <div class="flex flex-col items-center justify-center p-1">
                   <EntityIcon
                     targetType={item().data.channel_type || 'channel'}
@@ -889,7 +889,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   inputRef()?.focus({ preventScroll: true });
                 }
               }}
-              class="z-modal-content border border-edge bg-surface translate-y-1 p-2 rounded-xl shadow-lg shadow-drop-shadow"
+              class="z-modal-content translate-y-1 rounded-xl p-1.5 glass bg-menu-glass menu-open-animation text-sm [--color-surface:var(--color-menu)]"
             >
               <Combobox.Listbox
                 ref={setListboxRef}

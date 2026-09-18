@@ -16,7 +16,7 @@ import {
 
 declare const self: DedicatedWorkerGlobalScope;
 
-const withVersion = <T extends { coordinatorVersion: 2 }>(
+const withVersion = <T extends { coordinatorVersion: 3 }>(
   value: T extends unknown ? Omit<T, 'coordinatorVersion'> : never
 ): T =>
   ({
@@ -157,6 +157,28 @@ async function activate(
   activationValue = activation;
   controlPort = port;
   telemetry = new BroadcastChannel(`graphql-cache-wp08:${activation.scope}`);
+  await new Promise<void>((resolve) => {
+    port.onmessage = ({ data }) => {
+      const parsed = validateCoordinatorToEngineEnvelope(
+        Array.isArray(data) ? data[1] : data
+      );
+      if (
+        parsed.ok &&
+        parsed.value.kind === 'open-engine' &&
+        parsed.value.ownerEpoch === activation.ownerEpoch
+      )
+        resolve();
+    };
+    port.start();
+    port.postMessage([0]);
+    sendEngine(
+      withVersion<EngineToCoordinatorEnvelope>({
+        kind: 'engine-assets-ready',
+        tabId: activation.tabId,
+        ownerEpoch: activation.ownerEpoch,
+      })
+    );
+  });
   await navigator.locks.request(
     activation.ownerLockName,
     { mode: 'exclusive' },
@@ -277,8 +299,6 @@ async function activate(
               break;
           }
         };
-        port.start();
-        port.postMessage([0]);
         sendEngine(
           withVersion<EngineToCoordinatorEnvelope>({
             kind: 'engine-ready',

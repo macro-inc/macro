@@ -137,6 +137,7 @@ async fn seed(
 ) -> AgentSessionId {
     let id = AgentSessionId::new();
     repo.create(CreateAgentSessionParams {
+        repo_branch: None,
         id,
         bot_id: bot,
         owner_id: macro_user_id::user_id::MacroUserIdStr::try_from(owner.to_owned()).unwrap(),

@@ -1,3 +1,5 @@
+import { ViewSidebar } from '@app/components/view-shell';
+import { AgentSessionListItem } from '@app/features/agents-view/views/AgentSessionListItem';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { Entity, MaybeEntityRow } from '@entity';
@@ -21,73 +23,87 @@ export function HomeListEntity(props: HomeListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
 
   return (
-    <div class="soup-list-entity relative mx-1.5 my-0.5">
+    <div class="soup-list-entity relative mx-(--sidebar-gutter) my-(--sidebar-row-gap)">
       <MaybeEntityRow
         entityId={props.occurrenceKey}
         config={props.entityRowConfig}
       >
-        <div
-          class={cn(
-            'group/home-item relative flex h-8 min-w-0 items-center gap-2 rounded-xl px-2.5 text-left text-sm outline-none touch:h-11',
-            props.checked || props.highlighted
-              ? 'bg-active text-ink'
-              : 'text-ink-muted hover:bg-hover hover:text-ink'
-          )}
-          {...pressHandlers((event) => {
-            event.preventDefault();
-            props.onClick?.(event);
-          })}
-          data-home-item
-        >
-          <Show
-            when={threadEntity()}
-            fallback={<HomeEntityIcon entity={props.entity} />}
-          >
-            <span class="flex size-5 shrink-0 items-center justify-center">
-              <ArrowBendUpLeftIcon class="size-4" />
-            </span>
-          </Show>
-          <span
-            class={cn(
-              'block min-w-0 flex-1 truncate font-normal',
-              unread() && 'text-ink'
-            )}
-          >
-            <Show
-              when={threadEntity()}
-              fallback={
-                <Show
-                  when={props.channelName}
-                  fallback={<Entity.Title entity={props.entity} />}
-                >
-                  {props.channelName}
-                </Show>
-              }
+        <Show
+          when={props.entity.type === 'agent_session' && props.entity}
+          fallback={
+            <ViewSidebar.Item
+              as="div"
+              class="group/home-item relative"
+              active={props.checked || props.highlighted}
+              {...pressHandlers((event) => {
+                event.preventDefault();
+                props.onClick?.(event);
+              })}
+              data-home-item
             >
-              {(thread) => (
-                <HomeThreadTitle
-                  entity={thread()}
-                  channelName={props.channelName}
+              <Show
+                when={threadEntity()}
+                fallback={<HomeEntityIcon entity={props.entity} />}
+              >
+                <ViewSidebar.Icon>
+                  <ArrowBendUpLeftIcon class="size-4" />
+                </ViewSidebar.Icon>
+              </Show>
+              <span
+                class={cn(
+                  'block min-w-0 flex-1 truncate font-normal',
+                  unread() && 'text-ink'
+                )}
+              >
+                <Show
+                  when={threadEntity()}
+                  fallback={
+                    <Show
+                      when={props.channelName}
+                      fallback={<Entity.Title entity={props.entity} />}
+                    >
+                      {props.channelName}
+                    </Show>
+                  }
+                >
+                  {(thread) => (
+                    <HomeThreadTitle
+                      entity={thread()}
+                      channelName={props.channelName}
+                    />
+                  )}
+                </Show>
+              </span>
+              <span
+                data-home-timestamp
+                class="hidden shrink-0 text-xs font-normal text-ink-extra-muted group-hover/home-item:block"
+              >
+                <Entity.Timestamp
+                  entity={props.entity}
+                  overrideTimeStamp={props.timestamp ?? undefined}
                 />
-              )}
-            </Show>
-          </span>
-          <span
-            data-home-timestamp
-            class="hidden shrink-0 text-xs font-normal text-ink-extra-muted group-hover/home-item:block"
-          >
-            <Entity.Timestamp
-              entity={props.entity}
-              overrideTimeStamp={props.timestamp ?? undefined}
+              </span>
+              <Show when={unread()}>
+                <span
+                  aria-label="Unread"
+                  class="size-1.5 shrink-0 rounded-full bg-accent"
+                />
+              </Show>
+            </ViewSidebar.Item>
+          }
+        >
+          {(session) => (
+            <AgentSessionListItem
+              entity={session()}
+              active={props.checked || props.highlighted}
+              unread={unread()}
+              onOpen={(event) => {
+                event.preventDefault();
+                props.onClick?.(event);
+              }}
             />
-          </span>
-          <Show when={unread()}>
-            <span
-              aria-label="Unread"
-              class="size-1.5 shrink-0 rounded-full bg-accent"
-            />
-          </Show>
-        </div>
+          )}
+        </Show>
       </MaybeEntityRow>
     </div>
   );

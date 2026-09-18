@@ -67,6 +67,24 @@
   --app-border-width: 0.5px;
   --app-ring-width: 0.5px;
 
+  /* Workspace sidebar geometry. Both icon rails are 26px from the edge.
+     Controls align by their centers, independent of glyph or button size. */
+  --sidebar-gutter: 0.5rem;
+  --sidebar-item-inset: 0.5rem;
+  --sidebar-icon-slot: 1.25rem;
+  --sidebar-icon-size: 1rem;
+  --sidebar-control-size: 1.5rem;
+  --sidebar-row-height: 2rem;
+  --sidebar-row-gap: 0.125rem;
+  --sidebar-label-gap: 0.375rem;
+  --sidebar-section-gap: 1.5rem;
+  --sidebar-section-content-gap: 0.25rem;
+  --sidebar-content-inset: calc(var(--sidebar-gutter) + var(--sidebar-item-inset));
+  --sidebar-local-rail: calc(var(--sidebar-item-inset) + var(--sidebar-icon-slot) / 2);
+  --sidebar-control-overhang: calc((var(--sidebar-icon-slot) - var(--sidebar-control-size)) / 2);
+  --sidebar-action-inset: calc(var(--sidebar-item-inset) + var(--sidebar-control-overhang));
+  --sidebar-header-action-inset: calc(var(--sidebar-gutter) + var(--sidebar-action-inset));
+
   /* mobile safe areas */
   --safe-bottom: max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px));
   --safe-right: max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px));
@@ -388,8 +406,8 @@ body.tauri-ios {
      default covers first paint, before the mode attribute is written. */
   --color-avatar-edge: oklch(0 0 0 / 0.4);
   --color-skeleton: color-mix(in oklch, var(--color-ink) 10%, transparent);
-  --color-list-hover: color-mix(in oklch, var(--color-ink) 6%, transparent);
-  --color-list-highlighted: color-mix(in oklch, var(--color-ink) 8%, transparent);
+  --color-list-hover: var(--color-hover);
+  --color-list-highlighted: var(--color-hover);
   --color-list-selected: var(--color-selected);
   --color-list-selected-highlighted: color-mix(in oklch, var(--color-accent) 16%, transparent);
 
@@ -537,6 +555,7 @@ body.tauri-ios {
 
 /* Restore native feedback suppressed by Tailwind's reset; glass opts out below. */
 html[data-touch-device='true'] {
+  --sidebar-control-size: 2.25rem;
   -webkit-tap-highlight-color: initial;
 }
 
@@ -997,26 +1016,36 @@ html[data-touch-device='true'] :is(
   }
 }
 
-/* The dot leading an open agent turn that has nothing to expand yet. Shares
-   the shimmer's period so the row reads as one motion, not two. */
-@keyframes agent-working-dot {
+/* The three dots leading an open agent turn that has nothing to expand yet.
+   A staggered ripple on the shimmer's period, so the row reads as one motion,
+   not two. */
+@keyframes agent-working-wave {
   0%,
+  60%,
   100% {
-    opacity: 0.3;
-    transform: scale(0.65);
+    opacity: 0.35;
+    transform: translateY(0);
   }
-  50% {
+  30% {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(-2px);
   }
 }
 
-.agent-working-dot {
-  animation: agent-working-dot 1.8s ease-in-out infinite;
+.agent-working-wave > * {
+  animation: agent-working-wave 1.8s ease-in-out infinite;
+}
+
+.agent-working-wave > :nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.agent-working-wave > :nth-child(3) {
+  animation-delay: 0.4s;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-working-dot {
+  .agent-working-wave > * {
     animation: none;
     opacity: 0.55;
   }

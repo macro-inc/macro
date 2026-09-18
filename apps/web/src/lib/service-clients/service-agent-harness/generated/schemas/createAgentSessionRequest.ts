@@ -8,6 +8,7 @@ import type { CreateAgentSessionRequestBotId } from './createAgentSessionRequest
 import type { CreateAgentSessionRequestInstructions } from './createAgentSessionRequestInstructions';
 import type { CreateAgentSessionRequestOwner } from './createAgentSessionRequestOwner';
 import type { CreateAgentSessionRequestPrompt } from './createAgentSessionRequestPrompt';
+import type { CreateAgentSessionRequestRepoBranch } from './createAgentSessionRequestRepoBranch';
 import type { CreateAgentSessionRequestRepoUrl } from './createAgentSessionRequestRepoUrl';
 import type { CreateAgentSessionRequestThread } from './createAgentSessionRequestThread';
 import type { CreateAgentSessionRequestWorkspace } from './createAgentSessionRequestWorkspace';
@@ -53,8 +54,11 @@ bot's say-so. */
 only - an external runtime sends its own first prompt through the
 control endpoint. Omitted, the session opens idle. */
   prompt?: CreateAgentSessionRequestPrompt;
-  /** Repository nominally checked out at `workspace`. Informational and
-optional: having it cloned there is the runtime operator's job. */
+  /** Starting branch for a managed coding session's selected repository. */
+  repoBranch?: CreateAgentSessionRequestRepoBranch;
+  /** Explicit GitHub repository for a managed Cursor session. Access is
+checked for the session owner. For external sessions this is
+informational: cloning it is the runtime operator's job. */
   repoUrl?: CreateAgentSessionRequestRepoUrl;
   thread?: CreateAgentSessionRequestThread;
   /** Absolute directory the bot's harness runs in on its runtime. Present

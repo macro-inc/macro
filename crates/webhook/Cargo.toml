@@ -64,6 +64,7 @@ stream = [
 worker = ["dep:tokio", "ports"]
 
 [dependencies]
+messages = { path = "../messages", features = ["broker"] }
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
@@ -114,6 +115,7 @@ agent_session = { path = "../agent_session", default-features = false, features 
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 channel_sender = { path = "../channel_sender" }
 macro_db_migrator = { path = "../macro_db_migrator" }
+messages = { path = "../messages" }
 rate_limit = { path = "../rate_limit", default-features = false, features = [
   "axum",
   "testing",

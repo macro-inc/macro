@@ -13,49 +13,30 @@ import type {
   FoldedStreamEvent,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
-import type { AgentSessionLogEntryDto } from '@service-agent-harness/generated/schemas';
+import type { FoldInput } from './protocol';
 
 /**
- * One live session's fold, held open between frames.
+ * One live session's fold, held open between inputs.
  *
- * Mirrors `agent_fold::inbound::wasm::FoldStream`. Frames must be handed over
- * in log order, and one machine serves a session for its whole life — the
- * fetched log and the streamed frames after it go into the same instance, so
- * that a channel opened mid-session continues the fold rather than starting a
- * second one beside it.
+ * Mirrors `agent_fold::inbound::wasm::FoldStream`. Inputs must be handed over
+ * in order, a snapshot first, and one machine serves a session for its whole
+ * life: the fetched log, the streamed rows after it, and this client's own
+ * speculated actions all go into the same instance.
  */
 export interface FoldStream {
-  /** Replace with durable history; retain row metadata for live overlap. */
-  snapshot: (entries: AgentSessionLogEntryDto[]) => FoldedMessage[];
-  /** Reconcile durable rows against the snapshot, preserving delivery order. */
-  push_rows: (entries: AgentSessionLogEntryDto[]) => FoldedStreamEvent[];
   /**
-   * Fold a run of frames and answer with every message derived so far.
-   *
-   * The catch-up path. Not a loop of {@link push}: a push serializes the
-   * message it changed, and a session's frames change the same agent message
-   * over and over, so replaying a fetched log one frame at a time would
-   * serialize thousands of whole messages to produce a handful.
+   * Fold inputs in order, reporting the changes they implied. Empty for
+   * inputs that change nothing renderable, which is most confirmed rows.
+   * Throws a string when an input cannot be read or arrives before any
+   * snapshot.
    */
-  extend: (
-    entries: Pick<AgentSessionLogEntryDto, 'direction' | 'content' | 'userId'>[]
-  ) => FoldedMessage[];
+  push: (inputs: FoldInput[]) => FoldedStreamEvent[];
   /**
-   * Fold one more frame, reporting the changes it implied.
-   *
-   * Empty for the frames that change nothing renderable — handshakes, token
-   * accounting — which is most of them.
+   * Every message as the reader should see it, oldest first: the confirmed
+   * conversation with this client's unconfirmed actions on top.
    */
-  push: (
-    entry: Pick<AgentSessionLogEntryDto, 'direction' | 'content' | 'userId'>
-  ) => FoldedStreamEvent[];
-  /** Every message folded so far, oldest first. */
   messages: () => FoldedMessage[];
-  /**
-   * The session metadata as it now stands — what the latest
-   * `{kind: "metadata"}` event carried, for a caller that caught up with
-   * {@link extend} and saw no events.
-   */
+  /** The session metadata as it now stands. */
   metadata: () => SessionMetadata;
   /** Releases the machine's wasm memory. */
   free: () => void;
@@ -63,18 +44,6 @@ export interface FoldStream {
 
 interface AgentFoldWasmModule {
   default: (input?: { module_or_path?: unknown }) => Promise<unknown>;
-  /**
-   * Fold a session's log into the messages a channel renders.
-   *
-   * Throws a string when the input cannot be read — a session id that is not
-   * a UUID, or entries that are not log frames. The fold itself is total, so
-   * a half-finished or unrecognized frame yields a partially-known message
-   * rather than an error.
-   */
-  fold_session: (
-    sessionId: string,
-    entries: AgentSessionLogEntryDto[]
-  ) => FoldedMessage[];
   /** Opens a fold for one session. Throws when the id is not a UUID. */
   FoldStream: new (
     sessionId: string

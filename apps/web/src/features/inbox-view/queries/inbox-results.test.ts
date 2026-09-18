@@ -123,23 +123,29 @@ describe('inbox date buckets', () => {
     ]);
   });
 
-  it('buckets by content recency while the notified sort is off', () => {
+  it('still buckets a stamped row by its notification while the server sort is off', () => {
+    // The server notified_at sort is gated for cost, but a websocket
+    // notification stamps `notifiedAt` locally and the row must re-bucket
+    // there regardless — otherwise a fresh comment on a stale task sinks into
+    // an old date section until a refetch catches up.
     const signal = {
       tab: 'signal' as const,
       capabilities: withoutNotifiedSort.capabilities,
     };
     expect(inboxGroupTimestamp(staleTaskFreshComment, signal)).toBe(
-      '2026-08-31T19:00:00Z'
+      '2026-09-02T17:00:00Z'
+    );
+    // A row without a stamp still falls back to content recency.
+    expect(inboxGroupTimestamp(freshEmail, signal)).toBe(
+      '2026-09-02T16:00:00Z'
     );
     const groups = groupInboxEntitiesByDate(
       [freshEmail, staleTaskFreshComment],
       signal,
       now
     );
-    expect(groups.map((group) => group.label)).toEqual([
-      'Today',
-      'Last 7 days',
-    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].label).toBe('Today');
   });
 });
 

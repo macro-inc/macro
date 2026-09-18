@@ -393,6 +393,7 @@ type TestDocumentService = DocumentServiceImpl<
     TestEntityAccessManagementService,
     TestForeignEntityService,
     TestEventBroker,
+    sync_service_client::SyncServiceClient,
 >;
 
 fn make_test_service(repo: MockDocumentRepo) -> TestDocumentService {
@@ -843,6 +844,8 @@ async fn bot_document_has_no_saved_user_view_location() {
 #[tokio::test]
 async fn bot_lifecycle_event_has_no_actor_user_id() {
     let mut repo = make_mock_repo();
+    repo.expect_get_document_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .return_once(|_| Box::pin(std::future::ready(Ok(()))));
@@ -1871,6 +1874,8 @@ async fn content_uploaded_maps_an_immediate_broker_failure_to_internal() {
 #[tokio::test]
 async fn test_delete_document_publishes_document_deleted_event() {
     let mut repo = make_mock_repo();
+    repo.expect_get_document_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .returning(|_| Box::pin(std::future::ready(Ok(()))));
@@ -1909,6 +1914,8 @@ async fn test_delete_document_publishes_document_deleted_event() {
 #[tokio::test]
 async fn test_delete_document_publishes_no_event_when_repo_fails() {
     let mut repo = make_mock_repo();
+    repo.expect_get_document_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .returning(|_| Box::pin(std::future::ready(Err(anyhow!("db is down")))));
@@ -1918,6 +1925,22 @@ async fn test_delete_document_publishes_no_event_when_repo_fails() {
     let result = service.delete_document(owner_receipt("doc-1"), None).await;
 
     assert!(result.is_err());
+    assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_document_rejects_initiative_description() {
+    let mut repo = make_mock_repo();
+    let mut metadata = make_test_metadata();
+    metadata.sub_type = Some(DocumentSubType::InitiativeDescription);
+    repo.expect_get_document_metadata()
+        .return_once(move |_| Box::pin(std::future::ready(Ok(metadata))));
+    repo.expect_soft_delete_document().times(0);
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+    let result = service.delete_document(owner_receipt("doc-1"), None).await;
+
+    assert!(matches!(result, Err(DocumentError::BadRequest(_))));
     assert!(event_broker.published().lock().unwrap().is_empty());
 }
 
@@ -2264,6 +2287,7 @@ fn create_document_repo_args(file_type: FileType) -> CreateDocumentRepoArgs {
         sub_type: None,
         skip_history: false,
         attribution: None,
+        initial_link_share: InitialLinkShare::EntityDefault,
     }
 }
 
@@ -2349,6 +2373,105 @@ async fn create_document_repo_receives_disabled_share_when_team_turned_link_shar
 
     create_document_with_team_default(Some(TeamLinkShareDefault(None)), FileType::Md, None, None)
         .await;
+}
+
+#[tokio::test]
+async fn exact_initial_link_share_bypasses_md_public_edit_default() {
+    use models_permissions::share_permission::access_level::AccessLevel;
+    use models_permissions::share_permission::{LinkShare, LinkShareState};
+
+    for state in [
+        LinkShareState::Off,
+        LinkShareState::On {
+            scope: LinkShare::Team,
+            level: AccessLevel::View,
+        },
+    ] {
+        let mut repo = make_mock_repo();
+        let created_metadata = make_test_metadata();
+        repo.expect_get_team_default_link_share().times(0);
+        repo.expect_create_document()
+            .withf(move |args, share_permission| {
+                args.initial_link_share == InitialLinkShare::Exact(state)
+                    && share_permission.link_share_state() == state
+                    && share_permission.team_share_access_level.is_none()
+            })
+            .times(1)
+            .returning(move |_, _| Box::pin(std::future::ready(Ok(created_metadata.clone()))));
+        repo.expect_set_document_content()
+            .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+        repo.expect_get_team_task_metadata()
+            .returning(|_| Box::pin(std::future::ready(Ok(None))));
+        let (service, _event_broker) = make_test_service_with_event_broker(repo);
+
+        let mut args = create_document_repo_args(FileType::Md);
+        args.initial_link_share = InitialLinkShare::Exact(state);
+        crate::domain::ports::DocumentService::create_document(
+            &service,
+            args.user_id.clone(),
+            args,
+            None,
+        )
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn initiative_description_rejects_entity_default_link_share() {
+    let repo = make_mock_repo();
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+    let mut args = create_document_repo_args(FileType::Md);
+    args.sub_type = Some(document_sub_type::DocumentSubType::InitiativeDescription);
+
+    let err = crate::domain::ports::DocumentService::create_document(
+        &service,
+        args.user_id.clone(),
+        args,
+        None,
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(
+        err.to_string(),
+        "bad request: initiative descriptions must set an exact initial link share"
+    );
+    assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn initiative_description_accepts_exact_link_share() {
+    use models_permissions::share_permission::LinkShareState;
+
+    let mut repo = make_mock_repo();
+    let created_metadata = make_test_metadata();
+    repo.expect_get_team_default_link_share().times(0);
+    repo.expect_create_document()
+        .withf(|args, share_permission| {
+            args.sub_type == Some(document_sub_type::DocumentSubType::InitiativeDescription)
+                && args.initial_link_share == InitialLinkShare::Exact(LinkShareState::Off)
+                && share_permission.link_share_state() == LinkShareState::Off
+        })
+        .times(1)
+        .returning(move |_, _| Box::pin(std::future::ready(Ok(created_metadata.clone()))));
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    let (service, _event_broker) = make_test_service_with_event_broker(repo);
+
+    let mut args = create_document_repo_args(FileType::Md);
+    args.sub_type = Some(document_sub_type::DocumentSubType::InitiativeDescription);
+    args.initial_link_share = InitialLinkShare::Exact(LinkShareState::Off);
+    crate::domain::ports::DocumentService::create_document(
+        &service,
+        args.user_id.clone(),
+        args,
+        None,
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test]
@@ -2618,4 +2741,153 @@ async fn join_and_leave_interactions_publish_without_bumping_document() {
         assert_eq!(published[0].payload["event_type"], "document.interaction");
         assert_eq!(published[0].payload["metadata"]["reason"], expected_reason);
     }
+}
+
+fn spreadsheet_test_service(
+    repo: MockDocumentRepo,
+    sync: crate::domain::ports::sync::MockDocumentSyncPort,
+) -> DocumentServiceImpl<
+    MockDocumentRepo,
+    TestUploadUrlPort,
+    TestTaskPropertiesPort,
+    TestConnectionService,
+    TestEntityAccessManagementService,
+    TestForeignEntityService,
+    TestEventBroker,
+    crate::domain::ports::sync::MockDocumentSyncPort,
+> {
+    DocumentServiceImpl::new(
+        repo,
+        test_cloudfront_config(),
+        sync,
+        TestUploadUrlPort,
+        TestTaskPropertiesPort,
+        TestConnectionService::default(),
+        TestEntityAccessManagementService::default(),
+        TestForeignEntityService::default(),
+        TestEventBroker::default(),
+    )
+}
+
+fn spreadsheet_create_args() -> CreateDocumentRepoArgs {
+    let mut args = create_document_repo_args(FileType::Spreadsheet);
+    args.user_id = MacroUserIdStr::try_from_email("sheets@macro.com").unwrap();
+    args.sha = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855".to_string();
+    args
+}
+
+#[tokio::test]
+async fn spreadsheet_creation_is_ready_only_after_sync_initialization() {
+    let mut repo = make_mock_repo();
+    let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+    let mut sequence = mockall::Sequence::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document().returning(|_, _| {
+        let mut metadata = make_test_metadata();
+        metadata.file_type = Some("spreadsheet".to_string());
+        Box::pin(std::future::ready(Ok(metadata)))
+    });
+    repo.expect_set_document_content()
+        .withf(|_, content| {
+            *content == DocumentContent::pending_at(DocumentContentLocation::SyncService)
+        })
+        .times(1)
+        .in_sequence(&mut sequence)
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    sync.expect_initialize_spreadsheet()
+        .withf(|id| id == "doc-1")
+        .times(1)
+        .in_sequence(&mut sequence)
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_set_document_content()
+        .withf(|_, content| {
+            *content == DocumentContent::ready(DocumentContentLocation::SyncService)
+        })
+        .times(1)
+        .in_sequence(&mut sequence)
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    let service = spreadsheet_test_service(repo, sync);
+    let args = spreadsheet_create_args();
+    let result = DocumentService::create_document(&service, args.user_id.clone(), args, None)
+        .await
+        .unwrap();
+    assert!(result.document_response.presigned_url.is_none());
+    assert_eq!(
+        result.document_response.document_metadata.content,
+        DocumentContent::ready(DocumentContentLocation::SyncService)
+    );
+}
+
+#[tokio::test]
+async fn failed_spreadsheet_initialization_cleans_up_document_metadata() {
+    let mut repo = make_mock_repo();
+    let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+    repo.expect_get_team_default_link_share()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(make_test_metadata()))));
+    repo.expect_set_document_content()
+        .withf(|_, content| content.state == DocumentContentState::Pending)
+        .times(1)
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    sync.expect_initialize_spreadsheet()
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Err(anyhow!("sync unavailable")))));
+    repo.expect_delete_document_by_id()
+        .withf(|id| id == "doc-1")
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    let service = spreadsheet_test_service(repo, sync);
+    let args = spreadsheet_create_args();
+    assert!(
+        DocumentService::create_document(&service, args.user_id.clone(), args, None)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn native_spreadsheet_location_uses_sync_without_an_object_url() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_persisted_document_content().returning(|_| {
+        Box::pin(std::future::ready(Ok(Some(DocumentContent::ready(
+            DocumentContentLocation::SyncService,
+        )))))
+    });
+    let sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+    let service = spreadsheet_test_service(repo, sync);
+    let mut context = task_document_context("doc-1");
+    context.file_type = Some("spreadsheet".to_string());
+    context.sub_type = None;
+    let result = service
+        .get_document_location(
+            &context,
+            authenticated_receipt("doc-1"),
+            LocationQueryParams {
+                document_version_id: None,
+                get_converted_docx_url: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        result,
+        LocationResponseV3::SyncServiceContent { .. }
+    ));
+}
+
+#[test]
+fn spreadsheet_uploads_are_rejected_instead_of_discarding_their_bytes() {
+    assert!(
+        validate_spreadsheet_creation(Some(FileType::Spreadsheet), "uploaded-workbook-sha")
+            .is_err()
+    );
+    assert!(
+        validate_spreadsheet_creation(Some(FileType::Spreadsheet), &spreadsheet_create_args().sha)
+            .is_ok()
+    );
+    assert!(validate_spreadsheet_creation(Some(FileType::Csv), "uploaded-csv-sha").is_ok());
 }

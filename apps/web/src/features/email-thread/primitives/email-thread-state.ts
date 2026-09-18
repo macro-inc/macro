@@ -94,7 +94,6 @@ export type EmailThreadState = {
   markThreadUnread: () => boolean;
   /** Re-marks the thread read after a mark-unread. */
   markThreadRead: () => boolean;
-  getMarkDoneNavigationTargetId: () => string | undefined;
   blockSender: () => boolean;
   markSenderSignal: () => boolean;
   markSenderNoise: () => boolean;

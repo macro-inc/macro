@@ -351,7 +351,7 @@ export function UserToolComposer(props: {
   fallback?: JSX.Element;
 }) {
   const sink = <T,>() => createElicitationReviewSink<T>(props.review);
-  const locked = () => !props.review.canAnswer() || props.review.answering();
+  const locked = () => !props.review.canAnswer();
   return (
     <Switch fallback={props.fallback}>
       <Match when={props.tool.name === 'CreateCalendarEvent'}>

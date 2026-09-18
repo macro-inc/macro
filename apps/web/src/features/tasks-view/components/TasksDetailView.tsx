@@ -12,7 +12,6 @@ import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ShareDialogContext,
@@ -53,7 +52,6 @@ function TaskDetailTopBar(props: {
 
   return (
     <ViewShell.TopBar class="touch:flex">
-      <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
       <ViewBreadcrumbs.Outlet
         aria-label="Task location"
         fallback={<EntityDetailBreadcrumbSkeleton />}

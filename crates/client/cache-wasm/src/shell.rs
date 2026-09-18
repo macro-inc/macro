@@ -776,6 +776,29 @@ pub fn schema_hash() -> String {
     cache_core::meta::SCHEMA_HASH.to_string()
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CacheBuildInfo {
+    package_version: &'static str,
+    schema_hash: &'static str,
+    schema_compatibility_epoch: u32,
+    format_version: u32,
+    storage_schema_version: u32,
+}
+
+/// Read-only metadata embedded in this WASM binary, available without opening storage.
+/// Recovery fixtures compare both artifacts before invoking any destructive hook.
+#[wasm_bindgen(js_name = cacheBuildInfo)]
+pub fn cache_build_info() -> Result<JsValue, JsValue> {
+    to_js(&CacheBuildInfo {
+        package_version: env!("CARGO_PKG_VERSION"),
+        schema_hash: cache_core::meta::SCHEMA_HASH,
+        schema_compatibility_epoch: cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+        format_version: cache_core::codec::CACHE_FORMAT_VERSION,
+        storage_schema_version: cache_turso::STORAGE_SCHEMA_VERSION,
+    })
+}
+
 fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
     value
         .serialize(&serde_wasm_bindgen::Serializer::json_compatible())

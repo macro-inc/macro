@@ -10,6 +10,11 @@ export const FileTypeMap = {
   },
   pdf: { extension: 'pdf', mime: 'application/pdf', app: 'pdf' },
   md: { extension: 'md', mime: 'text/markdown', app: 'md' },
+  spreadsheet: {
+    extension: 'spreadsheet',
+    mime: 'application/x-macro-spreadsheet',
+    app: 'document',
+  },
   canvas: {
     extension: 'canvas',
     mime: 'application/x-macro-canvas',

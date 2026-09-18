@@ -1,7 +1,6 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import PlusIcon from '@phosphor/plus.svg';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { TagTree } from './components/tag-tree';
 import type { TagTreeNode } from './core/tag-tree';
@@ -60,22 +59,19 @@ export function SidebarTagsSection(props: SidebarTagsSectionProps) {
       open={props.open}
       onOpenChange={props.onOpenChange}
     >
-      <div class="flex items-center gap-1">
-        <CollapsibleSection.Trigger class="min-w-0 flex-1 text-xs">
+      <CollapsibleSection.Header>
+        <CollapsibleSection.Trigger class="flex-1">
           <span class="min-w-0 truncate">Tags</span>
           <CollapsibleSection.Indicator />
         </CollapsibleSection.Trigger>
-        <Button
+        <CollapsibleSection.Action
           type="button"
-          variant="ghost"
-          size="icon-sm"
           label="New tag"
-          class="ml-auto mr-2 shrink-0 rounded-lg"
           onClick={() => setCreating(true)}
         >
           <PlusIcon class="size-3.5" />
-        </Button>
-      </div>
+        </CollapsibleSection.Action>
+      </CollapsibleSection.Header>
       <CollapsibleSection.Content>
         <Show
           when={tree().length > 0}

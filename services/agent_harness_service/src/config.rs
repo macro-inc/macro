@@ -64,6 +64,13 @@ pub struct Config {
     pub codex_oauth_kms_key_id: CodexOauthKmsKeyId,
     /// Comma-separated Kafka bootstrap servers.
     pub kafka_brokers: KafkaBrokers,
+    /// Which committed-post topic feeds the in-process trigger: `messages`
+    /// (the default, channel and document posts) or `channels` (the
+    /// pre-parent channel event, kept until its producer retires it). Never
+    /// both: every channel post is on both topics, so both would evaluate
+    /// each mention twice.
+    #[macro_config_default(agent_trigger::domain::sources::TriggerEventSource::default())]
+    pub agent_trigger_event_source: agent_trigger::domain::sources::TriggerEventSource,
     /// MacroDB connection string; `agent_sessions` lives here.
     pub database_url: DatabaseUrl,
     /// Shared Redis used for cross-replica command forwarding.

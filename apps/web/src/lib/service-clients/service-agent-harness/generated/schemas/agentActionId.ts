@@ -11,10 +11,11 @@ control endpoint, written as the JSON-RPC request id on the action's wire
 frame, and read back off that frame as `request_id` on the folded message
 it derives.
 
-Minted only by the server at accept time, as a v7 uuid so ids sort by mint
-time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
-request id is the whole ownership test: the server is the only writer of
-runtime-bound frames. The machine's own handshake request ids
-(`agent_session:{session}:{n}`) are not uuids and stay `None`.
+A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+or by a client that speculated the action and named it in the control
+request - either way the server is the only writer of runtime-bound
+frames, so a uuid-shaped request id remains the whole ownership test. The
+machine's own handshake request ids (`agent_session:{session}:{n}`) are
+not uuids and stay `None`.
  */
 export type AgentActionId = string;

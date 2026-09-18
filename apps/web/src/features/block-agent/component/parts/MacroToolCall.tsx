@@ -19,7 +19,7 @@ import {
   deserializeToolResponse,
 } from '@service-cognition/generated/tools/tool';
 import { createMemo, ErrorBoundary, type JSX, Show } from 'solid-js';
-import { FoldedOutput, ToolCard } from '../../ui';
+import { FoldedExchange, ToolCard } from '../../ui';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
 type MacroDetail = Extract<ToolDetail, { kind: 'macro' }>;
@@ -76,28 +76,18 @@ export function MacroToolCall(props: {
   );
 }
 
-/** The labelled row with the tool's own JSON, for a tool the chat has no component for. */
+/**
+ * The labelled row with the tool's own JSON - request, response, error - for
+ * a tool the chat has no component for.
+ */
 function GenericMacroToolCall(props: {
   detail: MacroDetail;
   common: ToolCallCommon;
 }): JSX.Element {
-  const body = () => {
-    const sections: string[] = [];
-    if (props.detail.input != null) {
-      sections.push(JSON.stringify(props.detail.input, null, 2));
-    }
-    if (props.detail.error != null) {
-      sections.push(props.detail.error);
-    } else if (props.detail.output != null) {
-      sections.push(JSON.stringify(props.detail.output, null, 2));
-    }
-    return sections.join('\n\n');
-  };
-
   return (
     <ToolCard
       title={props.common.label}
-      subtitle={props.detail.error ?? undefined}
+      subtitle={props.detail.error ?? props.common.server}
       status={props.common.status}
       muted={props.common.muted}
       trailing={props.common.trailing}
@@ -107,7 +97,11 @@ function GenericMacroToolCall(props: {
         Boolean(props.detail.error)
       }
     >
-      <Show when={body()}>{(text) => <FoldedOutput text={text()} />}</Show>
+      <FoldedExchange
+        request={props.detail.input}
+        response={props.detail.output}
+        error={props.detail.error}
+      />
     </ToolCard>
   );
 }

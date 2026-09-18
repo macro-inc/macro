@@ -1,3 +1,4 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { buildChatEditor } from '@core/component/AI/component/input/buildChatEditor';
 import type { ChatSendInput } from '@core/component/AI/component/input/buildRequest';
@@ -7,6 +8,7 @@ import { useGetChatAttachmentInfo } from '@core/component/AI/signal/attachment';
 import { createMentionAttachmentCallbacks } from '@core/component/AI/signal/mention-attachment-callbacks';
 import { setPendingSendData } from '@core/component/AI/signal/pendingSend';
 import { deriveChatName } from '@core/component/AI/util/deriveName';
+import { enableChatV3Agents } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -15,10 +17,11 @@ import { createRenameDssEntityMutation } from '@entity';
 import { invalidateAllSoup } from '@queries/soup/normalized-cache';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { $getRoot } from 'lexical';
-import { createEffect } from 'solid-js';
+import { createEffect, Show, Suspense } from 'solid-js';
+import { HomeAgentComposer } from './home-agent-composer';
 import { replaceHomeComposerDraft } from './home-composer-selection';
 
-export const HomeChatInput = (props: {
+export type HomeChatInputProps = {
   variant?: 'default' | 'tall';
   class?: string;
   placeholder?: string;
@@ -29,10 +32,22 @@ export const HomeChatInput = (props: {
    * the conversation (the Agents view and its sidebar) opens it in place.
    */
   openChat?: (chatId: string) => void;
-}) => {
+};
+
+export const HomeChatInput = (props: HomeChatInputProps) => {
+  const flag = useFeatureFlag(enableChatV3Agents);
+  return (
+    <Show when={flag().enabled} fallback={<LegacyHomeChatInput {...props} />}>
+      <Suspense fallback={<div class="min-h-24" />}>
+        <HomeAgentComposer autoFocus={props.autoFocusOnMount} />
+      </Suspense>
+    </Show>
+  );
+};
+
+export const LegacyHomeChatInput = (props: HomeChatInputProps) => {
   const splitPanelContext = useSplitPanelOrThrow();
   const input = useChatInputContext();
-
   const { getAttachmentFromMention } = useGetChatAttachmentInfo();
   const attachmentMentionCallbacks = createMentionAttachmentCallbacks(
     input.attachments,
@@ -79,14 +94,18 @@ export const HomeChatInput = (props: {
 
   const renameMutation = createRenameDssEntityMutation();
 
+  const restoreDraft = (request: ChatSendInput) => {
+    input.attachments.setAttached(request.attachments);
+    replaceHomeComposerDraft(editor.controls, request.content);
+  };
+
   const handleSend = async (request: ChatSendInput) => {
     const backgroundSend = request.metaKey;
 
     // Create a new persistent chat
     const response = await cognitionApiServiceClient.createChat({});
     if (response.isErr()) {
-      input.attachments.setAttached(request.attachments);
-      replaceHomeComposerDraft(editor.controls, request.content);
+      restoreDraft(request);
       if (isPaymentError(response)) {
         const { showPaywall } = usePaywallState();
         showPaywall(PaywallKey.CHAT_LIMIT);

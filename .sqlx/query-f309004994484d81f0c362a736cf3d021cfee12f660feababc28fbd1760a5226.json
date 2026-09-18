@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO comms_message_threads\n                   (root_id, parent_entity_type, parent_entity_id, user_id, anchor, created_at, updated_at)\n               SELECT id, parent_entity_type, parent_entity_id, sender_id, $2, created_at, updated_at\n               FROM comms_messages WHERE id = $1\n               ON CONFLICT (root_id) DO UPDATE SET anchor = EXCLUDED.anchor",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f309004994484d81f0c362a736cf3d021cfee12f660feababc28fbd1760a5226"
+}

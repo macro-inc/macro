@@ -6,7 +6,7 @@
  */
 
 import type { AccessLevel } from './accessLevel';
-import type { InitiativeDetailDescription } from './initiativeDetailDescription';
+import type { DescriptionDocumentId } from './descriptionDocumentId';
 import type { InitiativeId } from './initiativeId';
 import type { MacroUserIdStr } from './macroUserIdStr';
 import type { SharePermissionV2 } from './sharePermissionV2';
@@ -17,8 +17,8 @@ import type { SharePermissionV2 } from './sharePermissionV2';
 export interface InitiativeDetail {
   /** When the initiative was created. */
   createdAt: string;
-  /** Optional description. */
-  description?: InitiativeDetailDescription;
+  /** The markdown document holding the description; open it in the editor. */
+  descriptionDocumentId: DescriptionDocumentId;
   /** Opaque identifier. */
   id: InitiativeId;
   /** Member user ids. The owner is never stored here. */

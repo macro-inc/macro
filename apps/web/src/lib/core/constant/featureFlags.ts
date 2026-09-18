@@ -694,3 +694,9 @@ export const enableNotificationSettings = defineFlag({
   env: 'ENABLE_NOTIFICATION_SETTINGS',
   default: onInDev,
 });
+
+// PostHog controls the internal pilot and team targeting in every environment.
+export const enableSpreadsheets = defineFlag({
+  key: 'enable-spreadsheets',
+  env: 'ENABLE_SPREADSHEETS',
+});

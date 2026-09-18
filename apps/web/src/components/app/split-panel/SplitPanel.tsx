@@ -239,7 +239,8 @@ function ForwardButton(props: SplitControlButtonProps) {
 }
 
 function CloseButton(props: SplitControlButtonProps) {
-  const controller = useSplitPanelController();
+  // Shared workspace headers also render outside a split (for example previews).
+  const controller = useContext(SplitPanelControllerContext);
   const [local, rest] = splitProps(props, [
     'aria-label',
     'children',
@@ -255,21 +256,22 @@ function CloseButton(props: SplitControlButtonProps) {
   const label = () => local.label ?? 'Close';
 
   return (
-    <Show when={controller.canClose()}>
+    <Show when={controller?.canClose()}>
       <Button
         {...rest}
         type={local.type ?? 'button'}
         variant={local.variant}
-        size={local.size ?? 'sm'}
+        size={local.size ?? 'icon-sm'}
         square={local.square ?? true}
         class={cn('rounded-lg transition-none', local.class)}
         aria-label={local['aria-label']}
         label={label()}
         hotkey={local.hotkey ?? TOKENS.split.close}
         disabled={Boolean(local.disabled)}
-        {...pressHandlers(() => controller.close())}
+        data-split-panel-close=""
+        {...pressHandlers(() => controller?.close())}
       >
-        {local.children ?? <CloseIcon />}
+        {local.children ?? <CloseIcon class="size-4" />}
       </Button>
     </Show>
   );

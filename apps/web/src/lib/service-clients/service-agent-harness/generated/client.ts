@@ -503,6 +503,10 @@ export const deleteAgentSession = async (
 /**
  * Edit access suffices: whoever can prompt the bot through its thread can
 prompt it here.
+
+A caller may name the action with `actionId`; the response echoes it.
+Re-posting an id the session still holds queued or in flight reports that
+action's status rather than accepting a duplicate.
  * @summary Perform a control operation on a live agent session.
  */
 export type controlAgentSessionResponse200 = {

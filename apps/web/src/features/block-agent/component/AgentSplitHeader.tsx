@@ -31,6 +31,16 @@ import { harnessTitle } from './compose-agent-session-options';
 
 export { harnessTitle };
 
+/** Shared title precedence for standalone and workspace agent sessions. */
+export function agentSessionTitle(
+  session: AgentSessionResponse | undefined,
+  transcriptTitle?: string | null
+): string {
+  const name = session?.name;
+  if (name && name !== 'Agent Session') return name;
+  return transcriptTitle ?? name ?? harnessTitle(session?.harness);
+}
+
 /**
  * Agent-session identity in the split header chrome plus the standard split
  * toolbar: static label, shared entity actions, the session's pull request
@@ -49,12 +59,7 @@ export function AgentSplitHeader(props: {
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
   const { sessionId, metadata } = useAgentSession();
-  const title = () => {
-    const persistedName = props.session?.name;
-    if (persistedName && persistedName !== 'Agent Session')
-      return persistedName;
-    return props.title ?? persistedName ?? harnessTitle(props.session?.harness);
-  };
+  const title = () => agentSessionTitle(props.session, props.title);
 
   const entity = (): AgentSessionEntity | undefined => {
     const session = props.session;
