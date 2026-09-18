@@ -198,6 +198,8 @@ export * from './sendChatMessageResponse';
 export * from './serverResponse';
 export * from './setPricingRequest';
 export * from './setPricingRequestPricePerAudioMinute';
+export * from './setPricingRequestPricePerMilIn';
+export * from './setPricingRequestPricePerMilOut';
 export * from './sharePermissionV2';
 export * from './sharePermissionV2ChannelSharePermissions';
 export * from './sharePermissionV2LinkShare';
