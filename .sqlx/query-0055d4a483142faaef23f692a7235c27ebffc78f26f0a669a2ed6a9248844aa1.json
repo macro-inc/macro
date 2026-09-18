@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO property_definitions (id, user_id, display_name, data_type, is_multi_select)\n        VALUES ($1, $2, $3, 'STRING', false)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0055d4a483142faaef23f692a7235c27ebffc78f26f0a669a2ed6a9248844aa1"
+}

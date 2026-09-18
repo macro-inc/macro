@@ -10,6 +10,7 @@ import type {
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
+import { contentReference } from '@components/app/split-layout/layoutManager';
 import type { BlockAlias, BlockName } from '@core/block';
 import {
   type ItemLike,
@@ -77,15 +78,12 @@ function openSplitIfNotOpen(
       options.sourceHandle.viewerId() === existing.id;
     if (!isSourcesViewer) existing.activate();
   } else {
-    layoutManager.openWithSplit(
-      { type, id },
-      {
-        activate: true,
-        referredFrom: null,
-        preferNewSplit: options.newSplit,
-        handle: options.sourceHandle,
-      }
-    );
+    layoutManager.openWithSplit(contentReference(type, id), {
+      activate: true,
+      referredFrom: null,
+      preferNewSplit: options.newSplit,
+      handle: options.sourceHandle,
+    });
   }
   if (options.params && type !== 'component') {
     goToLocationInSplit(layoutManager, type, id, options.params);

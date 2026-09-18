@@ -247,6 +247,10 @@ fn api_router(state: ApiContext) -> Router {
             initiative::inbound::axum_router::initiative_router(state.initiative_state.clone()),
         )
         .nest(
+            "/databases",
+            databases::inbound::axum_router::databases_router(state.databases_state.clone()),
+        )
+        .nest(
             "/collab_surfaces",
             collab_surface::inbound::axum_router::collab_surface_router(
                 state.collab_surface_state.clone(),

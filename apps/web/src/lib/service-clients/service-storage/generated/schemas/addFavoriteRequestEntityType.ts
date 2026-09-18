@@ -27,4 +27,5 @@ export type AddFavoriteRequestEntityType =
   | 'skill'
   | 'agent_session'
   | 'scheduled_action'
-  | 'initiative';
+  | 'initiative'
+  | 'database';

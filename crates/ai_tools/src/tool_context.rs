@@ -28,6 +28,7 @@ use connection::domain::ports::ConnectionService;
 use connection_gateway_client::ConnectionGatewayClient;
 use contacts::{domain::service::SqsContactsIngress, outbound::ingress::SqsContactsQueue};
 use crm::inbound::toolset::CrmToolContext;
+use databases::inbound::toolset::DatabasesToolContext;
 use documents::{
     domain::ports::{TaskPropertiesPort, task_property_edit_receipt},
     inbound::toolset::DocumentToolContext,
@@ -915,6 +916,40 @@ pub fn build_reminders_tool_context(
     )
 }
 
+/// Table-changed fan-out for AI tool hosts.
+///
+/// Owned by the databases crate, where the HTTP roots reach it too; re-exported
+/// under the tool-host name the AI tool wiring uses.
+pub use databases::outbound::gateway_event_publisher::MaybeGatewayTableEventPublisher as ToolTableEventPublisher;
+
+/// Type alias for the databases service implementation used by AI tools.
+///
+/// The same port implementations the HTTP surface runs on: Postgres for
+/// storage and the embedded rusqlite sandbox for SQL, so an agent's SQL is
+/// scoped by the acting user's catalog exactly as the HTTP surface's is.
+pub type ToolDatabasesService =
+    databases::outbound::build::PgDatabasesService<ToolTableEventPublisher>;
+
+/// Type alias for the databases tool context.
+pub type ToolDatabasesToolContext =
+    DatabasesToolContext<ToolDatabasesService, ToolEntityAccessService>;
+
+/// Build the databases tool context from a database pool.
+///
+/// The schema tools go through the same access receipts the HTTP API does, so
+/// this needs the entity access service as well as the pool; the publisher is
+/// what lets an agent's write reach open clients.
+pub fn build_databases_tool_context(
+    pool: sqlx::PgPool,
+    entity_access_service: Arc<ToolEntityAccessService>,
+    events: ToolTableEventPublisher,
+) -> ToolDatabasesToolContext {
+    DatabasesToolContext::new(
+        databases::outbound::build_service(pool, events),
+        entity_access_service,
+    )
+}
+
 /// Type alias for the chat service implementation used by AI tools.
 /// Uses an empty toolset — the read-only tool never invokes tool execution.
 pub type ToolChatService = ChatServiceImpl<PgChatRepo, (), ToolEntityAccessManagementService>;
@@ -1349,6 +1384,7 @@ pub struct ToolServiceContext {
     pub calendar_tool_context: ToolCalendarToolContext,
     pub notification_tool_context: ToolNotificationToolContext,
     pub reminders_tool_context: ToolRemindersToolContext,
+    pub databases_tool_context: ToolDatabasesToolContext,
     /// Import staging/tracking tools. `unwired` in hosts that can't build
     /// the import service — calls there fail with a clear error.
     pub import_tool_context: ToolImportToolContext,
