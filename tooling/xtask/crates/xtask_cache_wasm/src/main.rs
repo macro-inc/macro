@@ -53,8 +53,11 @@ fn run(force: bool) -> Result<()> {
         }
     }
 
+    // Same target dir as `just build-cache-wasm` so local ensure and CI
+    // rebuilds share artifacts and do not contend with the fold wasm crate.
     let status = Command::new("wasm-pack")
         .current_dir(&workspace_dir)
+        .env("CARGO_TARGET_DIR", workspace_dir.join("target/cache-wasm"))
         .arg("build")
         .arg(CRATE_REL)
         .arg("--target")

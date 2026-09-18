@@ -12,6 +12,9 @@ use gh_workflow::{
 
 use crate::workflows::{runners, steps, vars};
 
+#[cfg(test)]
+mod test;
+
 /// Build the workflow. The `workflow_dispatch`/`workflow_call` input blocks
 /// are filled in by [`patch`] (choice options + ordered maps).
 pub fn deploy_web_app() -> Workflow {
@@ -95,10 +98,12 @@ fn build_deploy() -> Job {
         .runs_on(runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG))
         .add_env(("CI", "true"))
         .add_step(checkout())
-        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::mount_web_build_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(build())
+        .add_step(steps::show_sccache_stats())
         .add_step(install_infra_dependencies())
         .add_step(configure_aws_credentials())
         .add_step(pulumi_up())

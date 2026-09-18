@@ -20,8 +20,9 @@ fn web_runner() -> String {
     runners::Runner::Small.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
 
-/// Typechecking can compile the Rust binaries used by `gen-api`, so retain the
-/// mid-size profile while sharing the web CI cache volume and remote sccache.
+/// Typechecking can compile the Rust binaries used by `gen-api`, and the app
+/// build compiles the two browser wasm packages, so retain the mid-size
+/// profile while sharing the web CI cache volume and remote sccache.
 fn typecheck_runner() -> String {
     runners::Runner::Mid.with_cache_tag(vars::WEB_CI_CACHE_TAG)
 }
@@ -117,12 +118,20 @@ fn cycles() -> Job {
 }
 
 fn build() -> Job {
-    gated_web_job("Build")
+    Job::default()
+        .needs(vec!["path-check".to_string()])
+        .cond(Expression::new(
+            "needs.path-check.outputs.should_run == 'true'",
+        ))
+        .name("Build")
+        .runs_on(typecheck_runner())
         .add_step(checkout("Checkout Repo", false))
-        .add_step(steps::mount_web_cache_volume(false))
+        .add_step(steps::mount_web_build_cache_volume())
         .add_step(steps::setup_nix())
         .add_step(steps::setup_reqs_web("Setup", false))
+        .add_step(steps::configure_namespace_sccache(vars::WEB_SCCACHE_NAME))
         .add_step(run_build())
+        .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
 }
 

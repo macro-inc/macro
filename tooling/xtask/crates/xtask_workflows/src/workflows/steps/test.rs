@@ -67,3 +67,22 @@ fn default_dev_shell_does_not_pass_a_shell_input() {
         "unspecified shell must keep the action default so other workflows stay unchanged"
     );
 }
+
+#[test]
+fn web_build_cache_volume_includes_wasm_pack_and_cargo() {
+    let step = mount_web_build_cache_volume();
+    let with = step.value.with.expect("cache volume should set paths");
+    let path = with
+        .0
+        .get("path")
+        .and_then(|value| value.as_str())
+        .expect("path list");
+    assert!(path.contains("/home/runner/.bun/install/cache"));
+    assert!(path.contains("/home/runner/.cargo/registry"));
+    assert!(path.contains("/home/runner/.cargo/git"));
+    assert!(path.contains("/home/runner/.cache/.wasm-pack"));
+    assert_eq!(
+        with.0.get("cache").and_then(|value| value.as_str()),
+        Some("nix")
+    );
+}
