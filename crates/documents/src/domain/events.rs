@@ -14,6 +14,7 @@ use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroDocumentsTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
+use model_owner::Owner;
 use serde::{Deserialize, Serialize};
 
 use super::models::FileTypeUpdate;
@@ -25,7 +26,8 @@ pub struct DocumentCreatedMetadata {
     /// The id of the created document.
     pub document_id: String,
     /// The owner (creator) of the document.
-    pub owner: MacroUserIdStr<'static>,
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub owner: Owner,
     /// Who mechanically created the document. Absent on events published
     /// before attribution: ingest then treats [`Self::owner`] as the actor.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -54,7 +56,8 @@ pub struct DocumentUpdatedMetadata {
     /// The id of the updated document.
     pub document_id: String,
     /// The owner of the document.
-    pub owner: MacroUserIdStr<'static>,
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub owner: Owner,
     /// The authenticated user who performed the update; `None` for
     /// unauthenticated or internal callers.
     pub actor_user_id: Option<MacroUserIdStr<'static>>,
@@ -111,7 +114,8 @@ pub struct DocumentContentUploadedMetadata {
     /// The id of the document whose stored bytes changed.
     pub document_id: String,
     /// The owner of the document (used by the extractor to resolve S3 keys).
-    pub owner: MacroUserIdStr<'static>,
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub owner: Owner,
     /// File type of the uploaded object (may differ from the document's own
     /// type, e.g. `pdf` for the converted rendition of a docx).
     pub file_type: FileType,
@@ -203,7 +207,8 @@ pub struct DocumentCopiedMetadata {
     /// The specific source version copied, when requested.
     pub source_version_id: Option<i64>,
     /// The owner of the new copy (the copier).
-    pub owner: MacroUserIdStr<'static>,
+    #[cfg_attr(feature = "schema", schema(value_type = String))]
+    pub owner: Owner,
     /// The name of the new document.
     pub document_name: String,
     /// File type of the document, when known.

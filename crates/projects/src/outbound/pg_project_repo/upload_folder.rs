@@ -264,7 +264,7 @@ async fn create_empty_document(
     Ok(DocumentMetadata::new_document(
         &document.id,
         version_id,
-        user_id,
+        model_owner::Owner::User(user_id),
         &document_name,
         item.file_type,
         &item.sha,

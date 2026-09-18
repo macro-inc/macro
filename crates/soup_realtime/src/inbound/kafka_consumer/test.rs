@@ -26,6 +26,7 @@ use email::domain::events::{
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::models::SimpleMention;
+use model_owner::Owner;
 use projects::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
 use properties::domain::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,
@@ -65,7 +66,7 @@ fn user() -> MacroUserIdStr<'static> {
 fn updated_event() -> Event<DocumentTopicEvent> {
     Event::new(DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user(),
+        owner: Owner::User(user()),
         actor_user_id: None,
         actor: None,
         on_behalf_of: None,
@@ -127,7 +128,7 @@ fn subscribes_to_all_existing_soup_source_topics() {
 fn document_lifecycle_events_map_to_updated_and_deleted_patches() {
     let created = DocumentTopicEvent::Created(DocumentCreatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user(),
+        owner: Owner::User(user()),
         actor: None,
         on_behalf_of: None,
         document_name: "Created".to_string(),
@@ -158,7 +159,7 @@ fn moving_a_document_out_of_a_project_updates_the_previous_project() {
     let previous_project_id = Uuid::now_v7().to_string();
     let event = DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user(),
+        owner: Owner::User(user()),
         actor_user_id: None,
         actor: None,
         on_behalf_of: None,
@@ -199,7 +200,7 @@ fn search_only_document_events_do_not_emit_patches() {
     let events = [
         DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
             document_id: DOCUMENT_ID.to_string(),
-            owner: user(),
+            owner: Owner::User(user()),
             file_type: "pdf".parse().expect("valid file type"),
             document_version_id: Some("convert".to_string()),
         }),

@@ -1,9 +1,9 @@
 use document_sub_type::DocumentSubType;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::chat::Chat;
 use model::document::{BasicDocument, BasicDocumentSubType};
 use model::item::Item;
 use model::project::Project;
+use model_owner::Owner;
 use sqlx::PgPool;
 use system_properties::{StatusOption, SystemPropertyKey};
 
@@ -102,9 +102,8 @@ async fn get_sub_documents(
         Ok(BasicDocument {
             document_id: row.document_id,
             document_version_id: row.document_version_id,
-            owner: MacroUserIdStr::parse_from_str(&row.owner)
-                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?
-                .into_owned(),
+            owner: Owner::from_principal_str(&row.owner)
+                .map_err(|error| sqlx::Error::Decode(Box::new(error)))?,
             document_name: row.document_name,
             file_type: row.file_type,
             project_id: row.project_id,

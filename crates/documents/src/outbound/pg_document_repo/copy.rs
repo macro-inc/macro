@@ -3,6 +3,7 @@ use model::document::{
     BomPart, DocumentMetadata, IDWithTimeStamps, SaveBomPart, VersionIDWithTimeStamps,
     VersionIDWithTimeStampsNoSha,
 };
+use model_owner::Owner;
 use sqlx::{Postgres, Transaction};
 
 /// Copies a given docx document (Document + DocumentBom + BomParts).
@@ -73,7 +74,7 @@ pub async fn copy_docx_document(
 
     Ok(DocumentMetadata {
         document_id: document.id.clone(),
-        owner: user_id,
+        owner: Owner::User(user_id),
         document_name: new_document_name.to_string(),
         file_type: original_document.file_type.clone(),
         sha: None,
@@ -188,7 +189,7 @@ pub async fn copy_non_docx_document(
 
     Ok(DocumentMetadata {
         document_id: document.id.clone(),
-        owner: user_id,
+        owner: Owner::User(user_id),
         document_name: new_document_name.to_string(),
         file_type: original_document.file_type.clone(),
         sha: Some(document_instance.sha),

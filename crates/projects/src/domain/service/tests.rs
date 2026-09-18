@@ -1718,7 +1718,7 @@ fn upload_document(id: &str, file_type: FileType) -> DocumentMetadata {
     DocumentMetadata::new_document(
         id,
         7,
-        user_id("macro|owner@example.com"),
+        model_owner::Owner::User(user_id("macro|owner@example.com")),
         id,
         Some(file_type),
         "0123456789abcdef",
