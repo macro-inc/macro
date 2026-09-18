@@ -18,6 +18,17 @@
    failure does not block the remaining content; signup retries repair tags
    without resetting task priorities. The guide waits until its tag IDs resolve.
 
+## Native iOS 27
+
+The native welcome screen offers `Create new account` and `Log into existing
+account` before the login form. Startup and background/foreground resume work
+with the scene lifecycle enabled. A custom-scheme link to `macro://app/login`
+works while Macro is running, but a link that cold-starts the app currently
+lands on the welcome screen instead. Open Macro first when testing deep links;
+do not treat cold-start link delivery as verified. See the
+[Tauri guide](../../apps/web/tauri/src-tauri/README.md#ios-27-scene-lifecycle)
+for the remaining compatibility gaps.
+
 ## Mailpit (local email)
 
 - UI: `http://localhost:<mailpit-port>/`

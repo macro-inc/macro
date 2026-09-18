@@ -72,6 +72,11 @@ targets:
         NSPhotoLibraryUsageDescription: "This app needs access to your photo library to upload attachments."
         LSApplicationQueriesSchemes:
           - macro
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            UIWindowSceneSessionRoleApplication:
+              - UISceneConfigurationName: TaoScene
         UIBackgroundModes:
           - audio
           - voip
