@@ -5,7 +5,7 @@
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SidebarTagsSection,
   type SidebarTagsSectionProps,
@@ -16,6 +16,19 @@ import { TagSetsProvider } from './tag-sets-context';
 const mocks = vi.hoisted(() => ({
   tagEditorDialog: vi.fn(),
 }));
+
+beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+});
+
+afterEach(() => vi.unstubAllGlobals());
 
 vi.mock('./TagEditorDialog', () => ({
   TagEditorDialog: (props: { open: boolean }) => {

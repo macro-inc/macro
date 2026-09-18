@@ -23,8 +23,8 @@ use crate::domain::{
         DisconnectedGoogleCalendar, DueCalendarReminder, EventReminderOverride, EventReminders,
         EventStart, EventStatus, EventTime, EventTransparency, EventType, EventVisibility,
         GOOGLE_CALENDAR_SCOPES, GoogleCalendarSyncSnapshot, GoogleScopeSet, GoogleWatchChannel,
-        OccurrenceRange, ProviderCalendar, StoredGoogleCalendar, TeamOutOfOffice, VisibleCalendar,
-        is_system_calendar,
+        OccurrenceContent, OccurrenceRange, ProviderCalendar, StoredGoogleCalendar,
+        TeamOutOfOffice, VisibleCalendar, is_system_calendar,
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventWrite,
@@ -285,6 +285,10 @@ struct OccurrenceJoinRow {
     occurrence_start_date: Option<NaiveDate>,
     occurrence_end_date: Option<NaiveDate>,
     is_cancelled: bool,
+    override_title: Option<String>,
+    override_description: Option<String>,
+    override_location: Option<String>,
+    override_status: Option<String>,
     owner_id: String,
     ical_uid: String,
     title: String,
@@ -879,6 +883,10 @@ impl CalendarRepository for PgCalendarRepository {
                 occurrence.start_date AS occurrence_start_date,
                 occurrence.end_date AS occurrence_end_date,
                 occurrence.is_cancelled,
+                override.title AS override_title,
+                override.description AS override_description,
+                override.location AS override_location,
+                override.status AS override_status,
                 event.owner_id,
                 event.ical_uid,
                 event.title,
@@ -908,6 +916,9 @@ impl CalendarRepository for PgCalendarRepository {
                 event.updated_at
             FROM calendar_event_occurrences occurrence
             JOIN calendar_events event ON event.id = occurrence.event_id
+            LEFT JOIN calendar_event_overrides override
+                ON override.event_id = occurrence.event_id
+               AND override.recurrence_id = occurrence.recurrence_id
             WHERE occurrence.owner_id IN (
                     SELECT $1::text
                     UNION
@@ -3963,11 +3974,15 @@ fn mention_preview_from_row(row: MentionPreviewRow) -> Result<CalendarMentionPre
 }
 
 fn event_from_join(
-    row: OccurrenceJoinRow,
+    mut row: OccurrenceJoinRow,
     attendees: Vec<CalendarAttendee>,
     sources: Vec<CalendarEventSourceContent>,
 ) -> Result<CalendarEvent, Report> {
-    Ok(CalendarEvent {
+    let override_title = row.override_title.take();
+    let override_description = row.override_description.take();
+    let override_location = row.override_location.take();
+    let override_status = row.override_status.take();
+    let mut event = CalendarEvent {
         id: row.event_id,
         owner_id: row.owner_id,
         ical_uid: row.ical_uid,
@@ -4007,7 +4022,16 @@ fn event_from_join(
         attendees,
         created_at: row.created_at,
         updated_at: row.updated_at,
-    })
+    };
+    // An exception's content replaces the series content for that occurrence
+    // alone, the same way its attendee list shadows the series list.
+    event.apply_occurrence_content(OccurrenceContent {
+        title: override_title.as_deref(),
+        description: override_description.as_deref(),
+        location: override_location.as_deref(),
+        status: override_status.as_deref().map(event_status),
+    });
+    Ok(event)
 }
 
 fn occurrence_from_join(row: &OccurrenceJoinRow) -> Result<CalendarOccurrence, Report> {

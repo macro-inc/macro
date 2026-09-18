@@ -26,7 +26,7 @@ import { IntegrationRow } from './primitives';
  * same agent sees their own dots, because a session spends the connections
  * of whoever runs it. So an unconnected pick is never an error here - it is
  * the agent's author saying "this agent uses Linear", and each person
- * connects Linear on their own, from this row or from Settings → Connections.
+ * connects Linear on their own, from this row or from Settings → Integrations.
  */
 export function PipedreamAppPicker(props: {
   selected: readonly AgentMcpServer[];

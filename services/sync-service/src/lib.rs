@@ -11,6 +11,7 @@ pub mod keepalive;
 mod metrics;
 mod mutex;
 mod secrets;
+mod spreadsheet;
 #[cfg(feature = "search-service")]
 mod sps;
 mod state;

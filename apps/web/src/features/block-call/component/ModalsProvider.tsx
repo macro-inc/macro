@@ -1,5 +1,3 @@
-import { useBlockId } from '@core/block';
-import { DetailsDrawer } from '@core/component/DetailsDrawer';
 import {
   ShareBlockModal,
   ShareDialogContext,
@@ -7,7 +5,6 @@ import {
 import { createSignal, type ParentProps } from 'solid-js';
 
 export function ModalsProvider(props: ParentProps) {
-  const blockId = useBlockId();
   const [shareOpen, setShareOpen] = createSignal(false);
   return (
     <ShareDialogContext.Provider
@@ -18,7 +15,6 @@ export function ModalsProvider(props: ParentProps) {
       }}
     >
       {props.children}
-      <DetailsDrawer documentId={blockId} />
       <ShareBlockModal />
     </ShareDialogContext.Provider>
   );

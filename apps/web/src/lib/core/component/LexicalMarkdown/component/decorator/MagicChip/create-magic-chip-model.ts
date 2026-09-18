@@ -7,25 +7,20 @@ import {
   createElicitationController,
   type ElicitationController,
 } from '@app/features/block-agent/context/create-elicitation-controller';
-import { useUserId } from '@core/context/user';
+import { AgentSession } from '@core/agent-session/AgentSession';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
   type MagicChipStatus,
 } from '@macro-inc/lexical-core';
-import {
-  acquireAgentSessionFold,
-  subscribeAgentSessionLog,
-} from '@queries/agent-session/session-fold';
+import { useAgentSessionQuery } from '@queries/agent-session/session';
+import { queryReadyGate } from '@queries/gate';
 import type {
   FoldedMessage,
+  FoldedStreamEvent,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
-import { agentHarnessServiceClient } from '@service-agent-harness/client';
-import type {
-  AgentSessionLogEntryDto,
-  SessionStatusDto,
-} from '@service-agent-harness/generated/schemas';
+import type { SessionStatusDto } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   deriveMagicChipPresentation,
@@ -33,16 +28,6 @@ import {
   type MagicChipPresentation,
   type MagicChipQuestion,
 } from './presentation';
-
-const STATUS_POLL_INTERVAL_MS = 5_000;
-const MAX_STATUS_POLLS = 120;
-
-function systemEvent(entry: AgentSessionLogEntryDto): string | undefined {
-  const content = entry.content;
-  return content.type === 'event' && typeof content.event === 'string'
-    ? content.event
-    : undefined;
-}
 
 function magicChipStatus(
   status: SessionStatusDto
@@ -52,7 +37,11 @@ function magicChipStatus(
 }
 
 /** What the session row says about who runs it, until the fold says more. */
-type SessionIdentity = { harness: string; model: string };
+type SessionIdentity = {
+  harness: string;
+  model: string;
+  pullRequestUrl?: string | null;
+};
 
 /**
  * The persona as the header names it: the runtime's product name followed
@@ -78,6 +67,21 @@ function modelName(
   return modelDisplayName(model, metadata.supportedModels);
 }
 
+/** Replace the message under the same turn and author, or append it. */
+function upsert(
+  current: FoldedMessage[],
+  message: FoldedMessage
+): FoldedMessage[] {
+  return [
+    ...current.filter(
+      (existing) =>
+        existing.turn !== message.turn ||
+        existing.author.kind !== message.author.kind
+    ),
+    message,
+  ];
+}
+
 /**
  * Observe the session lifecycle and the chip's anchored folded turn.
  *
@@ -85,95 +89,53 @@ function modelName(
  * that turn: the session's metadata names the live question, the session
  * row names its owner, and {@link ElicitationController} sends the answer.
  * The header names the persona and model from the session row and the fold.
+ *
+ * The fold is the shared {@link AgentSession} for the id, so a chip and a
+ * block showing the same session fold it once between them.
  */
 export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
   elicitation: ElicitationController;
 } {
-  const [latestEvent, setLatestEvent] = createSignal<string>();
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
-  const [persistedStatus, setPersistedStatus] = createSignal(props.status);
-  const [ownerId, setOwnerId] = createSignal<string>();
-  const [session, setSession] = createSignal<SessionIdentity>();
+  const sessionQuery = useAgentSessionQuery(() => props.agentSessionId);
+  // Guard pending data so a cold query cannot suspend the surrounding editor.
+  const session = () =>
+    queryReadyGate(sessionQuery) ? sessionQuery.data : undefined;
+  const canEdit = () => session()?.canEdit;
+  const persistedStatus = () => {
+    const status = session()?.status;
+    return (status ? magicChipStatus(status) : undefined) ?? props.status;
+  };
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
   const pendingElicitation = () => metadata()?.pendingElicitation ?? undefined;
-  const viewerId = useUserId();
-  let active = true;
-  let release: (() => void) | undefined;
-  let statusTimer: ReturnType<typeof setTimeout> | undefined;
-  let statusPolls = 0;
-  const unsubscribe = subscribeAgentSessionLog(
-    props.agentSessionId,
-    (event) => {
-      const name = systemEvent(event);
-      if (name) setLatestEvent(name);
-    }
-  );
+  // The last system event's wire name, which the fold carries as status.
+  const latestEvent = () => metadata()?.status ?? undefined;
 
-  const refreshStatus = async () => {
-    statusPolls += 1;
-    const result = await agentHarnessServiceClient
-      .get(props.agentSessionId)
-      .catch(() => undefined);
-    if (!active) return;
-    if (result?.isOk()) {
-      setOwnerId(result.value.ownerId);
-      setSession({
-        harness: result.value.harness,
-        model: result.value.model,
-      });
-    }
-    const status = result?.isOk()
-      ? magicChipStatus(result.value.status)
-      : undefined;
-    if (status) setPersistedStatus(status);
-    const retry =
-      result === undefined || status === 'no_messages' || status === 'booting';
-    if (retry && statusPolls < MAX_STATUS_POLLS) {
-      statusTimer = setTimeout(refreshStatus, STATUS_POLL_INTERVAL_MS);
+  const live = AgentSession.acquire(props.agentSessionId);
+  const applyEvents = (events: FoldedStreamEvent[]) => {
+    for (const event of events) {
+      if (event.kind === 'replace') setMessages(event.messages);
+      else if (event.kind === 'metadata') setMetadata(event.metadata);
+      else setMessages((current) => upsert(current, event.message));
     }
   };
-  void refreshStatus();
-
-  void acquireAgentSessionFold({
-    agentSessionId: props.agentSessionId,
-    onReplace: setMessages,
-    onChange: (changed) => {
-      setMessages((current) =>
-        changed.reduce(
-          (next, message) => [
-            ...next.filter(
-              (existing) =>
-                existing.turn !== message.turn ||
-                existing.author.kind !== message.author.kind
-            ),
-            message,
-          ],
-          current
-        )
-      );
-    },
-    onMetadata: setMetadata,
-  })
-    .then((acquired) => {
-      if (!active) {
-        acquired.release();
-        return;
-      }
-      release = acquired.release;
-      setMessages(acquired.messages);
-      setMetadata(acquired.metadata);
+  const unsubscribe = live.subscribe(applyEvents);
+  void live
+    .load()
+    .then(() => live.snapshot())
+    .then((snapshot) => {
+      setMessages(snapshot.messages);
+      setMetadata(snapshot.metadata);
     })
     .catch((error: unknown) => {
       console.error('[magic-chip] session log could not be folded', error);
     });
 
   onCleanup(() => {
-    active = false;
-    clearTimeout(statusTimer);
     unsubscribe();
-    release?.();
+    live.release();
   });
 
   // Fold patches can arrive out of order. Follow the highest turn, including
@@ -191,10 +153,9 @@ export function createMagicChipModel(props: MagicChipData): {
     return question?.turn === turn() ? question : undefined;
   };
   const elicitation = createElicitationController({
-    sessionId: () => props.agentSessionId,
     pending: questionForTurn,
-    ownerId,
-    viewerId,
+    canEdit,
+    issue: (action) => live.issue(action),
   });
   const asking = (): MagicChipQuestion | undefined => {
     const question = questionForTurn();
@@ -202,7 +163,6 @@ export function createMagicChipModel(props: MagicChipData): {
     return {
       question,
       canAnswer: elicitation.canAnswer(),
-      ownerName: elicitation.ownerName(),
     };
   };
 
@@ -227,7 +187,10 @@ export function createMagicChipModel(props: MagicChipData): {
   const header = createMemo((): MagicChipHeader | undefined => {
     const agent = agentName(session()?.harness);
     const model = modelName(metadata(), session());
-    return agent || model ? { agent, model } : undefined;
+    const pullRequestUrl = session()?.pullRequestUrl ?? undefined;
+    return agent || model || pullRequestUrl
+      ? { agent, model, pullRequestUrl }
+      : undefined;
   });
 
   return { presentation, header, elicitation };

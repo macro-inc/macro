@@ -1,5 +1,9 @@
 import type { BrowserTursoCacheRolloutDecision } from '@graphql-cache/rollout-policy';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import type {
+  GraphqlSoupEntityType,
+  SoupItemFieldsFragment,
+} from './graphql/generated/graphql';
 
 it('maps agent sessions without discarding persona, favorites or notifications', async () => {
   const { mapGraphqlSoupItem } = await import('./graphql-soup');
@@ -223,6 +227,81 @@ vi.mock('@urql/core', () => ({
     };
   },
 }));
+
+describe('GraphQL Soup chat models', () => {
+  it.each(['openai/gpt-5.6', 'anthropic/claude-sonnet-5', null])(
+    'preserves the saved model (%s) in the shared soup shape',
+    async (model) => {
+      const { mapGraphqlSoupItem } = await import('./graphql-soup');
+      const item = {
+        __typename: 'GraphqlSoupChat',
+        id: 'chat-model',
+        chatName: 'Chat',
+        model,
+        ownerId: 'macro|owner@example.com',
+        entityType: 'CHAT' as GraphqlSoupEntityType,
+        displayName: 'Chat',
+        projectId: null,
+        viewedAt: null,
+        deletedAt: null,
+        cacheProjection: null,
+        frecencyScore: null,
+        isPersistent: true,
+        isFavorited: false,
+        createdAt: '2026-09-11T00:00:00Z',
+        updatedAt: '2026-09-11T00:00:00Z',
+        properties: [],
+        notifications: [],
+      } satisfies SoupItemFieldsFragment;
+
+      expect(mapGraphqlSoupItem(item)).toMatchObject({
+        tag: 'chat',
+        data: { id: item.id, model },
+      });
+    }
+  );
+});
+
+describe('GraphQL Soup document sub types', () => {
+  it.each([
+    [
+      { __typename: 'GraphqlTaskSubType', isCompleted: true },
+      { type: 'task', is_completed: true },
+    ],
+    [{ __typename: 'GraphqlSkillSubType' }, { type: 'skill' }],
+    [{ __typename: 'GraphqlInitiativeDescriptionSubType' }, undefined],
+  ] as const)(
+    'maps %j to the shared soup sub type %j',
+    async (subType, expected) => {
+      const { mapGraphqlSoupItem } = await import('./graphql-soup');
+      const item = {
+        __typename: 'GraphqlSoupDocument',
+        id: 'doc-sub-type',
+        entityType: 'DOCUMENT' as GraphqlSoupEntityType,
+        displayName: 'Plan',
+        documentName: 'Plan',
+        ownerId: 'macro|owner@example.com',
+        fileType: 'md',
+        projectId: null,
+        viewedAt: null,
+        deletedAt: null,
+        cacheProjection: null,
+        frecencyScore: null,
+        isFavorited: false,
+        createdAt: '2026-09-11T00:00:00Z',
+        updatedAt: '2026-09-11T00:00:00Z',
+        subType,
+        properties: [],
+        notifications: [],
+      } satisfies SoupItemFieldsFragment;
+
+      expect(mapGraphqlSoupItem(item)).toMatchObject({
+        tag: 'document',
+        data: { id: item.id, subType: expected },
+      });
+    }
+  );
+});
 
 describe('GraphQL Soup browser cache session gate', () => {
   beforeEach(() => {

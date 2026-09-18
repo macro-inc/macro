@@ -24,6 +24,9 @@ use github::domain::service::GithubLinkServiceImpl;
 use github::outbound::github_auth_client::GithubAuthImpl;
 use github::outbound::github_oauth_client::GithubOauthImpl;
 use github::outbound::pg_github_repo::PgGithubRepo;
+use gtm_invite::{
+    domain::service::GtmInviteServiceImpl, outbound::pg_gtm_invite_repo::PgGtmInviteRepo,
+};
 use loops_client::LoopsClient;
 use macro_auth::{InternalApiKey, middleware::decode_jwt::JwtValidationArgs};
 use macro_authorization::{
@@ -95,6 +98,8 @@ pub(crate) type ReferralServiceType = ReferralServiceImpl<
     Arc<SqsNotificationIngress<SqsQueue>>,
 >;
 
+pub(crate) type GtmInviteServiceType = GtmInviteServiceImpl<PgGtmInviteRepo>;
+
 pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
     PgGithubRepo,
     GithubOauthImpl,
@@ -118,6 +123,8 @@ pub(crate) struct ApiContext {
     pub microsoft_token_cipher: Option<Arc<dyn MicrosoftTokenCipher>>,
     /// Encrypts users' Cursor API keys.
     pub cursor_api_key_cipher: Arc<dyn CursorApiKeyCipher>,
+    /// Owner-bound Codex OAuth lifecycle and cloud target settings.
+    pub codex_connection: Option<Arc<dyn codex_connection::domain::ConnectionService>>,
     pub macro_cache_client: Arc<MacroCache>,
     pub stripe_client: Arc<stripe::Client>,
     pub document_storage_service_client:
@@ -137,12 +144,14 @@ pub(crate) struct ApiContext {
         Arc<UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>>, // Note: since FromRef doesn't support generics we have to specify the concrete types here
     pub teams_service: Arc<TeamsServiceType>,
     pub channel_service: Arc<ChannelServiceType>,
+    pub channel_messages: Arc<dyn messages::domain::api::MessageCommands>,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub entity_access_service: Arc<EntityAccessServiceType>,
     pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
     pub analytics_client: Arc<AnalyticsClient>,
     pub loops_client: Arc<LoopsClient>,
     pub referral_service: Arc<ReferralServiceType>,
+    pub gtm_invite_service: Arc<GtmInviteServiceType>,
     pub rate_limit_service: RateLimiter,
     /// The stripe price id
     pub stripe_price_id: String,

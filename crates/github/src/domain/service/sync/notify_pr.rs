@@ -20,7 +20,7 @@ use crate::domain::{
         EnrichedGithubPullRequest, GithubAppInstallationSource, GithubPullRequestStatus,
         ValidatedGithubWebhookEvent,
     },
-    ports::{GithubSyncClient, GithubSyncRepo},
+    ports::{GithubSyncClient, GithubSyncRealtime, GithubSyncRepo},
 };
 
 use super::{GithubSyncServiceImpl, PullRequestForeignEntityUpsert};
@@ -48,7 +48,8 @@ impl<
     C: GithubSyncClient,
     F: ForeignEntityService,
     N: NotificationIngress,
-> GithubSyncServiceImpl<D, R, C, F, N>
+    P: GithubSyncRealtime,
+> GithubSyncServiceImpl<D, R, C, F, N, P>
 {
     pub(super) async fn notify_pr_status_transitions(
         &self,

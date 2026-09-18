@@ -32,3 +32,20 @@ export interface AnsweredQuestion {
 export function isToolActive(status: ToolStatus): boolean {
   return status === 'pending' || status === 'running';
 }
+
+/**
+ * A call's status as its row should read it, given whether its turn is
+ * still running.
+ *
+ * A call still `pending` or `running` once the turn is over was cut off —
+ * the harness never said how it ended, and never will — so it is not active,
+ * whatever the log last recorded. It settles as completed: the call happened
+ * and is over, which is all the row claims. A failure it never reported is
+ * not one to invent.
+ */
+export function settledToolStatus(
+  status: ToolStatus,
+  inFlight: boolean
+): ToolStatus {
+  return !inFlight && isToolActive(status) ? 'completed' : status;
+}

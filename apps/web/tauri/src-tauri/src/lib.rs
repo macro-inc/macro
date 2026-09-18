@@ -257,6 +257,7 @@ pub fn run() {
             graphql_cache_plugin::commands::graphql_cache_read,
             graphql_cache_plugin::commands::graphql_cache_read_records_by_keys,
             graphql_cache_plugin::commands::graphql_cache_search,
+            graphql_cache_plugin::commands::graphql_cache_entity_filter,
             graphql_cache_plugin::commands::graphql_cache_write,
             graphql_cache_plugin::commands::graphql_cache_hydrate,
             graphql_cache_plugin::commands::graphql_cache_enqueue_optimistic_mutation,

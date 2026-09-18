@@ -6,3 +6,6 @@ pub use axum_router::{
     AgentSessionControlState, AgentSessionRouterState, agent_sandbox_size_router,
     agent_session_control_router, agent_session_read_router,
 };
+
+#[cfg(feature = "ai_tools")]
+pub mod toolset;

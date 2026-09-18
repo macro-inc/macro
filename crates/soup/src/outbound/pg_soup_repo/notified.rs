@@ -20,6 +20,7 @@
 
 use filter_ast::Expr;
 use item_filters::ast::EntityFilterAst;
+use item_filters::ast::agent_session::AgentSessionLiteral;
 use item_filters::ast::calendar_event::CalendarEventLiteral;
 use item_filters::ast::foreign_entity::ForeignEntityLiteral;
 use item_filters::ast::properties::{PropertyEntityType, properties_filter_matches_propertyless};
@@ -143,6 +144,32 @@ fn reminder_gate() -> String {
     )
 }
 
+/// Agent sessions are authorized through `entity_access`, whose sources are
+/// the same user / channel / team ids the query's `user_source_ids` CTE
+/// already collects - the predicate the agent-session leg's own queries use.
+fn agent_session_gate() -> String {
+    uuid_guarded(
+        ID_SQL,
+        format!(
+            r#"EXISTS (
+                SELECT 1 FROM entity_access ea
+                WHERE ea.entity_id = {ID_SQL}::uuid
+                AND ea.entity_type = 'agent_session'
+                AND ea.source_id IN (SELECT source_id FROM user_source_ids)
+            )"#
+        ),
+    )
+}
+
+/// Agent sessions are off unless the request opts in, exactly as the
+/// agent-session leg decides it for the other feeds: an explicit `Include`,
+/// or naming ids/owners.
+fn includes_agent_sessions(filter: Option<&EntityFilterAst>) -> bool {
+    filter
+        .and_then(|f| f.agent_session_filter.as_deref())
+        .is_some_and(|tree: &Expr<AgentSessionLiteral>| super::agent_session::opted_in(tree))
+}
+
 /// A foreign-entity tree that can never match: the nil-id opt-out the client
 /// sends for entity types a view does not reference.
 fn foreign_entity_filter_is_impossible(tree: Option<&Expr<ForeignEntityLiteral>>) -> bool {
@@ -202,6 +229,11 @@ fn included_types(req: &NotifiedSoupRequest<'_>) -> Vec<&'static str> {
     }
     if req.hydratable.reminders && propertyless_ok {
         types.push(EntityType::Reminder.into());
+    }
+    // Agent sessions hydrate through the main by-ids query like documents,
+    // but are opt-in by filter like reminders, and carry no properties.
+    if includes_agent_sessions(req.filter) && propertyless_ok {
+        types.push(EntityType::AgentSession.into());
     }
     types
 }
@@ -289,6 +321,7 @@ pub(super) async fn notified_soup_page(
             WHEN 'calendar_event' THEN {calendar_event_gate}
             WHEN 'foreign_entity' THEN {foreign_entity_gate}
             WHEN 'reminder' THEN {reminder_gate}
+            WHEN 'agent_session' THEN {agent_session_gate}
             ELSE FALSE
         END
         ORDER BY nc.notified_at DESC, nc.entity_id DESC
@@ -303,6 +336,7 @@ pub(super) async fn notified_soup_page(
         calendar_event_gate = calendar_event_gate(req.filter),
         foreign_entity_gate = foreign_entity_gate(req.filter),
         reminder_gate = reminder_gate(),
+        agent_session_gate = agent_session_gate(),
     );
 
     let after_ts = req.after.as_ref().map(|a| a.notified_at.naive_utc());

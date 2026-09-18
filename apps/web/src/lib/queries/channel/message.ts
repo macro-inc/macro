@@ -2,6 +2,7 @@ import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import type { OptimisticPostMessageAttachment } from '@channel/Input/message-payload';
 import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
+import { markMessageSent } from '@core/util/message-send-motion';
 import { throwOnErr } from '@core/util/result';
 import {
   bumpSoupEntityTouchedAt,
@@ -201,6 +202,8 @@ export function optimisticInsertChannelMessage(
     optimisticId: vars.optimisticId,
     target,
   };
+
+  markMessageSent(`channel:${vars.optimisticId}`);
 
   if (target.kind === 'thread_reply') {
     const optimisticReply = makeOptimisticThreadReply(

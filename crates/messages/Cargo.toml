@@ -1,0 +1,67 @@
+[package]
+edition = "2024"
+name = "messages"
+publish = false
+version = "0.1.0"
+
+[features]
+annotations = ["dep:model", "ports"]
+broker = ["dep:macro_event_broker", "dep:macro_event_topics", "ports"]
+default = []
+delivery = [
+  "dep:connection_gateway_client",
+  "dep:model-entity",
+  "dep:model_notifications",
+  "dep:notification",
+  "dep:system_properties",
+  "outbound",
+]
+inbound = [
+  "dep:axum",
+  "dep:macro_authorization",
+  "entity_access/inbound",
+  "ports",
+  "schema",
+]
+json-schema = ["dep:schemars"]
+outbound = ["dep:macro_uuid", "dep:sqlx", "ports"]
+ports = ["dep:async-trait", "dep:entity_access", "dep:rootcause", "entity_access/ports"]
+schema = ["channel_sender/schema", "dep:utoipa"]
+test-utils = ["dep:mockall", "ports"]
+
+[dependencies]
+async-trait = { workspace = true, optional = true }
+axum = { workspace = true, optional = true }
+bot_id = { path = "../bot_id" }
+channel_sender = { path = "../channel_sender" }
+chrono = { workspace = true }
+connection_gateway_client = { path = "../connection_gateway_client", optional = true }
+entity_access = { path = "../entity_access", default-features = false, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = [
+  "axum",
+], optional = true }
+macro_event_broker = { path = "../macro_event_broker", default-features = false, optional = true }
+macro_event_topics = { path = "../macro_event_topics", optional = true }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid", optional = true }
+mockall = { workspace = true, optional = true }
+model = { path = "../model", optional = true }
+model-entity = { path = "../model-entity", optional = true }
+model_notifications = { path = "../model_notifications", optional = true }
+models_pagination = { path = "../models_pagination" }
+notification = { path = "../notification", optional = true }
+rootcause = { workspace = true, optional = true }
+schemars = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+system_properties = { path = "../system_properties", optional = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -27,11 +27,12 @@ export type AgentAction = (AgentPromptAction & {
  * frame, and read back off that frame as `request_id` on the folded message
  * it derives.
  *
- * Minted only by the server at accept time, as a v7 uuid so ids sort by mint
- * time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
- * request id is the whole ownership test: the server is the only writer of
- * runtime-bound frames. The machine's own handshake request ids
- * (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+ * A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+ * or by a client that speculated the action and named it in the control
+ * request - either way the server is the only writer of runtime-bound
+ * frames, so a uuid-shaped request id remains the whole ownership test. The
+ * machine's own handshake request ids (`agent_session:{session}:{n}`) are
+ * not uuids and stay `None`.
  */
 export type AgentActionId = string;
 
@@ -249,6 +250,12 @@ export type AgentSessionResponse = {
      */
     botId: string;
     /**
+     * Whether the caller may drive the session - prompt it, answer its
+     * questions, stop it - rather than only watch. Edit access; the
+     * creator owns the session, so a create response always says so.
+     */
+    canEdit: boolean;
+    /**
      * When the session was created.
      */
     createdAt: string;
@@ -287,6 +294,10 @@ export type AgentSessionResponse = {
      */
     ownerId: string;
     /**
+     * The session's linked pull request.
+     */
+    pullRequestUrl?: string | null;
+    /**
      * The repository the session works with, when one was stated.
      */
     repoUrl?: string | null;
@@ -300,13 +311,14 @@ export type AgentSessionResponse = {
     status: SessionStatusDto;
     /**
      * The channel `thread_id` lives in, when the session was spawned from a
-     * thread.
+     * channel thread. Derived from `thread_parent`.
      */
     threadChannelId?: string | null;
     /**
      * The root message of the thread the session was created from, if any.
      */
     threadId?: string | null;
+    threadParent?: null | MessageParent;
     /**
      * The directory the session's harness runs in on its runtime.
      */
@@ -326,9 +338,32 @@ export type AgentSetModelAction = {
 export type BotId = string;
 
 /**
- * The operation to perform.
+ * One-time manual code. Deliberately does not implement Debug.
  */
-export type ControlRequest = AgentAction;
+export type CompleteRequest = {
+    /**
+     * Server-issued handle; never an owner selected by the caller.
+     */
+    attemptId: string;
+    /**
+     * Claude's complete code#state string, not an access token.
+     */
+    code: string;
+};
+
+/**
+ * Request body for a control operation on a live session.
+ *
+ * A wrapper around the operation rather than the bare enum so that fields
+ * which are about the request rather than the operation have somewhere to go.
+ * The acting user is deliberately not one of them: it comes from the caller's
+ * credentials, so that a caller cannot attribute an operation to someone else.
+ *
+ * Clients serialize this, so both derives are used.
+ */
+export type ControlRequest = AgentAction & {
+    actionId?: null | AgentActionId;
+};
 
 /**
  * Response body for a control operation.
@@ -338,7 +373,8 @@ export type ControlRequest = AgentAction;
 export type ControlResponse = {
     /**
      * Matches `requestId` on the folded message this action derives once it
-     * dispatches, and names the queue entry until then.
+     * dispatches, and names the queue entry until then. The caller's own
+     * `actionId` when it supplied one; a freshly minted id otherwise.
      */
     actionId: AgentActionId;
     /**
@@ -369,10 +405,11 @@ export type ControlStatusDto = 'sent' | 'queued';
 export type CreateAgentSessionRequest = {
     /**
      * Bot the session runs for. On a managed request this optionally selects
-     * a persisted persona the user owns or may use through team membership;
-     * omitting it uses the deployment's default coding persona. On an
-     * external request, bot callers may omit it (their own identity is used)
-     * and must not name another bot; user callers must supply a bot they own.
+     * a persisted persona the user owns, may use through team membership, or
+     * can `@` mention in a shared channel; omitting it uses the deployment's
+     * default coding persona. On an external request, bot callers may omit it
+     * (their own identity is used) and must not name another bot; user callers
+     * must supply a bot they own.
      */
     botId?: string | null;
     /**
@@ -401,8 +438,13 @@ export type CreateAgentSessionRequest = {
      */
     prompt?: string | null;
     /**
-     * Repository nominally checked out at `workspace`. Informational and
-     * optional: having it cloned there is the runtime operator's job.
+     * Starting branch for a managed coding session's selected repository.
+     */
+    repoBranch?: string | null;
+    /**
+     * Explicit GitHub repository for a managed Cursor session. Access is
+     * checked for the session owner. For external sessions this is
+     * informational: cloning it is the runtime operator's job.
      */
     repoUrl?: string | null;
     thread?: null | CreateSessionThread;
@@ -433,9 +475,10 @@ export type CreateAgentSessionResponse = {
  */
 export type CreateSessionThread = {
     /**
-     * Channel the mentioning message was posted in.
+     * Channel the mentioning message was posted in. Runtimes built before
+     * message parents send this instead of `parent`.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * The mention's text, quoted in the session's announcement.
      */
@@ -444,12 +487,18 @@ export type CreateSessionThread = {
      * The mentioning message.
      */
     messageId: string;
+    parent?: null | MessageParent;
     /**
      * Thread the session belongs to; defaults to the message itself, which
      * is how a top-level mention roots its own thread.
      */
     threadId?: string | null;
 };
+
+/**
+ * A validated document identifier. Historical document ids need not be UUIDs.
+ */
+export type DocumentId = string;
 
 /**
  * Request body for editing a queued prompt.
@@ -502,6 +551,13 @@ export type ElicitationContentValue = string | boolean | number | number | Array
  * so it is not representable here.
  */
 export type ElicitationRequestId = number | string;
+
+/**
+ * A JSON body is required on writes, including start/disconnect (no form-based CSRF).
+ */
+export type EmptyRequest = {
+    [key: string]: never;
+};
 
 /**
  * The provider-side identity of an externally-served session.
@@ -582,9 +638,26 @@ export type LogFrameDto = {
 };
 
 /**
+ * The entity whose permissions and lifecycle govern a message.
+ */
+export type MessageParent = {
+    /**
+     * A channel, including direct messages.
+     */
+    id: string;
+    type: 'channel';
+} | {
+    /**
+     * A document, including tasks and PDFs.
+     */
+    id: DocumentId;
+    type: 'document';
+};
+
+/**
  * Harness names accepted by the model discovery endpoint.
  */
-export type ModelHarnessDto = 'in-memory' | 'cursor' | 'macrod';
+export type ModelHarnessDto = 'in-memory' | 'cursor' | 'claude-cloud' | 'macrod';
 
 /**
  * The decision carried by an [`AgentPermissionAction`].
@@ -693,6 +766,10 @@ export type SessionBot = {
      */
     avatarUrl?: string | null;
     /**
+     * Stable `@` handle, without a leading `@`.
+     */
+    handle: string;
+    /**
      * The bot's id. A message it sent has `"bot|{id}"` as its sender.
      */
     id: BotId;
@@ -716,6 +793,42 @@ export type SessionStatusDto = {
     kind: 'event';
 } | {
     kind: 'disconnected';
+};
+
+/**
+ * Public PKCE challenge and attempt handle; contains no verifier or provider tokens.
+ */
+export type StartResponse = {
+    /**
+     * Opaque owner-bound attempt handle.
+     */
+    attemptId: string;
+    /**
+     * Claude-hosted consent page.
+     */
+    authorizationUrl: string;
+    /**
+     * Attempt lifetime in seconds.
+     */
+    expiresIn: number;
+};
+
+/**
+ * Safe connection metadata.
+ */
+export type StatusResponse = {
+    /**
+     * Whether the authenticated Macro user has connected.
+     */
+    connected: boolean;
+    /**
+     * Whether this deployment supports browser connection.
+     */
+    enabled: boolean;
+    /**
+     * Whether reconnecting after service restart is required.
+     */
+    ephemeral: boolean;
 };
 
 /**
@@ -1116,3 +1229,101 @@ export type PutAgentSessionSandboxSizeResponses = {
 };
 
 export type PutAgentSessionSandboxSizeResponse = PutAgentSessionSandboxSizeResponses[keyof PutAgentSessionSandboxSizeResponses];
+
+export type DisconnectData = {
+    body: EmptyRequest;
+    path?: never;
+    query?: never;
+    url: '/claude-auth';
+};
+
+export type DisconnectErrors = {
+    /**
+     * Disabled
+     */
+    403: unknown;
+};
+
+export type DisconnectResponses = {
+    /**
+     * Disconnected
+     */
+    204: void;
+};
+
+export type DisconnectResponse = DisconnectResponses[keyof DisconnectResponses];
+
+export type StatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/claude-auth';
+};
+
+export type StatusErrors = {
+    /**
+     * Unauthenticated
+     */
+    401: unknown;
+};
+
+export type StatusResponses = {
+    200: StatusResponse;
+};
+
+export type StatusResponse2 = StatusResponses[keyof StatusResponses];
+
+export type CompleteData = {
+    body: CompleteRequest;
+    path?: never;
+    query?: never;
+    url: '/claude-auth/complete';
+};
+
+export type CompleteErrors = {
+    /**
+     * Invalid code
+     */
+    400: unknown;
+    /**
+     * Expired or replayed
+     */
+    409: unknown;
+    /**
+     * Provider failed
+     */
+    502: unknown;
+};
+
+export type CompleteResponses = {
+    /**
+     * Connected
+     */
+    204: void;
+};
+
+export type CompleteResponse = CompleteResponses[keyof CompleteResponses];
+
+export type StartData = {
+    body: EmptyRequest;
+    path?: never;
+    query?: never;
+    url: '/claude-auth/start';
+};
+
+export type StartErrors = {
+    /**
+     * Disabled
+     */
+    403: unknown;
+    /**
+     * Too many attempts
+     */
+    429: unknown;
+};
+
+export type StartResponses = {
+    200: StartResponse;
+};
+
+export type StartResponse2 = StartResponses[keyof StartResponses];

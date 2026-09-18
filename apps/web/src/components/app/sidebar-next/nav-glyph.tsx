@@ -5,13 +5,10 @@ import { Dynamic } from 'solid-js/web';
 /** Any SVG component — in practice the Phosphor icons `nav-items` imports. */
 export type NavIcon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
 
-const SWAP = cn(
-  'absolute inset-0 transition-opacity duration-150 ease-out',
-  'motion-reduce:transition-none'
-);
+const SWAP = 'absolute inset-0';
 
 /**
- * A nav glyph, optionally cross-fading to a filled counterpart.
+ * A nav glyph, instantly switching to a filled counterpart when active.
  *
  * Both weights are stacked in the same square box and swapped by opacity
  * alone, so neither reflows its button and the outline glyph does not blink out
@@ -23,7 +20,7 @@ export const NavGlyph = (props: {
   icon: NavIcon;
   /** Filled counterpart of `icon`. Omit to keep one glyph in every state. */
   iconActive?: NavIcon;
-  /** Cross-fades `iconActive` in. Ignored when there isn't one. */
+  /** Shows `iconActive` immediately. Ignored when there isn't one. */
   filled?: boolean;
   /** Sizes the box and, with it, both glyphs — e.g. `size-5`. */
   class: string;

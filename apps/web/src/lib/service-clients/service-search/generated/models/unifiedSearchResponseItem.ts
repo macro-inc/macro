@@ -11,6 +11,7 @@ import type { UnifiedSearchResponseItemOneOfOnesix } from './unifiedSearchRespon
 import type { UnifiedSearchResponseItemOneOfOnethree } from './unifiedSearchResponseItemOneOfOnethree';
 import type { UnifiedSearchResponseItemOneOfOnezero } from './unifiedSearchResponseItemOneOfOnezero';
 import type { UnifiedSearchResponseItemOneOfSeven } from './unifiedSearchResponseItemOneOfSeven';
+import type { UnifiedSearchResponseItemOneOfTwoeight } from './unifiedSearchResponseItemOneOfTwoeight';
 import type { UnifiedSearchResponseItemOneOfTwofive } from './unifiedSearchResponseItemOneOfTwofive';
 import type { UnifiedSearchResponseItemOneOfTwotwo } from './unifiedSearchResponseItemOneOfTwotwo';
 
@@ -23,4 +24,5 @@ export type UnifiedSearchResponseItem =
   | UnifiedSearchResponseItemOneOfOnesix
   | UnifiedSearchResponseItemOneOfOnenine
   | UnifiedSearchResponseItemOneOfTwotwo
-  | UnifiedSearchResponseItemOneOfTwofive;
+  | UnifiedSearchResponseItemOneOfTwofive
+  | UnifiedSearchResponseItemOneOfTwoeight;

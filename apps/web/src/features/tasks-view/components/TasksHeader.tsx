@@ -1,11 +1,11 @@
 import {
   SearchBar,
   useViewControlHotkeys,
+  ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -22,12 +22,42 @@ export type TasksHeaderProps = {
   onSearchEscape?: () => void;
 };
 
-export function TasksTopBar() {
+export function TaskViewBreadcrumbItem() {
   const { state } = useTasksView();
-  const title = () =>
+  const tabTitle = () =>
     TASK_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Tasks';
 
-  return <ViewShell.TopBar>{title()}</ViewShell.TopBar>;
+  return (
+    <ViewBreadcrumbs.Item
+      value="tasks-view"
+      metadata={{ type: 'tasks' }}
+      order={0}
+    >
+      {(item) => (
+        <ViewBreadcrumbs.ReturnButton
+          isActive={item.isActive()}
+          onClick={item.onSelect}
+          tooltip={tabTitle()}
+        >
+          <span class="truncate">{tabTitle()}</span>
+        </ViewBreadcrumbs.ReturnButton>
+      )}
+    </ViewBreadcrumbs.Item>
+  );
+}
+
+export function TasksTopBar() {
+  return (
+    <ViewShell.TopBar>
+      <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
+        Tasks
+      </h1>
+      <ViewBreadcrumbs.Outlet
+        class="@max-[720px]/view-shell:hidden"
+        aria-label="Task location"
+      />
+    </ViewShell.TopBar>
+  );
 }
 
 export function TasksHeader(props: TasksHeaderProps) {
@@ -63,14 +93,6 @@ export function TasksHeader(props: TasksHeaderProps) {
         when={isTouchDevice()}
         fallback={
           <>
-            <div class="hidden items-center @max-[720px]/view-shell:flex">
-              <SplitPanel.ControlGroup>
-                <SplitPanel.CloseButton />
-                <SplitPanel.BackButton />
-                <SplitPanel.ForwardButton />
-              </SplitPanel.ControlGroup>
-            </div>
-
             <div class="hidden h-8 min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
               <Dropdown
                 open={navigationOpen()}

@@ -2,6 +2,7 @@
 
 pub(crate) mod queries;
 
+pub use queries::agent_session_access::accessible_session_ids;
 pub use queries::{SourceIds, get_team_scope_source_ids, get_user_source_ids};
 
 #[cfg(test)]
@@ -65,12 +66,18 @@ impl AccessRepository for PgAccessRepository {
         document_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        let document_uuid = document_id
-            .parse::<Uuid>()
-            .map_err(|_| AccessError::BadRequest("Invalid document ID format"))?;
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
             .map_err(anyhow_access_error)?;
+        let Ok(document_uuid) = document_id.parse::<Uuid>() else {
+            return Ok(queries::document_access::get_legacy_document_access(
+                &self.pool,
+                document_id,
+                &source_ids,
+                user_id,
+            )
+            .await?);
+        };
         Ok(queries::document_access::get_document_access(
             &self.pool,
             &document_uuid,
@@ -205,6 +212,24 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
     }
 
+    async fn get_agent_session_document(
+        &self,
+        agent_session_id: &str,
+    ) -> Result<Option<String>, AccessError> {
+        let session = agent_session_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
+        Ok(sqlx::query_scalar!(
+            r#"SELECT m.parent_entity_id FROM agent_session s
+               JOIN comms_messages m ON m.id = s.thread_id
+               JOIN comms_message_threads t ON t.root_id = m.id
+               WHERE s.id = $1 AND m.parent_entity_type = 'document' AND t.deleted_at IS NULL"#,
+            session,
+        )
+        .fetch_optional(&self.pool)
+        .await?)
+    }
+
     async fn get_agent_session_access(
         &self,
         agent_session_id: &str,
@@ -219,6 +244,25 @@ impl AccessRepository for PgAccessRepository {
         Ok(queries::agent_session_access::get_agent_session_access(
             &self.pool,
             &agent_session_uuid,
+            &source_ids,
+        )
+        .await?)
+    }
+
+    async fn get_initiative_access(
+        &self,
+        initiative_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> Result<Option<AccessLevel>, AccessError> {
+        let initiative_uuid = initiative_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid initiative ID format"))?;
+        let source_ids = queries::get_user_source_ids(&self.pool, user_id)
+            .await
+            .map_err(anyhow_access_error)?;
+        Ok(queries::initiative_access::get_initiative_access(
+            &self.pool,
+            &initiative_uuid,
             &source_ids,
         )
         .await?)
@@ -308,6 +352,14 @@ impl AccessRepository for PgAccessRepository {
                 )
                 .await
             }
+            EntityType::Initiative => {
+                queries::initiative_access::get_initiative_access(
+                    &self.pool,
+                    &entity_uuid,
+                    &source_ids,
+                )
+                .await
+            }
             EntityType::User
             | EntityType::Channel
             | EntityType::ChannelMessage
@@ -318,8 +370,10 @@ impl AccessRepository for PgAccessRepository {
             | EntityType::CrmCompany
             | EntityType::CrmContact
             | EntityType::Skill
-            // Reminders are user-owned, never reachable through a team scope.
-            | EntityType::Reminder => {
+            // Reminders and scheduled actions are user-owned, never reachable
+            // through a team scope.
+            | EntityType::Reminder
+            | EntityType::ScheduledAction => {
                 return Err(AccessError::BadRequest(
                     "Unsupported entity type for team item access",
                 ));

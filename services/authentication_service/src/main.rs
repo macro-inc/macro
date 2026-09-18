@@ -65,6 +65,9 @@ use teams::{
     },
 };
 
+use gtm_invite::{
+    domain::service::GtmInviteServiceImpl, outbound::pg_gtm_invite_repo::PgGtmInviteRepo,
+};
 use referral::{
     domain::service::ReferralServiceImpl,
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
@@ -106,6 +109,9 @@ async fn main() -> anyhow::Result<()> {
             .signup_policy()
             .context("invalid signup policy configuration")?,
     );
+    let gtm_invite_config = config
+        .gtm_invite_config()
+        .context("invalid GTM invite link configuration")?;
     let microsoft_credentials = config
         .microsoft_credentials()
         .context("invalid Microsoft OAuth configuration")?;
@@ -384,7 +390,7 @@ async fn main() -> anyhow::Result<()> {
     // indexing.
     let channel_side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(db.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway_client),
+        ConnectionGatewayChannelRealtimePublisher::new(connection_gateway_client.clone()),
         NotificationChannelSender::new(notification_ingress_service.clone()),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
@@ -392,8 +398,38 @@ async fn main() -> anyhow::Result<()> {
     let channel_event_dispatcher = SpawnedChannelEventDispatcher::new(channel_side_effects);
     let channel_service = ChannelServiceImpl::with_dependencies(
         PgChannelsRepo::new(db.clone()),
-        channel_event_dispatcher,
+        channel_event_dispatcher.clone(),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service_impl.clone()),
+    );
+    // The welcome message goes through the shared message service so it gets the
+    // same persistence and delivery as every other channel message.
+    let channel_messages: Arc<dyn messages::domain::api::MessageCommands> = Arc::new(
+        messages::domain::service::MessageService::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::domain::effects::MessageEffects::new(
+                messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
+                messages::domain::ports::NoMessageEventPublisher,
+                channels::domain::message_delivery::ChannelMessageDelivery::new(
+                    PgChannelsRepo::new(db.clone()),
+                    channel_event_dispatcher,
+                    PgChannelReferenceSharePermissions::new(
+                        db.clone(),
+                        entity_access_service_impl.clone(),
+                    ),
+                    messages::outbound::connection_gateway::ConnectionGatewayMessages(
+                        connection_gateway_client,
+                    ),
+                ),
+            ),
+        )
+        .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
+            PgChannelsRepo::new(db.clone()),
+        ))
+        .with_references(
+            messages::outbound::entity_access_audience::EntityAccessMessageReferences(
+                (*entity_access_service_impl).clone(),
+            ),
+        ),
     );
 
     let teams_service_impl = TeamServiceImpl::new_with_analytics(
@@ -437,6 +473,29 @@ async fn main() -> anyhow::Result<()> {
         ),
         notification_ingress: notification_ingress_service.clone(),
     };
+    let gtm_invite_service = GtmInviteServiceImpl {
+        repo: PgGtmInviteRepo::new(db.clone()),
+        config: gtm_invite_config,
+    };
+
+    let codex_connection = if let Some(key_id) = config.codex_oauth_kms_key_id() {
+        let cipher = Arc::new(codex_connection::outbound::cipher::EnvelopeCipher::new(
+            aws_sdk_kms::Client::new(&aws_config),
+            key_id,
+        )?);
+        let repository = Arc::new(
+            codex_connection::outbound::postgres::PostgresRepository::new(db.clone(), cipher),
+        );
+        let provider = codex_cloud_agents::outbound::openai::OpenAi::new()
+            .map_err(|_| anyhow::anyhow!("failed to initialize Codex OAuth client"))?;
+        Some(
+            Arc::new(codex_connection::domain::ConnectionServiceImpl::new(
+                repository, provider,
+            )) as Arc<dyn codex_connection::domain::ConnectionService>,
+        )
+    } else {
+        None
+    };
 
     let server_result = api::setup_and_serve(
         ApiContext {
@@ -445,6 +504,7 @@ async fn main() -> anyhow::Result<()> {
             auth_client: Arc::new(auth_client),
             microsoft_token_cipher,
             cursor_api_key_cipher,
+            codex_connection,
             macro_cache_client: Arc::new(macro_cache_client),
             stripe_client: Arc::new(stripe_client),
             document_storage_service_client: Arc::new(document_storage_service_client),
@@ -471,9 +531,11 @@ async fn main() -> anyhow::Result<()> {
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
             channel_service: Arc::new(channel_service),
+            channel_messages,
             favorites_service: Arc::new(favorites_service),
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),
+            gtm_invite_service: Arc::new(gtm_invite_service),
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(
                     AppServiceUrl::new_for_environment(config.environment)

@@ -14,12 +14,13 @@ import DotsThree from '@phosphor/dots-three.svg';
 import Paperclip from '@phosphor/paperclip.svg';
 import Trash from '@phosphor/trash.svg';
 import { isIOS } from '@solid-primitives/platform';
-import { Button, cn, Layer, SendButton, Surface, Tooltip } from '@ui';
+import { Button, cn, SendButton, Surface, Tooltip } from '@ui';
 import type { LexicalEditor } from 'lexical';
 import { $getRoot } from 'lexical';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { EmailDateSelector } from '../components/email-date-selector';
 import { MacroSignatureButton } from '../components/macro-signature-button';
+import { MobileReplyToolbar } from '../components/mobile-reply-toolbar';
 import { SignaturePreview } from '../components/signature-preview';
 import type { EmailComposeContext } from '../context/compose-capabilities';
 import { getOrInitEmailFormContext } from '../context/email-form-context';
@@ -284,10 +285,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
     </Show>
   );
 
-  const AttachButton = (buttonProps?: {
-    variant?: 'ghost' | 'outline';
-    class?: string;
-  }) => (
+  const AttachButton = () => (
     <Button
       ref={(el) =>
         fileSelector(el, () => ({
@@ -295,9 +293,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           onSelect: handleAddAttachments,
         }))
       }
-      size="icon-sm"
-      variant={buttonProps?.variant}
-      class={buttonProps?.class}
+      size="icon-composer"
       tooltip="Attach"
     >
       <Paperclip />
@@ -309,7 +305,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       class={cn(
         'relative flex flex-col flex-1 max-w-full min-h-0',
         isMobileDrawer() && 'min-h-full overflow-y-scroll overscroll-y-none',
-        props.unframed ? 'rounded-lg' : 'rounded-xl'
+        props.unframed ? 'rounded-lg' : 'rounded-xl bg-menu-glass glass-input'
       )}
       style={props.unframed ? { 'background-color': 'transparent' } : undefined}
       hideBorder={props.unframed}
@@ -320,35 +316,19 @@ export function ReplyInputView(props: ReplyInputViewProps) {
       solid
     >
       <Show when={isMobileDrawer()}>
-        <Layer depth={0}>
-          <div
-            data-corvu-no-drag=""
-            class="sticky top-0 right-0 left-0 z-10 shrink-0 p-3 pt-0 flex items-center justify-between bg-surface"
-          >
-            <div class="flex items-center gap-1 min-w-0">
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                class="rounded-full border border-edge-muted/70 bg-transparent"
-                tooltip={savedDraftId() ? 'Delete draft' : 'Discard draft'}
-                onClick={deleteDraftAndReset}
-              >
-                <Trash class="size-4" />
-              </Button>
-            </div>
-            <div class="ml-auto flex items-center gap-1">
-              <AttachButton
-                variant="ghost"
-                class="rounded-full border border-edge-muted/70 bg-transparent"
-              />
-              <SendButton
-                disabled={sendActionDisabled() || sendActionHidden()}
-                pending={isSending()}
-                onClick={() => sendEmail()}
-              />
-            </div>
-          </div>
-        </Layer>
+        <MobileReplyToolbar
+          discardLabel={savedDraftId() ? 'Delete draft' : 'Discard draft'}
+          onDiscard={deleteDraftAndReset}
+          attachRef={(element) =>
+            fileSelector(element, () => ({
+              multiple: true,
+              onSelect: handleAddAttachments,
+            }))
+          }
+          sendDisabled={sendActionDisabled() || sendActionHidden()}
+          sending={isSending()}
+          onSend={() => sendEmail()}
+        />
       </Show>
       <ReplyEnvelope
         fields={state.recipients}
@@ -431,8 +411,7 @@ export function ReplyInputView(props: ReplyInputViewProps) {
           <MarkdownShell
             config={editorConfig}
             class={cn(
-              'ph-no-capture cursor-text wrap-break-word text-ink h-auto overflow-visible',
-              isMobileDrawer() ? 'text-[17px] leading-6' : 'text-sm',
+              'ph-no-capture cursor-text wrap-break-word text-base text-ink h-auto overflow-visible',
               // Quoted thread collapses behind the "⋯" pill below
               // (rule lives in LexicalMarkdown/styles.css — Tailwind arbitrary
               // variants turn the underscore in .macro_quote into a space)
@@ -547,49 +526,39 @@ export function ReplyInputView(props: ReplyInputViewProps) {
               />
             )}
           </Show>
-          {/* No fixed height: the send button (size-7.5) is taller than the icon
-              buttons, and a fixed h-9 minus the vertical padding left it 4px short
-              — with items-end it bled upward over the signature bar above. */}
+          {/* Keep the footer intrinsic-height so it cannot overlap the signature. */}
           <div
             ref={bottomBarRef}
-            class="shrink-0 flex flex-row w-full justify-between items-end space-x-2 px-0 pb-0 pt-1.5"
+            class="shrink-0 flex items-center justify-end gap-1 pt-1.5"
           >
-            <div class="flex flex-row items-center gap-1">
-              <div class="relative flex">
-                <AttachButton />
-              </div>
-
-              <Button
-                onclick={deleteDraftAndReset}
-                tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
-                size="icon-sm"
-              >
-                <Trash />
-              </Button>
-            </div>
-
-            <div class="flex flex-row items-center gap-1">
-              <Show
-                when={
-                  composeContext.presentation.scheduleEnabled &&
-                  !sendActionHidden()
-                }
-              >
-                <EmailDateSelector
-                  mobile={composeContext.presentation.isMobile()}
-                  sendTime={form.sendTime() ?? null}
-                  onSendTimeChange={handleSendTimeChange}
-                  disabled={scheduleSendDisabled()}
-                  disablePortal={composeContext.presentation.isTouch()}
-                />
-              </Show>
-              <SendButton
-                disabled={sendActionDisabled()}
-                pending={isSending()}
-                hidden={sendActionHidden()}
-                onClick={() => sendEmail()}
+            <Button
+              onClick={deleteDraftAndReset}
+              tooltip={savedDraftId() ? 'Delete draft' : 'Discard'}
+              size="icon-composer"
+            >
+              <Trash />
+            </Button>
+            <AttachButton />
+            <Show
+              when={
+                composeContext.presentation.scheduleEnabled &&
+                !sendActionHidden()
+              }
+            >
+              <EmailDateSelector
+                mobile={false}
+                sendTime={form.sendTime() ?? null}
+                onSendTimeChange={handleSendTimeChange}
+                disabled={scheduleSendDisabled()}
               />
-            </div>
+            </Show>
+            <SendButton
+              appearance="composer"
+              disabled={sendActionDisabled()}
+              pending={isSending()}
+              hidden={sendActionHidden()}
+              onClick={() => sendEmail()}
+            />
           </div>
         </Show>
       </div>

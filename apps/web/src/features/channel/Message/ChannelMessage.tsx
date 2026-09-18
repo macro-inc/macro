@@ -1,7 +1,8 @@
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import { touchHandler } from '@core/directive/touchHandler';
 import type { IUser } from '@core/user/types';
-import TrashIcon from '@icon/square-trash.svg';
+import { messageSendMotion } from '@core/util/message-send-motion';
+import TrashIcon from '@phosphor/trash.svg';
 import { type Accessor, type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
 import { MessageEditorContent } from '../Channel/InlineMessageEditor';
@@ -194,13 +195,14 @@ export function ChannelMessage(props: ChannelMessageProps) {
             isEditingMessage(props.messageEditor, props.message.id))
         }
         onClick={props.onClick}
-        ref={(el) =>
+        ref={(el) => {
+          messageSendMotion(el, () => `channel:${props.message.id}`);
           touchHandler(el, () => ({
             touchClassName: 'channel-message-long-press-highlight',
             onLongPress: () =>
               drawerManager?.open(props.message, props.actions),
-          }))
-        }
+          }));
+        }}
       >
         <Switch>
           <Match when={props.message.deleted_at != null}>

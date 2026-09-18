@@ -2,7 +2,6 @@ import type { Attachment, Model } from '@core/component/AI/types';
 import { makePersisted } from '@solid-primitives/storage';
 import { createSignal, untrack } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
-import { DEFAULT_MODEL } from '../constant';
 import { parseModel } from './parse';
 
 export type StoredStuff = {
@@ -68,11 +67,17 @@ export function storeChatStateImmediate(
   setPersistentChatState(id, { ...state, used_at: Date.now() });
 }
 
+/** Reactive model identity for icons, including models no longer in the picker. */
+export function getChatStoredModel(id: string): string | undefined {
+  return persistentChatState[id]?.model;
+}
+
 export function getChatInputStoredState(id: string): Partial<StoredStuff> {
   const storedStuff = untrack(() => persistentChatState[id]);
   if (!storedStuff) return {};
 
-  const model = parseModel(storedStuff.model) ?? DEFAULT_MODEL;
+  // Let the composer try the server model before applying its default.
+  const model = untrack(() => parseModel(getChatStoredModel(id)));
   setPersistentChatState(id, { ...storedStuff, used_at: Date.now() });
   return {
     ...storedStuff,

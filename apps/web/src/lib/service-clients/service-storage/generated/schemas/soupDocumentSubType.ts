@@ -6,6 +6,7 @@
  */
 import type { SoupDocumentSubTypeOneOf } from './soupDocumentSubTypeOneOf';
 import type { SoupDocumentSubTypeOneOfFive } from './soupDocumentSubTypeOneOfFive';
+import type { SoupDocumentSubTypeOneOfSeven } from './soupDocumentSubTypeOneOfSeven';
 import type { SoupDocumentSubTypeOneOfThree } from './soupDocumentSubTypeOneOfThree';
 
 /**
@@ -15,4 +16,5 @@ This ensures type-safety: task properties only exist when the document is a task
 export type SoupDocumentSubType =
   | SoupDocumentSubTypeOneOf
   | SoupDocumentSubTypeOneOfThree
-  | SoupDocumentSubTypeOneOfFive;
+  | SoupDocumentSubTypeOneOfFive
+  | SoupDocumentSubTypeOneOfSeven;

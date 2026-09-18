@@ -1,4 +1,5 @@
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { singleLineMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
 import { getDisplayName, tryMacroId } from '@core/user';
@@ -11,6 +12,8 @@ import { openDocument } from '../core/BlockLink';
 
 /** Single-line channel reply reference rendered by a ReplyTargetNode. */
 export function ReplyTarget(props: ReplyTargetDecoratorProps) {
+  const currentBlockId = useMaybeBlockId();
+  const currentBlockName = useMaybeBlockName();
   const channelBots = useChannelBotsQuery(() => props.channelId);
   const senderName = () =>
     getBotDisplayName(props.senderId, undefined, channelBots.data) ||
@@ -27,7 +30,10 @@ export function ReplyTarget(props: ReplyTargetDecoratorProps) {
         [CHANNEL_PARAMS.message]: props.targetMessageId,
         [CHANNEL_PARAMS.thread]: props.targetThreadId,
       },
-      openInNewSplitForMention(event.shiftKey, true)
+      openInNewSplitForMention(
+        event.shiftKey,
+        currentBlockName !== 'channel' || currentBlockId !== props.channelId
+      )
     );
   });
 

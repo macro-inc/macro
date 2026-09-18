@@ -52,8 +52,9 @@ use crate::domain::model::{
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
-    AgentPromptComposer, ChannelPromptContext, CommandForwarder, ContainerManager,
-    PermissionPolicySource, RuntimeConnections, SandboxEgressProvisioner, SessionAnnouncer,
+    AgentPromptComposer, AgentSessionNotifier, CommandForwarder, ContainerManager,
+    MessagePromptContext, PermissionPolicySource, PromptMentions, RuntimeConnections,
+    SandboxEgressProvisioner, SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
 use crate::domain::sandbox::SandboxResizeEffect;
@@ -98,6 +99,9 @@ struct AgentHarnessInner<
     PromptContext,
     PromptComposer,
     Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
 > {
     sessions: Sessions,
     containers: Containers,
@@ -125,9 +129,41 @@ struct AgentHarnessInner<
     /// command was handed to this session" and "the runtime has visibly
     /// started a turn", which a reaper watching only the latter cannot see.
     busy: PendingCommands,
-    /// Where lifecycle facts go. Erased so it is not an eighth type parameter.
-    lifecycle_publisher: Arc<dyn AgentSessionLifecyclePublisher>,
+    /// Where lifecycle facts go.
+    lifecycle_publisher: Lifecycle,
+    /// Who a prompt names.
+    mentions: Mentions,
+    /// Where the notifications a fact warrants go.
+    notifier: Notifier,
 }
+
+/// One handle on the orchestrator's state, shared by the service's clones
+/// and every session worker it spawns.
+type SharedInner<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> = Arc<
+    AgentHarnessInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
+    >,
+>;
 
 /// Turns trigger commands into running, announced agent sessions.
 pub struct AgentHarnessService<
@@ -138,26 +174,42 @@ pub struct AgentHarnessService<
     PromptContext,
     PromptComposer,
     Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
 > {
-    inner: Arc<
-        AgentHarnessInner<
-            Sessions,
-            Containers,
-            Announcer,
-            Runtimes,
-            PromptContext,
-            PromptComposer,
-            Egress,
-        >,
+    inner: SharedInner<
+        Sessions,
+        Containers,
+        Announcer,
+        Runtimes,
+        PromptContext,
+        PromptComposer,
+        Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >,
     workers: Arc<SessionWorkers>,
+    repositories: Option<Arc<dyn crate::domain::ports::ReachableRepositories>>,
 }
 
 // Manual Clone impl so the port types don't need to be Clone (both fields
 // are behind Arcs). A clone is another handle on the same workers and queues,
 // which is what lets the service be bound as its own session services' turn
 // observer.
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress> Clone
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> Clone
     for AgentHarnessService<
         Sessions,
         Containers,
@@ -166,17 +218,32 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
             workers: Arc::clone(&self.workers),
+            repositories: self.repositories.clone(),
         }
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
     AgentHarnessService<
         Sessions,
         Containers,
@@ -185,15 +252,21 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     /// Build the orchestrator from its ports.
     ///
@@ -211,8 +284,10 @@ where
         forwarder: impl CommandForwarder,
         permission_policies: impl PermissionPolicySource,
         defaults: impl Into<HarnessDefaults>,
-        lifecycle_publisher: impl AgentSessionLifecyclePublisher,
+        lifecycle_publisher: Lifecycle,
         pending: PendingCommands,
+        mentions: Mentions,
+        notifier: Notifier,
     ) -> Self {
         Self {
             inner: Arc::new(AgentHarnessInner {
@@ -228,10 +303,22 @@ where
                 defaults: defaults.into(),
                 queues: SessionQueues::new(),
                 busy: pending,
-                lifecycle_publisher: Arc::new(lifecycle_publisher),
+                lifecycle_publisher,
+                mentions,
+                notifier,
             }),
             workers: Arc::new(DashMap::new()),
+            repositories: None,
         }
+    }
+
+    /// Enable explicit repository choices, authorized against the owner's reachable repositories.
+    pub fn with_repositories(
+        mut self,
+        repositories: Arc<dyn crate::domain::ports::ReachableRepositories>,
+    ) -> Self {
+        self.repositories = Some(repositories);
+        self
     }
 
     /// Queue one command behind any work already running for its session.
@@ -277,6 +364,10 @@ where
         session_id: AgentSessionId,
         prompt: AnnouncePrompt,
     ) -> Result<()> {
+        self.inner
+            .prompt_context
+            .authorize_origin(&prompt.sender, &prompt.origin)
+            .await?;
         // Re-read rather than trusted: the row is what vouches that the
         // trigger's session and bot actually belong together.
         let session = self.inner.sessions.get_session(session_id).await?;
@@ -295,7 +386,7 @@ where
             .announce(SessionAnnouncement {
                 session_id,
                 bot_id: session.bot_id,
-                origin_channel_id: prompt.origin.channel_id,
+                origin_parent: prompt.origin.parent,
                 origin_thread_id: prompt.origin.thread_id,
                 origin_message_id: prompt.origin.message_id,
                 prompted_message_id: self
@@ -324,8 +415,18 @@ pub trait ForwardedCommands: Send + Sync + 'static {
     ) -> impl Future<Output = Result<CommandOutcome>> + Send;
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
-    ForwardedCommands
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> ForwardedCommands
     for AgentHarnessService<
         Sessions,
         Containers,
@@ -334,15 +435,21 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     async fn execute_forwarded(
         &self,

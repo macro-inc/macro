@@ -22,7 +22,9 @@ use crate::{
     rate_limit_config::RATE_LIMIT_CONFIG,
 };
 use authentication_service::service::user::create_user::create_user;
-use authentication_service::service::user::support_channel_welcome::post_support_channel_welcome;
+use authentication_service::service::user::support_channel_welcome::{
+    AuthorizedSupportChannelMessages, post_support_channel_welcome,
+};
 use channels::domain::{
     models::{ChannelType, CreateChannelRequest},
     ports::ChannelService,
@@ -419,6 +421,8 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
     tokio::spawn({
         let document_storage_service_client = ctx.document_storage_service_client.clone();
         let channel_service = ctx.channel_service.clone();
+        let channel_messages = ctx.channel_messages.clone();
+        let entity_access_service = ctx.entity_access_service.clone();
         let favorites_service = ctx.favorites_service.clone();
         let user_id = user_id.clone();
         let email = email.clone();
@@ -474,7 +478,9 @@ async fn create_user_webhook(ctx: &ApiContext, req: FusionAuthUserWebhook) -> an
                 tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to favorite Macro support channel");
             }
 
-            let _ = post_support_channel_welcome(channel_service.as_ref(), &channel.id, owner_id)
+            let welcome_gateway =
+                AuthorizedSupportChannelMessages::new(channel_messages, entity_access_service);
+            let _ = post_support_channel_welcome(&welcome_gateway, &channel.id, owner_id)
                 .await
                 .inspect_err(|e| {
                 tracing::error!(error=?e, channel_id=%channel.id, %email, "failed to post Macro support welcome message");

@@ -1,0 +1,19 @@
+[package]
+edition = "2024"
+name = "entity_registry_db_utils"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+chrono = { workspace = true }
+model_owner = { path = "../../model_owner", features = ["sqlx"] }
+rootcause = { workspace = true }
+shared_entity_registry = { path = "../shared_entity_registry" }
+sqlx = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../workspace-hack" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -67,6 +67,30 @@ pub struct SessionMetadata {
     /// nothing is pending, when the turn that asked has ended, or when the
     /// connection that asked is gone - the request id dies with it.
     pub pending_elicitation: Option<PendingElicitation>,
+    /// Where the newest turn stands, as one value. Readers used to derive it
+    /// from the transcript's tail, the status, and their own record of what
+    /// they had posted; this is that derivation done once, in the fold.
+    pub turn: TurnState,
+}
+
+/// Where the newest turn stands.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Type)]
+#[serde(rename_all = "snake_case")]
+pub enum TurnState {
+    /// No turn is open.
+    #[default]
+    Idle,
+    /// A prompt this client issued is on the wire, unconfirmed, and the agent
+    /// has produced nothing. Only a speculative fold reports this.
+    Starting,
+    /// A turn is open and the agent is working.
+    Running,
+    /// A stop was issued against the open turn and no stop reason has arrived.
+    Stopping,
+    /// The open turn is waiting on the user to answer an elicitation.
+    Blocked,
+    /// The runtime reported `disconnected`; whatever was open is not moving.
+    Disconnected,
 }
 
 /// One slash command the harness advertises.

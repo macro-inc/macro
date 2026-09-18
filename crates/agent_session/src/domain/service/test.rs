@@ -80,6 +80,76 @@ async fn previews_hydrate_bot_identity_only_for_accessible_sessions() {
     );
 }
 
+/// A viewer answers for one document-born session.
+struct GrantingViewAccess(AgentSessionId);
+
+impl crate::domain::ports::SessionViewAccess for GrantingViewAccess {
+    fn can_view<'a>(
+        &'a self,
+        _viewer: &'a macro_user_id::user_id::MacroUserIdStr<'static>,
+        session: AgentSessionId,
+    ) -> std::pin::Pin<Box<dyn Future<Output = Result<bool>> + Send + 'a>> {
+        Box::pin(async move { Ok(session == self.0) })
+    }
+}
+
+#[tokio::test]
+async fn previews_resolve_inherited_document_access_through_the_view_port() {
+    let fx = fixture();
+    let mut document_session = test_agent_session(AgentSessionId::new());
+    document_session.thread_parent =
+        Some(messages::domain::models::MessageParent::parse("document", "doc-1").unwrap());
+    let mut channel_session = test_agent_session(AgentSessionId::new());
+    channel_session.thread_parent = Some(messages::domain::models::MessageParent::Channel(
+        Uuid::from_u128(9),
+    ));
+    fx.repo.insert_session(document_session.clone());
+    fx.repo.insert_session(channel_session.clone());
+    let collaborator =
+        macro_user_id::user_id::MacroUserIdStr::try_from_email("collaborator@example.com").unwrap();
+    let ids = vec![document_session.id, channel_session.id, fx.session];
+
+    // Without a view port, only materialized grants count.
+    let mut previews = fx
+        .service
+        .preview_sessions(&collaborator, ids.clone())
+        .await
+        .unwrap();
+    previews.sort_by_key(|preview| preview.id().as_uuid());
+    assert!(
+        previews
+            .iter()
+            .all(|preview| matches!(preview, AgentSessionPreview::NoAccess(_)))
+    );
+
+    // With one, the document-born session is asked about and the rest are not.
+    let service = fx
+        .service
+        .clone()
+        .with_view_access(Arc::new(GrantingViewAccess(document_session.id)));
+    let previews = service.preview_sessions(&collaborator, ids).await.unwrap();
+    let access: Vec<_> = previews
+        .iter()
+        .filter_map(|preview| match preview {
+            AgentSessionPreview::Access(data) => Some(data.id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(access, vec![document_session.id]);
+    let channel_service = fx
+        .service
+        .clone()
+        .with_view_access(Arc::new(GrantingViewAccess(channel_session.id)));
+    assert_eq!(
+        channel_service
+            .preview_sessions(&collaborator, vec![channel_session.id])
+            .await
+            .unwrap(),
+        vec![AgentSessionPreview::NoAccess(channel_session.id)],
+        "channel grants are rows; the view port is never consulted for them"
+    );
+}
+
 #[tokio::test]
 async fn only_the_first_prompt_is_selected_for_automatic_naming() {
     let repo = InMemoryAgentSessionRepo::new();
@@ -420,12 +490,20 @@ impl AgentSessionRepo for BlockingPromptLogs {
         &self,
         viewer: &MacroUserIdStr<'static>,
         ids: &[AgentSessionId],
-    ) -> Result<Vec<AgentSessionPreview>> {
+    ) -> Result<Vec<crate::domain::model::SessionPreviewCandidate>> {
         self.repo.preview(viewer, ids).await
     }
 
     async fn session_bot(&self, id: BotId) -> Result<SessionBot> {
         self.repo.session_bot(id).await
+    }
+
+    async fn recent_for_owner(
+        &self,
+        owner: &MacroUserIdStr<'_>,
+        limit: std::num::NonZeroUsize,
+    ) -> Result<Vec<crate::domain::model::AgentSession>> {
+        self.repo.recent_for_owner(owner, limit).await
     }
 
     async fn find_by_egress_token_hash(
@@ -435,12 +513,12 @@ impl AgentSessionRepo for BlockingPromptLogs {
         self.repo.find_by_egress_token_hash(egress_token_hash).await
     }
 
-    async fn find_for_channel(
+    async fn find_for_thread(
         &self,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
-    ) -> Result<ChannelSession> {
-        self.repo.find_for_channel(thread_id, bot_id).await
+    ) -> Result<ThreadSession> {
+        self.repo.find_for_thread(thread_id, bot_id).await
     }
 
     async fn find_all_for_thread(&self, thread_id: Uuid) -> Result<Vec<AgentSession>> {
@@ -453,6 +531,14 @@ impl AgentSessionRepo for BlockingPromptLogs {
         acp_session_id: SessionId,
     ) -> Result<()> {
         self.repo.set_acp_session_id(id, acp_session_id).await
+    }
+
+    async fn set_egress_token_hash(&self, id: AgentSessionId, hash: &str) -> Result<()> {
+        self.repo.set_egress_token_hash(id, hash).await
+    }
+
+    async fn set_repo_url(&self, id: AgentSessionId, repo_url: Option<String>) -> Result<()> {
+        self.repo.set_repo_url(id, repo_url).await
     }
 
     async fn set_model(&self, id: AgentSessionId, model: &str) -> Result<()> {
@@ -568,6 +654,13 @@ impl AgentSessionLogRepo for BlockingPromptLogs {
         agent_session_id: AgentSessionId,
     ) -> Result<Vec<StoredAgentSessionLog>> {
         AgentSessionLogRepo::list_by_session(&self.repo, agent_session_id).await
+    }
+
+    async fn participants(
+        &self,
+        agent_session_id: AgentSessionId,
+    ) -> Result<Vec<MacroUserIdStr<'static>>> {
+        AgentSessionLogRepo::participants(&self.repo, agent_session_id).await
     }
 }
 
@@ -836,6 +929,7 @@ async fn cancellation_does_not_drop_an_effect_batch_after_machine_mutation() {
         command_rx,
         handshake,
         Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
     );
     let active = Arc::new(ActiveSessions::new());
     let cancellation = CancellationToken::new();
@@ -917,6 +1011,7 @@ async fn live_inbound_logs_do_not_reuse_the_expired_handshake_deadline() {
         command_rx,
         handshake,
         Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
     );
     let active = Arc::new(ActiveSessions::new());
     let cancellation = CancellationToken::new();
@@ -1293,6 +1388,10 @@ async fn session_log_returns_the_sessions_frames_in_order() {
         "every frame is served, none folded away"
     );
     assert!(!log.bot.name.is_empty(), "the response names the agent");
+    assert!(
+        !log.bot.handle.is_empty(),
+        "the response includes the agent's handle"
+    );
 
     // The order is the contract: folding is a left fold from the first frame,
     // so a reordered log derives different turn numbering.
@@ -1376,6 +1475,7 @@ async fn shared_transport_copies_durable_initialization_before_load() {
         commands,
         handshake.clone(),
         Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
     );
     actor
         .dispatch(Input::Inbound(ToServerMessage::Event {
@@ -1429,6 +1529,7 @@ async fn shared_transport_copies_durable_initialization_before_load() {
         commands,
         handshake,
         Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
     );
     let ready = actor.next_input().await;
     assert!(matches!(ready, Input::SharedReady { .. }));
@@ -1534,6 +1635,7 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
         command_rx,
         handshake.clone(),
         Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
     );
     let (completed, completion) = oneshot::channel();
     commands
@@ -1639,6 +1741,157 @@ async fn assert_restore_persistence_failure_does_not_send_prompt(failure: Restor
             event: SystemEvent::Disconnected
         })
     ));
+}
+
+/// The actor's GenAI projection, end to end: a prompt delivered through the
+/// actor opens an `invoke_agent` span under the command that carried it, and
+/// the runtime's answer closes it with what the agent said.
+#[tokio::test]
+async fn a_prompt_turn_is_traced_as_an_agent_span_under_its_command() {
+    use genai_telemetry::attr;
+    use opentelemetry::trace::{TraceContextExt as _, TracerProvider as _};
+    use opentelemetry_sdk::trace::{InMemorySpanExporter, SdkTracerProvider};
+    use tracing_opentelemetry::OpenTelemetrySpanExt as _;
+    use tracing_subscriber::layer::SubscriberExt as _;
+
+    let exporter = InMemorySpanExporter::default();
+    let provider = SdkTracerProvider::builder()
+        .with_simple_exporter(exporter.clone())
+        .build();
+    let layer = tracing_opentelemetry::layer().with_tracer(provider.tracer("test"));
+    let _guard = tracing::subscriber::set_default(tracing_subscriber::registry().with(layer));
+    tracing::callsite::rebuild_interest_cache();
+
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    let release = Arc::new(Notify::new());
+    let logs = BlockingPromptLogs {
+        repo: repo.clone(),
+        entered: Arc::new(Notify::new()),
+        release: release.clone(),
+        hang_disconnect: false,
+        fail_restore_log: None,
+    };
+    let (outbound_tx, mut outbound_rx) = mpsc::channel(8);
+    let (inbound_tx, inbound_rx) = mpsc::channel(8);
+    let (commands, command_rx) = mpsc::channel(8);
+    let (handshake, _) = watch::channel(HandshakeStatus::Pending);
+    let actor = SessionActor::new(
+        session,
+        None,
+        "/workspace".to_owned(),
+        Vec::new(),
+        crate::domain::session::PermissionPolicy::AutoAccept,
+        RecordingTransport {
+            outbound: outbound_tx,
+            inbound: inbound_rx,
+        },
+        logs,
+        command_rx,
+        handshake,
+        Arc::new(crate::domain::ports::NoOpTurnObserver),
+        Arc::new(crate::domain::ports::NoOpToolCatalog),
+    );
+    let active = Arc::new(ActiveSessions::new());
+    let cancellation = CancellationToken::new();
+    let (stopped_tx, _) = watch::channel(false);
+    let claim = claim_for_test(&repo, session).await;
+    let task = tokio::spawn(
+        run_session(
+            actor,
+            Arc::downgrade(&active),
+            Arc::new(()),
+            stopped_tx,
+            cancellation.clone(),
+            repo.clone(),
+            claim,
+            Arc::new(crate::domain::ports::NoOpTurnObserver),
+        )
+        .with_current_subscriber(),
+    );
+    open_test_session(&inbound_tx, &mut outbound_rx, session).await;
+
+    release.notify_one();
+    let command_span = tracing::info_span!("agent.session.command");
+    let command_id = command_span.context().span().span_context().span_id();
+    let action_id = AgentActionId::mint();
+    let (completed, result) = oneshot::channel();
+    commands
+        .send(SessionCommand {
+            user_id: None,
+            action: AgentAction::prompt("what time is it?"),
+            action_id,
+            completed,
+            span: command_span,
+            enqueued_at: tokio::time::Instant::now(),
+        })
+        .await
+        .unwrap();
+    let prompt = outbound_rx.recv().await.expect("prompt is dispatched");
+    assert!(matches!(
+        &prompt,
+        ToRuntimeMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::Request(request)
+        )) if request.method.as_ref() == "session/prompt"
+    ));
+    result.await.unwrap().expect("delivery completes");
+
+    let update = agent_client_protocol::RawJsonRpcMessage::notification(
+        "session/update".to_owned(),
+        serde_json::json!({
+            "sessionId": "acp-1",
+            "update": {
+                "sessionUpdate": "agent_message_chunk",
+                "content": { "type": "text", "text": "It is noon." }
+            }
+        }),
+    )
+    .unwrap();
+    inbound_tx
+        .send(ToServerMessage::Acp(AcpMessage(update)))
+        .await
+        .unwrap();
+    inbound_tx
+        .send(ToServerMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::response(
+                action_id.to_request_id(),
+                Ok(serde_json::json!({ "stopReason": "end_turn" })),
+            ),
+        )))
+        .await
+        .unwrap();
+    // The transport closing stops the actor, which flushes anything open.
+    drop(inbound_tx);
+    task.await.unwrap();
+
+    provider.force_flush().expect("flush");
+    let spans = exporter.get_finished_spans().expect("finished spans");
+    let agent: Vec<_> = spans
+        .iter()
+        .filter(|span| span.name == "invoke_agent")
+        .collect();
+    assert_eq!(agent.len(), 1, "one prompt, one agent span: {spans:#?}");
+    assert_eq!(agent[0].parent_span_id, command_id);
+    let attribute = |key: &str| {
+        agent[0]
+            .attributes
+            .iter()
+            .find(|kv| kv.key.as_str() == key)
+            .map(|kv| kv.value.to_string())
+    };
+    assert_eq!(
+        attribute(attr::CONVERSATION_ID).as_deref(),
+        Some(session.to_string().as_str())
+    );
+    assert_eq!(
+        attribute(attr::RESPONSE_FINISH_REASONS).as_deref(),
+        Some(r#"["stop"]"#)
+    );
+    let output = attribute(attr::OUTPUT_MESSAGES).expect("output recorded");
+    assert!(output.contains("It is noon."), "{output}");
+    let input = attribute(attr::INPUT_MESSAGES).expect("input recorded");
+    assert!(input.contains("what time is it?"), "{input}");
 }
 
 mod owner_binding;

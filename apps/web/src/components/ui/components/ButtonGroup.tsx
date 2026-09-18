@@ -32,10 +32,20 @@ type ButtonGroupProps = {
 const groupFocusRing =
   'has-[[data-slot=input-group-control]:focus-visible]:border-[color-mix(in_oklch,var(--color-edge)_80%,var(--color-ink))] has-[[data-slot=input-group-control]:focus-visible]:ring-2 has-[[data-slot=input-group-control]:focus-visible]:ring-edge-muted';
 
+/* Mirrors the glass rule in Button.tsx: the group carries the glass for the
+   whole row, and a `ghost` group — a bare toolbar cluster with no surface of
+   its own — stays flat, hover included. Kept local rather than imported so the
+   Button <-> ButtonGroup dependency stays type-only. Literal class strings
+   only — Tailwind's scanner can't see template-built classes. */
+const glassClass = (variant: ButtonVariant): string => {
+  if (variant === 'ghost') return '';
+  return 'glass';
+};
+
 /** Canonical classes for the button-group frame. */
 export const buttonGroupVariants = createVariants(
   cn(
-    'inline-flex items-center justify-center overflow-hidden',
+    'inline-flex items-center justify-center',
     'data-[orientation=horizontal]:flex-row',
     'data-[orientation=vertical]:flex-col',
     // strip per-button rounding + borders so the group owns the frame
@@ -63,6 +73,8 @@ export const buttonGroupVariants = createVariants(
         'rounded-md data-[orientation=horizontal]:h-5 data-[orientation=vertical]:w-5',
       'icon-sm':
         'rounded-md data-[orientation=horizontal]:h-6 data-[orientation=vertical]:w-6',
+      'icon-composer':
+        'rounded-md not-touch:rounded-full data-[orientation=horizontal]:h-6 data-[orientation=vertical]:w-6 not-touch:data-[orientation=horizontal]:h-[33.75px] not-touch:data-[orientation=vertical]:w-[33.75px]',
       'icon-md':
         'rounded-md data-[orientation=horizontal]:h-8 data-[orientation=vertical]:w-8',
       'icon-lg':
@@ -123,11 +135,15 @@ export const ButtonGroup = (props: ButtonGroupProps) => {
           data-size={size()}
           class={cn(
             buttonGroupVariants({ variant: props.variant, size: props.size }),
+            glassClass(props.variant ?? 'ghost'),
             props.class
           )}
           role="group"
         >
-          {props.children}
+          {/* Clip the segments independently of the expanding glass frame. */}
+          <div class="flex size-full min-w-0 items-center justify-center overflow-hidden rounded-[inherit] [flex-direction:inherit]">
+            {props.children}
+          </div>
         </div>
       </Layer>
     </ButtonGroupContext.Provider>

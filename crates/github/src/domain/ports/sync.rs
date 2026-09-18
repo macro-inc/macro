@@ -7,8 +7,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use crate::domain::models::{
     AppJwt, EnrichedGithubPullRequest, GithubAppInstallationSource, GithubAuthenticatedUser,
     GithubError, GithubInstallationAccessToken, GithubKey, GithubPullRequestDetails,
-    GithubSetupAccessToken, GithubUserInstallation, MacroTaskId, ResolvedTeamTaskReference,
-    TeamTaskReference, ValidatedGithubWebhookEvent,
+    GithubRepository, GithubSetupAccessToken, GithubUserInstallation, MacroTaskId,
+    ResolvedTeamTaskReference, TeamTaskReference, ValidatedGithubWebhookEvent,
 };
 
 /// Repository for accessing github sync data from the database.
@@ -87,6 +87,19 @@ pub trait GithubSyncRepo: Send + Sync + 'static {
         &self,
         installation_id: &str,
     ) -> impl Future<Output = Result<Vec<GithubAppInstallationSource>, Self::Err>> + Send;
+
+    /// Returns the installations whose sources include the given Macro user or
+    /// any of the given teams.
+    ///
+    /// The inverse of [`GithubSyncRepo::get_installation_sources`]: that
+    /// answers "who installed this?", this answers "what did they install?".
+    /// Ids are returned once each even when several of the user's sources
+    /// point at the same installation.
+    fn get_installation_ids_for_sources(
+        &self,
+        macro_id: &str,
+        team_ids: &[uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<String>, Self::Err>> + Send;
 
     /// Returns all Macro user IDs that belong to the given team.
     fn get_team_member_ids(
@@ -275,4 +288,24 @@ pub trait GithubSyncService: Send + Sync + 'static {
         &self,
         installation_id: u64,
     ) -> impl Future<Output = Result<GithubInstallationAccessToken, GithubError>> + Send;
+}
+
+/// Publishes persisted PR mappings to users allowed to view their source.
+pub trait GithubSyncRealtime: Send + Sync + 'static {
+    /// Forward a saved entity; recipient selection belongs to the sync service.
+    fn publish_pull_request(
+        &self,
+        recipients: &[MacroUserIdStr<'static>],
+        entity: &foreign_entity::domain::models::ForeignEntity,
+    ) -> impl Future<Output = Result<(), GithubError>> + Send;
+}
+
+/// Lists repository metadata for an installation the caller is authorized to access.
+pub trait GithubRepositoryClient: Send + Sync + 'static {
+    /// Fetch the installation's repositories using metadata-only access.
+    fn repositories_for_installation(
+        &self,
+        jwt: &AppJwt,
+        installation_id: u64,
+    ) -> impl Future<Output = Result<Vec<GithubRepository>, GithubError>> + Send;
 }

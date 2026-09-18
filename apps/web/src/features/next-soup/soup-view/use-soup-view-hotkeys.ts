@@ -15,6 +15,7 @@ import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isScopeInActiveBranch } from '@core/hotkey/utils';
 import {
+  type EntityData,
   filterNotDoneNotifications,
   filterValidNotifications,
   isSearchEntity,
@@ -31,6 +32,9 @@ import {
 } from './soup-view-tabs';
 
 type UseSoupViewHotkeysOptions = {
+  onOpenProject?: (id: string) => void;
+  onOpenEntity?: (entity: EntityData, event?: KeyboardEvent) => boolean;
+  disableTabHotkeys?: boolean;
   scopeId: string;
   soup: SoupState;
   splitHandle: SplitHandle;
@@ -153,7 +157,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     scopeId,
     description: 'Open',
     hide: true,
-    keyDownHandler: () => {
+    keyDownHandler: (event) => {
       const focusedRow = soup.focus.row();
       if (!focusedRow) return false;
 
@@ -179,6 +183,12 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
       const entity = soup.focus.item();
       if (!entity) return false;
+
+      if (entity.type === 'project' && options.onOpenProject) {
+        options.onOpenProject(entity.id);
+        return true;
+      }
+      if (options.onOpenEntity?.(entity, event)) return true;
 
       const contentHitData = isSearchEntity(entity)
         ? entity.search.contentHitData
@@ -363,6 +373,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
 
   const visibleViewTabs = useVisibleViewTabs();
   const getTabKeys = () => {
+    if (options.disableTabHotkeys) return [];
     const view = currentView();
     if (!view || !isTabbedView(view)) return [];
     return visibleViewTabs(view).map((t) => t.value);

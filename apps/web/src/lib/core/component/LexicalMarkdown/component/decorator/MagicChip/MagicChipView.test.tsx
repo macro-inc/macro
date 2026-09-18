@@ -20,6 +20,15 @@ vi.mock('@core/component/LexicalMarkdown/theme', () => ({
   channelTheme: {},
 }));
 
+// The PR link resolves its entity over the network; the view only places it.
+vi.mock('./MagicChipPullRequest', () => ({
+  MagicChipPullRequest: (props: { url: string }) => (
+    <a data-testid="chip-pull-request" href={props.url}>
+      {props.url}
+    </a>
+  ),
+}));
+
 // The chip answers a form with the real `ElicitationForm`; the rest of the
 // block-agent ui barrel reaches the composer, comments, and a socket.
 vi.mock('@app/features/block-agent/ui', async () => ({
@@ -168,6 +177,28 @@ describe('MagicChipView', () => {
     expect(label?.textContent).toContain('Thinking');
   });
 
+  it.each(['Cursor Agent', 'Codex Agent'])(
+    'places the pull request in the %s header once the session opened one',
+    (agent) => {
+      const { container } = render(() => (
+        <MagicChipView
+          agentSessionId="session-1"
+          presentation={{ kind: 'settled', markdown: 'Opened a PR.' }}
+          header={{
+            agent,
+            pullRequestUrl: 'https://github.com/macro-inc/macro/pull/6303',
+          }}
+        />
+      ));
+      const link = header(container)?.querySelector(
+        '[data-testid="chip-pull-request"]'
+      );
+      expect(link?.getAttribute('href')).toBe(
+        'https://github.com/macro-inc/macro/pull/6303'
+      );
+    }
+  );
+
   it('keeps the same answer height once the answer streams in', () => {
     const { container } = render(() => (
       <MagicChipView
@@ -301,7 +332,6 @@ function asking(canAnswer: boolean, markdown = ''): MagicChipPresentation {
         },
       },
       canAnswer,
-      ownerName: 'Alice Owner',
     },
   };
 }
@@ -319,7 +349,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(true, 'Setting that up.')}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
@@ -363,7 +393,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(true)}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
@@ -392,12 +422,12 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(false)}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
     expect(header(view.container)?.textContent).toContain(
-      'Waiting for Alice Owner'
+      'Waiting for an editor'
     );
     // The composer is there to read, but cannot act for a viewer.
     expect(view.getByTestId('calendar-composer').dataset.canAct).toBe('false');
@@ -408,13 +438,9 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(respond).not.toHaveBeenCalled();
   });
 
-  it('holds the buttons while an answer is on the wire', () => {
+  it('a chip with no answer handler is read-only', () => {
     const view = render(() => (
-      <MagicChipView
-        agentSessionId="session"
-        presentation={asking(true)}
-        answer={{ answering: true, respond }}
-      />
+      <MagicChipView agentSessionId="session" presentation={asking(true)} />
     ));
     expect(view.getByTestId('calendar-composer').dataset.canAct).toBe('false');
     fireEvent.click(view.getByTestId('composer-execute'));
@@ -437,7 +463,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={presentation()}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
@@ -513,7 +539,6 @@ function askingQuestion(
         request,
       },
       canAnswer: options.canAnswer ?? true,
-      ownerName: 'Alice Owner',
     },
   };
 }
@@ -524,7 +549,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm)}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
@@ -568,7 +593,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm)}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
       />
     ));
     fireEvent.input(view.getByPlaceholderText('Type your own answer'), {
@@ -589,7 +614,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={presentation()}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
       />
     ));
     fireEvent.click(view.getByRole('radio', { name: 'Blue' }));
@@ -606,17 +631,17 @@ describe('MagicChipView asking a form', () => {
     ).toBe('false');
   });
 
-  it('a viewer who is not the owner sees the choices locked and no decisions', () => {
+  it('a viewer without edit access sees the choices locked and no decisions', () => {
     const view = render(() => (
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm, { canAnswer: false })}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
     expect(header(view.container)?.textContent).toContain(
-      'Waiting for Alice Owner'
+      'Waiting for an editor'
     );
     const red = view.getByRole('radio', { name: 'Red' }) as HTMLButtonElement;
     expect(red.disabled).toBe(true);
@@ -635,7 +660,7 @@ describe('MagicChipView asking a form', () => {
           elicitationId: 'gh-1',
           url: 'https://agent.example.com/connect?e=gh-1',
         })}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
       />
     ));
     expect(view.getByText('agent.example.com')).toBeTruthy();
@@ -661,7 +686,7 @@ describe('MagicChipView asking a form', () => {
           mode: 'hologram',
           raw: {},
         })}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
       />
     ));
     expect(view.getByText(/cannot display a "hologram" request/)).toBeTruthy();

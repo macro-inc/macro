@@ -250,3 +250,11 @@ export const twoLineClampMarkdownTheme = createTheme({
   // span participates in normal inline text flow and clamping is counted correctly.
   searchMatch: 'search-match inline!',
 });
+
+export const inlineWrappingMarkdownTheme = createTheme(
+  {
+    root: 'md inline pr-[2px] cursor-default',
+    paragraph: 'md-p text-[1em] inline',
+  },
+  twoLineClampMarkdownTheme
+);

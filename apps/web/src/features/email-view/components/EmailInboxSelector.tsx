@@ -8,7 +8,7 @@ import CheckIcon from '@phosphor/check.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import TrayIcon from '@phosphor/tray.svg';
 import { useEmailLinksQuery } from '@queries/email/link';
-import { Button, cn, Dropdown, pressHandlers } from '@ui';
+import { cn, Dropdown, pressHandlers } from '@ui';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import { useEmailView } from '../email-view-context';
 
@@ -73,29 +73,20 @@ function useInboxSelection() {
   };
 }
 
-function InboxAvatar(props: { option: InboxOption; size: UserIconSize }) {
+function InboxAvatar(props: {
+  option: InboxOption;
+  size: UserIconSize;
+  class?: string;
+}) {
   return (
     <UserIcon
       {...inboxIconProps(props.option.label)}
       photoUrl={props.option.photoUrl}
       size={props.size}
+      class={props.class}
       suppressClick
       showTooltip={false}
     />
-  );
-}
-
-function AllInboxesIcon(props: { class?: string }) {
-  return (
-    <span
-      aria-hidden="true"
-      class={cn(
-        'flex size-6 shrink-0 items-center justify-center',
-        props.class
-      )}
-    >
-      <TrayIcon class="size-5" />
-    </span>
   );
 }
 
@@ -109,32 +100,27 @@ export function EmailInboxList(props: { class?: string }) {
 
   return (
     <Show when={selection.visible()}>
-      <ViewSidebar.Nav
-        aria-label="Inboxes"
-        class={cn('border-b border-edge pb-3', props.class)}
-      >
-        <div class="flex min-w-0 items-center gap-1">
+      <ViewSidebar.Nav aria-label="Inboxes" class={props.class}>
+        <div class="flex min-w-0 items-center gap-1 pr-(--sidebar-action-inset)">
           <ViewSidebar.Item
             active={selection.isAll()}
             aria-current={selection.isAll() ? 'true' : undefined}
             class="min-w-0 flex-1"
             {...pressHandlers(selection.selectAll)}
           >
-            <AllInboxesIcon />
+            <ViewSidebar.Icon>
+              <TrayIcon class="size-4" />
+            </ViewSidebar.Icon>
             <span class="truncate">All inboxes</span>
           </ViewSidebar.Item>
           <Show when={selection.canAddInbox()}>
-            <Button
+            <ViewSidebar.Control
               type="button"
-              variant="ghost"
-              size="sm"
-              square
-              class="size-8 shrink-0 rounded-full text-ink-muted transition-none"
               label="Connect another account"
               {...pressHandlers(selection.addInbox)}
             >
               <PlusIcon class="size-4" />
-            </Button>
+            </ViewSidebar.Control>
           </Show>
         </div>
         <For each={selection.options()}>
@@ -146,12 +132,9 @@ export function EmailInboxList(props: { class?: string }) {
               }
               {...pressHandlers(() => selection.select(option.id))}
             >
-              <span
-                aria-hidden="true"
-                class="flex size-6 shrink-0 items-center"
-              >
-                <InboxAvatar option={option} size="md" />
-              </span>
+              <ViewSidebar.Icon>
+                <InboxAvatar option={option} size="sm" class="size-5" />
+              </ViewSidebar.Icon>
               <span class="truncate">{option.label}</span>
             </ViewSidebar.Item>
           )}

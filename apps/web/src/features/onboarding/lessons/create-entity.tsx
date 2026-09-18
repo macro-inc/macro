@@ -8,8 +8,8 @@ import {
   type SoupState,
 } from '@app/features/next-soup/create-soup-state';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
-import { AnimatedPlusIcon } from '@icon/wide-plus';
 import { Dialog } from '@kobalte/core/dialog';
+import PlusIcon from '@phosphor/plus.svg';
 import {
   createEffect,
   createSignal,
@@ -121,7 +121,7 @@ function CreateEntityContent(props: LessonContentProps) {
           <div class="h-px flex-1 bg-edge-muted" />
         </div>
         <ClickCallout
-          icon={AnimatedPlusIcon}
+          icon={PlusIcon}
           label="in the sidebar"
           completed={completed()}
         />
@@ -185,7 +185,7 @@ function CreateEntityDemo(props: LessonContentProps) {
 
       <Dialog open={launcherOpen()} onOpenChange={setLauncherOpen} modal={true}>
         <Dialog.Portal>
-          <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+          <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass" />
           <Dialog.Content
             class="[--color-surface:var(--color-dialog)]"
             onCloseAutoFocus={(e) => {

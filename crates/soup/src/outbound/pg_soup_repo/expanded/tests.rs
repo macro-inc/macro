@@ -432,6 +432,7 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
         })
         .expect("The chat should exist");
     assert_eq!(chat.name, "Chat in B");
+    assert_eq!(chat.model.as_deref(), Some("gpt-4o"));
     assert_eq!(chat.project_id.as_ref(), Some(&expected_project_id));
 }
 
@@ -1111,6 +1112,12 @@ async fn test_filter_by_chat_ids(db: PgPool) -> anyhow::Result<()> {
         },
     )
     .await?;
+
+    for item in &items {
+        if let SoupItem::Chat(chat) = item {
+            assert_eq!(chat.model.as_deref(), Some("gpt-4o"));
+        }
+    }
 
     // Should get 2 chats (filtered), all documents, and all projects
     let mut chat_ids: HashSet<Uuid> = HashSet::new();

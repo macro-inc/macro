@@ -50,3 +50,7 @@ export function entryOf(event: AgentSessionLogEvent): AgentSessionLogEntryDto {
   const { agentSessionId: _agentSessionId, ...entry } = event;
   return entry;
 }
+
+/** A persisted session changed; consumers reload its current metadata. */
+export const AGENT_SESSION_UPDATED_EVENT = 'agent_session_updated';
+export type AgentSessionUpdatedEvent = { agentSessionId: string };

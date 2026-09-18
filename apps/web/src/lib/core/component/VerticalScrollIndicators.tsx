@@ -20,14 +20,14 @@ function thresholdOpacity(distance: number) {
 }
 
 /**
- * Adds decorative indications that content is scrollable. The indicators hide
- * at their respective scroll boundaries and support vertical or horizontal
- * scrolling.
+ * Adds soft edge shadows to indicate scrollable content, with an optional
+ * surface-color gradient. The indicators hide at their respective scroll
+ * boundaries and support vertical or horizontal scrolling.
  */
 export const ScrollIndicators = (props: {
   scrollRef: Accessor<HTMLElement | undefined>;
   direction?: 'vertical' | 'horizontal';
-  appearance?: 'pattern' | 'gradient';
+  appearance?: 'shadow' | 'gradient';
   gradientColor?: ScrollIndicatorGradientColor;
   class?: string;
   noBorderStart?: boolean;
@@ -97,11 +97,11 @@ export const ScrollIndicators = (props: {
               : 'inset-x-0 top-0 h-4 bg-linear-to-b from-(--scroll-indicator-from) to-transparent transition-opacity'
             : isHorizontal()
               ? cn(
-                  'inset-y-px left-0 w-3 mask-r-from-0% pattern-diagonal-4 pattern-edge',
+                  'inset-y-px left-0 w-3 bg-linear-to-r from-edge-muted/60 to-transparent transition-opacity',
                   !props.noBorderStart && 'border-edge-muted border-l'
                 )
               : cn(
-                  'inset-x-px top-0 h-3 mask-b-from-0% pattern-diagonal-4 pattern-edge',
+                  'inset-x-px top-0 h-3 bg-linear-to-b from-edge-muted/60 to-transparent transition-opacity',
                   !props.noBorderStart && 'border-edge-muted border-t'
                 ),
           props.class
@@ -119,11 +119,11 @@ export const ScrollIndicators = (props: {
               : 'inset-x-0 bottom-0 h-4 bg-linear-to-t from-(--scroll-indicator-from) to-transparent transition-opacity'
             : isHorizontal()
               ? cn(
-                  'inset-y-px right-0 w-3 mask-l-from-0% pattern-diagonal-4 pattern-edge',
+                  'inset-y-px right-0 w-3 bg-linear-to-l from-edge-muted/60 to-transparent transition-opacity',
                   !props.noBorderEnd && 'border-edge-muted border-r'
                 )
               : cn(
-                  'inset-x-px bottom-0 h-3 mask-t-from-0% pattern-diagonal-4 pattern-edge',
+                  'inset-x-px bottom-0 h-3 bg-linear-to-t from-edge-muted/60 to-transparent transition-opacity',
                   !props.noBorderEnd && 'border-edge-muted border-b'
                 ),
           props.class

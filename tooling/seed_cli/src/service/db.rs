@@ -21,6 +21,7 @@ use model::document::DocumentMetadata;
 use models_email::email::service;
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
+use models_permissions::share_permission::team_share::TeamShareCreation;
 use uuid::Uuid;
 
 /// Everything needed to seed one scenario user.
@@ -59,12 +60,12 @@ pub struct InsertCallRecordArgs {
     pub ended_at: DateTime<Utc>,
     /// Pre-derived share permission id.
     pub share_permission_id: String,
-    /// Whether the creator's team gets view access.
+    /// Whether the creator's current team gets canonical View access (the
+    /// same initialization `create_call` performs); no-op for a creator
+    /// without a team.
     pub share_with_team: bool,
     /// Optional custom display name.
     pub custom_name: Option<String>,
-    /// The creator's team, when `share_with_team` applies.
-    pub team_id: Option<Uuid>,
     /// Participants as (user id, joined_at, left_at).
     pub participants: Vec<(String, DateTime<Utc>, DateTime<Utc>)>,
     /// Transcript segments as (speaker id, content, started_at, ended_at).
@@ -501,17 +502,6 @@ impl SeedDb {
             entity_access_db_utils::AccessLevel::Edit,
         )
         .await?;
-        if let Some(team_id) = args.team_id {
-            entity_access_db_utils::insert_entity_access_row(
-                &mut transaction,
-                &args.call_id,
-                entity_access_db_utils::EntityType::Call,
-                &team_id.to_string(),
-                entity_access_db_utils::EntityAccessSourceType::Team,
-                entity_access_db_utils::AccessLevel::View,
-            )
-            .await?;
-        }
 
         let duration_ms = (args.ended_at - args.started_at).num_milliseconds().max(0);
         sqlx::query!(
@@ -532,6 +522,22 @@ impl SeedDb {
         )
         .execute(transaction.as_mut())
         .await?;
+
+        // Canonical team sharing, exactly as `create_call` initializes it: View
+        // for the creator's current team when the scenario shares the call,
+        // nothing otherwise. The legacy column above is only kept until it is
+        // dropped; readers derive `shareWithTeam` from this state.
+        share_permission_db_utils::team_share::initialize(
+            &mut transaction,
+            &model_entity::EntityType::Call.with_entity_string(args.call_id.to_string()),
+            if args.share_with_team {
+                TeamShareCreation::Call
+            } else {
+                TeamShareCreation::Unshared
+            },
+        )
+        .await
+        .map_err(anyhow::Error::from)?;
 
         for (user_id, joined_at, left_at) in &args.participants {
             sqlx::query!(

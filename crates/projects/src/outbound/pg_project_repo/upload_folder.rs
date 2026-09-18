@@ -172,6 +172,16 @@ async fn create_pending_project(
         AccessLevel::Owner,
     )
     .await?;
+    entity_registry_db_utils::insert_entity(
+        transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            entity_id,
+            entity_registry_db_utils::RegisteredEntityType::Project,
+            model_owner::Owner::User(user_id.clone()),
+        ),
+    )
+    .await
+    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
     Ok(project)
 }
 
@@ -240,6 +250,16 @@ async fn create_empty_document(
         AccessLevel::Owner,
     )
     .await?;
+    entity_registry_db_utils::insert_entity(
+        transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            entity_id,
+            entity_registry_db_utils::RegisteredEntityType::Document,
+            model_owner::Owner::User(user_id.clone()),
+        ),
+    )
+    .await
+    .map_err(|error| sqlx::Error::Protocol(error.to_string()))?;
 
     Ok(DocumentMetadata::new_document(
         &document.id,

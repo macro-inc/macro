@@ -46,6 +46,7 @@ import type {
 import { useHasPaidAccess } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import { getIconConfig } from '@core/component/EntityIcon';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { UserIcon } from '@core/component/UserIcon';
@@ -70,28 +71,20 @@ import { clearPressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import LogoIcon from '@icon/macro-logo.svg';
-import { AnimatedActivityIcon } from '@icon/wide-activity';
-import WideCalendarIcon from '@icon/wide-calendar.svg';
-import { AnimatedCallIcon } from '@icon/wide-call';
-import PhoneIcon from '@icon/wide-call.svg';
-import { AnimatedChannelIcon } from '@icon/wide-channel';
-import { AnimatedCompanyIcon } from '@icon/wide-company';
-import { AnimatedEmailIcon } from '@icon/wide-email';
-import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
-import { AnimatedHomeIcon } from '@icon/wide-home';
-import { AnimatedInboxIcon } from '@icon/wide-inbox';
-import { AnimatedSearchIcon } from '@icon/wide-search';
-import { AnimatedStarIcon } from '@icon/wide-star';
-import { AnimatedTaskIcon } from '@icon/wide-task';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import BellIcon from '@phosphor/bell.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import CompassIcon from '@phosphor/compass.svg';
 import DotsThreeIcon from '@phosphor/dots-three.svg';
 import GearIcon from '@phosphor/gear.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import HomeIcon from '@phosphor/house.svg';
+import SearchIcon from '@phosphor/magnifying-glass.svg';
+import PhoneIcon from '@phosphor/phone-call.svg';
+import ActivityIcon from '@phosphor/pulse.svg';
 import SignOutIcon from '@phosphor/sign-out.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
 import XIcon from '@phosphor/x.svg';
@@ -124,6 +117,7 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { CalendarSidebarPreview } from './calendar-sidebar-preview';
+import { SidebarSearchMenu } from './sidebar-search-menu';
 
 // TODO(sidebar-next): move to app-sidebar/navigation.tsx once SidebarRail ships.
 export interface SidebarItem {
@@ -131,10 +125,8 @@ export interface SidebarItem {
   label: string;
   href: string;
   params?: Record<string, unknown>;
-  icon?: Component<
-    JSX.SvgSVGAttributes<SVGSVGElement> & { triggerAnimation?: boolean }
-  >;
-  hotkey: ValidHotkey;
+  icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  hotkey?: ValidHotkey | ValidHotkey[];
   hotkeyToken: HotkeyToken;
   standaloneHotkey?: boolean;
   hiddenFromSidebar?: boolean;
@@ -189,17 +181,21 @@ const markdownDocumentsQuery = buildDocumentTypeQuery(['doc-markdown']);
 const SIDEBAR_LINKS = [
   {
     id: 'inbox',
-    label: 'Notifications',
+    get label() {
+      return isTouchDevice() ? 'Notifications' : 'Home';
+    },
     href: LIST_VIEW_PATHS.inbox,
-    icon: AnimatedInboxIcon,
-    hotkey: 'i',
+    get icon() {
+      return isTouchDevice() ? BellIcon : HomeIcon;
+    },
+    hotkey: ['h', 'i'],
     hotkeyToken: TOKENS.sidebar.goTo.inbox,
   },
   {
     id: 'search',
     label: 'Search',
     href: LIST_VIEW_PATHS.search,
-    icon: AnimatedSearchIcon,
+    icon: SearchIcon,
     hotkey: '/',
     hotkeyToken: TOKENS.sidebar.goTo.search,
     standaloneHotkey: true,
@@ -209,7 +205,7 @@ const SIDEBAR_LINKS = [
     id: 'agents',
     label: 'Agents',
     href: LIST_VIEW_PATHS.agents,
-    icon: AnimatedStarIcon,
+    icon: getIconConfig('agent').icon,
     hotkey: 'a',
     hotkeyToken: TOKENS.sidebar.goTo.agents,
   },
@@ -217,7 +213,7 @@ const SIDEBAR_LINKS = [
     id: 'mail',
     label: 'Email',
     href: LIST_VIEW_PATHS.mail,
-    icon: AnimatedEmailIcon,
+    icon: getIconConfig('email').icon,
     hotkey: 'e',
     hotkeyToken: TOKENS.sidebar.goTo.mail,
   },
@@ -225,7 +221,7 @@ const SIDEBAR_LINKS = [
     id: 'documents',
     label: 'Files',
     href: LIST_VIEW_PATHS.documents,
-    icon: AnimatedFileMdIcon,
+    icon: getIconConfig('files').icon,
     hotkey: 'f',
     hotkeyToken: TOKENS.sidebar.goTo.documents,
   },
@@ -240,7 +236,7 @@ const SIDEBAR_LINKS = [
         or: ['doc-markdown'],
       },
     },
-    icon: AnimatedFileMdIcon,
+    icon: getIconConfig('md').icon,
     hotkey: 'd',
     hotkeyToken: TOKENS.sidebar.goTo.markdownDocuments,
     hiddenFromSidebar: true,
@@ -249,7 +245,7 @@ const SIDEBAR_LINKS = [
     id: 'tasks',
     label: 'Tasks',
     href: LIST_VIEW_PATHS.tasks,
-    icon: AnimatedTaskIcon,
+    icon: getIconConfig('task').icon,
     hotkey: 't',
     hotkeyToken: TOKENS.sidebar.goTo.tasks,
   },
@@ -257,7 +253,7 @@ const SIDEBAR_LINKS = [
     id: 'calendar',
     label: 'Calendar',
     href: '/calendar',
-    icon: WideCalendarIcon,
+    icon: getIconConfig('calendar').icon,
     hotkey: 'r',
     hotkeyToken: TOKENS.sidebar.goTo.calendar,
   },
@@ -265,7 +261,7 @@ const SIDEBAR_LINKS = [
     id: 'channels',
     label: 'Channels',
     href: LIST_VIEW_PATHS.channels,
-    icon: AnimatedChannelIcon,
+    icon: getIconConfig('channel').icon,
     hotkey: 'c',
     hotkeyToken: TOKENS.sidebar.goTo.channels,
   },
@@ -397,7 +393,7 @@ const resetGoToHotkeysState = () => {
 /**
  * Hosts the always-on global shortcuts that must keep working even on
  * full-cover routes like solo settings: the "g" leader key with its per-link
- * "go to" nav hotkeys (e.g. "g i" for inbox), plus Send Invites. Rendered
+ * "go to" nav hotkeys (e.g. "g h" for Home), plus Send Invites. Rendered
  * unconditionally from `Layout` — unlike `AppSidebar`, which unmounts on those
  * routes — so none of them go dead there.
  */
@@ -463,7 +459,7 @@ export const GoToHotkeys = () => {
   });
 
   const registeredGoToKeys = () =>
-    new Set<ValidHotkey>(links().map((link) => link.hotkey));
+    new Set<ValidHotkey>(links().flatMap((link) => link.hotkey ?? []));
 
   // When the go to command scope is active, we want to prevent
   // other default hotkeys from running. So doing "g" + some key
@@ -578,7 +574,7 @@ const SidebarSectionMenu = (props: {
     >
       <DotsThreeIcon />
     </Dropdown.Trigger>
-    <Dropdown.Content class="w-56 shadow-menu">
+    <Dropdown.Content class="w-56">
       <Dropdown.Group>
         <Dropdown.GroupLabel>Customize</Dropdown.GroupLabel>
         <For each={props.options}>
@@ -600,20 +596,16 @@ const SidebarSectionMenu = (props: {
 type TryCardItem = {
   id: TryItemId;
   label: string;
-  icon: Component<{ triggerAnimation?: boolean; class?: string }>;
+  icon: Component<{ class?: string }>;
   onClick: () => void;
 };
 
 const TryCardRow = (props: { item: TryCardItem }) => {
-  const [isHovering, setIsHovering] = createSignal(false);
-
   return (
     <button
       type="button"
       aria-label={props.item.label}
       class="flex h-7 w-full items-center justify-start gap-2 rounded-md px-1.5 py-0 text-sm font-medium text-ink-muted outline-none hover:bg-ink/5 hover:text-ink focus-visible:bg-ink/5 focus-visible:text-ink [&_svg]:size-3.5"
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
       onMouseDown={(e) => {
         if (e.button !== 0) return;
         e.preventDefault();
@@ -621,7 +613,7 @@ const TryCardRow = (props: { item: TryCardItem }) => {
       onClick={props.item.onClick}
     >
       <span class="size-5 shrink-0 flex items-center justify-center">
-        <Dynamic component={props.item.icon} triggerAnimation={isHovering()} />
+        <Dynamic component={props.item.icon} />
       </span>
       <span class="min-w-0 flex-1 truncate text-left">{props.item.label}</span>
     </button>
@@ -667,7 +659,6 @@ const SidebarDropdownLink = (
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const location = useLocation();
-  const [isHovering, setIsHovering] = createSignal(false);
   let contextMenuOpen = false;
 
   const isActive = () => {
@@ -753,13 +744,11 @@ const SidebarDropdownLink = (
           'bg-ink/6 text-ink hover:bg-ink/6 data-highlighted:bg-ink/6'
       )}
       data-active={isActive() ? '' : undefined}
-      onMouseEnter={() => setIsHovering(true)}
-      onMouseLeave={() => setIsHovering(false)}
       onSelect={openInCurrentSplit}
     >
       <Show when={props.icon}>
         <div class="shrink-0 [&_svg]:size-3.5">
-          <Dynamic component={props.icon} triggerAnimation={isHovering()} />
+          <Dynamic component={props.icon} />
         </div>
       </Show>
       <span class="min-w-0 flex-1 truncate text-ink">{props.label}</span>
@@ -772,12 +761,13 @@ const SidebarHeaderSearchButton = (props: { link: SidebarItem }) => {
   const analytics = useAnalytics();
   const layout = useSplitLayout();
 
-  const openSearch = (event: MouseEvent) => {
+  const openSearch = (newSplit: boolean) => {
     analytics.track('sidebar_click', { view: props.link.id });
     let currentContentHandle = globalSplitManager()?.activeSplit();
     const content = currentContentHandle?.content();
 
     if (
+      !newSplit &&
       currentContentHandle &&
       content?.type === 'component' &&
       content.id === 'search'
@@ -790,7 +780,7 @@ const SidebarHeaderSearchButton = (props: { link: SidebarItem }) => {
     currentContentHandle = navigateToSidebarView({
       viewId: props.link.id,
       params: props.link.params,
-      shiftKey: event.shiftKey,
+      shiftKey: newSplit,
       activeSplit: currentContentHandle,
       openWithSplit: layout.openWithSplit,
       referredFrom: 'sidebar',
@@ -800,19 +790,14 @@ const SidebarHeaderSearchButton = (props: { link: SidebarItem }) => {
   };
 
   return (
-    <Button
-      size="icon-sm"
-      class="[&_svg]:size-4!"
-      label="Search"
-      hotkey={props.link.hotkeyToken}
-      onMouseDown={(e) => {
-        if (e.button !== 0) return;
-        e.preventDefault();
+    <SidebarSearchMenu
+      onSearch={openSearch}
+      triggerProps={{
+        size: 'icon-sm',
+        class: '[&_svg]:size-4!',
+        hotkey: props.link.hotkeyToken,
       }}
-      onClick={openSearch}
-    >
-      <MagnifyingGlassIcon />
-    </Button>
+    />
   );
 };
 
@@ -919,7 +904,7 @@ export const SidebarSettingsWidget = (props: SidebarSettingsWidgetProps) => {
         The menu is shrink-to-fit, so without a cap a long name or email
         stretches it instead of engaging the `truncate` below.
       */}
-      <Dropdown.Content class="min-w-[min(16rem,calc(100vw-1rem))] max-w-[min(20rem,calc(100vw-1rem))] shadow-menu">
+      <Dropdown.Content class="min-w-[min(16rem,calc(100vw-1rem))] max-w-[min(20rem,calc(100vw-1rem))]">
         <Dropdown.Group class="p-1.5 gap-0">
           <div class="flex items-center gap-3 px-1 py-1">
             <Show
@@ -1014,7 +999,7 @@ const CALLS_LINK: SidebarItem = {
   id: 'calls',
   label: 'Calls',
   href: LIST_VIEW_PATHS.calls,
-  icon: AnimatedCallIcon,
+  icon: getIconConfig('call').icon,
   hotkey: 'l',
   hotkeyToken: TOKENS.sidebar.goTo.calls,
 };
@@ -1023,17 +1008,16 @@ const COMPANIES_LINK: SidebarItem = {
   id: 'companies',
   label: 'Customers',
   href: LIST_VIEW_PATHS.companies,
-  icon: AnimatedCompanyIcon,
+  icon: getIconConfig('company').icon,
   hotkey: 'o',
   hotkeyToken: TOKENS.sidebar.goTo.companies,
 };
 
 const DASHBOARD_LINK: SidebarItem = {
   id: 'home',
-  label: 'Home',
+  label: 'Assistant',
   href: '/home',
-  icon: AnimatedHomeIcon,
-  hotkey: 'h',
+  icon: HomeIcon,
   hotkeyToken: TOKENS.sidebar.goTo.home,
 };
 
@@ -1050,7 +1034,7 @@ const ACTIVITY_LINK: SidebarItem = {
   id: 'activity',
   label: 'Activity',
   href: '/activity',
-  icon: AnimatedActivityIcon,
+  icon: ActivityIcon,
   hotkey: 'y',
   hotkeyToken: TOKENS.sidebar.goTo.activity,
 };
@@ -1059,7 +1043,7 @@ const RECENT_LINK: SidebarItem = {
   id: 'recent',
   label: 'Recent',
   href: LIST_VIEW_PATHS.recent,
-  icon: AnimatedActivityIcon,
+  icon: ActivityIcon,
   // `r` is Calendar and `e`/`c`/`t` are taken; `n` is the only letter of
   // "recent" that is not already a sidebar destination.
   hotkey: 'n',
@@ -1427,7 +1411,7 @@ export const AppSidebar = (props: AppSidebarProps) => {
     const addTryItem = (
       id: TryItemId,
       label: string,
-      icon: Component<{ triggerAnimation?: boolean; class?: string }>,
+      icon: Component<{ class?: string }>,
       onClick: () => void
     ) => {
       if (!tryVisibility()[id]) return;
@@ -1496,7 +1480,8 @@ export const AppSidebar = (props: AppSidebarProps) => {
       {...hotkeyScopeNeutralAttribute}
       class={cn(
         'group/sidebar flex flex-col gap-0 overflow-hidden bg-surface px-3 pb-3 pt-4 text-[13px]',
-        isExpanded() && 'relative h-full shrink-0 max-w-55 w-55 opacity-100',
+        isExpanded() &&
+          'relative h-full shrink-0 max-w-55 w-55 border-r border-edge-muted opacity-100',
         props.sidebarState === 'hidden' &&
           'fixed left-0 top-0 bottom-0 h-full -translate-x-full max-w-0 w-0 opacity-0 pointer-events-none',
         isCollapsed() && 'fixed z-modal-content',
@@ -1741,6 +1726,9 @@ interface SidebarOpenInSplitMenuProps {
    * account rows scope the freshly opened mail list to their inbox.
    */
   onOpened?: (split: SplitHandle, action: SidebarOpenAction) => void;
+  /** View-owned navigation for rows that select a location inside this split. */
+  onOpenCurrentSplit?: () => void;
+  onOpenFullscreen?: () => void;
   onOpenChange?: (open: boolean) => void;
   /**
    * Overrides the trigger's default `h-7`, which otherwise clips triggers of a
@@ -1748,6 +1736,7 @@ interface SidebarOpenInSplitMenuProps {
    * size utility here wins.
    */
   triggerClass?: string;
+  additionalActions?: JSX.Element;
   children: JSX.Element;
 }
 
@@ -1765,6 +1754,10 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
   const canOpenFullscreen = () => layout.getSplitCount() > 1;
 
   const openInCurrentSplit = () => {
+    if (props.onOpenCurrentSplit) {
+      props.onOpenCurrentSplit();
+      return;
+    }
     const split = layout.openWithSplit(props.content(), {
       allowDuplicate: true,
       mergeHistory: false,
@@ -1785,10 +1778,15 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
       allowDuplicate: true,
       referredFrom: 'sidebar',
     });
-    props.onOpened?.(split, 'new-split');
+    if (split) props.onOpened?.(split, 'new-split');
   };
 
   const openFullscreen = () => {
+    if (props.onOpenFullscreen) {
+      props.onOpenFullscreen();
+      globalSplitManager()?.returnFocus();
+      return;
+    }
     const split = layout.replaceAllSplits(props.content(), {
       referredFrom: 'sidebar',
     });
@@ -1813,6 +1811,7 @@ export const SidebarOpenInSplitMenu = (props: SidebarOpenInSplitMenuProps) => {
             <MenuItem text="Open fullscreen" onClick={openFullscreen} />
           </Show>
           <MenuItem text="Open in current split" onClick={openInCurrentSplit} />
+          {props.additionalActions}
         </ContextMenuContent>
       </ContextMenu.Portal>
     </ContextMenu>
@@ -1874,9 +1873,11 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
       onMouseEnter={() => setIsHovering(true)}
       label={`Go to ${props.label}`}
       hotkey={
-        props.standaloneHotkey
-          ? props.hotkeyToken
-          : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
+        props.hotkey
+          ? props.standaloneHotkey
+            ? props.hotkeyToken
+            : [TOKENS.sidebar.goToLeader, props.hotkeyToken]
+          : undefined
       }
       tooltipDisabled={props.sidebarState !== 'slim' || props.id === 'calendar'}
       onMouseLeave={() => setIsHovering(false)}
@@ -1923,9 +1924,7 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
                 ? props.removeAction
                 : undefined
             }
-            fallback={
-              <Dynamic component={props.icon} triggerAnimation={isHovering()} />
-            }
+            fallback={<Dynamic component={props.icon} />}
           >
             {(removeAction) => (
               <Tooltip label={removeAction().tooltip} as="span" placement="top">
@@ -1991,6 +1990,7 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
 
       <Show
         when={
+          props.hotkey &&
           isHovering() &&
           !props.hotkeyVisible &&
           !(isActive() && props.trailingWhenActive !== undefined)
@@ -2014,7 +2014,7 @@ const SidebarLinkRow = (props: SidebarLinkProps) => {
           </div>
         </div>
       </Show>
-      <Show when={props.hotkeyVisible}>
+      <Show when={props.hotkey && props.hotkeyVisible}>
         <div
           class={cn(
             'text-xs size-4 rounded-xs flex items-center justify-center overflow-hidden bg-accent/10 border border-accent/30 text-accent',

@@ -6,10 +6,31 @@ const listenMock = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: listenMock }));
 
-import { INITIAL_CACHE_REVISION } from '../protocol';
+import {
+  type EntityFilterCacheArgs,
+  type EntityFilterCacheResult,
+  INITIAL_CACHE_REVISION,
+} from '../protocol';
 import { createTauriCacheHost } from './tauri-host';
 
 type EventCallback = (event: { payload: Record<string, unknown> }) => void;
+
+const filterArgs: EntityFilterCacheArgs = {
+  filters: {},
+  sortMethod: 'UPDATED_AT',
+  sortDirection: 'DESC',
+  limit: 25,
+  mail: { view: 'ALL' },
+};
+const missingFilterCommand = 'Command graphql_cache_entity_filter not found';
+const emptyMailPage: EntityFilterCacheResult = {
+  kind: 'mail-page',
+  revision: INITIAL_CACHE_REVISION,
+  keys: [],
+  sortTimestamps: [],
+  nextCursor: null,
+  optimistic: false,
+};
 
 describe('createTauriCacheHost', () => {
   let eventCallbacks: Map<string, EventCallback>;
@@ -141,6 +162,206 @@ describe('createTauriCacheHost', () => {
         nowMs: 123,
       },
     });
+  });
+
+  it('waits for native initialization and forwards Mail filter requests over IPC', async () => {
+    let initialize: () => void = () => {
+      throw new Error('init not requested');
+    };
+    const page = {
+      kind: 'mail-page',
+      revision: INITIAL_CACHE_REVISION,
+      keys: ['GraphqlSoupEmailThread:thread-1'],
+      sortTimestamps: ['2025-01-04T00:00:00Z'],
+      nextCursor: 'local-cursor',
+      optimistic: false,
+    };
+    invokeMock.mockImplementation((command: string) =>
+      command === 'graphql_cache_init'
+        ? new Promise<void>((resolve) => {
+            initialize = resolve;
+          })
+        : Promise.resolve(page)
+    );
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    const args: EntityFilterCacheArgs = {
+      filters: { emailFilter: { tree: { literal: { importance: false } } } },
+      sortMethod: 'UPDATED_AT',
+      sortDirection: 'DESC',
+      limit: 25,
+      mail: { view: 'INBOX', cursor: 'previous-local-cursor' },
+    };
+    const pending = host.entityFilter(args);
+    await Promise.resolve();
+    expect(invokeMock).toHaveBeenCalledTimes(1);
+    initialize();
+    await expect(pending).resolves.toEqual(page);
+    expect(invokeMock).toHaveBeenLastCalledWith('graphql_cache_entity_filter', {
+      request: args,
+    });
+    host.dispose();
+  });
+
+  it.each([missingFilterCommand, new Error(missingFilterCommand)])(
+    'preserves legacy native behavior and remembers a missing filter command (%s)',
+    async (failure) => {
+      invokeMock.mockImplementation(async (command: string) => {
+        if (command === 'graphql_cache_entity_filter') throw failure;
+        if (command === 'graphql_cache_read') return { kind: 'miss' };
+        if (command === 'graphql_cache_hydrate')
+          return { kind: 'void', revision: INITIAL_CACHE_REVISION };
+        return null;
+      });
+      const host = createTauriCacheHost({ scope: 'old-native' });
+      try {
+        await expect(host.entityFilter(filterArgs)).resolves.toEqual({
+          kind: 'unsupported',
+        });
+        await expect(
+          host.entityFilter({ ...filterArgs, mail: { view: 'INBOX' } })
+        ).resolves.toEqual({ kind: 'unsupported' });
+        expect(
+          invokeMock.mock.calls.filter(
+            ([command]) => command === 'graphql_cache_entity_filter'
+          )
+        ).toHaveLength(1);
+        // Missing this additive command must not disable the existing cache API.
+        await expect(host.readQuery({ query: '{ x }' })).resolves.toEqual({
+          kind: 'miss',
+        });
+        await expect(
+          host.hydrateQuery({ query: '{ x }', data: { x: 1 } })
+        ).resolves.toEqual({
+          kind: 'void',
+          revision: INITIAL_CACHE_REVISION,
+        });
+      } finally {
+        host.dispose();
+      }
+    }
+  );
+
+  it('does not treat an unsupported predicate as a missing native command', async () => {
+    const page = emptyMailPage;
+    const filter = vi
+      .fn()
+      .mockResolvedValueOnce({ kind: 'unsupported' })
+      .mockResolvedValueOnce(page);
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_entity_filter' ? await filter() : null
+    );
+    const host = createTauriCacheHost({ scope: 'new-native' });
+    try {
+      await expect(host.entityFilter(filterArgs)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+      await expect(
+        host.entityFilter({ ...filterArgs, mail: { view: 'INBOX' } })
+      ).resolves.toEqual(page);
+      expect(filter).toHaveBeenCalledTimes(2);
+    } finally {
+      host.dispose();
+    }
+  });
+
+  it.each([
+    'cache storage failed',
+    'invalid entity-filter sort direction',
+    'Command graphql_cache_entity_filter not allowed by ACL',
+    'Command graphql_cache_read not found',
+    'Command not found',
+  ])(
+    'propagates non-capability errors without disabling future filtering: %s',
+    async (message) => {
+      const page = emptyMailPage;
+      const filter = vi
+        .fn()
+        .mockRejectedValueOnce(message)
+        .mockResolvedValueOnce(page);
+      invokeMock.mockImplementation(async (command: string) =>
+        command === 'graphql_cache_entity_filter' ? await filter() : null
+      );
+      const host = createTauriCacheHost({ scope: 'new-native' });
+      try {
+        await expect(host.entityFilter(filterArgs)).rejects.toThrow(message);
+        await expect(host.entityFilter(filterArgs)).resolves.toEqual(page);
+        expect(filter).toHaveBeenCalledTimes(2);
+      } finally {
+        host.dispose();
+      }
+    }
+  );
+
+  it('does not hide native cache initialization failures', async () => {
+    invokeMock.mockRejectedValue(new Error('cache initialization failed'));
+    const host = createTauriCacheHost({ scope: 'old-native' });
+    try {
+      await expect(host.entityFilter(filterArgs)).rejects.toThrow(
+        'cache initialization failed'
+      );
+      expect(invokeMock).toHaveBeenCalledTimes(1);
+    } finally {
+      host.dispose();
+    }
+  });
+
+  it('does not suppress filter timeouts or permanently disable the command', async () => {
+    vi.useFakeTimers();
+    const host = createTauriCacheHost({
+      scope: 'new-native',
+      requestTimeoutMs: 50,
+    });
+    try {
+      invokeMock.mockImplementation((command: string) =>
+        command === 'graphql_cache_entity_filter'
+          ? new Promise(() => {})
+          : Promise.resolve(null)
+      );
+      const assertion = expect(host.entityFilter(filterArgs)).rejects.toThrow(
+        'graphql cache ipc timeout: graphql_cache_entity_filter'
+      );
+      await vi.advanceTimersByTimeAsync(60);
+      await assertion;
+      invokeMock.mockResolvedValue({ kind: 'unsupported' });
+      await expect(host.entityFilter(filterArgs)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+      expect(
+        invokeMock.mock.calls.filter(
+          ([command]) => command === 'graphql_cache_entity_filter'
+        )
+      ).toHaveLength(2);
+    } finally {
+      host.dispose();
+      vi.useRealTimers();
+    }
+  });
+
+  it('rechecks capabilities when a new native host is created', async () => {
+    const filter = vi
+      .fn()
+      .mockRejectedValueOnce(missingFilterCommand)
+      .mockResolvedValueOnce(emptyMailPage);
+    invokeMock.mockImplementation(async (command: string) =>
+      command === 'graphql_cache_entity_filter' ? await filter() : null
+    );
+    const oldHost = createTauriCacheHost({ scope: 'scope-1' });
+    try {
+      await expect(oldHost.entityFilter(filterArgs)).resolves.toEqual({
+        kind: 'unsupported',
+      });
+    } finally {
+      oldHost.dispose();
+    }
+    const newHost = createTauriCacheHost({ scope: 'scope-1' });
+    try {
+      await expect(newHost.entityFilter(filterArgs)).resolves.toEqual(
+        emptyMailPage
+      );
+      expect(filter).toHaveBeenCalledTimes(2);
+    } finally {
+      newHost.dispose();
+    }
   });
 
   it('sends writes with origin and dependency registration', async () => {

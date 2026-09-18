@@ -4,8 +4,8 @@ use crate::testing::helpers::egress::test_egress;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
-    AgentSession, AgentSessionPreview, ChannelSession, CreateAgentSessionParams,
-    DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot, SessionStatus,
+    AgentSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot,
+    SessionStatus, ThreadSession,
 };
 use bot_id::BotId;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -99,6 +99,8 @@ impl ContainerManager for TaggedManager {
 #[derive(Clone)]
 struct FixedBotSessions(BotId);
 
+const CLAUDE_TEST_BOT: BotId = BotId::TEST_B;
+
 impl AgentSessionRepo for FixedBotSessions {
     async fn create(&self, _params: CreateAgentSessionParams) -> SessionResult<AgentSession> {
         unimplemented!("the router never creates sessions")
@@ -115,21 +117,28 @@ impl AgentSessionRepo for FixedBotSessions {
         &self,
         _viewer: &MacroUserIdStr<'static>,
         _ids: &[AgentSessionId],
-    ) -> SessionResult<Vec<AgentSessionPreview>> {
+    ) -> SessionResult<Vec<agent_session::domain::model::SessionPreviewCandidate>> {
         unimplemented!("the router never previews sessions")
     }
 
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
+            repo_branch: None,
+            pull_request_url: None,
             id,
             owner_id: MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
                 .expect("valid user id"),
             thread_id: None,
-            thread_channel_id: None,
+            thread_parent: None,
             originating_message_id: None,
             bot_id: self.0,
             model: "auto".to_owned(),
-            harness: "cursor".to_owned(),
+            harness: if self.0 == CLAUDE_TEST_BOT {
+                "claude-cloud"
+            } else {
+                "cursor"
+            }
+            .to_owned(),
             repo_url: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
@@ -144,12 +153,20 @@ impl AgentSessionRepo for FixedBotSessions {
         })
     }
 
-    async fn find_for_channel(
+    async fn find_for_thread(
         &self,
         _thread_id: Option<macro_uuid::Uuid>,
         _bot_id: Option<BotId>,
-    ) -> SessionResult<ChannelSession> {
+    ) -> SessionResult<ThreadSession> {
         unimplemented!("the router never routes channel events")
+    }
+
+    async fn recent_for_owner(
+        &self,
+        _owner: &MacroUserIdStr<'_>,
+        _limit: std::num::NonZeroUsize,
+    ) -> SessionResult<Vec<agent_session::domain::model::AgentSession>> {
+        unimplemented!("the router never summarizes an owner's recent sessions")
     }
 
     async fn find_all_for_thread(
@@ -173,6 +190,18 @@ impl AgentSessionRepo for FixedBotSessions {
 
     async fn set_model(&self, _id: AgentSessionId, _model: &str) -> SessionResult<()> {
         unimplemented!("the router never sets models")
+    }
+
+    async fn set_egress_token_hash(&self, _id: AgentSessionId, _hash: &str) -> SessionResult<()> {
+        unimplemented!("this adapter does not rotate credentials")
+    }
+
+    async fn set_repo_url(
+        &self,
+        _id: AgentSessionId,
+        _repo_url: Option<String>,
+    ) -> SessionResult<()> {
+        unimplemented!("the router never sets repositories")
     }
 
     async fn delete(&self, _id: AgentSessionId) -> SessionResult<()> {
@@ -223,6 +252,8 @@ async fn the_cursor_bot_routes_to_cursor_and_everything_else_to_the_sandbox() {
     let router = RoutedContainerManager::new(
         sandbox.clone(),
         cursor.clone(),
+        TaggedManager::new("codex"),
+        TaggedManager::new("claude"),
         FixedBotSessions(bot_id::CURSOR_BOT_ID),
     );
 
@@ -249,6 +280,8 @@ async fn resume_and_teardown_route_by_the_stored_bot() {
     let router = RoutedContainerManager::new(
         sandbox.clone(),
         cursor.clone(),
+        TaggedManager::new("codex"),
+        TaggedManager::new("claude"),
         FixedBotSessions(bot_id::CURSOR_BOT_ID),
     );
 
@@ -266,6 +299,8 @@ async fn a_database_backed_cursor_agent_routes_by_its_stored_harness() {
     let router = RoutedContainerManager::new(
         sandbox.clone(),
         cursor.clone(),
+        TaggedManager::new("codex"),
+        TaggedManager::new("claude"),
         FixedBotSessions(BotId::TEST_A),
     );
 
@@ -278,4 +313,79 @@ async fn a_database_backed_cursor_agent_routes_by_its_stored_harness() {
         ["cursor:resume", "cursor:session_token", "cursor:teardown"]
     );
     assert!(sandbox.calls().is_empty());
+}
+
+#[tokio::test]
+async fn codex_routes_all_lifecycle_operations_and_rejects_resize() {
+    let sandbox = TaggedManager::new("sandbox");
+    let cursor = TaggedManager::new("cursor");
+    let codex = TaggedManager::new("codex");
+    let router = RoutedContainerManager::new(
+        sandbox.clone(),
+        cursor.clone(),
+        codex.clone(),
+        TaggedManager::new("claude"),
+        FixedBotSessions(bot_id::CODEX_BOT_ID),
+    );
+    router
+        .spawn(spawn_for(AgentKind::CodexCloud))
+        .await
+        .unwrap()
+        .map_transport(|transport| assert!(matches!(transport, RoutedTransport::Codex(_))));
+    let session = AgentSessionId::new();
+    router.resume(session).await.unwrap();
+    router.session_token(session).await.unwrap();
+    router.teardown(session).await.unwrap();
+    assert!(router.resize(session, SandboxSize::Default).await.is_err());
+    assert_eq!(
+        codex.calls(),
+        [
+            "codex:spawn",
+            "codex:resume",
+            "codex:session_token",
+            "codex:teardown"
+        ]
+    );
+    assert!(sandbox.calls().is_empty());
+    assert!(cursor.calls().is_empty());
+    assert_eq!(
+        AgentKind::from_harness("codex-cloud"),
+        AgentKind::CodexCloud
+    );
+}
+
+#[tokio::test]
+async fn claude_routes_by_harness_through_the_shared_provider_router() {
+    let sandbox = TaggedManager::new("sandbox");
+    let cursor = TaggedManager::new("cursor");
+    let codex = TaggedManager::new("codex");
+    let claude = TaggedManager::new("claude");
+    let router = RoutedContainerManager::new(
+        sandbox.clone(),
+        cursor.clone(),
+        codex.clone(),
+        claude.clone(),
+        FixedBotSessions(CLAUDE_TEST_BOT),
+    );
+    router
+        .spawn(spawn_for(AgentKind::ClaudeCloud))
+        .await
+        .unwrap()
+        .map_transport(|transport| assert!(matches!(transport, RoutedTransport::Claude(_))));
+    let session = AgentSessionId::new();
+    router.resume(session).await.unwrap();
+    router.session_token(session).await.unwrap();
+    router.teardown(session).await.unwrap();
+    assert_eq!(
+        claude.calls(),
+        [
+            "claude:spawn",
+            "claude:resume",
+            "claude:session_token",
+            "claude:teardown"
+        ]
+    );
+    assert!(sandbox.calls().is_empty());
+    assert!(cursor.calls().is_empty());
+    assert!(codex.calls().is_empty());
 }

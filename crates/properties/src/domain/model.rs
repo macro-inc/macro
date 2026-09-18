@@ -55,7 +55,9 @@ pub fn storage_entity_type(entity_type: AccessEntityType) -> Option<EntityType> 
         | AccessEntityType::CrmContact
         | AccessEntityType::Reminder
         | AccessEntityType::Skill
-        | AccessEntityType::AgentSession => None,
+        | AccessEntityType::AgentSession
+        | AccessEntityType::ScheduledAction
+        | AccessEntityType::Initiative => None,
     }
 }
 
@@ -186,6 +188,15 @@ impl<'a> PropertyDefinitionOwner<'a> {
             PropertyDefinitionOwner::Team(team_id) => (Some(team_id), None),
         }
     }
+}
+
+/// Result of resolving an option by value without changing an existing option.
+#[derive(Debug)]
+pub struct GetOrCreatePropertyOptionResult {
+    /// The newly inserted or existing option.
+    pub option: PropertyOption,
+    /// Whether this call inserted the option.
+    pub created: bool,
 }
 
 /// Result of getting or creating an owner's tag definition.

@@ -22,10 +22,10 @@ use uuid::Uuid;
 
 use super::model::{
     EditReceipt, EntityPropertiesKey, EntityPropertyInfo, EntityPropertyMutationSnapshot,
-    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreateTagDefinitionResult,
-    PropertyDefinitionOwner, PropertyOptionReplaceOutcome, PropertyOptionReplacePlan,
-    TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification, UpdatePropertyOptionOutcome,
-    ViewReceipt,
+    EntityPropertyOptionSelection, EntityPropertyOptionUpdate, GetOrCreatePropertyOptionResult,
+    GetOrCreateTagDefinitionResult, PropertyDefinitionOwner, PropertyOptionReplaceOutcome,
+    PropertyOptionReplacePlan, TagPromotionOutcome, TagRemapOutcome, TaskAssignedNotification,
+    UpdatePropertyOptionOutcome, ViewReceipt,
 };
 
 /// Repository trait for property operations.
@@ -120,6 +120,16 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         value: PropertyOptionValue,
         color: Option<String>,
     ) -> impl Future<Output = Result<PropertyOption, Self::Err>> + Send;
+
+    /// Resolve by exact value, inserting if absent. Concurrent calls return the
+    /// same option; an existing option's color and display order are preserved.
+    fn get_or_create_property_option(
+        &self,
+        property_definition_id: Uuid,
+        display_order: i32,
+        value: PropertyOptionValue,
+        color: Option<String>,
+    ) -> impl Future<Output = Result<GetOrCreatePropertyOptionResult, Self::Err>> + Send;
 
     /// Update a property option's value, color, and display order in place.
     /// The option id is preserved, so every entity referencing it reflects the

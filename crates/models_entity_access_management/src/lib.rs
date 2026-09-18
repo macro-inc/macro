@@ -17,4 +17,6 @@ pub enum EntityAccessSourceType {
     Team,
     /// User source
     User,
+    /// Bot source
+    Bot,
 }

@@ -21,17 +21,24 @@ members = [
   "crates/client/cache-wasm",
   "crates/client/turso-opfs",
   "crates/coding_agent_worker",
+  "crates/codex_cloud_agents",
+  "crates/codex_connection",
   "crates/collab_surface",
   "crates/complete_graph",
   "crates/cowlike",
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
+  "crates/claude_cloud_agents",
   "crates/embedding",
   "crates/email_api_client",
   "crates/entity_mutation",
+  "crates/entity_registry/entity_registry",
+  "crates/entity_registry/entity_registry_db_utils",
+  "crates/entity_registry/shared_entity_registry",
   "crates/favorites",
   "crates/foreign_entity",
+  "crates/genai_telemetry",
   "crates/generic_email_domains",
   "crates/gmail_client",
   "crates/graphql_activity",
@@ -45,10 +52,12 @@ members = [
   "crates/graphql_properties",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/gtm_invite",
   "crates/harness_id",
   "crates/harness_token",
   "crates/harnesses",
   "crates/import",
+  "crates/initiative",
   "crates/item_filter_index",
   "crates/integration_tests/local_e2e",
   "crates/loops_client",
@@ -60,6 +69,7 @@ members = [
   "crates/macro_sync_service_jwt",
   "crates/maybe_send",
   "crates/memory",
+  "crates/messages",
   "crates/model_owner",
   "crates/mcp_select",
   "crates/mcp_toolset",
@@ -295,6 +305,7 @@ sqlx = { version = "0.8.6", features = [
   "uuid",
 ] }
 sqlx-core = { version = "0.8.6" }
+sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
 strum = { version = "0.27.1", features = ["derive"] }
 tempfile = "3"
 thiserror = "2.0.0"

@@ -1,22 +1,28 @@
 /**
- * The block's composer container: reads the composer controller from the
- * session context and drives the dumb `AgentInput` with derived props. All
- * block-level state stays on this side of the boundary.
+ * The block's composer container: reads the session from context and drives
+ * the dumb `AgentInput` with derived props. Every in-flight state it shows
+ * is read off the fold — the turn discriminant and the messages' pending
+ * marks — so the composer keeps no state of its own.
  */
 
+import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import type { MessagePart } from '@service-agent-fold/generated/types';
-import { For, Show } from 'solid-js';
+import type { AgentAction } from '@service-agent-harness/generated/schemas';
+import { type Component, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { changingModel, hasPendingStop } from '../state/control-message';
 import {
   AgentInput,
+  type AgentInputProps,
   AgentModelSelector,
   ComposerNotice,
   PermissionOptions,
   type QueuedPromptItem,
   QueuedPrompts,
 } from '../ui';
+import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
 
 type PendingPermission = Extract<MessagePart, { kind: 'permission' }>;
 
@@ -26,27 +32,59 @@ export function AgentComposer(props: {
    * split layout and j/k navigation — same contract as Chat and Channel.
    */
   autofocus?: boolean;
+  input?: Component<AgentInputProps>;
+  modelSelector?: Component<AgentModelSelectorProps>;
 }) {
+  const Input = props.input ?? AgentInput;
+  const ModelSelector = props.modelSelector ?? AgentModelSelector;
   const {
-    blockedOnUser,
-    composer,
     elicitation,
+    issue,
     loadFailed,
     messages,
     metadata,
     pending,
+    permissions,
     queue,
-    resuming,
-    working,
+    sendNext,
+    turn,
     registerQuoteInsert,
   } = useAgentSession();
   const userId = useUserId();
 
-  // Permission requests the agent is blocked on, surfaced here so a prompt
-  // buried mid-transcript is not missed. Only the running turn's: a request
-  // left open by a turn that already ended can no longer be answered.
+  // The fold speculates the action the moment it is issued, so success is
+  // observed there; only a refusal needs saying here.
+  const act = (action: AgentAction, failure: string) => {
+    void issue(action)?.then((result) => {
+      if (result.isErr()) toast.failure(failure);
+    });
+  };
+
+  // A turn is open in some form: the send button becomes a stop square and
+  // prompts sent now wait in the server queue behind it. A stop the fold has
+  // speculated already reads as done - the button goes back to send with the
+  // rest of the transcript, and the log confirms the end of the turn later.
+  const busy = () => {
+    const state = turn();
+    return (
+      (state !== 'idle' && state !== 'disconnected' && state !== 'stopping') ||
+      resuming()
+    );
+  };
+  // The runtime is gone and the user has asked it for something anyway, so
+  // the service is bringing its sandbox back before it can deliver. There is
+  // no signal for this on the wire; it is the one honest inference from a
+  // disconnected runtime and a pending action of ours. The wake is a turn in
+  // all but name, so it can be stopped - and a pending stop ends it here as
+  // it does everywhere else, before the log says so.
+  const resuming = () =>
+    turn() === 'disconnected' &&
+    messages().some((message) => message.pending) &&
+    !hasPendingStop(messages());
+
   const pendingPermissions = (): PendingPermission[] => {
-    if (!working()) return [];
+    if (!busy() || turn() === 'disconnected' || turn() === 'stopping')
+      return [];
     const last = messages().at(-1);
     if (last?.author.kind !== 'agent' || last.stop != null) return [];
     return last.parts.filter(
@@ -94,12 +132,12 @@ export function AgentComposer(props: {
       <Show when={resuming()}>
         <ComposerNotice text="Waking the agent's sandbox…" active />
       </Show>
-      <Show when={blockedOnUser()}>
+      <Show when={turn() === 'blocked'}>
         <ComposerNotice
           text={
             elicitation.canAnswer()
               ? 'The agent is waiting for your answer above. Messages sent now are queued.'
-              : `The agent is waiting for ${elicitation.ownerName()} to answer above. Messages sent now are queued.`
+              : 'The agent is waiting for an editor to answer above. Messages sent now are queued.'
           }
         />
       </Show>
@@ -109,31 +147,42 @@ export function AgentComposer(props: {
             <span class="text-ink">
               The agent is waiting for your permission to continue.
             </span>
-            <PermissionOptions
-              options={permission.options}
-              disabled={composer.answeringPermission(permission.requestId)}
-              onSelect={(optionId) =>
-                composer.respondToPermission(permission.requestId, {
-                  kind: 'selected',
-                  optionId,
-                })
-              }
-            />
+            <Show when={permissions.canAnswer()}>
+              <PermissionOptions
+                options={permission.options}
+                disabled={permissions.answering(permission.requestId)}
+                onSelect={(optionId) =>
+                  void permissions.respond(permission.requestId, {
+                    kind: 'selected',
+                    optionId,
+                  })
+                }
+              />
+            </Show>
           </div>
         )}
       </For>
-      <AgentInput
+      <Input
         placeholder="Message the agent, @mention anything"
         autofocus={props.autofocus}
-        busy={composer.busy()}
+        busy={busy()}
         hasQueuedMessages={queuedItems().length > 0}
+        // The fold's own answer to "a stop is already working on this turn",
+        // which holds from the moment the stop is folded until the turn
+        // actually ends. `pending` alone clears as soon as the log confirms
+        // the cancel, which is well before the runtime winds the turn down -
+        // and every Enter in that gap posted another cancel.
+        stopPending={turn() === 'stopping'}
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed
         // into, but not sent from, until the id lands.
         disabled={loadFailed() || pending()}
         commands={() => metadata()?.availableCommands ?? []}
-        onSend={composer.send}
-        onStop={composer.stop}
+        onSend={(prompt) =>
+          act({ type: 'prompt', prompt }, 'The message could not be sent')
+        }
+        onStop={() => act({ type: 'stop' }, 'The agent could not be stopped')}
+        onSendNext={sendNext}
         // Installed only while a queue row exists to land on: an installed
         // handler claims the keys (Up, and the shared plugin's other
         // leave-at-start keys), which must keep their defaults when there is
@@ -146,12 +195,14 @@ export function AgentComposer(props: {
         }}
         registerQuoteInsert={registerQuoteInsert}
         modelControl={
-          <AgentModelSelector
+          <ModelSelector
             model={metadata()?.model ?? null}
-            changingTo={composer.changingModel()}
+            changingTo={changingModel(messages(), metadata()?.model ?? null)}
             options={metadata()?.supportedModels ?? []}
             disabled={loadFailed()}
-            onSelect={composer.setModel}
+            onSelect={(model) =>
+              act({ type: 'setModel', model }, 'The model could not be changed')
+            }
           />
         }
       />

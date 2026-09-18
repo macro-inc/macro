@@ -16,6 +16,8 @@ const CHAT_ID: &str = "3f6f8b0a-6f9f-4a3f-9c3a-2b1e5d4c7a90";
 const NEW_CHAT_ID: &str = "0197f776-6e7b-7c69-a251-780ae754d3e4";
 const PROJECT_ID: &str = "c1a2b3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d";
 const OWNER: &str = "macro|owner@example.com";
+const OTHER_USER: &str = "macro|other@example.com";
+const TEAM_ID: uuid::Uuid = uuid::Uuid::from_u128(0x7ea3_0000_0000_0000_0000_0000_0000_0001);
 const MESSAGE_ID: &str = "message-id";
 const TOOL_CALL_ID: &str = "tool-call-id";
 const TOOL_NAME: &str = "test_tool";
@@ -40,11 +42,16 @@ struct StubChatRepo {
     message_persistence: Arc<Mutex<MessagePersistence>>,
     team_default: Option<models_permissions::share_permission::TeamLinkShareDefault>,
     received_share_permission: Arc<Mutex<Option<SharePermissionV2>>>,
+    /// Facts returned by `get_team_share_facts`; `None` uses the owner-with-team default.
+    team_share_facts: Option<TeamShareFacts>,
+    team_share_facts_loads: Arc<Mutex<usize>>,
+    received_patch: Arc<Mutex<Option<PatchChatRepoArgs>>>,
     fail_create: bool,
     fail_copy_chat: bool,
     fail_delete: bool,
     fail_permanently_delete: bool,
     fail_patch: bool,
+    fail_patch_with_conflict: bool,
     fail_revert_delete: bool,
 }
 
@@ -54,6 +61,25 @@ impl StubChatRepo {
             metadata_project_id: Some(PROJECT_ID.to_string()),
             ..Self::default()
         }
+    }
+
+    fn with_team_share_facts(facts: TeamShareFacts) -> Self {
+        Self {
+            team_share_facts: Some(facts),
+            ..Self::default()
+        }
+    }
+
+    fn team_share_facts_loads(&self) -> usize {
+        *self.team_share_facts_loads.lock().unwrap()
+    }
+
+    fn received_team_share(&self) -> Option<Option<AuthorizedTeamShareCommand>> {
+        self.received_patch
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|args| args.team_share.clone())
     }
 
     fn with_tool_message() -> Self {
@@ -154,6 +180,14 @@ impl ChatRepo for StubChatRepo {
         unimplemented!("not exercised")
     }
 
+    async fn get_team_share_facts(&self, _chat_id: &str) -> Result<TeamShareFacts> {
+        *self.team_share_facts_loads.lock().unwrap() += 1;
+        Ok(self
+            .team_share_facts
+            .clone()
+            .unwrap_or_else(|| team_share_facts(owner(), Some(TEAM_ID), 0)))
+    }
+
     async fn delete(&self, _chat_id: &str) -> Result<()> {
         if self.fail_delete {
             return Err(Self::repo_err());
@@ -172,11 +206,15 @@ impl ChatRepo for StubChatRepo {
         &self,
         _user_id: MacroUserIdStr<'static>,
         _chat_id: &str,
-        _args: PatchChatArgs,
+        args: PatchChatRepoArgs,
     ) -> Result<()> {
         if self.fail_patch {
             return Err(Self::repo_err());
         }
+        if self.fail_patch_with_conflict {
+            return Err(ChatErr::Conflict("stale team-share facts".to_string()));
+        }
+        *self.received_patch.lock().unwrap() = Some(args);
         Ok(())
     }
 
@@ -406,6 +444,7 @@ fn patch_args(share_permission_updated: bool) -> PatchChatArgs {
                 models_permissions::share_permission::LinkShare::Public,
             )),
             link_share_access_level: None,
+            team_share_access_level: None,
             channel_share_permissions: None,
         },
     );
@@ -846,4 +885,202 @@ async fn broker_scheduling_failure_does_not_fail_the_call() {
             .is_ok()
     );
     assert!(service.revert_delete(owner_receipt(CHAT_ID)).await.is_ok());
+}
+
+// -- Team sharing --
+
+use models_permissions::share_permission::access_level::AccessLevel as ShareAccessLevel;
+use models_permissions::share_permission::team_share::{
+    AuthorizedTeamShareCommand, TeamShareFacts, TeamShareLevel,
+};
+
+fn user(id: &str) -> MacroUserIdStr<'static> {
+    MacroUserIdStr::try_from(id.to_string()).expect("valid user id")
+}
+
+fn team_share_facts(
+    owner: MacroUserIdStr<'static>,
+    owner_team_id: Option<uuid::Uuid>,
+    revision: i64,
+) -> TeamShareFacts {
+    TeamShareFacts {
+        entity: EntityType::Chat.with_entity_str(CHAT_ID),
+        owner,
+        owner_team_id,
+        current: None,
+        revision,
+    }
+}
+
+fn team_share_args(level: Option<ShareAccessLevel>) -> PatchChatArgs {
+    PatchChatArgs {
+        name: None,
+        project_id: None,
+        share_permission: Some(
+            models_permissions::share_permission::UpdateSharePermissionRequestV2 {
+                link_share: None,
+                link_share_access_level: None,
+                team_share_access_level: Some(level),
+                channel_share_permissions: None,
+            },
+        ),
+    }
+}
+
+#[tokio::test]
+async fn patch_without_team_share_field_does_not_load_facts_or_send_command() {
+    let repo = StubChatRepo::default();
+    let service = build_service(repo.clone(), RecordingEventBroker::default());
+
+    service
+        .patch(owner_receipt(CHAT_ID), patch_args(true))
+        .await
+        .unwrap();
+
+    assert_eq!(repo.team_share_facts_loads(), 0);
+    assert_eq!(repo.received_team_share(), Some(None));
+}
+
+#[tokio::test]
+async fn patch_with_team_share_level_forwards_authorized_command() {
+    let repo = StubChatRepo::default();
+    let broker = RecordingEventBroker::default();
+    let service = build_service(repo.clone(), broker.clone());
+
+    service
+        .patch(
+            owner_receipt(CHAT_ID),
+            team_share_args(Some(ShareAccessLevel::Edit)),
+        )
+        .await
+        .unwrap();
+
+    let command = repo
+        .received_team_share()
+        .flatten()
+        .expect("repo receives an authorized command");
+    assert_eq!(
+        command.expected(),
+        &team_share_facts(owner(), Some(TEAM_ID), 0)
+    );
+    let grant = command.target().expect("explicit level sets a grant");
+    assert_eq!(grant.team_id, TEAM_ID);
+    assert_eq!(grant.level, TeamShareLevel::Edit);
+    assert_eq!(command.next_revision(), 1);
+    let events = broker.events();
+    assert_eq!(events.len(), 1);
+    assert_eq!(
+        events[0].envelope["metadata"]["share_permission_updated"],
+        true
+    );
+}
+
+#[tokio::test]
+async fn patch_with_team_share_null_forwards_clear_command() {
+    let repo = StubChatRepo::default();
+    let service = build_service(repo.clone(), RecordingEventBroker::default());
+
+    service
+        .patch(owner_receipt(CHAT_ID), team_share_args(None))
+        .await
+        .unwrap();
+
+    let command = repo
+        .received_team_share()
+        .flatten()
+        .expect("clearing still produces a command");
+    assert!(command.target().is_none());
+    assert_eq!(command.next_revision(), 1);
+}
+
+#[tokio::test]
+async fn patch_team_share_by_non_owner_returns_unauthorized_and_publishes_nothing() {
+    // The receipt carries effective Owner access, but the persisted owner is someone else.
+    let repo =
+        StubChatRepo::with_team_share_facts(team_share_facts(user(OTHER_USER), Some(TEAM_ID), 0));
+    let broker = RecordingEventBroker::default();
+    let service = build_service(repo.clone(), broker.clone());
+
+    let result = service
+        .patch(
+            owner_receipt(CHAT_ID),
+            team_share_args(Some(ShareAccessLevel::View)),
+        )
+        .await;
+
+    assert!(matches!(
+        result,
+        Err(ChatErr::Access(AccessError::Unauthorized))
+    ));
+    assert_eq!(repo.received_team_share(), None, "repo patch must not run");
+    assert!(broker.events().is_empty());
+}
+
+#[tokio::test]
+async fn patch_team_share_owner_level_returns_bad_request() {
+    let repo = StubChatRepo::default();
+    let service = build_service(repo.clone(), RecordingEventBroker::default());
+
+    let result = service
+        .patch(
+            owner_receipt(CHAT_ID),
+            team_share_args(Some(ShareAccessLevel::Owner)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(ChatErr::BadRequest(_))));
+    assert_eq!(repo.received_team_share(), None);
+}
+
+#[tokio::test]
+async fn patch_team_share_without_owner_team_returns_bad_request() {
+    let repo = StubChatRepo::with_team_share_facts(team_share_facts(owner(), None, 0));
+    let service = build_service(repo.clone(), RecordingEventBroker::default());
+
+    let result = service
+        .patch(
+            owner_receipt(CHAT_ID),
+            team_share_args(Some(ShareAccessLevel::Edit)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(ChatErr::BadRequest(_))));
+    assert_eq!(repo.received_team_share(), None);
+}
+
+#[tokio::test]
+async fn patch_team_share_exhausted_revision_returns_conflict() {
+    let repo =
+        StubChatRepo::with_team_share_facts(team_share_facts(owner(), Some(TEAM_ID), i64::MAX));
+    let service = build_service(repo.clone(), RecordingEventBroker::default());
+
+    let result = service
+        .patch(
+            owner_receipt(CHAT_ID),
+            team_share_args(Some(ShareAccessLevel::Edit)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(ChatErr::Conflict(_))));
+    assert_eq!(repo.received_team_share(), None);
+}
+
+#[tokio::test]
+async fn patch_repo_conflict_does_not_publish_event() {
+    let repo = StubChatRepo {
+        fail_patch_with_conflict: true,
+        ..StubChatRepo::default()
+    };
+    let broker = RecordingEventBroker::default();
+    let service = build_service(repo, broker.clone());
+
+    let result = service
+        .patch(
+            owner_receipt(CHAT_ID),
+            team_share_args(Some(ShareAccessLevel::Edit)),
+        )
+        .await;
+
+    assert!(matches!(result, Err(ChatErr::Conflict(_))));
+    assert!(broker.events().is_empty());
 }

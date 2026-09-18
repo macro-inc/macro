@@ -72,6 +72,7 @@ describe('blockNameToItemType', () => {
     ['automation', 'automation'],
     ['company', 'crm_company'],
     ['contact', 'crm_contact'],
+    ['pr', 'foreign'],
   ] as const)('maps block %s to item type %s', (blockName, itemType) => {
     expect(blockNameToItemType(blockName)).toBe(itemType);
   });

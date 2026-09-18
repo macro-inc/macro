@@ -75,6 +75,19 @@ pub trait AccessRepository: Clone + Send + Sync + 'static {
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
 
+    /// Get the highest access level a user has for an initiative.
+    fn get_initiative_access(
+        &self,
+        initiative_id: &str,
+        user_id: Option<&MacroUserId<Lowercase<'_>>>,
+    ) -> impl Future<Output = Result<Option<AccessLevel>, AccessError>> + Send;
+    /// Document owning an agent session's still-live originating message thread.
+    /// This is a persisted relationship, not a caller-supplied grant.
+    fn get_agent_session_document(
+        &self,
+        agent_session_id: &str,
+    ) -> impl Future<Output = Result<Option<String>, AccessError>> + Send;
+
     /// Get the access level a user has for a reminder.
     ///
     /// A reminder is never shared, so this is ownership and nothing else:

@@ -8,7 +8,7 @@ import { Show } from 'solid-js';
  */
 
 /** Extra distance the gradients bleed past the chrome they cover. */
-const TOP_FALLOFF = '0px';
+const TOP_FALLOFF = '32px';
 const BOTTOM_FALLOFF = '32px';
 
 export function MobileTopEdgeFade() {

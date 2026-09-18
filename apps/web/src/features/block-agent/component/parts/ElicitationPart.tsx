@@ -61,13 +61,12 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
     elicitation.pending()?.requestId === props.part.requestId;
 
   const agentName = () => bot()?.name ?? 'The agent';
-  // Controls are inert while an answer is on the wire and for anyone who is
-  // not the owner.
-  const locked = () => elicitation.answering() || !elicitation.canAnswer();
+  // Controls are inert for anyone without edit access. An answer in flight
+  // needs no lock of its own: the fold speculates it, so the card has
+  // already left its live state by the time the POST lands.
+  const locked = () => !elicitation.canAnswer();
   const waitingFor = () =>
-    elicitation.canAnswer()
-      ? 'Waiting for you'
-      : `Waiting for ${elicitation.ownerName()}`;
+    elicitation.canAnswer() ? 'Waiting for you' : 'Waiting for an editor';
 
   return (
     <Show when={live()} fallback={<ResolvedElicitation part={props.part} />}>
@@ -81,7 +80,7 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
           <div class="text-sm text-ink">{props.part.message}</div>
           <Show when={!elicitation.canAnswer()}>
             <div class="text-xs text-ink-extra-muted">
-              Only {elicitation.ownerName()} can answer this.
+              Only people who can edit this session can answer.
             </div>
           </Show>
           {match(props.part.request)
@@ -144,8 +143,6 @@ function LiveUserTool(props: {
           fallback={fallback}
           review={{
             canAnswer: elicitation.canAnswer,
-            ownerName: elicitation.ownerName,
-            answering: elicitation.answering,
             respond: props.onRespond,
           }}
         />
@@ -179,6 +176,7 @@ function ResolvedElicitation(props: { part: ElicitationPartData }) {
           common={{
             id: props.part.toolCall ?? String(props.part.requestId),
             label: reviewed().request.tool,
+            server: undefined,
             status:
               reviewed().toolOutcome.kind === 'failed' ? 'failed' : 'completed',
             muted: reviewed().toolOutcome.kind === 'failed',
@@ -226,6 +224,7 @@ function ResolvedQuestion(props: { part: ElicitationPartData }) {
       status={props.part.outcome.kind === 'errored' ? 'failed' : 'completed'}
       muted={props.part.outcome.kind === 'errored'}
       trailing={<span class="text-ink">{outcomeLabel(props.part)}</span>}
+      hasContent={shown().length > 0 || Boolean(refusal())}
     >
       <Show when={shown().length > 0 || refusal()}>
         <div class="flex flex-col gap-2 py-1">

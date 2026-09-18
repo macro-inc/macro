@@ -52,6 +52,7 @@ macro_aws_config = { path = "../macro_aws_config" }
 macro_db_client = { path = "../macro_db_client" }
 macro_env_var = { path = "../macro_env_var" }
 macro_event_broker = { path = "../macro_event_broker" }
+messages = { path = "../messages", features = ["broker", "delivery"] }
 macro_queues = { path = "../macro_queues" }
 macro_user_id = { path = "../macro_user_id" }
 mcp_client = { path = "../mcp_client" }

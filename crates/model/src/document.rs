@@ -52,6 +52,8 @@ pub enum BasicDocumentSubType {
     Snippet {},
     /// A skill document — markdown instructions for AI
     Skill {},
+    /// The description document of an initiative
+    InitiativeDescription {},
 }
 
 impl BasicDocumentSubType {
@@ -64,6 +66,7 @@ impl BasicDocumentSubType {
             }),
             DocumentSubType::Snippet => Some(Self::Snippet {}),
             DocumentSubType::Skill => Some(Self::Skill {}),
+            DocumentSubType::InitiativeDescription => Some(Self::InitiativeDescription {}),
         }
     }
 }
@@ -326,6 +329,8 @@ pub enum DocumentPreviewDataSubType {
     Snippet {},
     /// A skill document — markdown instructions for AI
     Skill {},
+    /// The description document of an initiative
+    InitiativeDescription {},
 }
 
 impl DocumentPreviewDataSubType {
@@ -338,6 +343,7 @@ impl DocumentPreviewDataSubType {
             }),
             DocumentSubType::Snippet => Some(Self::Snippet {}),
             DocumentSubType::Skill => Some(Self::Skill {}),
+            DocumentSubType::InitiativeDescription => Some(Self::InitiativeDescription {}),
         }
     }
 }

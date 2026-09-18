@@ -1,15 +1,10 @@
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
-import {
-  isSidebarVisible,
-  useSidebarCollapse,
-} from '@components/app/sidebarVisibility';
 import { Resize } from '@core/component/Resize';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { useWindowSize } from '@solid-primitives/resize-observer';
 import { useLocation, useNavigate } from '@solidjs/router';
-import { cn } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -64,7 +59,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   );
   restorePreviewPairs(splitManager, initialLayout.previewPairs);
   const [, setTabTitle] = tabTitleSignal;
-  const sidebar = useSidebarCollapse();
 
   // Create the mobile swipe layout once on mobile devices.
   const mobileSwipeLayout: MobileSwipeLayout | undefined =
@@ -76,6 +70,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
   const panelRefs = new Map<SplitId, HTMLDivElement>();
 
   const splits = createMemo(splitManager.splits);
+  const useBentoLayout = () => !isTouchDevice() && splits().length > 1;
 
   // Drop refs for departed splits by reconciling against the live list:
   // batched mutations can remove several splits in one flush (e.g. closing
@@ -115,18 +110,15 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <div
-        class={cn('size-full p-2 touch:p-0', {
-          'pl-0': isSidebarVisible() && !sidebar.isCollapsed(),
-        })}
-      >
+      <div class="size-full" classList={{ 'py-1.5 pr-1.5': useBentoLayout() }}>
         <Show
           when={isNativeMobilePlatform() && mobileSwipeLayout}
           fallback={
             // Desktop: side-by-side resizable splits.
             <Resize.Zone
               direction="horizontal"
-              gutter={8}
+              gutter={useBentoLayout() ? 6 : 1}
+              showDividers={!useBentoLayout()}
               captureResizeCtx={splitManager.setResizeContext}
             >
               <For each={ids()}>

@@ -1,4 +1,3 @@
-import { mdStore } from '@block-md/signal/markdownBlockData';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import {
   $computeTableMap,
@@ -14,7 +13,14 @@ import {
   isHTMLElement,
   type LexicalEditor,
 } from 'lexical';
-import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  onCleanup,
+  Show,
+  useContext,
+} from 'solid-js';
+import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import {
   $deleteTableAtHover,
   $selectionDeleteExtent,
@@ -117,8 +123,8 @@ function readSelectionDeletePixels(
 }
 
 export function TableDeleteButtons() {
-  const mdData = mdStore.get;
-  const editor = () => mdData.editor;
+  const lexicalWrapper = useContext(LexicalWrapperContext);
+  const editor = () => lexicalWrapper?.editor;
 
   const [target, setTarget] = createSignal<DeleteTarget>();
   const [hovered, setHovered] = createSignal<'row' | 'column' | 'table'>();

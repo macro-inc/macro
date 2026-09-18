@@ -177,9 +177,13 @@ export function useItemPreview(item: Accessor<ItemEntity>) {
 
   const preview = createMemo(() => {
     const data = previewQuery.data();
-    const channelMessageData = queryReadyGate(maybeChannelMessageQuery)
-      ? maybeChannelMessageQuery.data
-      : undefined;
+    // Disabled message queries are pending but not loading. Reading their
+    // data still suspends briefly whenever a preview row mounts.
+    const channelMessageData =
+      !maybeChannelMessageQuery.isPending &&
+      queryReadyGate(maybeChannelMessageQuery)
+        ? maybeChannelMessageQuery.data
+        : undefined;
 
     if (!data) {
       return {

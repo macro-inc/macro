@@ -11,7 +11,7 @@ import { dedupeCallRecordingParticipants } from './call-recording-utils';
 export function CallRecordingParticipantsSection(props: {
   record: Accessor<CallRecord>;
 }) {
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
   const participants = createMemo(() =>
     dedupeCallRecordingParticipants(
@@ -20,12 +20,15 @@ export function CallRecordingParticipantsSection(props: {
     )
   );
 
-  const openDirectMessage = (participantId: string) => {
+  const openDirectMessage = (participantId: string, event: MouseEvent) => {
     getOrCreateDmMutation.mutate(
       { recipient_id: participantId },
       {
         onSuccess: ({ channel_id }) => {
-          replaceOrInsertSplit({ type: 'channel', id: channel_id });
+          openWithSplit(
+            { type: 'channel', id: channel_id },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
         },
       }
     );
@@ -46,7 +49,7 @@ export function CallRecordingParticipantsSection(props: {
               type="button"
               role="listitem"
               class="inline-flex items-center gap-1.5 rounded-full border border-edge-muted/50 py-1 pr-2.5 pl-1 text-sm text-ink transition-colors hover:bg-hover"
-              onClick={() => openDirectMessage(participant.userId)}
+              onClick={(event) => openDirectMessage(participant.userId, event)}
             >
               <UserIcon id={participant.userId} size="sm" isDeleted={false} />
               <span class="truncate max-w-48">

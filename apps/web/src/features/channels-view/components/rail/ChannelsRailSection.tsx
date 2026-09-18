@@ -1,14 +1,28 @@
-import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
-import { AnimatedSquareSidebarIcon } from '@icon/square-sidebar';
+import {
+  ViewSidebar,
+  CollapsibleSection as WorkspaceSection,
+} from '@app/components/view-shell';
+import { CollapseTransition } from '@app/components/view-shell/CollapseTransition';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CaretUpIcon from '@phosphor/caret-up.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { Button, cn, Scroll, Tooltip } from '@ui';
-import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
+import {
+  createContext,
+  createSignal,
+  For,
+  type JSX,
+  Match,
+  Show,
+  Suspense,
+  Switch,
+  useContext,
+} from 'solid-js';
 import { useOffscreenActivity } from './hooks/useOffscreenActivity';
 
 const LOADING_SKELETON_ROWS = [0, 1, 2];
+const SectionContainerContext = createContext<() => HTMLElement | undefined>();
 
 function SectionScrollArea(props: {
   contentRef: (element: HTMLDivElement) => void;
@@ -17,14 +31,12 @@ function SectionScrollArea(props: {
   activityTargetId?: string;
   activityLabel?: string;
   activityTooltip?: boolean;
-  onActivityVisible?: (targetId: string) => void;
   children: JSX.Element;
 }) {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const activity = useOffscreenActivity({
     scrollRoot,
     targetId: () => props.activityTargetId,
-    onTargetVisible: (targetId) => props.onActivityVisible?.(targetId),
   });
 
   return (
@@ -36,14 +48,9 @@ function SectionScrollArea(props: {
         }}
       >
         <div role="group" class={props.class}>
-          {props.children}
+          <Suspense>{props.children}</Suspense>
         </div>
       </Scroll>
-      <ScrollIndicators
-        scrollRef={scrollRoot}
-        appearance="gradient"
-        gradientColor="panel"
-      />
       <Show when={activity.direction()}>
         {(direction) => (
           <Tooltip
@@ -57,7 +64,7 @@ function SectionScrollArea(props: {
           >
             <button
               type="button"
-              class="flex h-7 max-w-full items-center gap-1 rounded-full border border-edge bg-lift px-2 text-xxs font-medium text-ink-muted shadow-sm transition-colors hover:bg-surface hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
+              class="flex h-7 max-w-full items-center gap-1 rounded-full border border-edge bg-surface px-2 text-xxs font-medium text-ink-muted shadow-sm transition-colors hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
               aria-label={`${props.activityLabel ?? 'New activity'} ${
                 direction() === 'start' ? 'above' : 'below'
               }; scroll to it`}
@@ -82,25 +89,45 @@ function SectionScrollArea(props: {
   );
 }
 
+/**
+ * How an open section claims height in its flex column.
+ *
+ * - `half`: natural height, capped at half the column and shrinkable. Two
+ *   `half` siblings split the column; a third sibling is starved to zero
+ *   once both hit the cap, so keep `half` sections in a column of their own.
+ * - `fill`: grows into whatever the column has left.
+ * - `content`: natural height, never shrunk below it, capped at a third of
+ *   the column so a long list still leaves room for its siblings.
+ */
+type CollapsibleSectionSizing = 'half' | 'fill' | 'content';
+
 function CollapsibleSectionRoot(props: {
   open: boolean;
-  fillAvailable?: boolean;
+  sizing?: CollapsibleSectionSizing;
   class?: string;
   children: JSX.Element;
 }) {
+  let sectionRef: HTMLElement | undefined;
+  const sizing = () => props.sizing ?? 'half';
+
   return (
-    <section
-      class={cn(
-        'flex min-h-0 flex-col gap-1',
-        props.open && props.fillAvailable && 'flex-1',
-        props.open && !props.fillAvailable && 'shrink',
-        !props.open && 'shrink-0',
-        props.open && !props.fillAvailable && 'max-h-[calc(50%_-_0.375rem)]',
-        props.class
-      )}
-    >
-      {props.children}
-    </section>
+    <SectionContainerContext.Provider value={() => sectionRef}>
+      <section
+        ref={sectionRef}
+        class={cn(
+          'group/sidebar-section flex min-h-0 flex-col gap-(--sidebar-section-content-gap)',
+          !props.open && 'shrink-0',
+          props.open && sizing() === 'fill' && 'flex-1',
+          props.open &&
+            sizing() === 'half' &&
+            'shrink max-h-[calc(50%_-_0.375rem)]',
+          props.open && sizing() === 'content' && 'shrink-0 max-h-1/3',
+          props.class
+        )}
+      >
+        {props.children}
+      </section>
+    </SectionContainerContext.Provider>
   );
 }
 
@@ -111,16 +138,16 @@ function CollapsibleSectionHeader(props: {
   children: JSX.Element;
 }) {
   return (
-    <div
+    <WorkspaceSection.Header
       class={cn(
-        'flex w-full items-center rounded-xl text-xs font-semibold uppercase tracking-wide text-ink-extra-muted hover:bg-hover hover:text-ink-muted',
+        'w-full rounded-lg text-xs leading-5 font-medium text-ink-muted transition-colors group-hover/sidebar-section:text-ink',
         props.focused && 'bg-hover text-ink-muted',
         !props.focused && props.focusWithin && 'text-ink-muted',
         props.class
       )}
     >
       {props.children}
-    </div>
+    </WorkspaceSection.Header>
   );
 }
 
@@ -132,11 +159,16 @@ function CollapsibleSectionContent(props: {
   activityTargetId?: string;
   activityLabel?: string;
   activityTooltip?: boolean;
-  onActivityVisible?: (targetId: string) => void;
   children: JSX.Element;
 }) {
+  const container = useContext(SectionContainerContext);
+
   return (
-    <Show when={props.open}>
+    <CollapseTransition
+      open={props.open}
+      container={container}
+      collapsedSize={32}
+    >
       <SectionScrollArea
         contentRef={props.contentRef}
         containerClass={props.containerClass}
@@ -144,11 +176,10 @@ function CollapsibleSectionContent(props: {
         activityTargetId={props.activityTargetId}
         activityLabel={props.activityLabel}
         activityTooltip={props.activityTooltip}
-        onActivityVisible={props.onActivityVisible}
       >
         {props.children}
       </SectionScrollArea>
-    </Show>
+    </CollapseTransition>
   );
 }
 
@@ -169,9 +200,7 @@ export function RailListLoading() {
   );
 }
 
-export function RailListLoadingMore(props: {
-  variant: 'channel' | 'recent' | 'slim';
-}) {
+export function RailListLoadingMore(props: { variant: 'channel' | 'recent' }) {
   return (
     <div role="status" aria-label="Loading more conversations">
       <For each={LOADING_SKELETON_ROWS}>
@@ -180,31 +209,29 @@ export function RailListLoadingMore(props: {
             aria-hidden="true"
             class={cn(
               'flex items-center',
-              props.variant === 'slim' && 'h-10 justify-center',
-              props.variant === 'channel' && 'h-10 gap-2 px-2',
-              props.variant === 'recent' && 'h-18 items-start gap-3 px-2 py-2'
+              props.variant === 'channel' &&
+                'h-(--sidebar-row-height) gap-(--sidebar-label-gap) px-(--sidebar-item-inset) touch:h-11',
+              props.variant === 'recent' && 'h-20 items-start gap-3 px-2 py-2'
             )}
           >
             <div
               class={cn(
                 'skeleton-shimmer shrink-0 rounded-full bg-skeleton',
-                props.variant === 'channel' && 'size-6',
+                props.variant === 'channel' && 'size-5',
                 props.variant !== 'channel' && 'size-8'
               )}
             />
-            <Show when={props.variant !== 'slim'}>
-              <div class="flex min-w-0 flex-1 flex-col gap-2">
-                <div
-                  class={cn(
-                    'skeleton-shimmer h-2.5 rounded-full bg-skeleton',
-                    row % 2 === 0 ? 'w-1/2' : 'w-2/3'
-                  )}
-                />
-                <Show when={props.variant === 'recent'}>
-                  <div class="skeleton-shimmer h-2 w-4/5 rounded-full bg-skeleton" />
-                </Show>
-              </div>
-            </Show>
+            <div class="flex min-w-0 flex-1 flex-col gap-2">
+              <div
+                class={cn(
+                  'skeleton-shimmer h-2.5 rounded-full bg-skeleton',
+                  row % 2 === 0 ? 'w-1/2' : 'w-2/3'
+                )}
+              />
+              <Show when={props.variant === 'recent'}>
+                <div class="skeleton-shimmer h-2 w-4/5 rounded-full bg-skeleton" />
+              </Show>
+            </div>
           </div>
         )}
       </For>
@@ -236,34 +263,8 @@ export function CreateRailAction(props: {
   onClick: () => void;
 }) {
   return (
-    <button
-      type="button"
-      class="flex size-7 shrink-0 items-center justify-center rounded-lg text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-accent"
-      aria-label={props.label}
-      onClick={props.onClick}
-    >
+    <ViewSidebar.Control label={props.label} onClick={props.onClick}>
       <PlusIcon class="size-3.5" />
-    </button>
-  );
-}
-
-export function RailModeButton(props: {
-  expanded: boolean;
-  onToggle: () => void;
-}) {
-  const [hovering, setHovering] = createSignal(false);
-
-  return (
-    <Button
-      variant="ghost"
-      size="icon-sm"
-      label={props.expanded ? 'Collapse chat rail' : 'Expand chat rail'}
-      tooltipPlacement={props.expanded ? 'bottom' : 'right'}
-      onClick={props.onToggle}
-      onMouseEnter={() => setHovering(true)}
-      onMouseLeave={() => setHovering(false)}
-    >
-      <AnimatedSquareSidebarIcon class="size-4" triggerAnimation={hovering()} />
-    </Button>
+    </ViewSidebar.Control>
   );
 }

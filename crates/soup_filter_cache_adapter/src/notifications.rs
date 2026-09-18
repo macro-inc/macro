@@ -9,6 +9,8 @@ use cache_core::{
 };
 use predicate_index::ExactFact;
 
+mod batch;
+
 #[cfg(all(test, not(target_arch = "wasm32")))]
 mod test;
 
@@ -110,13 +112,14 @@ fn snapshot_facts(
         "GraphqlSoupDocument" => "DOCUMENT",
         "GraphqlSoupProject" => "PROJECT",
         "GraphqlSoupChat" => "CHAT",
+        "GraphqlSoupChannel" => "CHANNEL",
         _ => return Err(()),
     };
     let mut states = std::collections::BTreeMap::new();
     for notification in notifications {
         let notification = notification.as_object().ok_or(())?;
         // The display edge also contains secondary-entity matches; Soup's SQL
-        // predicate for these three partitions only uses primary association.
+        // predicates for these partitions only use primary association.
         let primary_id = notification
             .get("entityId")
             .and_then(serde_json::Value::as_str)
@@ -185,6 +188,7 @@ fn association(record: &Record) -> Option<(RecordKey, Token)> {
         "DOCUMENT" => "GraphqlSoupDocument",
         "PROJECT" => "GraphqlSoupProject",
         "CHAT" => "GraphqlSoupChat",
+        "CHANNEL" => "GraphqlSoupChannel",
         _ => return None,
     };
     uuid::Uuid::parse_str(id).ok()?;
@@ -235,6 +239,7 @@ async fn retain_complete_parents<S: Storage>(
     storage: &S,
     mutations: Vec<ProjectionMutation>,
 ) -> Result<Vec<ProjectionMutation>, SoupFilterCacheAdapterError> {
+    let mutations = batch::batch_member_changes(mutations);
     if mutations.is_empty() {
         return Ok(mutations);
     }
@@ -271,7 +276,9 @@ async fn retain_complete_parents<S: Storage>(
                 states.get(record_key),
                 Some(Some(ProjectionState::Complete(document)))
                     if document.record_key == *record_key
-                        && document.profile == *profile
+                        && (document.profile == *profile
+                            || (*profile == vocabulary::profile_v4()
+                                && document.profile == vocabulary::profile_v5()))
                         && document.partition == *partition
             )
         })

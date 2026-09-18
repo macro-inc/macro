@@ -62,6 +62,7 @@ pub struct ApiStates<T, R, Opener, Bots, Access, Auth, Models> {
     create: CreateSessionState<Opener, Bots, Auth>,
     gateway: RuntimeGatewayState<Auth>,
     models: AgentModelsRouterState<Models, Auth>,
+    claude_auth: Router,
 }
 
 impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Access, Auth, Models> {
@@ -79,23 +80,34 @@ impl<T, R, Opener, Bots, Access, Auth, Models> ApiStates<T, R, Opener, Bots, Acc
             create,
             gateway,
             models,
+            claude_auth: Router::new(),
         }
+    }
+
+    /// Attach the optional owner-authenticated Claude demo connection routes.
+    pub fn with_claude_auth(mut self, router: Router) -> Self {
+        self.claude_auth = router;
+        self
     }
 }
 
-/// Serve the sandbox-facing egress proxy on its own listener.
+/// Serve session egress and Macro Internal MCP on the existing egress listener.
 ///
-/// No CORS layer and no Swagger: nothing browses this. Its only client is a
-/// sandbox, and its only credential is a session token.
+/// Both authenticate session credentials; internal tools also serve external
+/// runtimes. No browser-facing CORS layer or Swagger is needed.
 pub async fn serve_egress<Service>(
     service: std::sync::Arc<Service>,
+    internal_mcp: Router,
     port: u16,
     shutdown: impl Future<Output = ()> + Send + 'static,
 ) -> anyhow::Result<()>
 where
     Service: EgressService + 'static,
 {
-    let app = egress_app(EgressRouterState::new(service));
+    let app = egress_app(EgressRouterState::new(service)).merge(mount_at_root_and_prefix(
+        internal_mcp,
+        EGRESS_GATEWAY_PATH_PREFIX,
+    ));
 
     let listener = tokio::net::TcpListener::bind(format!("0.0.0.0:{port}"))
         .await
@@ -167,6 +179,7 @@ where
         .nest("/agent-sessions", agent_sessions)
         .merge(agent_sandbox_size_router(states.read))
         .merge(agent_models_router(states.models))
+        .merge(states.claude_auth)
         .nest("/runtime", runtime_gateway_router(states.gateway))
 }
 

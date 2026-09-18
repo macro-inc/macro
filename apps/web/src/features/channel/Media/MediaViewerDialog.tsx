@@ -151,7 +151,7 @@ export function MediaViewerDialog(props: MediaViewerDialogProps) {
   return (
     <Dialog open={props.open} onOpenChange={props.onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay pattern-edge-muted pattern-diagonal-4" />
+        <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass" />
         <Show when={currentItem()}>
           {(item) => (
             <Show

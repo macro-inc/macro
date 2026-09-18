@@ -405,7 +405,7 @@
       "post": {
         "tags": ["agent-sessions"],
         "summary": "Perform a control operation on a live agent session.",
-        "description": "Edit access suffices: whoever can prompt the bot through its thread can\nprompt it here.",
+        "description": "Edit access suffices: whoever can prompt the bot through its thread can\nprompt it here.\n\nA caller may name the action with `actionId`; the response echoes it.\nRe-posting an id the session still holds queued or in flight reports that\naction's status rather than accepting a duplicate.",
         "operationId": "control_agent_session",
         "parameters": [
           {
@@ -916,6 +916,137 @@
           }
         }
       }
+    },
+    "/claude-auth": {
+      "get": {
+        "tags": ["claude-auth"],
+        "summary": "Read connection status for the authenticated user only.",
+        "operationId": "status",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      },
+      "delete": {
+        "tags": ["claude-auth"],
+        "summary": "Forget only the authenticated user's grant and cancel pending consent.",
+        "operationId": "disconnect",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Disconnected"
+          },
+          "403": {
+            "description": "Disabled"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/claude-auth/complete": {
+      "post": {
+        "tags": ["claude-auth"],
+        "summary": "Exchange one code; never return access or refresh tokens.",
+        "operationId": "complete",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Connected"
+          },
+          "400": {
+            "description": "Invalid code"
+          },
+          "409": {
+            "description": "Expired or replayed"
+          },
+          "502": {
+            "description": "Provider failed"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    },
+    "/claude-auth/start": {
+      "post": {
+        "tags": ["claude-auth"],
+        "summary": "Create an expiring PKCE challenge for the authenticated user.",
+        "operationId": "start",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/EmptyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StartResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Disabled"
+          },
+          "429": {
+            "description": "Too many attempts"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1026,7 +1157,7 @@
       "AgentActionId": {
         "type": "string",
         "format": "uuid",
-        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nMinted only by the server at accept time, as a v7 uuid so ids sort by mint\ntime. On the wire and in JSON it is the bare uuid, and a uuid-shaped\nrequest id is the whole ownership test: the server is the only writer of\nruntime-bound frames. The machine's own handshake request ids\n(`agent_session:{session}:{n}`) are not uuids and stay `None`."
+        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nA v7 uuid, so ids sort by mint time. Minted by the server at accept time,\nor by a client that speculated the action and named it in the control\nrequest - either way the server is the only writer of runtime-bound\nframes, so a uuid-shaped request id remains the whole ownership test. The\nmachine's own handshake request ids (`agent_session:{session}:{n}`) are\nnot uuids and stay `None`."
       },
       "AgentModelDto": {
         "type": "object",
@@ -1288,6 +1419,7 @@
           "id",
           "name",
           "ownerId",
+          "canEdit",
           "botId",
           "model",
           "harness",
@@ -1306,6 +1438,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The bot running the agent."
+          },
+          "canEdit": {
+            "type": "boolean",
+            "description": "Whether the caller may drive the session - prompt it, answer its\nquestions, stop it - rather than only watch. Edit access; the\ncreator owns the session, so a create response always says so."
           },
           "createdAt": {
             "type": "string",
@@ -1358,6 +1494,10 @@
             "type": "string",
             "description": "The user who created and owns the session."
           },
+          "pullRequestUrl": {
+            "type": ["string", "null"],
+            "description": "The session's linked pull request."
+          },
           "repoUrl": {
             "type": ["string", "null"],
             "description": "The repository the session works with, when one was stated."
@@ -1373,12 +1513,23 @@
           "threadChannelId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "The channel `thread_id` lives in, when the session was spawned from a\nthread."
+            "description": "The channel `thread_id` lives in, when the session was spawned from a\nchannel thread. Derived from `thread_parent`."
           },
           "threadId": {
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The root message of the thread the session was created from, if any."
+          },
+          "threadParent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageParent",
+                "description": "The channel or document `thread_id` lives in, when the session was\nspawned from a thread."
+              }
+            ]
           },
           "workspace": {
             "type": "string",
@@ -1400,11 +1551,43 @@
       "BotId": {
         "type": "string"
       },
+      "CompleteRequest": {
+        "type": "object",
+        "description": "One-time manual code. Deliberately does not implement Debug.",
+        "required": ["attemptId", "code"],
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "description": "Server-issued handle; never an owner selected by the caller."
+          },
+          "code": {
+            "type": "string",
+            "description": "Claude's complete code#state string, not an access token."
+          }
+        },
+        "additionalProperties": false
+      },
       "ControlRequest": {
         "allOf": [
           {
             "$ref": "#/components/schemas/AgentAction",
             "description": "The operation to perform."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "actionId": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AgentActionId",
+                    "description": "The id the caller already speculated this action under, when it has\none. Adopted as the accepted id, so a client that renders the action\noptimistically promotes that entry in place instead of retracting it\nand re-speculating under a server id. Re-sending the same id is not a\nsecond action: see [`ControlResponse`].\n\nNamed rather than flattened so it cannot collide with the action's own\nfields, which are tagged under `type`."
+                  }
+                ]
+              }
+            }
           }
         ],
         "description": "Request body for a control operation on a live session.\n\nA wrapper around the operation rather than the bare enum so that fields\nwhich are about the request rather than the operation have somewhere to go.\nThe acting user is deliberately not one of them: it comes from the caller's\ncredentials, so that a caller cannot attribute an operation to someone else.\n\nClients serialize this, so both derives are used."
@@ -1416,7 +1599,7 @@
         "properties": {
           "actionId": {
             "$ref": "#/components/schemas/AgentActionId",
-            "description": "Matches `requestId` on the folded message this action derives once it\ndispatches, and names the queue entry until then."
+            "description": "Matches `requestId` on the folded message this action derives once it\ndispatches, and names the queue entry until then. The caller's own\n`actionId` when it supplied one; a freshly minted id otherwise."
           },
           "status": {
             "$ref": "#/components/schemas/ControlStatusDto",
@@ -1436,7 +1619,7 @@
           "botId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns or may use through team membership;\nomitting it uses the deployment's default coding persona. On an\nexternal request, bot callers may omit it (their own identity is used)\nand must not name another bot; user callers must supply a bot they own."
+            "description": "Bot the session runs for. On a managed request this optionally selects\na persisted persona the user owns, may use through team membership, or\ncan `@` mention in a shared channel; omitting it uses the deployment's\ndefault coding persona. On an external request, bot callers may omit it\n(their own identity is used) and must not name another bot; user callers\nmust supply a bot they own."
           },
           "instructions": {
             "type": ["string", "null"],
@@ -1450,9 +1633,13 @@
             "type": ["string", "null"],
             "description": "First prompt to deliver once the session is running. Managed sessions\nonly - an external runtime sends its own first prompt through the\ncontrol endpoint. Omitted, the session opens idle."
           },
+          "repoBranch": {
+            "type": ["string", "null"],
+            "description": "Starting branch for a managed coding session's selected repository."
+          },
           "repoUrl": {
             "type": ["string", "null"],
-            "description": "Repository nominally checked out at `workspace`. Informational and\noptional: having it cloned there is the runtime operator's job."
+            "description": "Explicit GitHub repository for a managed Cursor session. Access is\nchecked for the session owner. For external sessions this is\ninformational: cloning it is the runtime operator's job."
           },
           "thread": {
             "oneOf": [
@@ -1485,12 +1672,12 @@
       "CreateSessionThread": {
         "type": "object",
         "description": "The triggering mention on a create request.\n\nClients serialize this, so both derives are used.",
-        "required": ["channelId", "messageId"],
+        "required": ["messageId"],
         "properties": {
           "channelId": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
-            "description": "Channel the mentioning message was posted in."
+            "description": "Channel the mentioning message was posted in. Runtimes built before\nmessage parents send this instead of `parent`."
           },
           "content": {
             "type": "string",
@@ -1501,12 +1688,27 @@
             "format": "uuid",
             "description": "The mentioning message."
           },
+          "parent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageParent",
+                "description": "Entity the mentioning message was posted in."
+              }
+            ]
+          },
           "threadId": {
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Thread the session belongs to; defaults to the message itself, which\nis how a top-level mention roots its own thread."
           }
         }
+      },
+      "DocumentId": {
+        "type": "string",
+        "description": "A validated document identifier. Historical document ids need not be UUIDs."
       },
       "EditQueuedActionRequest": {
         "type": "object",
@@ -1612,6 +1814,11 @@
         ],
         "description": "The JSON-RPC id of an agent's `elicitation/create` request, carried whole\nso the answer echoes exactly what the agent sent.\n\nAgents pick these, not us: Claude Code counts from `0`, others use\nstrings. `null` is not a legal id for a request that expects a response,\nso it is not representable here."
       },
+      "EmptyRequest": {
+        "type": "object",
+        "description": "A JSON body is required on writes, including start/disconnect (no form-based CSRF).",
+        "additionalProperties": false
+      },
       "ExternalSessionResponse": {
         "type": "object",
         "description": "The provider-side identity of an externally-served session.",
@@ -1689,10 +1896,46 @@
           }
         }
       },
+      "MessageParent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A channel, including direct messages.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A channel, including direct messages."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A document, including tasks and PDFs.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/DocumentId",
+                "description": "A document, including tasks and PDFs."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["document"]
+              }
+            }
+          }
+        ],
+        "description": "The entity whose permissions and lifecycle govern a message."
+      },
       "ModelHarnessDto": {
         "type": "string",
         "description": "Harness names accepted by the model discovery endpoint.",
-        "enum": ["in-memory", "cursor", "macrod"]
+        "enum": ["in-memory", "cursor", "claude-cloud", "macrod"]
       },
       "PermissionAnswer": {
         "oneOf": [
@@ -1812,11 +2055,15 @@
       "SessionBot": {
         "type": "object",
         "description": "The agent behind a session, as much of it as rendering a message needs.",
-        "required": ["id", "name"],
+        "required": ["id", "name", "handle"],
         "properties": {
           "avatarUrl": {
             "type": ["string", "null"],
             "description": "Avatar, when it has one."
+          },
+          "handle": {
+            "type": "string",
+            "description": "Stable `@` handle, without a leading `@`."
           },
           "id": {
             "$ref": "#/components/schemas/BotId",
@@ -1869,6 +2116,46 @@
           }
         ],
         "description": "Transport representation of a session's status, mirroring\n[`SessionStatus`]."
+      },
+      "StartResponse": {
+        "type": "object",
+        "description": "Public PKCE challenge and attempt handle; contains no verifier or provider tokens.",
+        "required": ["attemptId", "authorizationUrl", "expiresIn"],
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "description": "Opaque owner-bound attempt handle."
+          },
+          "authorizationUrl": {
+            "type": "string",
+            "description": "Claude-hosted consent page."
+          },
+          "expiresIn": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Attempt lifetime in seconds.",
+            "minimum": 0
+          }
+        }
+      },
+      "StatusResponse": {
+        "type": "object",
+        "description": "Safe connection metadata.",
+        "required": ["enabled", "connected", "ephemeral"],
+        "properties": {
+          "connected": {
+            "type": "boolean",
+            "description": "Whether the authenticated Macro user has connected."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether this deployment supports browser connection."
+          },
+          "ephemeral": {
+            "type": "boolean",
+            "description": "Whether reconnecting after service restart is required."
+          }
+        }
       },
       "WithAgentSessionId": {
         "type": "object",

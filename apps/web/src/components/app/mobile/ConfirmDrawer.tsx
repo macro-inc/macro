@@ -1,76 +1,87 @@
-import { Button, type ConfirmDialogProps } from '@ui';
-import { createSignal, Show } from 'solid-js';
+import SpinnerIcon from '@phosphor/spinner.svg';
+import CloseIcon from '@phosphor/x.svg';
+import { Button } from '@ui/components/Button';
+import type { ConfirmDialogProps } from '@ui/components/ConfirmDialog';
+import { cn } from '@ui/utils/classname';
+import { createUniqueId, Show } from 'solid-js';
 import { MobileDrawer } from './MobileDrawer';
 
-const TONE_VARIANT = {
-  default: 'accent',
-  danger: 'danger',
-  success: 'success',
-} as const;
-
-/** Slide-out length; keep ≥ MobileDrawer's `duration-200` transition. */
-const CLOSE_MS = 250;
-
-/**
- * The mobile presentation of `confirmDialog`: the same confirmation contract
- * rendered as a bottom sheet. `position` and `class` are dialog-presentation
- * options and are ignored here.
- */
+/** Controlled confirmation sheet; pending actions remain visible until resolved. */
 export function ConfirmDrawer(props: ConfirmDialogProps) {
-  // A managed dismissal disposes the entry immediately, which would cut the
-  // drawer's slide-out. Close internally first so the transition plays, then
-  // hand the dismissal to the manager.
-  const [internalOpen, setInternalOpen] = createSignal(true);
-  const requestClose = () => {
-    if (!internalOpen()) return;
-    setInternalOpen(false);
-    setTimeout(() => props.onOpenChange(false), CLOSE_MS);
+  const titleId = createUniqueId();
+  const descriptionId = createUniqueId();
+  const close = () => {
+    if (!props.pending) props.onOpenChange(false);
   };
-  const confirm = () => {
-    if (!internalOpen()) return;
-    setInternalOpen(false);
-    setTimeout(() => props.onConfirm(), CLOSE_MS);
-  };
-
   return (
     <MobileDrawer
       side="bottom"
-      open={props.open && internalOpen()}
-      onOpenChange={(open) => {
-        if (!open) requestClose();
-      }}
-      closeOnOutsidePointerStrategy="pointerdown"
+      open={props.open}
+      onOpenChange={(open) => !open && close()}
+      closeOnOutsidePointer={!props.pending}
+      closeOnEscapeKeyDown={!props.pending}
     >
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
-        <MobileDrawer.Content aria-label="Confirmation">
-          <MobileDrawer.Handle />
-          <div class="flex flex-col gap-1 px-4 pb-4 pt-1">
-            <div class="text-base font-semibold text-ink">{props.title}</div>
-            <Show when={props.body ?? props.children}>
-              {(body) => <div class="text-sm text-ink-muted">{body()}</div>}
-            </Show>
-          </div>
-          <div class="flex flex-col gap-2 px-4 pb-4">
+        <MobileDrawer.Overlay />
+        <MobileDrawer.Content
+          aria-labelledby={titleId}
+          aria-describedby={descriptionId}
+          class="overflow-hidden"
+        >
+          <MobileDrawer.Handle class="pb-1" />
+          <div class="flex shrink-0 items-center justify-between gap-3 px-6 pb-4">
+            <h2 id={titleId} class="text-lg font-semibold text-ink">
+              {props.title}
+            </h2>
             <Button
-              type="button"
-              variant={TONE_VARIANT[props.tone ?? 'default']}
-              size="lg"
-              class="w-full rounded-lg"
-              onClick={confirm}
-            >
-              {props.confirmLabel ?? 'Confirm'}
-            </Button>
-            <MobileDrawer.Close
-              as={Button}
-              type="button"
               variant="ghost"
-              size="lg"
-              class="w-full rounded-lg"
+              size="icon-lg"
+              aria-label="Close confirmation"
+              class="rounded-full bg-ink/6"
+              disabled={props.pending}
+              onClick={close}
             >
-              {props.cancelLabel ?? 'Cancel'}
-            </MobileDrawer.Close>
+              <CloseIcon class="size-5" />
+            </Button>
           </div>
+          <MobileDrawer.ScrollBody>
+            <div
+              id={descriptionId}
+              class="px-6 pb-5 text-base leading-6 text-ink-muted"
+            >
+              {props.body ?? props.children}
+            </div>
+            <div class="flex gap-3 px-6 pb-2">
+              <Button
+                variant="ghost"
+                size="xl"
+                class="min-w-0 flex-1 rounded-full bg-ink/6"
+                disabled={props.pending}
+                onClick={close}
+              >
+                {props.cancelLabel ?? 'Cancel'}
+              </Button>
+              <Button
+                variant="ghost"
+                size="xl"
+                class={cn(
+                  'min-w-0 flex-1 rounded-full',
+                  props.tone === 'danger'
+                    ? 'bg-failure-bg text-failure'
+                    : props.tone === 'success'
+                      ? 'bg-success-bg text-success'
+                      : 'bg-accent-bg text-accent'
+                )}
+                disabled={props.pending}
+                onClick={() => !props.pending && props.onConfirm()}
+              >
+                <Show when={props.pending}>
+                  <SpinnerIcon class="size-4 animate-spin" />
+                </Show>
+                {props.confirmLabel ?? 'Confirm'}
+              </Button>
+            </div>
+          </MobileDrawer.ScrollBody>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
     </MobileDrawer>

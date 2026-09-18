@@ -10,6 +10,149 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/codex": {
+      "get": {
+        "tags": ["crate::api::codex"],
+        "operationId": "get_codex_connection",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodexConnectionStatus"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crate::api::codex"],
+        "operationId": "disconnect_codex",
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
+    "/codex/config": {
+      "put": {
+        "tags": ["crate::api::codex"],
+        "operationId": "configure_codex",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CodexConfigRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodexConnectionStatus"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/codex/environments": {
+      "get": {
+        "tags": ["crate::api::codex"],
+        "operationId": "list_codex_environments",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CodexEnvironment"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/codex/login": {
+      "post": {
+        "tags": ["crate::api::codex"],
+        "operationId": "start_codex_login",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodexLoginStart"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/codex/login/{attempt_id}": {
+      "get": {
+        "tags": ["crate::api::codex"],
+        "operationId": "poll_codex_login",
+        "parameters": [
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CodexLoginPoll"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["crate::api::codex"],
+        "operationId": "cancel_codex_login",
+        "parameters": [
+          {
+            "name": "attempt_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/cursor-api-key": {
       "get": {
         "tags": ["crate::api::cursor_api_key::get_cursor_api_key"],
@@ -481,6 +624,406 @@
             }
           },
           "428": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gtm-invite/links": {
+      "get": {
+        "tags": ["gtm_invite"],
+        "summary": "Lists invite links, newest first. Macro staff only.",
+        "operationId": "list_gtm_invite_links",
+        "parameters": [
+          {
+            "name": "mine",
+            "in": "query",
+            "description": "Only the caller's own links (default: every staff member's).",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GtmInviteLinkList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["gtm_invite"],
+        "summary": "Creates an invite link. Macro staff only.",
+        "operationId": "create_gtm_invite_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGtmInviteLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GtmInviteLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gtm-invite/links/{id}": {
+      "delete": {
+        "tags": ["gtm_invite"],
+        "summary": "Revokes an invite link nobody has signed up through. Macro staff only.",
+        "operationId": "revoke_gtm_invite_link",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The invite link id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GtmInviteLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gtm-invite/offer": {
+      "get": {
+        "tags": ["gtm_invite"],
+        "summary": "The promotion the signed-in user's account holds from an invite link, if\nthey redeemed one and have not started a paid subscription yet.",
+        "operationId": "get_gtm_invite_offer",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GtmInviteOfferStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gtm-invite/public/{token}": {
+      "get": {
+        "tags": ["gtm_invite"],
+        "summary": "Resolves an invite link for the public welcome page and counts the open.",
+        "description": "Unauthenticated: the recipient has no account yet. Only the first name and\nwhether the link is still usable are exposed.",
+        "operationId": "resolve_gtm_invite_link",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The token from the invite link URL",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicGtmInviteLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": ""
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gtm-invite/redeem": {
+      "post": {
+        "tags": ["gtm_invite"],
+        "summary": "Attributes the signed-in user's account to the invite link they opened and\ngrants them its offer. Idempotent for the same account.",
+        "operationId": "redeem_gtm_invite_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemGtmInviteLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GtmInviteOffer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
             "description": "",
             "content": {
               "application/json": {
@@ -3832,6 +4375,135 @@
           }
         }
       },
+      "CodexConfigRequest": {
+        "type": "object",
+        "description": "Explicit remote environment for future Codex sessions.",
+        "required": ["environmentId"],
+        "properties": {
+          "environmentId": {
+            "type": "string",
+            "description": "An environment currently visible to this account."
+          }
+        },
+        "additionalProperties": false
+      },
+      "CodexConnectionStatus": {
+        "type": "object",
+        "description": "Safe connection metadata; no secret or masked token is returned.",
+        "required": ["connected"],
+        "properties": {
+          "accountId": {
+            "type": ["string", "null"],
+            "description": "Connected provider account identifier."
+          },
+          "connected": {
+            "type": "boolean",
+            "description": "Whether the user has completed provider authorization."
+          },
+          "email": {
+            "type": ["string", "null"],
+            "description": "Reserved until provider-verified email metadata is available."
+          },
+          "environmentId": {
+            "type": ["string", "null"],
+            "description": "Explicitly selected remote environment."
+          }
+        }
+      },
+      "CodexEnvironment": {
+        "type": "object",
+        "description": "A cloud environment visible to the connected provider account.",
+        "required": ["id", "repositories"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "Provider environment identity."
+          },
+          "label": {
+            "type": ["string", "null"],
+            "description": "Human-readable provider label."
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CodexEnvironmentRepository"
+            },
+            "description": "Ordered safe repository identities from Codex."
+          }
+        }
+      },
+      "CodexEnvironmentRepository": {
+        "type": "object",
+        "description": "Safe repository metadata available to the connected Codex account.",
+        "required": ["fullName", "cloneUrl", "defaultBranch"],
+        "properties": {
+          "cloneUrl": {
+            "type": "string",
+            "description": "Credential-free HTTPS clone URL."
+          },
+          "defaultBranch": {
+            "type": "string",
+            "description": "Provider default branch."
+          },
+          "fullName": {
+            "type": "string",
+            "description": "Owner/repository identity."
+          }
+        }
+      },
+      "CodexLoginPoll": {
+        "type": "object",
+        "description": "Outcome of polling one attempt.",
+        "required": ["status"],
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/CodexLoginState",
+            "description": "Current attempt state."
+          }
+        }
+      },
+      "CodexLoginStart": {
+        "type": "object",
+        "description": "Expiring browser authorization instructions.",
+        "required": [
+          "attemptId",
+          "verificationUrl",
+          "userCode",
+          "expiresAt",
+          "pollIntervalSeconds"
+        ],
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Owner-bound attempt UUID."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "UTC attempt deadline."
+          },
+          "pollIntervalSeconds": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Minimum browser polling interval.",
+            "minimum": 0
+          },
+          "userCode": {
+            "type": "string",
+            "description": "Short expiring user code, not an API credential."
+          },
+          "verificationUrl": {
+            "type": "string",
+            "description": "Official provider verification URL."
+          }
+        }
+      },
+      "CodexLoginState": {
+        "type": "string",
+        "description": "Device authorization state visible to its initiating user.",
+        "enum": ["pending", "connected", "expired", "failed"]
+      },
       "CreateAccountMergeRequest": {
         "type": "object",
         "required": ["email"],
@@ -3862,6 +4534,25 @@
           "successUrl": {
             "type": "string",
             "description": "The URL to redirect to on successful checkout"
+          }
+        }
+      },
+      "CreateGtmInviteLinkRequest": {
+        "type": "object",
+        "description": "Request body to create a link.",
+        "required": ["firstName"],
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "description": "The recipient's first name, shown on the welcome page."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "Free-form internal note for the dashboard."
+          },
+          "recipientEmail": {
+            "type": ["string", "null"],
+            "description": "The recipient's email, when the sender knows it."
           }
         }
       },
@@ -4436,6 +5127,179 @@
           }
         }
       },
+      "GtmInviteLink": {
+        "type": "object",
+        "description": "A link as shown on the staff dashboard.",
+        "required": [
+          "id",
+          "token",
+          "firstName",
+          "promoCode",
+          "freeMonths",
+          "status",
+          "createdBy",
+          "createdAt",
+          "expiresAt",
+          "openCount"
+        ],
+        "properties": {
+          "convertedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the account started a paid subscription."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the link was created."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "The Macro user id of the staff member who created the link."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the link stops being openable."
+          },
+          "firstName": {
+            "type": "string",
+            "description": "The recipient's first name."
+          },
+          "firstOpenedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the welcome page first loaded."
+          },
+          "freeMonths": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Free months the promotion grants.",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Primary key."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "Internal note."
+          },
+          "openCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many times the welcome page loaded."
+          },
+          "promoCode": {
+            "type": "string",
+            "description": "The Stripe promotion code applied at checkout."
+          },
+          "recipientEmail": {
+            "type": ["string", "null"],
+            "description": "The recipient's email, when known."
+          },
+          "redeemedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When that account redeemed the link."
+          },
+          "redeemedBy": {
+            "type": ["string", "null"],
+            "description": "The Macro user id of the account that signed up through the link."
+          },
+          "revokedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When staff revoked the link."
+          },
+          "status": {
+            "$ref": "#/components/schemas/GtmInviteLinkStatus",
+            "description": "Lifecycle status."
+          },
+          "stripeSubscriptionId": {
+            "type": ["string", "null"],
+            "description": "The Stripe subscription id of that subscription."
+          },
+          "token": {
+            "type": "string",
+            "description": "The secret to embed in the link URL."
+          }
+        }
+      },
+      "GtmInviteLinkList": {
+        "type": "object",
+        "description": "Links for the dashboard.",
+        "required": ["links"],
+        "properties": {
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GtmInviteLink"
+            },
+            "description": "Newest first."
+          }
+        }
+      },
+      "GtmInviteLinkStatus": {
+        "type": "string",
+        "description": "Where a link is in its lifecycle.",
+        "enum": ["active", "expired", "revoked", "redeemed", "converted"]
+      },
+      "GtmInviteOffer": {
+        "type": "object",
+        "description": "The promotion a signed-in user's account holds.",
+        "required": [
+          "linkId",
+          "firstName",
+          "promoCode",
+          "freeMonths",
+          "redeemedAt"
+        ],
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "description": "The first name the link was made out to."
+          },
+          "freeMonths": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Free months the promotion grants.",
+            "minimum": 0
+          },
+          "linkId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The redeemed link."
+          },
+          "promoCode": {
+            "type": "string",
+            "description": "The Stripe promotion code checkout applies."
+          },
+          "redeemedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the account redeemed the link."
+          }
+        }
+      },
+      "GtmInviteOfferStatus": {
+        "type": "object",
+        "description": "Whether the signed-in user holds an unused offer.",
+        "properties": {
+          "offer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GtmInviteOffer",
+                "description": "The offer, when the account redeemed a link and has not subscribed yet."
+              }
+            ]
+          }
+        }
+      },
       "InitGithubLinkResponse": {
         "type": "object",
         "required": ["authorization_url", "link_id"],
@@ -4744,6 +5608,27 @@
           }
         }
       },
+      "PublicGtmInviteLink": {
+        "type": "object",
+        "description": "What the public welcome page learns about a link.",
+        "required": ["firstName", "status", "freeMonths"],
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "description": "The recipient's first name."
+          },
+          "freeMonths": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Free months the promotion grants.",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/GtmInviteLinkStatus",
+            "description": "Whether the link can still be used."
+          }
+        }
+      },
       "PutCursorApiKeyRequest": {
         "type": "object",
         "description": "The key the user pasted.",
@@ -4775,6 +5660,17 @@
           "last_name": {
             "type": ["string", "null"],
             "description": "Last Name of user"
+          }
+        }
+      },
+      "RedeemGtmInviteLinkRequest": {
+        "type": "object",
+        "description": "Request body to redeem a link.",
+        "required": ["token"],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The token from the link URL."
           }
         }
       },

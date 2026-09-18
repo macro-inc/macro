@@ -51,6 +51,8 @@ fn canonical_types_without_properties_storage_map_to_none() {
         AccessEntityType::Reminder,
         AccessEntityType::Skill,
         AccessEntityType::AgentSession,
+        AccessEntityType::ScheduledAction,
+        AccessEntityType::Initiative,
     ] {
         assert_eq!(storage_entity_type(unsupported), None, "{unsupported:?}");
     }

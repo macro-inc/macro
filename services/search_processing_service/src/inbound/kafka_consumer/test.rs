@@ -1270,6 +1270,7 @@ fn subscribes_to_declared_search_processing_topics_with_durable_group() {
         "search-processing-service"
     );
     let topics = DeclaredMacroEvent::topics();
+    assert!(topics.contains(&macro_event_topics::MacroAgentSessionLifecycleTopic::TOPIC_STR));
     assert_eq!(MacroChatsTopic::TOPIC_STR, "macro.chats");
     assert!(topics.contains(&MacroCallsTopic::TOPIC_STR));
     assert!(topics.contains(&MacroChannelsTopic::TOPIC_STR));
@@ -1510,6 +1511,41 @@ fn email_envelope_decodes_round_trip() {
     };
     assert_eq!(decoded_event.key(), EMAIL_LINK_ID.to_string());
     assert_eq!(decoded_event.event().event, event);
+}
+
+#[test]
+fn agent_session_lifecycle_decodes_and_routes_by_session() {
+    use ::agent_session::domain::{events::*, model::AgentSessionId};
+    use macro_event_topics::MacroAgentSessionLifecycleTopic;
+
+    let id = AgentSessionId::new_from_uuid(Uuid::from_u128(10));
+    let identity = SessionIdentity {
+        session_id: id,
+        session_name: "Indexed session".into(),
+        bot_id: serde_json::from_value(serde_json::json!(Uuid::from_u128(2))).unwrap(),
+        bot_name: "Agent".into(),
+        owner_id: user_id(),
+        origin: None,
+        audience: vec![],
+    };
+    for event in [
+        AgentSessionLifecycleEvent::Renamed(SessionRenamedMetadata {
+            identity: identity.clone(),
+        }),
+        AgentSessionLifecycleEvent::Deleted(SessionDeletedMetadata { identity }),
+    ] {
+        let message = encoded_message(
+            MacroAgentSessionLifecycleTopic::TOPIC_STR,
+            id,
+            Event::new(event.clone()),
+        );
+        let decoded = DeclaredMacroEvent::decode(&message).unwrap();
+        assert_eq!(ordering_key(&decoded), id.to_string());
+        let DeclaredMacroEvent::AgentSessionLifecycleMacroEvent(decoded) = decoded else {
+            panic!("expected agent-session lifecycle event");
+        };
+        assert_eq!(decoded.event().event, event);
+    }
 }
 
 #[test]

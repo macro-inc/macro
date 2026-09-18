@@ -5,11 +5,14 @@ import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import ArrowBendUpLeft from '@phosphor/arrow-bend-up-left.svg';
 import ArrowBendUpRight from '@phosphor/arrow-bend-up-right.svg';
+import ArrowDown from '@phosphor/arrow-down.svg';
+import ArrowUp from '@phosphor/arrow-up.svg';
 import CheckIcon from '@phosphor/check.svg';
 import CheckBoldIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
 import { createCallback } from '@solid-primitives/rootless';
 import { Button, cn } from '@ui';
 import { type Component, Show } from 'solid-js';
+import type { EmailThreadListNavigation } from '../context/email-thread-context';
 import { useEmailThreadState } from '../context/email-thread-state-context';
 import { useEmailThreadViewContext } from '../context/email-thread-view-context';
 import { openEmailReplyComposerForMessage } from '../primitives/reply-actions';
@@ -18,6 +21,7 @@ function ReplyActionButton(props: {
   icon: Component<{ class?: string }>;
   label?: string;
   ariaLabel?: string;
+  disabled?: boolean;
   onClick: () => void;
 }) {
   const viewContext = useEmailThreadViewContext();
@@ -30,13 +34,17 @@ function ReplyActionButton(props: {
       depth={viewContext.thread.isTouch() ? 3 : undefined}
       variant="outline"
       aria-label={props.ariaLabel}
+      disabled={props.disabled}
       class={cn(
         // Island pills when floating in the mobile/tablet accessory region.
-        'touch:island touch:h-8 touch:rounded-full touch:border-0'
+        'touch:island touch:h-8 touch:rounded-full touch:border-0',
+        !props.label && 'touch:w-9 touch:p-0'
       )}
       onClick={props.onClick}
     >
-      <props.icon class="size-4 shrink-0" />
+      <props.icon
+        class={cn('size-4 shrink-0', !props.label && 'touch:size-6')}
+      />
       <Show when={props.label}>
         <span>{props.label}</span>
       </Show>
@@ -44,7 +52,10 @@ function ReplyActionButton(props: {
   );
 }
 
-export function BottomReplyButtons(props: { lastMessage: EmailMessage }) {
+export function BottomReplyButtons(props: {
+  lastMessage: EmailMessage;
+  navigation?: EmailThreadListNavigation;
+}) {
   const ctx = useEmailThreadState();
   const viewContext = useEmailThreadViewContext();
   const currentUserEmail = viewContext.thread.viewerEmail;
@@ -76,6 +87,8 @@ export function BottomReplyButtons(props: { lastMessage: EmailMessage }) {
   const toggleMarkDone = () => {
     if (isDone()) {
       ctx.markThreadNotDone();
+    } else if (props.navigation) {
+      props.navigation.markDone(ctx.archiveThread);
     } else {
       ctx.archiveThread();
     }
@@ -104,7 +117,7 @@ export function BottomReplyButtons(props: { lastMessage: EmailMessage }) {
     >
       <FloatRegionOrInline region="accessory">
         <div class="w-full p-2 pb-2 pt-4 touch:px-(--mobile-chrome-gutter) touch:py-0">
-          <div class="flex flex-row items-center gap-2 justify-between touch:pointer-events-auto">
+          <div class="flex flex-row flex-wrap items-center gap-2 justify-between touch:pointer-events-auto">
             <div class="flex flex-row items-center gap-2">
               <ReplyActionButton
                 icon={ArrowBendUpLeft}
@@ -118,20 +131,42 @@ export function BottomReplyButtons(props: { lastMessage: EmailMessage }) {
               />
             </div>
 
-            <Show when={showMarkDoneToggle()}>
-              <ReplyActionButton
-                icon={(iconProps) => (
-                  <Show
-                    when={isDone()}
-                    fallback={<CheckIcon class={iconProps.class} />}
-                  >
-                    <CheckBoldIcon class={cn(iconProps.class, 'text-accent')} />
-                  </Show>
+            <div class="ml-auto flex items-center gap-2">
+              <Show when={props.navigation}>
+                {(navigation) => (
+                  <>
+                    <ReplyActionButton
+                      icon={ArrowUp}
+                      ariaLabel="Previous email"
+                      disabled={!navigation().canPrevious()}
+                      onClick={() => navigation().previous()}
+                    />
+                    <ReplyActionButton
+                      icon={ArrowDown}
+                      ariaLabel="Next email"
+                      disabled={!navigation().canNext()}
+                      onClick={() => navigation().next()}
+                    />
+                  </>
                 )}
-                ariaLabel={isDone() ? 'Mark as not done' : 'Mark done'}
-                onClick={toggleMarkDone}
-              />
-            </Show>
+              </Show>
+              <Show when={showMarkDoneToggle()}>
+                <ReplyActionButton
+                  icon={(iconProps) => (
+                    <Show
+                      when={isDone()}
+                      fallback={<CheckIcon class={iconProps.class} />}
+                    >
+                      <CheckBoldIcon
+                        class={cn(iconProps.class, 'text-accent')}
+                      />
+                    </Show>
+                  )}
+                  ariaLabel={isDone() ? 'Mark as not done' : 'Mark done'}
+                  onClick={toggleMarkDone}
+                />
+              </Show>
+            </div>
           </div>
         </div>
       </FloatRegionOrInline>

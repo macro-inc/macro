@@ -17,6 +17,7 @@ const tabTypes: Record<InboxTab, ReadonlySet<InboxTypeFilter>> = {
     'tasks',
     'email',
     'channels',
+    'chats',
     'agents',
     'projects',
     'github',
@@ -89,6 +90,7 @@ export function buildInboxSearchRequest(
     filtersIncompleteEntities || notification !== undefined;
 
   const filters: EntityFilters = {
+    agent_session_filters: { ids: [NIL_UUID] },
     calendar_event_filters: { calendar_event_ids: [NIL_UUID] },
     call_filters: { call_ids: [NIL_UUID] },
     channel_filters: { channel_ids: [NIL_UUID] },
@@ -104,6 +106,10 @@ export function buildInboxSearchRequest(
 
   if (types.has('calendar')) {
     filters.calendar_event_filters = {};
+  }
+
+  if (types.has('agents')) {
+    filters.agent_session_filters = { include: true };
   }
 
   if (types.has('channels')) {
@@ -126,7 +132,7 @@ export function buildInboxSearchRequest(
     };
   }
 
-  if (types.has('agents')) {
+  if (types.has('chats')) {
     const chatFilters: NonNullable<EntityFilters['chat_filters']> = {};
 
     if (hasNotificationFilter) {

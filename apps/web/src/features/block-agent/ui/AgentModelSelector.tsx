@@ -35,11 +35,10 @@ import type { ModelOption } from '@service-agent-fold/generated/types';
 import { Button, cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { groupOptions, withoutRedundantGroups } from './model-groups';
-import { TextShimmer } from './TextShimmer';
 
 /** Compact ghost pill — same size as the short-list trigger and chat's selector. */
 const PILL_TRIGGER_CLASS =
-  'h-6 w-auto max-w-[9rem] min-w-0 justify-start gap-1 rounded-full border-transparent bg-ink/5 px-2 text-left text-xs text-ink-muted hover:bg-ink/10';
+  'h-6 w-auto max-w-[9rem] min-w-0 justify-start gap-1 rounded-full border-transparent bg-ink/5 px-2 text-left text-sm text-ink-subtle hover:bg-ink/10';
 
 /** Height of one model row — `h-7` on the item, so the cap is exact. */
 const ROW_HEIGHT_PX = 28;
@@ -63,9 +62,9 @@ export interface AgentModelSelectorProps {
   /** Current model id, when the fold has learned it. */
   model: string | null;
   /**
-   * A change to this model is on the wire. The pill shows it, shimmering,
-   * so the switch is visibly in progress rather than appearing not to have
-   * registered — the request can block for a whole container resume.
+   * A change to this model the fold has shown but `metadata.model` has not
+   * caught up to. The pill reads it as the current model at once and stays
+   * interactive; a runtime rejection later reverts it through the fold.
    */
   changingTo?: string;
   /** The models the harness offers, in the order it listed them. */
@@ -103,8 +102,6 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
       : options();
     return groupOptions(matching);
   });
-  const disabled = () => props.disabled || props.changingTo !== undefined;
-
   const openSheet = (open: boolean) => {
     setSheetOpen(open);
     if (!open) setQuery('');
@@ -129,18 +126,14 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         variant="ghost"
         size="sm"
         aria-label="Agent model"
-        disabled={disabled()}
-        class="h-8 max-w-[60vw] min-w-0 justify-start gap-1 rounded-lg border-none bg-transparent px-1.5 text-left text-sm text-ink-muted hover:bg-hover"
+        disabled={props.disabled}
+        class="h-8 max-w-[60vw] min-w-0 justify-start gap-1 rounded-lg border-none bg-transparent px-1.5 text-left text-sm text-ink-subtle hover:bg-hover"
       >
-        <TextShimmer
-          text={label()}
-          active={props.changingTo !== undefined}
-          class="min-w-0 truncate"
-        />
+        <span class="min-w-0 truncate">{label()}</span>
         <CaretDown class="size-3.5 shrink-0" />
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
-        <MobileDrawer.Overlay class="fixed inset-0 z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted" />
+        <MobileDrawer.Overlay />
         <MobileDrawer.Content aria-label="Choose a model">
           <MobileDrawer.Handle />
           <Show when={searchable()}>
@@ -177,12 +170,11 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                   >
                     <For each={group.options}>
                       {(option) => (
-                        <button
+                        <MobileDrawer.Item
                           type="button"
                           role="radio"
                           aria-checked={option.id === shown()}
                           title={option.description ?? undefined}
-                          class="flex w-full items-center gap-3 bg-surface px-4 py-3 text-left text-sm text-ink hover:bg-hover hover-transition-bg not-last:mb-px"
                           onClick={() => pick(option.id)}
                         >
                           <span class="min-w-0 flex-1 truncate">
@@ -191,7 +183,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                           <Show when={option.id === shown()}>
                             <Check class="size-3.5 shrink-0 text-accent" />
                           </Show>
-                        </button>
+                        </MobileDrawer.Item>
                       )}
                     </For>
                   </MobileDrawer.Section>
@@ -210,12 +202,12 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         variant="ghost"
         size="sm"
         class={PILL_TRIGGER_CLASS}
-        disabled={disabled()}
+        disabled={props.disabled}
       >
-        <TextShimmer text={label()} active={props.changingTo !== undefined} />
+        {label()}
         <CaretDown />
       </Dropdown.Trigger>
-      <Dropdown.Content class="overflow-hidden">
+      <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)] overflow-hidden">
         {/* The gradients anchor here, outside the scrolling box, and read
             the menu background through `--color-surface`. */}
         <div class="relative [--color-surface:var(--color-menu)]">
@@ -235,7 +227,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
                     title={option.description ?? undefined}
                     onSelect={() => pick(option.id)}
                   >
-                    <span class="flex-1 truncate text-xs">{option.name}</span>
+                    <span class="flex-1 truncate">{option.name}</span>
                   </Dropdown.Item>
                 )}
               </For>
@@ -255,7 +247,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
             value={shown()}
             options={catalogOptions()}
             onSelect={pick}
-            disabled={disabled()}
+            disabled={props.disabled}
             ariaLabel="Agent model"
             searchPlaceholder="Search models"
             triggerClass={PILL_TRIGGER_CLASS}

@@ -17,13 +17,17 @@ name = "agent_harness_service_doppler_config"
 path = "src/doppler_config.rs"
 
 [dependencies]
+codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
+codex_connection = { path = "../../crates/codex_connection" }
 agent_egress = { path = "../../crates/agent_egress" }
 agent_fold = { path = "../../crates/agent_fold" }
 agent_harness = { path = "../../crates/agent_harness" }
 agent_inmem = { path = "../../crates/agent_inmem" }
 ai_tools = { path = "../../crates/ai_tools" }
 agent_runtime_protocol = { path = "../../crates/agent_runtime_protocol", features = ["utoipa"] }
-agent_session = { path = "../../crates/agent_session" }
+agent_session = { path = "../../crates/agent_session", features = ["ai_tools"] }
+ai_toolset = { path = "../../crates/ai_toolset" }
+rmcp = { workspace = true }
 agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
 ai_usage = { path = "../../crates/ai_usage" }
 aws-sdk-sqs = { workspace = true }
@@ -35,6 +39,7 @@ connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 aws-sdk-kms = { workspace = true }
 cursor_api_key = { path = "../../crates/cursor_api_key" }
 cursor_cloud_agents = { path = "../../crates/cursor_cloud_agents" }
+claude_cloud_agents = { path = "../../crates/claude_cloud_agents" }
 database_env_vars = { path = "../../crates/database_env_vars" }
 entity_access = { path = "../../crates/entity_access" }
 futures = { workspace = true }
@@ -50,7 +55,10 @@ macro_aws_config = { path = "../../crates/macro_aws_config" }
 macro_event_broker = { path = "../../crates/macro_event_broker", features = ["outbound"] }
 macro_queues = { path = "../../crates/macro_queues" }
 lexical_client = { path = "../../crates/lexical_client" }
+lexical_mention_extractor = { path = "../../crates/lexical_mention_extractor" }
 macro_service_urls = { path = "../../crates/macro_service_urls" }
+messages = { path = "../../crates/messages", features = ["broker", "delivery"] }
+static_file_service_client = { path = "../../crates/static_file_service_client" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 notification = { path = "../../crates/notification" }
 rdkafka = { workspace = true }
@@ -59,6 +67,7 @@ channels = { path = "../../crates/channels", features = ["ports", "outbound"] }
 anyhow = { workspace = true }
 macro_user_id = { path = "../../crates/macro_user_id" }
 axum = { workspace = true }
+axum-extra = { workspace = true, features = ["typed-header"] }
 aws-sdk-secretsmanager = { workspace = true }
 kafka_util = { path = "../../crates/kafka_util" }
 macro_auth = { path = "../../crates/macro_auth" }

@@ -10,8 +10,18 @@ use super::*;
 /// control routes notify. Both operations go through the per-session queue, so
 /// a teardown cannot land in the middle of an open and a model change cannot
 /// overtake the prompt it was meant to follow.
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
-    AgentSessionNotificationRecipient
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> AgentSessionNotificationRecipient
     for AgentHarnessService<
         Sessions,
         Containers,
@@ -20,15 +30,21 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     async fn session_deleted(
         &self,
@@ -45,12 +61,10 @@ where
         id: AgentSessionId,
         event: ControlEvent,
     ) -> agent_session::domain::error::Result<AcceptedControl> {
-        let action_id = AgentActionId::mint();
+        let action = DeliverAction::control(event);
+        let action_id = action.id;
         let outcome = self
-            .execute(
-                id,
-                HarnessCommand::Deliver(DeliverAction::control(action_id, event)),
-            )
+            .execute(id, HarnessCommand::Deliver(action))
             .await
             .map_err(into_session_error)?;
         Ok(AcceptedControl {
@@ -135,8 +149,18 @@ where
 /// only admit an internal command there and return. Admission is synchronous
 /// inside [`AgentHarnessService::execute_here`]; the returned future only
 /// awaits the completion, which nothing here needs.
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
-    agent_session::domain::ports::SessionTurnObserver
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+> agent_session::domain::ports::SessionTurnObserver
     for AgentHarnessService<
         Sessions,
         Containers,
@@ -145,15 +169,21 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     fn signal(&self, id: AgentSessionId, signal: TurnSignal) {
         drop(self.execute_here(id, HarnessCommand::Turn(signal)));
@@ -169,7 +199,18 @@ where
     }
 }
 
-impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, Egress>
+impl<
+    Sessions,
+    Containers,
+    Announcer,
+    Runtimes,
+    PromptContext,
+    PromptComposer,
+    Egress,
+    Lifecycle,
+    Mentions,
+    Notifier,
+>
     AgentHarnessInner<
         Sessions,
         Containers,
@@ -178,15 +219,21 @@ impl<Sessions, Containers, Announcer, Runtimes, PromptContext, PromptComposer, E
         PromptContext,
         PromptComposer,
         Egress,
+        Lifecycle,
+        Mentions,
+        Notifier,
     >
 where
     Sessions: AgentSessionService,
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
+    Lifecycle: AgentSessionLifecyclePublisher,
+    Mentions: PromptMentions,
+    Notifier: AgentSessionNotifier,
 {
     /// Resolve current permission policy, failing closed if lookup fails.
     pub(super) async fn permission_policy_for(&self, bot: BotId) -> PermissionPolicy {

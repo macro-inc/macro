@@ -18,6 +18,7 @@ import {
   createMemo,
   createSignal,
   For,
+  type JSX,
   onCleanup,
   onMount,
   Show,
@@ -38,7 +39,10 @@ import type {
  * [`DiscussionSource`]. Backend-agnostic: drive it via a `DiscussionProvider`
  * supplying a document/task or CRM source.
  */
-export function Discussion() {
+export function Discussion(props: {
+  hideComposer?: boolean;
+  threadHeader?: (thread: ViewThread) => JSX.Element;
+}) {
   const source = useDiscussion();
   const [isExpanded, setIsExpanded] = createSignal(true);
   const [mountedCommentsVersion, setMountedCommentsVersion] = createSignal(0);
@@ -101,8 +105,6 @@ export function Discussion() {
     });
   });
 
-  let newThreadInputHandle: { clear: () => void } | undefined;
-
   const rootMetaById = createMemo(() => {
     const messages = source.threads().flatMap((thread) => {
       const root = thread.comments[0];
@@ -115,13 +117,6 @@ export function Discussion() {
 
     return metaById;
   });
-
-  const handleCreateThread = async (snapshot: InputSnapshot) => {
-    const text = snapshot.value.trim();
-    if (!text) return;
-    await source.createThread(text, snapshot.mentions);
-    newThreadInputHandle?.clear();
-  };
 
   return (
     <section class="mt-3 pb-12">
@@ -152,27 +147,23 @@ export function Discussion() {
                   const listMeta = () =>
                     root() ? rootMetaById()[root()!.id] : undefined;
                   return (
-                    <DiscussionThreadView
-                      thread={thread}
-                      listMeta={listMeta()}
-                      onCommentMount={registerMountedComment}
-                      onCommentCleanup={unregisterMountedComment}
-                    />
+                    <>
+                      {props.threadHeader?.(thread)}
+                      <DiscussionThreadView
+                        thread={thread}
+                        listMeta={listMeta()}
+                        onCommentMount={registerMountedComment}
+                        onCommentCleanup={unregisterMountedComment}
+                      />
+                    </>
                   );
                 }}
               </For>
             </div>
 
-            <Show when={source.canEdit()}>
+            <Show when={!props.hideComposer && source.canEdit()}>
               <div class="mt-4">
-                <DiscussionInput
-                  input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
-                  onSend={handleCreateThread}
-                  onReady={(handle) => {
-                    newThreadInputHandle = handle;
-                  }}
-                  autofocus={false}
-                />
+                <DiscussionComposer />
               </div>
             </Show>
           </div>
@@ -182,8 +173,42 @@ export function Discussion() {
   );
 }
 
+/** The new-thread composer can be placed independently of the thread list. */
+export function DiscussionComposer(props: {
+  collapsible?: boolean;
+  autofocus?: boolean;
+  /** Dismiss the keyboard after submitting from a floating mobile composer. */
+  blurOnSend?: boolean;
+}) {
+  const source = useDiscussion();
+  let inputHandle: { clear: () => void } | undefined;
+
+  const handleCreateThread = async (snapshot: InputSnapshot) => {
+    const text = snapshot.value.trim();
+    if (!text) return;
+    await source.createThread(text, snapshot.mentions);
+    inputHandle?.clear();
+  };
+
+  return (
+    <Show when={source.canEdit()}>
+      <DiscussionInput
+        input={{ mode: 'channel', placeholder: 'Leave a comment...' }}
+        collapsible={props.collapsible}
+        blurOnSend={props.blurOnSend}
+        onSend={handleCreateThread}
+        onReady={(handle) => {
+          inputHandle = handle;
+        }}
+        autofocus={props.autofocus ?? false}
+      />
+    </Show>
+  );
+}
+
 export function DiscussionThreadView(props: {
   thread: ViewThread;
+  showReplyAction?: boolean;
   listMeta?: ChannelMessageListMeta;
   onCommentMount?: (commentId: string, element: HTMLElement) => void;
   onCommentCleanup?: (commentId: string, element: HTMLElement) => void;
@@ -241,15 +266,24 @@ export function DiscussionThreadView(props: {
               setIsReplying(true);
             }
           : undefined,
-      onEdit: own
-        ? () => {
-            setEditingId(comment.id);
-          }
-        : undefined,
+      onEdit:
+        own && canEdit()
+          ? () => {
+              setEditingId(comment.id);
+            }
+          : undefined,
       onDelete:
         own && canEdit()
           ? async () => {
-              await source.deleteComment(comment);
+              try {
+                await source.deleteComment(comment);
+              } catch (error) {
+                toast.failure(
+                  error instanceof Error
+                    ? error.message
+                    : 'Unable to delete comment.'
+                );
+              }
             }
           : undefined,
       onCopyLink: makeCopyLink(comment),
@@ -304,6 +338,26 @@ export function DiscussionThreadView(props: {
                 />
               </div>
 
+              <Show
+                when={
+                  props.showReplyAction &&
+                  !hasReplies() &&
+                  !isReplying() &&
+                  canEdit()
+                }
+              >
+                <Thread.ActionsFooter>
+                  <Thread.ReplyButton
+                    getFocusTarget={() =>
+                      replyInputContainerRef?.querySelector<HTMLElement>(
+                        '[contenteditable]'
+                      ) ?? null
+                    }
+                    onClick={() => setIsReplying(true)}
+                    aria-label="Reply"
+                  />
+                </Thread.ActionsFooter>
+              </Show>
               <Show when={hasReplies() || isReplying()}>
                 <div class="relative w-full">
                   <Thread.ReplyRailDecorations />

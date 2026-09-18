@@ -101,6 +101,7 @@ fn soup_chat(id: Uuid) -> SoupItem<()> {
     SoupItem::Chat(SoupChat {
         id,
         name: format!("Chat {id}"),
+        model: Some("openai/gpt-5.6".to_string()),
         owner_id: MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
         project_id: None,
         is_persistent: true,
@@ -293,6 +294,7 @@ struct CountingEmailService {
     user_link_calls: Arc<AtomicUsize>,
     user_catalog_identities: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     seen_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
+    unread_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
     label_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, Uuid, bool)>>>,
 }
 
@@ -449,6 +451,18 @@ impl EmailService for CountingEmailService {
         self.seen_mutation_calls
             .lock()
             .expect("seen mutation calls lock")
+            .push((macro_id, thread_id));
+        Ok(())
+    }
+
+    async fn mark_thread_unread(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        self.unread_mutation_calls
+            .lock()
+            .expect("unread mutation calls lock")
             .push((macro_id, thread_id));
         Ok(())
     }
@@ -1407,6 +1421,20 @@ async fn soup_input_rejects_initial_and_continuation_together() {
 }
 
 #[tokio::test]
+async fn soup_returns_the_saved_chat_model() {
+    let harness = harness();
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_chat(Uuid::from_u128(91))]);
+    let response = harness.execute(
+        "{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupChat { model } } } } }"
+    ).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(data["user"]["soup"]["items"][0]["model"], "openai/gpt-5.6");
+}
+
+#[tokio::test]
 async fn soup_passes_team_receipt_to_frecency_enriched_path() {
     let harness = harness();
 
@@ -2030,7 +2058,29 @@ async fn email_mutations_return_the_canonical_thread_for_normalized_cache_update
     assert_eq!(label_thread["id"], thread_id.to_string());
     assert_eq!(label_thread["isRead"], true);
 
+    harness
+        .soup_service
+        .set_raw_response(vec![soup_email_thread_with_read_status(thread_id, false)]);
+    let unread_response = harness
+        .execute_authenticated_mutation(&format!(
+            r#"mutation {{ markEmailThreadUnread(input: {{threadId: "{thread_id}"}}) {{ __typename id isRead }} }}"#
+        ))
+        .await;
+    assert!(
+        unread_response.errors.is_empty(),
+        "{:?}",
+        unread_response.errors
+    );
+    let unread_thread = &unread_response.data.into_json().unwrap()["markEmailThreadUnread"];
+    assert_eq!(unread_thread["__typename"], "GraphqlSoupEmailThread");
+    assert_eq!(unread_thread["id"], thread_id.to_string());
+    assert_eq!(unread_thread["isRead"], false);
+
     let expected_user = MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap();
+    assert_eq!(
+        *harness.email_service.unread_mutation_calls.lock().unwrap(),
+        vec![(expected_user.clone(), thread_id)]
+    );
     assert_eq!(
         *harness
             .email_service

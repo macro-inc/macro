@@ -25,13 +25,13 @@ import type {
   EntityData,
   ForeignEntity,
   GithubPullRequestEntity,
-  NamedSubType,
   Notification,
   ProjectEntity,
   ReminderEntity,
   SearchData,
   WithSearch,
 } from '@entity';
+import { toSubType } from '@entity/types/entity';
 import { resolveNotifiedAt } from '@queries/soup/normalized-cache/notified-floor';
 import { resolveOwnTouch } from '@queries/soup/normalized-cache/own-touch';
 import type {
@@ -55,6 +55,7 @@ import { formatDocumentName } from '@service-storage/util/filename';
 import type { UseQueryResult } from '@tanstack/solid-query';
 import { differenceInMilliseconds } from 'date-fns';
 import { match, P } from 'ts-pattern';
+import { mapAgentSessionSearchResult } from './agent-session-search';
 
 type InnerSearchResult =
   | DocumentSearchResult
@@ -315,6 +316,8 @@ export const useSearchResponseItemMapper = () => {
     searchQuery: string
   ): (WithSearch<EntityData> | undefined)[] => {
     switch (result.type) {
+      case 'agentSession':
+        return [mapAgentSessionSearchResult(result)];
       case 'company': {
         const primaryDomain = result.domains[0]?.domain;
         const nameHighlight = result.nameHighlighted
@@ -634,16 +637,7 @@ const resolveDocumentEntityName = (
     type: 'document',
     name: entity.name,
     fileType: entity.fileType,
-    subType:
-      entity.subType == null
-        ? null
-        : {
-            type: entity.subType.type,
-            is_completed:
-              'is_completed' in entity.subType
-                ? entity.subType.is_completed
-                : undefined,
-          },
+    subType: toSubType(entity.subType),
   });
 };
 
@@ -944,16 +938,7 @@ export const mapApiSoupItemToEntity = (
       viewedAt: item.data.viewedAt,
       fileType: item.data.fileType ?? undefined,
       projectId: item.data.projectId ?? undefined,
-      subType:
-        item.data.subType === null || item.data.subType === undefined
-          ? undefined
-          : {
-              type: item.data.subType.type as NamedSubType,
-              is_completed:
-                'is_completed' in item.data.subType
-                  ? item.data.subType.is_completed
-                  : undefined,
-            },
+      subType: toSubType(item.data.subType) ?? undefined,
       name: resolveDocumentEntityName(item.data),
     }))
     .with({ tag: 'crmCompany' }, (item) => {

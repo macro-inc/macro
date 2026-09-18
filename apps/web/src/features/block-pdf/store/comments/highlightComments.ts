@@ -1,11 +1,5 @@
 import { useHighlightSelection } from '@block-pdf/component/UserHighlight';
-import { disablePageViewClickSignal } from '@block-pdf/signal/click';
-import { generalPopupLocationSignal } from '@block-pdf/signal/location';
-import {
-  pageHeightStore,
-  useCurrentPageViewport,
-  viewerReadySignal,
-} from '@block-pdf/signal/pdfViewer';
+import { useCurrentPageViewport } from '@block-pdf/signal/pdfViewer';
 import type {
   PdfComment,
   PdfReply,
@@ -13,30 +7,19 @@ import type {
   ViewerCommentType,
 } from '@block-pdf/type/comments';
 import { getHighlightsFromSelection } from '@block-pdf/util/pdfjsUtils';
-import { createBlockMemo, createBlockSignal } from '@core/block';
 import { useUserId } from '@core/context/user';
 import { createCallback } from '@solid-primitives/rootless';
-import { batch } from 'solid-js';
+import { batch, createMemo } from 'solid-js';
 import { produce } from 'solid-js/store';
+import { usePdfDocument } from '../../context/pdf-document-context';
 import {
   Highlight,
   HighlightType,
   type IHighlight,
 } from '../../model/Highlight';
-import {
-  highlightStore,
-  highlightsUuidMap,
-  selectionStore,
-  useAddNewHighlightComments,
-} from '../../store/highlight';
 import { sortComments } from '../commentsResource';
 import { useDeleteNewComments } from './commentOperations';
-import { activeCommentThreadSignal, useGetCommentById } from './commentStore';
-
-// highlight uuid that is converted to a comment. This allows us to revert to a regular highlight if the user cancels the comment operation
-export const convertedHighlightThreadIdSignal = createBlockSignal<
-  string | null
->(null);
+import { useGetCommentById } from './commentStore';
 
 const getHighlightPos = (highlight: IHighlight, viewportHeight: number) => {
   try {
@@ -97,63 +80,67 @@ const getHighlightThread = (
   return { root, replies };
 };
 
-export const highlightComments = createBlockMemo(() => {
-  const userId = useUserId()();
-  const pageHeights = pageHeightStore.get;
-  if (!viewerReadySignal()) return [];
+export const useHighlightComments = () => {
+  const userId = useUserId();
+  const { stores, derived } = usePdfDocument().state;
+  const [pageHeights] = stores.pageHeight;
+  const [highlights] = stores.highlights;
 
-  const out: PdfComment[] = [];
-  for (const [pageIndexStr, pageHighlights] of Object.entries(
-    highlightStore.get
-  )) {
-    if (!pageHighlights) continue;
-    const pageIndex = parseInt(pageIndexStr);
-    const height = pageHeights[pageIndex] ?? 0;
+  return createMemo(() => {
+    if (!derived.viewerReady()) return [];
 
-    for (const highlight of Object.values(pageHighlights)) {
-      if (!highlight) continue;
+    const out: PdfComment[] = [];
+    for (const [pageIndexStr, pageHighlights] of Object.entries(highlights)) {
+      if (!pageHighlights) continue;
+      const pageIndex = parseInt(pageIndexStr);
+      const height = pageHeights[pageIndex] ?? 0;
 
-      const originalYPosition = getHighlightPos(highlight, height);
-      if (originalYPosition === null) continue;
+      for (const highlight of Object.values(pageHighlights)) {
+        if (!highlight) continue;
 
-      const layout = {
-        pageIndex,
-        originalYPosition,
-      };
+        const originalYPosition = getHighlightPos(highlight, height);
+        if (originalYPosition === null) continue;
 
-      // new highlight thread
-      if (highlight.hasTempThread) {
-        if (!userId) {
-          console.error('User ID not found');
+        const layout = {
+          pageIndex,
+          originalYPosition,
+        };
+
+        // new highlight thread
+        if (highlight.hasTempThread) {
+          const currentUserId = userId();
+          if (!currentUserId) {
+            console.error('User ID not found');
+            continue;
+          }
+          const rootComment: PdfRoot = {
+            id: -1,
+            rootId: -1,
+            type: 'highlight',
+            text: '',
+            owner: currentUserId,
+            author: currentUserId,
+            createdAt: new Date(),
+            isNew: true,
+            children: [],
+            threadId: -1,
+            anchorId: highlight.uuid,
+          };
+          out.push({ ...rootComment, layout });
           continue;
         }
-        const rootComment: PdfRoot = {
-          id: -1,
-          rootId: -1,
-          type: 'highlight',
-          text: '',
-          owner: userId,
-          author: userId,
-          createdAt: new Date(),
-          isNew: true,
-          children: [],
-          threadId: -1,
-          anchorId: highlight.uuid,
-        };
-        out.push({ ...rootComment, layout });
-        continue;
+
+        const highlightThread = getHighlightThread(highlight);
+        if (!highlightThread) continue;
+
+        const { root, replies } = highlightThread;
+        out.push({ ...root, layout });
+        replies.forEach((reply) => out.push(reply));
       }
-
-      const highlightThread = getHighlightThread(highlight);
-      if (!highlightThread) continue;
-
-      const { root, replies } = highlightThread;
-      out.push({ ...root, layout });
-      replies.forEach((reply) => out.push(reply));
     }
-  }
-  return out;
-});
+    return out;
+  });
+};
 
 const useGetHighlightIdFromCommentId = () => {
   const getCommentById = useGetCommentById();
@@ -169,20 +156,21 @@ const useGetHighlightIdFromCommentId = () => {
 
 export const useDeleteNewHighlightComment = () => {
   const handleHighlightSelection = useHighlightSelection();
+  const { signals, stores, derived } = usePdfDocument().state;
   const [convertedHighlightThreadId, setConvertedHighlightThreadId] =
-    convertedHighlightThreadIdSignal;
-  const setHighlightStore = highlightStore.set;
+    signals.convertedHighlightThreadId;
+  const [, setHighlights] = stores.highlights;
   const getHighlightIdFromCommentId = useGetHighlightIdFromCommentId();
 
   return () => {
     const commentId = -1;
     const highlightUuid = getHighlightIdFromCommentId(commentId);
     if (!highlightUuid) return;
-    const highlight = highlightsUuidMap()?.[highlightUuid];
+    const highlight = derived.highlightsUuidMap()?.[highlightUuid];
     if (!highlight) return;
     const pageIndex = highlight.pageNum;
 
-    setHighlightStore(
+    setHighlights(
       pageIndex,
       produce((draft) => {
         if (!draft) return;
@@ -215,34 +203,29 @@ export const useDeleteNewHighlightComment = () => {
 };
 
 export function useCreateHighlightCommentAtSelection() {
-  const selectionStoreValue = selectionStore.get;
-  const setHighlightStore = highlightStore.set;
-  const setConvertedHighlightThreadId = convertedHighlightThreadIdSignal.set;
-  const setGeneralPopupLocation = generalPopupLocationSignal.set;
-  const addHighlights = useAddNewHighlightComments();
+  const { signals, stores } = usePdfDocument().state;
+  const [selection] = stores.selection;
+  const [, setHighlights] = stores.highlights;
   const currentPageViewport = useCurrentPageViewport();
   const deleteNewComments = useDeleteNewComments();
-  const setActiveCommentThread = activeCommentThreadSignal.set;
-  const setDisablePageViewClick = disablePageViewClickSignal.set;
 
   return createCallback((_e: MouseEvent) => {
-    setDisablePageViewClick(true);
+    signals.disablePageViewClick[1](true);
     try {
       deleteNewComments();
 
       // TODO: make the general popup location reactive to the active highlight/term state instead of requiring a manual reset
-      setGeneralPopupLocation(null);
+      signals.generalPopupLocation[1](null);
 
       // create comment from existing highlight
-      const highlightUnderSelection =
-        selectionStoreValue.highlightsUnderSelection.at(0);
+      const highlightUnderSelection = selection.highlightsUnderSelection.at(0);
       if (highlightUnderSelection) {
         batch(() => {
-          setConvertedHighlightThreadId(highlightUnderSelection.uuid);
-          setActiveCommentThread(-1);
+          signals.convertedHighlightThreadId[1](highlightUnderSelection.uuid);
+          signals.activeCommentThread[1](-1);
 
           // NOTE: the new comment is reactively determined in the highlight comments memo
-          setHighlightStore(
+          setHighlights(
             highlightUnderSelection.pageNum,
             highlightUnderSelection.uuid,
             (prev) => ({ ...prev, hasTempThread: true })
@@ -252,11 +235,11 @@ export function useCreateHighlightCommentAtSelection() {
         return;
       }
 
-      const selection = selectionStoreValue.selection;
-      if (!selection) return;
+      const selectedRange = selection.selection;
+      if (!selectedRange) return;
 
       const selectionHighlights = getHighlightsFromSelection(
-        selection,
+        selectedRange,
         Highlight.defaultYellow,
         HighlightType.HIGHLIGHT,
         null,
@@ -275,10 +258,22 @@ export function useCreateHighlightCommentAtSelection() {
         highlights.push({ ...highlight, hasTempThread: true });
       }
 
-      addHighlights(highlights);
-      setActiveCommentThread(-1);
+      setHighlights(
+        produce((state) => {
+          for (const highlight of highlights) {
+            const pageNum = highlight.pageNum;
+            const uuid = highlight.uuid;
+            if (state[pageNum]) {
+              state[pageNum][uuid] = highlight;
+            } else {
+              state[pageNum] = { [uuid]: highlight };
+            }
+          }
+        })
+      );
+      signals.activeCommentThread[1](-1);
     } finally {
-      setDisablePageViewClick(false);
+      signals.disablePageViewClick[1](false);
     }
   });
 }

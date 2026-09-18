@@ -225,6 +225,14 @@ impl SoupService for MockSoup {
 struct MockEmail;
 
 impl EmailService for MockEmail {
+    async fn mark_thread_unread(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn get_email_thread_previews(
         &self,
         _req: email::domain::models::GetEmailsRequest,
@@ -667,6 +675,14 @@ struct MockEmailLinkResult {
 }
 
 impl EmailService for MockEmailLinkResult {
+    async fn mark_thread_unread(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: uuid::Uuid,
+    ) -> Result<(), EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
     async fn get_email_thread_previews(
         &self,
         _req: email::domain::models::GetEmailsRequest,

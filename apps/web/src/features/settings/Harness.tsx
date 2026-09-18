@@ -1,6 +1,9 @@
+import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { useCodexAgentsAccess } from '@core/codex/flag';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';
+import { claudeCloud } from '@core/constant/featureFlags';
 import { ThrownResultError } from '@core/util/result';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
@@ -20,9 +23,11 @@ import {
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
 import { Button, Dialog, Panel } from '@ui';
-import { createSignal, For, type JSX, onMount, Show } from 'solid-js';
+import { createSignal, For, onMount, Show } from 'solid-js';
+import { ClaudeConnection } from '../claude-connection/claude-connection';
+import { CodexHarness } from './codex/views/CodexHarness';
 import { HarnessPairingDialog } from './HarnessPairingDialog';
-import { ConnectAction, StatusDot } from './integration-ui';
+import { ConnectAction, HarnessIcon, StatusDot } from './integration-ui';
 import { SettingsCard, SettingsPage } from './primitives';
 
 const BYOA_DOCS_URL = 'https://docs.macro.com/AI/bring-your-own';
@@ -40,6 +45,8 @@ function lastConnectedText(harness: RegisteredHarness): string {
 
 /** Settings UI for choosing and configuring the available agent harnesses. */
 export function Harness() {
+  const canUseCodex = useCodexAgentsAccess();
+  const claudeCloudFlag = useFeatureFlag(claudeCloud);
   const [cursorApiKey, setCursorApiKey] = createSignal('');
   const cursorStatus = useCursorApiKeyStatusQuery();
   const saveCursorApiKey = useSaveCursorApiKey();
@@ -173,6 +180,10 @@ export function Harness() {
             </p>
           </div>
         </section>
+
+        <Show when={claudeCloudFlag().enabled}>
+          <ClaudeConnection />
+        </Show>
 
         <section class="flex gap-4 px-6 py-5">
           <HarnessIcon>
@@ -359,6 +370,10 @@ export function Harness() {
           </div>
         </section>
 
+        <Show when={canUseCodex()}>
+          <CodexHarness />
+        </Show>
+
         <section class="flex gap-4 px-6 py-5">
           <HarnessIcon>
             <TerminalWindowIcon />
@@ -532,13 +547,5 @@ function HarnessRemoveDialog(props: {
         </Panel.Footer>
       </Panel>
     </Dialog>
-  );
-}
-
-function HarnessIcon(props: { children: JSX.Element }) {
-  return (
-    <div class="flex size-9 shrink-0 items-center justify-center rounded-lg bg-ink/4 text-ink-muted [&_svg]:size-5">
-      {props.children}
-    </div>
   );
 }

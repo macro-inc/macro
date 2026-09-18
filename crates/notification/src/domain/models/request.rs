@@ -32,6 +32,7 @@ pub enum NotificationCategory {
     Github,
     Reminder,
     Calendar,
+    Agent,
 }
 
 /// Request to send a notification.
@@ -58,6 +59,14 @@ where
 {
     /// Convert this builder into a full request with optional delivery customizers.
     pub fn into_request(self) -> SendNotificationRequest<'a, T, ()> {
+        self.into_request_with_id(Uuid::now_v7())
+    }
+
+    /// As [`Self::into_request`], with the notification id chosen by the
+    /// caller. Creating a notification is idempotent on its id, so a producer
+    /// that derives the id from its own event can be redelivered that event
+    /// without notifying twice.
+    pub fn into_request_with_id(self, notification_id: Uuid) -> SendNotificationRequest<'a, T, ()> {
         let SendNotificationRequestBuilder {
             notification_entity,
             secondary_notification_entity,
@@ -66,7 +75,7 @@ where
             recipient_ids,
         } = self;
         SendNotificationRequest {
-            uuid_to_write: Uuid::now_v7(),
+            uuid_to_write: notification_id,
             req: SendNotificationRequestBuilder {
                 notification_entity,
                 secondary_notification_entity,

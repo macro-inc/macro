@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO migrated_comment_id (comment_id, message_id, document_id)\n             SELECT * FROM UNNEST($1::bigint[], $2::uuid[], $3::text[])",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Int8Array",
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "74275afbf7e9f3348efbbd7d8c7eb565faee20148c38b8ca42582c02628af0e7"
+}

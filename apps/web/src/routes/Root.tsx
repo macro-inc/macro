@@ -6,6 +6,9 @@ import { MobileAuthWelcome } from '@app/features/auth/mobile-onboarding/MobileAu
 import { MobileOnboarding } from '@app/features/auth/mobile-onboarding/MobileOnboarding';
 import { setCookie } from '@app/features/auth/Shared';
 import { ChannelInviteAcceptance } from '@app/features/channel-invitations/ChannelInviteAcceptance';
+import { InviteLinksPortal } from '@app/features/gtm-invite/InviteLinksPortal';
+import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
+import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
@@ -356,6 +359,16 @@ const ROUTES: RouteDefinition[] = [
     component: SetupRoute,
   },
   {
+    // A personal GTM invite link (`?token=`): welcome page, then signup.
+    path: '/invite',
+    component: InviteWelcome,
+  },
+  {
+    // Macro staff only: create and track GTM invite links.
+    path: '/internal/invite-links',
+    component: InviteLinksPortal,
+  },
+  {
     path: '/team-invite',
     component: TeamInviteAcceptance,
   },
@@ -420,6 +433,10 @@ function UserInfoSideEffects() {
   const posthog = usePosthog();
 
   useSyncLoginCookie();
+
+  // A signup that started from a GTM invite link finishes its attribution on
+  // the first authenticated load (the welcome page parked the token).
+  usePendingInviteRedemption();
 
   // Set user info for observability and analytics
   const userInfo = useUserInfo();

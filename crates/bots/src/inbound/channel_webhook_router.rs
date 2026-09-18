@@ -18,10 +18,6 @@ use axum::{
     response::IntoResponse,
     routing::post,
 };
-use channels::domain::{
-    models::{PostMessageRequest, PostMessageResponse, Sender},
-    ports::{ChannelMutationErr, ChannelService},
-};
 use entity_access::{
     domain::{
         models::{EntityAccessReceipt, MemberParticipantRole},
@@ -34,49 +30,28 @@ use macro_authorization::{
     MacroAuthorizationService, MacroAuthorizationState, OptionalMacroAuthorizationExtractor,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::{
+    api::MessageCommands,
+    models::{MessageAttribution, PostMessage},
+    ports::MessageError,
+    service::MessageWrite,
+};
 use model_error_response::ErrorResponse;
-use std::{future::Future, marker::PhantomData, sync::Arc};
+use std::{marker::PhantomData, sync::Arc};
 use uuid::Uuid;
 
 /// Header used to authenticate channel bot webhook requests.
 pub const CHANNEL_BOT_TOKEN_HEADER: &str = "x-macro-channel-bot-token";
 
-/// Narrow adapter for posting channel messages from bot webhooks.
-pub trait ChannelMessagePoster: Clone + Send + Sync + 'static {
-    /// Post a message to a channel.
-    fn post_message(
-        &self,
-        actor: Sender,
-        channel_id: Uuid,
-        req: PostMessageRequest,
-    ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send;
-}
-
-impl<S> ChannelMessagePoster for Arc<S>
-where
-    S: ChannelService,
-{
-    fn post_message(
-        &self,
-        actor: Sender,
-        channel_id: Uuid,
-        req: PostMessageRequest,
-    ) -> impl Future<Output = Result<PostMessageResponse, ChannelMutationErr>> + Send {
-        ChannelService::post_message(self.as_ref(), actor, channel_id, req)
-    }
-}
-
 /// State for the channel bot webhook router.
-pub struct ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth> {
+pub struct ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth> {
     bot_service: Arc<BotSvc>,
-    channel_poster: Arc<ChannelPoster>,
+    channel_poster: Arc<dyn MessageCommands>,
     access_service: Arc<AccessSvc>,
     authorization_state: MacroAuthorizationState<Auth>,
 }
 
-impl<BotSvc, ChannelPoster, AccessSvc, Auth> Clone
-    for ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>
-{
+impl<BotSvc, AccessSvc, Auth> Clone for ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth> {
     fn clone(&self) -> Self {
         Self {
             bot_service: self.bot_service.clone(),
@@ -87,47 +62,39 @@ impl<BotSvc, ChannelPoster, AccessSvc, Auth> Clone
     }
 }
 
-impl<BotSvc, ChannelPoster, AccessSvc, Auth>
-    ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>
+impl<BotSvc, AccessSvc, Auth> ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>
 where
     BotSvc: BotService,
-    ChannelPoster: ChannelMessagePoster,
     AccessSvc: EntityAccessService,
 {
     /// Create a router state.
     pub fn new(
         bot_service: BotSvc,
-        channel_poster: ChannelPoster,
+        channel_poster: Arc<dyn MessageCommands>,
         access_service: AccessSvc,
         authorization_state: MacroAuthorizationState<Auth>,
     ) -> Self {
         Self {
             bot_service: Arc::new(bot_service),
-            channel_poster: Arc::new(channel_poster),
+            channel_poster,
             access_service: Arc::new(access_service),
             authorization_state,
         }
     }
 }
 
-impl<BotSvc, ChannelPoster, AccessSvc, Auth>
-    FromRef<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>
+impl<BotSvc, AccessSvc, Auth> FromRef<ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>>
     for Arc<AccessSvc>
 {
-    fn from_ref(
-        state: &ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>,
-    ) -> Self {
+    fn from_ref(state: &ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>) -> Self {
         state.access_service.clone()
     }
 }
 
-impl<BotSvc, ChannelPoster, AccessSvc, Auth>
-    FromRef<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>
+impl<BotSvc, AccessSvc, Auth> FromRef<ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>>
     for MacroAuthorizationState<Auth>
 {
-    fn from_ref(
-        state: &ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>,
-    ) -> Self {
+    fn from_ref(state: &ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>) -> Self {
         state.authorization_state.clone()
     }
 }
@@ -174,12 +141,11 @@ pub struct ChannelPath {
 }
 
 /// Create the authenticated channel-scoped bot creation router.
-pub fn channel_scoped_bot_router<BotSvc, ChannelPoster, AccessSvc, Auth, T>(
-    state: ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>,
+pub fn channel_scoped_bot_router<BotSvc, AccessSvc, Auth, T>(
+    state: ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>,
 ) -> Router<T>
 where
     BotSvc: BotService,
-    ChannelPoster: ChannelMessagePoster,
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
     T: Send + Sync,
@@ -187,18 +153,17 @@ where
     Router::new()
         .route(
             "/channels/{channel_id}/bots/scoped",
-            post(create_channel_scoped_bot_handler::<BotSvc, ChannelPoster, AccessSvc, Auth>),
+            post(create_channel_scoped_bot_handler::<BotSvc, AccessSvc, Auth>),
         )
         .with_state(state)
 }
 
 /// Create the unauthenticated channel bot webhook router.
-pub fn channel_bot_webhook_router<BotSvc, ChannelPoster, AccessSvc, Auth, T>(
-    state: ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>,
+pub fn channel_bot_webhook_router<BotSvc, AccessSvc, Auth, T>(
+    state: ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>,
 ) -> Router<T>
 where
     BotSvc: BotService,
-    ChannelPoster: ChannelMessagePoster,
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
     T: Send + Sync,
@@ -206,7 +171,7 @@ where
     Router::new()
         .route(
             "/channels/{channel_id}/webhook",
-            post(post_channel_webhook_handler::<BotSvc, ChannelPoster, AccessSvc, Auth>),
+            post(post_channel_webhook_handler::<BotSvc, AccessSvc, Auth>),
         )
         .with_state(state)
 }
@@ -239,15 +204,14 @@ fn caller_from_receipt(
     )
 )]
 #[tracing::instrument(err, skip_all)]
-pub async fn create_channel_scoped_bot_handler<BotSvc, ChannelPoster, AccessSvc, Auth>(
-    State(state): State<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>,
+pub async fn create_channel_scoped_bot_handler<BotSvc, AccessSvc, Auth>(
+    State(state): State<ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>>,
     access: ChannelAccessLevelExtractor<MemberParticipantRole, AccessSvc, Auth>,
     Path(path): Path<ChannelPath>,
     Json(req): Json<CreateChannelScopedBotRequest>,
 ) -> Result<(StatusCode, Json<CreateChannelScopedBotResponse>), ChannelBotWebhookHandlerErr>
 where
     BotSvc: BotService,
-    ChannelPoster: ChannelMessagePoster,
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
@@ -294,8 +258,8 @@ where
     private_interfaces,
     reason = "the public handler is referenced by DSS OpenAPI while its route-specific extractor stays private"
 )]
-pub async fn post_channel_webhook_handler<BotSvc, ChannelPoster, AccessSvc, Auth>(
-    State(state): State<ChannelBotWebhookRouterState<BotSvc, ChannelPoster, AccessSvc, Auth>>,
+pub async fn post_channel_webhook_handler<BotSvc, AccessSvc, Auth>(
+    State(state): State<ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>>,
     Path(path): Path<ChannelPath>,
     ChannelWebhookAuthorizationExtractor {
         authentication: preferred_authentication,
@@ -306,48 +270,29 @@ pub async fn post_channel_webhook_handler<BotSvc, ChannelPoster, AccessSvc, Auth
 ) -> Result<(StatusCode, Json<ChannelWebhookResponse>), ChannelBotWebhookHandlerErr>
 where
     BotSvc: BotService,
-    ChannelPoster: ChannelMessagePoster,
     AccessSvc: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
     tracing::Span::current().record("channel_id", tracing::field::display(path.channel_id));
 
     let content = parse_webhook_content(&headers, body)?;
-    let bot_id = match preferred_authentication {
-        Some(authentication) => {
-            record_preferred_bot(&authentication);
-            state
-                .bot_service
-                .ensure_bot_in_channel(authentication.bot_id, path.channel_id)
-                .await?;
-            authentication.bot_id
-        }
-        None => {
-            let bot_auth_token = channel_bot_token(&headers)?;
-            let authenticated = state
-                .bot_service
-                .authenticate_channel_token(path.channel_id, bot_auth_token)
-                .await?;
-            tracing::Span::current()
-                .record("bot_id", tracing::field::display(authenticated.bot_id));
-            authenticated.bot_id
-        }
-    };
+    let access =
+        webhook_access(&state, path.channel_id, preferred_authentication, &headers).await?;
 
-    let response = state
+    let message = state
         .channel_poster
-        .post_message(
-            Sender::new_from_bot(bot_id),
-            path.channel_id,
-            PostMessageRequest {
+        .post(
+            access,
+            PostMessage {
+                // External webhook bot posting on its own; no triggering user.
+                attribution: MessageAttribution::Unprompted,
+                notification_policy: Default::default(),
                 content,
-                mentions: Vec::new(),
                 thread_id: None,
+                anchor: None,
+                mentions: Vec::new(),
                 attachments: Vec::new(),
                 nonce: None,
-                notification_policy: Default::default(),
-                // External webhook bot posting on its own; no triggering user.
-                triggered_by: None,
             },
         )
         .await?;
@@ -355,7 +300,7 @@ where
     Ok((
         StatusCode::OK,
         Json(ChannelWebhookResponse {
-            message_id: response.id,
+            message_id: message.id.to_string(),
         }),
     ))
 }
@@ -436,27 +381,25 @@ pub enum ChannelBotWebhookHandlerErr {
     /// Bot service error.
     #[error(transparent)]
     Bot(#[from] BotError),
-    /// Channel mutation error.
+    /// Shared message error.
     #[error(transparent)]
-    Channel(#[from] ChannelMutationErr),
+    Message(#[from] MessageError),
 }
 
 impl IntoResponse for ChannelBotWebhookHandlerErr {
     fn into_response(self) -> axum::response::Response {
         let status = match &self {
-            Self::BadRequest(_) | Self::Bot(BotError::BadRequest(_)) => StatusCode::BAD_REQUEST,
-            Self::Bot(BotError::Unauthorized)
-            | Self::Channel(ChannelMutationErr::Unauthorized(_)) => StatusCode::UNAUTHORIZED,
-            Self::Channel(ChannelMutationErr::Forbidden(_)) => StatusCode::FORBIDDEN,
-            Self::Bot(BotError::NotFound(_)) | Self::Channel(ChannelMutationErr::NotFound(_)) => {
+            Self::BadRequest(_)
+            | Self::Bot(BotError::BadRequest(_))
+            | Self::Message(MessageError::Invalid(_)) => StatusCode::BAD_REQUEST,
+            Self::Bot(BotError::Unauthorized) => StatusCode::UNAUTHORIZED,
+            Self::Message(MessageError::Forbidden) => StatusCode::FORBIDDEN,
+            Self::Bot(BotError::NotFound(_)) | Self::Message(MessageError::NotFound) => {
                 StatusCode::NOT_FOUND
             }
-            Self::Channel(ChannelMutationErr::BadRequest(_)) => StatusCode::BAD_REQUEST,
-            Self::Bot(BotError::Repo(_))
-            | Self::Channel(ChannelMutationErr::Repo(_))
-            | Self::Channel(ChannelMutationErr::Gateway(_))
-            | Self::Channel(ChannelMutationErr::Notification(_))
-            | Self::Channel(ChannelMutationErr::Contacts(_)) => StatusCode::INTERNAL_SERVER_ERROR,
+            Self::Bot(BotError::Repo(_)) | Self::Message(MessageError::Repository(_)) => {
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         };
 
         if status == StatusCode::INTERNAL_SERVER_ERROR {
@@ -471,4 +414,34 @@ impl IntoResponse for ChannelBotWebhookHandlerErr {
         )
             .into_response()
     }
+}
+
+/// Capability for a bot that authenticated with a preferred bot token or a legacy
+/// channel token. Both paths authorize the post by the bot's own channel
+/// membership; a verified acting user never becomes the message's attribution.
+async fn webhook_access<BotSvc: BotService, AccessSvc, Auth>(
+    state: &ChannelBotWebhookRouterState<BotSvc, AccessSvc, Auth>,
+    channel_id: Uuid,
+    preferred: Option<BotAuthentication>,
+    headers: &HeaderMap,
+) -> Result<EntityAccessReceipt<MessageWrite>, ChannelBotWebhookHandlerErr> {
+    let bot_id = match preferred {
+        Some(authentication) => {
+            record_preferred_bot(&authentication);
+            authentication.bot_id
+        }
+        None => {
+            let authenticated = state
+                .bot_service
+                .authenticate_channel_token(channel_id, channel_bot_token(headers)?)
+                .await?;
+            tracing::Span::current()
+                .record("bot_id", tracing::field::display(authenticated.bot_id));
+            authenticated.bot_id
+        }
+    };
+    Ok(state
+        .bot_service
+        .channel_message_access(bot_id, channel_id)
+        .await?)
 }

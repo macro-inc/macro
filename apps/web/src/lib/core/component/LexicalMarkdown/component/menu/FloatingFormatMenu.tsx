@@ -8,10 +8,10 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { isMobile } from '@core/mobile/isMobile';
 import { debouncedDependent } from '@core/util/debounce';
-import DotsThreeLarge from '@icon/dots-three-large.svg';
 import CaretDown from '@phosphor/caret-down.svg';
 import TextCode from '@phosphor/code.svg';
 import CodeBlock from '@phosphor/code-block.svg';
+import DotsThreeLarge from '@phosphor/dots-three.svg';
 import BrokenLinkIcon from '@phosphor/link-break.svg';
 import LinkIcon from '@phosphor/link-simple.svg';
 import ListBullets from '@phosphor/list-bullets.svg';
@@ -370,7 +370,7 @@ export function FloatingFormatMenu(props: {
       <ScopedPortal scope={props.portalScope}>
         <div
           ref={setMenuRef}
-          class="fixed top-0 left-0 z-highlight-menu w-fit"
+          class="fixed top-0 left-0 z-action-menu w-fit"
           use:floatWithSelection={{
             selection: domSelection(),
             reactiveOnContainer: editor.getRootElement(),

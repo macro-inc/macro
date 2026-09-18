@@ -5,7 +5,6 @@ type ActivityDirection = 'start' | 'end';
 export function useOffscreenActivity(options: {
   scrollRoot: Accessor<HTMLDivElement | undefined>;
   targetId: Accessor<string | undefined>;
-  onTargetVisible?: (targetId: string) => void;
 }) {
   const [direction, setDirection] = createSignal<ActivityDirection>();
   let measuredTargetId: string | undefined;
@@ -36,9 +35,7 @@ export function useOffscreenActivity(options: {
       targetBounds.top < rootBounds.bottom;
 
     if (targetIsVisible || root.scrollHeight <= root.clientHeight + 1) {
-      const wasOffscreen = direction() !== undefined;
       setDirection(undefined);
-      if (wasOffscreen) options.onTargetVisible?.(targetId);
       return;
     }
 

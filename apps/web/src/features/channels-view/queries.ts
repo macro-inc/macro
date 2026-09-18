@@ -12,7 +12,11 @@ import {
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { type Accessor, createMemo } from 'solid-js';
-import type { ChannelsQueryScope } from './types';
+import type {
+  ChannelListSort,
+  ChannelsGroup,
+  ChannelsQueryScope,
+} from './types';
 import { channelHasMessages, isDirectMessage } from './utils';
 
 const CHANNELS_QUERY_PARAMS = {
@@ -27,7 +31,9 @@ type ChannelsQueryDefinition = {
 
 export type ChannelsDataSource = ListDataSource<ChannelEntity>;
 
-export type ChannelsSources = Record<ChannelsQueryScope, ChannelsDataSource>;
+export type ChannelsSourceScope = ChannelsQueryScope | 'search';
+
+export type ChannelsSources = Record<ChannelsSourceScope, ChannelsDataSource>;
 
 export const CHANNELS_QUERY_DEFINITIONS = {
   recents: {
@@ -58,21 +64,32 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     }),
     matches: isDirectMessage,
   },
-} satisfies Record<ChannelsQueryScope, ChannelsQueryDefinition>;
+  search: {
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
+    filters: defineQueryFilters({
+      include: { channelIsParticipant: [true] },
+    }),
+    matches: () => true,
+  },
+} satisfies Record<ChannelsSourceScope, ChannelsQueryDefinition>;
 
 export function channelsQueryArgs(
-  scope: ChannelsQueryScope
+  scope: ChannelsSourceScope,
+  sortMethod?: ChannelListSort
 ): SoupAstItemsQueryArgs {
   const definition = CHANNELS_QUERY_DEFINITIONS[scope];
 
   return {
-    params: definition.params,
+    params: {
+      ...definition.params,
+      sort_method: sortMethod ?? definition.params.sort_method,
+    },
     body: compileToAst(queryStateFrom(definition.filters)),
   };
 }
 
 export function filterChannelsForScope(
-  scope: ChannelsQueryScope,
+  scope: ChannelsSourceScope,
   channels: readonly ChannelEntity[]
 ): ChannelEntity[] {
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
@@ -128,11 +145,12 @@ export function resolveSelectedChannel(
 }
 
 function useChannelsDataSource(
-  scope: ChannelsQueryScope,
-  enabled: Accessor<boolean>
+  scope: ChannelsSourceScope,
+  enabled: Accessor<boolean>,
+  sortMethod: Accessor<ChannelListSort | undefined>
 ): ChannelsDataSource {
   const query = useSoupAstItemsQuery(
-    () => channelsQueryArgs(scope),
+    () => channelsQueryArgs(scope, sortMethod()),
     () => ({ enabled: enabled(), staleTime: 30_000 })
   );
   const items = createMemo<ChannelEntity[]>((previous) => {
@@ -143,11 +161,20 @@ function useChannelsDataSource(
       (query.data?.entities ?? []).filter(isChannelEntity)
     );
 
-    if (scope !== 'direct_messages') return channels;
+    if (scope === 'recents') return channels;
+
+    const activeSort =
+      sortMethod() ?? CHANNELS_QUERY_DEFINITIONS[scope].params.sort_method;
+    const sortDate = (channel: ChannelEntity) =>
+      activeSort === 'created_at'
+        ? channel.createdAt
+        : activeSort === 'viewed_at'
+          ? channel.viewedAt
+          : channel.updatedAt;
 
     return channels
       .slice()
-      .sort((left, right) => compareDateDesc(left.updatedAt, right.updatedAt));
+      .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
   }, []);
 
   return {
@@ -172,14 +199,30 @@ function useChannelsDataSource(
 }
 
 export function useChannelsSources(
-  enabled: (scope: ChannelsQueryScope) => boolean
+  enabled: (scope: ChannelsSourceScope) => boolean,
+  sortBy: (group: ChannelsGroup) => ChannelListSort
 ): ChannelsSources {
   return {
-    channels: useChannelsDataSource('channels', () => enabled('channels')),
-    direct_messages: useChannelsDataSource('direct_messages', () =>
-      enabled('direct_messages')
+    channels: useChannelsDataSource(
+      'channels',
+      () => enabled('channels'),
+      () => sortBy('channels')
     ),
-    recents: useChannelsDataSource('recents', () => enabled('recents')),
+    direct_messages: useChannelsDataSource(
+      'direct_messages',
+      () => enabled('direct_messages'),
+      () => sortBy('direct_messages')
+    ),
+    recents: useChannelsDataSource(
+      'recents',
+      () => enabled('recents'),
+      () => undefined
+    ),
+    search: useChannelsDataSource(
+      'search',
+      () => enabled('search'),
+      () => undefined
+    ),
   };
 }
 

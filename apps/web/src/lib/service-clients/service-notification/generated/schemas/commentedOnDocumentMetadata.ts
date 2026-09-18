@@ -4,26 +4,31 @@
  * notification_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { CommentedOnDocumentMetadataFileType } from './commentedOnDocumentMetadataFileType';
+import type { CommentedOnDocumentMetadataSenderDisplayName } from './commentedOnDocumentMetadataSenderDisplayName';
 import type { CommentedOnDocumentMetadataSenderProfilePictureUrl } from './commentedOnDocumentMetadataSenderProfilePictureUrl';
 import type { CommentedOnDocumentMetadataSubType } from './commentedOnDocumentMetadataSubType';
+import type { CommentRef } from './commentRef';
 
 /**
  * Notification sent when someone comments on a document the user owns.
  */
 export interface CommentedOnDocumentMetadata {
   /** the comment id */
-  commentId: number;
+  commentId: CommentRef;
   /** The name of the document. */
   documentName: string;
   /** The file type of the document. */
   fileType?: CommentedOnDocumentMetadataFileType;
   /** The owner of the document. */
   owner: string;
+  /** Public bot name when the author is an agent rather than a Macro user. */
+  senderDisplayName?: CommentedOnDocumentMetadataSenderDisplayName;
   senderProfilePictureUrl?: CommentedOnDocumentMetadataSenderProfilePictureUrl;
   subType?: CommentedOnDocumentMetadataSubType;
   /** the text of the comment */
   text: string;
   /** the thread id */
-  threadId: number;
+  threadId: CommentRef;
 }

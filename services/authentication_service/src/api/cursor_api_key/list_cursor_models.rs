@@ -81,7 +81,7 @@ pub async fn handler(
 
     let client = CursorClient::new(CursorConfig {
         api_key: ApiKey::new(key.expose()),
-        base_url: cursor_cloud_agents::api::CURSOR_API_BASE_URL.to_owned(),
+        base_url: cursor_cloud_agents::api::cursor_api_base_url(),
         model: None,
         starting_ref: "main".to_owned(),
         record_dir: None,

@@ -1,7 +1,14 @@
+import { createTauriCacheHost } from '@graphql-cache/host/tauri-host';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { parseCacheRevision } from '@graphql-cache/protocol';
 import { describe, expect, it, vi } from 'vitest';
 import { createSharedMailBackfillFetcher } from './shared-mail-backfill';
+
+const invokeMock = vi.hoisted(() => vi.fn());
+vi.mock('@tauri-apps/api/core', () => ({ invoke: invokeMock }));
+vi.mock('@tauri-apps/api/event', () => ({
+  listen: vi.fn(async () => () => {}),
+}));
 
 vi.mock('./graphql-soup', () => ({
   getGraphqlSoupCacheHost: vi.fn(),
@@ -29,6 +36,61 @@ function host() {
 const input = { initial: { emailView: 'ALL' as const } };
 
 describe('Shared Mail scope refresh', () => {
+  it('continues Shared hydration when an OTA frontend runs on a native binary without entity filtering', async () => {
+    invokeMock.mockReset();
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_init') return null;
+      if (command === 'graphql_cache_read')
+        return { kind: 'hit', data: { user: { id: 'viewer' } } };
+      if (command === 'graphql_cache_entity_filter')
+        throw new Error('Command graphql_cache_entity_filter not found');
+      throw new Error(`Unexpected native command: ${command}`);
+    });
+    const cache = createTauriCacheHost({ scope: 'legacy-ios' });
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce({
+        nextCursor: 'network-next',
+        entityIds: ['first'],
+      })
+      .mockResolvedValueOnce({ nextCursor: null, entityIds: ['second'] });
+    try {
+      const scan = await createSharedMailBackfillFetcher(
+        'viewer',
+        cache,
+        fetch
+      );
+      await expect(scan(input)).resolves.toEqual({
+        nextCursor: 'network-next',
+        entityIds: ['first'],
+      });
+      const continuation = { continuation: { cursor: 'network-next' } };
+      await expect(scan(continuation)).resolves.toEqual({
+        nextCursor: null,
+        entityIds: ['second'],
+      });
+      expect(fetch.mock.calls).toEqual([
+        [input, undefined],
+        [continuation, undefined],
+      ]);
+      await createSharedMailBackfillFetcher('viewer', cache, fetch);
+      expect(
+        invokeMock.mock.calls.filter(
+          ([command]) => command === 'graphql_cache_entity_filter'
+        )
+      ).toHaveLength(1);
+      expect(
+        invokeMock.mock.calls.some(
+          ([command]) =>
+            command === 'graphql_cache_invalidate' ||
+            command === 'graphql_cache_delete_records'
+        )
+      ).toBe(false);
+    } finally {
+      cache.dispose();
+    }
+  });
+
   it('invalidates missing old proof only after a complete successful scan', async () => {
     const cache = host();
     const fetch = vi

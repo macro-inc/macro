@@ -27,6 +27,7 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
+import { MagicChipPullRequest } from './MagicChipPullRequest';
 import {
   type MagicChipActivity,
   type MagicChipHeader,
@@ -60,8 +61,6 @@ function isTextEntry(target: EventTarget | null) {
 
 /** What the chip's answer to a question does. */
 export type MagicChipAnswer = {
-  /** An answer is on the wire; the buttons wait. */
-  answering: boolean;
   respond: (answer: ElicitationAnswer) => Promise<boolean>;
 };
 
@@ -179,8 +178,8 @@ const AskingActions: Component<ChipAsking & { onOpen?: () => void }> = (
 
 /**
  * The chip's top row: who is answering (`Macro Agent · model`), what the turn is
- * doing, and the way into the session. The whole label opens the session,
- * as does the arrow.
+ * doing, the pull request the session opened once there is one, and the way
+ * into the session. The whole label opens the session, as does the arrow.
  */
 const ChipHeader: Component<{
   header?: MagicChipHeader;
@@ -196,7 +195,7 @@ const ChipHeader: Component<{
   >
     <button
       type="button"
-      class="flex min-w-0 flex-1 items-center gap-1.5 rounded-md text-left text-ink-extra-muted"
+      class="flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md text-left text-ink-extra-muted"
       classList={{ 'hover:text-ink': Boolean(props.onOpen) }}
       data-message-reply-preview={props.preview}
       disabled={!props.onOpen}
@@ -228,6 +227,13 @@ const ChipHeader: Component<{
       </Show>
       <ActivityText activity={props.status} />
     </button>
+    <Show when={props.header?.pullRequestUrl}>
+      {(url) => (
+        <div class="flex min-w-0 max-w-[40%] justify-end overflow-hidden">
+          <MagicChipPullRequest url={url()} />
+        </div>
+      )}
+    </Show>
     <Show when={props.onCollapse}>
       <Button
         variant="ghost"
@@ -307,9 +313,7 @@ const Question: Component<ChipAsking> = (props) => (
               tool={review().tool}
               toolCall={review().toolCall}
               review={{
-                canAnswer: () => props.asking.canAnswer,
-                ownerName: () => props.asking.ownerName,
-                answering: () => props.locked && props.asking.canAnswer,
+                canAnswer: () => props.asking.canAnswer && !props.locked,
                 respond: props.respond,
               }}
             />
@@ -369,8 +373,7 @@ export const MagicChipView: Component<{
     const current = asking();
     const state = question();
     if (!current || !state) return undefined;
-    const locked =
-      !current.canAnswer || !props.answer || props.answer.answering;
+    const locked = !current.canAnswer || !props.answer;
     return {
       asking: current,
       question: state,

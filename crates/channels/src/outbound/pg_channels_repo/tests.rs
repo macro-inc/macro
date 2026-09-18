@@ -558,6 +558,60 @@ async fn patch_channel_rename_advances_updated_at(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn patch_channel_rename_allows_a_member(pool: Pool<Postgres>) {
+    let repo = repo(pool.clone());
+
+    repo.patch_channel(
+        CH1,
+        USER_C.to_string(),
+        None,
+        PatchChannelRequest {
+            channel_name: Some("member-renamed".to_string()),
+            convert_to_team_channel: None,
+            auto_join_team: None,
+        },
+    )
+    .await
+    .unwrap();
+
+    let after = sqlx::query!("SELECT name FROM comms_channels WHERE id = $1", CH1)
+        .fetch_one(&pool)
+        .await
+        .unwrap();
+    assert_eq!(after.name.as_deref(), Some("member-renamed"));
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn patch_channel_settings_reject_a_member(pool: Pool<Postgres>) {
+    let repo = repo(pool);
+
+    let err = repo
+        .patch_channel(
+            CH1,
+            USER_C.to_string(),
+            None,
+            PatchChannelRequest {
+                channel_name: None,
+                convert_to_team_channel: None,
+                auto_join_team: Some(false),
+            },
+        )
+        .await
+        .expect_err("member cannot change auto-join");
+
+    assert!(
+        err.to_string()
+            .contains("to patch channel settings you must be an admin or owner")
+    );
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn patch_channel_converts_to_team_and_updates_auto_join_members(pool: Pool<Postgres>) {
     let repo = repo(pool.clone());
     let user_id = macro_user_id(TEAM_OWNER_A);
@@ -3052,6 +3106,76 @@ async fn attachment_references_returns_generic_reference(
     fixtures(path = "../../../fixtures", scripts("channels_repo")),
     migrator = "MACRO_DB_MIGRATIONS"
 )]
+async fn attachment_references_collapse_repeat_mentions_from_one_source(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // src-doc already mentions doc-generic at 2024-01-03; a second mention of the
+    // same pair must not surface as a second reference.
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_entity_mentions
+            (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at)
+        VALUES
+            ('00000000-0000-0000-0000-00000000e0a1'::uuid, 'doc', 'src-doc',
+             'document', 'doc-generic', 'macro|user-a@test.com', '2024-01-05 00:00:00+00')
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    let refs = repo(pool)
+        .get_attachment_references("document", "doc-generic", NON_MEMBER)
+        .await?;
+
+    assert_eq!(refs.len(), 1);
+    let AttachmentEntityReference::Generic(generic) = &refs[0] else {
+        anyhow::bail!("expected a generic reference");
+    };
+    assert_eq!(generic.source_entity_id, "src-doc");
+    assert_eq!(generic.created_at.to_rfc3339(), "2024-01-05T00:00:00+00:00");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn attachment_references_collapse_alias_typed_mentions_from_one_source(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // The same email thread recorded once as `thread` and once as `email` — both
+    // match the thread lookup aliases, and both come from one source.
+    sqlx::query!(
+        r#"
+        INSERT INTO comms_entity_mentions
+            (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id, created_at)
+        VALUES
+            ('00000000-0000-0000-0000-00000000e0b1'::uuid, 'document', 'task-1',
+             'thread', 'thread-9', 'macro|user-a@test.com', '2024-01-05 00:00:00+00'),
+            ('00000000-0000-0000-0000-00000000e0b2'::uuid, 'document', 'task-1',
+             'email', 'thread-9', 'macro|user-a@test.com', '2024-01-06 00:00:00+00')
+        "#,
+    )
+    .execute(&pool)
+    .await?;
+
+    let refs = repo(pool)
+        .get_attachment_references("email", "thread-9", NON_MEMBER)
+        .await?;
+
+    assert_eq!(refs.len(), 1);
+    let AttachmentEntityReference::Generic(generic) = &refs[0] else {
+        anyhow::bail!("expected a generic reference");
+    };
+    assert_eq!(generic.source_entity_id, "task-1");
+    assert_eq!(generic.created_at.to_rfc3339(), "2024-01-06T00:00:00+00:00");
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
 async fn attachment_references_merges_channel_and_generic_newest_first(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {
@@ -3234,4 +3358,22 @@ async fn delete_channel_cascades_contacts_backfill_outbox_rows(pool: Pool<Postgr
     .unwrap()
     .unwrap();
     assert_eq!(outbox_count, 0);
+}
+
+#[sqlx::test(
+    fixtures(path = "../../../fixtures", scripts("channels_repo")),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn channel_picture_round_trips_through_batched_previews(pool: Pool<Postgres>) {
+    let repo = repo(pool);
+    for picture in [Some(Uuid::new_v4()), Some(Uuid::new_v4()), None] {
+        repo.set_channel_picture(CH1, picture).await.unwrap();
+        let previews = repo
+            .batch_get_channel_previews(&[CH1.to_string()], USER_A, None)
+            .await
+            .unwrap();
+        assert_eq!(previews.len(), 1);
+        assert_eq!(previews[0].profile_picture_id, picture);
+        assert!(previews[0].has_access);
+    }
 }

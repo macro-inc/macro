@@ -78,15 +78,13 @@ export function MessageEditorContent(props: MessageEditorContentProps) {
           props.messageEditor.save(props.message, nextSnapshot)
         }
       >
-        <Input.Actions>
-          <Input.Actions.Left>
-            <Input.ToggleFormatAction />
-            <Input.DiscardDraftAction />
-          </Input.Actions.Left>
-          <Input.Actions.Right>
-            <Input.SendAction />
-          </Input.Actions.Right>
-        </Input.Actions>
+        <Input.Layout.ActionsLeft>
+          <Input.ToggleFormatAction />
+          <Input.DiscardDraftAction />
+        </Input.Layout.ActionsLeft>
+        <Input.Layout.ActionsRight>
+          <Input.SendAction />
+        </Input.Layout.ActionsRight>
       </ChannelInput>
     </div>
   );

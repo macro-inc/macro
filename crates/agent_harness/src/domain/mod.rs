@@ -2,6 +2,8 @@ pub mod error;
 pub mod model;
 /// Fresh model discovery without creating an agent session.
 pub mod model_load;
+/// Which lifecycle facts become notifications for people, and for whom.
+pub mod notifications;
 /// A shared record of sessions with a command admitted but not yet resolved,
 /// consulted by container managers' idle reapers.
 pub mod pending;
@@ -14,3 +16,9 @@ pub mod sandbox;
 pub mod service;
 /// Policy for turning broker trigger events into harness work.
 pub mod trigger_router;
+
+/// Per-owner hosted Codex runtime authorization.
+pub mod codex;
+
+/// Owner-bound Claude conversation lifecycle.
+pub mod claude;

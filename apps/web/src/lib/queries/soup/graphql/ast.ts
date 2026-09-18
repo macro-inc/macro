@@ -1,3 +1,4 @@
+import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type {
   GraphqlAgentSessionLiteral,
   GraphqlCalendarEventLiteral as GraphqlCalendarEventLiteralInput,
@@ -95,26 +96,76 @@ function compileExpr<TLiteral>(
   ast: RestAst,
   mapLiteral: LiteralMapper<TLiteral>
 ): GraphqlExprInput<TLiteral> {
-  if ('&' in ast) {
+  return compileExprWithLeaf(ast, (literal) => ({
+    literal: mapLiteral(literal),
+  }));
+}
+
+function compileExprWithLeaf<TLiteral>(
+  ast: RestAst,
+  mapLeaf: (literal: unknown) => GraphqlExprInput<TLiteral>
+): GraphqlExprInput<TLiteral> {
+  if ('&' in ast)
     return {
       and: {
-        left: compileExpr(ast['&'][0], mapLiteral),
-        right: compileExpr(ast['&'][1], mapLiteral),
+        left: compileExprWithLeaf(ast['&'][0], mapLeaf),
+        right: compileExprWithLeaf(ast['&'][1], mapLeaf),
       },
     };
-  }
-  if ('|' in ast) {
+  if ('|' in ast)
     return {
       or: {
-        left: compileExpr(ast['|'][0], mapLiteral),
-        right: compileExpr(ast['|'][1], mapLiteral),
+        left: compileExprWithLeaf(ast['|'][0], mapLeaf),
+        right: compileExprWithLeaf(ast['|'][1], mapLeaf),
       },
     };
-  }
-  if ('!' in ast) {
-    return { not: compileExpr(ast['!'], mapLiteral) };
-  }
-  return { literal: mapLiteral(ast.l) };
+  if ('!' in ast) return { not: compileExprWithLeaf(ast['!'], mapLeaf) };
+  return mapLeaf(ast.l);
+}
+
+function mapDocumentPredicate(
+  literal: unknown
+): GraphqlExprInput<GraphqlDocumentLiteralInput> {
+  const [field, value] = singleLiteralField(literal);
+  if (field !== 'fa') return { literal: mapDocumentLiteral(literal) };
+  if (typeof value !== 'string' || !value.startsWith('assoc:'))
+    unsupported('invalid file association');
+  const association = value.slice('assoc:'.length);
+  const types = Object.values(FileTypeMap);
+  if (
+    association !== 'other' &&
+    !types.some((type) => type.app === association)
+  )
+    unsupported(`unknown file association ${association}`);
+  // Match item_filters::ast::document::other. The Files Other category adds
+  // its own image/document/video exclusions on top of this association.
+  const extensions = [
+    ...new Set(
+      types
+        .filter((type) =>
+          association === 'other'
+            ? !['write', 'pdf', 'md', 'canvas', 'code', 'video'].includes(
+                type.app
+              )
+            : type.app === association
+        )
+        .map((type) => type.extension)
+    ),
+  ];
+  const balanced = (
+    start: number,
+    end: number
+  ): GraphqlExprInput<GraphqlDocumentLiteralInput> => {
+    if (end - start === 1) return { literal: { fileType: extensions[start] } };
+    const middle = Math.floor((start + end) / 2);
+    return {
+      or: { left: balanced(start, middle), right: balanced(middle, end) },
+    };
+  };
+  // Balanced expansion keeps large Code/Other sets within the AST depth budget.
+  return extensions.length
+    ? balanced(0, extensions.length)
+    : { literal: { id: '00000000-0000-0000-0000-000000000000' } };
 }
 
 function singleLiteralField(literal: unknown): [string, unknown] {
@@ -150,10 +201,11 @@ function mapString(value: unknown, field: string): string {
   return value;
 }
 
-function mapDocumentSubType(value: unknown): 'TASK' | 'SNIPPET' {
+function mapDocumentSubType(value: unknown): 'TASK' | 'SNIPPET' | 'SKILL' {
   const subType = mapString(value, 'subType');
   if (subType === 'task') return 'TASK';
   if (subType === 'snippet') return 'SNIPPET';
+  if (subType === 'skill') return 'SKILL';
   unsupported(`unsupported document subType ${subType}`);
 }
 
@@ -573,7 +625,7 @@ function makeGraphqlFilters(body: AstBody): GraphqlEntityFilterAstInput {
     );
   }
   if (body.df)
-    filters.documentFilter = compileExpr(body.df, mapDocumentLiteral);
+    filters.documentFilter = compileExprWithLeaf(body.df, mapDocumentPredicate);
   if (body.pf) filters.projectFilter = compileExpr(body.pf, mapProjectLiteral);
   if (body.cf) filters.chatFilter = compileExpr(body.cf, mapChatLiteral);
   if (body.ef)

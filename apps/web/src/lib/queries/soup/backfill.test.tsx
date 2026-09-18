@@ -407,9 +407,31 @@ describe('runSoupBackfills', () => {
     rendered.unmount();
   });
 
+  it.each([13, 14])('does not reuse v%i backfill checkpoints', (version) => {
+    localStorage.setItem(
+      `graphql-soup-backfill:v${version}:user-1:email-filter-metadata`,
+      JSON.stringify({
+        userId: 'user-1',
+        nextCursor: 'old-page',
+        pagesFetched: 3,
+        completed: false,
+        scanStartedAt: '2026-09-01T00:00:00.000Z',
+        updatedSince: null,
+        completedAt: null,
+      })
+    );
+    expect(
+      loadSoupBackfillCheckpoint('user-1', 'email-filter-metadata')
+    ).toMatchObject({
+      nextCursor: null,
+      pagesFetched: 0,
+      completed: false,
+    });
+  });
+
   it('restarts from the beginning when the cache generation is replaced', async () => {
     localStorage.setItem(
-      'graphql-soup-backfill:v11:user-1:core-entities',
+      'graphql-soup-backfill:v15:user-1:core-entities',
       JSON.stringify({
         userId: 'user-1',
         nextCursor: 'stale-cursor',

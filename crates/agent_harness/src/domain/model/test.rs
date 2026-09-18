@@ -9,6 +9,8 @@ fn only_external_runtimes_prompt_by_default() {
     for managed in [
         AgentKind::SandboxedCoder,
         AgentKind::Cursor,
+        AgentKind::CodexCloud,
+        AgentKind::ClaudeCloud,
         AgentKind::InMemory,
     ] {
         assert_eq!(
@@ -38,6 +40,8 @@ fn editable_personas_default_to_prompt_even_on_builtin_runtimes() {
     for kind in [
         AgentKind::InMemory,
         AgentKind::Cursor,
+        AgentKind::CodexCloud,
+        AgentKind::ClaudeCloud,
         AgentKind::SandboxedCoder,
         AgentKind::External,
     ] {
@@ -60,6 +64,8 @@ fn registered_harness_limit_wins_over_runtime_kind_and_persona_choice() {
     for kind in [
         AgentKind::InMemory,
         AgentKind::Cursor,
+        AgentKind::CodexCloud,
+        AgentKind::ClaudeCloud,
         AgentKind::SandboxedCoder,
         AgentKind::External,
     ] {
@@ -72,5 +78,23 @@ fn registered_harness_limit_wins_over_runtime_kind_and_persona_choice() {
             .resolve(),
             PermissionPolicy::Prompt
         );
+    }
+}
+
+/// The URL survives verbatim - it is what a session's row carries, and
+/// what the egress proxy re-reads - and one that names no repository is
+/// refused rather than repaired. The shapes themselves are the parser's
+/// own tests, in `agent_egress`.
+#[test]
+fn a_session_repository_keeps_the_url_it_was_read_from() {
+    let repository =
+        SessionRepository::parse("https://github.com/macro-inc/macro.git").expect("a repo");
+    assert_eq!(
+        repository.as_str(),
+        "https://github.com/macro-inc/macro.git"
+    );
+
+    for url in ["", "https://github.com/macro-inc", "not a url"] {
+        assert_eq!(SessionRepository::parse(url), None, "accepted {url}");
     }
 }

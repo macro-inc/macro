@@ -53,6 +53,10 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('github_pr_mention', () => 'mentioned you in')
       .with('github_pr_review', () => 'reviewed')
       .with('inbox_reauth_required', () => 'needs reconnection')
+      // The bot is the actor: "<bot> finished <session>".
+      .with('agent_session_settled', () => 'finished')
+      .with('agent_session_waiting_for_input', () => 'needs your answer in')
+      .with('agent_session_mentioned', () => 'mentioned you in')
       .exhaustive()
   );
 }
@@ -94,6 +98,16 @@ export function getNotificationTargetName(
         (m) => m.content.title || '(No title)'
       )
       .with({ tag: 'inbox_reauth_required' }, () => undefined)
+      .with(
+        {
+          tag: P.union(
+            'agent_session_settled',
+            'agent_session_waiting_for_input',
+            'agent_session_mentioned'
+          ),
+        },
+        (m) => m.content.sessionName
+      )
       .exhaustive()
   );
 }
@@ -148,6 +162,15 @@ export function getNotificationContent(
         formatCalendarReminderTime(m.content)
       )
       .with({ tag: 'inbox_reauth_required' }, (m) => m.content.emailAddress)
+      .with(
+        { tag: 'agent_session_settled' },
+        (m) => m.content.excerpt ?? undefined
+      )
+      .with(
+        { tag: 'agent_session_waiting_for_input' },
+        (m) => m.content.question
+      )
+      .with({ tag: 'agent_session_mentioned' }, () => undefined)
       .exhaustive()
   );
 }
@@ -202,6 +225,16 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'reminder' }, () => true)
       .with({ tag: 'calendar_event_reminder' }, () => true)
       .with({ tag: 'inbox_reauth_required' }, () => false)
+      .with(
+        {
+          tag: P.union(
+            'agent_session_settled',
+            'agent_session_waiting_for_input',
+            'agent_session_mentioned'
+          ),
+        },
+        () => true
+      )
       .exhaustive()
   );
 }

@@ -21,9 +21,14 @@ export function PermissionPart(props: {
   // Only a live session can still take an answer: a request left open by a
   // runtime that is gone will never be resolved by clicking.
   const answerable = () =>
-    pending() && session !== undefined && session.working();
+    pending() &&
+    session !== undefined &&
+    session.permissions.canAnswer() &&
+    session.turn() !== 'idle' &&
+    session.turn() !== 'disconnected' &&
+    session.turn() !== 'stopping';
   const answering = () =>
-    session?.composer.answeringPermission(props.part.requestId) ?? false;
+    session?.permissions.answering(props.part.requestId) ?? false;
 
   const outcome = () => {
     const resolved = props.part.outcome;
@@ -59,7 +64,7 @@ export function PermissionPart(props: {
             options={props.part.options}
             disabled={answering()}
             onSelect={(optionId) =>
-              session?.composer.respondToPermission(props.part.requestId, {
+              void session?.permissions.respond(props.part.requestId, {
                 kind: 'selected',
                 optionId,
               })

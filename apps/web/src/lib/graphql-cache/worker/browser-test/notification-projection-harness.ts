@@ -6,6 +6,8 @@ const host = createWorkerCacheHost({
   scope: `notification-projection-${crypto.randomUUID()}`,
   requestTimeoutMs: 30_000,
 });
+const channel = new URL(location.href).searchParams.get('entity') === 'channel';
+const entityType = channel ? 'CHANNEL' : 'PROJECT';
 const projectId = '00000000-0000-0000-0000-000000000001';
 const ids = [
   '00000000-0000-0000-0000-000000000011',
@@ -15,8 +17,12 @@ const nil = '00000000-0000-0000-0000-000000000000';
 const snapshotQuery = `query Snapshot {
   user { id soup(input: { initial: { limit: 20 } }) { items {
     __typename id cacheProjection
+    properties { id }
     notifications { id entityId entityType state }
     ... on GraphqlSoupProject { ownerId parentId createdAt updatedAt }
+    ... on GraphqlSoupChannel {
+      ownerId channelType channelTeamId: teamId organizationId isParticipant createdAt updatedAt
+    }
   } } }
 }`;
 const updateQuery = `mutation Update($input: UpdateNotificationsInput!) {
@@ -26,10 +32,10 @@ const notification = (id: string, state: string) => ({
   __typename: 'GraphqlNotification',
   id,
   entityId: projectId,
-  entityType: 'PROJECT',
+  entityType,
   state,
 });
-const unhydratedNotifications = ['DOCUMENT', 'PROJECT', 'CHAT'].map(
+const unhydratedNotifications = ['DOCUMENT', 'PROJECT', 'CHAT', 'CHANNEL'].map(
   (entityType, index) => ({
     ...notification(`00000000-0000-0000-0000-00000000002${index}`, 'UNSEEN'),
     entityType,
@@ -39,10 +45,14 @@ const unhydratedNotifications = ['DOCUMENT', 'PROJECT', 'CHAT'].map(
 const filters = (state: string) => ({
   calendarEventFilter: { literal: { id: nil } },
   documentFilter: { literal: { id: nil } },
-  projectFilter: { literal: { notificationState: state } },
+  projectFilter: {
+    literal: channel ? { projectIdSelf: nil } : { notificationState: state },
+  },
   chatFilter: { literal: { chatId: nil } },
   emailFilter: { tree: { literal: { threadId: nil } } },
-  channelFilter: { literal: { channelId: nil } },
+  channelFilter: {
+    literal: channel ? { notificationState: state } : { channelId: nil },
+  },
   channelThreadFilter: { literal: { threadId: nil } },
   callFilter: { literal: { callId: nil } },
   crmCompanyFilter: { literal: { id: nil } },
@@ -83,9 +93,14 @@ const snapshot = (
       soup: {
         items: [
           {
-            __typename: 'GraphqlSoupProject',
+            __typename: channel ? 'GraphqlSoupChannel' : 'GraphqlSoupProject',
+            channelType: 'team',
+            channelTeamId: '00000000-0000-0000-0000-000000000050',
+            organizationId: null,
+            isParticipant: true,
             id: entityId,
             cacheProjection: null,
+            properties: [],
             ownerId: 'macro|viewer@example.com',
             parentId: null,
             createdAt: '2025-01-01T00:00:00Z',
@@ -123,6 +138,35 @@ const markDone = (id: string) =>
 try {
   await seed();
   await expectCount('Secondary edges preserve local filtering', 'UNSEEN', 1);
+  if (channel) {
+    for (const participation of [
+      { not: { literal: { isParticipant: false } } },
+      {
+        or: {
+          left: { literal: { isParticipant: true } },
+          right: { literal: { importance: false } },
+        },
+      },
+    ]) {
+      const input = filters('UNSEEN');
+      const result = await host.entityFilter({
+        filters: {
+          ...input,
+          channelFilter: {
+            and: { left: input.channelFilter, right: participation },
+          },
+        },
+        sortMethod: 'UPDATED_AT',
+        sortDirection: 'DESC',
+        limit: 20,
+      });
+      if (result.kind !== 'complete' || result.keys.length !== 1)
+        throw new Error(
+          `equivalent participation filter: ${JSON.stringify(result)}`
+        );
+    }
+    report.push('Equivalent participant filters: local');
+  }
   for (const row of unhydratedNotifications) {
     await host.writeQuery({
       query: updateQuery,

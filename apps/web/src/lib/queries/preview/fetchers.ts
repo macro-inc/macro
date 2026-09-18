@@ -3,6 +3,8 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { toSubType } from '@entity/types/entity';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
 import type { ApiThread } from '@service-email/generated/schemas';
@@ -15,6 +17,7 @@ import { normalizeMessageSender } from '../channel/message-sender';
 import { queryClient } from '../client';
 import { emailKeys } from '../email/keys';
 import { threadQueryOptions } from '../email/thread';
+import { representativeThreadMessage } from '../email/thread-subject';
 import type { ItemEntity, MessageContext, PreviewItem } from './types';
 
 async function fetchSessionPreviews(ids: string[]): Promise<PreviewItem[]> {
@@ -68,6 +71,7 @@ async function fetchChannelPreviews(
           rawName: channel.channel_name,
           name: channel.channel_name,
           channelType: channel.channel_type,
+          profilePictureId: channel.profile_picture_id,
         };
       case 'no_access':
       case 'does_not_exist':
@@ -133,16 +137,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           fileType: doc.file_type as FileType,
           owner: doc.owner,
           updatedAt: doc.updated_at,
-          subType:
-            doc.sub_type === null || doc.sub_type === undefined
-              ? undefined
-              : {
-                  type: doc.sub_type.type,
-                  is_completed:
-                    'is_completed' in doc.sub_type
-                      ? doc.sub_type.is_completed
-                      : undefined,
-                },
+          subType: toSubType(doc.sub_type) ?? undefined,
         };
       case 'no_access':
       case 'does_not_exist':
@@ -351,7 +346,11 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         const result = await emailClient.getThread({
           thread_id: threadId,
           offset: 0,
-          limit: 1,
+          // Fetch a page rather than a single message: the newest message can
+          // be a subjectless draft (or, for a non-owner, be filtered out
+          // entirely), so a limit-1 fetch would resolve the thread as "No
+          // Subject" even though a real message in it has one.
+          limit: DEFAULT_THREAD_MESSAGES_LIMIT,
         });
 
         if (result.isErr()) {
@@ -364,10 +363,10 @@ async function fetchEmailPreviews(threadIds: string[]): Promise<PreviewItem[]> {
         thread = result.value.thread;
       }
 
-      const firstMessage = thread.messages[0];
-      const subject = firstMessage?.subject ?? 'No Subject';
+      const representative = representativeThreadMessage(thread.messages);
+      const subject = representative?.subject ?? 'No Subject';
       const sender =
-        firstMessage?.from?.email ?? firstMessage?.from?.name ?? undefined;
+        representative?.from?.email ?? representative?.from?.name ?? undefined;
 
       return {
         ...base,

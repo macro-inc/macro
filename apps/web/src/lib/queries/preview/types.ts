@@ -83,6 +83,7 @@ export type PreviewChannelAccess = {
   fileType?: never;
   subType?: never;
   channelType?: ChannelType;
+  profilePictureId?: string | null;
   messageContext?: MessageContext | undefined;
 } & BasePreviewItem<'channel'>;
 

@@ -34,7 +34,11 @@ pub trait BotRepo: Send + Sync + 'static {
         req: UpdateAgentRequest,
     ) -> impl Future<Output = Result<Option<Agent>, Self::Err>> + Send;
 
-    /// List active agents manageable by a caller.
+    /// List active agents the caller can manage or start a managed session as.
+    ///
+    /// Own and team-owned agents are included, plus selected-channel agents
+    /// installed in a channel the caller belongs to — the same personas they
+    /// can `@` mention there.
     fn list_manageable_agents(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -106,6 +110,13 @@ pub trait BotRepo: Send + Sync + 'static {
     fn bot_active_in_channel(
         &self,
         channel_id: Uuid,
+        bot_id: BotId,
+    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+
+    /// Whether the user and bot share at least one active channel.
+    fn user_shares_channel_with_bot(
+        &self,
+        caller: MacroUserIdStr<'static>,
         bot_id: BotId,
     ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
 
@@ -216,7 +227,7 @@ pub trait BotService: Send + Sync + 'static {
         req: UpdateAgentRequest,
     ) -> impl Future<Output = Result<Agent, BotError>> + Send;
 
-    /// List agents manageable by the caller.
+    /// List agents the caller can manage or start a managed session as.
     fn list_agents(
         &self,
         caller: MacroUserIdStr<'static>,
@@ -326,6 +337,16 @@ pub trait BotService: Send + Sync + 'static {
         bot_id: BotId,
         channel_id: Uuid,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
+
+    /// Authorize an autonomous bot's channel messages using its active channel
+    /// membership alone. The receipt names no acting user and reaches no other entity.
+    fn channel_message_access(
+        &self,
+        bot_id: BotId,
+        channel_id: Uuid,
+    ) -> impl Future<
+        Output = Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError>,
+    > + Send;
 
     /// Authenticate a raw bearer token.
     fn authenticate_token(

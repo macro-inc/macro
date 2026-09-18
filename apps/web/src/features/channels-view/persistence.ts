@@ -11,6 +11,7 @@ import type { Accessor } from 'solid-js';
 import { z } from 'zod';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
+  CHANNELS_DEFAULT_SORT_BY,
   clampChannelsRailWidth,
 } from './constants';
 import type { ChannelsViewState } from './types';
@@ -36,6 +37,7 @@ const channelsExpandedGroupsSchema = z.preprocess(
     };
   },
   z.object({
+    favorites: z.boolean().default(true),
     channels: z.boolean().default(true),
     direct_messages: z.boolean().default(true),
   })
@@ -49,6 +51,7 @@ const channelsEntryStateSchemaWithDefaults = z.object({
     .default('channels'),
   selectedChannelId: z.string().optional(),
   expandedGroups: channelsExpandedGroupsSchema.default({
+    favorites: true,
     channels: true,
     direct_messages: true,
   }),
@@ -62,6 +65,7 @@ const DEFAULT_CHANNELS_ENTRY_STATE = {
   mobileTab: 'channels',
   selectedChannelId: undefined,
   expandedGroups: {
+    favorites: true,
     channels: true,
     direct_messages: true,
   },
@@ -74,7 +78,16 @@ const channelsPreferencesSchema = z.object({
     .finite()
     .default(CHANNELS_DEFAULT_RAIL_WIDTH)
     .transform(clampChannelsRailWidth),
-  railMode: z.enum(['auto', 'full', 'slim']).default('auto'),
+  sortBy: z
+    .object({
+      channels: z
+        .enum(['viewed_at', 'updated_at', 'created_at'])
+        .default(CHANNELS_DEFAULT_SORT_BY.channels),
+      direct_messages: z
+        .enum(['viewed_at', 'updated_at', 'created_at'])
+        .default(CHANNELS_DEFAULT_SORT_BY.direct_messages),
+    })
+    .default(CHANNELS_DEFAULT_SORT_BY),
 });
 
 type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
@@ -82,7 +95,7 @@ type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
 const DEFAULT_CHANNELS_PREFERENCES = {
   version: 1,
   asideWidth: CHANNELS_DEFAULT_RAIL_WIDTH,
-  railMode: 'auto',
+  sortBy: CHANNELS_DEFAULT_SORT_BY,
 } satisfies ChannelsPreferences;
 
 function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
@@ -178,7 +191,7 @@ function createChannelsPreferencesStorage(options: {
     JSON.stringify({
       version: 1,
       asideWidth: clampChannelsRailWidth(state.asideWidth),
-      railMode: state.railMode,
+      sortBy: state.sortBy,
     } satisfies ChannelsPreferences);
 
   return {
@@ -200,13 +213,13 @@ function createChannelsPreferencesStorage(options: {
         return {
           ...current,
           asideWidth: restored.asideWidth,
-          railMode: restored.railMode,
+          sortBy: restored.sortBy,
         };
       } catch {
         return {
           ...current,
           asideWidth: DEFAULT_CHANNELS_PREFERENCES.asideWidth,
-          railMode: DEFAULT_CHANNELS_PREFERENCES.railMode,
+          sortBy: DEFAULT_CHANNELS_PREFERENCES.sortBy,
         };
       }
     },

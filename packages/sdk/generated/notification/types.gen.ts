@@ -4,6 +4,115 @@ export type ClientOptions = {
     baseUrl: `${string}://${string}` | (string & {});
 };
 
+/**
+ * Someone named the recipient in a prompt to an agent session.
+ */
+export type AgentSessionMentionedMetadata = AgentSessionNotificationRef & {
+    /**
+     * The action carrying the prompt.
+     */
+    actionId: string;
+    /**
+     * Who wrote the prompt, absent when a bot acted on nobody's behalf.
+     */
+    mentionedBy?: string | null;
+};
+
+/**
+ * Flattened into each agent-session kind so the wire keeps these keys at the
+ * top level of the metadata, the way [`CommonChannelMetadata`] does.
+ */
+export type AgentSessionNotificationRef = {
+    /**
+     * The magic-chip message for the turn in question, when one was posted.
+     */
+    announcementMessageId?: string | null;
+    /**
+     * The bot the session runs for. A string on the wire: system bots have
+     * fixed ids like `00000000-0000-0000-0000-00000000a2a2`, which are not
+     * RFC 4122 uuids and fail a `format: uuid` check on the client.
+     */
+    botId: string;
+    /**
+     * The bot's display name; agent notifications have no user sender, so
+     * this is who they read as being from.
+     */
+    botName: string;
+    /**
+     * The channel the session was opened from, when it was opened from a
+     * channel thread.
+     */
+    channelId?: string | null;
+    parent?: null | AgentSessionOriginParent;
+    /**
+     * The session; what a click opens.
+     */
+    sessionId: string;
+    /**
+     * The session's name at the time of the event.
+     */
+    sessionName: string;
+    /**
+     * The thread the session was opened from, when it was.
+     */
+    threadId?: string | null;
+};
+
+/**
+ * The session an agent-session notification is about, and where its magic
+ * chip lives when it was opened from a thread.
+ *
+ * The conversation an agent session was opened from: a channel or a
+ * document discussion. Spelled like the message API's parent so a client can
+ * route to either surface.
+ */
+export type AgentSessionOriginParent = {
+    /**
+     * The channel or document id.
+     */
+    id: string;
+    /**
+     * `channel` or `document`.
+     */
+    type: string;
+};
+
+/**
+ * An agent finished a turn with nothing queued behind it.
+ */
+export type AgentSessionSettledMetadata = AgentSessionNotificationRef & {
+    /**
+     * Who prompted the turn, absent when a bot acted on nobody's behalf.
+     */
+    actor?: string | null;
+    /**
+     * The agent's last prose in the turn, whole; `None` when it wrote none.
+     */
+    excerpt?: string | null;
+    /**
+     * The ACP stop reason, or `error`.
+     */
+    stopReason: string;
+    /**
+     * The turn that ended.
+     */
+    turn: number;
+};
+
+/**
+ * An agent is blocked on a question only the session's owner can answer.
+ */
+export type AgentSessionWaitingForInputMetadata = AgentSessionNotificationRef & {
+    /**
+     * The question, as the agent phrased it.
+     */
+    question: string;
+    /**
+     * The turn asking.
+     */
+    turn: number;
+};
+
 export type AiResponseMetadata = {
     messageId: string;
     summary: string;
@@ -225,13 +334,20 @@ export type ChannelReplyMetadata = CommonChannelMetadata & {
 export type ChannelType = 'public' | 'private' | 'directMessage' | 'team';
 
 /**
+ * Identity of a document comment or its thread. Comments written before the
+ * shared message store carry the legacy numeric ids; comments in the shared
+ * store carry the message and root UUIDs.
+ */
+export type CommentRef = number | string;
+
+/**
  * Notification sent when someone comments on a document the user owns.
  */
 export type CommentedOnDocumentMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -244,6 +360,10 @@ export type CommentedOnDocumentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -253,7 +373,7 @@ export type CommentedOnDocumentMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
 
 /**
@@ -347,7 +467,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative';
 
 /**
  * A plain old json error response for use with axum.
@@ -686,7 +806,7 @@ export type MentionedInDocumentCommentMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -703,6 +823,10 @@ export type MentionedInDocumentCommentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -712,7 +836,7 @@ export type MentionedInDocumentCommentMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
 
 export type NewEmailMetadata = {
@@ -869,6 +993,24 @@ export type NotifEvent = {
      */
     content: GithubPrReview;
     tag: 'github_pr_review';
+} | {
+    /**
+     * An agent finished a turn with nothing queued behind it.
+     */
+    content: AgentSessionSettledMetadata;
+    tag: 'agent_session_settled';
+} | {
+    /**
+     * An agent is blocked on a question for the session's owner.
+     */
+    content: AgentSessionWaitingForInputMetadata;
+    tag: 'agent_session_waiting_for_input';
+} | {
+    /**
+     * The user was named in a prompt to an agent session.
+     */
+    content: AgentSessionMentionedMetadata;
+    tag: 'agent_session_mentioned';
 };
 
 /**
@@ -891,6 +1033,8 @@ export type NotificationDocumentSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 export type NotificationServiceApiVersion = 'v1';
@@ -1006,7 +1150,7 @@ export type RepliedToDocumentCommentThreadMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -1019,6 +1163,10 @@ export type RepliedToDocumentCommentThreadMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -1028,7 +1176,7 @@ export type RepliedToDocumentCommentThreadMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
 
 /**

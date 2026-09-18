@@ -11,7 +11,10 @@ import {
   readRecordsByKeys,
   selectRecords,
 } from '@app/lib/graphql-cache';
-import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
+import {
+  createUrqlInfiniteQuery,
+  type UrqlInfiniteData,
+} from '@app/lib/urql-solid';
 import { Telemetry } from '@macro-inc/observability';
 import { useInstructionsMdIdQuery } from '@queries/storage/instructions-md';
 import {
@@ -46,9 +49,18 @@ import {
   untrack,
 } from 'solid-js';
 import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
-import { mapSoupPageToEntityList } from '../transform-utils';
+import { soupPageTimestamp } from '../page-timestamp';
+import {
+  mapApiSoupItemToEntity,
+  mapSoupPageToEntityList,
+} from '../transform-utils';
+import { registerGraphqlSoupRevalidations } from './active-queries';
 import { makeGraphqlSoupInput } from './ast';
 import { isCachedMailView, materializeMailView } from './mail-view';
+import {
+  usePendingGraphqlSoupDeleteIds,
+  withoutPendingGraphqlSoupDeletes,
+} from './optimistic-deletions';
 import {
   materializeReconciledSoup,
   soupItemKey,
@@ -91,6 +103,7 @@ export function createGraphqlSoupAstItemsQuery(
   options: Accessor<GraphqlSoupAstItemsQueryOptions>
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
+  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
   const [offline, setOffline] = createSignal(
     typeof navigator !== 'undefined' && !navigator.onLine
   );
@@ -120,8 +133,9 @@ export function createGraphqlSoupAstItemsQuery(
   const firstPageInput = createMemo(() => inputForCursor(null));
   const isSupported = () => firstPageInput() !== undefined;
   type ServerProjection = {
+    pageParams: readonly (string | null)[];
     data: SoupAstItemsData;
-    records: GraphqlSoupItem[];
+    records: Accessor<GraphqlSoupItem[]>;
   };
   type LocalProjection = {
     input: GraphqlSoupInput;
@@ -435,6 +449,49 @@ export function createGraphqlSoupAstItemsQuery(
     })();
   });
 
+  // Keep the selector stable across activity/filter changes. The observer
+  // caches projections by selector and page identity; rebuilding the closure
+  // would remap and reconcile every notification when merely disabling a view.
+  const projectionSortMethod = createMemo(() => args().params.sort_method);
+  const projectionForeignEntities = createMemo(
+    () => options().showSupportedForeignEntities
+  );
+  const projectionInstructionsId = createMemo(() =>
+    instructionsIdQuery.isSuccess ? instructionsIdQuery.data : undefined
+  );
+  const selectPages = createMemo(() => {
+    // The mapper reads this query inside the untracked observer callback.
+    // Track its resolved id here so cached pages reselect when it changes.
+    projectionInstructionsId();
+    const sortMethod = projectionSortMethod();
+    const showSupportedForeignEntities = projectionForeignEntities();
+    return ({
+      pages,
+      pageParams,
+    }: UrqlInfiniteData<SoupQuery, string | null>): ServerProjection => {
+      const mappedPages = pages.map(mapGraphqlSoupPage);
+      const oldestFetchedTimestamp = soupPageTimestamp(
+        mappedPages.flatMap((page) => page.items.map(mapApiSoupItemToEntity)),
+        sortMethod
+      );
+      const entities = mappedPages.flatMap((page) =>
+        mapSoupPageToEntityList(page, {
+          instructionsIdQuery,
+          showSupportedForeignEntities,
+        })
+      );
+      const records = pages.flatMap((page) => page.user.soup.items);
+      return {
+        // Raw wire records are reconciliation evidence, not reactive UI state.
+        // Publish them atomically without walking their entire notification
+        // payload again. Mapped entities retain deep reactivity and identity.
+        records: () => records,
+        pageParams,
+        data: { entities, groups: undefined, oldestFetchedTimestamp },
+      };
+    };
+  });
+
   const query = createUrqlInfiniteQuery<
     SoupQuery,
     SoupQueryVariables,
@@ -443,8 +500,6 @@ export function createGraphqlSoupAstItemsQuery(
   >(() => {
     const firstInput = firstPageInput();
     const queryOptions = options();
-    const showSupportedForeignEntities =
-      queryOptions.showSupportedForeignEntities;
 
     return {
       query: SoupDocument,
@@ -476,27 +531,26 @@ export function createGraphqlSoupAstItemsQuery(
         recordAuthority('network');
         finishStaleFallback('network');
       },
-      select: ({ pages }) => ({
-        records: pages.flatMap((page) => page.user.soup.items),
-        data: {
-          entities: pages.flatMap((page) =>
-            mapSoupPageToEntityList(mapGraphqlSoupPage(page), {
-              instructionsIdQuery,
-              showSupportedForeignEntities,
-            })
-          ),
-          groups: undefined,
-        },
-      }),
+      select: selectPages(),
     };
   });
 
-  // Snapshot the reactive normalized rows: their object identities may remain
-  // stable across writes, but baseline membership/sort evidence must not mutate
-  // beneath an in-flight reconciliation.
+  onCleanup(
+    registerGraphqlSoupRevalidations(() => {
+      if (!query.isEnabled) return [];
+      const cursors = new Set([null, ...(query.data?.pageParams ?? [])]);
+      return [...cursors].flatMap((cursor) => {
+        const input = inputForCursor(cursor);
+        return input ? [{ document: SoupDocument, variables: { input } }] : [];
+      });
+    })
+  );
+
+  // Capture membership/sort evidence for each published projection, so a later
+  // cache revision cannot change the baseline of an in-flight reconciliation.
   const serverRecords = createMemo(() =>
     baselineGeneration() === cacheGeneration
-      ? (query.data?.records ?? []).map((record) => ({ ...record }))
+      ? (query.data?.records() ?? []).map((record) => ({ ...record }))
       : []
   );
 
@@ -561,7 +615,22 @@ export function createGraphqlSoupAstItemsQuery(
         };
   });
 
-  const error = (): CombinedError | undefined => query.error ?? undefined;
+  const error = (): CombinedError | undefined => {
+    const error = query.error;
+    // A background transport failure must not replace usable current-query
+    // cache results (including an empty result) with the full-screen error state.
+    // Keep server responses (including HTTP auth failures), GraphQL errors,
+    // and failures without current-query local proof visible.
+    if (
+      error?.networkError &&
+      !error.response &&
+      error.graphQLErrors.length === 0 &&
+      displayLocalProjection()
+    ) {
+      return undefined;
+    }
+    return error ?? undefined;
+  };
   createComputed(
     on(error, (queryError) => {
       if (queryError) {
@@ -571,7 +640,16 @@ export function createGraphqlSoupAstItemsQuery(
   );
 
   return {
-    data: displayData,
+    data: createMemo(() => {
+      const data = displayData();
+      return withoutPendingGraphqlSoupDeletes(
+        data && {
+          ...data,
+          oldestFetchedTimestamp: query.data?.data.oldestFetchedTimestamp,
+        },
+        pendingDeleteIds()
+      );
+    }),
     error,
     isSupported,
     isEnabled: () => query.isEnabled,

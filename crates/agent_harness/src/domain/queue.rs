@@ -3,9 +3,12 @@
 //! Prompts (and compaction) occupy a whole agent turn, and ACP runs one turn
 //! at a time - so while a turn runs, further turn-occupying actions wait here
 //! rather than interleaving on the wire. Entries hold the *raw* user text:
-//! composition and announcement happen at dispatch, which is what makes a
-//! queued prompt editable and gives it fresh channel context when it actually
-//! runs.
+//! composition happens at dispatch, which is what makes a queued prompt
+//! editable and gives it fresh channel context when it actually runs. The
+//! chip is usually announced then too, except a channel follow-up that
+//! steers a running turn: it goes to the front and posts its chip when it is
+//! accepted, so the reply sits on the follow-up rather than after the
+//! cancelled turn or behind work queued earlier.
 //!
 //! In-memory on purpose. The queue lives beside the session's live actor on
 //! the replica that manages it, and dies with the process - a restart loses
@@ -142,11 +145,31 @@ impl SessionQueues {
 
     /// Append an entry to its session's queue.
     pub fn enqueue(&self, session: AgentSessionId, entry: QueuedEntry) -> Result<(), QueueError> {
+        self.insert(session, entry, VecDeque::push_back)
+    }
+
+    /// Put an entry ahead of everything already waiting, for a channel
+    /// follow-up that steers the running turn: it runs next, not after work
+    /// that was queued before it.
+    pub fn enqueue_front(
+        &self,
+        session: AgentSessionId,
+        entry: QueuedEntry,
+    ) -> Result<(), QueueError> {
+        self.insert(session, entry, VecDeque::push_front)
+    }
+
+    fn insert(
+        &self,
+        session: AgentSessionId,
+        entry: QueuedEntry,
+        push: fn(&mut VecDeque<QueuedEntry>, QueuedEntry),
+    ) -> Result<(), QueueError> {
         let mut queue = self.queues.entry(session).or_default();
         if queue.len() >= QUEUE_CAP {
             return Err(QueueError::Full);
         }
-        queue.push_back(entry);
+        push(&mut queue, entry);
         Ok(())
     }
 
@@ -185,6 +208,23 @@ impl SessionQueues {
         self.queues
             .get(&session)
             .is_some_and(|queue| queue.iter().any(|entry| entry.action_id == action_id))
+    }
+
+    /// Remember that this entry's chip has been posted, so dispatch does not
+    /// announce it a second time.
+    pub fn mark_announced(
+        &self,
+        session: AgentSessionId,
+        action_id: AgentActionId,
+        message_id: Uuid,
+    ) -> Result<(), QueueError> {
+        let mut queue = self.queues.get_mut(&session).ok_or(QueueError::NotFound)?;
+        let entry = queue
+            .iter_mut()
+            .find(|entry| entry.action_id == action_id)
+            .ok_or(QueueError::NotFound)?;
+        entry.announced = Some(message_id);
+        Ok(())
     }
 
     /// Replace a queued prompt's text. The entry keeps its place and its id.

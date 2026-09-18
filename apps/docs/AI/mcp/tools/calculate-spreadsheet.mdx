@@ -1,0 +1,17 @@
+---
+title: CalculateSpreadsheet
+description: "Run up to 20 Excel-style scratch formulas against a native spreadsheet without writing anything. Optional input overrides support what-if analysis without changing the user's cells. Uses the same IronCalc engine as the editor and returns typed results/errors. ReadSpreadsheet first to learn sheet IDs and ranges. Unqualified references use sheetId. Each formula evaluates at A1 on a private sheet and returns its top-left value; position-sensitive functions such as ROW() therefore use A1. INDIRECT is not supported in scratch formulas. Use this to verify totals, test a proposed formula, or compare scenarios before editing. Volatile functions are disabled, as in the editor."
+---
+
+# CalculateSpreadsheet
+
+Run up to 20 Excel-style scratch formulas against a native spreadsheet without writing anything. Optional input overrides support what-if analysis without changing the user's cells. Uses the same IronCalc engine as the editor and returns typed results/errors. ReadSpreadsheet first to learn sheet IDs and ranges. Unqualified references use sheetId. Each formula evaluates at A1 on a private sheet and returns its top-left value; position-sensitive functions such as ROW() therefore use A1. INDIRECT is not supported in scratch formulas. Use this to verify totals, test a proposed formula, or compare scenarios before editing. Volatile functions are disabled, as in the editor.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `documentId` | string | Yes | Native spreadsheet document ID. |
+| `sheetId` | string | No | Sheet for unqualified references in scratch formulas. |
+| `formulas` | SpreadsheetFormula[] | Yes | Formulas beginning with =, optionally labelled, at most 20. |
+| `overrides` | SpreadsheetOverride[] | No | Hypothetical cell inputs, never persisted. |

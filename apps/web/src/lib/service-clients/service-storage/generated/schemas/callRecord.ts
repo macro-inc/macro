@@ -15,6 +15,7 @@ import type { CallRecordRecordingStartedAt } from './callRecordRecordingStartedA
 import type { CallRecordRecordingUrl } from './callRecordRecordingUrl';
 import type { CallRecordStatus } from './callRecordStatus';
 import type { CallRecordSummary } from './callRecordSummary';
+import type { CallRecordTeamShareAccessLevel } from './callRecordTeamShareAccessLevel';
 import type { CallRecordTranscriptSegment } from './callRecordTranscriptSegment';
 import type { CallRecordUserAccessLevel } from './callRecordUserAccessLevel';
 
@@ -55,7 +56,9 @@ this value when present, falling back to `started_at` otherwise. */
   recordingUrl?: CallRecordRecordingUrl;
   /** The RTC room name. */
   roomName: string;
-  /** Whether the call is shared with the creator's team. */
+  /** Whether the call is shared with the creator's team. While the call is
+live this is the pending toggle applied at archive; afterwards it
+mirrors `team_share_access_level`. */
   shareWithTeam: boolean;
   /** When the call started (created_at for active, started_at for archived). */
   startedAt: string;
@@ -63,6 +66,7 @@ this value when present, falling back to `started_at` otherwise. */
   /** AI-generated summary of the call. Only set on archived `call_records`
 once summarization has run; active calls always return `None`. */
   summary?: CallRecordSummary;
+  teamShareAccessLevel?: CallRecordTeamShareAccessLevel;
   /** Transcript segments ordered by `sequence_num`. */
   transcript: CallRecordTranscriptSegment[];
   userAccessLevel?: CallRecordUserAccessLevel;

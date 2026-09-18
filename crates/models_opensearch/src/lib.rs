@@ -11,6 +11,8 @@
 #[derive(Debug, Clone, Hash, Eq, PartialEq, strum::Display, strum::EnumString, strum::AsRefStr)]
 #[strum(serialize_all = "snake_case")]
 pub enum SearchIndex {
+    /// The folded agent-session alias
+    AgentSessions,
     /// The channel alias
     Channels,
     /// The chat alias
@@ -47,6 +49,8 @@ pub enum SearchIndex {
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum SearchEntityType {
+    /// Folded agent sessions.
+    AgentSessions,
     /// The channel entity type (has OpenSearch index)
     Channels,
     /// The chat entity type (has OpenSearch index)
@@ -83,6 +87,8 @@ pub enum SearchEntityType {
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
 pub enum OpenSearchEntityType {
+    /// The agent sessions index.
+    AgentSessions,
     /// The channel index
     Channels,
     /// The chat index
@@ -105,6 +111,7 @@ impl OpenSearchEntityType {
     /// without requiring a code change here.
     pub fn index_name(&self) -> &'static str {
         match self {
+            Self::AgentSessions => "agent_sessions",
             Self::Channels => "channels",
             Self::Chats => "chats",
             Self::Documents => "documents",
@@ -148,6 +155,7 @@ impl OpenSearchEntityType {
 impl From<OpenSearchEntityType> for SearchEntityType {
     fn from(value: OpenSearchEntityType) -> Self {
         match value {
+            OpenSearchEntityType::AgentSessions => SearchEntityType::AgentSessions,
             OpenSearchEntityType::Channels => SearchEntityType::Channels,
             OpenSearchEntityType::Chats => SearchEntityType::Chats,
             OpenSearchEntityType::Documents => SearchEntityType::Documents,
@@ -162,6 +170,7 @@ impl From<OpenSearchEntityType> for SearchEntityType {
 impl From<OpenSearchEntityType> for SearchIndex {
     fn from(value: OpenSearchEntityType) -> Self {
         match value {
+            OpenSearchEntityType::AgentSessions => SearchIndex::AgentSessions,
             OpenSearchEntityType::Channels => SearchIndex::Channels,
             OpenSearchEntityType::Chats => SearchIndex::Chats,
             OpenSearchEntityType::Documents => SearchIndex::Documents,

@@ -442,6 +442,12 @@ export type FoldedMessage = {
   parts: MessagePart[];
   /**  How the turn ended, absent while it remains in flight. */
   stop: StopReason | null;
+  /**
+   *  Derived from an action this client issued that the log has not yet
+   *  confirmed. A reader shows it as sending; it flips off in place when
+   *  the confirmed frame arrives.
+   */
+  pending: boolean;
 };
 
 /**
@@ -771,6 +777,12 @@ export type SessionMetadata = {
    *  connection that asked is gone - the request id dies with it.
    */
   pendingElicitation: PendingElicitation | null;
+  /**
+   *  Where the newest turn stands, as one value. Readers used to derive it
+   *  from the transcript's tail, the status, and their own record of what
+   *  they had posted; this is that derivation done once, in the fold.
+   */
+  turn: TurnState;
 };
 
 /**
@@ -934,19 +946,33 @@ export type ToolDetail =
       output: string | null;
     }
   /**
-   *  Anything else: ACP's `switch_mode`, and any kind - including `other`
-   *  itself, [`ToolKind`](agent_client_protocol::ToolKind)'s default for a
-   *  call that names no kind at all - this fold has no special rendering
-   *  for.
+   *  Anything else: ACP's `switch_mode`, a tool from an MCP server the fold
+   *  knows nothing about, and any kind - including `other` itself,
+   *  [`ToolKind`](agent_client_protocol::ToolKind)'s default for a call
+   *  that names no kind at all - this fold has no special rendering for.
+   *  What a reader wants is the exchange itself: the request the agent
+   *  made and the response it got, as JSON.
    */
   | {
       kind: 'other';
       /**  ACP's tool kind, as its wire string. */
       acpKind: string;
-      /**  Text the call reported, when any. */
+      /**  Text the call reported in its content blocks, when any. */
       output: string | null;
-      /**  The tool's input, when reported. */
+      /**
+       *  The tool's own arguments, when reported - out of any wrapper the
+       *  harness put around them.
+       */
       input: unknown;
+      /**
+       *  The tool's own result, when the harness reported one in
+       *  `rawOutput` - out of the harness's wrapper and MCP's envelope, so
+       *  an MCP tool's `structuredContent` (or its text, parsed when it is
+       *  JSON) arrives as the JSON the tool returned.
+       */
+      result: unknown;
+      /**  The error text, when the harness's wrapper reported failure. */
+      error: string | null;
     }
   /**
    *  A Macro tool the fold knows by name - reached over Macro's MCP
@@ -1104,6 +1130,24 @@ export type ToolStatus =
 
 /**  A tool call within a turn, identified by its ACP `toolCallId`. */
 export type ToolUseId = string;
+
+/**  Where the newest turn stands. */
+export type TurnState =
+  /**  No turn is open. */
+  | 'idle'
+  /**
+   *  A prompt this client issued is on the wire, unconfirmed, and the agent
+   *  has produced nothing. Only a speculative fold reports this.
+   */
+  | 'starting'
+  /**  A turn is open and the agent is working. */
+  | 'running'
+  /**  A stop was issued against the open turn and no stop reason has arrived. */
+  | 'stopping'
+  /**  The open turn is waiting on the user to answer an elicitation. */
+  | 'blocked'
+  /**  The runtime reported `disconnected`; whatever was open is not moving. */
+  | 'disconnected';
 
 /**
  *  How far a user tool has got - the fold's reading of the backend's

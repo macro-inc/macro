@@ -60,7 +60,6 @@ const VIRTUAL_ITEM_HEIGHT = 36;
 const PANEL_DECORATION_HEIGHT = 18;
 
 type MentionsMenuProps = {
-  editor: LexicalEditor;
   menu: MenuOperations;
   /** pass in a custom users list if necessary */
   users?: Accessor<IUser[]>;
@@ -79,7 +78,10 @@ type MentionsMenuProps = {
   showOpenTabs?: boolean;
   /** restrict which mention source buckets to show (e.g. ['users'] for user-only mentions) */
   sources?: MentionBucketId[];
-};
+} & (
+  | { editor: LexicalEditor; onPick?: never }
+  | { editor?: never; anchor: HTMLElement; onPick: (item: MentionItem) => void }
+);
 
 export function MentionsMenu(props: MentionsMenuProps) {
   return (
@@ -257,8 +259,8 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     const combined: MentionItem[] = [
       ...users,
       ...(docs() ?? []),
-      ...agentSessions(),
       ...(channels() ?? []),
+      ...agentSessions(),
       ...(companies() ?? []),
       ...(emails() ?? []),
       ...(dates() ?? []),
@@ -305,12 +307,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
     const buckets: BucketConfig[] = [
       {
-        id: 'agentSessions',
-        label: 'Recent agent sessions',
-        getData: agentSessions,
-        getFullCount: () => agentSessions().length,
-      },
-      {
         id: 'users',
         label: groups().length > 0 ? 'People & Groups' : 'People',
         getData: () => usersAndGroups() ?? [],
@@ -333,6 +329,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         hasMore: channelsMention.hasMore,
         isLoadingMore: channelsMention.isLoadingMore,
         loadMore: channelsMention.loadMore,
+      },
+      {
+        id: 'agentSessions',
+        label: 'Recent agent sessions',
+        getData: agentSessions,
+        getFullCount: () => agentSessions().length,
       },
       {
         id: 'companies',
@@ -393,19 +395,22 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }
   });
 
-  const itemActionHandler = createItemHandler({
-    editor: props.editor,
-    blockName: useMaybeBlockName(),
-    blockId: useMaybeBlockId(),
-    onUserMention: props.onUserMention,
-    onDocumentMention: props.onDocumentMention,
-    onEmailMention: props.onEmailMention,
-    disableMentionTracking: props.disableMentionTracking,
-  });
+  const itemActionHandler = props.editor
+    ? createItemHandler({
+        editor: props.editor,
+        blockName: useMaybeBlockName(),
+        blockId: useMaybeBlockId(),
+        onUserMention: props.onUserMention,
+        onDocumentMention: props.onDocumentMention,
+        onEmailMention: props.onEmailMention,
+        disableMentionTracking: props.disableMentionTracking,
+      })
+    : undefined;
 
   const itemAction = async (item: MentionItem) => {
     analytics.track('mentions_menu_use', { itemType: item.kind });
-    await itemActionHandler(item);
+    if (props.onPick) props.onPick(item);
+    else await itemActionHandler?.(item);
   };
 
   createEffect(() => {
@@ -422,7 +427,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   });
 
   const closeMenu = () => {
-    props.editor.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
+    props.editor?.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
     setMenuOpen(false);
   };
 
@@ -565,7 +570,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const clickOutsideHandler = (e: MouseEvent) => {
     e.stopPropagation();
-    props.editor.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
+    props.editor?.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
     setMenuOpen(false);
   };
 
@@ -593,7 +598,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     !props.anchor
       ? {
           selection: untrack(mountSelection),
-          reactiveOnContainer: props.editor.getRootElement(),
+          reactiveOnContainer: props.editor?.getRootElement(),
           useBlockBoundary: props.useBlockBoundary,
           onAvailableHeight: setMenuAvailableHeight,
         }
@@ -605,16 +610,19 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         <div
           class="w-96 max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           on:touchstart={(e) => e.stopPropagation()}
+          onPointerDown={(event) => {
+            if (props.onPick) event.preventDefault();
+          }}
+          onMouseDown={(event) => {
+            if (props.onPick) event.preventDefault();
+          }}
           ref={(el) => {
             floatWithElement(el, floatWithElementProps);
             floatWithSelection(el, floatWithSelectionProps);
             clickOutside(el, () => clickOutsideHandler);
           }}
         >
-          <Surface
-            depth={2}
-            class="pt-2 pb-1.5 shadow-lg shadow-drop-shadow rounded-xl"
-          >
+          <Surface depth={2} class="pt-2 pb-1.5 glass bg-menu-glass rounded-xl">
             <Show
               when={controller.viewAllMode()}
               fallback={

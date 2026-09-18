@@ -1,6 +1,6 @@
 import { isPlaceholderSubject } from '@app/features/email-compose/core/subject-text';
-import WideCopy from '@icon/wide-copy.svg';
 import IconCheck from '@phosphor/check.svg';
+import CopyIcon from '@phosphor/copy.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn } from '@ui/utils/classname';
 import { createSignal, Show } from 'solid-js';
@@ -39,7 +39,7 @@ export function CopySubjectButton(props: {
         )}
         onClick={handleCopy}
       >
-        <Show when={copied()} fallback={<WideCopy class="size-3.5" />}>
+        <Show when={copied()} fallback={<CopyIcon class="size-3.5" />}>
           <IconCheck class="size-3.5" />
         </Show>
       </button>

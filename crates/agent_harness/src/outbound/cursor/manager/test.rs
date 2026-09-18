@@ -9,11 +9,12 @@ use agent_runtime_protocol::domain::schema::v0::{
 };
 use agent_session::domain::error::Result as SessionResult;
 use agent_session::domain::model::{
-    AgentSession, AgentSessionPreview, ChannelSession, CreateAgentSessionParams,
-    DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot, SessionStatus,
+    AgentSession, CreateAgentSessionParams, DEFAULT_AGENT_SESSION_NAME, SandboxSize, SessionBot,
+    SessionStatus, ThreadSession,
 };
 use bot_id::BotId;
 use cursor_api_key::cipher::CursorApiKey;
+use cursor_cloud_agents::domain::ports::NoArtifactStore;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
@@ -24,8 +25,11 @@ use std::sync::{Arc, Mutex};
 /// the manager has no business calling.
 #[derive(Clone, Default)]
 struct StubSessions {
+    repo_branch: Option<agent_session::domain::repository_branch::RepositoryBranch>,
     external: Arc<Mutex<HashMap<AgentSessionId, ExternalSession>>>,
     acp_session_id: Arc<Mutex<Option<String>>>,
+    /// What the repository chooser wrote back, per session.
+    repo_url: Arc<Mutex<HashMap<AgentSessionId, Option<String>>>>,
 }
 
 impl ExternalSessionRepo for StubSessions {
@@ -68,22 +72,27 @@ impl AgentSessionRepo for StubSessions {
         &self,
         _viewer: &MacroUserIdStr<'static>,
         _ids: &[AgentSessionId],
-    ) -> SessionResult<Vec<AgentSessionPreview>> {
+    ) -> SessionResult<Vec<agent_session::domain::model::SessionPreviewCandidate>> {
         unimplemented!("the manager never previews sessions")
     }
 
     async fn get(&self, id: AgentSessionId) -> SessionResult<AgentSession> {
         Ok(AgentSession {
+            repo_branch: self.repo_branch.clone(),
             id,
             owner_id: MacroUserIdStr::try_from("macro|owner@macro.com".to_owned())
                 .expect("valid user id"),
             thread_id: None,
-            thread_channel_id: None,
+            thread_parent: None,
             originating_message_id: None,
             bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
             model: "auto".to_owned(),
             harness: "cursor".to_owned(),
-            repo_url: None,
+            repo_url: self
+                .repo_branch
+                .as_ref()
+                .map(|_| "https://github.com/macro-inc/macro".into()),
+            pull_request_url: None,
             workspace: "/workspace".to_owned(),
             name: DEFAULT_AGENT_SESSION_NAME.to_owned(),
             sandbox_size: SandboxSize::Default,
@@ -102,11 +111,11 @@ impl AgentSessionRepo for StubSessions {
         })
     }
 
-    async fn find_for_channel(
+    async fn find_for_thread(
         &self,
         _thread_id: Option<macro_uuid::Uuid>,
         _bot_id: Option<BotId>,
-    ) -> SessionResult<ChannelSession> {
+    ) -> SessionResult<ThreadSession> {
         unimplemented!("the manager never routes channel events")
     }
 
@@ -115,6 +124,14 @@ impl AgentSessionRepo for StubSessions {
         _thread_id: macro_uuid::Uuid,
     ) -> SessionResult<Vec<AgentSession>> {
         unimplemented!("the manager never lists thread sessions")
+    }
+
+    async fn recent_for_owner(
+        &self,
+        _owner: &MacroUserIdStr<'_>,
+        _limit: std::num::NonZeroUsize,
+    ) -> SessionResult<Vec<agent_session::domain::model::AgentSession>> {
+        unimplemented!("the manager never summarizes an owner's recent sessions")
     }
 
     async fn session_bot(&self, _id: BotId) -> SessionResult<SessionBot> {
@@ -131,6 +148,22 @@ impl AgentSessionRepo for StubSessions {
 
     async fn set_model(&self, _id: AgentSessionId, _model: &str) -> SessionResult<()> {
         unimplemented!("the manager never sets models")
+    }
+
+    async fn set_egress_token_hash(&self, _id: AgentSessionId, _hash: &str) -> SessionResult<()> {
+        unimplemented!("this adapter does not rotate credentials")
+    }
+
+    async fn set_repo_url(
+        &self,
+        id: AgentSessionId,
+        repo_url: Option<String>,
+    ) -> SessionResult<()> {
+        self.repo_url
+            .lock()
+            .expect("stub poisoned")
+            .insert(id, repo_url);
+        Ok(())
     }
 
     async fn delete(&self, _id: AgentSessionId) -> SessionResult<()> {
@@ -372,10 +405,22 @@ impl CursorApiKeys for StubKeys {
     }
 }
 
+/// A user who reaches no repository through the GitHub App: the chooser
+/// short-circuits on an empty listing, so these tests drive the whole spawn
+/// path without a model call.
+struct NoRepositories;
+
+#[async_trait::async_trait]
+impl ReachableRepositories for NoRepositories {
+    async fn for_user(&self, _user: &MacroUserIdStr<'_>) -> Result<Vec<String>> {
+        Ok(Vec::new())
+    }
+}
+
 fn manager(
     base_url: String,
     sessions: StubSessions,
-) -> CursorContainerManager<StubSessions, StubKeys> {
+) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories, NoArtifactStore> {
     manager_with_keys(base_url, sessions, StubKeys::connected())
 }
 
@@ -383,9 +428,14 @@ fn manager_with_keys(
     base_url: String,
     sessions: StubSessions,
     keys: StubKeys,
-) -> CursorContainerManager<StubSessions, StubKeys> {
-    let repo = CursorRepoUrl::parse("https://github.com/macro-inc/macro").expect("valid repo");
-    CursorContainerManager::with_memory_journal(keys, base_url, repo, sessions)
+) -> CursorContainerManager<StubSessions, StubKeys, NoRepositories, NoArtifactStore> {
+    CursorContainerManager::with_memory_journal(
+        keys,
+        base_url,
+        sessions,
+        Arc::new(NoRepositories),
+        NoArtifactStore,
+    )
 }
 
 async fn next_acp(
@@ -558,7 +608,15 @@ async fn spawn_uses_the_owners_default_model() {
 #[tokio::test]
 async fn session_new_mcp_servers_reach_the_created_agent() {
     let (base_url, _, created) = fake_cursor_api().await;
-    let sessions = StubSessions::default();
+    let sessions = StubSessions {
+        repo_branch: Some(
+            agent_session::domain::repository_branch::RepositoryBranch::parse(
+                "feature/home".into(),
+            )
+            .unwrap(),
+        ),
+        ..StubSessions::default()
+    };
     let session_id = AgentSessionId::new();
     let manager = manager(base_url, sessions);
 
@@ -594,8 +652,8 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
                 },
                 {
                     "type": "http",
-                    "name": "google_sheets",
-                    "url": "https://egress.test/mcp/google_sheets",
+                    "name": "macro_internal",
+                    "url": "https://egress.test/mcp/internal",
                     "headers": [{"name": "Authorization", "value": "Bearer test-session-token"}],
                 },
             ],
@@ -621,6 +679,7 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
     }
 
     let body = created.lock().expect("create log poisoned")[0].clone();
+    assert_eq!(body["repos"][0]["startingRef"], "feature/home");
     assert_eq!(
         body["mcpServers"],
         serde_json::json!([
@@ -631,9 +690,9 @@ async fn session_new_mcp_servers_reach_the_created_agent() {
                 "headers": { "Authorization": "Bearer test-session-token" },
             },
             {
-                "name": "google_sheets",
+                "name": "macro_internal",
                 "type": "http",
-                "url": "https://egress.test/mcp/google_sheets",
+                "url": "https://egress.test/mcp/internal",
                 "headers": { "Authorization": "Bearer test-session-token" },
             },
         ])
@@ -906,9 +965,35 @@ fn count(frames: &[serde_json::Value], pointer: &str, value: &str) -> usize {
         .count()
 }
 
+/// Whether this frame is the slash-command catalog, not conversation history.
+fn is_available_commands_update(frame: &serde_json::Value) -> bool {
+    frame
+        .pointer("/params/update/sessionUpdate")
+        .and_then(|found| found.as_str())
+        == Some("available_commands_update")
+}
+
+/// Consume the `available_commands_update` that follows a successful load so
+/// leftover catalog frames do not precede the next initialize or look like
+/// unsolicited history.
+async fn drain_available_commands_update(
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>,
+) {
+    let frames = collect_until(receiver, is_available_commands_update).await;
+    assert_eq!(
+        frames.len(),
+        1,
+        "session/load is followed by the slash-command catalog and nothing else: {frames:?}"
+    );
+}
+
 /// The recovery handshake as the session actor performs it: `initialize`,
 /// then `session/load`. Returns the history replayed before the load's
 /// response after asserting the load succeeded and only history preceded it.
+///
+/// The catalog notification that follows a successful load is drained, the
+/// same way the Cursor fold helpers do, so a leftover metadata frame cannot
+/// poison the next handshake.
 async fn reload(
     sender: &super::super::pipe::PipeSender,
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>,
@@ -946,7 +1031,12 @@ async fn reload(
             ),
             "only history travels before a load's response, got {frame}"
         );
+        assert!(
+            !is_available_commands_update(frame),
+            "the catalog is advertised after the load result, not as history: {frame}"
+        );
     }
+    drain_available_commands_update(receiver).await;
     replayed
 }
 

@@ -4,6 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { MarkMessageNotifications } from '@notifications/components/MarkMessageNotifications';
 import { useThreadRepliesQuery } from '@queries/channel/thread-replies';
+import { queryReadyGate } from '@queries/gate';
 import type { ApiThreadReply } from '@service-storage/generated/schemas/apiThreadReply';
 import {
   createEffect,
@@ -68,8 +69,7 @@ export function ChannelThread(props: ThreadProps) {
   );
 
   const queryReplies = (): Array<ApiThreadReply> | undefined => {
-    if (repliesQuery.isLoading) return undefined;
-    return repliesQuery.data;
+    return queryReadyGate(repliesQuery) ? repliesQuery.data : undefined;
   };
 
   const loadedReplies = () => queryReplies() ?? [];

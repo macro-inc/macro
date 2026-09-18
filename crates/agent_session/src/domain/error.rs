@@ -6,6 +6,9 @@ pub type Result<T, E = AgentSessionError> = std::result::Result<T, E>;
 
 #[derive(Error, Debug)]
 pub enum AgentSessionError {
+    /// A repository or branch cannot be used by this session.
+    #[error("{0}")]
+    InvalidRepositorySelection(&'static str),
     #[error("agent session {0} already has an active transport")]
     AlreadyConnected(AgentSessionId),
     #[error("agent session {0} is managed by another live replica")]
@@ -20,6 +23,8 @@ pub enum AgentSessionError {
     ThreadSessionExists,
     #[error("the session owner is not a known user")]
     UnknownOwner,
+    #[error("expected a GitHub PR URL: https://github.com/owner/repo/pull/number")]
+    InvalidPullRequestUrl,
     #[error("invalid agent session name: {0}")]
     InvalidName(&'static str),
     #[error("a preview request may name at most {0} sessions")]
