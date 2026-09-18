@@ -94,6 +94,8 @@ impl<P: CloudProvider, Repo: AgentSessionRepo, External: ExternalSessionRepo>
     pub async fn attach(&self, id: AgentSessionId) -> Result<Arc<Session<P::Client>>> {
         let _creation = self.creation.lock().await;
         let row = AgentSessionRepo::get(&self.repo, id).await?;
+        let model =
+            claude_cloud_agents::domain::models::Model::parse(&row.model).map_err(cloud_error)?;
         let client = self
             .provider
             .connect(row.owner_id.as_ref())
@@ -133,7 +135,7 @@ impl<P: CloudProvider, Repo: AgentSessionRepo, External: ExternalSessionRepo>
                     )
                     .await?;
                 let cloud_id = match client
-                    .create(row.instructions.as_deref().unwrap_or_default())
+                    .create(row.instructions.as_deref().unwrap_or_default(), &model)
                     .await
                 {
                     Ok(id) => id,
@@ -163,11 +165,7 @@ impl<P: CloudProvider, Repo: AgentSessionRepo, External: ExternalSessionRepo>
                 cloud_id
             }
         };
-        Ok(Session::with_model(
-            client,
-            cloud_id,
-            claude_cloud_agents::domain::models::Model::parse(&row.model).map_err(cloud_error)?,
-        ))
+        Ok(Session::with_model(client, cloud_id, model))
     }
 }
 

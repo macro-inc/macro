@@ -26,6 +26,7 @@ input_file: crates/agent_fold/fixtures/real/real_single_turn.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -43,5 +44,6 @@ input_file: crates/agent_fold/fixtures/real/real_single_turn.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
 ]

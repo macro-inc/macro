@@ -1,40 +1,42 @@
 /**
  * @vitest-environment jsdom
  *
- * The controller against a mocked harness client: an answer is one POST on
- * the agent's request id, only a viewer with edit access may send it, and a
- * 409 is said once.
+ * The controller against a stub `issue`: an answer is one action on the
+ * session's optimistic path, only a viewer with edit access may send it, and
+ * a 409 is said once.
  */
 
+import type { IssueResult } from '@core/agent-session/AgentSession';
 import type { PendingElicitation } from '@service-agent-fold/generated/types';
+import type { AgentAction } from '@service-agent-harness/generated/schemas';
+import { err, ok } from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { createElicitationController } from './create-elicitation-controller';
 
-const control = vi.hoisted(() => ({
-  calls: [] as { sessionId: string; action: unknown }[],
-  outcome: 'ok' as 'ok' | 'conflict' | 'err' | 'reject',
-}));
-
-vi.mock('@service-agent-harness/client', () => ({
-  agentHarnessServiceClient: {
-    control: vi.fn(async (sessionId: string, action: unknown) => {
-      control.calls.push({ sessionId, action });
-      if (control.outcome === 'reject') throw new Error('network');
-      return {
-        isErr: () => control.outcome !== 'ok',
-        error:
-          control.outcome === 'conflict'
-            ? [{ code: 'CONFLICT' }]
-            : [{ code: 'INTERNAL' }],
-        value: { actionId: 'unused', status: 'sent' },
-      };
-    }),
-  },
+const issued = vi.hoisted(() => ({
+  actions: [] as AgentAction[],
+  outcome: 'ok' as 'ok' | 'conflict' | 'err' | 'reject' | 'no-session',
 }));
 
 const toast = vi.hoisted(() => ({ failure: vi.fn(), success: vi.fn() }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast }));
+
+const issue = (action: AgentAction): Promise<IssueResult> | undefined => {
+  issued.actions.push(action);
+  if (issued.outcome === 'no-session') return undefined;
+  if (issued.outcome === 'reject') return Promise.reject(new Error('network'));
+  if (issued.outcome === 'ok') {
+    return Promise.resolve(
+      ok({ actionId: 'accepted', status: 'sent' }) as IssueResult
+    );
+  }
+  return Promise.resolve(
+    err([
+      { code: issued.outcome === 'conflict' ? 'CONFLICT' : 'INTERNAL' },
+    ]) as unknown as IssueResult
+  );
+};
 
 const question: PendingElicitation = {
   requestId: 43,
@@ -53,24 +55,20 @@ function setup(options: { canEdit?: boolean } = { canEdit: true }) {
   );
   const [canEdit] = createSignal<boolean | undefined>(options.canEdit);
   const { controller, dispose } = createRoot((dispose) => ({
-    controller: createElicitationController({
-      sessionId: () => 'session-1',
-      pending,
-      canEdit,
-    }),
+    controller: createElicitationController({ pending, canEdit, issue }),
     dispose,
   }));
   return { controller, setPending, dispose };
 }
 
 beforeEach(() => {
-  control.calls = [];
-  control.outcome = 'ok';
+  issued.actions = [];
+  issued.outcome = 'ok';
   toast.failure.mockReset();
 });
 
 describe('createElicitationController', () => {
-  it('answers on the agent request id with the action spread into the body', async () => {
+  it('answers through the session with the agent request id and the answer', async () => {
     const { controller, dispose } = setup();
     expect(controller.canAnswer()).toBe(true);
     const accepted = await controller.respond({
@@ -78,15 +76,12 @@ describe('createElicitationController', () => {
       content: { colour: 'teal' },
     });
     expect(accepted).toBe(true);
-    expect(control.calls).toEqual([
+    expect(issued.actions).toEqual([
       {
-        sessionId: 'session-1',
-        action: {
-          type: 'respondElicitation',
-          requestId: 43,
-          action: 'accept',
-          content: { colour: 'teal' },
-        },
+        type: 'respondElicitation',
+        requestId: 43,
+        action: 'accept',
+        content: { colour: 'teal' },
       },
     ]);
     dispose();
@@ -97,7 +92,7 @@ describe('createElicitationController', () => {
     expect(controller.canAnswer()).toBe(false);
     const sent = await controller.respond({ action: 'decline' });
     expect(sent).toBe(false);
-    expect(control.calls).toEqual([]);
+    expect(issued.actions).toEqual([]);
     dispose();
   });
 
@@ -108,7 +103,7 @@ describe('createElicitationController', () => {
   });
 
   it('a 409 means the agent moved on: said once, nothing else', async () => {
-    control.outcome = 'conflict';
+    issued.outcome = 'conflict';
     const { controller, dispose } = setup();
     expect(await controller.respond({ action: 'cancel' })).toBe(false);
     expect(toast.failure).toHaveBeenCalledWith(
@@ -118,13 +113,21 @@ describe('createElicitationController', () => {
   });
 
   it('other failures and thrown errors read as a failed send', async () => {
-    control.outcome = 'err';
+    issued.outcome = 'err';
     const { controller, dispose } = setup();
     expect(await controller.respond({ action: 'decline' })).toBe(false);
-    control.outcome = 'reject';
+    issued.outcome = 'reject';
     expect(await controller.respond({ action: 'decline' })).toBe(false);
     expect(toast.failure).toHaveBeenCalledTimes(2);
     expect(toast.failure).toHaveBeenCalledWith("Couldn't send your answer");
+    dispose();
+  });
+
+  it('a block with no session to act on reports nothing sent', async () => {
+    issued.outcome = 'no-session';
+    const { controller, dispose } = setup();
+    expect(await controller.respond({ action: 'decline' })).toBe(false);
+    expect(toast.failure).not.toHaveBeenCalled();
     dispose();
   });
 
@@ -132,7 +135,7 @@ describe('createElicitationController', () => {
     const { controller, setPending, dispose } = setup();
     setPending(undefined);
     expect(await controller.respond({ action: 'decline' })).toBe(false);
-    expect(control.calls).toEqual([]);
+    expect(issued.actions).toEqual([]);
     dispose();
   });
 });

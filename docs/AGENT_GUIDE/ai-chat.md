@@ -60,9 +60,20 @@
   behind it throughout the transition, keeping its existing edge-muted border.
   Selecting a chat agent retracts it. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
-  offers **Choose automatically**, recent repositories, or GitHub `owner/repo` /
-  URL entry confirmed with **Use repository**. Once selected, **Branch** opens
-  a starting-branch field confirmed with **Use branch** (initially `main`).
+  (**Choose repository** until one is picked) opens a searchable list:
+  **Choose automatically**, then the repositories the signed-in user reaches
+  through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
+  recently used ones first. Typing filters the list; an unlisted GitHub
+  `owner/repo` or URL adds a **Use owner/repo** row. Arrow keys move the
+  highlight and Enter or a click picks it; there is no separate confirm
+  button. Someone who reaches no repository sees a hint with **Connect
+  GitHub**, which opens Settings → Connected. The last repository picked is
+  remembered per user in local storage and preselected next time. Once
+  selected, **Branch** shows the repository's default branch (`main` when it
+  has none) and opens a starting-branch field confirmed with **Use branch**;
+  picking a different repository resets the branch to that repository's
+  default. Omitting the branch on the create-session API likewise starts on
+  the repository's default branch.
   Both controls open above the drawer without clipping. The selections survive
   agent changes and are sent only to coding agents. Cursor honors the explicit
   repository and branch instead of choosing a repository from the prompt;

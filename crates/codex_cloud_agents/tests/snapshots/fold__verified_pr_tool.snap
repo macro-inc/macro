@@ -16,7 +16,8 @@ expression: messages
         "text": "Inspect repository"
       }
     ],
-    "stop": null
+    "stop": null,
+    "pending": false
   },
   {
     "turn": 0,
@@ -55,6 +56,7 @@ expression: messages
     ],
     "stop": {
       "kind": "end_turn"
-    }
+    },
+    "pending": false
   }
 ]

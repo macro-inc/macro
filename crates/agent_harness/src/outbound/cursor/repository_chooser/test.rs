@@ -22,12 +22,19 @@ impl ReachableRepositories for StubRepositories {
     async fn for_user(
         &self,
         user: &MacroUserIdStr<'_>,
-    ) -> crate::domain::error::Result<Vec<String>> {
+    ) -> crate::domain::error::Result<Vec<crate::domain::model::ReachableRepository>> {
         self.asked_for
             .lock()
             .expect("stub poisoned")
             .push(user.to_string());
-        Ok(self.repositories.clone())
+        Ok(self
+            .repositories
+            .iter()
+            .map(|url| crate::domain::model::ReachableRepository {
+                url: url.clone(),
+                default_branch: Some("main".to_owned()),
+            })
+            .collect())
     }
 }
 

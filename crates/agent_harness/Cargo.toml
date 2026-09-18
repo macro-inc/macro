@@ -86,3 +86,4 @@ bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 mockall = { workspace = true }
 model_user = { path = "../model_user" }
+tower = { workspace = true }

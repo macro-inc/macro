@@ -195,6 +195,7 @@ const FIXTURE_DIFF = {
 const FIXTURE_MESSAGE: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
+  pending: false,
   turn: 0,
   author: { kind: 'agent' },
   stop: { kind: 'end_turn' },
@@ -439,6 +440,7 @@ const FIXTURE_MESSAGE: FoldedMessage = {
 const FIXTURE_IN_FLIGHT: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
+  pending: false,
   turn: 1,
   author: { kind: 'agent' },
   stop: null,
@@ -481,6 +483,7 @@ const FIXTURE_IN_FLIGHT: FoldedMessage = {
 const FIXTURE_UNCLOSED: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
+  pending: false,
   turn: 2,
   author: { kind: 'agent' },
   stop: null,
@@ -659,7 +662,6 @@ function MagicChipAskingDemo(props: {
       presentation={presentation}
       header={GALLERY_CHIP_HEADER}
       answer={{
-        answering: false,
         respond: async (answer) => {
           console.log('[gallery] elicitation answer', answer);
           return true;

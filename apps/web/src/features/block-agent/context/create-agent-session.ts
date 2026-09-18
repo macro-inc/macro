@@ -1,57 +1,71 @@
 /**
- * The block's session feed: session metadata plus the shared live fold,
- * exposed as an *ordered* reactive list of folded messages — the shape a
- * linear transcript renders from.
+ * The Solid face of {@link AgentSession}: the shared session for whatever id
+ * the block currently shows, as a reconciled ordered store of folded messages
+ * plus the signals a transcript renders from.
  *
- * The heavy lifting lives in `@queries/agent-session/session-fold`'s
- * `acquireAgentSessionFold`: it buffers realtime frames before fetching the
- * persisted log, folds through one worker machine per session, and
- * refcounts across surfaces. This factory just orders what the fold reports
- * and keeps rows reconciled so a streaming turn updates in place.
+ * Everything stateful about the session lives in the class. This only owns
+ * the store, applies fold events to it, and releases the acquisition when
+ * the id changes or the owner disposes.
  */
 
+import {
+  AgentSession,
+  type IssueResult,
+} from '@core/agent-session/AgentSession';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
-import { acquireAgentSessionFold } from '@queries/agent-session/session-fold';
 import {
   subscribeAgentSessionRenamed,
   subscribeAgentSessionUpdated,
 } from '@queries/agent-session/session-metadata-sync';
 import type {
   FoldedMessage,
+  FoldedStreamEvent,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
+  AgentAction,
   AgentSessionResponse,
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import {
   type Accessor,
   batch,
+  createMemo,
   createResource,
   createSignal,
   onCleanup,
+  untrack,
 } from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
-import { lastTurnMessage } from '../state/control-message';
 
-export type AgentSessionFeed = {
-  /** Session metadata, absent until the load resolves. */
+export type AgentSessionHandle = {
+  /** Session row, absent until the load resolves. */
   session: Accessor<AgentSessionResponse | undefined>;
-  /** The bot the session runs as, absent until the fold is acquired. */
+  /** The bot the session runs as, absent until the load resolves. */
   bot: Accessor<SessionBot | undefined>;
-  /** The fold's session metadata (title, model, …), followed live. */
+  /** The fold's session metadata (title, model, turn, …), followed live. */
   metadata: Accessor<SessionMetadata | undefined>;
   /** The folded transcript, ordered by turn (prompt before reply). */
   messages: Accessor<FoldedMessage[]>;
   loadFailed: Accessor<boolean>;
   /** Re-runs a failed load. */
   retry: () => void;
-  /** The newest turn has no stop reason yet — the agent is working. */
-  working: Accessor<boolean>;
+  /**
+   * Do something to the agent. Folded speculatively at once; settled by the
+   * log. `undefined` while the block has no session to act on.
+   */
+  issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  /**
+   * Show a queued action as dispatched under the id the server holds it
+   * by. See {@link AgentSession.expect}.
+   */
+  expect: (actionId: string, action: AgentAction) => void;
+  /** Take a speculation back. See {@link AgentSession.retract}. */
+  retract: (actionId: string) => void;
   /**
    * Adopt a newer snapshot of this session (the bounded external-url poll).
-   * No-op when the payload is for a different session or the feed has closed.
+   * No-op when the payload is for a different session.
    */
   applySnapshot: (session: AgentSessionResponse) => void;
 };
@@ -74,11 +88,15 @@ function sameMessage(a: FoldedMessage, b: FoldedMessage): boolean {
  * `sessionId` is absent while a just-created session's `POST` is still on the
  * wire (`pending-session.ts`). `createResource` treats an absent source as
  * "nothing to fetch", so the block simply renders its empty transcript until
- * the id lands and the fetch runs itself.
+ * the id lands and the load runs itself.
  */
-export function createAgentSessionFeed(
-  sessionId: Accessor<string | undefined>
-): AgentSessionFeed {
+export function createAgentSession(
+  sessionId: Accessor<string | undefined>,
+  options: {
+    /** The viewer, so a speculated prompt is attributed as the log will. */
+    userId: Accessor<string | undefined>;
+  }
+): AgentSessionHandle {
   // Whether this block went on screen before it had a session to load.
   //
   // `resource.latest` falls back to a *suspending* read until the resource has
@@ -121,70 +139,91 @@ export function createAgentSessionFeed(
       }
     });
 
-  let release: (() => void) | undefined;
+  /** A row's identity in the transcript, and the transcript's render key. */
+  const keyOf = (message: FoldedMessage) =>
+    `${message.turn}:${message.author.kind}`;
 
-  // A superseded run (session switch, unmount mid-fetch) must release its
-  // acquisition or the shared fold leaks a reference.
-  let generation = 0;
-  let closed = false;
-  let latestRename: AgentSessionRenamedEvent | undefined;
-  let renameRefresh = 0;
-  onCleanup(() => {
-    closed = true;
-    release?.();
-    release = undefined;
+  // A whole new view of the conversation: what a load reports, and what every
+  // rebase reports while something is speculated.
+  //
+  // Merged row by row rather than spliced wholesale. A splice hands the store
+  // a fresh object for every index, so Solid remounts every row - the
+  // transcript re-measures, entrance motions replay, and a streaming turn
+  // visibly jumps. A rebase happens on *every* confirmed frame while an
+  // action is pending, so that jump was the whole turn flickering. Reconciling
+  // each row against the one already there keeps identity for everything that
+  // did not actually change.
+  const replace = (messages: FoldedMessage[]) =>
+    batch(() => {
+      const wanted = new Set(messages.map(keyOf));
+      // Tail first, so the indices ahead of each removal still hold.
+      for (let index = list.length - 1; index >= 0; index--) {
+        if (wanted.has(keyOf(list[index]!))) continue;
+        setList(
+          produce((current: FoldedMessage[]) => {
+            current.splice(index, 1);
+          })
+        );
+      }
+      upsert(messages);
+    });
+
+  const applyEvents = (events: FoldedStreamEvent[]) =>
+    batch(() => {
+      for (const event of events) {
+        if (event.kind === 'replace') replace(event.messages);
+        else if (event.kind === 'metadata') setMetadata(event.metadata);
+        else upsert([event.message]);
+      }
+    });
+
+  // The shared session for the current id. A memo rather than an effect so
+  // acquisition and release track the id exactly, with nothing to schedule.
+  const live = createMemo(() => {
+    const id = sessionId();
+    if (!id) return undefined;
+    const session = AgentSession.acquire(id);
+    const unsubscribe = session.subscribe(applyEvents);
+    onCleanup(() => {
+      unsubscribe();
+      session.release();
+    });
+    return session;
   });
 
-  const [resource, { mutate, refetch }] = createResource(
-    sessionId,
-    async (id) => {
-      const run = ++generation;
-      const renameRefreshAtStart = renameRefresh;
-      const superseded = () => closed || generation !== run;
+  let latestRename: AgentSessionRenamedEvent | undefined;
+  let renameRefresh = 0;
 
-      release?.();
-      release = undefined;
+  const [resource, { mutate, refetch }] = createResource(
+    live,
+    async (session) => {
+      const renameRefreshAtStart = renameRefresh;
+      const superseded = () => untrack(sessionId) !== session.id;
+
       batch(() => {
         setList(reconcile([]));
         setBot(undefined);
         setMetadata(undefined);
       });
 
-      const session = await agentHarnessServiceClient.get(id);
-      if (session.isErr()) {
-        throw new Error(`agent session could not be fetched: ${id}`);
-      }
-      if (superseded()) return session.value;
+      const record = await session.load();
+      if (superseded()) return record.session;
+      // Read after every input pushed so far, and applied before any event
+      // that arrives later: events between subscribe and here upserted into
+      // the list, and this replaces the list with a view that includes them.
+      const snapshot = await session.snapshot();
+      if (superseded()) return record.session;
 
-      const fold = await acquireAgentSessionFold({
-        agentSessionId: id,
-        onChange: upsert,
-        onReplace: (messages) =>
-          setList(
-            produce((current: FoldedMessage[]) => {
-              // Replay can reuse turn/author and tool IDs for different part
-              // kinds. Replace row identities atomically so mounted parts
-              // cannot keep reading a union variant that reconcile removed.
-              current.splice(0, current.length, ...messages);
-            })
-          ),
-        onMetadata: setMetadata,
-      });
-      if (superseded()) {
-        fold.release();
-        return session.value;
-      }
-      release = fold.release;
       batch(() => {
-        setBot(fold.bot);
-        setMetadata(fold.metadata);
-        upsert(fold.messages);
+        setBot(record.bot);
+        setMetadata(snapshot.metadata);
+        replace(snapshot.messages);
       });
 
       return renameRefresh > renameRefreshAtStart &&
-        latestRename?.agentSessionId === id
-        ? { ...session.value, name: latestRename.name }
-        : session.value;
+        latestRename?.agentSessionId === session.id
+        ? { ...record.session, name: latestRename.name }
+        : record.session;
     }
   );
 
@@ -233,23 +272,6 @@ export function createAgentSessionFeed(
     })
   );
 
-  const messages = () => list;
-  // A user-authored tail means a prompt is awaiting its reply — except when
-  // it is a control, which is user-authored, never gets a stop reason, and
-  // starts no turn. Counting one would latch this signal true forever, and
-  // the composer's drain holds every prompt behind it: changing the model
-  // would silently stop the session from accepting anything again.
-  const working = () => {
-    const last = lastTurnMessage(list);
-    if (!last) return false;
-    return last.author.kind === 'user' || last.stop == null;
-  };
-
-  const applySnapshot = (session: AgentSessionResponse) => {
-    if (closed || sessionId() !== session.id) return;
-    mutate(session);
-  };
-
   // A first fetch would suspend; see `openedPending`.
   const session = () =>
     openedPending && resource.state === 'pending' ? undefined : resource.latest;
@@ -258,10 +280,16 @@ export function createAgentSessionFeed(
     session,
     bot,
     metadata,
-    messages,
+    messages: () => list,
     loadFailed: () => resource.error !== undefined,
     retry: () => void refetch(),
-    working,
-    applySnapshot,
+    issue: (action) => live()?.issue(action, { userId: options.userId() }),
+    expect: (actionId, action) =>
+      live()?.expect(actionId, action, { userId: options.userId() }),
+    retract: (actionId) => live()?.retract(actionId),
+    applySnapshot: (snapshot) => {
+      if (sessionId() !== snapshot.id) return;
+      mutate(snapshot);
+    },
   };
 }

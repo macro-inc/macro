@@ -27,6 +27,7 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -50,6 +51,7 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -166,5 +168,6 @@ input_file: crates/agent_fold/fixtures/real/plan_todo.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
 ]

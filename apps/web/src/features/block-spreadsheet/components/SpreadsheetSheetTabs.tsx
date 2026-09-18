@@ -16,6 +16,7 @@ export type SpreadsheetSheetTabsProps = {
   activeSheetId: string;
   readonly: boolean;
   canAdd: boolean;
+  preserveEditorFocus?: boolean;
   onSelect: (id: string) => void;
   onAdd: () => void;
   onRename: (id: string) => void;
@@ -196,6 +197,14 @@ export function SpreadsheetSheetTabs(props: SpreadsheetSheetTabsProps) {
                         props.activeSheetId === sheet.id,
                       'border-transparent text-ink-muted':
                         props.activeSheetId !== sheet.id,
+                    }}
+                    onPointerDown={(event) => {
+                      if (props.preserveEditorFocus && event.button === 0)
+                        event.preventDefault();
+                    }}
+                    onMouseDown={(event) => {
+                      if (props.preserveEditorFocus && event.button === 0)
+                        event.preventDefault();
                     }}
                     onClick={() => props.onSelect(sheet.id)}
                     onDblClick={() => {

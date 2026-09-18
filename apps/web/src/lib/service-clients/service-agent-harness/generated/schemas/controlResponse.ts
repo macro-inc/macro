@@ -14,7 +14,8 @@ Clients deserialize this, so both derives are used.
  */
 export interface ControlResponse {
   /** Matches `requestId` on the folded message this action derives once it
-dispatches, and names the queue entry until then. */
+dispatches, and names the queue entry until then. The caller's own
+`actionId` when it supplied one; a freshly minted id otherwise. */
   actionId: AgentActionId;
   /** Whether the action went out or waits in the queue. */
   status: ControlStatusDto;

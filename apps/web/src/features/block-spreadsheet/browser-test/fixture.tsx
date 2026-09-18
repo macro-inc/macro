@@ -2,6 +2,7 @@ import '@fontsource-variable/inter';
 import '@fontsource-variable/roboto-mono';
 import '../../../index.css';
 import { useAppSquishHandlers } from '@components/app/useAppSquishHandlers';
+import { registerHotkey, useHotKeyRoot } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSyncSocket } from '@macro-inc/collaboration/sync-service/socket';
 import {
@@ -28,6 +29,7 @@ declare global {
       snapshot: () => SpreadsheetWorkbookSheet[];
       setReadonly: (readonly: boolean) => void;
       connectionStatus: () => string;
+      globalShortcutCount: () => number;
     };
   }
 }
@@ -51,6 +53,19 @@ function Fixture() {
     new URLSearchParams(location.search).has('readonly')
   );
   const params = new URLSearchParams(location.search);
+  const [globalShortcutCount, setGlobalShortcutCount] = createSignal(0);
+  if (params.has('hotkeys')) {
+    useHotKeyRoot();
+    registerHotkey({
+      scopeId: 'global',
+      hotkey: ['h', 'arrowdown'],
+      description: 'Fixture app navigation',
+      keyDownHandler: () => {
+        setGlobalShortcutCount((count) => count + 1);
+        return true;
+      },
+    });
+  }
   const documentId = params.get('document');
   const socketUrl = params.get('socket');
   const socket =
@@ -84,6 +99,7 @@ function Fixture() {
     snapshot: () => structuredClone(store.workbook()),
     setReadonly,
     connectionStatus: source.status,
+    globalShortcutCount,
   };
   onCleanup(() => {
     // Revoke the fixture bridge when Vite unmounts this owner during HMR.

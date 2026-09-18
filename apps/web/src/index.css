@@ -1016,26 +1016,36 @@ html[data-touch-device='true'] :is(
   }
 }
 
-/* The dot leading an open agent turn that has nothing to expand yet. Shares
-   the shimmer's period so the row reads as one motion, not two. */
-@keyframes agent-working-dot {
+/* The three dots leading an open agent turn that has nothing to expand yet.
+   A staggered ripple on the shimmer's period, so the row reads as one motion,
+   not two. */
+@keyframes agent-working-wave {
   0%,
+  60%,
   100% {
-    opacity: 0.3;
-    transform: scale(0.65);
+    opacity: 0.35;
+    transform: translateY(0);
   }
-  50% {
+  30% {
     opacity: 1;
-    transform: scale(1);
+    transform: translateY(-2px);
   }
 }
 
-.agent-working-dot {
-  animation: agent-working-dot 1.8s ease-in-out infinite;
+.agent-working-wave > * {
+  animation: agent-working-wave 1.8s ease-in-out infinite;
+}
+
+.agent-working-wave > :nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.agent-working-wave > :nth-child(3) {
+  animation-delay: 0.4s;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-working-dot {
+  .agent-working-wave > * {
     animation: none;
     opacity: 0.55;
   }

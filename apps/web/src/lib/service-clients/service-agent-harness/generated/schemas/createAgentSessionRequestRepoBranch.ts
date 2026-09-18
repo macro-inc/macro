@@ -7,5 +7,6 @@
 
 /**
  * Starting branch for a managed coding session's selected repository.
+Omitted, the session starts on the repository's default branch.
  */
 export type CreateAgentSessionRequestRepoBranch = string | null;

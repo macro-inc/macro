@@ -284,6 +284,13 @@ export function createSpreadsheetStore(options: {
       else selections.delete(activeSheetId());
       publishSelection(current);
     },
+    setSheetCells(id: string, edits: SpreadsheetCellEdits) {
+      const doc = options.source.doc();
+      if (!doc || !editable() || !workbook().some((sheet) => sheet.id === id))
+        return;
+      writeSpreadsheetCells(doc, edits, id);
+      refresh();
+    },
     setCells(edits: SpreadsheetCellEdits) {
       const doc = options.source.doc();
       if (!doc || !editable()) return;

@@ -1,4 +1,7 @@
-import type { FoldedMessage } from '@service-agent-fold/generated/types';
+import type {
+  FoldedMessage,
+  TurnState,
+} from '@service-agent-fold/generated/types';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
@@ -8,8 +11,8 @@ import { Transcript } from './Transcript';
 
 const session = vi.hoisted(() => ({
   sessionId: () => 'session',
+  turn: (): TurnState => 'idle',
   messages: () => [] as FoldedMessage[],
-  working: (): boolean => false,
   quoteSelection: vi.fn(),
   touch: false,
   top: () => 40,
@@ -97,7 +100,7 @@ beforeEach(() => {
   viewport = 400;
   rowHeight = 96;
   session.touch = false;
-  session.working = () => false;
+  session.turn = () => 'idle';
   session.bottom = () => 80;
   vi.stubGlobal(
     'ResizeObserver',
@@ -191,8 +194,8 @@ describe('Transcript live turn', () => {
 
   it('marks only the newest turn live, however many messages lack a stop', async () => {
     // Every one of these reads `stop: null`; a superseded turn keeps it.
-    const [working, setWorking] = createSignal(true);
-    session.working = working;
+    const [turn, setTurn] = createSignal<TurnState>('running');
+    session.turn = turn;
     const view = mount([message(0), message(1), message(2)]);
     await settle();
     expect(inFlight(view)).toEqual([
@@ -202,7 +205,7 @@ describe('Transcript live turn', () => {
     ]);
 
     // The runtime went away: the block stops working, and so does the tail.
-    setWorking(false);
+    setTurn('disconnected');
     await settle();
     expect(inFlight(view)).toEqual([
       '0:agent=false',
@@ -212,7 +215,7 @@ describe('Transcript live turn', () => {
   });
 
   it('marks nothing live while the newest turn is a prompt awaiting its reply', async () => {
-    session.working = () => true;
+    session.turn = () => 'running';
     const view = mount([
       message(0),
       { ...message(1), author: { kind: 'user', userId: 'u' } } as FoldedMessage,

@@ -875,6 +875,7 @@ function AgentDialog(props: {
                       each={props.connectedHarnesses.filter(
                         (harness) =>
                           harness.id !== 'claude-cloud' ||
+                          harness.id === harnessId() ||
                           modelDataForHarness(harness.id)?.status ===
                             'available'
                       )}
