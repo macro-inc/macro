@@ -93,16 +93,13 @@ function _registerTablePlugin(editor: LexicalEditor, props: TablePluginProps) {
         ) {
           return;
         }
-        Telemetry.error(
-          'table cell normalization salvaged stray children',
-          {
-            document_id: props.documentId ?? 'unknown',
-            salvaged_types: result.salvagedTypes,
-            removed_types: result.removedTypes,
-            salvaged_count: result.salvagedTypes.length,
-            removed_count: result.removedTypes.length,
-          }
-        );
+        Telemetry.error('table cell normalization salvaged stray children', {
+          document_id: props.documentId ?? 'unknown',
+          salvaged_types: result.salvagedTypes,
+          removed_types: result.removedTypes,
+          salvaged_count: result.salvagedTypes.length,
+          removed_count: result.removedTypes.length,
+        });
       });
     })()
   );

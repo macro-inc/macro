@@ -27,7 +27,7 @@ function makeTable(rows: string[][]) {
   return { session, doc, introId: ids[0]! };
 }
 
-function tableNode(session: LexicalSession): ElementNode {
+function $tableNode(): ElementNode {
   const table = $getRoot()
     .getChildren()
     .find((n) => $isElementNode(n) && n.getType() === 'table');
@@ -37,7 +37,7 @@ function tableNode(session: LexicalSession): ElementNode {
 
 function cellIds(session: LexicalSession): string[] {
   return read(session, () =>
-    tableNode(session)
+    $tableNode()
       .getChildren()
       .filter($isTableRowNode)
       .flatMap((row) =>
@@ -52,7 +52,7 @@ function cellIds(session: LexicalSession): string[] {
 
 function paragraphIds(session: LexicalSession): string[] {
   return read(session, () =>
-    tableNode(session)
+    $tableNode()
       .getChildren()
       .filter($isTableRowNode)
       .flatMap((row) =>
@@ -83,7 +83,11 @@ function randomOp(
   const target = pick(rng, [...cells, ...paragraphs, introId, 't']);
   switch (rng.integer(0, 6)) {
     case 0:
-      return { kind: 'setText', node: target, text: `set-${rng.integer(0, 99)}` };
+      return {
+        kind: 'setText',
+        node: target,
+        text: `set-${rng.integer(0, 99)}`,
+      };
     case 1:
       return { kind: 'appendText', node: target, text: 'x' };
     case 2:

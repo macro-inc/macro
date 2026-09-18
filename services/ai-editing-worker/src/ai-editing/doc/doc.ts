@@ -73,7 +73,6 @@ import * as blocks from '../ai-toolkit/blocks';
 import * as inline from '../ai-toolkit/inline';
 import * as lists from '../ai-toolkit/lists';
 import * as locate from '../ai-toolkit/locate';
-import { assertSubstringMatched } from './substring-miss';
 import * as modify from '../ai-toolkit/modify';
 import type { LexicalSession } from '../ai-toolkit/session';
 import * as tables from '../ai-toolkit/tables';
@@ -89,6 +88,7 @@ import type {
 } from '../editor';
 import { EditError } from '../editor';
 import type { DocReader, DocWriter, Match } from './interfaces';
+import { assertSubstringMatched } from './substring-miss';
 
 const FORMAT_BIT: Record<
   Format,
