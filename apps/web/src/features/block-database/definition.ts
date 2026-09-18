@@ -25,7 +25,7 @@ export const definition = defineBlock({
     );
   },
   accepted: {},
-  defaultFilename: 'Untitled table',
+  defaultFilename: 'Untitled database',
 });
 
 export type DatabaseData = ExtractLoadType<(typeof definition)['load']>;
