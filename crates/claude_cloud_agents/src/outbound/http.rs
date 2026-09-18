@@ -3,6 +3,7 @@ use crate::domain::{
     credentials::AccountCredentials,
     environment::gateway_network_patch,
     model::{Error, Event, Result, SessionId},
+    models::{Model, RECENT_SESSION_LIMIT, RecentSession},
     ports::{Cloud, CloudLifecycle, CloudProvider, Events},
 };
 use futures::StreamExt;
@@ -98,9 +99,12 @@ impl Client {
     }
 
     /// Create only in the explicitly selected, active Anthropic cloud environment.
-    pub async fn create(&self, instructions: &str) -> Result<SessionId> {
+    pub async fn create(&self, instructions: &str, model: &Model) -> Result<SessionId> {
         let environment = self.selected_environment().await?;
         let mut config = json!({"sources": [], "outcomes": []});
+        if let Some(model) = model.provider_value() {
+            config["model"] = json!(model);
+        }
         if !instructions.is_empty() {
             config["append_system_prompt"] = json!(instructions);
         }
@@ -170,8 +174,8 @@ impl CloudLifecycle for Client {
         Ok(())
     }
 
-    async fn create(&self, instructions: &str) -> Result<SessionId> {
-        Client::create(self, instructions).await
+    async fn create(&self, instructions: &str, model: &Model) -> Result<SessionId> {
+        Client::create(self, instructions, model).await
     }
 
     async fn archive(&self, session: &SessionId) -> Result<()> {
@@ -180,9 +184,12 @@ impl CloudLifecycle for Client {
 }
 
 impl Cloud for Client {
-    async fn recent_sessions(&self) -> Result<Vec<SessionId>> {
+    async fn recent_sessions(&self) -> Result<Vec<RecentSession>> {
         let response: Value = self
-            .request("/v1/code/sessions?limit=5", None)
+            .request(
+                &format!("/v1/code/sessions?limit={RECENT_SESSION_LIMIT}"),
+                None,
+            )
             .await?
             .json()
             .await
@@ -191,8 +198,15 @@ impl Cloud for Client {
             .as_array()
             .ok_or(Error::Protocol)?
             .iter()
-            .take(5)
-            .map(|row| SessionId::parse(row["id"].as_str().ok_or(Error::Protocol)?))
+            .take(RECENT_SESSION_LIMIT)
+            .map(|row| {
+                Ok(RecentSession {
+                    id: SessionId::parse(row["id"].as_str().ok_or(Error::Protocol)?)?,
+                    model: row["config"]["model"]
+                        .as_str()
+                        .and_then(|value| Model::parse(value).ok()),
+                })
+            })
             .collect()
     }
     async fn send_batch(&self, session: &SessionId, payloads: Vec<Value>) -> Result<()> {

@@ -438,6 +438,88 @@ describe('Agents', () => {
     }
   );
 
+  it('keeps a saved Claude harness selected while discovery loads and scopes Fable to it', async () => {
+    agentMocks.query.data = [
+      {
+        bot: {
+          id: 'agent-1',
+          kind: 'owned',
+          owner: { type: 'user', user_id: 'macro|user@example.com' },
+          name: 'Bug fixer',
+          handle: 'bug-fixer',
+          has_agent: true,
+          created_at: '2026-08-27T12:00:00Z',
+          updated_at: '2026-08-27T12:00:00Z',
+        },
+        instructions: 'Fix the root cause.',
+        harness: 'claude-cloud',
+        default_model: 'claude-fable-5-1',
+        channel_scope: 'all',
+        channel_ids: [],
+      },
+    ];
+    let resolveModels!: (models: LoadAgentModelsResponse) => void;
+    const response = new Promise<LoadAgentModelsResponse>((resolve) => {
+      resolveModels = resolve;
+    });
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false } },
+    });
+    vi.mocked(useAgentModelsQueries).mockImplementationOnce((targets) =>
+      targets().map((target) =>
+        useQuery(() => ({
+          queryKey: ['pending-models', target.harness],
+          queryFn: () =>
+            target.harness === 'claude-cloud'
+              ? response
+              : Promise.resolve(modelMocks.queries['in-memory:'].data!),
+        }))
+      )
+    );
+    const view = render(() => (
+      <QueryClientProvider client={client}>
+        <Suspense fallback={<p>Settings suspended</p>}>
+          <Agents />
+        </Suspense>
+      </QueryClientProvider>
+    ));
+    try {
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Bug fixer' }));
+      const harness = screen.getByRole('combobox', { name: 'Harness' });
+      expect(harness).toHaveProperty('value', 'claude-cloud');
+      expect(screen.getByText('Loading models…')).toBeTruthy();
+      resolveModels({
+        status: 'available',
+        currentModel: 'claude-fable-5-1',
+        models: [{ id: 'claude-fable-5-1', name: 'Fable 5.1' }],
+      });
+      await waitFor(() =>
+        expect(screen.getByRole('option', { name: 'Fable 5.1' })).toBeTruthy()
+      );
+      expect(harness).toHaveProperty('value', 'claude-cloud');
+      fireEvent.change(harness, { target: { value: 'in-memory' } });
+      await waitFor(() =>
+        expect(
+          screen.getByRole('combobox', { name: 'Default model' })
+        ).toHaveProperty('value', Model.sonnet5)
+      );
+      expect(screen.queryByRole('option', { name: /Fable/i })).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Save changes' }));
+      await waitFor(() =>
+        expect(agentMocks.update).toHaveBeenCalledWith(
+          expect.objectContaining({
+            agentId: 'agent-1',
+            harness: 'in-memory',
+            defaultModel: Model.sonnet5,
+          })
+        )
+      );
+    } finally {
+      view.unmount();
+      client.clear();
+    }
+  });
+
   it('lists the built-in global Macro agent as a team agent', () => {
     render(() => <Agents />);
 

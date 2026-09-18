@@ -10,7 +10,7 @@ struct ReconnectingCloud {
     history: Arc<Mutex<Vec<Event>>>,
 }
 impl Cloud for ReconnectingCloud {
-    async fn recent_sessions(&self) -> Result<Vec<SessionId>> {
+    async fn recent_sessions(&self) -> Result<Vec<crate::domain::models::RecentSession>> {
         Ok(Vec::new())
     }
     async fn send_batch(
@@ -171,10 +171,14 @@ struct ModelCloud {
     sends: Arc<Mutex<Vec<serde_json::Value>>>,
     reject: Arc<std::sync::atomic::AtomicBool>,
     reject_model: Arc<std::sync::atomic::AtomicBool>,
+    account_history: Arc<Mutex<Vec<Event>>>,
 }
 impl Cloud for ModelCloud {
-    async fn recent_sessions(&self) -> Result<Vec<SessionId>> {
-        Ok(Vec::new())
+    async fn recent_sessions(&self) -> Result<Vec<crate::domain::models::RecentSession>> {
+        Ok(vec![crate::domain::models::RecentSession {
+            id: SessionId::parse("cse_account").unwrap(),
+            model: Some(Model::parse("claude-fable-5-1").unwrap()),
+        }])
     }
     async fn send(&self, _: &SessionId, payload: serde_json::Value) -> Result<()> {
         if self.reject.load(Ordering::SeqCst) {
@@ -190,7 +194,10 @@ impl Cloud for ModelCloud {
         self.sends.lock().await.extend(payloads);
         Ok(())
     }
-    async fn history(&self, _: &SessionId) -> Result<Vec<Event>> {
+    async fn history(&self, id: &SessionId) -> Result<Vec<Event>> {
+        if id.as_str() == "cse_account" {
+            return Ok(self.account_history.lock().await.clone());
+        }
         Ok(vec![Event {
             kind: "client_event".into(),
             sequence: Some(0),
@@ -218,6 +225,67 @@ impl Cloud for ModelCloud {
             ]
         }).flat_map(futures::stream::iter).boxed())
     }
+}
+
+#[tokio::test]
+async fn account_fable_choice_survives_selection_load_poll_and_prompt() {
+    let cloud = ModelCloud::default();
+    *cloud.account_history.lock().await = vec![Event {
+        kind: "client_event".into(),
+        sequence: Some(0),
+        data: json!({"payload":{"type":"control_response","response":{"subtype":"success","response":{"models":[
+            {"value":"claude-fable-5-1","displayName":"Fable 5.1"}
+        ]}}}}),
+    }];
+    let fable = Model::parse("claude-fable-5-1").unwrap();
+    let id = SessionId::parse("cse_test").unwrap();
+    let session = Session::new(cloud.clone(), id.clone());
+    session.set_model(fable.clone()).await.unwrap();
+    assert_eq!(cloud.sends.lock().await[0]["request"]["model"], fable.id());
+    assert!(matches!(
+        session
+            .set_model(Model::parse("not-reported").unwrap())
+            .await,
+        Err(Error::ModelUnavailable)
+    ));
+
+    let restored = Session::with_model(cloud.clone(), id, fable.clone());
+    restored.load().await.unwrap();
+    assert!(restored.catalog().await.contains(&fable));
+    let changed = Event {
+        kind: "client_event".into(),
+        sequence: Some(1),
+        data: json!({"payload":{"type":"control_response","response":{"subtype":"success","response":{"models":[
+            {"value":"sonnet","displayName":"New Sonnet label"}
+        ]}}}}),
+    };
+    restored
+        .learn_catalog(&changed, |update| {
+            let Update::Models { catalog, current } = update else {
+                panic!("expected catalog")
+            };
+            assert!(catalog.contains(&fable));
+            assert_eq!(current, fable);
+            assert!(!catalog.contains(&Model::parse("opus").unwrap()));
+            Ok(())
+        })
+        .await
+        .unwrap();
+    restored.prompt("hello".into(), |_| Ok(())).await.unwrap();
+    assert_eq!(cloud.sends.lock().await[1]["request"]["model"], fable.id());
+
+    // Claude still has final authority to reject an account-discovered choice.
+    cloud.reject_model.store(true, Ordering::SeqCst);
+    let restored = Session::with_model(cloud.clone(), SessionId::parse("cse_test").unwrap(), fable);
+    restored.load().await.unwrap();
+    assert!(matches!(
+        restored.prompt("hello".into(), |_| Ok(())).await,
+        Err(Error::ModelUnavailable)
+    ));
+    assert_eq!(
+        cloud.sends.lock().await.last().unwrap()["request"]["subtype"],
+        "interrupt"
+    );
 }
 
 #[tokio::test]

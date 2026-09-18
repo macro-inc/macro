@@ -67,12 +67,18 @@ fn rejects_duplicate_aliases_malformed_catalogs_and_unsuccessful_responses() {
 #[derive(Clone)]
 struct AccountCloud {
     histories: Vec<Vec<Event>>,
+    models: Vec<Option<Model>>,
     reads: std::sync::Arc<std::sync::atomic::AtomicUsize>,
 }
 impl Cloud for AccountCloud {
-    async fn recent_sessions(&self) -> Result<Vec<super::super::model::SessionId>> {
+    async fn recent_sessions(&self) -> Result<Vec<RecentSession>> {
         (0..self.histories.len())
-            .map(|i| super::super::model::SessionId::parse(&format!("cse_{i}")))
+            .map(|i| {
+                Ok(RecentSession {
+                    id: SessionId::parse(&format!("cse_{i}"))?,
+                    model: self.models.get(i).cloned().flatten(),
+                })
+            })
             .collect()
     }
     async fn history(&self, session: &super::super::model::SessionId) -> Result<Vec<Event>> {
@@ -106,12 +112,14 @@ async fn discovery_is_bounded_account_scoped_and_skips_uninitialized_sessions() 
             vec![],
             vec![event(json!([{"value":"account-a","displayName":"A"}]))],
         ],
+        models: vec![],
         reads: Default::default(),
     };
     let second = AccountCloud {
         histories: vec![vec![event(
             json!([{"value":"account-b","displayName":"B"}]),
         )]],
+        models: vec![],
         reads: Default::default(),
     };
     assert_eq!(
@@ -123,9 +131,81 @@ async fn discovery_is_bounded_account_scoped_and_skips_uninitialized_sessions() 
         "account-b"
     );
     let empty = AccountCloud {
-        histories: vec![vec![]; 6],
+        histories: vec![vec![]; CATALOG_SESSION_LIMIT + 1],
+        models: vec![],
         reads: Default::default(),
     };
     assert_eq!(discover(&empty).await.unwrap(), Catalog::Unknown);
-    assert_eq!(empty.reads.load(std::sync::atomic::Ordering::SeqCst), 5);
+    assert_eq!(
+        empty.reads.load(std::sync::atomic::Ordering::SeqCst),
+        CATALOG_SESSION_LIMIT
+    );
+}
+
+#[tokio::test]
+async fn discovery_finds_fable_beyond_five_recent_opus_sessions() {
+    let opus = event(json!([
+        {"value":"default","displayName":"Default"},
+        {"value":"opus[1m]","displayName":"Latest Opus name","resolvedModel":"claude-opus-5[1m]"}
+    ]));
+    let fable = event(json!([
+        {"value":"opus[1m]","displayName":"Older Opus name"},
+        {"value":"claude-fable-5-1","displayName":"Fable 5.1"}
+    ]));
+    let mut cloud = AccountCloud {
+        histories: vec![vec![opus]; 12],
+        models: vec![Some(Model::parse("claude-opus-5").unwrap()); 12],
+        reads: Default::default(),
+    };
+    cloud.models[0] = Some(Model::parse("claude-fable-5-1").unwrap());
+    cloud.histories[11] = vec![fable];
+    cloud.models[11] = Some(Model::parse("claude-fable-5-1").unwrap());
+    let options = discover(&cloud).await.unwrap().options();
+    assert_eq!(options.len(), 3);
+    assert_eq!(options[1].name, "Latest Opus name");
+    assert_eq!(options[2].model.id(), "claude-fable-5-1");
+    assert_eq!(options[2].name, "Fable 5.1");
+    assert_eq!(cloud.reads.load(std::sync::atomic::Ordering::SeqCst), 2);
+
+    // A configured model is only a sampling hint, not an advertised choice.
+    cloud.histories[11] = vec![];
+    assert!(
+        !discover(&cloud)
+            .await
+            .unwrap()
+            .contains(&Model::parse("claude-fable-5-1").unwrap())
+    );
+}
+
+#[tokio::test]
+async fn discovery_excludes_the_current_session_and_bounds_metadata() {
+    let cloud = AccountCloud {
+        histories: (0..=RECENT_SESSION_LIMIT)
+            .map(|i| {
+                vec![event(json!([
+                    {"value":format!("model-{i}"),"displayName":format!("Model {i}")}
+                ]))]
+            })
+            .collect(),
+        // A distinct model beyond the metadata bound must not be sampled.
+        models: (0..=RECENT_SESSION_LIMIT)
+            .map(|i| {
+                Some(
+                    Model::parse(if i == RECENT_SESSION_LIMIT {
+                        "out-of-bounds"
+                    } else {
+                        "opus"
+                    })
+                    .unwrap(),
+                )
+            })
+            .collect(),
+        reads: Default::default(),
+    };
+    let catalog = discover_excluding(&cloud, Some(&SessionId::parse("cse_0").unwrap()))
+        .await
+        .unwrap();
+    assert!(!catalog.contains(&Model::parse("model-0").unwrap()));
+    assert!(!catalog.contains(&Model::parse(&format!("model-{RECENT_SESSION_LIMIT}")).unwrap()));
+    assert_eq!(catalog.options().len(), CATALOG_SESSION_LIMIT);
 }
