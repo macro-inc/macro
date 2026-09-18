@@ -36,9 +36,12 @@ the junction rather than comparing the JSON array.\n\
 - `entity` columns hold references to Macro things (people, documents). Their values are typed \
 ids, and joining them against the `people` or `documents` magic table is how you get names.\n\
 \n\
-Select and tag columns are created with **no options**; the options come into existence as \
-rows are written. Requires edit access. The response is the table's database schema after the \
-change, including the new column's exact `sqlName`."
+Select and tag columns take their options as **explicit schema**: pass every label the column \
+should accept in `options`. SQL only accepts those labels — a select column created with no \
+options accepts nothing — and more can be added later with AddColumnOptions.\n\
+\n\
+Requires edit access. The response is the table's database schema after the change, including \
+the new column's exact `sqlName`."
 )]
 pub struct AddColumn {
     /// The database the table belongs to.
@@ -75,6 +78,18 @@ pub struct AddColumn {
     )]
     #[serde(default)]
     pub is_multi_select: bool,
+
+    /// The labels a select or tag column accepts.
+    #[schemars(
+        description = "For a select, select_number, or tag column, the allowed labels — e.g. \
+                       [\"Going\", \"Maybe\", \"Declined\"]. SQL writes and reads these labels \
+                       verbatim, and anything else is rejected by the statement, so list every \
+                       value the data actually has. A select_number column's labels must be \
+                       numbers. Omit for other column types; add more later with \
+                       AddColumnOptions."
+    )]
+    #[serde(default)]
+    pub options: Option<Vec<String>>,
 
     /// Make this a link column targeting another table.
     #[schemars(
@@ -145,6 +160,7 @@ where
                         name: self.name.clone(),
                         data_type: self.data_type.into(),
                         is_multi_select: self.is_multi_select,
+                        options: self.options.clone().unwrap_or_default(),
                     },
                     config,
                 },

@@ -157,6 +157,13 @@ pub enum ColumnBinding {
         data_type: DataType,
         /// Whether the column holds multiple values.
         is_multi_select: bool,
+        /// Display labels of the select options the column accepts, for the
+        /// data types that take options ([`DataType::SelectString`],
+        /// [`DataType::SelectNumber`], [`DataType::Tag`]). Options are
+        /// explicit schema: the compiled SQLite column carries a `CHECK`
+        /// listing exactly these labels, so a column created without any
+        /// accepts no value at all. Empty for every other data type.
+        options: Vec<String>,
     },
     /// Bind an existing user/team/system definition.
     ExistingDefinition(PropertyDefinitionId),
@@ -171,6 +178,21 @@ pub struct CreateColumn {
     pub binding: ColumnBinding,
     /// Column-kind configuration (links, lookups).
     pub config: Option<ColumnConfig>,
+}
+
+/// Command to extend a select column's set of allowed options.
+///
+/// Add-only: an option is never renamed or removed here, because both would
+/// change what existing cells mean.
+#[derive(Debug, Clone)]
+pub struct AddColumnOptions {
+    /// Table the column belongs to.
+    pub table_id: TableId,
+    /// The column to extend.
+    pub column_id: ColumnId,
+    /// Display labels to add. Labels already on the column are ignored rather
+    /// than rejected, so re-sending a list is safe.
+    pub labels: Vec<String>,
 }
 
 // ===== The query/exec pipeline =====

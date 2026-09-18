@@ -10,6 +10,7 @@
 //! the service, render the answer. No policy, no SQL, no persistence.
 
 mod add_column;
+mod add_column_options;
 mod create_database;
 mod create_table;
 mod describe_database;
@@ -37,7 +38,8 @@ macro_rules! sql_guide {
          - **`col HAS 'x'`** tests membership in a multi-valued column. It is the one piece of \
          sugar; everything else is plain SQLite.\n\
          - **Select columns take their option labels as text** (`status = 'Going'`), never \
-         option ids.\n\
+         option ids. The options are explicit schema: only the labels the column carries are \
+         accepted, and new ones are added with AddColumnOptions.\n\
          - **Entity columns hold typed ids** (`usr_…`, `doc_…`) — join them against a magic \
          table to get names.\n\
          - **Writes are plain `INSERT` / `UPDATE` / `DELETE`** against the user table and are \
@@ -88,6 +90,7 @@ use crate::domain::models::{
 use crate::domain::ports::DatabasesService;
 
 pub use add_column::{AddColumn, AddColumnResponse};
+pub use add_column_options::{AddColumnOptions, AddColumnOptionsResponse};
 pub use create_database::CreateDatabase;
 pub use create_table::{CreateTable, CreateTableResponse};
 pub use describe_database::DescribeDatabase;
@@ -190,6 +193,7 @@ where
         .add_tool::<CreateDatabase, DatabasesToolContext<S, E>>()
         .add_tool::<CreateTable, DatabasesToolContext<S, E>>()
         .add_tool::<AddColumn, DatabasesToolContext<S, E>>()
+        .add_tool::<AddColumnOptions, DatabasesToolContext<S, E>>()
 }
 
 /// The acting user, as the service's query surface understands them.

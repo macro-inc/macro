@@ -886,7 +886,9 @@ export type ReadThreadReadContent =
  * - `linkToTableId` makes it a **link column** pointing at another table, so rows on one side reference rows on the other. Link columns are many-to-many and junction-backed; join through the junction rather than comparing the JSON array.
  * - `entity` columns hold references to Macro things (people, documents). Their values are typed ids, and joining them against the `people` or `documents` magic table is how you get names.
  *
- * Select and tag columns are created with **no options**; the options come into existence as rows are written. Requires edit access. The response is the table's database schema after the change, including the new column's exact `sqlName`.
+ * Select and tag columns take their options as **explicit schema**: pass every label the column should accept in `options`. SQL only accepts those labels — a select column created with no options accepts nothing — and more can be added later with AddColumnOptions.
+ *
+ * Requires edit access. The response is the table's database schema after the change, including the new column's exact `sqlName`.
  */
 export interface AddColumn {
   /**
@@ -906,6 +908,10 @@ export interface AddColumn {
    * True if a cell can hold several values at once. Defaults to false. Multi-valued cells read as JSON arrays in SQL and get a junction table; test membership with `col HAS 'x'`.
    */
   isMultiSelect?: boolean;
+  /**
+   * For a select, select_number, or tag column, the allowed labels — e.g. ["Going", "Maybe", "Declined"]. SQL writes and reads these labels verbatim, and anything else is rejected by the statement, so list every value the data actually has. A select_number column's labels must be numbers. Omit for other column types; add more later with AddColumnOptions.
+   */
+  options?: string[] | null;
   /**
    * Id of another table to link to, making this a link column whose rows reference rows over there. Omit for an ordinary column. The target table must be one the user can reach.
    */
@@ -1003,6 +1009,45 @@ export interface ToolColumn {
    * Whether SQL may write to this column.
    */
   writable: boolean;
+}
+/**
+ * Add allowed labels to a select, select_number, or tag column. A select column's options are explicit schema: SQL accepts exactly the labels the column carries and rejects everything else, so a value that does not exist yet has to be added here before it can be written.
+ *
+ * Use this when an INSERT or UPDATE was rejected for an unknown option, or when the user names a new status, stage, or category. Labels the column already has are ignored, so it is safe to send the whole set. A select_number column's labels must be numbers.
+ *
+ * This is add-only — options are never renamed or removed here, because both would change what rows already holding them mean. Requires edit access. The response is the column after the change, with the labels SQL now accepts, plus the database's refreshed schema.
+ */
+export interface AddColumnOptions {
+  /**
+   * Id of the database the column belongs to, from ListDatabases.
+   */
+  databaseId: string;
+  /**
+   * Id of the table the column belongs to, from DescribeDatabase. It must belong to databaseId.
+   */
+  tableId: string;
+  /**
+   * Id of the column to add options to, from DescribeDatabase. It must be a select, select_number, or tag column.
+   */
+  columnId: string;
+  /**
+   * The labels to add, as SQL will write them — e.g. ["Waitlisted"]. Labels the column already has are ignored.
+   */
+  labels: string[];
+}
+/**
+ * Response from the AddColumnOptions tool.
+ */
+export interface AddColumnOptionsResponse {
+  /**
+   * The column's id.
+   */
+  columnId: string;
+  /**
+   * Every label the column now accepts, in display order.
+   */
+  options: string[];
+  database: ToolDatabaseSchema;
 }
 /**
  * Execute a bash command in a sandboxed environment using Claude's built-in code execution tool.
@@ -2607,9 +2652,10 @@ export interface DeleteTagResponse {
  * - **`row_id` is the primary key** of every user table. It is minted by the server; never insert one yourself.
  * - **Multi-valued columns are JSON arrays**, and each one also has a companion junction table `table__column(row_id, linked_id)` for flat joins.
  * - **`col HAS 'x'`** tests membership in a multi-valued column. It is the one piece of sugar; everything else is plain SQLite.
- * - **Select columns take their option labels as text** (`status = 'Going'`), never option ids.
+ * - **Select columns take their option labels as text** (`status = 'Going'`), never option ids. The options are explicit schema: only the labels the column carries are accepted, and new ones are added with AddColumnOptions.
  * - **Entity columns hold typed ids** (`usr_…`, `doc_…`) — join them against a magic table to get names.
  * - **Writes are plain `INSERT` / `UPDATE` / `DELETE`** against the user table and are validated against the column schema; an unknown select option or a wrong type is rejected by the statement, not silently coerced.
+ * - **Write to a table's own name**, the one `DescribeDatabase` reports as its `sql_name`. A table may also answer to a second, database-qualified name; that alias is a view and reads only, so writing through it is rejected.
  * - Tables you only hold view access on are read-only, and magic tables always are.
  */
 export interface DescribeDatabase {
@@ -4124,9 +4170,10 @@ export interface NameSearch {
  * - **`row_id` is the primary key** of every user table. It is minted by the server; never insert one yourself.
  * - **Multi-valued columns are JSON arrays**, and each one also has a companion junction table `table__column(row_id, linked_id)` for flat joins.
  * - **`col HAS 'x'`** tests membership in a multi-valued column. It is the one piece of sugar; everything else is plain SQLite.
- * - **Select columns take their option labels as text** (`status = 'Going'`), never option ids.
+ * - **Select columns take their option labels as text** (`status = 'Going'`), never option ids. The options are explicit schema: only the labels the column carries are accepted, and new ones are added with AddColumnOptions.
  * - **Entity columns hold typed ids** (`usr_…`, `doc_…`) — join them against a magic table to get names.
  * - **Writes are plain `INSERT` / `UPDATE` / `DELETE`** against the user table and are validated against the column schema; an unknown select option or a wrong type is rejected by the statement, not silently coerced.
+ * - **Write to a table's own name**, the one `DescribeDatabase` reports as its `sql_name`. A table may also answer to a second, database-qualified name; that alias is a view and reads only, so writing through it is rejected.
  * - Tables you only hold view access on are read-only, and magic tables always are.
  *
  * Results come back as columns and rows. A column whose values are entity ids carries an `entityType`, which is how the app renders it as a clickable chip rather than as raw text — prefer selecting an entity column over stringifying it. Writes report `changesApplied` and, for inserts, the `insertedRowIds` the server minted.

@@ -17,16 +17,18 @@ use entity_access::domain::models::{
     AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, OwnerAccessLevel,
     RequiredPermission, ViewAccessLevel,
 };
+use models_properties::service::property_option::PropertyOptionValue;
+use models_properties::shared::DataType;
 use uuid::Uuid;
 
 use crate::domain::catalog::{self, JunctionKind, TableEntry};
 use crate::domain::materialize;
 use crate::domain::models::{
-    AccessGrant, ApplyOutcome, Catalog, ColumnBinding, ColumnConfig, ColumnDetail, ColumnId,
-    CreateColumn, CreateDatabase, CreateTable, Database, DatabaseDetail, DatabaseError, DatabaseId,
-    ExecOutcome, ExecRequest, ListedDatabase, MaterializedTable, QueryError, QueryResult,
-    RawRowChange, Row, RowChange, RowId, SqliteSnapshot, Table, TableDeps, TableDetail, TableId,
-    TableSchema, TableSource, TableVersion, Viewer,
+    AccessGrant, AddColumnOptions, ApplyOutcome, Catalog, ColumnBinding, ColumnConfig,
+    ColumnDetail, ColumnId, CreateColumn, CreateDatabase, CreateTable, Database, DatabaseDetail,
+    DatabaseError, DatabaseId, ExecOutcome, ExecRequest, ListedDatabase, MaterializedTable,
+    QueryError, QueryResult, RawRowChange, Row, RowChange, RowId, SqliteSnapshot, Table, TableDeps,
+    TableDetail, TableId, TableSchema, TableSource, TableVersion, Viewer,
 };
 use crate::domain::ports::{
     AccessDirectory, ColumnDefinitionStore, DatabasesRepo, DatabasesService, MagicTables,
@@ -39,6 +41,8 @@ use crate::domain::translate::translate;
 const STARTER_TABLE_NAME: &str = "Table 1";
 /// Longest accepted database/table/column name.
 const MAX_NAME_LEN: usize = 200;
+/// Longest accepted select-option label.
+const MAX_OPTION_LABEL_LEN: usize = 200;
 /// Longest accepted statement text; SQLite enforces the same cap.
 const MAX_SQL_LEN: usize = 256 * 1024;
 /// Most rows any one table may contribute to a materialization.
@@ -110,6 +114,71 @@ fn validate_name(name: &str) -> Result<String, DatabaseError> {
 
 fn same_name(a: &str, b: &str) -> bool {
     a.trim().eq_ignore_ascii_case(b.trim())
+}
+
+/// Whether a data type's cells are drawn from an explicit set of options.
+fn takes_options(data_type: DataType) -> bool {
+    matches!(
+        data_type,
+        DataType::SelectString | DataType::SelectNumber | DataType::Tag
+    )
+}
+
+/// The value the properties system stores for one display label.
+///
+/// A numeric select stores numbers, so its labels have to parse as one;
+/// letting `"soon"` through would store it as text and leave a cell SQL can
+/// never satisfy.
+fn option_value(data_type: DataType, label: &str) -> Result<PropertyOptionValue, DatabaseError> {
+    if data_type != DataType::SelectNumber {
+        return Ok(PropertyOptionValue::String(label.to_string()));
+    }
+    match label.parse::<f64>() {
+        Ok(number) if number.is_finite() => Ok(PropertyOptionValue::Number(number)),
+        _ => Err(DatabaseError::InvalidSchemaOperation(format!(
+            "`{label}` is not a number; the options of a numeric select column must be numbers"
+        ))),
+    }
+}
+
+/// Validate option labels and turn them into stored values, dropping the ones
+/// the column already has.
+///
+/// `existing` are the column's current labels. Re-adding one is a no-op rather
+/// than an error: a caller re-sending the full set of options it wants should
+/// end up with exactly that set, not a failure.
+fn validate_option_labels(
+    data_type: DataType,
+    labels: &[String],
+    existing: &[String],
+) -> Result<Vec<PropertyOptionValue>, DatabaseError> {
+    let mut taken: HashSet<String> = existing.iter().map(|label| option_key(label)).collect();
+    let mut values = Vec::new();
+    for label in labels {
+        let trimmed = label.trim();
+        if trimmed.is_empty() {
+            return Err(DatabaseError::InvalidSchemaOperation(
+                "an option label must not be empty".into(),
+            ));
+        }
+        if trimmed.chars().count() > MAX_OPTION_LABEL_LEN {
+            return Err(DatabaseError::InvalidSchemaOperation(format!(
+                "an option label must be at most {MAX_OPTION_LABEL_LEN} characters"
+            )));
+        }
+        let value = option_value(data_type, trimmed)?;
+        // Compare on the label SQL will see: `2.0` and `2` are one numeric
+        // option, and `Main` and `main` would compile to indistinguishable
+        // `CHECK` entries.
+        if taken.insert(option_key(&catalog::option_display(&value))) {
+            values.push(value);
+        }
+    }
+    Ok(values)
+}
+
+fn option_key(label: &str) -> String {
+    label.trim().to_lowercase()
 }
 
 /// The viewer's catalog plus the entries needed to materialize and translate.
@@ -547,6 +616,42 @@ where
         Ok((database, tables))
     }
 
+    /// One column as the client sees it, named against the same catalog the
+    /// query surface uses so its `sql_name` is the one SQL answers to.
+    async fn column_detail(
+        &self,
+        viewer: &Viewer,
+        database_id: DatabaseId,
+        grant: AccessGrant,
+        table_id: TableId,
+        column_id: ColumnId,
+    ) -> Result<ColumnDetail, DatabaseError> {
+        let grants = self
+            .viewer_grants(viewer, database_id, grant)
+            .await
+            .map_err(repo_err)?;
+        let entries = self
+            .entries_for(&grants, &self.reserved_names())
+            .await
+            .map_err(|e| DatabaseError::Repo(rootcause::Report::new(e).into_dynamic()))?;
+        Self::entries_of(entries, database_id)
+            .into_iter()
+            .find(|entry| entry.table.id == table_id)
+            .and_then(|entry| {
+                entry
+                    .columns
+                    .into_iter()
+                    .find(|column| column.column.id == column_id)
+            })
+            .map(|column| ColumnDetail {
+                column: column.column,
+                sql_name: column.sql_name,
+                definition: column.definition,
+                writable: column.writable,
+            })
+            .ok_or(DatabaseError::NotFound)
+    }
+
     /// The receipted database regardless of its trash state — the lifecycle
     /// operations (trash, restore, permanent delete) act on trashed rows too.
     async fn database_by_receipt<T: RequiredPermission>(
@@ -786,17 +891,32 @@ where
             .into_iter()
             .map(|d| d.definition.display_name)
             .collect();
-        let binding = match cmd.binding {
+        let (binding, option_values) = match cmd.binding {
             ColumnBinding::NewDefinition {
                 name,
                 data_type,
                 is_multi_select,
-            } => ColumnBinding::NewDefinition {
-                name: validate_name(&name)?,
-                data_type,
-                is_multi_select,
-            },
-            other => other,
+                options,
+            } => {
+                if !options.is_empty() && !takes_options(data_type) {
+                    return Err(DatabaseError::InvalidSchemaOperation(
+                        "options are only valid on select, select_number, and tag columns".into(),
+                    ));
+                }
+                // Validated before anything is written, so a bad label cannot
+                // leave a half-built column behind.
+                let values = validate_option_labels(data_type, &options, &[])?;
+                (
+                    ColumnBinding::NewDefinition {
+                        name: validate_name(&name)?,
+                        data_type,
+                        is_multi_select,
+                        options,
+                    },
+                    values,
+                )
+            }
+            other => (other, Vec::new()),
         };
         if let ColumnBinding::NewDefinition { name, .. } = &binding
             && existing_names.iter().any(|n| same_name(n, name))
@@ -818,6 +938,12 @@ where
             .resolve_binding(database.id, &viewer, &binding)
             .await
             .map_err(|e| DatabaseError::InvalidSchemaOperation(e.to_string()))?;
+        if !option_values.is_empty() {
+            self.definitions
+                .add_options(definition_id, &option_values)
+                .await
+                .map_err(repo_err)?;
+        }
         let cmd = CreateColumn { binding, ..cmd };
         let column_id = self
             .repo
@@ -829,6 +955,81 @@ where
                 .await;
         }
         Ok(column_id)
+    }
+
+    #[tracing::instrument(skip(self, receipt), err)]
+    async fn add_column_options(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        viewer: Viewer,
+        cmd: AddColumnOptions,
+    ) -> Result<ColumnDetail, DatabaseError> {
+        let (database, tables) = self.database_for_edit(&receipt).await?;
+        if !tables.iter().any(|t| t.id == cmd.table_id) {
+            // The receipt covers this database only; a table elsewhere is
+            // indistinguishable from a missing one.
+            return Err(DatabaseError::NotFound);
+        }
+        let columns = self
+            .repo
+            .columns_for_tables(&[cmd.table_id])
+            .await
+            .map_err(repo_err)?;
+        let column = columns
+            .iter()
+            .find(|c| c.id == cmd.column_id)
+            .ok_or(DatabaseError::NotFound)?;
+        let definition = self
+            .definitions
+            .definitions(&[column.property_definition_id])
+            .await
+            .map_err(repo_err)?
+            .into_iter()
+            .next()
+            .ok_or(DatabaseError::NotFound)?;
+
+        let data_type = definition.definition.data_type;
+        if !takes_options(data_type) {
+            return Err(DatabaseError::InvalidSchemaOperation(
+                "only select, select_number, and tag columns have options".into(),
+            ));
+        }
+        let existing: Vec<String> = definition
+            .property_options
+            .iter()
+            .map(|option| catalog::option_display(&option.value))
+            .collect();
+        let values = validate_option_labels(data_type, &cmd.labels, &existing)?;
+
+        // Every label was already there: nothing changed, so nothing is
+        // written, versioned, or announced.
+        if !values.is_empty() {
+            self.definitions
+                .add_options(definition.definition.id, &values)
+                .await
+                .map_err(repo_err)?;
+            // Options compile into the column's CHECK constraint, so the
+            // table's shape moved and cached materializations are stale.
+            let version = self
+                .repo
+                .bump_table_version(cmd.table_id)
+                .await
+                .map_err(repo_err)?;
+            self.publish(
+                &HashMap::from([(cmd.table_id, database.id)]),
+                &HashMap::from([(cmd.table_id, version)]),
+            )
+            .await;
+        }
+
+        self.column_detail(
+            &viewer,
+            database.id,
+            receipt_grant(&receipt, AccessGrant::Edit),
+            cmd.table_id,
+            cmd.column_id,
+        )
+        .await
     }
 
     #[tracing::instrument(skip(self, req), err)]

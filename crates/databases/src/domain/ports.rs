@@ -7,13 +7,14 @@ use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 
 use crate::domain::models::{
-    AccessGrant, ApplyOutcome, Catalog, Column, ColumnBinding, ColumnId, CreateColumn,
-    CreateDatabase, CreateTable, Database, DatabaseDetail, DatabaseError, DatabaseId, ExecOutcome,
-    ExecRequest, ListedDatabase, MaterializedTable, PropertyDefinitionId, QueryError, QueryResult,
-    RawRowChange, Row, RowChange, RowId, SqliteSnapshot, Table, TableDeps, TableId, TableVersion,
-    Viewer,
+    AccessGrant, AddColumnOptions, ApplyOutcome, Catalog, Column, ColumnBinding, ColumnDetail,
+    ColumnId, CreateColumn, CreateDatabase, CreateTable, Database, DatabaseDetail, DatabaseError,
+    DatabaseId, ExecOutcome, ExecRequest, ListedDatabase, MaterializedTable, PropertyDefinitionId,
+    QueryError, QueryResult, RawRowChange, Row, RowChange, RowId, SqliteSnapshot, Table, TableDeps,
+    TableId, TableVersion, Viewer,
 };
 
 /// Outbound persistence port for databases, tables, column placements, rows,
@@ -81,6 +82,17 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         property_definition_id: PropertyDefinitionId,
         cmd: &CreateColumn,
     ) -> impl Future<Output = Result<ColumnId, Self::Err>> + Send;
+
+    /// Bump a table's version and return the new one.
+    ///
+    /// For schema changes that happen outside [`DatabasesRepo::create_column`]
+    /// and [`DatabasesRepo::apply_changes`] — adding a select option rewrites
+    /// the table's compiled `CHECK`, so every materialization keyed on the
+    /// version has to be rebuilt.
+    fn bump_table_version(
+        &self,
+        table_id: TableId,
+    ) -> impl Future<Output = Result<TableVersion, Self::Err>> + Send;
 
     /// Fetch a table's rows in position order, at most `limit` of them.
     ///
@@ -168,6 +180,20 @@ pub trait ColumnDefinitionStore: Send + Sync + 'static {
         viewer: &Viewer,
         binding: &ColumnBinding,
     ) -> impl Future<Output = Result<PropertyDefinitionId, Self::Err>> + Send;
+
+    /// Append select options to a definition, returning the created rows in
+    /// the order given.
+    ///
+    /// Mechanics only: the caller has already checked that the definition
+    /// takes options and that none of these values is on it yet, and has
+    /// turned each display label into the value the properties system stores
+    /// (a number for [`models_properties::shared::DataType::SelectNumber`], a
+    /// string otherwise).
+    fn add_options(
+        &self,
+        definition_id: PropertyDefinitionId,
+        values: &[PropertyOptionValue],
+    ) -> impl Future<Output = Result<Vec<PropertyOption>, Self::Err>> + Send;
 
     /// Fetch the definitions (with options) behind a set of column placements.
     fn definitions(
@@ -301,6 +327,18 @@ pub trait DatabasesService: Send + Sync + 'static {
         viewer: Viewer,
         cmd: CreateColumn,
     ) -> impl Future<Output = Result<ColumnId, DatabaseError>> + Send;
+
+    /// Extend a select column's allowed options.
+    ///
+    /// Options are part of the compiled schema (a `CHECK` on the column), so
+    /// this bumps the table's version and announces the change. Add-only, and
+    /// idempotent: a label the column already has is ignored.
+    fn add_column_options(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        viewer: Viewer,
+        cmd: AddColumnOptions,
+    ) -> impl Future<Output = Result<ColumnDetail, DatabaseError>> + Send;
 
     /// Execute SQL for a viewer — the whole read/write surface.
     ///

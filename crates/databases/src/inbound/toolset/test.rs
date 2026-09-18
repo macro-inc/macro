@@ -47,7 +47,8 @@ struct Calls {
     executed: Vec<String>,
     created_databases: Vec<String>,
     created_tables: Vec<String>,
-    created_columns: Vec<(Uuid, DataType, bool)>,
+    created_columns: Vec<(Uuid, DataType, bool, Vec<String>)>,
+    added_options: Vec<(Uuid, Vec<String>)>,
 }
 
 #[derive(Clone, Default)]
@@ -213,17 +214,40 @@ impl DatabasesService for FakeService {
         let crate::domain::models::ColumnBinding::NewDefinition {
             data_type,
             is_multi_select,
+            options,
             ..
         } = cmd.binding
         else {
             panic!("the tool only ever creates fresh definitions");
         };
+        self.calls.lock().unwrap().created_columns.push((
+            cmd.table_id,
+            data_type,
+            is_multi_select,
+            options,
+        ));
+        Ok(COLUMN_ID)
+    }
+
+    async fn add_column_options(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        _viewer: Viewer,
+        cmd: crate::domain::models::AddColumnOptions,
+    ) -> Result<ColumnDetail, DatabaseError> {
         self.calls
             .lock()
             .unwrap()
-            .created_columns
-            .push((cmd.table_id, data_type, is_multi_select));
-        Ok(COLUMN_ID)
+            .added_options
+            .push((cmd.column_id, cmd.labels.clone()));
+        let mut column = status_column();
+        for (offset, label) in cmd.labels.iter().enumerate() {
+            column
+                .definition
+                .property_options
+                .push(option(label, 2 + offset as i32));
+        }
+        Ok(column)
     }
 
     async fn exec_sql(
@@ -440,6 +464,12 @@ fn every_tool_schema_is_valid() {
             .name,
         "AddColumn"
     );
+    assert_eq!(
+        generate_validated_input_schema::<AddColumnOptions>()
+            .expect("schema should validate")
+            .name,
+        "AddColumnOptions"
+    );
 }
 
 /// The dialect note is the whole reason a model can write correct SQL on the
@@ -471,10 +501,11 @@ fn toolset_builds_with_every_tool() {
         "CreateDatabase",
         "CreateTable",
         "AddColumn",
+        "AddColumnOptions",
     ] {
         assert!(toolset.tools.contains_key(name), "missing {name}");
     }
-    assert_eq!(toolset.tools.len(), 6);
+    assert_eq!(toolset.tools.len(), 7);
     assert!(
         toolset.user_tools.is_empty(),
         "database tools run in the loop, none are user-executed"
@@ -558,6 +589,7 @@ async fn adding_a_column_needs_more_than_view_access() {
         name: "Dietary Needs".to_string(),
         data_type: ColumnType::Select,
         is_multi_select: true,
+        options: Some(vec!["Vegan".to_string()]),
         link_to_table_id: None,
     }
     .call(ServiceContext(context), request_context())
@@ -585,6 +617,7 @@ async fn adding_a_column_passes_the_type_through() {
         name: "Dietary Needs".to_string(),
         data_type: ColumnType::Select,
         is_multi_select: true,
+        options: Some(vec!["Vegan".to_string(), "Gluten-free".to_string()]),
         link_to_table_id: None,
     }
     .call(ServiceContext(context), request_context())
@@ -594,7 +627,12 @@ async fn adding_a_column_passes_the_type_through() {
     assert_eq!(response.column_id, COLUMN_ID);
     assert_eq!(
         calls.lock().unwrap().created_columns,
-        vec![(TABLE_ID, DataType::SelectString, true)]
+        vec![(
+            TABLE_ID,
+            DataType::SelectString,
+            true,
+            vec!["Vegan".to_string(), "Gluten-free".to_string()]
+        )]
     );
 }
 
@@ -738,4 +776,70 @@ fn the_response_serializes_with_camel_case_keys() {
     assert!(json["tables"][0]["sqlName"].is_string());
     assert!(json["tables"][0]["columns"][0]["isMultiSelect"].is_boolean());
     assert!(json["sqlGuide"].is_string());
+}
+
+// --- select options are explicit schema ---
+
+/// The description is what stops a model creating an optionless select column
+/// and then failing every INSERT against it.
+#[test]
+fn add_column_teaches_that_options_are_explicit() {
+    let validated = generate_validated_input_schema::<AddColumn>().expect("schema should validate");
+
+    assert!(
+        validated.description.contains("explicit schema"),
+        "{}",
+        validated.description
+    );
+    assert!(
+        validated.description.contains("AddColumnOptions"),
+        "the description must point at the way to add more: {}",
+        validated.description
+    );
+}
+
+#[tokio::test]
+async fn adding_options_needs_more_than_view_access() {
+    let (context, calls) = context(FakeAccess::granting(AccessLevel::View));
+    let error = AddColumnOptions {
+        database_id: DATABASE_ID,
+        table_id: TABLE_ID,
+        column_id: COLUMN_ID,
+        labels: vec!["Waitlisted".to_string()],
+    }
+    .call(ServiceContext(context), request_context())
+    .await
+    .expect_err("view access cannot change the schema");
+
+    assert!(
+        error
+            .description
+            .contains("does not have permission to edit"),
+        "{}",
+        error.description
+    );
+    assert!(calls.lock().unwrap().added_options.is_empty());
+}
+
+/// The response carries the labels SQL now accepts, so the model can write the
+/// statement that just failed without describing the database again.
+#[tokio::test]
+async fn adding_options_returns_the_labels_sql_accepts() {
+    let (context, calls) = context(FakeAccess::granting(AccessLevel::Edit));
+    let response = AddColumnOptions {
+        database_id: DATABASE_ID,
+        table_id: TABLE_ID,
+        column_id: COLUMN_ID,
+        labels: vec!["Waitlisted".to_string()],
+    }
+    .call(ServiceContext(context), request_context())
+    .await
+    .expect("edit access may extend a select column");
+
+    assert_eq!(response.column_id, COLUMN_ID);
+    assert_eq!(response.options, vec!["Going", "Declined", "Waitlisted"]);
+    assert_eq!(
+        calls.lock().unwrap().added_options,
+        vec![(COLUMN_ID, vec!["Waitlisted".to_string()])]
+    );
 }

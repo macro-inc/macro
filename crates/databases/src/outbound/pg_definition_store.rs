@@ -13,8 +13,11 @@ mod test;
 
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use models_properties::service::property_option::{PropertyOption, PropertyOptionValue};
 use models_properties::{DataType, EntityType, db};
-use properties::outbound::property_option_queries::get_property_options_batch;
+use properties::outbound::property_option_queries::{
+    create_property_option, get_property_options, get_property_options_batch,
+};
 use sqlx::PgPool;
 
 use crate::domain::models::{ColumnBinding, DatabaseId, PropertyDefinitionId, Viewer};
@@ -32,6 +35,15 @@ pub enum PgDefinitionStoreError {
     /// A stored option row could not be decoded into a `PropertyOption`.
     #[error("malformed property option: {0}")]
     MalformedOption(String),
+}
+
+/// The `properties` option helpers are anyhow-typed; their only failure modes
+/// are a query error and a malformed option row.
+fn from_properties_error(error: anyhow::Error) -> PgDefinitionStoreError {
+    match error.downcast::<sqlx::Error>() {
+        Ok(sqlx_error) => PgDefinitionStoreError::Sqlx(sqlx_error),
+        Err(other) => PgDefinitionStoreError::MalformedOption(other.to_string()),
+    }
 }
 
 /// [`ColumnDefinitionStore`] backed by MacroDB's `property_definitions` and
@@ -95,10 +107,13 @@ impl ColumnDefinitionStore for PgDefinitionStore {
         binding: &ColumnBinding,
     ) -> Result<PropertyDefinitionId, Self::Err> {
         match binding {
+            // Options are attached separately, through
+            // [`ColumnDefinitionStore::add_options`], once the definition exists.
             ColumnBinding::NewDefinition {
                 name,
                 data_type,
                 is_multi_select,
+                options: _,
             } => {
                 self.create_database_definition(database_id, name, *data_type, *is_multi_select)
                     .await
@@ -129,6 +144,43 @@ impl ColumnDefinitionStore for PgDefinitionStore {
                 .ok_or(PgDefinitionStoreError::NotFound(*id))
             }
         }
+    }
+
+    #[tracing::instrument(skip(self), err)]
+    async fn add_options(
+        &self,
+        definition_id: PropertyDefinitionId,
+        values: &[PropertyOptionValue],
+    ) -> Result<Vec<PropertyOption>, Self::Err> {
+        if values.is_empty() {
+            return Ok(Vec::new());
+        }
+        // New options go after the ones already there, so the order the user
+        // sees (and the labels the catalog derives from it) is stable.
+        let mut display_order = get_property_options(&self.pool, definition_id)
+            .await
+            .map_err(from_properties_error)?
+            .iter()
+            .map(|option| option.display_order)
+            .max()
+            .map_or(0, |highest| highest + 1);
+
+        let mut created = Vec::with_capacity(values.len());
+        for value in values {
+            created.push(
+                create_property_option(
+                    &self.pool,
+                    definition_id,
+                    display_order,
+                    value.clone(),
+                    None,
+                )
+                .await
+                .map_err(from_properties_error)?,
+            );
+            display_order += 1;
+        }
+        Ok(created)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -164,14 +216,7 @@ impl ColumnDefinitionStore for PgDefinitionStore {
 
         let mut options = get_property_options_batch(&self.pool, ids)
             .await
-            .map_err(|e| {
-                // The helper is anyhow-typed; its only failure modes are a query
-                // error and a malformed option row.
-                match e.downcast::<sqlx::Error>() {
-                    Ok(sqlx_error) => PgDefinitionStoreError::Sqlx(sqlx_error),
-                    Err(other) => PgDefinitionStoreError::MalformedOption(other.to_string()),
-                }
-            })?;
+            .map_err(from_properties_error)?;
 
         Ok(rows
             .into_iter()

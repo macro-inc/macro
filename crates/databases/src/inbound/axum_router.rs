@@ -7,7 +7,8 @@
 //! - `GET /` — list the caller's databases; `POST /` — create one.
 //! - `GET /{id}` — schema detail (tables, columns, definitions, SQL names).
 //! - `GET /{id}/sqlite` — download a database as a SQLite file (takeout).
-//! - `POST /{id}/tables`, `POST /{id}/tables/{table_id}/columns` — schema
+//! - `POST /{id}/tables`, `POST /{id}/tables/{table_id}/columns`,
+//!   `POST /{id}/tables/{table_id}/columns/{column_id}/options` — schema
 //!   operations, which stay structured because property definitions carry
 //!   configuration DDL cannot express.
 //!
@@ -36,9 +37,9 @@ use serde::Deserialize;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    ColumnBinding, ColumnConfig, ColumnId, CreateColumn, CreateDatabase, CreateTable, Database,
-    DatabaseDetail, DatabaseError, ExecOutcome, ExecRequest, ListedDatabase, QueryError, Table,
-    TableVersion, Viewer,
+    AddColumnOptions, ColumnBinding, ColumnConfig, ColumnDetail, ColumnId, CreateColumn,
+    CreateDatabase, CreateTable, Database, DatabaseDetail, DatabaseError, ExecOutcome, ExecRequest,
+    ListedDatabase, QueryError, Table, TableVersion, Viewer,
 };
 use crate::domain::ports::DatabasesService;
 
@@ -109,6 +110,10 @@ where
             "/{id}/tables/{table_id}/columns",
             post(create_column_handler::<S, Eas, Auth>),
         )
+        .route(
+            "/{id}/tables/{table_id}/columns/{column_id}/options",
+            post(add_column_options_handler::<S, Eas, Auth>),
+        )
         .with_state(state)
 }
 
@@ -147,6 +152,11 @@ pub enum ColumnBindingRequest {
         /// Whether the column holds multiple values.
         #[serde(default)]
         is_multi_select: bool,
+        /// For a select or tag column, the labels SQL will accept. A select
+        /// column created without any accepts nothing until options are added.
+        #[serde(default)]
+        #[schema(nullable = false)]
+        options: Option<Vec<String>>,
     },
     /// Bind an existing user/team/system definition.
     Existing {
@@ -196,6 +206,34 @@ pub struct ColumnPath {
     /// Table id.
     pub table_id: Uuid,
 }
+
+/// Path params for the column-options route.
+#[derive(Debug, Deserialize)]
+pub struct ColumnOptionsPath {
+    /// Database id.
+    pub id: Uuid,
+    /// Table id.
+    pub table_id: Uuid,
+    /// Column id.
+    pub column_id: Uuid,
+}
+
+/// Request body for adding options to a select column.
+#[derive(Debug, Deserialize, utoipa::ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct AddColumnOptionsRequest {
+    /// Display labels to add. Labels the column already has are ignored.
+    pub labels: Vec<String>,
+}
+
+/// The bytes of a SQLite database file.
+///
+/// Its only job is to make the response body binary in the OpenAPI document;
+/// `Vec<u8>` would be described as an array of integers and generate clients
+/// that parse the file as JSON.
+#[derive(utoipa::ToSchema)]
+#[schema(value_type = String, format = Binary)]
+pub struct SqliteFile(pub Vec<u8>);
 
 /// List the caller's databases.
 #[utoipa::path(
@@ -342,7 +380,7 @@ where
     path = "/databases/{id}/sqlite",
     params(("id" = Uuid, Path, description = "Database id")),
     responses(
-        (status = 200, description = "A SQLite database file", content_type = "application/vnd.sqlite3", body = Vec<u8>),
+        (status = 200, description = "A SQLite database file", content_type = "application/vnd.sqlite3", body = SqliteFile),
         (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
         (status = 403, description = "No access to the database", body = ErrorResponse),
         (status = 500, body = ErrorResponse),
@@ -461,10 +499,12 @@ where
             name,
             data_type,
             is_multi_select,
+            options,
         } => ColumnBinding::NewDefinition {
             name,
             data_type,
             is_multi_select,
+            options: options.unwrap_or_default(),
         },
         ColumnBindingRequest::Existing {
             property_definition_id,
@@ -490,6 +530,58 @@ where
         StatusCode::CREATED,
         Json(CreateColumnResponse { column_id }),
     ))
+}
+
+/// Add options to a select column.
+#[utoipa::path(
+    post,
+    tag = "databases",
+    operation_id = "add_database_column_options",
+    path = "/databases/{id}/tables/{table_id}/columns/{column_id}/options",
+    params(
+        ("id" = Uuid, Path, description = "Database id"),
+        ("table_id" = Uuid, Path, description = "Table id"),
+        ("column_id" = Uuid, Path, description = "Column id"),
+    ),
+    request_body = AddColumnOptionsRequest,
+    responses(
+        (status = 200, body = ColumnDetail),
+        (status = 400, description = "Not a select column, or an invalid label", body = ErrorResponse),
+        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+        (status = 403, description = "No edit access to the database", body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
+pub async fn add_column_options_handler<S, Eas, Auth>(
+    access: DatabaseAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
+    State(state): State<DatabasesRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(ColumnOptionsPath {
+        id: _,
+        table_id,
+        column_id,
+    }): Path<ColumnOptionsPath>,
+    Json(req): Json<AddColumnOptionsRequest>,
+) -> Result<Json<ColumnDetail>, DatabaseError>
+where
+    S: DatabasesService,
+    Eas: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let column = state
+        .service
+        .add_column_options(
+            access.entity_access_receipt,
+            viewer_of(&user),
+            AddColumnOptions {
+                table_id,
+                column_id,
+                labels: req.labels,
+            },
+        )
+        .await?;
+    Ok(Json(column))
 }
 
 impl IntoResponse for DatabaseError {

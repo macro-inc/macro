@@ -80,10 +80,12 @@ use databases::domain::models::{
     TableVersion as DatabaseTableVersion,
 };
 use databases::inbound::axum_router::{
+    AddColumnOptionsRequest as DatabaseAddColumnOptionsRequest,
     ColumnBindingRequest as DatabaseColumnBindingRequest,
     CreateColumnRequest as DatabaseCreateColumnRequest,
     CreateColumnResponse as DatabaseCreateColumnResponse, CreateDatabaseRequest,
     CreateTableRequest as DatabaseCreateTableRequest, ExecRequestBody as DatabaseExecRequestBody,
+    SqliteFile as DatabaseSqliteFile,
 };
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
@@ -345,6 +347,7 @@ use utoipa::OpenApi;
         databases::inbound::axum_router::sqlite_snapshot_handler,
         databases::inbound::axum_router::create_table_handler,
         databases::inbound::axum_router::create_column_handler,
+        databases::inbound::axum_router::add_column_options_handler,
         // collab surfaces
         collab_surface::inbound::axum_router::ensure_surface_handler,
         collab_surface::inbound::axum_router::get_surface_handler,
@@ -515,6 +518,8 @@ use utoipa::OpenApi;
             DatabaseColumnBindingRequest,
             DatabaseCreateColumnRequest,
             DatabaseCreateColumnResponse,
+            DatabaseAddColumnOptionsRequest,
+            DatabaseSqliteFile,
             DatabaseExecRequestBody,
             CreateReminderRequest,
             UpdateReminderRequest,

@@ -78,6 +78,8 @@ fn new_definition(name: &str, data_type: DataType) -> ColumnBinding {
         name: name.to_string(),
         data_type,
         is_multi_select: false,
+        // Options are attached through `add_options`, never by the binding.
+        options: vec![],
     }
 }
 
@@ -238,4 +240,110 @@ async fn definitions_of_nothing_is_empty(pool: PgPool) {
     let definitions = store.definitions(&[]).await.expect("empty is not an error");
 
     assert!(definitions.is_empty());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn add_options_appends_to_the_definition(pool: PgPool) {
+    let database_id = insert_database(&pool).await;
+    let store = PgDefinitionStore::new(pool);
+
+    let definition_id = store
+        .resolve_binding(
+            database_id,
+            &viewer_for_tests(),
+            &new_definition("Stage", DataType::SelectString),
+        )
+        .await
+        .expect("definition should be created");
+
+    let created = store
+        .add_options(
+            definition_id,
+            &[
+                PropertyOptionValue::String("Draft".to_string()),
+                PropertyOptionValue::String("Sent".to_string()),
+            ],
+        )
+        .await
+        .expect("options should be created");
+    assert_eq!(created.len(), 2);
+    assert_eq!(created[0].display_order, 0);
+    assert_eq!(created[1].display_order, 1);
+
+    // A second call appends rather than restarting the order, so the labels
+    // the catalog derives from it stay put.
+    let later = store
+        .add_options(
+            definition_id,
+            &[PropertyOptionValue::String("Signed".to_string())],
+        )
+        .await
+        .expect("options should be created");
+    assert_eq!(later[0].display_order, 2);
+
+    let definitions = store
+        .definitions(&[definition_id])
+        .await
+        .expect("definitions should be readable");
+    let labels: Vec<String> = definitions[0]
+        .property_options
+        .iter()
+        .map(|option| match &option.value {
+            PropertyOptionValue::String(s) => s.clone(),
+            PropertyOptionValue::Number(_) => panic!("expected string options"),
+        })
+        .collect();
+    assert_eq!(labels, ["Draft", "Sent", "Signed"]);
+}
+
+/// A numeric select stores its options as numbers, which is what makes the
+/// catalog render `2` rather than `"2"` in the compiled CHECK.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn add_options_stores_numbers_for_a_numeric_select(pool: PgPool) {
+    let database_id = insert_database(&pool).await;
+    let store = PgDefinitionStore::new(pool);
+
+    let definition_id = store
+        .resolve_binding(
+            database_id,
+            &viewer_for_tests(),
+            &new_definition("Priority", DataType::SelectNumber),
+        )
+        .await
+        .expect("definition should be created");
+
+    store
+        .add_options(definition_id, &[PropertyOptionValue::Number(2.0)])
+        .await
+        .expect("options should be created");
+
+    let definitions = store
+        .definitions(&[definition_id])
+        .await
+        .expect("definitions should be readable");
+    assert_eq!(
+        definitions[0].property_options[0].value,
+        PropertyOptionValue::Number(2.0)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn add_options_of_nothing_writes_nothing(pool: PgPool) {
+    let database_id = insert_database(&pool).await;
+    let store = PgDefinitionStore::new(pool);
+    let definition_id = store
+        .resolve_binding(
+            database_id,
+            &viewer_for_tests(),
+            &new_definition("Stage", DataType::SelectString),
+        )
+        .await
+        .expect("definition should be created");
+
+    let created = store
+        .add_options(definition_id, &[])
+        .await
+        .expect("empty is not an error");
+
+    assert!(created.is_empty());
 }

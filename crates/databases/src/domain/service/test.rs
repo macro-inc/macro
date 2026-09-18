@@ -191,6 +191,16 @@ impl DatabasesRepo for FakeRepo {
         w.columns.push(column.clone());
         Ok(column.id)
     }
+    async fn bump_table_version(&self, table_id: TableId) -> Result<TableVersion, FakeError> {
+        let mut w = self.0.lock().unwrap();
+        let table = w
+            .tables
+            .iter_mut()
+            .find(|t| t.id == table_id)
+            .ok_or(FakeError)?;
+        table.version = TableVersion(table.version.0 + 1);
+        Ok(table.version)
+    }
     async fn fetch_rows(&self, table_id: TableId, limit: usize) -> Result<Vec<Row>, FakeError> {
         // Honours `limit` like the real `LIMIT $2`, so the domain's over-cap
         // check is exercised against a truncated read, not a full one.
@@ -410,6 +420,8 @@ impl ColumnDefinitionStore for FakeDefs {
                 name,
                 data_type,
                 is_multi_select,
+                // Options are attached through `add_options`, as in Postgres.
+                options: _,
             } => {
                 let def = definition(
                     name,
@@ -422,6 +434,36 @@ impl ColumnDefinitionStore for FakeDefs {
                 Ok(id)
             }
         }
+    }
+    async fn add_options(
+        &self,
+        definition_id: PropertyDefinitionId,
+        values: &[PropertyOptionValue],
+    ) -> Result<Vec<PropertyOption>, FakeError> {
+        let mut w = self.0.lock().unwrap();
+        let def = w.definitions.get_mut(&definition_id).ok_or(FakeError)?;
+        let mut display_order = def
+            .property_options
+            .iter()
+            .map(|o| o.display_order)
+            .max()
+            .map_or(0, |highest| highest + 1);
+        let mut created = Vec::new();
+        for value in values {
+            let option = PropertyOption {
+                id: Uuid::new_v4(),
+                property_definition_id: definition_id,
+                display_order,
+                value: value.clone(),
+                color: None,
+                created_at: Utc::now(),
+                updated_at: Utc::now(),
+            };
+            def.property_options.push(option.clone());
+            created.push(option);
+            display_order += 1;
+        }
+        Ok(created)
     }
     async fn definitions(
         &self,
@@ -600,6 +642,7 @@ async fn seeded() -> (Shared, Service, DatabaseId, TableId) {
                     name: "Name".into(),
                     data_type: DataType::String,
                     is_multi_select: false,
+                    options: vec![],
                 },
                 config: None,
             },
@@ -617,6 +660,7 @@ async fn seeded() -> (Shared, Service, DatabaseId, TableId) {
                     name: "Status".into(),
                     data_type: DataType::SelectString,
                     is_multi_select: false,
+                    options: vec!["Going".into(), "Declined".into()],
                 },
                 config: None,
             },
@@ -632,40 +676,22 @@ async fn seeded() -> (Shared, Service, DatabaseId, TableId) {
                 name: "Plus ones".into(),
                 data_type: DataType::Number,
                 is_multi_select: false,
+                options: vec![],
             },
             config: None,
         },
     )
     .await
     .unwrap();
-    // Give Status two options and share View-only with VIEWER.
-    {
-        let mut w = world.lock().unwrap();
-        let def_id = w
-            .columns
-            .iter()
-            .find(|c| c.id == status_col)
-            .unwrap()
-            .property_definition_id;
-        let def = w.definitions.get_mut(&def_id).unwrap();
-        def.property_options = ["Going", "Declined"]
-            .iter()
-            .enumerate()
-            .map(|(i, v)| PropertyOption {
-                id: Uuid::new_v4(),
-                property_definition_id: def_id,
-                display_order: i as i32,
-                value: PropertyOptionValue::String(v.to_string()),
-                color: None,
-                created_at: Utc::now(),
-                updated_at: Utc::now(),
-            })
-            .collect();
-        w.grants
-            .entry(VIEWER.into())
-            .or_default()
-            .push((database.id, AccessGrant::View));
-    }
+    let _ = status_col;
+    // Share View-only with VIEWER.
+    world
+        .lock()
+        .unwrap()
+        .grants
+        .entry(VIEWER.into())
+        .or_default()
+        .push((database.id, AccessGrant::View));
     svc.exec_sql(
         viewer(OWNER),
         ExecRequest {
@@ -914,6 +940,7 @@ async fn schema_operations_respect_receipts() {
                     name: "X".into(),
                     data_type: DataType::String,
                     is_multi_select: false,
+                    options: vec![],
                 },
                 config: None,
             },
@@ -1182,6 +1209,51 @@ async fn add_column(
     multi: bool,
     config: Option<ColumnConfig>,
 ) -> ColumnId {
+    new_column(svc, db, table_id, name, data_type, multi, &[], config)
+        .await
+        .unwrap()
+}
+
+/// A select/tag column created with its options, which is the only way one
+/// ever accepts a value.
+async fn add_select_column(
+    svc: &Service,
+    db: DatabaseId,
+    table_id: TableId,
+    name: &str,
+    data_type: DataType,
+    multi: bool,
+    options: &[&str],
+) -> ColumnId {
+    try_add_select_column(svc, db, table_id, name, data_type, multi, options)
+        .await
+        .unwrap()
+}
+
+/// The same, reporting why the service refused instead of panicking.
+async fn try_add_select_column(
+    svc: &Service,
+    db: DatabaseId,
+    table_id: TableId,
+    name: &str,
+    data_type: DataType,
+    multi: bool,
+    options: &[&str],
+) -> Result<ColumnId, DatabaseError> {
+    new_column(svc, db, table_id, name, data_type, multi, options, None).await
+}
+
+#[allow(clippy::too_many_arguments)]
+async fn new_column(
+    svc: &Service,
+    db: DatabaseId,
+    table_id: TableId,
+    name: &str,
+    data_type: DataType,
+    multi: bool,
+    options: &[&str],
+    config: Option<ColumnConfig>,
+) -> Result<ColumnId, DatabaseError> {
     svc.create_column(
         receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
         viewer(OWNER),
@@ -1191,12 +1263,12 @@ async fn add_column(
                 name: name.into(),
                 data_type,
                 is_multi_select: multi,
+                options: options.iter().map(|o| (*o).to_string()).collect(),
             },
             config,
         },
     )
     .await
-    .unwrap()
 }
 
 /// VIEWER owns a second database (`Rooms`) while holding View on OWNER's.
@@ -1230,6 +1302,7 @@ async fn joins_span_databases_with_different_grants() {
                 name: "Name".into(),
                 data_type: DataType::String,
                 is_multi_select: false,
+                options: vec![],
             },
             config: None,
         },
@@ -1434,26 +1507,8 @@ async fn link_columns_round_trip_through_junction_sql() {
 #[tokio::test]
 async fn has_predicate_runs_end_to_end() {
     let (world, svc, db, guests) = seeded().await;
-    let tags_column = add_column(&svc, db, guests, "Tags", DataType::Tag, true, None).await;
-    {
-        let mut w = world.lock().unwrap();
-        let def_id = w
-            .columns
-            .iter()
-            .find(|c| c.id == tags_column)
-            .unwrap()
-            .property_definition_id;
-        let def = w.definitions.get_mut(&def_id).unwrap();
-        def.property_options = vec![PropertyOption {
-            id: Uuid::new_v4(),
-            property_definition_id: def_id,
-            display_order: 0,
-            value: PropertyOptionValue::String("vip".into()),
-            color: None,
-            created_at: Utc::now(),
-            updated_at: Utc::now(),
-        }];
-    }
+    let _ = world;
+    add_select_column(&svc, db, guests, "Tags", DataType::Tag, true, &["vip"]).await;
     exec(
         &svc,
         OWNER,
@@ -1747,4 +1802,317 @@ async fn rows_are_fetched_one_over_the_materialization_cap() {
         vec![MAX_MATERIALIZED_ROWS + 1],
         "the cap is pushed into the query, not applied after loading everything"
     );
+}
+
+// ===== Select options are explicit schema =====
+
+/// Column id of the one column of `table_id` holding `data_type`.
+fn column_of_type(world: &Shared, table_id: TableId, data_type: DataType) -> ColumnId {
+    let w = world.lock().unwrap();
+    w.columns
+        .iter()
+        .find(|column| {
+            column.table_id == table_id
+                && w.definitions
+                    .get(&column.property_definition_id)
+                    .is_some_and(|d| d.definition.data_type == data_type)
+        })
+        .expect("the seeded table has such a column")
+        .id
+}
+
+/// A select column only accepts the labels it was created with — which is why
+/// creating one without options makes it unwritable.
+#[tokio::test]
+async fn select_options_are_created_with_the_column() {
+    let (_world, svc, _db, _guests) = seeded().await;
+
+    exec(
+        &svc,
+        OWNER,
+        "INSERT INTO guests (name, status) VALUES ('Ada', 'Declined')",
+    )
+    .await
+    .expect("a listed option is accepted");
+
+    let err = exec(
+        &svc,
+        OWNER,
+        "INSERT INTO guests (name, status) VALUES ('Bo', 'Waitlisted')",
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(err, QueryError::Sql(ref m) if m.contains("CHECK constraint")),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn a_select_column_with_no_options_accepts_nothing() {
+    let (_world, svc, db, guests) = seeded().await;
+    add_select_column(
+        &svc,
+        db,
+        guests,
+        "Stage",
+        DataType::SelectString,
+        false,
+        &[],
+    )
+    .await;
+
+    let err = exec(
+        &svc,
+        OWNER,
+        "INSERT INTO guests (name, stage) VALUES ('Ada', 'Main')",
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(err, QueryError::Sql(ref m) if m.contains("CHECK constraint")),
+        "{err:?}"
+    );
+}
+
+/// The point of the operation: the write that failed succeeds once the option
+/// exists, and the table's version moves because its compiled schema did.
+#[tokio::test]
+async fn add_column_options_extends_what_sql_accepts_and_bumps_the_version() {
+    let (world, svc, db, guests) = seeded().await;
+    let status = column_of_type(&world, guests, DataType::SelectString);
+    let version_before = world.lock().unwrap().tables[0].version;
+    let published_before = world.lock().unwrap().published.len();
+
+    let column = svc
+        .add_column_options(
+            receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
+            viewer(OWNER),
+            AddColumnOptions {
+                table_id: guests,
+                column_id: status,
+                labels: vec!["Waitlisted".into()],
+            },
+        )
+        .await
+        .expect("edit access may extend a select column");
+
+    assert_eq!(column.sql_name, "status");
+    assert_eq!(
+        catalog::option_labels(&column.definition)
+            .into_iter()
+            .map(|(_, label)| label)
+            .collect::<Vec<_>>(),
+        vec!["Going", "Declined", "Waitlisted"],
+        "new options are appended, so existing labels do not move"
+    );
+
+    {
+        let w = world.lock().unwrap();
+        assert_eq!(w.tables[0].version, TableVersion(version_before.0 + 1));
+        assert_eq!(
+            w.published.len(),
+            published_before + 1,
+            "the schema change is announced for liveness"
+        );
+    }
+
+    exec(
+        &svc,
+        OWNER,
+        "INSERT INTO guests (name, status) VALUES ('Bo', 'Waitlisted')",
+    )
+    .await
+    .expect("the option now compiles into the CHECK");
+}
+
+/// Re-sending a label the column already has changes nothing: no duplicate
+/// option, no version bump, no event — and no error either.
+#[tokio::test]
+async fn adding_an_existing_option_is_a_no_op() {
+    let (world, svc, db, guests) = seeded().await;
+    let status = column_of_type(&world, guests, DataType::SelectString);
+    let version_before = world.lock().unwrap().tables[0].version;
+    let published_before = world.lock().unwrap().published.len();
+
+    let column = svc
+        .add_column_options(
+            receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
+            viewer(OWNER),
+            AddColumnOptions {
+                table_id: guests,
+                column_id: status,
+                labels: vec!["going".into(), "  Declined  ".into()],
+            },
+        )
+        .await
+        .expect("an option that is already there is not an error");
+
+    assert_eq!(column.definition.property_options.len(), 2);
+    let w = world.lock().unwrap();
+    assert_eq!(w.tables[0].version, version_before);
+    assert_eq!(w.published.len(), published_before);
+}
+
+#[tokio::test]
+async fn options_are_refused_on_a_column_that_cannot_hold_them() {
+    let (world, svc, db, guests) = seeded().await;
+
+    let err = try_add_select_column(
+        &svc,
+        db,
+        guests,
+        "Notes",
+        DataType::String,
+        false,
+        &["Main"],
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(err, DatabaseError::InvalidSchemaOperation(ref m) if m.contains("select")),
+        "{err:?}"
+    );
+
+    // …and the same on the standalone operation, against the text column the
+    // seeded table already has.
+    let name_column = column_of_type(&world, guests, DataType::String);
+    let err = svc
+        .add_column_options(
+            receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
+            viewer(OWNER),
+            AddColumnOptions {
+                table_id: guests,
+                column_id: name_column,
+                labels: vec!["Main".into()],
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, DatabaseError::InvalidSchemaOperation(ref m) if m.contains("options")),
+        "{err:?}"
+    );
+}
+
+/// A numeric select stores numbers, so its labels have to be numbers — and
+/// the label SQL sees is the normalized one.
+#[tokio::test]
+async fn numeric_select_options_are_parsed_as_numbers() {
+    let (_world, svc, db, guests) = seeded().await;
+
+    let err = try_add_select_column(
+        &svc,
+        db,
+        guests,
+        "Priority",
+        DataType::SelectNumber,
+        false,
+        &["soon"],
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(err, DatabaseError::InvalidSchemaOperation(ref m) if m.contains("not a number")),
+        "{err:?}"
+    );
+
+    add_select_column(
+        &svc,
+        db,
+        guests,
+        "Priority",
+        DataType::SelectNumber,
+        false,
+        &["1", "2.0", "2"],
+    )
+    .await;
+    exec(
+        &svc,
+        OWNER,
+        "INSERT INTO guests (name, priority) VALUES ('Ada', '2')",
+    )
+    .await
+    .expect("`2.0` and `2` are one option, written as `2`");
+}
+
+#[tokio::test]
+async fn option_labels_are_validated() {
+    let (_world, svc, db, guests) = seeded().await;
+
+    for bad in ["   ", ""] {
+        let err = try_add_select_column(
+            &svc,
+            db,
+            guests,
+            "Stage",
+            DataType::SelectString,
+            false,
+            &[bad],
+        )
+        .await
+        .unwrap_err();
+        assert!(
+            matches!(err, DatabaseError::InvalidSchemaOperation(ref m) if m.contains("empty")),
+            "{err:?}"
+        );
+    }
+
+    let too_long = "x".repeat(MAX_OPTION_LABEL_LEN + 1);
+    let err = try_add_select_column(
+        &svc,
+        db,
+        guests,
+        "Stage",
+        DataType::SelectString,
+        false,
+        &[&too_long],
+    )
+    .await
+    .unwrap_err();
+    assert!(
+        matches!(err, DatabaseError::InvalidSchemaOperation(ref m) if m.contains("at most")),
+        "{err:?}"
+    );
+}
+
+#[tokio::test]
+async fn add_column_options_respects_receipts() {
+    let (world, svc, db, guests) = seeded().await;
+    let status = column_of_type(&world, guests, DataType::SelectString);
+    let elsewhere = Uuid::new_v4();
+
+    let err = svc
+        .add_column_options(
+            receipt::<EditAccessLevel>(elsewhere, OWNER, AccessLevel::Owner),
+            viewer(OWNER),
+            AddColumnOptions {
+                table_id: guests,
+                column_id: status,
+                labels: vec!["Waitlisted".into()],
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(
+        matches!(err, DatabaseError::NotFound),
+        "a receipt for another database reaches nothing: {err:?}"
+    );
+
+    let err = svc
+        .add_column_options(
+            receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
+            viewer(OWNER),
+            AddColumnOptions {
+                table_id: guests,
+                column_id: Uuid::new_v4(),
+                labels: vec!["Waitlisted".into()],
+            },
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(err, DatabaseError::NotFound), "{err:?}");
+
+    // Nothing was written on the way to either refusal.
+    assert_eq!(world.lock().unwrap().definitions.len(), 3);
 }

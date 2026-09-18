@@ -768,6 +768,18 @@ impl DatabasesRepo for PgDatabasesRepo {
             .collect()
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn bump_table_version(&self, table_id: TableId) -> Result<TableVersion, Self::Err> {
+        let version = sqlx::query_scalar!(
+            r#"UPDATE database_tables SET version = version + 1 WHERE id = $1 RETURNING version"#,
+            table_id
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(TableVersion(version))
+    }
+
     async fn table_versions(
         &self,
         table_ids: &[TableId],

@@ -9,6 +9,10 @@ import type * as types from './types';
 
 type ToolParserMap = {
   AddColumn: { call: types.AddColumn; response: types.AddColumnResponse };
+  AddColumnOptions: {
+    call: types.AddColumnOptions;
+    response: types.AddColumnOptionsResponse;
+  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
@@ -246,6 +250,10 @@ type ToolParserMap = {
 
 const toolParserMap = {
   AddColumn: { call: schemas.AddColumn, response: schemas.AddColumnResponse },
+  AddColumnOptions: {
+    call: schemas.AddColumnOptions,
+    response: schemas.AddColumnOptionsResponse,
+  },
   BashCodeExecution: {
     call: schemas.BashCodeExecution,
     response: schemas.BashCodeExecutionResponse,
@@ -524,6 +532,10 @@ type NamedRawTool = {
 
 type ToolDataMap = {
   AddColumn: { call: types.AddColumn; response: types.AddColumnResponse };
+  AddColumnOptions: {
+    call: types.AddColumnOptions;
+    response: types.AddColumnOptionsResponse;
+  };
   BashCodeExecution: {
     call: types.BashCodeExecution;
     response: types.BashCodeExecutionResponse;
