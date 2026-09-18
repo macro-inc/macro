@@ -499,7 +499,7 @@ function DiscussionMessageView(props: {
             <Show when={isEditing()} fallback={<Message.Content />}>
               <DiscussionInput
                 input={{
-                  mode: 'reply',
+                  mode: 'channel',
                   placeholder: 'Edit comment...',
                   value: props.comment.text,
                 }}
