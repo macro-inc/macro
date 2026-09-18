@@ -123,6 +123,22 @@ impl Owner {
             Self::parse(OwnerType::Team, value)
         }
     }
+
+    /// True when this owner is the given user.
+    #[must_use]
+    pub fn is_user(&self, user: &MacroUserIdStr<'_>) -> bool {
+        matches!(self, Self::User(owner) if owner == user)
+    }
+}
+
+impl Display for Owner {
+    fn fmt(&self, f: &mut Formatter<'_>) -> FmtResult {
+        match self {
+            Self::User(user_id) => Display::fmt(user_id, f),
+            Self::Bot(bot_id) => Display::fmt(&bot_id.into_storage_id(), f),
+            Self::Team(team_id) => write!(f, "{}", team_id.hyphenated()),
+        }
+    }
 }
 
 impl From<Owner> for String {
