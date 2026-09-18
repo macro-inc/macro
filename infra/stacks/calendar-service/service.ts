@@ -104,7 +104,11 @@ export class CalendarService extends pulumi.ComponentResource {
           Version: '2012-10-17',
           Statement: [
             {
-              Action: ['sqs:*'],
+              Action: [
+                'sqs:SendMessage',
+                'sqs:ReceiveMessage',
+                'sqs:DeleteMessage',
+              ],
               Resource: [pulumi.interpolate`${calendarBackfillQueueArn}`],
               Effect: 'Allow',
             },
