@@ -461,7 +461,14 @@ impl AgentAction {
             Self::Prompt(action) => {
                 // Text first, then one link per attachment: agents read the
                 // prompt in order, and the text is what the links are about.
-                let blocks = std::iter::once(ContentBlock::from(action.prompt.clone()))
+                // A file-only send carries no text block at all: an empty one
+                // reads as an empty prompt to some runtimes, and the fold
+                // drops it, so sending one would make the wire and the
+                // transcript disagree.
+                let text =
+                    (!action.prompt.is_empty()).then(|| ContentBlock::from(action.prompt.clone()));
+                let blocks = text
+                    .into_iter()
                     .chain(
                         action
                             .attachments

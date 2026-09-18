@@ -381,6 +381,39 @@ fn a_prompt_with_attachments_sends_text_then_one_resource_link_each() {
 }
 
 #[test]
+fn a_file_only_prompt_carries_no_text_block_at_all() {
+    // The composer allows a send with files and no words. An empty text
+    // block would read as an empty prompt to some runtimes, and the fold
+    // drops it, so the wire must not carry one either.
+    let session_id = SessionId::new("acp-abc");
+    let screenshot = PromptAttachment::new(
+        "https://static.example/file/11111111-1111-4111-8111-111111111111",
+        "screenshot.png",
+    )
+    .mime_type("image/png");
+    let translated = AgentAction::prompt_with_attachments("", vec![screenshot])
+        .to_runtime(&session_id, RequestId::Str("harness:prompt:2".to_owned()))
+        .unwrap();
+
+    let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = translated else {
+        panic!("a prompt translates to an ACP request");
+    };
+    let ClientRequest::PromptRequest(parsed) =
+        ClientRequest::parse_message(&request.method, &request.params).unwrap()
+    else {
+        panic!("a prompt translates to PromptRequest");
+    };
+
+    // Just the link: no leading empty text.
+    assert_eq!(parsed.prompt.len(), 1);
+    assert!(
+        matches!(&parsed.prompt[0], ContentBlock::ResourceLink(_)),
+        "a file-only prompt is links alone, got {:?}",
+        parsed.prompt[0]
+    );
+}
+
+#[test]
 fn attachments_are_optional_on_the_wire() {
     // Clients that predate attachments post `{type, prompt}` and must keep
     // working; and a prompt without attachments must not grow a field every
