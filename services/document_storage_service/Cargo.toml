@@ -83,6 +83,13 @@ connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 contacts = { path = "../../crates/contacts" }
 cowlike = { path = "../../crates/cowlike" }
 crm = { path = "../../crates/crm" }
+databases = { path = "../../crates/databases", features = [
+  "entity_mutation",
+  "gateway",
+  "inbound",
+  "postgres",
+  "sqlite",
+] }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents_hex = { path = "../../crates/documents", package = "documents" }
 doppler-config = { workspace = true }
@@ -92,13 +99,6 @@ embedding = { path = "../../crates/embedding" }
 entity_access = { path = "../../crates/entity_access", features = [
   "inbound",
   "schema",
-] }
-databases = { path = "../../crates/databases", features = [
-  "entity_mutation",
-  "gateway",
-  "inbound",
-  "postgres",
-  "sqlite",
 ] }
 entity_access_management = { path = "../../crates/entity_access_management" }
 entity_mutation = { path = "../../crates/entity_mutation" }

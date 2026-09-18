@@ -528,8 +528,9 @@ async fn main() -> anyhow::Result<()> {
     // Nudges the user's connected clients when import rows flip, so setup
     // sections and chat surfaces update immediately instead of on the next
     // poll (see import::outbound::gateway_notifier).
-    let import_notify =
-        import::outbound::gateway_notifier::gateway_import_notify(channels_connection_gateway);
+    let import_notify = import::outbound::gateway_notifier::gateway_import_notify(
+        channels_connection_gateway.clone(),
+    );
 
     let entity_creator = ai_tools::ToolEntityCreator {
         document_creator: document_tool_context.creator.clone(),
@@ -592,10 +593,7 @@ async fn main() -> anyhow::Result<()> {
             entity_access_service.clone(),
             ai_tools::ToolTableEventPublisher::Gateway(
                 databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
-                    connection_gateway_client::ConnectionGatewayClient::new(
-                        internal_api_key.clone(),
-                        ConnectionGatewayUrl::new()?.to_string(),
-                    ),
+                    channels_connection_gateway.as_ref().clone(),
                 ),
             ),
         ),
