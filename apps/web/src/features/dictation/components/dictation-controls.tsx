@@ -74,7 +74,10 @@ export function DictationPanel(props: { dictation: DictationController }) {
           size="icon-composer"
           class="rounded-full text-composer-ink"
           label="Use dictation"
-          disabled={props.dictation.phase() === 'starting'}
+          disabled={
+            props.dictation.phase() === 'starting' ||
+            props.dictation.phase() === 'finishing'
+          }
           onClick={() => void props.dictation.confirm()}
         >
           <CheckIcon />
@@ -85,10 +88,7 @@ export function DictationPanel(props: { dictation: DictationController }) {
 }
 
 export function DictationFeedback(props: { dictation: DictationController }) {
-  const message = () =>
-    props.dictation.phase() === 'installing'
-      ? 'Downloading speech language for on-device dictation…'
-      : props.dictation.message();
+  const message = () => props.dictation.message();
   return (
     <Show when={message()}>
       <p role="status" class="px-3 pt-1 text-xs text-ink-muted">

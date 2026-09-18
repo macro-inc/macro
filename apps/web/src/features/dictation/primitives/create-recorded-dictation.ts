@@ -12,7 +12,7 @@ import {
 import { appendLevel, type VolumeLevel } from '../core/volume';
 
 /**
- * Cloud fallback: record in memory, upload only on confirm. Cancel never
+ * Record in memory and upload to Whisper only on confirm. Cancel never
  * uploads, and a response that arrives after cancel never edits the draft.
  */
 export function createRecordedDictation(options: {
@@ -130,6 +130,12 @@ export function createRecordedDictation(options: {
         setMessage(error.message);
         settleConfirm();
       },
+      onInterrupted: () => {
+        if (recorder !== current) return;
+        reset('idle');
+        setMessage('Dictation moved to another composer.');
+        settleConfirm();
+      },
     });
     recorder = current;
     try {
@@ -187,7 +193,6 @@ export function createRecordedDictation(options: {
     start,
     cancel,
     confirm,
-    transcript: () => '',
     disabled: () => phase() !== 'idle',
     label: () =>
       options.supported

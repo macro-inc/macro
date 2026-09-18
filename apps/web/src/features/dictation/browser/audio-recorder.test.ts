@@ -1,6 +1,27 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { MAX_RECORDING_CHUNKS, RECORDING_CHUNK_MS } from '../core/recording';
-import { AudioRecorder } from './audio-recorder';
+import {
+  MAX_RECORDING_BYTES,
+  MAX_RECORDING_MS,
+  RECORDING_CHUNK_MS,
+} from '../core/recording';
+import {
+  AudioRecorder,
+  AudioRecorderManager,
+  type RecordingClock,
+} from './audio-recorder';
+
+let now = 0;
+let deadline: (() => void) | undefined;
+const cancelDeadline = vi.fn();
+const clock: RecordingClock = {
+  now: () => now,
+  schedule: (callback, delay) => {
+    expect(delay).toBe(MAX_RECORDING_MS);
+    deadline = callback;
+    return cancelDeadline;
+  },
+};
+let manager: AudioRecorderManager;
 
 const stopTrack = vi.fn();
 const stream = {
@@ -44,9 +65,12 @@ class FakeMediaRecorder {
   });
   stop = vi.fn(() => {
     this.state = 'inactive';
+  });
+  finish() {
+    this.state = 'inactive';
     this.ondataavailable?.({ data: new Blob(['final']) });
     this.onstop?.();
-  });
+  }
   constructor(_stream: MediaStream, options: MediaRecorderOptions) {
     this.mimeType = options.mimeType ?? '';
     FakeMediaRecorder.latest = this;
@@ -68,12 +92,16 @@ function callbacks() {
     onRecording: vi.fn<(audio: Blob) => void>(),
     onLimit: vi.fn<() => void>(),
     onError: vi.fn<(error: Error) => void>(),
+    onInterrupted: vi.fn<() => void>(),
   };
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   frequencyByte = 0;
+  now = 0;
+  deadline = undefined;
+  manager = new AudioRecorderManager(clock);
   frames.length = 0;
   FakeMediaRecorder.latest = undefined;
   FakeMediaRecorder.isTypeSupported.mockImplementation(
@@ -105,7 +133,7 @@ describe('AudioRecorder', () => {
   it('collects chunks, meters each one, and delivers the recording on stop', async () => {
     frequencyByte = 255;
     const sinks = callbacks();
-    const recorder = new AudioRecorder(sinks);
+    const recorder = manager.createSession(sinks);
     await recorder.start();
     const media = latest();
     expect(media.timeslice).toBe(RECORDING_CHUNK_MS);
@@ -118,6 +146,8 @@ describe('AudioRecorder', () => {
     expect(sinks.onLevel.mock.calls.map(([level]) => level)).toEqual([1, 0]);
 
     recorder.stop();
+    expect(sinks.onRecording).not.toHaveBeenCalled();
+    media.finish();
     expect(sinks.onRecording).toHaveBeenCalledOnce();
     const audio = sinks.onRecording.mock.calls[0][0];
     expect(audio.type).toBe('audio/mp4');
@@ -126,11 +156,12 @@ describe('AudioRecorder', () => {
     expect(recorder.recording).toBe(false);
     expect(sinks.onError).not.toHaveBeenCalled();
     expect(sinks.onLimit).not.toHaveBeenCalled();
+    expect(cancelDeadline).toHaveBeenCalledOnce();
   });
 
   it('discards audio and releases the microphone on cancel', async () => {
     const sinks = callbacks();
-    const recorder = new AudioRecorder(sinks);
+    const recorder = manager.createSession(sinks);
     await recorder.start();
     latest().chunk('secret');
     recorder.cancel();
@@ -148,7 +179,7 @@ describe('AudioRecorder', () => {
           grant = resolve;
         })
     );
-    const recorder = new AudioRecorder(callbacks());
+    const recorder = manager.createSession(callbacks());
     const starting = recorder.start();
     recorder.cancel();
     grant(stream);
@@ -161,29 +192,47 @@ describe('AudioRecorder', () => {
   it('rejects start when the microphone is unavailable', async () => {
     getUserMedia.mockRejectedValueOnce(new Error('Permission denied'));
     const sinks = callbacks();
-    const recorder = new AudioRecorder(sinks);
+    const recorder = manager.createSession(sinks);
     await expect(recorder.start()).rejects.toThrow('Permission denied');
     expect(recorder.recording).toBe(false);
     expect(sinks.onError).not.toHaveBeenCalled();
   });
 
-  it('stops itself at the duration cap and still delivers the recording', async () => {
+  it('uses elapsed timestamps when chunk delivery is delayed', async () => {
     const sinks = callbacks();
-    const recorder = new AudioRecorder(sinks);
+    const recorder = manager.createSession(sinks);
     await recorder.start();
     const media = latest();
-    for (let index = 0; index < MAX_RECORDING_CHUNKS; index++) media.chunk('.');
+    now = MAX_RECORDING_MS - 1;
+    media.chunk('before');
+    expect(media.stop).not.toHaveBeenCalled();
+    now = MAX_RECORDING_MS + 10_000;
+    media.chunk('delayed');
     expect(sinks.onLimit).toHaveBeenCalledOnce();
     expect(media.stop).toHaveBeenCalledOnce();
+    expect(sinks.onRecording).not.toHaveBeenCalled();
+    media.finish();
     expect(sinks.onRecording).toHaveBeenCalledOnce();
-    expect(sinks.onLevel).toHaveBeenCalledTimes(MAX_RECORDING_CHUNKS);
+    expect(sinks.onLevel).toHaveBeenCalledTimes(2);
     media.chunk('late');
-    expect(sinks.onLevel).toHaveBeenCalledTimes(MAX_RECORDING_CHUNKS);
+    expect(sinks.onLevel).toHaveBeenCalledTimes(2);
+  });
+
+  it('stops at its deadline even when no chunks arrive', async () => {
+    const sinks = callbacks();
+    const recorder = manager.createSession(sinks);
+    await recorder.start();
+    deadline?.();
+    deadline?.();
+    expect(latest().stop).toHaveBeenCalledOnce();
+    expect(sinks.onLimit).toHaveBeenCalledOnce();
+    latest().finish();
+    expect(sinks.onRecording).toHaveBeenCalledOnce();
   });
 
   it('reports capture failures once and releases the microphone', async () => {
     const sinks = callbacks();
-    const recorder = new AudioRecorder(sinks);
+    const recorder = manager.createSession(sinks);
     await recorder.start();
     const media = latest();
     media.onerror?.();
@@ -197,26 +246,63 @@ describe('AudioRecorder', () => {
   it('lets only one recorder hold the microphone', async () => {
     const first = callbacks();
     const second = callbacks();
-    const one = new AudioRecorder(first);
+    const one = manager.createSession(first);
     await one.start();
-    const two = new AudioRecorder(second);
+    const two = manager.createSession(second);
     await two.start();
     expect(one.recording).toBe(false);
     expect(two.recording).toBe(true);
     expect(first.onRecording).not.toHaveBeenCalled();
+    expect(first.onInterrupted).toHaveBeenCalledOnce();
     two.stop();
+    latest().finish();
     expect(second.onRecording).toHaveBeenCalledOnce();
     expect(stopTrack).toHaveBeenCalledTimes(2);
   });
 
-  it('drops chunks when running as a meter only', async () => {
+  it('delivers the final recording when the capture device stops itself', async () => {
     const sinks = callbacks();
-    const recorder = new AudioRecorder({ ...sinks, onRecording: undefined });
+    const recorder = manager.createSession(sinks);
     await recorder.start();
-    latest().chunk('discard');
-    expect(sinks.onLevel).toHaveBeenCalledOnce();
-    recorder.stop();
+    latest().chunk('before device disconnected');
+    latest().finish();
+    expect(sinks.onRecording).toHaveBeenCalledOnce();
     expect(stopTrack).toHaveBeenCalledOnce();
     expect(recorder.recording).toBe(false);
+  });
+
+  it('rejects an oversized final chunk without delivering partial audio', async () => {
+    const sinks = callbacks();
+    const recorder = manager.createSession(sinks);
+    await recorder.start();
+    recorder.stop();
+    latest().ondataavailable?.({
+      data: new Blob([new Uint8Array(MAX_RECORDING_BYTES + 1)]),
+    });
+    latest().finish();
+    expect(sinks.onError).toHaveBeenCalledOnce();
+    expect(sinks.onRecording).not.toHaveBeenCalled();
+    expect(stopTrack).toHaveBeenCalledOnce();
+  });
+
+  it('does not let a late permission grant steal the next session', async () => {
+    let grant!: (stream: MediaStream) => void;
+    getUserMedia.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          grant = resolve;
+        })
+    );
+    const first = callbacks();
+    const one = manager.createSession(first);
+    const starting = one.start();
+    const two = manager.createSession(callbacks());
+    await two.start();
+    expect(first.onInterrupted).toHaveBeenCalledOnce();
+    grant(stream);
+    await starting;
+    expect(one.recording).toBe(false);
+    expect(two.recording).toBe(true);
+    two.cancel();
   });
 });
