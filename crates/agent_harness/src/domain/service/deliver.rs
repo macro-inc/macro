@@ -108,7 +108,8 @@ where
                     self.sessions
                         .attach_session(
                             session_id,
-                            attachment.mcp_servers(vec![egress.sandbox.internal_mcp_server()]),
+                            attachment
+                                .mcp_servers(self.egress.external_mcp_servers(&egress.sandbox)),
                         )
                         .await?;
                 }

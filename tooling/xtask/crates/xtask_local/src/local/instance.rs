@@ -110,6 +110,12 @@ pub enum Port {
     AgentHarnessEgress = 8102,
     /// Scheduled actions API and dispatcher (default compose port 8099).
     ScheduledAction = 8099,
+    /// Live-preview control API.
+    PreviewControl = 8110,
+    /// Stock SSH reverse-tunnel listener.
+    PreviewSsh = 2222,
+    /// Local wildcard preview TLS listener.
+    PreviewHttps = 8443,
 }
 
 impl Port {

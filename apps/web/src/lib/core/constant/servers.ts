@@ -14,6 +14,7 @@ const serverHostLocal: Servers = {
   'image-proxy-service': 'http://localhost:8097',
   'scheduled-action': 'http://localhost:8099',
   'agent-harness': 'http://localhost:8101',
+  preview: 'http://localhost:8110',
 } as const;
 
 const devServerSuffix = import.meta.env.MODE === 'development' ? '-dev' : '';
@@ -44,6 +45,7 @@ const serverHostRemote = {
   'image-proxy-service': `${gatewayHost}/image-proxy`,
   'scheduled-action': `${gatewayHost}/scheduled-action`,
   'agent-harness': `${gatewayHost}/agent-harness`,
+  preview: `${gatewayHost}/preview`,
 } as const;
 
 type Servers = Record<keyof typeof serverHostRemote, string>;
@@ -102,6 +104,7 @@ function proxyServers(): Servers | undefined {
     'static-file': `${proxyOrigin}/static-file`,
     'unfurl-service': `${proxyOrigin}/unfurl`,
     'agent-harness': `${proxyOrigin}/agent-harness`,
+    preview: `${proxyOrigin}/preview`,
     contacts: `${proxyOrigin}/contacts`,
     'email-service': `${proxyOrigin}/email`,
     'image-proxy-service': `${proxyOrigin}/image-proxy`,
