@@ -1,10 +1,10 @@
+import type { Span } from '@macro-inc/observability';
 import { createSignal, onCleanup } from 'solid-js';
 import type {
   CreateRecorder,
   RecorderHandle,
   TranscribeAudio,
 } from '../core/recording';
-import type { DictationOutcome, DictationTrace } from '../core/telemetry';
 import {
   ACTIVE_PHASES,
   type DictationController,
@@ -18,7 +18,7 @@ import { appendLevel, type VolumeLevel } from '../core/volume';
  */
 export function createRecordedDictation(options: {
   supported: boolean;
-  startTrace: () => DictationTrace;
+  startTrace: () => Pick<Span, 'event' | 'run' | 'setAttr' | 'error' | 'end'>;
   createRecorder: CreateRecorder;
   transcribe: TranscribeAudio;
   onConfirm: (text: string) => void;
@@ -38,11 +38,12 @@ export function createRecordedDictation(options: {
   let limitReached = false;
   let pendingConfirm: (() => void) | undefined;
   let disposed = false;
-  let trace: DictationTrace | undefined;
+  let trace: ReturnType<typeof options.startTrace> | undefined;
   let attempt = 0;
 
-  const endTrace = (outcome: DictationOutcome) => {
-    trace?.end(outcome);
+  const endTrace = (outcome: string) => {
+    trace?.setAttr('dictation.outcome', outcome);
+    trace?.end();
     trace = undefined;
   };
 
@@ -71,7 +72,7 @@ export function createRecordedDictation(options: {
     upload = current;
     setPhase('finishing');
     setMessage('Transcribing with OpenAI…');
-    trace?.event('upload_started', {
+    trace?.event('dictation.upload_started', {
       attempt: ++attempt,
       audioBytes: blob.size,
     });
@@ -88,7 +89,7 @@ export function createRecordedDictation(options: {
     } catch (error) {
       if (current.signal.aborted || disposed) return;
       upload = undefined;
-      trace?.event('upload_failed', { attempt });
+      trace?.event('dictation.upload_failed', { attempt });
       setMessage(
         error instanceof Error
           ? error.message
@@ -104,7 +105,7 @@ export function createRecordedDictation(options: {
   const onRecording = (blob: Blob) => {
     recorder = undefined;
     if (disposed) return;
-    trace?.event('recording_stopped', { audioBytes: blob.size });
+    trace?.event('dictation.recording_stopped', { audioBytes: blob.size });
     if (!blob.size) {
       endTrace('empty_audio');
       reset('idle');
@@ -144,11 +145,12 @@ export function createRecordedDictation(options: {
       onLimit: () => {
         if (recorder === current) {
           limitReached = true;
-          trace?.event('recording_limit');
+          trace?.event('dictation.recording_limit');
         }
       },
       onError: (error) => {
         if (recorder !== current) return;
+        trace?.error('recording_error');
         endTrace('recording_error');
         reset('idle');
         setMessage(error.message);
@@ -170,9 +172,10 @@ export function createRecordedDictation(options: {
         return;
       }
       setPhase('listening');
-      trace?.event('recording_started');
+      trace?.event('dictation.recording_started');
     } catch {
       if (disposed || recorder !== current) return;
+      trace?.error('microphone_error');
       endTrace('microphone_error');
       reset('idle');
       setMessage(
@@ -184,13 +187,13 @@ export function createRecordedDictation(options: {
   const confirm = () =>
     new Promise<void>((resolve) => {
       if (phase() === 'review' && audio) {
-        trace?.event('confirmed');
+        trace?.event('dictation.confirmed');
         pendingConfirm = resolve;
         void transcribe(audio);
         return;
       }
       if (phase() === 'listening' && recorder) {
-        trace?.event('confirmed');
+        trace?.event('dictation.confirmed');
         pendingConfirm = resolve;
         commitOnStop = true;
         setPhase('finishing');
