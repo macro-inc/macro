@@ -1,3 +1,4 @@
+// @vitest-environment jsdom
 import {
   commentPlugin,
   REMOVE_ORPHANED_COMMENT_MARKS_COMMAND,
@@ -12,6 +13,19 @@ import {
   type LexicalEditor,
 } from 'lexical';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+
+// The comment plugin barrel's leaves open the storage and connection-gateway
+// sockets on import, which throw under jsdom; stub them like utils.test.ts does.
+vi.mock('@service-storage/websocket', () => ({
+  storageWS: { reconnectIfDisconnected: vi.fn() },
+  createWebSocketJob: vi.fn(),
+}));
+vi.mock('@service-connection/websocket', () => ({
+  ws: { addEventListener: vi.fn(), send: vi.fn() },
+  state: () => 'closed',
+  createConnectionBlockWebsocketEffect: vi.fn(),
+  createConnectionWebsocketEffect: vi.fn(),
+}));
 
 const disposers: (() => void)[] = [];
 afterEach(() => {

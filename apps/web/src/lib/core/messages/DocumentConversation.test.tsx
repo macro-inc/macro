@@ -4,14 +4,25 @@ import { type Accessor, createSignal, For, type ParentProps } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { DocumentConversation } from './DocumentConversation';
 
-const mocks = vi.hoisted(() => ({ timeline: vi.fn(), linkResolved: true }));
+const mocks = vi.hoisted(() => ({
+  timeline: vi.fn(),
+  linkResolved: true,
+  contacts: [{ id: 'user|a@example.com', name: 'Ann', email: 'a@example.com' }],
+  capturedParticipants: undefined as (() => Array<{ id: string }>) | undefined,
+}));
 
 vi.mock('@channel/Input', () => ({
-  ChannelInput: () => <textarea aria-label="Leave a comment..." />,
+  ChannelInput: (props: { participants?: () => Array<{ id: string }> }) => {
+    mocks.capturedParticipants = props.participants;
+    return <textarea aria-label="Leave a comment..." />;
+  },
 }));
 vi.mock('@channel/Input/message-payload', () => ({}));
 vi.mock('@channel/use-channel-bot-mention-users', () => ({
   useMessageBotMentionUsers: () => [],
+}));
+vi.mock('@queries/contacts/contacts', () => ({
+  useContacts: () => () => mocks.contacts,
 }));
 vi.mock(
   '@core/component/LexicalMarkdown/component/core/StaticMarkdown',
@@ -49,6 +60,7 @@ vi.mock('./MessageThread', () => ({
 
 afterEach(() => {
   mocks.linkResolved = true;
+  mocks.capturedParticipants = undefined;
   cleanup();
 });
 
@@ -128,6 +140,13 @@ describe('DocumentConversation placement', () => {
   it('renders the inline composer for writers by default', () => {
     const view = discussion([[]], undefined, { canWrite: true });
     expect(view.getByRole('textbox')).toBeTruthy();
+  });
+
+  it('offers workspace contacts as @-mention participants', () => {
+    discussion([[]], undefined, { canWrite: true });
+    // Without participants the composer would suggest only agents and bots,
+    // losing the user mentions the legacy comment input offered.
+    expect(mocks.capturedParticipants?.()).toEqual(mocks.contacts);
   });
 
   it('shows nothing from the shared latest page while a link is still resolving', () => {

@@ -1,10 +1,13 @@
 import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-context';
 import type { ThreadProps } from '@channel/Thread/types';
-import type { MessageListItem } from '@service-storage/messages';
+import type {
+  MessageListItem,
+  MessageThread as ThreadData,
+} from '@service-storage/messages';
 import { cleanup, fireEvent, render } from '@solidjs/testing-library';
 import { Show } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { MessageThread } from './MessageThread';
+import { MessageThread, threadListItem } from './MessageThread';
 
 const mocks = vi.hoisted(() => ({
   edit: vi.fn(),
@@ -149,5 +152,38 @@ describe('document message touch actions', () => {
     expect(mocks.clipboard).toHaveBeenCalledWith(
       'https://macro.test/app/md/document?comment_id=root'
     );
+  });
+});
+
+describe('threadListItem', () => {
+  const reply = (id: string, createdAt: string) =>
+    ({
+      id,
+      parent: { type: 'document', id: 'doc' },
+      sender_id: 'user',
+      content: id,
+      created_at: createdAt,
+      updated_at: createdAt,
+      mentions: [],
+      attachments: [],
+      reactions: [],
+    }) as unknown as MessageListItem;
+
+  it('previews the latest three replies, newest last, as channels do', () => {
+    const replies = [
+      reply('r1', '2026-01-01T00:00:00Z'),
+      reply('r2', '2026-01-02T00:00:00Z'),
+      reply('r3', '2026-01-03T00:00:00Z'),
+      reply('r4', '2026-01-04T00:00:00Z'),
+      reply('r5', '2026-01-05T00:00:00Z'),
+    ];
+    const item = threadListItem({
+      root: reply('root', '2026-01-01T00:00:00Z'),
+      state: { root_id: 'root' },
+      replies,
+    } as unknown as ThreadData);
+    expect(item.thread.reply_count).toBe(5);
+    expect(item.thread.preview.map((r) => r.id)).toEqual(['r3', 'r4', 'r5']);
+    expect(item.thread.latest_reply_at).toBe('2026-01-05T00:00:00Z');
   });
 });

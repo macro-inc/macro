@@ -33,7 +33,8 @@ export function threadListItem(thread: ThreadData): MessageListItem {
     state: thread.state,
     thread: {
       reply_count: thread.replies.length,
-      preview: thread.replies.slice(0, 3),
+      // Replies are stored oldest-first; preview the latest three, as channels do.
+      preview: thread.replies.slice(-3),
       latest_reply_at: thread.replies.at(-1)?.created_at ?? null,
     },
   };

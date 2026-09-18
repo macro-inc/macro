@@ -11,6 +11,7 @@ import {
 } from '@core/constant/featureFlags';
 import { MessageThreadById } from '@core/messages/MessageThread';
 import { buildSimpleEntityUrl } from '@core/util/url';
+import { useContacts } from '@queries/contacts/contacts';
 import { Layer } from '@ui';
 import type { EditorThemeClasses } from 'lexical';
 import {
@@ -155,6 +156,8 @@ export function ThreadBody(props: ThreadBodyProps) {
 function MessageThreadBody(props: ThreadBodyProps) {
   const context = useContext(CommentsContext);
   const blockName = useBlockAliasedName();
+  // Workspace users for @-mentions, matching the legacy comment composer.
+  const participants = useContacts();
   const parent = () => ({ type: 'document' as const, id: context.documentId });
   const targetId = () => {
     const highlighted = context.highlightedCommentId();
@@ -167,6 +170,7 @@ function MessageThreadBody(props: ThreadBodyProps) {
         fallback={
           <ChannelInput
             parent={parent()}
+            participants={participants}
             input={{ mode: 'reply', placeholder: 'Leave a comment...' }}
             onClose={() => context.setActiveThread(null)}
             onSend={async (snapshot) => {
