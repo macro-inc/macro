@@ -25,7 +25,9 @@ outbound = [
   "dep:ai_usage",
   "dep:connection_gateway_client",
   "dep:entity_access_db_utils",
+  "dep:entity_registry_db_utils",
   "dep:model-entity",
+  "dep:model_owner",
   "dep:sqlx",
   "macro_user_id/sqlx",
 ]
@@ -47,6 +49,7 @@ agent = { path = "../agent", optional = true }
 ai_usage = { path = "../ai_usage", optional = true }
 dashmap = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
+messages = { path = "../messages", features = ["ports", "schema"] }
 mockall = { workspace = true, optional = true }
 agent_fold = { path = "../agent_fold" }
 # Only the domain vocabulary; `outbound` would pull rdkafka into every
@@ -61,8 +64,10 @@ entity_access = { path = "../entity_access", default-features = false, features 
   "ports",
 ] }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils", optional = true }
 genai_telemetry = { path = "../genai_telemetry" }
 model-entity = { path = "../model-entity", optional = true }
+model_owner = { path = "../model_owner", optional = true }
 clap = { workspace = true, optional = true }
 macro_authorization = { path = "../macro_authorization", default-features = false, optional = true }
 macro_user_id = { path = "../macro_user_id" }
@@ -87,6 +92,8 @@ path = "src/bin/seed_jsonl.rs"
 required-features = ["cli"]
 
 [dev-dependencies]
+messages = { path = "../messages", features = ["outbound"] }
+entity_access = { path = "../entity_access", features = ["outbound"] }
 agent-client-protocol = { workspace = true }
 bot_id = { path = "../bot_id", features = ["test-utils"] }
 harness_id = { path = "../harness_id", features = ["test-utils"] }

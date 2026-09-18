@@ -1,17 +1,15 @@
-import {
-  activeCommentThreadSignal,
-  noScrollToActiveCommentThreadSignal,
-  useIsActiveThreadSelector,
-} from '@block-pdf/store/comments/commentStore';
+import { useIsActiveThreadSelector } from '@block-pdf/store/comments/commentStore';
 import type { IThreadPlaceable } from '@block-pdf/type/placeables';
 import { cn } from '@ui';
 import type { Component } from 'solid-js';
+import { usePdfDocument } from '../../context/pdf-document-context';
 
 export const FreeCommentPlaceable: Component<{
   payload: NonNullable<IThreadPlaceable['payload']>;
 }> = (props) => {
   const isActiveThreadSelector = useIsActiveThreadSelector();
-  const setActiveThreadId = activeCommentThreadSignal.set;
+  const [, setActiveThreadId] =
+    usePdfDocument().state.signals.activeCommentThread;
 
   return (
     <CommentIndicator
@@ -33,8 +31,8 @@ function CommentIndicator(props: {
   isActive: boolean;
   setActive?: () => void;
 }) {
-  const setNoScrollToActiveCommentThread =
-    noScrollToActiveCommentThreadSignal.set;
+  const [, setNoScrollToActiveCommentThread] =
+    usePdfDocument().state.signals.noScrollToActiveCommentThread;
 
   // SCUFFED, decide how to define this color
   return (

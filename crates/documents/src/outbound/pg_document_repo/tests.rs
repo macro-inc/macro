@@ -13,6 +13,7 @@ use sqlx::{Pool, Postgres, Row};
 use crate::domain::models::{
     CopyDocumentRepoArgs, CreateDocumentRepoArgs, EditDocumentRepoArgs, EmailImportRepoOutcome,
     FileTypeUpdate, GithubPullRequest, GithubPullRequestsResponse, ImportEmailAttachmentRepoArgs,
+    InitialLinkShare,
 };
 use crate::domain::ports::DocumentRepo;
 use crate::outbound::pg_document_repo::PgDocumentRepo;
@@ -491,6 +492,7 @@ fn create_document_args(
         sub_type: is_task.then_some(document_sub_type::DocumentSubType::Task),
         skip_history: false,
         attribution: None,
+        initial_link_share: InitialLinkShare::EntityDefault,
     }
 }
 
@@ -764,20 +766,33 @@ async fn test_get_basic_document(pool: Pool<Postgres>) {
 )]
 async fn test_soft_delete_document(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
+    let document_id = TEST_DOCUMENT_ID;
+    let mut transaction = pool.begin().await.unwrap();
+    entity_registry_db_utils::insert_entity(
+        &mut transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            uuid::Uuid::parse_str(document_id).unwrap(),
+            entity_registry_db_utils::RegisteredEntityType::Document,
+            model_owner::Owner::User(user_id(TEST_DOCUMENT_OWNER_ID)),
+        ),
+    )
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
 
-    repo.soft_delete_document("d0000000-0000-0000-0000-000000000001")
-        .await
-        .unwrap();
+    repo.soft_delete_document(document_id).await.unwrap();
 
-    // Verify deleted_at is set
     let row = sqlx::query!(
         r#"SELECT "deletedAt"::timestamptz as deleted_at FROM "Document" WHERE id = $1"#,
-        "d0000000-0000-0000-0000-000000000001"
+        document_id
     )
     .fetch_one(&pool)
     .await
     .unwrap();
     assert!(row.deleted_at.is_some());
+
+    let entity = fetch_entity_row(&pool, document_id).await;
+    assert!(entity.deleted_at.is_some());
 }
 
 #[sqlx::test(
@@ -1835,6 +1850,31 @@ async fn test_deleting_document_cascades_team_task_row(pool: Pool<Postgres>) {
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../fixtures", scripts("documents_test_data"))
 )]
+async fn test_delete_document_by_id_removes_entity_row(pool: Pool<Postgres>) {
+    let repo = PgDocumentRepo::new(pool.clone());
+    let document_id = TEST_DOCUMENT_ID;
+    let mut transaction = pool.begin().await.unwrap();
+    entity_registry_db_utils::insert_entity(
+        &mut transaction,
+        entity_registry_db_utils::NewEntityRecord::new(
+            uuid::Uuid::parse_str(document_id).unwrap(),
+            entity_registry_db_utils::RegisteredEntityType::Document,
+            model_owner::Owner::User(user_id(TEST_DOCUMENT_OWNER_ID)),
+        ),
+    )
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
+
+    repo.delete_document_by_id(document_id).await.unwrap();
+
+    assert_eq!(count_entity_rows_for_id(&pool, document_id).await, 0);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
 async fn test_copying_task_allocates_new_team_task_number(pool: Pool<Postgres>) {
     let repo = PgDocumentRepo::new(pool.clone());
     let original = create_task_for_team(&repo, "macro|user@user.com", TEST_TEAM_ID).await;
@@ -2421,6 +2461,7 @@ fn import_email_document_args(
             sub_type: None,
             skip_history: true,
             attribution: None,
+            initial_link_share: InitialLinkShare::EntityDefault,
         },
     }
 }

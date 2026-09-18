@@ -7,7 +7,7 @@ import {
 import { EmailPermissionsBanner } from '@core/component/EmailPermissionsBanner';
 import { WrapUnlessMobile } from '@core/mobile/WrapUnlessMobile';
 
-import { Surface } from '@ui';
+import { ComposerSurface } from '@ui';
 
 import { createSignal, Show } from 'solid-js';
 import { SignaturePreview } from '../components/signature-preview';
@@ -129,18 +129,26 @@ export function EmailComposeView(props: EmailComposeViewProps) {
         </SplitHeaderLeft>
       </Show>
       <div class="relative flex flex-col size-full min-h-0 overflow-hidden text-sm">
-        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 touch:my-0 px-2 sm:px-4 touch:px-0 overflow-hidden touch:overflow-y-auto touch:scrollbar-hidden touch:min-h-full">
+        {/* No overflow clipping on desktop: the card clips its own content, and
+            clipping here would slice the composer shadow flat at the top and
+            bottom while the side padding lets it show. */}
+        <div class="macro-message-width sm:macro-message-padding mx-auto w-full min-h-120 max-h-full my-2 sm:my-12 touch:my-0 px-2 sm:px-4 touch:px-0 touch:overflow-y-auto touch:scrollbar-hidden touch:min-h-full">
           <WrapUnlessMobile
             wrapper={(children) => (
-              <Surface depth={2} class="rounded-xl border border-ink-muted/8">
+              // The same card as the chat composer and the thread's message
+              // cards, so a fresh draft reads as one of the app's composers.
+              <ComposerSurface
+                as="div"
+                class="relative size-full min-h-0 overflow-clip touch:rounded-xl touch:border touch:border-edge-muted"
+              >
                 {children}
-              </Surface>
+              </ComposerSurface>
             )}
           >
             <ComposeLayout
               toolbar={<EmailComposeToolbar editor={editor} />}
               notice={hasInboxError() ? <EmailPermissionsBanner /> : undefined}
-              class="size-full p-4 bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
+              class="size-full p-4 touch:bg-surface max-h-full touch:max-h-none overflow-hidden flex flex-col min-h-0 touch:min-h-full"
             />
           </WrapUnlessMobile>
         </div>

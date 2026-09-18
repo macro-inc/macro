@@ -24,10 +24,11 @@ use cache_turso::{
 use predicate_index::RecordKey;
 use serde::{Deserialize, Serialize};
 use soup_filter_cache_adapter::{
-    SoupFilterCompileOutcome, authoritative_projection_mutations, compile_filter_request,
-    dirty_projection_mutations, mail::ProjectionError as MailProjectionError,
-    notification_deletion_updates, notification_projection_updates,
-    optimistic_notification_updates, optimistic_projection_mutations,
+    SoupFilterCompileOutcome, authoritative_projection_mutations,
+    compile_current_filter_request as compile_filter_request, dirty_projection_mutations,
+    mail::ProjectionError as MailProjectionError, notification_deletion_updates,
+    notification_projection_updates, optimistic_notification_updates,
+    optimistic_projection_mutations,
 };
 use std::cell::RefCell;
 use std::collections::HashMap;
@@ -775,6 +776,29 @@ pub fn schema_hash() -> String {
     cache_core::meta::SCHEMA_HASH.to_string()
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct CacheBuildInfo {
+    package_version: &'static str,
+    schema_hash: &'static str,
+    schema_compatibility_epoch: u32,
+    format_version: u32,
+    storage_schema_version: u32,
+}
+
+/// Read-only metadata embedded in this WASM binary, available without opening storage.
+/// Recovery fixtures compare both artifacts before invoking any destructive hook.
+#[wasm_bindgen(js_name = cacheBuildInfo)]
+pub fn cache_build_info() -> Result<JsValue, JsValue> {
+    to_js(&CacheBuildInfo {
+        package_version: env!("CARGO_PKG_VERSION"),
+        schema_hash: cache_core::meta::SCHEMA_HASH,
+        schema_compatibility_epoch: cache_core::codec::CACHE_SCHEMA_COMPATIBILITY_EPOCH,
+        format_version: cache_core::codec::CACHE_FORMAT_VERSION,
+        storage_schema_version: cache_turso::STORAGE_SCHEMA_VERSION,
+    })
+}
+
 fn to_js<T: Serialize>(value: &T) -> Result<JsValue, JsValue> {
     value
         .serialize(&serde_wasm_bindgen::Serializer::json_compatible())
@@ -1022,7 +1046,7 @@ impl CacheEngine {
                 serde_wasm_bindgen::from_value(request).map_err(err_js)?;
             if let Some(mail) = request.mail {
                 let generation = state.mail_generation.clone();
-                let result = soup_filter_cache_adapter::mail::page(
+                let result = soup_filter_cache_adapter::mail::page_current(
                     state.engine_mut()?,
                     &generation,
                     request.filters,
@@ -1181,6 +1205,17 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                reuse_stored_identity,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .write_query_with_registration_and_projections(
@@ -1254,6 +1289,17 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &variables,
+                &data,
+                reuse_stored_identity,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .hydrate_query_with_projections(
@@ -1339,6 +1385,16 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             ));
+            let projection_mutations = soup_filter_cache_adapter::properties::augment_optimistic(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                projection_mutations,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let claim = MutationClaimRequest {
                 owner: lease_owner,
                 now_ms: parse_timestamp(now_ms, "claim timestamp")?,
@@ -1557,6 +1613,17 @@ impl CacheEngine {
                 .await
                 .map_err(|error| state.mail_projection_error(error))?,
             );
+            let projections = soup_filter_cache_adapter::properties::augment_authoritative(
+                state.engine_mut()?.storage(),
+                &query,
+                operation_name.as_deref(),
+                &vars,
+                &data,
+                true,
+                projections,
+            )
+            .await
+            .map_err(|error| state.mail_projection_error(error))?;
             let result = state
                 .engine_mut()?
                 .commit_optimistic_write_with_projections_outcome(
@@ -1645,6 +1712,15 @@ impl CacheEngine {
             );
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
+            projections.extend(
+                soup_filter_cache_adapter::properties::deletion_updates(
+                    state.engine_mut()?.storage(),
+                    &keys.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::current_mutations(projections);
             let result = state
                 .engine_mut()?
                 .invalidate_keys_with_projections(&keys, projections)
@@ -1677,6 +1753,15 @@ impl CacheEngine {
             );
             let keys: Vec<EntityKey<'static>> =
                 keys.into_iter().map(|key| EntityKey(key.into())).collect();
+            projections.extend(
+                soup_filter_cache_adapter::properties::deletion_updates(
+                    state.engine_mut()?.storage(),
+                    &keys.iter().map(ToString::to_string).collect::<Vec<_>>(),
+                )
+                .await
+                .map_err(|error| state.mail_projection_error(error))?,
+            );
+            let projections = soup_filter_cache_adapter::properties::current_mutations(projections);
             let result = state
                 .engine_mut()?
                 .delete_keys_with_projection_changes(&keys, projections)

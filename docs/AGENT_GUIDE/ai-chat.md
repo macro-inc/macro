@@ -2,16 +2,114 @@
 
 ## Where chats live
 
-- List: `Go to Agents` → `/app/component/agents`. With new app views enabled
-  on desktop, an Agents sidebar opens New Chat, Routines, configured Agents,
-  Connections, and Skills, followed by favorite and recent conversations.
-  Selecting a recent chat or agent session opens it inside the workspace;
-  Shift-clicking one opens it in a new split instead.
-  Touch devices and users outside the flag retain the Owned / Running / Shared /
-  Automations / Skills list.
-- A chat is `/app/chat/<uuid>`. A doc-scoped chat is `/app/md/<doc>/chat/<chat>` (split view).
+- If session creation fails, the session view shows **Unable to start this agent**
+  with the service's reason. Repository access requires a GitHub connection to
+  Macro that covers that repository; connecting only Cursor does not grant Macro
+  GitHub access. Cloud agents also need a public agent gateway: Docker-only hostnames
+  cannot receive their MCP callbacks. Check the runtime error before retrying, and
+  start a new Claude session after correcting its gateway network configuration.
+
+- Open **Go to Agents** → `/app/component/agents`. With AI agents enabled
+  (`enable-chat-v3-agents`), the workspace uses one sidebar for Chat and Code.
+  **New conversation** opens the composer. **Conversations** is a mixed list
+  of chats and coding sessions, newest first, with one search across both.
+  Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
+  pull request is linked). Home and the Agents sidebar share these agent rows.
+  Rows have no agent or runtime-status subtext. Sessions with a linked PR show
+  **View PR #<number> in GitHub** beneath the title; clicking it opens GitHub in
+  a new tab without opening the session. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
+  Selecting a row opens its own mode; Shift-click opens it in a new split.
+- The starting page has a compact composer that starts at one line and grows
+  with longer prompts or Shift+Enter. Lists, quotes, headings, and other
+  non-paragraph blocks expand immediately, even with short text. This also applies
+  to session composers. The editor takes the full width and controls move below;
+  returning to a short paragraph restores the compact row. Height changes animate
+  over 150ms, with reduced-motion preferences respected. **Agent** and **Send**
+  sit inside the input on the right.
+  Direct model selections show only the model name and provider icon in the input.
+  Saved and coding agents show their identity beside the current model. There is
+  no Chat/Code switch or separate model button.
+- The agent dropdown includes every saved agent regardless of runtime, plus Cursor,
+  grouped in **Coding agents** and **Agents** sections. A **Models** section lists
+  Macro’s available models with readable names (for example, **Sonnet 5**) and
+  provider icons aligned with the agent icons. The chat catalog offers Sonnet 5,
+  Opus 5, and Haiku 4.5; older Sonnet and Opus versions are not offered.
+  Selecting a model here selects
+  the default runtime and applies that model to the next send, retracting the repository drawer.
+  The built-in Macro agent is the only agent excluded from these sections; its models remain available.
+  Unavailable paired agents stay visible with a reason. Model discovery uses the
+  selected runtime, including Claude Cloud. Every coding agent opens the repository
+  drawer; chat agents hide it. Repository/branch overrides are currently applied
+  only to Cursor sessions by the create-session API.
+  Coding agents carry a `</>` badge. The most recently used supported,
+  available agent is selected initially; otherwise Macro is selected.
+  Hover an agent (or use the right arrow key) to open its model submenu, with
+  the searchable Settings catalog, provider icons, and scrollable **More models**.
+  Clicking an agent directly uses its default; choosing a submenu model selects
+  both the agent and that model. A checkmark identifies the selected model,
+  including when it is the agent’s configured default; there is no separate default row.
+  Disconnected Cursor offers **Connect Cursor**, opening Settings → Harness.
+  The built-in sandbox and paired macrod runtimes are not offered here.
+- Selecting an agent changes the heading: **What should we work on?** for chat
+  agents and **What should we build?** for coding agents. The draft stays intact
+  when changing agents. **Create agent** stays pinned at the bottom of the dropdown
+  while the agent and model lists scroll. It opens the roster on the selected kind's
+  tab, where either kind can be created.
+- Selecting a coding agent reveals a repository drawer directly under the input
+  with a short slide and fade; it extends 32px behind the rounded input and stays
+  behind it throughout the transition, keeping its existing edge-muted border.
+  Selecting a chat agent retracts it. Reduced-motion
+  preferences disable the animation. The hidden drawer is inert. **Repository**
+  offers **Choose automatically**, recent repositories, or GitHub `owner/repo` /
+  URL entry confirmed with **Use repository**. Once selected, **Branch** opens
+  a starting-branch field confirmed with **Use branch** (initially `main`).
+  Both controls open above the drawer without clipping. The selections survive
+  agent changes and are sent only to coding agents. Cursor honors the explicit
+  repository and branch instead of choosing a repository from the prompt;
+  the owner must have access through the connected GitHub App.
+- Sending starts a session with the chosen agent's configured default model;
+  a model selected from its submenu overrides that default for the next send
+  only. Sending or choosing another agent clears the override. This does not
+  update the saved agent; configure persistent defaults in the agent editor.
+  Within an existing session, the model picker remains available on the right.
+  Its trigger, model options, and session metadata use the same readable model names
+  as the new-conversation picker. The menu includes provider icons, search, a short
+  **Recommended** list, and a scrollable **More models** submenu shared with Settings.
+- Chat agents' empty input cycles tips about connectors, skills, mentions, and
+  agents; coding agents show **Describe what you want to build**. Type `@` for
+  mentions and `/` for skills.
+- Opening a conversation updates the URL based on that conversation's kind:
+  `/app/agents/<id>` for Chat sessions, `/app/coders/<id>` for Code sessions,
+  and `/app/agent-chats/<id>` for legacy chats. Reload and back/forward restore
+  its mode and conversation. Newly created sessions replace their temporary
+  URL with the real id without remounting the composer or adding a temporary
+  history step.
+- **Agents page** (inside the workspace; Settings → Agents is unchanged):
+  **Close** returns to the composer. **Agents / Coding agents** tabs split
+  the roster into Team and Private, with Edit / Delete actions. The coding
+  tab includes runtime setup. The create/edit dialog has sharing, name,
+  `@tag`, runtime, default model, connections, channels, and instructions.
+- **Session**: the header has the sidebar reopen control, a linked PR status chip,
+  favorite, Share, and Side panel. The top-left title uses the same provider icon,
+  saved-title precedence, and title menu as `/app/agent/<id>`; click the caret
+  beside the title for shared block actions such as Rename, Copy link, Favorite,
+  and Delete
+  (Rename, Copy link, Delete). A metadata strip lists the agent, runtime,
+  model, repository, and status. Chat and Code session inputs
+  use the same growing, initially single-line input with the model selector on
+  the right.
+  Existing sessions retain their agent and kind; use **New conversation** to
+  choose another. Stop, queued-message advancement, and quoting remain available.
+- Users outside the flag retain the Owned / Running / Shared / Automations /
+  Skills list. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
+  is `/app/md/<doc>/chat/<chat>` (split view).
 
 ## Start a standalone chat
+
+While an answer streams, resolved mention pills should keep their names and
+icons instead of flashing back to loading placeholders. Check an answer with
+multiple mentions while more text arrives and when generation finishes, in both
+chat and agent sessions. A newly encountered mention may load once.
 
 On mobile, every screen has a single-line AI composer directly above the bottom
 dock. A labeled glass button beside it opens the current view's create action:
@@ -22,8 +120,12 @@ More opens the full create menu in a glass bottom sheet. Other views show
 to the left of the navigation pill's right edge below. Agents has no separate
 create button; its AI input fills the row.
 The composer's compact height is 46px, matching the mobile chrome buttons,
-with a plus attachment control and centered text and actions. It expands for
-longer prompts while focused. Leaving the AI composer collapses a long draft to
+with a paperclip attachment control and centered text and actions. It expands for
+longer prompts while focused, including text that wraps without an explicit
+line break. Lists, blockquotes, headings, and other non-paragraph blocks also
+expand while editing, even when their text is short. Shortening a paragraph
+draft or widening the pane restores the compact layout when the text fits
+beside its controls. Leaving the AI composer collapses a long draft to
 a single-line preview in the accessory row; tapping it expands the same editor
 with the full draft intact. Screens with an available composer or reply controls show those
 instead; opening mobile search shows scope pills in their place. When neither
@@ -31,6 +133,10 @@ is available, the AI composer returns with its draft intact, including in
 documents without a comment composer. Type a
 prompt, optionally choose a model or
 attach context, and tap **Send** to create the chat and send its first message.
+The paperclip (**Attach files**) opens the device file chooser directly, including
+in the native iPhone app; it does not open a Macro file browser. Select supported
+files to upload and attach them, or cancel to return to the unchanged draft.
+Existing Macro documents can still be attached through an `@mention`.
 On touch devices, the accessory hides whenever an editable field outside its
 Ask AI composer is focused, including email recipients, subject, and body fields.
 It returns with the same draft when focus leaves that field. While typing in
@@ -133,6 +239,16 @@ Leaving Macro selected uses the backend's in-memory default in every
 environment, including production; it does not provision a Daytona container.
 Explicit coding-agent selections still use their configured runtimes.
 
+## Starting from Home
+
+Home's composer follows the existing `enable-chat-v3-agents` flag: disabled keeps
+legacy chat; enabled mounts the same new-conversation composer as the Agents page.
+The greeting, agent/model selector, coding repository/branch drawer, and send flow
+are shared. Sending opens the new session inside Agents with the matching URL.
+Home suggestions and document/project context populate this same draft as markdown
+mentions. A failed suggestion conversion preserves the text and shows an error.
+Session creation and prompt delivery use the shared pending-session flow.
+
 ## Sharing a chat
 
 A standalone chat (`/app/chat/<uuid>`) has **Share** and **Copy Share Link** in
@@ -156,8 +272,7 @@ documents:
 Open a doc → side panel `Actions` → `Ask Macro`. Opens a chat pane with the document already
 attached as context (it appears as a link chip in the composer). New-chat pane shows tips:
 `@mention anything` to attach entities, `Ctrl+Enter` to send in the background (you get
-notified when the AI responds). Background sends from Home preserve the submitted
-tool selection.
+notified when the AI responds). Legacy Home background sends preserve the submitted tool selection.
 
 ## Composer anatomy (a11y)
 
@@ -266,13 +381,38 @@ to open the title menu (caret), then **Rename** — that opens the generic entit
 rename dialog. Do not expect a tap on the name itself to start
 an inline edit.
 
+When the session has opened a pull request, a compact `#N` status chip
+appears in the header (top right) and in the side-panel Details. Click it
+to open the PR entity in a split; until GitHub has synced the entity the
+chip is a GitHub link instead. The icon and status word follow open /
+merged / closed.
+
 Tool groups and individual tool cards start collapsed. Expand a group to see
 its calls, then expand an edit card to view its file diffs. Diff bodies load
 only when their card opens; syntax highlighting may appear after the diff text.
 Opening a session or expanding a group should leave the app responsive, even
 when the session contains many file edits.
 
+A thought row reads **Thinking** and shimmers only while it is the last part
+of the turn the session is working on. Earlier thoughts settle to **Thought**
+as soon as a tool or answer follows, including during long Cursor turns. A
+trailing thought stays outside the tool group so the live reasoning row stays
+visible. Only the newest turn can be live: once the composer stops showing the
+agent as working, every Thinking label, **Calling N tools** row, shimmering
+tool title, and working row settles — earlier turns never shimmer, even ones
+the runtime cut off mid-call. At most one shimmering row is ever expected.
+
 ### Sharing a session
+
+In the Agents workspace, saved sessions use the shared top-bar controls: session
+icon, title and action menu, Share, Copy Share Link, and a side-panel toggle.
+There is no breadcrumb because Agents has no subspaces. Unknown model providers
+fall back to the chat icon. The toggle (or `]`) opens the session's Details, Plan,
+Changes, and Activity sections when available, beside the transcript in wide
+layouts or over it in narrow layouts; it does not open another split.
+New conversation pages have no disabled session action buttons. Older chats
+also have one header row, and empty chats show a simple conversation prompt
+instead of the standalone recent-sessions and tips surface.
 
 Saved sessions have **Share** and **Copy Share Link** in the desktop header;
 on mobile, open the session title menu and choose **Share**. The owner can
@@ -395,7 +535,12 @@ Reopening or resuming the session must retain that selection and logo.
 
 Both AI composers display their model trigger label at the input text size
 (15px), using the softer secondary text color. This includes the agent model
-catalog trigger and mobile model sheet trigger.
+catalog trigger and mobile model sheet trigger. Opening the agent model
+catalog focuses the `Search models` field so you can type immediately.
+The search field is borderless inside the menu. New-session and active-session
+model triggers use a transparent round pill with a background only on hover,
+15px icons, and compact spacing,
+matching the production chat composer's proportions.
 
 Soup and recent-chat icons recognize the provider in the saved model ID even
 when that model is no longer selectable. For example, `openai/gpt-5.5` retains

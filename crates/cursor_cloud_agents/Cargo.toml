@@ -15,11 +15,14 @@ test-utils = []
 name = "cursor_cloud_agents"
 
 [dependencies]
+urlencoding = { workspace = true }
 agent_session = { path = "../agent_session", optional = true }
 agent_runtime_protocol = { path = "../agent_runtime_protocol", default-features = false }
 sqlx = { workspace = true }
 uuid = { workspace = true }
 agent-client-protocol = { workspace = true }
+bytes = { workspace = true }
+static_file_service_client = { path = "../static_file_service_client" }
 futures = { workspace = true }
 macro_env_var = { path = "../macro_env_var" }
 # `stream` on top of the workspace features: the run stream is consumed as
@@ -29,7 +32,7 @@ rootcause = { workspace = true }
 # Strictly spec-compliant SSE decoding. `default-features = false` drops the
 # retry/jitter and async-stream halves: this crate drives the decoder itself,
 # synchronously, so all it needs is the state machine.
-sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
+sse-core = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

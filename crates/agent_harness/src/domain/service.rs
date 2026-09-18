@@ -51,8 +51,8 @@ use crate::domain::model::{
 };
 use crate::domain::pending::PendingCommands;
 use crate::domain::ports::{
-    AgentPromptComposer, AgentSessionNotifier, ChannelPromptContext, CommandForwarder,
-    ContainerManager, PromptMentions, RuntimeConnections, SandboxEgressProvisioner,
+    AgentPromptComposer, AgentSessionNotifier, CommandForwarder, ContainerManager,
+    MessagePromptContext, PromptMentions, RuntimeConnections, SandboxEgressProvisioner,
     SessionAnnouncer,
 };
 use crate::domain::queue::{InFlightTurn, QueueError, QueuedEntry, SessionQueues};
@@ -159,6 +159,7 @@ pub struct AgentHarnessService<
         Notifier,
     >,
     workers: Arc<SessionWorkers>,
+    repositories: Option<Arc<dyn crate::domain::ports::ReachableRepositories>>,
 }
 
 // Manual Clone impl so the port types don't need to be Clone (both fields
@@ -194,6 +195,7 @@ impl<
         Self {
             inner: Arc::clone(&self.inner),
             workers: Arc::clone(&self.workers),
+            repositories: self.repositories.clone(),
         }
     }
 }
@@ -227,7 +229,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,
@@ -272,7 +274,17 @@ where
                 notifier,
             }),
             workers: Arc::new(DashMap::new()),
+            repositories: None,
         }
+    }
+
+    /// Enable explicit repository choices, authorized against the owner's reachable repositories.
+    pub fn with_repositories(
+        mut self,
+        repositories: Arc<dyn crate::domain::ports::ReachableRepositories>,
+    ) -> Self {
+        self.repositories = Some(repositories);
+        self
     }
 
     /// Queue one command behind any work already running for its session.
@@ -318,6 +330,10 @@ where
         session_id: AgentSessionId,
         prompt: AnnouncePrompt,
     ) -> Result<()> {
+        self.inner
+            .prompt_context
+            .authorize_origin(&prompt.sender, &prompt.origin)
+            .await?;
         // Re-read rather than trusted: the row is what vouches that the
         // trigger's session and bot actually belong together.
         let session = self.inner.sessions.get_session(session_id).await?;
@@ -336,7 +352,7 @@ where
             .announce(SessionAnnouncement {
                 session_id,
                 bot_id: session.bot_id,
-                origin_channel_id: prompt.origin.channel_id,
+                origin_parent: prompt.origin.parent,
                 origin_thread_id: prompt.origin.thread_id,
                 origin_message_id: prompt.origin.message_id,
                 prompted_message_id: self
@@ -394,7 +410,7 @@ where
     Containers: ContainerManager,
     Announcer: SessionAnnouncer,
     Runtimes: RuntimeConnections,
-    PromptContext: ChannelPromptContext,
+    PromptContext: MessagePromptContext,
     PromptComposer: AgentPromptComposer,
     Egress: SandboxEgressProvisioner,
     Lifecycle: AgentSessionLifecyclePublisher,

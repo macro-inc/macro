@@ -1,5 +1,5 @@
 import { pickNativePhotoLibraryMedia } from '@core/mobile/nativePhotoLibrary';
-import PlusIcon from '@phosphor/plus.svg';
+import PaperclipIcon from '@phosphor/paperclip.svg';
 import FormatIcon from '@phosphor/text-aa.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import type { JSX } from 'solid-js';
@@ -37,7 +37,7 @@ export function AttachFilesAction() {
         label="Attach files"
         onClick={() => fileInputRef?.click()}
       >
-        <PlusIcon />
+        <PaperclipIcon />
       </InputActionButton>
     </>
   );
@@ -85,7 +85,7 @@ export function AttachNativeMediaAction() {
         label="Attach photos or videos"
         onClick={() => void onAttachMedia()}
       >
-        <PlusIcon />
+        <PaperclipIcon />
       </InputActionButton>
     </>
   );

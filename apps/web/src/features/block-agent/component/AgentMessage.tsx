@@ -1,20 +1,24 @@
 /**
  * Renders one folded agent-session message. Pure composition: each part kind
  * has its own component under `parts/` (the chat block's handler-per-tool
- * split), user prompts get the chat block's bubble treatment, and thoughts
- * shimmer while the turn is in flight.
+ * split), user prompts get the chat block's bubble treatment, and the tail
+ * thought shimmers while the turn is in flight.
+ *
+ * Whether the turn is in flight is the caller's to say (`state/live-turn`):
+ * a message's own `stop` reads several settled turns as live, and a
+ * transcript that let each message decide showed every one of them working.
  */
 
 import { messageSendMotion } from '@core/util/message-send-motion';
 import type {
   FoldedMessage,
   MessagePart,
-  TurnState,
 } from '@service-agent-fold/generated/types';
 import { UserMessageBubble } from '@ui';
 import { For, Index, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import { isControlMessage } from '../state/control-message';
+import { thoughtIsStreaming } from '../state/thought-streaming';
 import { segmentParts } from '../state/tool-groups';
 import {
   ActionLine,
@@ -36,7 +40,7 @@ function AgentMessagePart(props: {
   message: FoldedMessage;
   /** The part's index within its message, for the tool render context. */
   index: number;
-  /** The turn is still in flight — thoughts read "Thinking" and shimmer. */
+  /** The turn is still in flight — the tail thought reads "Thinking". */
   inFlight: boolean;
 }): JSX.Element {
   return match(props.part)
@@ -44,7 +48,14 @@ function AgentMessagePart(props: {
       <TextPart text={part.text} inFlight={props.inFlight} />
     ))
     .with({ kind: 'thought' }, (part) => (
-      <Thought text={part.text} active={props.inFlight} />
+      <Thought
+        text={part.text}
+        active={thoughtIsStreaming(
+          props.inFlight,
+          props.index,
+          props.message.parts.length
+        )}
+      />
     ))
     .with({ kind: 'tool_use' }, (part) => (
       <ToolCallPart
@@ -67,8 +78,9 @@ function AgentMessagePart(props: {
 }
 
 /**
- * A run of consecutive tool calls (see `segmentParts`), folded to one row
- * that opens to the calls themselves, each at its original part index.
+ * A run of consecutive tool calls and their accompanying thoughts (see
+ * `segmentParts`), folded to one row that opens to those parts, each at
+ * its original index.
  */
 function ToolGroupPart(props: {
   message: FoldedMessage;
@@ -77,12 +89,11 @@ function ToolGroupPart(props: {
   end: number;
   inFlight: boolean;
 }): JSX.Element {
+  const parts = () => props.message.parts.slice(props.start, props.end);
   const calls = () =>
-    props.message.parts
-      .slice(props.start, props.end)
-      .filter((part): part is ToolUsePart => part.kind === 'tool_use');
-  // A speculated stop settles the message before the log closes the calls,
-  // so a group only reads as active while the turn itself still is.
+    parts().filter((part): part is ToolUsePart => part.kind === 'tool_use');
+  // A call the log left running in a finished turn is over (see
+  // `settledToolStatus`), so a settled turn's run is never "Calling".
   const active = () =>
     props.inFlight && calls().some((call) => isToolActive(call.status));
 
@@ -97,7 +108,7 @@ function ToolGroupPart(props: {
             detail: toolCallDetail(latest()),
           }}
         >
-          <For each={calls()}>
+          <For each={parts()}>
             {(part, offset) => (
               <AgentMessagePart
                 part={part}
@@ -186,18 +197,10 @@ function UserMessage(props: { message: FoldedMessage }) {
 
 export function Message(props: {
   message: FoldedMessage;
-  /**
-   * The session's turn state, when the caller has it. A speculated stop
-   * settles the open message at once: the fold shows the Stopped line before
-   * the log confirms the turn ended, and the message should not still be
-   * working underneath it.
-   */
-  turn?: TurnState;
+  /** This is the running turn's reply, by the session's one `working` truth. */
+  inFlight: boolean;
 }) {
-  const inFlight = () =>
-    props.message.author.kind === 'agent' &&
-    props.message.stop == null &&
-    props.turn !== 'stopping';
+  const inFlight = () => props.inFlight;
   const failure = () =>
     props.message.stop?.kind === 'failed'
       ? props.message.stop.message

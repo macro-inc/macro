@@ -89,6 +89,9 @@ pub async fn edit_comment_handler(
                         document_sub_type::DocumentSubType::Skill => {
                             NotificationDocumentSubType::Skill
                         }
+                        document_sub_type::DocumentSubType::InitiativeDescription => {
+                            NotificationDocumentSubType::InitiativeDescription
+                        }
                     }),
                     sender_id: user_id.clone().try_into().ok(),
                     sender_profile_picture_url,

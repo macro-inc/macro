@@ -18,6 +18,7 @@ export type InboxTypeFilter =
   | 'tasks'
   | 'email'
   | 'channels'
+  | 'chats'
   | 'agents'
   | 'projects'
   | 'github'

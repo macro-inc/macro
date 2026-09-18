@@ -11,6 +11,7 @@ import type {
 } from '@service-agent-fold/generated/types';
 import { For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { thoughtIsStreaming } from '../../state/thought-streaming';
 import { FoldedOutput, Thought, ToolCard } from '../../ui';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 import { TextPart } from './TextPart';
@@ -45,6 +46,7 @@ function resultSummary(result: SubagentResult): string | undefined {
 function ChildPart(props: {
   part: MessagePart;
   index: number;
+  childCount: number;
   context?: ToolCallContext;
 }) {
   const inFlight = () => props.context?.inFlight ?? false;
@@ -52,7 +54,10 @@ function ChildPart(props: {
     match(props.part)
       .with({ kind: 'text' }, (part) => <TextPart text={part.text} />)
       .with({ kind: 'thought' }, (part) => (
-        <Thought text={part.text} active={inFlight()} />
+        <Thought
+          text={part.text}
+          active={thoughtIsStreaming(inFlight(), props.index, props.childCount)}
+        />
       ))
       .with({ kind: 'tool_use' }, (part) => (
         <ToolCallPart
@@ -129,6 +134,7 @@ export function SubagentToolCall(props: {
                   <ChildPart
                     part={child}
                     index={index()}
+                    childCount={props.detail.children.length}
                     context={childContext()}
                   />
                 )}

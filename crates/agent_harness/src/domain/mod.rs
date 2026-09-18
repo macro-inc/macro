@@ -19,3 +19,6 @@ pub mod trigger_router;
 
 /// Per-owner hosted Codex runtime authorization.
 pub mod codex;
+
+/// Owner-bound Claude conversation lifecycle.
+pub mod claude;

@@ -268,4 +268,95 @@ describe('Home data source', () => {
     expect(notifications.fetchNextPage).toHaveBeenCalledOnce();
     expect(activity.fetchNextPage).not.toHaveBeenCalled();
   });
+
+  it('applies type visibility to both sources and hides channels together with replies', () => {
+    const channel: EntityData = {
+      type: 'channel',
+      id: 'channel',
+      name: 'Channel',
+      ownerId: 'alice',
+      channelType: 'public',
+      touchedAt: new Date(2026, 8, 9),
+    };
+    const thread: EntityData = {
+      type: 'channel_thread',
+      id: 'reply',
+      name: 'Reply',
+      ownerId: 'alice',
+      channelId: channel.id,
+      messageId: 'root',
+      threadId: 'root',
+      senderId: 'alice',
+      sender: { id: 'alice', type: 'user' },
+      content: '',
+      attachments: [],
+      reactions: [],
+      thread: { replyCount: 1, preview: [] },
+      touchedAt: new Date(2026, 8, 8),
+    };
+    const notifications = makeQuery([email('received', 9)], false);
+    const activity = makeQuery([email('sent', 10), channel, thread], false);
+    const { source, setState } = mount(notifications, activity);
+    expect(ids(source)).toEqual(['sent', 'channel', 'received', 'reply']);
+    setState('facets', { type: ['channels'] });
+    expect(ids(source)).toEqual(['channel', 'reply']);
+    setState('facets', { type: ['email'] });
+    expect(ids(source)).toEqual(['sent', 'received']);
+    setState('facets', { type: ['none'] });
+    expect(ids(source)).toEqual([]);
+  });
+
+  it('selects read and unread rows consistently across notification and activity sources', () => {
+    const notifications = makeQuery([email('unread', 9)], false);
+    const activity = makeQuery([{ ...email('read', 10), isRead: true }], false);
+    const { source, setState } = mount(notifications, activity);
+    setState('facets', { read: ['read'] });
+    expect(ids(source)).toEqual(['read']);
+    setState('facets', { read: ['unread'] });
+    expect(ids(source)).toEqual(['unread']);
+    setState('facets', { read: [] });
+    expect(ids(source)).toEqual(['read', 'unread']);
+  });
+
+  it('does not drain paginated history when every entity type is hidden', async () => {
+    const notifications = makeQuery([email('notification', 9)]);
+    const activity = makeQuery([email('activity', 10)]);
+    const { source, setState } = mount(notifications, activity);
+    setState('facets', { type: ['none'] });
+    expect(ids(source)).toEqual([]);
+    expect(source.hasMore()).toBe(false);
+    expect(source.isLoading()).toBe(false);
+    await source.loadMore();
+    expect(notifications.fetchNextPage).not.toHaveBeenCalled();
+    expect(activity.fetchNextPage).not.toHaveBeenCalled();
+  });
+
+  it('can select chats and agent sessions independently', () => {
+    const activity = makeQuery(
+      [
+        {
+          type: 'chat',
+          id: 'chat',
+          name: 'Chat',
+          ownerId: 'alice',
+          touchedAt: new Date(2026, 8, 9),
+        },
+        {
+          type: 'agent_session',
+          id: 'agent',
+          name: 'Agent',
+          ownerId: 'alice',
+          botId: 'bot',
+          status: 'idle',
+          touchedAt: new Date(2026, 8, 10),
+        },
+      ],
+      false
+    );
+    const { source, setState } = mount(makeQuery([], false), activity);
+    setState('facets', { type: ['chats'] });
+    expect(ids(source)).toEqual(['chat']);
+    setState('facets', { type: ['agents'] });
+    expect(ids(source)).toEqual(['agent']);
+  });
 });

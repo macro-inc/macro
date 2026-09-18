@@ -47,6 +47,8 @@ pub enum GraphqlNotificationDocumentSubType {
     Snippet,
     /// Skill document.
     Skill,
+    /// The description document of an initiative.
+    InitiativeDescription,
 }
 
 impl From<NotificationDocumentSubType> for GraphqlNotificationDocumentSubType {
@@ -55,6 +57,7 @@ impl From<NotificationDocumentSubType> for GraphqlNotificationDocumentSubType {
             NotificationDocumentSubType::Task => Self::Task,
             NotificationDocumentSubType::Snippet => Self::Snippet,
             NotificationDocumentSubType::Skill => Self::Skill,
+            NotificationDocumentSubType::InitiativeDescription => Self::InitiativeDescription,
         }
     }
 }
@@ -368,14 +371,16 @@ impl GraphqlMentionedInDocumentCommentMetadata {
         &self.0.mention_id
     }
 
-    /// Comment identifier.
-    async fn comment_id(&self) -> i64 {
-        self.0.comment_id
+    /// Comment identifier: a legacy numeric comment id, or the message id in
+    /// the shared message store.
+    async fn comment_id(&self) -> String {
+        self.0.comment_id.to_string()
     }
 
-    /// Comment thread identifier.
-    async fn thread_id(&self) -> i64 {
-        self.0.thread_id
+    /// Comment thread identifier: a legacy numeric thread id, or the root
+    /// message id in the shared message store.
+    async fn thread_id(&self) -> String {
+        self.0.thread_id.to_string()
     }
 
     /// Comment text.
@@ -386,6 +391,10 @@ impl GraphqlMentionedInDocumentCommentMetadata {
     /// Sender profile-picture URL.
     async fn sender_profile_picture_url(&self) -> Option<&str> {
         self.0.sender_profile_picture_url.as_deref()
+    }
+    /// Display name for a non-user sender.
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
     }
 }
 
@@ -415,14 +424,16 @@ impl GraphqlRepliedToDocumentCommentThreadMetadata {
         self.0.sub_type.clone().map(Into::into)
     }
 
-    /// Comment identifier.
-    async fn comment_id(&self) -> i64 {
-        self.0.comment_id
+    /// Comment identifier: a legacy numeric comment id, or the message id in
+    /// the shared message store.
+    async fn comment_id(&self) -> String {
+        self.0.comment_id.to_string()
     }
 
-    /// Comment thread identifier.
-    async fn thread_id(&self) -> i64 {
-        self.0.thread_id
+    /// Comment thread identifier: a legacy numeric thread id, or the root
+    /// message id in the shared message store.
+    async fn thread_id(&self) -> String {
+        self.0.thread_id.to_string()
     }
 
     /// Reply text.
@@ -433,6 +444,10 @@ impl GraphqlRepliedToDocumentCommentThreadMetadata {
     /// Sender profile-picture URL.
     async fn sender_profile_picture_url(&self) -> Option<&str> {
         self.0.sender_profile_picture_url.as_deref()
+    }
+    /// Display name for a non-user sender.
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
     }
 }
 
@@ -462,14 +477,16 @@ impl GraphqlCommentedOnDocumentMetadata {
         self.0.sub_type.clone().map(Into::into)
     }
 
-    /// Comment identifier.
-    async fn comment_id(&self) -> i64 {
-        self.0.comment_id
+    /// Comment identifier: a legacy numeric comment id, or the message id in
+    /// the shared message store.
+    async fn comment_id(&self) -> String {
+        self.0.comment_id.to_string()
     }
 
-    /// Comment thread identifier.
-    async fn thread_id(&self) -> i64 {
-        self.0.thread_id
+    /// Comment thread identifier: a legacy numeric thread id, or the root
+    /// message id in the shared message store.
+    async fn thread_id(&self) -> String {
+        self.0.thread_id.to_string()
     }
 
     /// Comment text.
@@ -480,6 +497,10 @@ impl GraphqlCommentedOnDocumentMetadata {
     /// Sender profile-picture URL.
     async fn sender_profile_picture_url(&self) -> Option<&str> {
         self.0.sender_profile_picture_url.as_deref()
+    }
+    /// Display name for a non-user sender.
+    async fn sender_display_name(&self) -> Option<&str> {
+        self.0.sender_display_name.as_deref()
     }
 }
 

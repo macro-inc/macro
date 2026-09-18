@@ -89,7 +89,10 @@ export function RecommendedSection() {
     );
   };
 
-  const openRecommendation = async (item: RecommendedItem) => {
+  const openRecommendation = async (
+    item: RecommendedItem,
+    event: MouseEvent
+  ) => {
     const splitManager = globalSplitManager();
     if (!splitManager) return;
 
@@ -101,7 +104,11 @@ export function RecommendedSection() {
     }
 
     if (notification) {
-      const result = await openNotification(notification, splitManager);
+      const result = await openNotification(
+        notification,
+        splitManager,
+        event.shiftKey
+      );
       if (result.isOk()) {
         await notificationSource.markAsRead(notification);
         return;
@@ -112,13 +119,13 @@ export function RecommendedSection() {
       .with('email_thread', () =>
         splitManager.openWithSplit(
           { type: 'email', id: item.entityId },
-          { activate: true }
+          { activate: true, preferNewSplit: event.shiftKey }
         )
       )
       .with('channel', 'chat', 'call', 'project', (entityType) =>
         splitManager.openWithSplit(
           { type: entityType, id: item.entityId },
-          { activate: true }
+          { activate: true, preferNewSplit: event.shiftKey }
         )
       )
       .with('document', () => navigate(LIST_VIEW_PATHS.documents))
@@ -178,7 +185,7 @@ export function RecommendedSection() {
                 <RecommendedRow
                   item={item}
                   onSelect={() => selectRecommendation(item)}
-                  onOpen={() => void openRecommendation(item)}
+                  onOpen={(event) => void openRecommendation(item, event)}
                 />
               )}
             </For>
@@ -289,7 +296,7 @@ export function GettingStartedSection(props: { preferences: HomePreferences }) {
 function RecommendedRow(props: {
   item: RecommendedItem;
   onSelect: () => void;
-  onOpen: () => void;
+  onOpen: (event: MouseEvent) => void;
 }) {
   const status = () => STATUS[props.item.action];
   const iconType = () => {
@@ -325,7 +332,7 @@ function RecommendedRow(props: {
           class="rounded-lg px-2 py-1.5 text-xs font-medium text-ink-muted transition-colors hover:bg-hover hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
           onClick={(event) => {
             event.stopPropagation();
-            props.onOpen();
+            props.onOpen(event);
           }}
           aria-label={`Open ${props.item.title}`}
         >

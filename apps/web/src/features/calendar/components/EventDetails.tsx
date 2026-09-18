@@ -521,7 +521,12 @@ export function EventDetails(props: {
     event.preventDefault();
     const target = parseMacroAppLink(anchor.href);
     if (target) {
-      openDocument(target.blockName, target.documentId);
+      openDocument(
+        target.blockName,
+        target.documentId,
+        undefined,
+        event.shiftKey
+      );
       return;
     }
     openExternalUrl(anchor.href);

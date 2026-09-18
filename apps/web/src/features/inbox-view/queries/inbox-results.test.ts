@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { getHomePagination } from './home-pagination';
 import { buildInboxQuery } from './inbox-query';
 import {
+  groupHomeEntitiesByDate,
   groupInboxEntitiesByDate,
   inboxGroupTimestamp,
   mergeHomeEntities,
@@ -122,23 +123,29 @@ describe('inbox date buckets', () => {
     ]);
   });
 
-  it('buckets by content recency while the notified sort is off', () => {
+  it('still buckets a stamped row by its notification while the server sort is off', () => {
+    // The server notified_at sort is gated for cost, but a websocket
+    // notification stamps `notifiedAt` locally and the row must re-bucket
+    // there regardless — otherwise a fresh comment on a stale task sinks into
+    // an old date section until a refetch catches up.
     const signal = {
       tab: 'signal' as const,
       capabilities: withoutNotifiedSort.capabilities,
     };
     expect(inboxGroupTimestamp(staleTaskFreshComment, signal)).toBe(
-      '2026-08-31T19:00:00Z'
+      '2026-09-02T17:00:00Z'
+    );
+    // A row without a stamp still falls back to content recency.
+    expect(inboxGroupTimestamp(freshEmail, signal)).toBe(
+      '2026-09-02T16:00:00Z'
     );
     const groups = groupInboxEntitiesByDate(
       [freshEmail, staleTaskFreshComment],
       signal,
       now
     );
-    expect(groups.map((group) => group.label)).toEqual([
-      'Today',
-      'Last 7 days',
-    ]);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].label).toBe('Today');
   });
 });
 
@@ -323,6 +330,58 @@ describe('Home activity and notifications', () => {
       'a',
       'b',
     ]);
+  });
+
+  it('sorts sections and rows independently of arrival order, including clock skew and invalid dates', () => {
+    const reference = new Date(2026, 8, 14, 10);
+    const row = (id: string, sortTs: Date | string | undefined) => ({
+      ...staleTaskFreshComment,
+      id,
+      sortTs,
+    });
+    const entities = [
+      row('morning', new Date(2026, 8, 14, 8)),
+      row('invalid', 'bad date'),
+      row('hour-b', new Date(2026, 8, 14, 9, 30)),
+      row('skew', new Date(2026, 8, 14, 10, 0, 1)),
+      row('hour-a', new Date(2026, 8, 14, 9, 30)),
+      row('recent', new Date(2026, 8, 14, 9, 59)),
+      row('yesterday', new Date(2026, 8, 13, 20)),
+      row('missing', undefined),
+    ];
+    const expected = [
+      ['last-few-minutes', ['skew', 'recent']],
+      ['last-hour', ['hour-a', 'hour-b']],
+      ['this-morning', ['morning']],
+      ['yesterday', ['yesterday']],
+      ['older', ['invalid', 'missing']],
+    ];
+    for (let offset = 0; offset < entities.length; offset++) {
+      const shuffled = [
+        ...entities.slice(offset),
+        ...entities.slice(0, offset),
+      ];
+      expect(
+        groupHomeEntitiesByDate(shuffled, reference).map((group) => [
+          group.id,
+          group.entities.map((entity) => entity.id),
+        ])
+      ).toEqual(expected);
+    }
+    expect(entities[0].id).toBe('morning');
+  });
+
+  it('does not let an invalid duplicate timestamp discard valid sort evidence', () => {
+    const valid = recent('task', '2026-09-02T18:00:00Z');
+    const invalid = { ...staleTaskFreshComment, notifiedAt: 'bad date' };
+    for (const notifications of [
+      [invalid, staleTaskFreshComment],
+      [staleTaskFreshComment, invalid],
+    ]) {
+      const [row] = mergeHomeEntities(notifications, [valid], signal);
+      expect(row.sortTs).toBe(valid.touchedAt);
+      expect(row.notifiedAt).toBe(staleTaskFreshComment.notifiedAt);
+    }
   });
 });
 

@@ -16,7 +16,7 @@ use crate::domain::{
         GetChannelsParams, GetThreadReplyRowsParams, LatestMessage, MessageAttachment,
         MessagePageDirection, MutatedAttachment, MutatedMessage, NameLookup, NewChannelAttachment,
         ParticipantRole, PatchChannelRequest, RecentChannelMessage, ReferencedShareItemType,
-        ResolvedChannelMessage, SimpleMention, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
+        ResolvedChannelMessage, ThreadData, ThreadInfo, ThreadReply, ThreadReplyRow,
         TopLevelMessageRow, UserName, fallback_user_name,
     },
     ports::{ChannelRepo, TopLevelMessagesQueryResult},
@@ -32,6 +32,7 @@ use item_filters::ast::{
     channel::{ChannelLiteral, ChannelThreadLiteral},
 };
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use messages::domain::models::SimpleMention;
 use models_pagination::{CreatedAt, Query};
 #[cfg(feature = "list")]
 use recursion::CollapsibleExt;
@@ -245,6 +246,7 @@ struct ChannelInfoRow {
 /// Intermediate row for batch channel preview lookups.
 #[derive(Debug, sqlx::FromRow)]
 struct ChannelPreviewQueryRow {
+    profile_picture_id: Option<Uuid>,
     id: Uuid,
     name: Option<String>,
     channel_type: ChannelType,
@@ -1691,6 +1693,22 @@ impl ChannelAttachmentRepo for PgChannelsRepo {
 }
 
 impl ChannelRepo for PgChannelsRepo {
+    async fn set_channel_picture(
+        &self,
+        channel_id: Uuid,
+        picture_id: Option<Uuid>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            "UPDATE comms_channels SET profile_picture_id = $2, updated_at = NOW() WHERE id = $1",
+            channel_id,
+            picture_id,
+        )
+        .execute(&self.pool)
+        .await
+        .context("unable to update channel picture")?;
+        Ok(())
+    }
+
     type Err = anyhow::Error;
 
     #[tracing::instrument(err, skip(self))]
@@ -1738,7 +1756,7 @@ impl ChannelRepo for PgChannelsRepo {
                     r#"
                     SELECT
                         m.id,
-                        m.channel_id,
+                        m.channel_id AS "channel_id!",
                         m.sender_id,
                         m.triggered_by_user_id,
                         m.content,
@@ -1815,7 +1833,7 @@ impl ChannelRepo for PgChannelsRepo {
                     r#"
                     SELECT
                         m.id,
-                        m.channel_id,
+                        m.channel_id AS "channel_id!",
                         m.sender_id,
                         m.triggered_by_user_id,
                         m.content,
@@ -2127,7 +2145,7 @@ impl ChannelRepo for PgChannelsRepo {
         let rows = sqlx::query_as!(
             ChannelAttachmentRow,
             r#"
-            SELECT a.id, a.channel_id, a.message_id, m.sender_id,
+            SELECT a.id, a.channel_id AS "channel_id!", a.message_id, m.sender_id,
                 a.entity_type, a.entity_id,
                 a.width AS "width?", a.height AS "height?", a.created_at
             FROM comms_attachments a
@@ -2220,7 +2238,7 @@ impl ChannelRepo for PgChannelsRepo {
             r#"
             SELECT
                 id,
-                channel_id,
+                channel_id AS "channel_id!",
                 thread_id,
                 sender_id,
                 triggered_by_user_id,
@@ -2247,7 +2265,7 @@ impl ChannelRepo for PgChannelsRepo {
             r#"
             SELECT
                 id,
-                channel_id,
+                channel_id AS "channel_id!",
                 thread_id,
                 sender_id,
                 triggered_by_user_id,
@@ -2276,7 +2294,7 @@ impl ChannelRepo for PgChannelsRepo {
             r#"
             SELECT
                 id,
-                channel_id,
+                channel_id AS "channel_id!",
                 thread_id,
                 sender_id,
                 triggered_by_user_id,
@@ -2323,7 +2341,7 @@ impl ChannelRepo for PgChannelsRepo {
                 AttachmentChannelReference,
                 r#"
                 SELECT
-                    a.channel_id                     AS "channel_id: uuid::Uuid",
+                    a.channel_id                     AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     a.message_id                     AS "message_id: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",
@@ -2356,7 +2374,7 @@ impl ChannelRepo for PgChannelsRepo {
                 AttachmentChannelReference,
                 r#"
                 SELECT
-                    m.channel_id                     AS "channel_id: uuid::Uuid",
+                    m.channel_id                     AS "channel_id!: uuid::Uuid",
                     c.name                           AS "channel_name?",            -- Option<String>
                     m.id                             AS "message_id: uuid::Uuid",
                     m.thread_id                      AS "thread_id?: uuid::Uuid",
@@ -2467,7 +2485,7 @@ impl ChannelRepo for PgChannelsRepo {
             r#"
             SELECT
                 m.id,
-                m.channel_id,
+                m.channel_id AS "channel_id!",
                 m.sender_id,
                 m.triggered_by_user_id,
                 m.content,
@@ -2511,7 +2529,7 @@ impl ChannelRepo for PgChannelsRepo {
         let row = sqlx::query_as!(
             ResolvedMessageRow,
             r#"
-            SELECT id, channel_id, thread_id, created_at
+            SELECT id, channel_id AS "channel_id!", thread_id, created_at
             FROM comms_messages
             WHERE id = $1
               AND channel_id = $2
@@ -2553,7 +2571,7 @@ impl ChannelRepo for PgChannelsRepo {
             r#"
             SELECT
                 m.id,
-                m.channel_id,
+                m.channel_id AS "channel_id!",
                 m.sender_id,
                 m.triggered_by_user_id,
                 m.content,
@@ -2584,7 +2602,7 @@ impl ChannelRepo for PgChannelsRepo {
             r#"
             SELECT
                 m.id,
-                m.channel_id,
+                m.channel_id AS "channel_id!",
                 m.sender_id,
                 m.triggered_by_user_id,
                 m.content,
@@ -2719,6 +2737,7 @@ impl ChannelRepo for PgChannelsRepo {
             SELECT
                 c.id,
                 c.name,
+                c.profile_picture_id,
                 c.channel_type AS "channel_type: ChannelType",
                 c.org_id,
                 c.team_id,
@@ -2745,6 +2764,7 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(rows
             .into_iter()
             .map(|row| ChannelPreviewRow {
+                profile_picture_id: row.profile_picture_id,
                 info: ChannelInfo {
                     id: row.id,
                     name: row.name,
@@ -3244,7 +3264,7 @@ impl ChannelRepo for PgChannelsRepo {
             VALUES ($1, $2, $3, $4, $5, $6)
             RETURNING
                 id,
-                channel_id,
+                channel_id AS "channel_id!",
                 sender_id,
                 triggered_by_user_id,
                 content,
@@ -3334,7 +3354,7 @@ impl ChannelRepo for PgChannelsRepo {
                     height
                 )
                 VALUES ($1, $2, $3, $4, $5, $6, $7)
-                RETURNING id, message_id, channel_id, entity_type, entity_id, width, height, created_at
+                RETURNING id, message_id, channel_id AS "channel_id!", entity_type, entity_id, width, height, created_at
                 "#,
                 macro_uuid::generate_uuid_v7(),
                 message_id,
@@ -3358,7 +3378,7 @@ impl ChannelRepo for PgChannelsRepo {
         Ok(sqlx::query_as!(
             MutatedAttachmentRow,
             r#"
-                SELECT id, message_id, channel_id, entity_type, entity_id, width, height, created_at
+                SELECT id, message_id, channel_id AS "channel_id!", entity_type, entity_id, width, height, created_at
                 FROM comms_attachments
                 WHERE message_id = $1
                 "#,
@@ -3489,7 +3509,7 @@ impl ChannelRepo for PgChannelsRepo {
             WHERE id = $1
             RETURNING
                 id,
-                channel_id,
+                channel_id AS "channel_id!",
                 sender_id,
                 triggered_by_user_id,
                 content,
@@ -3522,7 +3542,7 @@ impl ChannelRepo for PgChannelsRepo {
             WHERE id = $2 AND channel_id = $3
             RETURNING
                 id,
-                channel_id,
+                channel_id AS "channel_id!",
                 sender_id,
                 triggered_by_user_id,
                 content,
@@ -3554,7 +3574,7 @@ impl ChannelRepo for PgChannelsRepo {
             WHERE id = $1 AND channel_id = $2
             RETURNING
                 id,
-                channel_id,
+                channel_id AS "channel_id!",
                 sender_id,
                 triggered_by_user_id,
                 content,

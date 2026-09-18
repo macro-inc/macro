@@ -38,6 +38,11 @@ import {
   onCleanup,
 } from 'solid-js';
 
+import {
+  usePendingGraphqlSoupDeleteIds,
+  withoutPendingSoupEntities,
+} from '../../graphql/optimistic-deletions';
+
 export type GroupQueryData = {
   entities: EntityData[];
 };
@@ -107,6 +112,7 @@ export function createGraphqlGroupedSoupQueries(
   resetToInitialPage: () => void;
 } {
   const instructionsIdQuery = useInstructionsMdIdQuery();
+  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
 
   const mapItems = (
     items: SoupAstItemsGroupedPage['items'],
@@ -282,8 +288,14 @@ export function createGraphqlGroupedSoupQueries(
         const initial = initialData();
         if (!initial) return;
         const continued = getContinuation()?.query.data;
-        if (!continued) return initial;
-        return { entities: [...initial.entities, ...continued.entities] };
+        const combined = continued
+          ? { entities: [...initial.entities, ...continued.entities] }
+          : initial;
+        const entities = withoutPendingSoupEntities(
+          combined.entities,
+          pendingDeleteIds()
+        );
+        return entities === combined.entities ? combined : { entities };
       });
 
       const trackFirstPage = (action: Promise<unknown>): Promise<void> => {

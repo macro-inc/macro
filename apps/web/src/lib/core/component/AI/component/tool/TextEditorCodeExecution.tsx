@@ -54,7 +54,7 @@ function CreateResult(props: {
   result: TextEditorCodeExecutionCreateResult;
   toolId: string;
 }) {
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const [createdFile, setCreatedFile] = createSignal<CreatedFileInfo | null>(
     createdFilesMap[props.toolId] ?? null
   );
@@ -78,11 +78,14 @@ function CreateResult(props: {
     }
   });
 
-  const handleClick = () => {
+  const handleClick = (event: MouseEvent) => {
     const file = createdFile();
     if (file) {
       const blockName = fileTypeToBlockName(file.extension);
-      replaceOrInsertSplit({ type: blockName, id: file.documentId });
+      openWithSplit(
+        { type: blockName, id: file.documentId },
+        { activate: true, preferNewSplit: event.shiftKey }
+      );
     }
   };
 

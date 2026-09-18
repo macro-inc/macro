@@ -1,5 +1,8 @@
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
+import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
+import { createSpreadsheetDocument } from '@app/features/block-spreadsheet/queries/create-spreadsheet';
+import { isSpreadsheetEnabledForCurrentUser } from '@app/features/block-spreadsheet/queries/spreadsheet-access';
 import { EMAIL_COMPOSE_TO_INPUT_ID } from '@app/features/email-compose/core/constants';
 import { openStandaloneReminderComposer } from '@app/features/reminders/reminder-composer';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -15,7 +18,6 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { CHAT_INPUT_TEXT_AREA_ID } from '@core/component/AI/component/input/ChatInput';
 import { getIconConfig } from '@core/component/EntityIcon';
 import {
-  ENABLE_ANIMATED_ICONS,
   enableChatV3Agents,
   enableReminders,
   enableSnippets,
@@ -39,35 +41,12 @@ import {
   createSnippet,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import SkillIcon from '@icon/skill.svg';
-import WideAutomation from '@icon/wide-automation.svg';
-import { AnimatedChannelIcon } from '@icon/wide-channel';
-import WideChannel from '@icon/wide-channel.svg';
-import { AnimatedChatIcon } from '@icon/wide-chat';
-import WideChat from '@icon/wide-chat.svg';
-import { AnimatedDiagramIcon } from '@icon/wide-diagram';
-import WideDiagram from '@icon/wide-diagram.svg';
-import { AnimatedEmailIcon } from '@icon/wide-email';
-import WideEmail from '@icon/wide-email.svg';
-import WideFileCode from '@icon/wide-file-code.svg';
-import WideFileMd from '@icon/wide-file-md.svg';
-import { AnimatedFileCodeIcon } from '@icon/wide-fileCode';
-import { AnimatedFileMdIcon } from '@icon/wide-fileMd';
-import { AnimatedFolderIcon } from '@icon/wide-folder';
-import WideFolder from '@icon/wide-folder.svg';
-import { AnimatedSnippetIcon } from '@icon/wide-snippet';
-import WideSnippet from '@icon/wide-snippet.svg';
-import { AnimatedStarIcon } from '@icon/wide-star';
-import WideStar from '@icon/wide-star.svg';
-import { AnimatedTaskIcon } from '@icon/wide-task';
-import WideTask from '@icon/wide-task.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { getMarkdownGoldenBytes } from '@macro-inc/lexical-core/markdown-golden';
 import type { Span } from '@macro-inc/observability';
-import BellSimpleIcon from '@phosphor/bell-simple.svg';
+import ChatIcon from '@phosphor/chat.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
-import Robot from '@phosphor/robot.svg';
 import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -314,6 +293,19 @@ export function runCreateAction(
         });
       return;
     }
+    case 'spreadsheet':
+      if (!isSpreadsheetEnabledForCurrentUser()) return;
+      void createBlock({
+        blockName: 'spreadsheet',
+        loading: true,
+        createFn: () =>
+          createSpreadsheetDocument({
+            projectId: options.projectId,
+            source,
+          }),
+        shouldInsert,
+      });
+      return;
     case 'canvas':
       createBlock({
         blockName: 'canvas',
@@ -484,8 +476,7 @@ export type { CreatableBlock, CreatableName } from './types';
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
   {
     label: 'Email',
-    icon: WideEmail,
-    animatedIcon: AnimatedEmailIcon,
+    icon: getIconConfig('email').icon,
     description: 'Create email',
     keywords: ['new', 'make', 'add', 'compose'],
     blockName: 'email',
@@ -502,8 +493,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     // has not reached. Mutually exclusive with the Agent entry below:
     // both bind `a`, and exactly one is ever enabled.
     label: 'Agent',
-    icon: WideStar,
-    animatedIcon: AnimatedStarIcon,
+    icon: getIconConfig('chat').icon,
     description: 'Create agent chat',
     launcherHint: 'New agent session',
     keywords: ['new', 'make', 'add', 'agent'],
@@ -523,7 +513,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Automation',
-    icon: WideAutomation,
+    icon: getIconConfig('automation').icon,
     description: 'Create automation',
     launcherHint: 'Scheduled agent runs',
     keywords: ['new', 'make', 'add', 'schedule', 'agent'],
@@ -537,7 +527,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Agent',
-    icon: Robot,
+    icon: getIconConfig('agent').icon,
     description: 'Create agent session',
     launcherHint: 'Dedicated Agent Session',
     keywords: ['new', 'make', 'add', 'agent', 'code', 'coder', 'session'],
@@ -554,7 +544,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Skill',
-    icon: SkillIcon,
+    icon: getIconConfig('skill').icon,
     description: 'Create skill',
     launcherHint: 'Custom agent skill',
     keywords: ['new', 'make', 'add', 'instruction', 'prompt'],
@@ -568,8 +558,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Document',
-    icon: WideFileMd,
-    animatedIcon: AnimatedFileMdIcon,
+    icon: getIconConfig('md').icon,
     description: 'Create doc',
     keywords: ['new', 'make', 'add', 'document', 'note'],
     blockName: 'md',
@@ -583,8 +572,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Task',
-    icon: WideTask,
-    animatedIcon: AnimatedTaskIcon,
+    icon: getIconConfig('task').icon,
     description: 'Create task',
     keywords: ['new', 'make', 'add', 'todo'],
     blockName: 'task',
@@ -598,7 +586,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Reminder',
-    icon: BellSimpleIcon,
+    icon: getIconConfig('reminder').icon,
     description: 'Create reminder',
     launcherHint: 'Nudge yourself later',
     keywords: ['new', 'make', 'add', 'remind', 'later', 'todo'],
@@ -615,8 +603,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Snippet',
-    icon: WideSnippet,
-    animatedIcon: AnimatedSnippetIcon,
+    icon: getIconConfig('snippet').icon,
     description: 'Create snippet',
     launcherHint: 'Reusable document template',
     keywords: ['new', 'make', 'add'],
@@ -631,8 +618,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Message',
-    icon: WideChat,
-    animatedIcon: AnimatedChatIcon,
+    icon: ChatIcon,
     description: 'Create message',
     launcherHint: 'Quick send message',
     keywords: ['new', 'make', 'add', 'channel'],
@@ -647,8 +633,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Channel',
-    icon: WideChannel,
-    animatedIcon: AnimatedChannelIcon,
+    icon: getIconConfig('channel').icon,
     description: 'Create channel',
     launcherHint: 'Team-wide or group chat',
     keywords: ['new', 'make', 'add', 'channel', 'group', 'conversation'],
@@ -663,8 +648,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Canvas',
-    icon: WideDiagram,
-    animatedIcon: AnimatedDiagramIcon,
+    icon: getIconConfig('canvas').icon,
     description: 'Create canvas',
     keywords: ['new', 'make', 'add', 'diagram'],
     blockName: 'canvas',
@@ -679,9 +663,26 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
+    label: 'Spreadsheet',
+    enabled: isSpreadsheetEnabledForCurrentUser,
+    icon: getIconConfig('spreadsheet').icon,
+    description: 'Create spreadsheet',
+    launcherHint: 'Tables, formulas, and shared calculations',
+    keywords: ['new', 'make', 'add', 'sheet', 'table', 'formula'],
+    blockName: 'spreadsheet',
+    hotkeyToken: TOKENS.create.spreadsheet,
+    altHotkeyToken: TOKENS.create.spreadsheetNewSplit,
+    hotkey: 'b',
+    keyDownHandler: () => {
+      runCreateAction('spreadsheet', {
+        shouldInsert: pressedKeys().has('shift'),
+      });
+      return true;
+    },
+  },
+  {
     label: 'Folder',
-    icon: WideFolder,
-    animatedIcon: AnimatedFolderIcon,
+    icon: getIconConfig('project').icon,
     description: 'Create folder',
     keywords: ['new', 'make', 'add', 'project'],
     blockName: 'project',
@@ -695,8 +696,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Code',
-    icon: WideFileCode,
-    animatedIcon: AnimatedFileCodeIcon,
+    icon: getIconConfig('code').icon,
     description: 'Create code file',
     keywords: ['new', 'make', 'add'],
     blockName: 'code',
@@ -720,6 +720,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
 export function useCreateMenuBlocks(
   source: () => CreatableBlock[] = () => CREATABLE_BLOCKS
 ): Accessor<CreatableBlock[]> {
+  const spreadsheets = useSpreadsheetAccess();
   const snippetsFlag = useFeatureFlag(enableSnippets);
   // Subscribed to rather than left to the block's own `enabled`, which reads
   // PostHog without tracking it: this memo has no other reason to re-run, so a
@@ -730,6 +731,7 @@ export function useCreateMenuBlocks(
     remindersFlag();
     agentsFlag();
     return source().filter((block) => {
+      if (block.blockName === 'spreadsheet') return spreadsheets();
       if (block.blockName === 'snippet') return snippetsFlag().enabled;
       return block.enabled?.() ?? true;
     });
@@ -767,8 +769,6 @@ type LauncherMenuItemProps = {
 };
 
 const LauncherMenuItem = (props: LauncherMenuItemProps) => {
-  const StaticIcon = props.creatableBlock.icon;
-  const AnimatedIcon = props.creatableBlock.animatedIcon;
   const selectedIconColor = () =>
     getIconConfig(props.creatableBlock.blockName).foreground;
   const launcherHint = () => props.creatableBlock.launcherHint;
@@ -781,14 +781,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           props.selected && selectedIconColor()
         )}
       >
-        <Show
-          when={ENABLE_ANIMATED_ICONS && AnimatedIcon}
-          fallback={<Dynamic component={StaticIcon} />}
-        >
-          {(icon) => (
-            <Dynamic component={icon()} triggerAnimation={props.selected} />
-          )}
-        </Show>
+        <Dynamic component={props.creatableBlock.icon} />
       </div>
 
       <div class="min-w-0 flex-1 flex items-baseline gap-2">

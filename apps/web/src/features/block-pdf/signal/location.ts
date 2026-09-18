@@ -5,25 +5,13 @@ import {
   type IUpdateFindControlStateEvent,
 } from '@block-pdf/PdfViewer/EventBus';
 import type { FindController } from '@block-pdf/PdfViewer/FindController';
-import {
-  createBlockEffect,
-  createBlockSignal,
-  createBlockStore,
-  useBlockId,
-} from '@core/block';
 import { useReferralCode } from '@core/context/user';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { waitForSignal } from '@core/util/waitForSignal';
 import { createCallback } from '@solid-primitives/rootless';
-import { type Accessor, createMemo } from 'solid-js';
+import { type Accessor, createEffect, createMemo } from 'solid-js';
 import { z } from 'zod';
-import { pdfViewLocation } from './document';
-import {
-  updateFindControlStateSignal,
-  useGetRootViewer,
-  viewerHasVisiblePagesSignal,
-  viewerReadySignal,
-} from './pdfViewer';
+import { usePdfDocument } from '../context/pdf-document-context';
 
 export { URL_PARAMS };
 
@@ -121,54 +109,41 @@ export const PdfOrderInfoSchema = z.object({
 
 export type PdfOrderInfo = z.infer<typeof PdfOrderInfoSchema>;
 
-export const locationChangedSignal = createBlockSignal<boolean>(false);
-
-export const pendingLocationParamsSignal =
-  createBlockSignal<LocationBlockParams>();
-
-export const searchLocationPendingSignal = createBlockSignal<boolean>(false);
-
 const useIsViewerReadyForScroll = () => {
-  const viewerHasVisiblePages = viewerHasVisiblePagesSignal.get;
-  return createMemo(() => viewerReadySignal() && viewerHasVisiblePages());
+  const pdf = usePdfDocument();
+  const [viewerHasVisiblePages] = pdf.state.signals.viewerHasVisiblePages;
+  return createMemo(
+    () => pdf.state.derived.viewerReady() && viewerHasVisiblePages()
+  );
 };
 
-createBlockEffect(() => {
-  const getViewer = useGetRootViewer();
+export function usePendingLocationNavigationEffect() {
+  const pdf = usePdfDocument();
+  const [rootViewer] = pdf.state.signals.rootViewer;
+  const [pendingLocationParams] = pdf.state.signals.pendingLocationParams;
   const goToLinkLocationFromParams = useGoToLinkLocationFromParams();
   const isViewerReady = useIsViewerReadyForScroll();
 
-  const params = pendingLocationParamsSignal();
+  createEffect(() => {
+    const params = pendingLocationParams();
+    if (isViewerReady() && params) {
+      // TODO: do we need to clear all overlays here
+      rootViewer()?.clearAllOverlays();
 
-  if (isViewerReady() && params) {
-    // TODO: do we need to clear all overlays here
-    getViewer()?.clearAllOverlays();
-
-    goToLinkLocationFromParams(params);
-  }
-});
-
-export const locationStore = createBlockStore<{
-  general: GeneralLocation | undefined;
-  precise: PreciseLocation | undefined;
-  annotation: AnnotationLocation | undefined;
-  search: SearchLocation | undefined;
-}>({
-  general: undefined,
-  precise: undefined,
-  annotation: undefined,
-  search: undefined,
-});
+      void goToLinkLocationFromParams(params);
+    }
+  });
+}
 
 export function useSetLocationStore() {
-  const setLocationStore_ = locationStore.set;
+  const [, setLocation] = usePdfDocument().state.stores.location;
 
   const setLocationStore = <T extends PdfLocationType>(
     type: T,
     location: Omit<LocationTypeMap[T], 'type'> | undefined
   ): void => {
     if (type === 'precise') {
-      setLocationStore_('annotation', undefined);
+      setLocation('annotation', undefined);
     }
 
     const l: LocationTypeMap[T] | undefined = location
@@ -177,18 +152,11 @@ export function useSetLocationStore() {
           type,
         } as LocationTypeMap[T])
       : undefined;
-    setLocationStore_(type, l);
+    setLocation(type, l);
   };
 
   return createCallback(setLocationStore);
 }
-
-export const generalPopupLocationSignal = createBlockSignal<{
-  pageIndex: number;
-  element: HTMLElement;
-  hasHighlight?: boolean;
-  hasComment?: boolean;
-} | null>(null);
 
 /**
  * Converts a location into URL parameters for sharing.
@@ -263,8 +231,8 @@ export function selectLocationForFidelity(
 }
 
 export function useCreateShareUrl() {
-  const locationStore_ = locationStore.get;
-  const blockId = useBlockId();
+  const pdf = usePdfDocument();
+  const [locationStore] = pdf.state.stores.location;
   const referralCode = useReferralCode();
 
   /**
@@ -279,13 +247,13 @@ export function useCreateShareUrl() {
     copy: boolean = true
   ): string => {
     const locations = {
-      general: locationStore_.general,
-      precise: locationStore_.precise,
-      annotation: locationStore_.annotation,
-      search: locationStore_.search,
+      general: locationStore.general,
+      precise: locationStore.precise,
+      annotation: locationStore.annotation,
+      search: locationStore.search,
     };
-    const location = selectLocationForFidelity(fidelity, locations);
-    const url = locationToUrl(location);
+    const selectedLocation = selectLocationForFidelity(fidelity, locations);
+    const url = locationToUrl(selectedLocation);
     const params = Object.fromEntries(new URL(url).searchParams);
     const code = referralCode();
     if (code) {
@@ -294,7 +262,7 @@ export function useCreateShareUrl() {
     const updatedUrl = buildSimpleEntityUrl(
       {
         type: 'pdf',
-        id: blockId,
+        id: pdf.documentId(),
       },
       params
     );
@@ -542,12 +510,14 @@ async function applyCustomHighlights(
  * @param location - The location to go to
  */
 function useGoToPdfLocation() {
-  const getRootViewer = useGetRootViewer();
-  const findControllerStateEventSignal = updateFindControlStateSignal.get;
-  const setSearchLocationPending = searchLocationPendingSignal.set;
+  const pdf = usePdfDocument();
+  const [rootViewer] = pdf.state.signals.rootViewer;
+  const [findControllerStateEventSignal] =
+    pdf.state.signals.updateFindControlState;
+  const [, setSearchLocationPending] = pdf.state.signals.searchLocationPending;
 
   const go = async (location: PdfLocation): Promise<void> => {
-    const viewer = getRootViewer();
+    const viewer = rootViewer();
     if (!viewer) return;
 
     switch (location.type) {
@@ -692,18 +662,19 @@ function useGoToPdfLocation() {
 }
 
 const useGoToPreviousLocation = () => {
-  const getViewer = useGetRootViewer();
-  const getViewLocation = pdfViewLocation.get;
+  const pdf = usePdfDocument();
+  const [viewer] = pdf.state.signals.rootViewer;
+  const [viewLocation] = pdf.state.signals.viewLocation;
   const isViewerReady = useIsViewerReadyForScroll();
 
   return async () => {
-    const viewer = getViewer();
+    const rootViewer = viewer();
 
-    await waitForSignal(getViewLocation, (location) => !!location, 300).then(
+    await waitForSignal(viewLocation, (location) => !!location, 300).then(
       (prevLocationHash) => {
         waitForSignal(isViewerReady).then(() => {
-          if (viewer && prevLocationHash) {
-            viewer.goToLocationHash(prevLocationHash);
+          if (rootViewer && prevLocationHash) {
+            rootViewer.goToLocationHash(prevLocationHash);
           }
         });
       }

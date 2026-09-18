@@ -1,142 +1,127 @@
 # Releasing the SDK
 
-SDK releases publish `@macro-inc/sdk` to npm. Incrementing `package.json` alone
-never publishes: merge the version change into `main`, then push an `sdk-vX.Y.Z`
-tag pointing at the intended merged commit. A GitHub Release is optional and is
-not the workflow trigger.
+`@macro-inc/sdk` publishes to npm when a merge to `main` raises the `version` in
+`packages/sdk/package.json`. There is no release PR, no dispatch, and no tag to
+push: bump the version in the same PR that changes the SDK, and merging it
+releases. If the version is unchanged, the release workflow resolves to a no-op.
 
-Agents can use [`release-sdk`](../../.agents/skills/release-sdk/SKILL.md) to
-prepare or publish a patch release using this guide.
+[Release SDK](../../.github/workflows/release-sdk.yml) validates the package,
+runs `npm publish`, and only then pushes the `sdk-vX.Y.Z` tag, so a release tag
+always names a commit that actually shipped.
+
+Agents can use [`release-sdk`](../../.agents/skills/release-sdk/SKILL.md).
+
+## Bump
+
+From `packages/sdk`, on the branch carrying your SDK change:
+
+```sh
+just bump          # patch; also accepts minor, major, or an explicit X.Y.Z
+```
+
+The script refuses a version npm already has, and touches only the `version`
+field. Commit it with the rest of your change — reviewers should see the API
+change and the version it ships in one diff.
+
+Then run the same validation the release workflow runs:
+
+```sh
+bun install --frozen-lockfile
+bun run check && bun test && bun run coverage && bun run build
+npm pack --dry-run --ignore-scripts
+```
+
+The compiled JavaScript and declaration files referenced by `exports` must
+appear in the package listing. `coverage` checks endpoint wrappers, not test
+coverage. `SDK Check` runs the same package suite on the PR and again on the
+merge to `main`, and additionally checks generated-code freshness on the PR; if
+it reports staleness, run `just update-generated` and review the diff. Run
+`just check` from the repository root before committing.
+
+Forgetting to bump publishes nothing, which is the intended failure mode: open a
+follow-up PR with the bump.
+
+## What happens on merge
+
+`Release SDK` runs on any push to `main` touching `packages/sdk/package.json`:
+
+1. `bun scripts/resolve-release.ts` reads the manifest version and asks npm
+   about it. Already published → no-op. Below what npm serves → fails, since
+   that is an accidental downgrade. The policy lives in
+   [`scripts/release.ts`](scripts/release.ts), shared with `just bump` and
+   unit-tested in [`tests/release.test.ts`](tests/release.test.ts); `semver`
+   does the comparing.
+2. `bun install --frozen-lockfile`, then `check`, `test`, `coverage`, `build`.
+3. `npm publish --access public` over OIDC trusted publishing. A prerelease
+   version publishes under the `next` dist-tag so it never becomes what a plain
+   `npm install` resolves to.
+4. Pushes the lightweight tag `sdk-vX.Y.Z` at the released commit.
+
+Verify:
+
+```sh
+gh run list --repo macro-inc/macro --workflow release-sdk.yml --branch main \
+  --json databaseId,headSha,status,conclusion,url
+npm view "@macro-inc/sdk@<version>" version dist.tarball --json --registry=https://registry.npmjs.org
+npm view @macro-inc/sdk dist-tags --json --registry=https://registry.npmjs.org
+```
+
+A merged bump, a green job, or a pushed tag is not proof of publication; the npm
+version is. If the run has not appeared or npm has not updated, allow a short
+bounded wait and report pending status rather than claiming success.
 
 ## One-time npm setup
 
-Before the first automated release, a package maintainer must verify the package
-exists on npm and configure its trusted publisher:
+Publication uses OIDC trusted publishing, so no npm token lives in GitHub
+secrets. A package maintainer must register the publisher once, on npmjs.com:
 
 | Setting | Value |
 | --- | --- |
 | Provider | GitHub Actions |
 | Organization | `macro-inc` |
 | Repository | `macro` |
-| Workflow filename | `publish-sdk.yml` |
+| Workflow filename | `release-sdk.yml` |
 | Environment | Leave blank; the job declares no environment |
 | Allowed actions | Allow direct publishing with `npm publish` |
 
-If the package does not exist, arrange its initial publication with a maintainer
-before following the routine patch process. Do not interpret network or
-authentication errors as proof that the package or version is available.
-
-Check that `packages/sdk/package.json` has repository metadata matching
-`https://github.com/macro-inc/macro` (conventionally
-`"repository": { "type": "git", "url": "git+https://github.com/macro-inc/macro.git", "directory": "packages/sdk" }`).
-Add missing metadata in the release PR. npm documents this requirement in its
+Register `publish-sdk.yml` as a second trusted publisher to keep the recovery
+path below working. Until this is done, every release fails at `npm publish`
+with an authentication error — `0.0.1` was published by hand, so OIDC has not
+yet been exercised. Do not interpret network or authentication errors as proof
+that the package or version is available. npm documents the requirement in its
 [trusted publishing guide](https://docs.npmjs.com/trusted-publishers/).
-The workflow uses OIDC; routine releases do not need an npm token in GitHub secrets.
 
-## Prepare a patch
+`packages/sdk/package.json` must keep repository metadata matching
+`https://github.com/macro-inc/macro`.
 
-1. From the repository root, inspect the working tree and fetch current release
-   state. Preserve unrelated edits; use a separate checkout if necessary.
+## Recovery
 
-   ```sh
-   git status --short --branch
-   git fetch origin main --tags
-   git show origin/main:packages/sdk/package.json
-   npm view @macro-inc/sdk versions --json --registry=https://registry.npmjs.org
-   git ls-remote --tags origin 'refs/tags/sdk-v*'
-   ```
-
-2. Choose the next patch of the current stable version (`X.Y.Z` → `X.Y.(Z+1)`),
-   checking both `main` and npm. For example, `0.0.1` → `0.0.2`. If a release
-   bump is already prepared, resume it instead of incrementing again. Resolve
-   disagreements between the checkout, `main`, tags, and npm before proceeding;
-   do not downgrade or silently turn a prerelease/minor/major release into a patch.
-
-3. Edit only the `version` field in `packages/sdk/package.json` for the bump.
-   Keep the Bun lockfile consistent if installation changes it; do not introduce
-   an npm lockfile or use a version command that creates an early Git tag.
-
-4. In `packages/sdk`, run the same validation as publishing CI:
-
-   ```sh
-   bun install --frozen-lockfile
-   bun run check && bun test && bun run coverage && bun run build
-   npm pack --dry-run --ignore-scripts
-   ```
-
-   Inspect the package listing: the compiled JavaScript and declaration files
-   referenced by `exports` must be present. `coverage` checks endpoint wrappers,
-   not test coverage. SDK CI also checks generated-code freshness; if stale,
-   follow the package's `just update-generated` workflow and review its diff.
-   Run `just check` from the repository root before committing.
-
-5. Commit the intended release changes, push a branch, and open a PR. Include the
-   old/new version, SDK changes being released, and validation results. Wait for
-   required checks and reviews, then merge within the user's authorized scope.
-   A request to prepare a bump ends at the prepared change or PR; a request to
-   publish includes proceeding through the tag and verification steps.
-
-## Publish the merged commit
-
-Use the actual merge or squash commit from the release PR, not an unmerged branch
-commit or an unchecked moving `main` tip. From the repository root, set these
-values for the release (replace the examples):
+[Publish SDK](../../.github/workflows/publish-sdk.yml) remains as the manual
+path, triggered by pushing an `sdk-v*` tag. Use it when a release commit is
+already on `main` but the automatic run failed for a transient reason and left
+the version unpublished:
 
 ```sh
-sdk_version='0.0.2'
-sdk_release_sha='<full merged commit SHA>'
-sdk_tag="sdk-v${sdk_version}"
 git fetch origin main --tags
 git merge-base --is-ancestor "$sdk_release_sha" origin/main
-git show "${sdk_release_sha}:packages/sdk/package.json"
+git tag "sdk-v${sdk_version}" "$sdk_release_sha"
+git push origin "refs/tags/sdk-v${sdk_version}"
 ```
 
-Continue only if the ancestry check succeeds, that commit's package version
-exactly matches `sdk_version`, and it contains `.github/workflows/publish-sdk.yml`.
-Recheck npm and remote tags immediately before tagging. If the version is already
-published, verify the existing release instead. If the tag exists, inspect its
-commit and associated run; never move, delete, or force-push a release tag.
+It re-checks that the tag version matches the manifest and that the commit is on
+`main`. Tags pushed by `Release SDK` use `GITHUB_TOKEN`, which does not start
+another workflow run, so the two paths never double-publish.
 
-Pushing this tag starts the public npm publication:
+On failure, read the job logs and check npm before retrying: a run may have
+published before a later step failed. Code fixes go through a new PR and a new
+version. Never overwrite an existing npm version, move a release tag, or publish
+locally as a shortcut. Report missing npm access or setup as a concrete blocker.
 
-```sh
-git tag "$sdk_tag" "$sdk_release_sha"
-git push origin "refs/tags/${sdk_tag}"
-```
+## Maintaining the workflows
 
-The workflow rejects mismatched versions and commits outside `main`, installs
-with Bun, validates, builds, and runs `npm publish --access public`. It has no
-manual dispatch trigger and does not create a GitHub Release or release notes.
-
-## Verify and recover
-
-Find the run for the exact tag and confirm its commit SHA before watching it:
-
-```sh
-gh run list --repo macro-inc/macro --workflow publish-sdk.yml --branch "$sdk_tag" \
-  --json databaseId,headSha,status,conclusion,url
-# Replace RUN_ID with the matching run's databaseId.
-gh run watch RUN_ID --repo macro-inc/macro --exit-status
-npm view "@macro-inc/sdk@${sdk_version}" version dist.tarball --json \
-  --registry=https://registry.npmjs.org
-npm view @macro-inc/sdk dist-tags --json --registry=https://registry.npmjs.org
-```
-
-Confirm the requested version is available and `latest` points to it (unless a
-newer release has since completed). Report the version, commit, tag, PR, Actions
-run URL, and npm verification. If the run has not appeared or npm has not updated,
-allow a short bounded wait and report pending status rather than claiming success.
-
-On failure, read the failed job logs and check npm before retrying: a run may have
-published successfully before a later failure. Retry the same run only after a
-transient or configuration problem is resolved and the version remains
-unpublished. Code fixes go through a new PR and a new version/tag. Never overwrite
-an existing npm version, move a release tag, or bypass CI with a local publish as
-a recovery shortcut. Report missing npm access or setup as a concrete blocker.
-
-## Maintaining the workflow
-
-[Publish SDK](../../.github/workflows/publish-sdk.yml) is generated from
+Both workflows are generated from Rust:
+[`release_sdk.rs`](../../tooling/xtask/crates/xtask_workflows/src/workflows/release_sdk.rs)
+and
 [`publish_sdk.rs`](../../tooling/xtask/crates/xtask_workflows/src/workflows/publish_sdk.rs).
-Change the Rust source and regenerate with `cargo x workflows` from the repository
+Change the source and regenerate with `cargo x workflows` from the repository
 root; do not hand-edit the generated YAML.

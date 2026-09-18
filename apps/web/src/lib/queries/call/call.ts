@@ -5,6 +5,8 @@ import { queryClient } from '@queries/client';
 import { type CallRecord, callServiceClient } from '@service-call/client';
 import type { ActiveCallSummary } from '@service-storage/generated/schemas/activeCallSummary';
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
+import type { SharePermissionV2 } from '@service-storage/generated/schemas/sharePermissionV2';
+import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { callKeys } from './keys';
@@ -145,6 +147,7 @@ export function useCallRecordQuery(callId: Accessor<string>) {
     // primed record from triggering an immediate duplicate fetch on mount.
     // Mutations still invalidate, so sharing edits stay reactive.
     staleTime: 60_000,
+    enabled: callId().length > 0,
   }));
 }
 
@@ -160,16 +163,63 @@ export function fetchCallRecord(
   });
 }
 
-export function setCallRecordShareWithTeamCache(
-  callId: string,
-  shareWithTeam: boolean
-) {
-  queryClient.setQueryData<CallRecord>(
-    callKeys.record(callId).queryKey,
-    (prev) => {
-      if (!prev) return prev;
-      return { ...prev, shareWithTeam };
-    }
+/**
+ * Whether a call is shared with its creator's team: the pending toggle while
+ * the call is live, the canonical `view` grant once it is archived.
+ */
+export function isCallSharedWithTeam(record: CallRecord): boolean {
+  return record.shareWithTeam;
+}
+
+export function sharePermissionFromCallRecord(
+  record: CallRecord
+): SharePermissionV2 {
+  return {
+    id: record.callId,
+    owner: record.createdBy,
+    teamShareAccessLevel: isCallSharedWithTeam(record) ? 'view' : null,
+  };
+}
+
+export function fetchCallSharePermission(callId: string) {
+  return callServiceClient
+    .getCallRecord(callId)
+    .then((result) => result.map(sharePermissionFromCallRecord));
+}
+
+/** The `sharePermission` patch that shares a call with the team, or revokes it. */
+export function buildCallTeamSharePayload(
+  shared: boolean
+): Pick<UpdateSharePermissionRequestV2, 'teamShareAccessLevel'> {
+  return { teamShareAccessLevel: shared ? 'view' : null };
+}
+
+export function updateCallTeamShare(callId: string, shared: boolean) {
+  return callServiceClient.editCallRecord({
+    callId,
+    sharePermission: buildCallTeamSharePayload(shared),
+  });
+}
+
+function patchCachedCallTeamShare(
+  record: CallRecord,
+  shared: boolean
+): CallRecord {
+  return {
+    ...record,
+    shareWithTeam: shared,
+    teamShareAccessLevel: record.isActive
+      ? record.teamShareAccessLevel
+      : buildCallTeamSharePayload(shared).teamShareAccessLevel,
+  };
+}
+
+export function setCallRecordTeamShareCache(callId: string, shared: boolean) {
+  const queryKey = callKeys.record(callId).queryKey;
+  // Drop in-flight GETs so a slower record response cannot overwrite this write.
+  void queryClient.cancelQueries({ queryKey });
+  queryClient.setQueryData<CallRecord>(queryKey, (prev) =>
+    prev ? patchCachedCallTeamShare(prev, shared) : prev
   );
 }
 
@@ -177,34 +227,43 @@ function invalidateCallRecord(callId: string) {
   queryClient.invalidateQueries({ queryKey: callKeys.record(callId).queryKey });
 }
 
-export function useSetCallRecordShareWithTeamMutation() {
-  return useMutation(() => ({
-    gcTime: 0,
-    mutationFn: async (params: { callId: string; shareWithTeam: boolean }) => {
-      await throwOnErr(() => callServiceClient.editCallRecord(params));
-      return params;
-    },
-    onSuccess({ callId, shareWithTeam }) {
-      setCallRecordShareWithTeamCache(callId, shareWithTeam);
-      invalidateCallRecord(callId);
-    },
-    onError(error: Error) {
-      console.error('failed to set share with team', error);
-    },
-  }));
-}
-
+/**
+ * Flip the live call's share-with-team toggle. Any participant with edit
+ * access may do this; the toggle is applied as canonical team sharing when
+ * the call is archived.
+ */
 export function useToggleShareWithTeamMutation() {
   return useMutation(() => ({
     gcTime: 0,
     mutationFn: (callId: string) =>
       throwOnErr(() => callServiceClient.toggleShareWithTeam(callId)),
     onSuccess(newValue, callId) {
-      setCallRecordShareWithTeamCache(callId, newValue);
+      setCallRecordTeamShareCache(callId, newValue);
       invalidateCallRecord(callId);
     },
     onError(error: Error) {
       console.error('failed to toggle share with team', error);
+    },
+  }));
+}
+
+/**
+ * Share an archived call with the creator's team, or revoke it. Only the
+ * creator may change this; the backend answers 403 otherwise.
+ */
+export function useSetCallRecordTeamShareMutation() {
+  return useMutation(() => ({
+    gcTime: 0,
+    mutationFn: async (params: { callId: string; shared: boolean }) => {
+      await throwOnErr(() => updateCallTeamShare(params.callId, params.shared));
+      return params;
+    },
+    onSuccess({ callId, shared }) {
+      setCallRecordTeamShareCache(callId, shared);
+      invalidateCallRecord(callId);
+    },
+    onError(error: Error) {
+      console.error('failed to update call team sharing', error);
     },
   }));
 }

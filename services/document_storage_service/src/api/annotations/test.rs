@@ -3,13 +3,14 @@ use super::*;
 #[test]
 fn check_ser_meta() -> Result<(), Box<dyn std::error::Error>> {
     let m = MentionedInDocumentCommentMetadata {
+        sender_display_name: None,
         document_name: "test".to_string(),
         owner: MacroUserIdStr::parse_from_str("macro|user@test.com").unwrap(),
         file_type: None,
         sub_type: None,
         mention_id: "xxx".to_string(),
-        thread_id: 42,
-        comment_id: 99,
+        thread_id: 42.into(),
+        comment_id: 99.into(),
         text: "yy".to_string(),
         sender_profile_picture_url: None,
     };

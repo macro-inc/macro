@@ -175,6 +175,29 @@ pub struct RunListing {
     pub status: RunStatus,
 }
 
+/// Who said one line of an agent's conversation.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConversationSpeaker {
+    /// A prompt, whether typed here or on cursor.com.
+    User,
+    /// One of the agent's replies. A turn has several, one per step.
+    Agent,
+}
+
+/// One line of an agent's conversation, as Cursor still holds it.
+///
+/// Prompts and replies only: no tool calls, no reasoning, no run ids and no
+/// timestamps. Enough to find a prompt that was lost, not enough to rebuild
+/// a turn - which is why this supplements captured history rather than
+/// replacing it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ConversationLine {
+    /// Who said it.
+    pub speaker: ConversationSpeaker,
+    /// What was said.
+    pub text: String,
+}
+
 /// An MCP server a session should make available to its Cursor agent.
 ///
 /// Only the transports a *cloud* agent can honour. ACP's third transport,

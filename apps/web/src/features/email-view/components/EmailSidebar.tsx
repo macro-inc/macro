@@ -1,13 +1,13 @@
 import { useViewTabHotkeys, ViewSidebar } from '@app/components/view-shell';
 import { SidebarCreateHeader } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { AnimatedNoiseIcon } from '@icon/wide-noise';
-import { AnimatedSignalIcon } from '@icon/wide-signal';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import EnvelopeIcon from '@phosphor/envelope.svg';
 import FileIcon from '@phosphor/file.svg';
 import PaperPlaneTiltIcon from '@phosphor/paper-plane-tilt.svg';
 import UsersThreeIcon from '@phosphor/users-three.svg';
+import SignalIcon from '@phosphor/wave-sine.svg';
+import NoiseIcon from '@phosphor/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { pressHandlers } from '@ui';
 import { type Component, For } from 'solid-js';
@@ -19,8 +19,8 @@ import type { EmailTab } from '../types';
 import { EmailInboxList } from './EmailInboxSelector';
 
 const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
-  important: AnimatedSignalIcon,
-  noise: AnimatedNoiseIcon,
+  important: SignalIcon,
+  noise: NoiseIcon,
   sent: PaperPlaneTiltIcon,
   calendar: CalendarBlankIcon,
   drafts: FileIcon,
@@ -48,31 +48,24 @@ function Tab(props: { item: EmailTabItem; onNavigate?: () => void }) {
 }
 
 export function EmailNavigation(props: { onNavigate?: () => void }) {
-  const { state, showTags, isSidebarSectionOpen, setSidebarSectionOpen } =
-    useEmailView();
-
   return (
-    <div class="flex flex-col gap-6">
-      <ViewSidebar.Nav aria-label="Email tabs">
-        <For each={EMAIL_TABS}>
-          {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
-        </For>
-      </ViewSidebar.Nav>
-
-      <SidebarTagsSection
-        activeIds={state.facets.tags ?? []}
-        onActiveIdsChange={showTags}
-        open={isSidebarSectionOpen('tags')}
-        onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
-        onNavigate={props.onNavigate}
-      />
-    </div>
+    <ViewSidebar.Nav aria-label="Email tabs">
+      <For each={EMAIL_TABS}>
+        {(item) => <Tab item={item} onNavigate={props.onNavigate} />}
+      </For>
+    </ViewSidebar.Nav>
   );
 }
 
 export function EmailSidebar() {
   const panel = useSplitPanelOrThrow();
-  const { state, setTab } = useEmailView();
+  const {
+    state,
+    setTab,
+    showTags,
+    isSidebarSectionOpen,
+    setSidebarSectionOpen,
+  } = useEmailView();
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -83,17 +76,24 @@ export function EmailSidebar() {
   });
 
   return (
-    <ViewSidebar.Root aria-label="Email navigation" class="gap-4">
+    <ViewSidebar.Root aria-label="Email navigation">
       <SidebarCreateHeader
         title="Email"
         label="New email"
         onCreate={() => composeEmail()}
       />
 
-      <ViewSidebar.Content class="flex flex-col gap-6">
+      <ViewSidebar.Content>
         <EmailInboxList />
 
         <EmailNavigation />
+
+        <SidebarTagsSection
+          activeIds={state.facets.tags ?? []}
+          onActiveIdsChange={showTags}
+          open={isSidebarSectionOpen('tags')}
+          onOpenChange={(open) => setSidebarSectionOpen('tags', open)}
+        />
       </ViewSidebar.Content>
     </ViewSidebar.Root>
   );

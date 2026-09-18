@@ -4,7 +4,6 @@ import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
 } from '@components/app/ResponsiveBlockToolbar';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import { SplitHeaderLeft } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
@@ -12,7 +11,6 @@ import { useBlockId } from '@core/block';
 import { ProviderIcon } from '@core/component/AI/component/ProviderIcon';
 import { useChatInputContext } from '@core/component/AI/context';
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import {
   getShareDrawerRecipientInput,
   ShareTrigger,
@@ -20,10 +18,9 @@ import {
 } from '@core/component/TopBar/ShareButton';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import IconShared from '@icon/wide-share.svg';
 import ChatDebugIcon from '@phosphor/chat-text.svg';
-import Info from '@phosphor/info.svg';
 import Notepad from '@phosphor/notepad.svg';
+import IconShared from '@phosphor/share.svg';
 import type { Accessor } from 'solid-js';
 
 export function TopBar(props: {
@@ -38,15 +35,9 @@ export function TopBar(props: {
 
   const openInstructions = useOpenInstructionsMd();
 
-  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   const ops: FileOperation[] = [
-    {
-      label: 'Details',
-      icon: Info,
-      action: detailsControl.toggle,
-    },
     {
       label: 'Edit AI Instructions',
       icon: Notepad,

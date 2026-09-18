@@ -5,7 +5,7 @@ import { useHotkeyInterceptor } from '@app/signal/hotkeyRoot';
 import { setActiveScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { activateClosestDOMScope } from '@core/hotkey/utils';
-import CreateIcon from '@icon/square-pen-create.svg';
+import CreateIcon from '@phosphor/note-pencil.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown, Hotkey, NavRow } from '@ui';
 import {
@@ -36,7 +36,6 @@ export type SidebarCreateMenuProps = {
 export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
   const analytics = useAnalytics();
   const [open, setOpen] = createSignal(false);
-  const [focusedIndex, setFocusedIndex] = createSignal(-1);
   const blocks = useCreateMenuBlocks();
 
   const isSlim = () => props.isSlim?.() ?? false;
@@ -161,21 +160,16 @@ export const SidebarCreateMenu = (props: SidebarCreateMenuProps) => {
       <Dropdown.Content class="min-w-52">
         <Dropdown.Group>
           <For each={blocks()}>
-            {(block, index) => (
+            {(block) => (
               <Dropdown.Item
                 class="min-h-9 gap-2 px-2.5"
-                onFocus={() => setFocusedIndex(index())}
-                onMouseEnter={() => setFocusedIndex(index())}
                 onSelect={() => {
                   setOpen(false);
                   block.keyDownHandler();
                 }}
               >
                 <div class="size-4 shrink-0 flex items-center rounded-sm text-ink-muted [&_svg]:size-4">
-                  <Dynamic
-                    component={block.animatedIcon ?? block.icon}
-                    triggerAnimation={focusedIndex() === index()}
-                  />
+                  <Dynamic component={block.icon} />
                 </div>
                 <span class="flex-1 text-ink">{block.label}</span>
                 <Hotkey token={block.hotkeyToken} theme="subtle" class="ml-6" />

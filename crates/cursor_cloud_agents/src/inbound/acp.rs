@@ -30,7 +30,9 @@ mod test;
 
 use crate::domain::model::{McpHeader, McpServer, McpTransport};
 use crate::domain::model_options::{MODEL_CONFIG_ID, cursor_model_config_options};
-use crate::domain::ports::{CursorAgents, RepositoryChooser, RunStream, SessionNotifier};
+use crate::domain::ports::{
+    ArtifactStore, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream, SessionNotifier,
+};
 use crate::domain::service::CursorSessionService;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
@@ -310,8 +312,8 @@ fn agent_capabilities() -> AgentCapabilities {
 ///
 /// A clean EOF from the client is `Ok`; transport and protocol-level failures
 /// are the SDK's error.
-pub async fn serve<Reader, Writer, Cursor, Notifier, Chooser>(
-    service: Arc<CursorSessionService<Cursor, Notifier, Chooser>>,
+pub async fn serve<Reader, Writer, Cursor, Notifier, Chooser, Store>(
+    service: Arc<CursorSessionService<Cursor, Notifier, Chooser, Store>>,
     notifier: AcpNotifier,
     reader: Reader,
     writer: Writer,
@@ -319,9 +321,10 @@ pub async fn serve<Reader, Writer, Cursor, Notifier, Chooser>(
 where
     Reader: tokio::io::AsyncRead + Send + 'static,
     Writer: tokio::io::AsyncWrite + Send + 'static,
-    Cursor: CursorAgents + RunStream + Send + Sync + 'static,
+    Cursor: CursorAgents + CursorArtifacts + RunStream + Send + Sync + 'static,
     Notifier: SessionNotifier + Send + Sync + 'static,
     Chooser: RepositoryChooser + 'static,
+    Store: ArtifactStore + 'static,
 {
     serve_transport(
         service,
@@ -339,16 +342,17 @@ where
 ///
 /// A clean EOF from the client is `Ok`; transport and protocol-level failures
 /// are the SDK's error.
-pub async fn serve_transport<Transport, Cursor, Notifier, Chooser>(
-    service: Arc<CursorSessionService<Cursor, Notifier, Chooser>>,
+pub async fn serve_transport<Transport, Cursor, Notifier, Chooser, Store>(
+    service: Arc<CursorSessionService<Cursor, Notifier, Chooser, Store>>,
     notifier: AcpNotifier,
     transport: Transport,
 ) -> Result<(), AcpError>
 where
     Transport: ConnectTo<Agent> + 'static,
-    Cursor: CursorAgents + RunStream + Send + Sync + 'static,
+    Cursor: CursorAgents + CursorArtifacts + RunStream + Send + Sync + 'static,
     Notifier: SessionNotifier + Send + Sync + 'static,
     Chooser: RepositoryChooser + 'static,
+    Store: ArtifactStore + 'static,
 {
     let startup_notifier = notifier.clone();
     Agent
@@ -547,14 +551,15 @@ where
 /// A failure to reach `GET /v1/models` costs the picker, not the session: the
 /// options come back empty and the client simply has nothing to offer, which is
 /// the state it was in before any of this existed.
-async fn session_config_options<Cursor, Notifier, Chooser>(
-    service: &CursorSessionService<Cursor, Notifier, Chooser>,
+async fn session_config_options<Cursor, Notifier, Chooser, Store>(
+    service: &CursorSessionService<Cursor, Notifier, Chooser, Store>,
     session: &SessionId,
 ) -> Vec<SessionConfigOption>
 where
-    Cursor: CursorAgents + RunStream,
+    Cursor: CursorAgents + CursorArtifacts + RunStream,
     Notifier: SessionNotifier,
     Chooser: RepositoryChooser,
+    Store: ArtifactStore,
 {
     let models = match service.models().await {
         Ok(models) => models,

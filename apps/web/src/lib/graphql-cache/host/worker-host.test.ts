@@ -18,6 +18,11 @@ vi.mock('../worker/coordinator-page-adapter', () => ({
   createCacheCoordinatorPageAdapter: adapterFactory,
 }));
 
+import { CACHE_COORDINATOR_PROTOCOL_VERSION } from '../worker/coordinator-protocol';
+import {
+  CacheBootstrapExhaustedError,
+  COORDINATOR_CONNECT_TIMEOUT_MS,
+} from '../worker/startup';
 import { createWorkerCacheHost } from './worker-host';
 
 const CLIENT_ID = '00000000-0000-4000-8000-000000000007';
@@ -75,6 +80,7 @@ function responseFor(request: CacheRequest): unknown {
 class FakePageAdapter {
   onmessage: ((event: MessageEvent<WorkerMessage>) => void) | null = null;
   readonly requests: CacheRequest[] = [];
+  readonly start = vi.fn(async (): Promise<void> => {});
   readonly ignoredKinds = new Set<CacheRequest['kind']>();
   readonly errors = new Map<CacheRequest['kind'], string>();
   readonly dispose = vi.fn(
@@ -336,7 +342,7 @@ describe('createWorkerCacheHost', () => {
 
     const read = host.readQuery({ query: '{ x }' });
     expect(adapterFactory).toHaveBeenCalledOnce();
-    expect(indexedDbDelete).toHaveBeenCalledOnce();
+    await vi.waitFor(() => expect(indexedDbDelete).toHaveBeenCalledOnce());
     expect(indexedDbDelete).toHaveBeenCalledWith('graphql-cache:lazy-scope');
     expect(adapterFactory).toHaveBeenCalledWith(
       expect.objectContaining({ scope: 'lazy-scope' })
@@ -515,6 +521,159 @@ describe('createWorkerCacheHost', () => {
     host.dispose();
   });
 
+  it('follows coordinator phase deadlines instead of applying the read timeout to startup', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) => {
+      fake.ignoredKinds.add('init');
+      fake.ignoredKinds.add('read');
+    };
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      requestTimeoutMs: 10,
+      onInitializationError,
+    });
+    const read = host.readQuery({ query: '{ user }' });
+    const rejected = expect(read).rejects.toThrow('cache worker timeout: read');
+    await vi.advanceTimersByTimeAsync(0);
+    const adapter = requireAdapter();
+    const progress = (
+      ownerEpoch: number,
+      phase: 'loading-assets' | 'opening-database',
+      timeoutMs: number
+    ) =>
+      adapter.options.onStartupProgress?.({
+        coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
+        kind: 'engine-startup',
+        ownerEpoch,
+        databaseAction: 'open-existing',
+        phase,
+        timeoutMs,
+      });
+    progress(1, 'loading-assets', 60_000);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(onInitializationError).not.toHaveBeenCalled();
+    progress(1, 'opening-database', 20_000);
+    await vi.advanceTimersByTimeAsync(20_001);
+    // The coordinator retries before the page's grace expires.
+    progress(2, 'loading-assets', 60_000);
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(onInitializationError).not.toHaveBeenCalled();
+    adapter.respond(1, null);
+    await vi.advanceTimersByTimeAsync(11);
+    await rejected;
+    expect(onInitializationError).not.toHaveBeenCalled();
+    host.dispose();
+  });
+
+  it('retries a transient coordinator registration failure without disabling or quarantining the cache', async () => {
+    let attempt = 0;
+    let first: FakePageAdapter | undefined;
+    configureAdapter = (fake) => {
+      if (attempt++ !== 0) return;
+      first = fake;
+      fake.start.mockImplementation(async () => {
+        const error = new Error('SharedWorker load failed');
+        fake.terminalError(error);
+        throw error;
+      });
+    };
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    await expect(host.readQuery({ query: '{ user }' })).resolves.toEqual({
+      kind: 'miss',
+    });
+    expect(adapterFactory).toHaveBeenCalledTimes(2);
+    expect(first?.dispose).toHaveBeenCalledWith({ graceful: false });
+    expect(first?.requests).toEqual([]);
+    expect(onInitializationError).not.toHaveBeenCalled();
+    host.dispose();
+  });
+
+  it('bounds hung coordinator registration retries and reports terminal failure only once', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) =>
+      fake.start.mockImplementation(() => new Promise(() => {}));
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    const rejected = expect(host.currentRevision()).rejects.toThrow(
+      'cache worker timeout: registration'
+    );
+    await vi.advanceTimersByTimeAsync(COORDINATOR_CONNECT_TIMEOUT_MS * 3 + 1);
+    await rejected;
+    expect(adapterFactory).toHaveBeenCalledTimes(3);
+    expect(onInitializationError).toHaveBeenCalledOnce();
+    expect(requireAdapter().requests).toEqual([]);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it('cancels coordinator registration on disposal without retrying or reporting failure', async () => {
+    vi.useFakeTimers();
+    configureAdapter = (fake) =>
+      fake.start.mockImplementation(() => new Promise(() => {}));
+    const onInitializationError = vi.fn();
+    const host = createWorkerCacheHost({
+      scope: 'scope-1',
+      onInitializationError,
+    });
+    const rejected = expect(host.currentRevision()).rejects.toThrow(
+      'disposed during startup'
+    );
+    host.dispose();
+    await rejected;
+    expect(adapterFactory).toHaveBeenCalledOnce();
+    expect(onInitializationError).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it.each([
+    ['open-existing', true],
+    ['open-existing', false],
+    ['wipe-before-open', false],
+  ] as const)(
+    'requires coordinator proof to preserve a failed startup scope (%s, proof: %s)',
+    async (databaseAction, provenUntouched) => {
+      configureAdapter = (fake) => fake.ignoredKinds.add('init');
+      localStorage.setItem('graphql-cache:scope', 'scope-1');
+      const onInitializationError = vi.fn();
+      const host = createWorkerCacheHost({
+        scope: 'scope-1',
+        onInitializationError,
+      });
+      const rejected = expect(host.currentRevision()).rejects.toThrow(
+        'bootstrap attempts exhausted'
+      );
+      const adapter = requireAdapter();
+      await vi.waitFor(() => expect(adapter.requests).toHaveLength(1));
+      adapter.options.onStartupProgress?.({
+        coordinatorVersion: CACHE_COORDINATOR_PROTOCOL_VERSION,
+        kind: 'engine-startup',
+        ownerEpoch: 1,
+        phase: 'loading-assets',
+        databaseAction,
+        timeoutMs: 60_000,
+      });
+      adapter.terminalError(
+        provenUntouched
+          ? new CacheBootstrapExhaustedError('bootstrap attempts exhausted')
+          : new Error('bootstrap attempts exhausted')
+      );
+      await rejected;
+      await vi.waitFor(() =>
+        expect(onInitializationError).toHaveBeenCalledOnce()
+      );
+      expect(localStorage.getItem('graphql-cache:scope')).toBe(
+        provenUntouched ? 'scope-1' : 'quarantine:scope-1'
+      );
+    }
+  );
+
   it('bounds hung registration/init before admitting reads or mutations', async () => {
     vi.useFakeTimers();
     configureAdapter = (fake) => fake.ignoredKinds.add('init');
@@ -605,6 +764,7 @@ describe('createWorkerCacheHost', () => {
       errorCode: 'owner-epoch-lost',
     });
     const adapter = requireAdapter();
+    await vi.waitFor(() => expect(adapter.requests).toHaveLength(1));
     adapter.reject(1, 'owner epoch 1 was lost', 'owner-epoch-lost');
     await Promise.all([readRejected, mutationRejected]);
 
@@ -651,6 +811,7 @@ describe('createWorkerCacheHost', () => {
 
     const read = host.readQuery({ opKey: 5, query: 'query Read { user }' });
     const adapter = requireAdapter();
+    await vi.waitFor(() => expect(adapter.requests).toHaveLength(1));
     adapter.replace(2);
     adapter.respond(1, null);
     await expect(read).resolves.toEqual({ kind: 'miss' });

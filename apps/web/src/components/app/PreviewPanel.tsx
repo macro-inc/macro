@@ -1,25 +1,9 @@
 import {
-  type CalendarPreviewSelection,
-  type ChannelPreviewSelection,
-  calendarBlockParamsForEntity,
-  getChannelEntityTarget,
   navigateCalendarEntityToTarget,
   navigateChannelEntityToTarget,
-  type ReminderPreviewSelection,
-  reminderSplitTarget,
 } from '@app/features/next-soup/utils';
-import { CALENDAR_BLOCK_ID } from '@block-calendar/types';
-import { getChannelParams } from '@block-channel/utils/link';
-import type {
-  BlockAliasContext,
-  BlockComponentProps,
-  BlockName,
-} from '@core/block';
-import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
-import { USE_MACRO_PR_SUMMARY_BLOCK } from '@core/constant/featureFlags';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { BlockOrchestrator } from '@core/orchestrator';
-import type { DocumentEntity, ForeignEntity } from '@entity';
 import { createContextProvider } from '@solid-primitives/context';
 import {
   createMemo,
@@ -29,10 +13,16 @@ import {
   on,
   Show,
   Suspense,
-  untrack,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { match, P } from 'ts-pattern';
+import {
+  type PreviewPanelSelection,
+  previewBlockTarget,
+} from './previewTarget';
+
+export type { PreviewPanelSelection } from './previewTarget';
+
+import { ViewShell } from '../view-shell/ViewShell';
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
@@ -41,37 +31,6 @@ import {
   SplitPanelContext,
   type SplitPanelContextType,
 } from './split-layout/context';
-
-type IdOnlyPreviewSelection = {
-  id: string;
-  type:
-    | 'agent_session'
-    | 'automation'
-    | 'call'
-    | 'chat'
-    | 'crm_company'
-    | 'crm_contact'
-    | 'email'
-    | 'project';
-};
-
-type DocumentPreviewSelection = Pick<
-  DocumentEntity,
-  'id' | 'type' | 'fileType' | 'subType'
->;
-
-type ForeignPreviewSelection = Pick<
-  ForeignEntity,
-  'id' | 'type' | 'foreignSource'
->;
-
-export type PreviewPanelSelection =
-  | IdOnlyPreviewSelection
-  | DocumentPreviewSelection
-  | ForeignPreviewSelection
-  | ChannelPreviewSelection
-  | CalendarPreviewSelection
-  | ReminderPreviewSelection;
 
 export const [PreviewPanelContext, useMaybePreviewPanel] =
   createContextProvider(
@@ -93,13 +52,6 @@ export type PreviewPanelProps = {
   headerLeading?: JSX.Element;
 };
 
-type PreviewBlockTarget = {
-  blockType: BlockName;
-  blockId: string;
-  aliasContext: BlockAliasContext | undefined;
-  params?: BlockComponentProps[BlockName];
-};
-
 function PreviewPanelContent(
   props: PreviewPanelProps & { selectedEntity: PreviewPanelSelection }
 ) {
@@ -115,97 +67,10 @@ function PreviewPanelContent(
   >((previous) => {
     const entity = props.selectedEntity;
 
-    const target = match(entity)
-      .returnType<PreviewBlockTarget>()
-      .with(
-        { type: 'document', fileType: 'md', subType: { type: 'task' } },
-        (task) => ({
-          blockType: fileTypeToResolvedBlockName(task.fileType),
-          blockId: task.id,
-          aliasContext: {
-            alias: 'task',
-            baseType: 'md',
-          } satisfies BlockAliasContext,
-        })
-      )
-      .with(
-        { type: 'document', fileType: 'md', subType: { type: 'snippet' } },
-        (snippet) => ({
-          blockType: fileTypeToResolvedBlockName(snippet.fileType),
-          blockId: snippet.id,
-          aliasContext: {
-            alias: 'snippet',
-            baseType: 'md',
-          } satisfies BlockAliasContext,
-        })
-      )
-      .with({ type: 'document' }, (document) => ({
-        blockType: fileTypeToResolvedBlockName(document.fileType),
-        blockId: document.id,
-        aliasContext: undefined,
-      }))
-      .with(
-        { type: P.union('channel_message', 'channel_thread') },
-        (message) => {
-          const channelTarget = untrack(() => getChannelEntityTarget(message));
-          return {
-            blockType: 'channel',
-            blockId: message.channelId,
-            aliasContext: undefined,
-            params:
-              channelTarget?.kind === 'message'
-                ? getChannelParams(
-                    channelTarget.messageId,
-                    channelTarget.threadId
-                  )
-                : undefined,
-          };
-        }
-      )
-      .with({ type: 'foreign' }, (foreignEntity) => ({
-        blockType:
-          USE_MACRO_PR_SUMMARY_BLOCK &&
-          foreignEntity.foreignSource === 'github_pull_request'
-            ? 'pr'
-            : 'unknown',
-        blockId: foreignEntity.id,
-        aliasContext: undefined,
-      }))
-      .with({ type: 'crm_company' }, (company) => ({
-        blockType: 'company',
-        blockId: company.id,
-        aliasContext: undefined,
-      }))
-      .with({ type: 'crm_contact' }, (contact) => ({
-        blockType: 'contact',
-        blockId: contact.id,
-        aliasContext: undefined,
-      }))
-      .with({ type: 'calendar_event' }, (calendarEvent) => ({
-        blockType: 'calendar',
-        blockId: CALENDAR_BLOCK_ID,
-        aliasContext: undefined,
-        params: untrack(() => calendarBlockParamsForEntity(calendarEvent)),
-      }))
-      .with({ type: 'reminder' }, (reminder) => {
-        const reminderTarget = reminderSplitTarget(reminder);
-        return {
-          blockType: fileTypeToResolvedBlockName(reminderTarget?.type),
-          blockId: reminderTarget?.id ?? reminder.id,
-          aliasContext: undefined,
-        };
-      })
-      .otherwise((fallbackEntity) => ({
-        blockType: fileTypeToResolvedBlockName(fallbackEntity.type),
-        blockId: fallbackEntity.id,
-        aliasContext: undefined,
-      }));
+    const target = previewBlockTarget(entity);
 
     if (previous?.type === target.blockType && previous.id === target.blockId) {
       return previous;
-    }
-    if (props.orchestrator.isBlockMounted(target.blockType, target.blockId)) {
-      return undefined;
     }
 
     return props.orchestrator.createBlockInstance(
@@ -218,23 +83,44 @@ function PreviewPanelContent(
     );
   });
 
+  // Cache reconciliation can replace an unchanged channel object. Only a new
+  // selection or explicit target should navigate/reset focus, not fresh metadata
+  // or notifications. Keep the live entity available to the preview context.
+  const navigationSelection = createMemo(() => {
+    const entity = props.selectedEntity;
+    if (
+      entity.type === 'channel' ||
+      entity.type === 'channel_message' ||
+      entity.type === 'channel_thread'
+    ) {
+      return JSON.stringify([
+        entity.type,
+        entity.id,
+        entity.type === 'channel' ? undefined : entity.channelId,
+        entity.type === 'channel' ? undefined : entity.messageId,
+        entity.type === 'channel' ? undefined : entity.threadId,
+        entity.target?.messageId,
+        entity.target?.threadId,
+      ]);
+    }
+    return entity;
+  });
+
   createRenderEffect(
-    on(
-      () => props.selectedEntity,
-      (entity) => {
-        setInteractedWith(false);
-        if (!blockInstance()) return;
-        if (
-          entity.type === 'channel' ||
-          entity.type === 'channel_message' ||
-          entity.type === 'channel_thread'
-        ) {
-          void navigateChannelEntityToTarget(entity, props.orchestrator);
-        } else if (entity.type === 'calendar_event') {
-          void navigateCalendarEntityToTarget(entity, props.orchestrator);
-        }
+    on(navigationSelection, () => {
+      const entity = props.selectedEntity;
+      setInteractedWith(false);
+      if (!blockInstance()) return;
+      if (
+        entity.type === 'channel' ||
+        entity.type === 'channel_message' ||
+        entity.type === 'channel_thread'
+      ) {
+        void navigateChannelEntityToTarget(entity, props.orchestrator);
+      } else if (entity.type === 'calendar_event') {
+        void navigateCalendarEntityToTarget(entity, props.orchestrator);
       }
-    )
+    })
   );
 
   return (
@@ -265,9 +151,9 @@ function PreviewPanelContent(
       onPointerDown={() => setInteractedWith(true)}
       tabIndex={-1}
     >
-      <div
+      <ViewShell.TopBar
         ref={headerCollapseController.setRow}
-        class="relative flex min-h-10 w-full shrink-0 items-center justify-between bg-surface px-2"
+        class="relative w-full py-0 touch:flex"
       >
         <Show when={props.headerLeading}>
           <div class="flex shrink-0 items-center">{props.headerLeading}</div>
@@ -276,7 +162,11 @@ function PreviewPanelContent(
           controller={headerCollapseController}
           truncateAsLastResort
           class="relative h-full min-w-0 shrink overflow-hidden"
-          contentClass="flex h-full items-center gap-1"
+          contentClass={
+            props.headerLeading
+              ? 'flex h-full items-center gap-1 pl-0.5'
+              : 'flex h-full items-center gap-1'
+          }
           contentRef={(element) => {
             scopedLayoutRefs.headerLeft = element;
           }}
@@ -287,10 +177,10 @@ function PreviewPanelContent(
             scopedLayoutRefs.headerRight = ref;
           }}
         />
-      </div>
+      </ViewShell.TopBar>
       <div
         ref={toolbarCollapseController.setRow}
-        class="relative flex min-h-0 w-full shrink-0 items-center justify-between bg-surface px-2"
+        class="relative flex min-h-0 w-full shrink-0 items-center justify-between px-2"
       >
         <PriorityCollapseOverflowSensor
           controller={toolbarCollapseController}
@@ -323,14 +213,7 @@ function PreviewPanelContent(
             onFocusOut={props.onFocusOut}
           >
             <Suspense>
-              <Show
-                when={blockInstance()}
-                fallback={
-                  <div class="flex size-full items-center justify-center text-sm text-ink-muted">
-                    Content already open.
-                  </div>
-                }
-              >
+              <Show when={blockInstance()}>
                 {(instance) => <Dynamic component={instance().element} />}
               </Show>
             </Suspense>
@@ -341,7 +224,10 @@ function PreviewPanelContent(
   );
 }
 
-/** Renders a selected entity's actual block inside an inline preview surface. */
+/**
+ * Renders an admitted selection. Hosts use createPreviewSelectionGuard before
+ * changing selection so conflicts never replace their current detail view.
+ */
 export function PreviewPanel(props: PreviewPanelProps) {
   return (
     <div class="flex size-full min-h-0">

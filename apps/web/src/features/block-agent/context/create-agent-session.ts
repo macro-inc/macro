@@ -13,7 +13,10 @@ import {
   type IssueResult,
 } from '@core/agent-session/AgentSession';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
-import { subscribeAgentSessionRenamed } from '@queries/agent-session/session-metadata-sync';
+import {
+  subscribeAgentSessionRenamed,
+  subscribeAgentSessionUpdated,
+} from '@queries/agent-session/session-metadata-sync';
 import type {
   FoldedMessage,
   FoldedStreamEvent,
@@ -245,6 +248,27 @@ export function createAgentSession(
             current ? { ...current, name: session.value.name } : current
           );
         });
+    })
+  );
+
+  let updateRefresh = 0;
+  onCleanup(
+    subscribeAgentSessionUpdated((event) => {
+      if (event.agentSessionId !== sessionId()) return;
+      const run = ++updateRefresh;
+      void (async () => {
+        const session = await agentHarnessServiceClient.get(
+          event.agentSessionId
+        );
+        if (
+          session.isErr() ||
+          run !== updateRefresh ||
+          event.agentSessionId !== sessionId()
+        ) {
+          return;
+        }
+        mutate((current) => (current ? session.value : current));
+      })();
     })
   );
 

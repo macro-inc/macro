@@ -407,7 +407,11 @@ describe('AgentSession', () => {
     await Promise.all([first, second]);
     await settle();
 
-    expect(speculations().map((input) => input.action.prompt)).toEqual(['one']);
+    expect(
+      speculations().map((input) =>
+        input.action.type === 'prompt' ? input.action.prompt : undefined
+      )
+    ).toEqual(['one']);
     expect(harness.control).toHaveBeenCalledTimes(2);
     live.release();
   });

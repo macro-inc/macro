@@ -1,7 +1,9 @@
 import { openEntityInSplit } from '@app/features/activity/open-entity-in-split';
 import { useActivityFeedFlag } from '@app/features/activity/use-activity-feed-flag';
+import { parseAgentsRoute } from '@app/features/agents-view/core/route';
 import { AgentsView } from '@app/features/agents-view/views/AgentsView';
 import { ComposeAgentSession } from '@app/features/block-agent/component/ComposeAgentSession';
+import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
 import type { EventEditorInitialValues } from '@app/features/calendar/components/composer/event-form-model';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { ChannelsView } from '@app/features/channels-view/channels-view';
@@ -38,6 +40,7 @@ import { useIsAuthenticated } from '@core/auth';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import {
   DEV_MODE_ENV,
+  enableChatV3Agents,
   enableCrm,
   enableNewAppViews,
   enableReminders,
@@ -200,6 +203,15 @@ export function resolveComponent(
 ): ResolvedComponent {
   const registration = REGISTRY.get(name);
   if (!registration) {
+    if (parseAgentsRoute(name)) {
+      const base = REGISTRY.get('agents');
+      if (base) {
+        return {
+          element: () => base.factory({ ...(params ?? {}), agentsRoute: name }),
+          initialMeta: base.initialMeta,
+        };
+      }
+    }
     if (name.startsWith(REMINDER_VIEW_PREFIX)) {
       const base = REGISTRY.get('reminder-view');
       if (base) {
@@ -243,7 +255,7 @@ function LegacyInboxView() {
   const preset = getViewPreset('inbox');
   return (
     <SoupView
-      viewName="Home"
+      viewName={isTouchDevice() ? 'Notifications' : 'Home'}
       initialFilters={preset?.filters}
       initialClientFilters={preset?.clientFilters}
       initialGroupBy={preset?.groupBy}
@@ -254,11 +266,15 @@ function LegacyInboxView() {
 
 function RegisteredInboxView() {
   usePageViewTracking('inbox');
-  const newAppViews = useNewAppViews();
+  const newAppViews = useNewAppViews({
+    enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
+  });
   return (
-    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
-      <Show when={newAppViews.enabled()} fallback={<LegacyInboxView />}>
-        <InboxView />
+    <Show when={!isTouchDevice()} fallback={<LegacyInboxView />}>
+      <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+        <Show when={newAppViews.enabled()} fallback={<LegacyInboxView />}>
+          <InboxView />
+        </Show>
       </Show>
     </Show>
   );
@@ -390,19 +406,43 @@ function LegacyAgentsView() {
   );
 }
 
-function RegisteredAgentsView() {
+function RegisteredAgentsView(params: ComponentParams) {
+  const route =
+    typeof params.agentsRoute === 'string'
+      ? parseAgentsRoute(params.agentsRoute)
+      : undefined;
   usePageViewTracking('agents');
-  const newAppViews = useNewAppViews({
-    enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
+  const panel = useSplitPanelOrThrow();
+  const agentsFlag = useFeatureFlag(enableChatV3Agents);
+
+  createRenderEffect(() => {
+    if (agentsFlag().loading) return;
+    panel.handle.updateMeta?.({
+      splitPanelLayout: agentsFlag().enabled ? 'composable' : 'legacy',
+    });
   });
 
   return (
-    <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
+    <Show when={!agentsFlag().loading} fallback={<LoadingBlock />}>
       <Show
-        when={newAppViews.enabled() && !isTouchDevice()}
-        fallback={<LegacyAgentsView />}
+        when={agentsFlag().enabled}
+        fallback={
+          route ? (
+            <RedirectSplit
+              to={{
+                type:
+                  route.conversation.type === 'agent_session'
+                    ? 'agent'
+                    : 'chat',
+                id: route.conversation.id,
+              }}
+            />
+          ) : (
+            <LegacyAgentsView />
+          )
+        }
       >
-        <AgentsView />
+        <AgentsView initialRoute={route} />
       </Show>
     </Show>
   );
@@ -443,7 +483,9 @@ registerComponent(
   'documents',
   withAuth((params: DocumentsComponentParams = {}) => {
     usePageViewTracking('documents');
-    const newAppViews = useNewAppViews();
+    const newAppViews = useNewAppViews({
+      enabledLayout: () => (isTouchDevice() ? 'legacy' : 'composable'),
+    });
     const user = useUserContext();
     const preset = getViewPreset('documents', undefined, {
       userId: user.userId(),
@@ -460,7 +502,7 @@ registerComponent(
     return (
       <Show when={newAppViews.ready()} fallback={<LoadingBlock />}>
         <Show
-          when={newAppViews.enabled()}
+          when={newAppViews.enabled() && !isTouchDevice()}
           fallback={
             <SoupView
               viewName="Files"
@@ -590,7 +632,8 @@ registerComponent(
         initialCrmView={initialCrmView}
       />
     );
-  })
+  }),
+  { splitPanelLayout: 'composable' }
 );
 
 registerComponent(
@@ -870,6 +913,26 @@ if (LOCAL_ONLY) {
   registerComponent(
     'linked-conversation',
     withAuth(lazy(() => import('@core/linked-conversation/debug/Demo')))
+  );
+}
+
+if (import.meta.env.DEV) {
+  registerComponent(
+    'spreadsheet-demo',
+    withAuth(() => {
+      const enabled = useSpreadsheetAccess();
+      const Demo = lazy(
+        () => import('@app/features/block-spreadsheet/SpreadsheetDemo')
+      );
+      return (
+        <Show
+          when={enabled()}
+          fallback={<RedirectSplit to={{ type: 'component', id: 'inbox' }} />}
+        >
+          <Demo />
+        </Show>
+      );
+    })
   );
 }
 

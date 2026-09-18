@@ -1759,8 +1759,8 @@
       },
       "DocumentSubType": {
         "type": "string",
-        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet", "skill"]
+        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.",
+        "enum": ["task", "snippet", "skill", "initiative_description"]
       },
       "EmailFilters": {
         "type": "object",
@@ -2248,6 +2248,7 @@
           "docx",
           "pdf",
           "md",
+          "spreadsheet",
           "canvas",
           "coffee",
           "cson",

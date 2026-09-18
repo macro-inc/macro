@@ -26,7 +26,6 @@ import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { copyBranchNameToClipboard } from '@core/util/branchName';
 import { matches } from '@core/util/match';
-import DotsThree from '@icon/dots-three-large.svg';
 import MacroEmbed from '@icon/macro-embed.svg';
 import CollapseInlinePreview from '@phosphor/arrows-in-line-horizontal.svg';
 import ExpandInlinePreview from '@phosphor/arrows-out-line-horizontal.svg';
@@ -34,6 +33,7 @@ import MessageIcon from '@phosphor/chat-circle.svg';
 import ThreadIcon from '@phosphor/chats-circle.svg';
 import ClockIcon from '@phosphor/clock.svg';
 import ColumnsPlusRight from '@phosphor/columns-plus-right.svg';
+import DotsThree from '@phosphor/dots-three.svg';
 import GitBranchIcon from '@phosphor/git-branch.svg';
 import HighlightIcon from '@phosphor/highlighter-circle.svg';
 import Link from '@phosphor/link.svg';
@@ -527,10 +527,13 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
     return undefined;
   };
 
-  const openDocument = createCallback(async () => {
+  const openDocument = createCallback(async (event: MouseEvent) => {
     const calendarTarget = calendarOpenTarget();
     if (calendarTarget) {
-      await openCalendarEventSplit(calendarTarget);
+      await openCalendarEventSplit({
+        ...calendarTarget,
+        openInNewSplit: event.shiftKey,
+      });
       return;
     }
     const type = targetBlockType();
@@ -545,6 +548,14 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
         link += `?${queryParams}`;
       }
       navigate(link);
+      return;
+    }
+
+    if (event.shiftKey) {
+      splitManager.openWithSplit(
+        { type, id: props.documentInfo.id, params: props.documentInfo.params },
+        { preferNewSplit: true }
+      );
       return;
     }
 
@@ -682,7 +693,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
           class="min-w-0 text-left wrap-anywhere rounded-sm hover:underline focus-visible:outline-2 focus-visible:outline-accent"
           onClick={(event) => {
             event.stopPropagation();
-            void openDocument();
+            void openDocument(event);
           }}
         >
           {local.name}

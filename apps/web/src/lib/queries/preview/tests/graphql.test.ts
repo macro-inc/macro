@@ -20,6 +20,8 @@ vi.mock('@app/lib/urql-solid', () => ({
   createUrqlQuery: createUrqlQueryMock,
 }));
 
+vi.mock('@service-storage/client', () => ({ DEFAULT_ITEM_TYPE: 'document' }));
+
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupCacheHost: getGraphqlSoupCacheHostMock,
   getGraphqlSoupClient: getGraphqlSoupClientMock,
@@ -190,6 +192,44 @@ describe('GraphQL item previews', () => {
       expect(queries[2].data()).toMatchObject({ name: 'Renamed' });
       await Promise.all(queries.map((q) => q.refetch()));
       expect(result.refetch).toHaveBeenCalledTimes(1);
+    } finally {
+      dispose();
+    }
+  });
+
+  it('treats a user envelope without soup items as unloaded, not a throw', async () => {
+    const [result, setResult] = createStore({
+      data: { user: { id: 'viewer' } } as ItemPreviewQuery,
+      error: null,
+      isError: false,
+      isFetched: false,
+      isFetching: true,
+      isLoading: true,
+      isEnabled: true,
+      stale: false,
+      refetch: vi.fn(async () => undefined),
+    });
+    createUrqlQueryMock.mockReturnValue(result);
+
+    const { query, dispose } = createRoot((dispose) => ({
+      query: createGraphqlItemPreviewQuery(
+        () => ({ id: 'doc-1', type: 'document' }),
+        () => true
+      ),
+      dispose,
+    }));
+
+    try {
+      await vi.advanceTimersByTimeAsync(30);
+      expect(query.data()).toBeUndefined();
+      expect(query.shouldFallback()).toBe(false);
+      setResult({
+        isFetched: true,
+        isFetching: false,
+        isLoading: false,
+      });
+      expect(query.data()).toBeUndefined();
+      expect(query.shouldFallback()).toBe(true);
     } finally {
       dispose();
     }

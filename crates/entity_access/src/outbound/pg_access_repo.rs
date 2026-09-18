@@ -66,12 +66,18 @@ impl AccessRepository for PgAccessRepository {
         document_id: &str,
         user_id: Option<&MacroUserId<Lowercase<'_>>>,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        let document_uuid = document_id
-            .parse::<Uuid>()
-            .map_err(|_| AccessError::BadRequest("Invalid document ID format"))?;
         let source_ids = queries::get_user_source_ids(&self.pool, user_id)
             .await
             .map_err(anyhow_access_error)?;
+        let Ok(document_uuid) = document_id.parse::<Uuid>() else {
+            return Ok(queries::document_access::get_legacy_document_access(
+                &self.pool,
+                document_id,
+                &source_ids,
+                user_id,
+            )
+            .await?);
+        };
         Ok(queries::document_access::get_document_access(
             &self.pool,
             &document_uuid,
@@ -204,6 +210,24 @@ impl AccessRepository for PgAccessRepository {
             .await
             .map_err(anyhow_access_error)?;
         Ok(queries::call_access::get_call_access(&self.pool, &call_uuid, &source_ids).await?)
+    }
+
+    async fn get_agent_session_document(
+        &self,
+        agent_session_id: &str,
+    ) -> Result<Option<String>, AccessError> {
+        let session = agent_session_id
+            .parse::<Uuid>()
+            .map_err(|_| AccessError::BadRequest("Invalid agent session ID format"))?;
+        Ok(sqlx::query_scalar!(
+            r#"SELECT m.parent_entity_id FROM agent_session s
+               JOIN comms_messages m ON m.id = s.thread_id
+               JOIN comms_message_threads t ON t.root_id = m.id
+               WHERE s.id = $1 AND m.parent_entity_type = 'document' AND t.deleted_at IS NULL"#,
+            session,
+        )
+        .fetch_optional(&self.pool)
+        .await?)
     }
 
     async fn get_agent_session_access(

@@ -9,16 +9,18 @@ import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { idToDisplayName } from '@core/user/util';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
-import { Show } from 'solid-js';
+import { type Component, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
 import { changingModel, hasPendingStop } from '../state/control-message';
 import {
   AgentInput,
+  type AgentInputProps,
   AgentModelSelector,
   ComposerNotice,
   type QueuedPromptItem,
   QueuedPrompts,
 } from '../ui';
+import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
 
 export function AgentComposer(props: {
   /**
@@ -26,7 +28,11 @@ export function AgentComposer(props: {
    * split layout and j/k navigation — same contract as Chat and Channel.
    */
   autofocus?: boolean;
+  input?: Component<AgentInputProps>;
+  modelSelector?: Component<AgentModelSelectorProps>;
 }) {
+  const Input = props.input ?? AgentInput;
+  const ModelSelector = props.modelSelector ?? AgentModelSelector;
   const {
     elicitation,
     issue,
@@ -119,7 +125,7 @@ export function AgentComposer(props: {
           }
         />
       </Show>
-      <AgentInput
+      <Input
         placeholder="Message the agent, @mention anything"
         autofocus={props.autofocus}
         busy={busy()}
@@ -152,7 +158,7 @@ export function AgentComposer(props: {
         }}
         registerQuoteInsert={registerQuoteInsert}
         modelControl={
-          <AgentModelSelector
+          <ModelSelector
             model={metadata()?.model ?? null}
             changingTo={changingModel(messages(), metadata()?.model ?? null)}
             options={metadata()?.supportedModels ?? []}

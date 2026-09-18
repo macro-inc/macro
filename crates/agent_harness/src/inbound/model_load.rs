@@ -41,6 +41,8 @@ pub enum ModelHarnessDto {
     InMemory,
     /// The caller's Cursor account.
     Cursor,
+    /// The caller's allowlisted Claude subscription demo.
+    ClaudeCloud,
     /// A paired macrod runtime.
     Macrod,
 }
@@ -52,6 +54,7 @@ impl TryFrom<LoadAgentModelsRequest> for LoadAgentModels {
         let harness = match value.harness {
             ModelHarnessDto::InMemory => ModelHarness::InMemory,
             ModelHarnessDto::Cursor => ModelHarness::Cursor,
+            ModelHarnessDto::ClaudeCloud => ModelHarness::ClaudeCloud,
             ModelHarnessDto::Macrod => ModelHarness::Macrod,
         };
         Ok(Self {

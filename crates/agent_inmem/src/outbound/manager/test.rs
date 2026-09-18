@@ -167,6 +167,7 @@ async fn a_prompt_runs_end_to_end_through_the_real_session_machine() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            repo_branch: None,
             id,
             owner_id: owner(),
             bot_id: BotId::TEST_A,
@@ -306,6 +307,7 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            repo_branch: None,
             id,
             owner_id: owner(),
             bot_id: BotId::TEST_A,
@@ -452,6 +454,7 @@ async fn instructions_reach_every_turn_including_after_a_reattach() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            repo_branch: None,
             id,
             owner_id: owner(),
             bot_id: BotId::TEST_A,
@@ -526,6 +529,7 @@ async fn a_session_without_instructions_hands_the_engine_none() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            repo_branch: None,
             id,
             owner_id: owner(),
             bot_id: BotId::TEST_A,
@@ -585,6 +589,7 @@ async fn identity_reaches_every_turn_including_after_a_reattach() {
     let id = AgentSessionId::new();
     sessions
         .create_session(CreateAgentSessionParams {
+            repo_branch: None,
             id,
             owner_id: owner(),
             bot_id: BotId::TEST_A,

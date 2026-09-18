@@ -1,8 +1,4 @@
-import {
-  activePlaceableIdSignal,
-  newPlaceableSignal,
-} from '@block-pdf/signal/placeables';
-import { blockElementSignal } from '@core/signal/blockElement';
+import { ScopedPortal } from '@core/component/ScopedPortal';
 import Dialog from '@corvu/dialog';
 import Check from '@phosphor/check.svg';
 import Trash from '@phosphor/trash-simple.svg';
@@ -17,8 +13,8 @@ import {
   onMount,
   Show,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
 import { themeReactive } from '../../../theme/signals/themeReactive';
+import { usePdfDocument } from '../../context/pdf-document-context';
 import { useDeletePlaceable, useModifyPayload } from '../../store/placeables';
 import { type AllowableEdits, PayloadMode } from '../../type/placeables';
 
@@ -35,6 +31,7 @@ interface SignatureEditorProps {
 }
 
 function SignatureEditor(props: SignatureEditorProps) {
+  const pdf = usePdfDocument();
   let canvasRef!: HTMLCanvasElement;
   let signaturePad: SignaturePad | undefined;
 
@@ -42,11 +39,11 @@ function SignatureEditor(props: SignatureEditorProps) {
     signaturePad = new SignaturePad(canvasRef);
   });
 
-  const setActivePlaceable = activePlaceableIdSignal.set;
+  const [, setActivePlaceable] = pdf.state.signals.activePlaceableId;
   const modifyPayload = useModifyPayload();
   const deletePlaceable = useDeletePlaceable();
 
-  const setNewPlaceable = newPlaceableSignal.set;
+  const [, setNewPlaceable] = pdf.state.signals.newPlaceable;
   const updatePlaceable = createCallback((e: MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -77,7 +74,7 @@ function SignatureEditor(props: SignatureEditorProps) {
   );
 
   onMount(() => {
-    const el = blockElementSignal.get();
+    const el = pdf.rootElement();
     if (!el) {
       setBlockRect(undefined);
       return;
@@ -122,7 +119,7 @@ function SignatureEditor(props: SignatureEditorProps) {
       // this is because we often prevent default onMouseDown
       noOutsidePointerEvents={false}
     >
-      <Portal mount={document.getElementById('modal') ?? undefined}>
+      <ScopedPortal scope={pdf.portalScope()}>
         <Dialog.Overlay
           class="dialog-overlay-open-animation flex sm:max-h-full items-center justify-center z-modal-overlay fixed inset-0 bg-modal-overlay"
           style={{
@@ -170,7 +167,7 @@ function SignatureEditor(props: SignatureEditorProps) {
             </Button>
           </div>
         </Dialog.Content>
-      </Portal>
+      </ScopedPortal>
     </Dialog>
   );
 }

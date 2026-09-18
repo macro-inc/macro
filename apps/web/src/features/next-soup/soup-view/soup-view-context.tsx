@@ -106,11 +106,17 @@ import {
   useContext,
 } from 'solid-js';
 import { unwrap } from 'solid-js/store';
+import {
+  applyDocumentTabScope,
+  withDocumentTabItemScope,
+} from './document-tab-scope';
 
 type DataSource<T> = {
   data: Accessor<T[]>;
   /** Results are limited to synchronized email metadata. */
   cachedMail?: Accessor<boolean>;
+  /** Only the active GraphQL source opts rows into deferred interaction setup. */
+  deferRowInteractions?: Accessor<boolean>;
   error: Accessor<Error | null>;
   /** True when the active request has local or network data, including an
    * intentionally empty result. */
@@ -852,6 +858,9 @@ export const SoupViewContextProvider: FlowComponent<
     let next = applyInboxFilter(state);
     next = applyInboxThreadFilter(next);
     next = applyInboxReadFilter(next);
+    if (activeListView() === 'documents') {
+      next = applyDocumentTabScope(next, activeTab(), userId());
+    }
     return next;
   };
 
@@ -953,6 +962,7 @@ export const SoupViewContextProvider: FlowComponent<
     owners: ownerFilter(),
     stages: stageFilter(),
     resolveCompanyStage,
+    companyStageLabel: dealStages.stageLabel,
   });
 
   // This is temporary while we are experimenting/handling
@@ -1021,7 +1031,11 @@ export const SoupViewContextProvider: FlowComponent<
         showSupportedForeignEntities: showSupportedForeignEntitiesFF().enabled,
         onBeforeGraphqlRefresh: () => groupQueries.resetToInitialPage(),
         meta: {
-          itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
+          itemFilter: withDocumentTabItemScope(
+            view === 'documents' ? activeTab() : undefined,
+            userId(),
+            (item) => soupItemMatchesActiveFilters(item, view)
+          ),
           insertFilter: (item) =>
             emailItemMatchesImportance(item, emailImportance),
         },
@@ -1210,7 +1224,11 @@ export const SoupViewContextProvider: FlowComponent<
       return {
         enabled: enabled() && !search.isSearching(),
         meta: {
-          itemFilter: (item) => soupItemMatchesActiveFilters(item, view),
+          itemFilter: withDocumentTabItemScope(
+            view === 'documents' ? activeTab() : undefined,
+            userId(),
+            (item) => soupItemMatchesActiveFilters(item, view)
+          ),
           insertFilter: (item) =>
             emailItemMatchesImportance(item, emailImportance),
         },
@@ -1523,6 +1541,8 @@ export const SoupViewContextProvider: FlowComponent<
     initialize,
     source: {
       data: entities,
+      deferRowInteractions: () =>
+        !search.isSearching() && itemsQuery.transport === 'graphql',
       cachedMail: () =>
         !search.isSearching() && itemsQueryData()?.cachedMail === true,
       error: () =>

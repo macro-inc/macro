@@ -1,11 +1,11 @@
 import {
   SearchBar,
   useViewControlHotkeys,
+  ViewBreadcrumbs,
   ViewShell,
 } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
-import MenuIcon from '@phosphor/list.svg';
+import CaretDownIcon from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown, pressHandlers } from '@ui';
 import { createSignal } from 'solid-js';
@@ -21,12 +21,38 @@ export type EmailHeaderProps = {
   onSearchEscape?: () => void;
 };
 
-export function EmailTopBar() {
+export function EmailViewBreadcrumbItem() {
   const { state } = useEmailView();
-  const title = () =>
+  const tabTitle = () =>
     EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
 
-  return <ViewShell.TopBar>{title()}</ViewShell.TopBar>;
+  return (
+    <ViewBreadcrumbs.Item
+      value="email-view"
+      metadata={{ type: 'email-view' }}
+      order={0}
+    >
+      {(item) => (
+        <ViewBreadcrumbs.Button
+          isActive={item.isActive()}
+          onClick={item.onSelect}
+        >
+          <span class="truncate @max-[720px]/view-shell:hidden">
+            {tabTitle()}
+          </span>
+          <span class="hidden @max-[720px]/view-shell:inline">Email</span>
+        </ViewBreadcrumbs.Button>
+      )}
+    </ViewBreadcrumbs.Item>
+  );
+}
+
+export function EmailTopBar() {
+  return (
+    <ViewShell.TopBar>
+      <ViewBreadcrumbs.Outlet class="flex-1" aria-label="Email location" />
+    </ViewShell.TopBar>
+  );
 }
 
 export function EmailHeader(props: EmailHeaderProps) {
@@ -35,6 +61,8 @@ export function EmailHeader(props: EmailHeaderProps) {
   const [navigationOpen, setNavigationOpen] = createSignal(false);
   const [filterOpen, setFilterOpen] = createSignal(false);
   let searchInput: HTMLInputElement | undefined;
+  const selectedTabLabel = () =>
+    EMAIL_TABS.find((tab) => tab.id === state.tab)?.label ?? 'Email';
 
   // The view's control hotkeys are registered once, here, for the split scope.
   useViewControlHotkeys({
@@ -59,10 +87,6 @@ export function EmailHeader(props: EmailHeaderProps) {
 
   return (
     <div class="flex min-w-0 flex-col">
-      <SplitPanel.ControlGroup class="hidden px-2 pb-2 @max-[720px]/view-shell:flex">
-        <SplitPanel.CloseButton />
-      </SplitPanel.ControlGroup>
-
       {/* Sidebar stand-in while the aside is collapsed: the tab menu, the
           inbox selector, and compose. */}
       <div class="mb-4 hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
@@ -71,24 +95,23 @@ export function EmailHeader(props: EmailHeaderProps) {
           onOpenChange={setNavigationOpen}
           placement="bottom-start"
         >
-          <Dropdown.Trigger
-            variant="ghost"
-            size="sm"
-            square
-            class="size-8 shrink-0 rounded-full"
-            aria-label="Open Email navigation"
-          >
-            <MenuIcon class="size-4" />
-          </Dropdown.Trigger>
+          <h1 class="min-w-0">
+            <Dropdown.Trigger
+              variant="ghost"
+              size="sm"
+              class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
+              aria-label={`Select email view: ${selectedTabLabel()}`}
+            >
+              <span class="truncate">{selectedTabLabel()}</span>
+              <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
+            </Dropdown.Trigger>
+          </h1>
           <Dropdown.Content class="w-72 rounded-2xl p-2">
             <div class="rounded-xl bg-menu">
               <EmailNavigation onNavigate={() => setNavigationOpen(false)} />
             </div>
           </Dropdown.Content>
         </Dropdown>
-        <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
-          Email
-        </h1>
         <div class="ml-auto flex shrink-0 items-center gap-2">
           <EmailInboxMenu />
           <Button

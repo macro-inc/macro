@@ -45,10 +45,12 @@
   },
   "devDependencies": {
     "@biomejs/biome": "2.4.12",
+    "@hey-api/openapi-ts": "0.99.0",
     "@types/bun": "^1.3.5",
+    "@types/semver": "^7.8.0",
     "esbuild": "^0.28.1",
     "hono": "^4.12.27",
-    "@hey-api/openapi-ts": "0.99.0",
+    "semver": "^7.8.5",
     "typescript": "^5.9.2"
   }
 }

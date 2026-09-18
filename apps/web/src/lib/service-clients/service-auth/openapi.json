@@ -646,6 +646,406 @@
         }
       }
     },
+    "/gtm-invite/links": {
+      "get": {
+        "tags": ["gtm_invite"],
+        "summary": "Lists invite links, newest first. Macro staff only.",
+        "operationId": "list_gtm_invite_links",
+        "parameters": [
+          {
+            "name": "mine",
+            "in": "query",
+            "description": "Only the caller's own links (default: every staff member's).",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GtmInviteLinkList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["gtm_invite"],
+        "summary": "Creates an invite link. Macro staff only.",
+        "operationId": "create_gtm_invite_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateGtmInviteLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GtmInviteLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gtm-invite/links/{id}": {
+      "delete": {
+        "tags": ["gtm_invite"],
+        "summary": "Revokes an invite link nobody has signed up through. Macro staff only.",
+        "operationId": "revoke_gtm_invite_link",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "The invite link id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GtmInviteLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gtm-invite/offer": {
+      "get": {
+        "tags": ["gtm_invite"],
+        "summary": "The promotion the signed-in user's account holds from an invite link, if\nthey redeemed one and have not started a paid subscription yet.",
+        "operationId": "get_gtm_invite_offer",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GtmInviteOfferStatus"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gtm-invite/public/{token}": {
+      "get": {
+        "tags": ["gtm_invite"],
+        "summary": "Resolves an invite link for the public welcome page and counts the open.",
+        "description": "Unauthenticated: the recipient has no account yet. Only the first name and\nwhether the link is still usable are exposed.",
+        "operationId": "resolve_gtm_invite_link",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "The token from the invite link URL",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PublicGtmInviteLink"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": ""
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/gtm-invite/redeem": {
+      "post": {
+        "tags": ["gtm_invite"],
+        "summary": "Attributes the signed-in user's account to the invite link they opened and\ngrants them its offer. Idempotent for the same account.",
+        "operationId": "redeem_gtm_invite_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RedeemGtmInviteLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GtmInviteOffer"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "410": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["health"],
@@ -4137,6 +4537,25 @@
           }
         }
       },
+      "CreateGtmInviteLinkRequest": {
+        "type": "object",
+        "description": "Request body to create a link.",
+        "required": ["firstName"],
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "description": "The recipient's first name, shown on the welcome page."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "Free-form internal note for the dashboard."
+          },
+          "recipientEmail": {
+            "type": ["string", "null"],
+            "description": "The recipient's email, when the sender knows it."
+          }
+        }
+      },
       "CreateInProgressLinkResponse": {
         "type": "object",
         "required": ["link_id"],
@@ -4708,6 +5127,179 @@
           }
         }
       },
+      "GtmInviteLink": {
+        "type": "object",
+        "description": "A link as shown on the staff dashboard.",
+        "required": [
+          "id",
+          "token",
+          "firstName",
+          "promoCode",
+          "freeMonths",
+          "status",
+          "createdBy",
+          "createdAt",
+          "expiresAt",
+          "openCount"
+        ],
+        "properties": {
+          "convertedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the account started a paid subscription."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the link was created."
+          },
+          "createdBy": {
+            "type": "string",
+            "description": "The Macro user id of the staff member who created the link."
+          },
+          "expiresAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the link stops being openable."
+          },
+          "firstName": {
+            "type": "string",
+            "description": "The recipient's first name."
+          },
+          "firstOpenedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When the welcome page first loaded."
+          },
+          "freeMonths": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Free months the promotion grants.",
+            "minimum": 0
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Primary key."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "Internal note."
+          },
+          "openCount": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many times the welcome page loaded."
+          },
+          "promoCode": {
+            "type": "string",
+            "description": "The Stripe promotion code applied at checkout."
+          },
+          "recipientEmail": {
+            "type": ["string", "null"],
+            "description": "The recipient's email, when known."
+          },
+          "redeemedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When that account redeemed the link."
+          },
+          "redeemedBy": {
+            "type": ["string", "null"],
+            "description": "The Macro user id of the account that signed up through the link."
+          },
+          "revokedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When staff revoked the link."
+          },
+          "status": {
+            "$ref": "#/components/schemas/GtmInviteLinkStatus",
+            "description": "Lifecycle status."
+          },
+          "stripeSubscriptionId": {
+            "type": ["string", "null"],
+            "description": "The Stripe subscription id of that subscription."
+          },
+          "token": {
+            "type": "string",
+            "description": "The secret to embed in the link URL."
+          }
+        }
+      },
+      "GtmInviteLinkList": {
+        "type": "object",
+        "description": "Links for the dashboard.",
+        "required": ["links"],
+        "properties": {
+          "links": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GtmInviteLink"
+            },
+            "description": "Newest first."
+          }
+        }
+      },
+      "GtmInviteLinkStatus": {
+        "type": "string",
+        "description": "Where a link is in its lifecycle.",
+        "enum": ["active", "expired", "revoked", "redeemed", "converted"]
+      },
+      "GtmInviteOffer": {
+        "type": "object",
+        "description": "The promotion a signed-in user's account holds.",
+        "required": [
+          "linkId",
+          "firstName",
+          "promoCode",
+          "freeMonths",
+          "redeemedAt"
+        ],
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "description": "The first name the link was made out to."
+          },
+          "freeMonths": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Free months the promotion grants.",
+            "minimum": 0
+          },
+          "linkId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The redeemed link."
+          },
+          "promoCode": {
+            "type": "string",
+            "description": "The Stripe promotion code checkout applies."
+          },
+          "redeemedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the account redeemed the link."
+          }
+        }
+      },
+      "GtmInviteOfferStatus": {
+        "type": "object",
+        "description": "Whether the signed-in user holds an unused offer.",
+        "properties": {
+          "offer": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GtmInviteOffer",
+                "description": "The offer, when the account redeemed a link and has not subscribed yet."
+              }
+            ]
+          }
+        }
+      },
       "InitGithubLinkResponse": {
         "type": "object",
         "required": ["authorization_url", "link_id"],
@@ -5016,6 +5608,27 @@
           }
         }
       },
+      "PublicGtmInviteLink": {
+        "type": "object",
+        "description": "What the public welcome page learns about a link.",
+        "required": ["firstName", "status", "freeMonths"],
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "description": "The recipient's first name."
+          },
+          "freeMonths": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Free months the promotion grants.",
+            "minimum": 0
+          },
+          "status": {
+            "$ref": "#/components/schemas/GtmInviteLinkStatus",
+            "description": "Whether the link can still be used."
+          }
+        }
+      },
       "PutCursorApiKeyRequest": {
         "type": "object",
         "description": "The key the user pasted.",
@@ -5047,6 +5660,17 @@
           "last_name": {
             "type": ["string", "null"],
             "description": "Last Name of user"
+          }
+        }
+      },
+      "RedeemGtmInviteLinkRequest": {
+        "type": "object",
+        "description": "Request body to redeem a link.",
+        "required": ["token"],
+        "properties": {
+          "token": {
+            "type": "string",
+            "description": "The token from the link URL."
           }
         }
       },

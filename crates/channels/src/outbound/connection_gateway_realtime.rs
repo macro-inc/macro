@@ -56,6 +56,17 @@ impl ChannelRealtimePublisher for ConnectionGatewayChannelRealtimePublisher {
 
     async fn publish(&self, effect: ChannelRealtimeEffect) -> Result<(), Self::Err> {
         match effect {
+            ChannelRealtimeEffect::PictureChanged {
+                recipients,
+                channel_id,
+            } => {
+                self.send_update(
+                    "comms_channel_picture",
+                    PictureChangedRealtimeData { channel_id },
+                    recipients,
+                )
+                .await
+            }
             ChannelRealtimeEffect::Message {
                 recipients,
                 message,
@@ -204,6 +215,11 @@ impl MessageRealtimeSender {
             unreachable!("channel sender is always either a user or a bot")
         }
     }
+}
+
+#[derive(Serialize)]
+struct PictureChangedRealtimeData {
+    channel_id: Uuid,
 }
 
 #[derive(Serialize)]

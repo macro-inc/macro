@@ -89,6 +89,7 @@ describe('isManagedHarness', () => {
     expect(isManagedHarness('in-memory')).toBe(true);
     expect(isManagedHarness('macro-inmem')).toBe(true);
     expect(isManagedHarness('cursor')).toBe(true);
+    expect(isManagedHarness('claude-cloud')).toBe(true);
   });
 
   it('refuses external daemons', () => {

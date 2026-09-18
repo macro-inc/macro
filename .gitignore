@@ -49,3 +49,6 @@ infra/local/generated/
 # Per-developer macrod config contains this machine's harness bearer token.
 /macrod.toml
 /macrod.webhook-state.json
+
+# Owner-bound subscription OAuth credentials for the internal Claude demo.
+/.claude-cloud/

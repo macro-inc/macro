@@ -1,5 +1,6 @@
 import type { NotifEvent } from '@service-notification/generated/schemas';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
+import { scopeChannelNotificationsForEntity } from '../../soup/entity-notifications';
 import {
   getAllNotificationsFromGroup,
   getMostRecentNotification,
@@ -135,6 +136,122 @@ function createDocMentionNotification(
     },
   });
 }
+
+describe('channel notification scoping', () => {
+  function expectStackMembership(notifications: UnifiedNotification[]) {
+    const threadIds = new Set(
+      stackNotifications(notifications)
+        .filter(
+          (stack) =>
+            stack.type === 'channel_message_reply' ||
+            stack.type === 'channel_mention'
+        )
+        .flatMap((stack) => stack.notifications.map((n) => n.id))
+    );
+    expect(
+      scopeChannelNotificationsForEntity({ type: 'channel' }, notifications)
+    ).toEqual(notifications.filter((n) => !threadIds.has(n.id)));
+  }
+
+  it('matches display-stack membership for every combination of channel events', () => {
+    const candidates = [
+      createNewMessageNotification('root-send', 'root', 2000),
+      createNewMessageNotification('standalone-send', 'standalone', 1000),
+      createReplyNotification('reply', 'reply-message', 'root', 5000),
+      createMentionNotification('reply-mention', 'reply-message', 4000, 'root'),
+      createMentionNotification('root-mention', 'root', 6000),
+      createMentionNotification('orphan-mention', 'orphan', 3000),
+      createMentionNotification(
+        'thread-mention',
+        'other-message',
+        8000,
+        'other'
+      ),
+      createDocCommentNotification('document-comment', 1, 2, 7000),
+    ];
+    for (let mask = 0; mask < 2 ** candidates.length; mask++) {
+      const notifications = candidates.filter((_, i) => mask & (1 << i));
+      expectStackMembership(notifications);
+      expectStackMembership([...notifications].reverse());
+    }
+  });
+
+  it('matches stack membership for empty thread and message keys', () => {
+    const candidates = [
+      createNewMessageNotification('empty-send', '', 1000),
+      createReplyNotification('empty-thread-reply', 'reply', '', 2000),
+      createMentionNotification('empty-root-mention', '', 3000),
+      createMentionNotification('empty-thread-mention', 'mention', 4000, ''),
+    ];
+    for (let mask = 0; mask < 2 ** candidates.length; mask++) {
+      expectStackMembership(candidates.filter((_, i) => mask & (1 << i)));
+    }
+  });
+
+  it('does not read timestamps or sort stacks to scope channel notifications', () => {
+    const readTimestamp = vi.fn(() => new Date(1000).toISOString());
+    const notifications = [
+      createNewMessageNotification('root', 'root', 1000),
+      createReplyNotification('reply', 'reply-message', 'root', 2000),
+      createNewMessageNotification('standalone', 'standalone', 3000),
+    ].map((notification) => ({
+      ...notification,
+      get created_at() {
+        return readTimestamp();
+      },
+    }));
+
+    const scoped = scopeChannelNotificationsForEntity(
+      { type: 'channel' },
+      notifications
+    );
+
+    expect(scoped.map((n) => n.id)).toEqual(['standalone']);
+    expect(scoped[0]).toBe(notifications[2]);
+    expect(readTimestamp).not.toHaveBeenCalled();
+  });
+
+  it('keeps root sends and mentions in their explicit thread row', () => {
+    const notifications = [
+      createNewMessageNotification('root-send', 'root', 1000),
+      createMentionNotification('root-mention', 'root', 2000),
+      createReplyNotification('reply', 'reply-message', 'root', 3000),
+      createMentionNotification('reply-mention', 'reply-message', 4000, 'root'),
+      createReplyNotification('other-reply', 'other-message', 'other', 5000),
+    ];
+
+    expect(
+      scopeChannelNotificationsForEntity(
+        { type: 'channel_thread', messageId: 'root' },
+        notifications
+      )
+    ).toEqual(notifications.slice(0, 4));
+    expect(
+      scopeChannelNotificationsForEntity(
+        { type: 'channel_message' },
+        notifications
+      )
+    ).toBe(notifications);
+  });
+
+  it('recomputes membership when an existing notification array changes', () => {
+    const notifications = [createNewMessageNotification('root', 'root', 1000)];
+    const entity = { type: 'channel' } as const;
+    expect(scopeChannelNotificationsForEntity(entity, notifications)).toEqual(
+      notifications
+    );
+    notifications.push(
+      createReplyNotification('reply', 'message', 'root', 2000)
+    );
+    expect(scopeChannelNotificationsForEntity(entity, notifications)).toEqual(
+      []
+    );
+    notifications.pop();
+    expect(scopeChannelNotificationsForEntity(entity, notifications)).toEqual(
+      notifications
+    );
+  });
+});
 
 describe('stackNotifications', () => {
   describe('basic stacking', () => {

@@ -44,7 +44,6 @@ export interface EmailThreadCommands {
   isThreadMarkedUnread: Accessor<boolean>;
   markThreadUnread(): boolean;
   markThreadRead(): boolean;
-  getMarkDoneNavigationTargetId(): string | undefined;
   blockSender(): boolean;
   markSenderSignal(): boolean;
   markSenderNoise(): boolean;

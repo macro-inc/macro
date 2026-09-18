@@ -81,6 +81,10 @@ use github::domain::service::GithubSyncServiceImpl;
 use github::outbound::connection_gateway_realtime::ConnectionGatewayGithubRealtime;
 use github::outbound::github_sync_client::GithubSyncClientImpl;
 use github::outbound::pg_github_sync_repo::PgGithubSyncRepo;
+use initiative::{
+    domain::service::InitiativeServiceImpl, inbound::axum_router::InitiativeRouterState,
+    outbound::PgInitiativeRepo,
+};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     MacroAuthJwtValidator, MacroAuthorizationServiceImpl, MacroAuthorizationState,
@@ -318,6 +322,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     EntityAccessManagementService,
     ForeignEntityServiceImpl<PgForeignEntityRepo>,
     DssEventBroker,
+    sync_service_client::SyncServiceClient,
 >;
 
 /// Type alias for the authorization service.
@@ -364,6 +369,7 @@ pub(crate) type DssChannelService = ChannelServiceImpl<
     >,
     PgChannelReferenceSharePermissions<EntityAccessService>,
     lexical_mention_extractor::LexicalMentionExtractor,
+    channels::outbound::static_file_pictures::StaticFileChannelPictures,
 >;
 
 /// Type alias for the channels router state.
@@ -387,12 +393,12 @@ pub(crate) type DssHarnessesState =
     harnesses::inbound::axum_router::HarnessesRouterState<DssHarnessService, AuthorizationService>;
 
 /// Type alias for the channel bot webhook router state.
-pub(crate) type DssChannelBotWebhookState = ChannelBotWebhookRouterState<
-    DssBotService,
-    Arc<DssChannelService>,
-    EntityAccessService,
-    AuthorizationService,
->;
+pub(crate) type DssChannelBotWebhookState =
+    ChannelBotWebhookRouterState<DssBotService, EntityAccessService, AuthorizationService>;
+
+/// Shared messages use the same parent access and authentication services as DSS.
+pub(crate) type DssMessagesState =
+    messages::inbound::axum_router::MessagesRouterState<EntityAccessService, AuthorizationService>;
 
 /// Type alias for the call connection service.
 pub(crate) type CallConnectionService =
@@ -475,6 +481,23 @@ pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
 pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
+pub(crate) type InitiativeDescriptionDocumentsType =
+    crate::outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter<
+        Arc<DocumentService>,
+        documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer,
+        documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
+        documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker,
+        DssEventBroker,
+    >;
+
+/// Type alias for the initiative service.
+pub(crate) type InitiativeServiceType =
+    InitiativeServiceImpl<PgInitiativeRepo, InitiativeDescriptionDocumentsType>;
+
+/// Type alias for the initiative router state.
+pub(crate) type DssInitiativeState =
+    InitiativeRouterState<InitiativeServiceType, EntityAccessService, AuthorizationService>;
+
 /// Type alias for the collab-surface service.
 pub(crate) type CollabSurfaceServiceType =
     CollabSurfaceServiceImpl<PgCollabSurfaceRepo, LexicalSyncSurfaceInitializer>;
@@ -545,6 +568,7 @@ pub(crate) struct ApiContext {
     pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
     pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
+    pub initiative_state: DssInitiativeState,
     pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,
@@ -569,6 +593,7 @@ pub(crate) struct ApiContext {
     pub documents_state: DocumentsState,
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,
+    pub messages_state: DssMessagesState,
     /// Shared channel service, for calling channel domain operations outside
     /// the channels router (starter-doc seeding records mention backlinks).
     pub channel_service: Arc<DssChannelService>,

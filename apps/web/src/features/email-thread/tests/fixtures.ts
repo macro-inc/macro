@@ -50,7 +50,6 @@ export function createThreadContext(
       isThreadMarkedUnread: () => false,
       markThreadUnread: () => false,
       markThreadRead: () => false,
-      getMarkDoneNavigationTargetId: () => undefined,
       blockSender: () => false,
       markSenderSignal: () => false,
       markSenderNoise: () => false,

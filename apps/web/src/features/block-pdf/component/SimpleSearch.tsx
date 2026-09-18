@@ -1,12 +1,9 @@
-import { searchLocationPendingSignal } from '@block-pdf/signal/location';
 import type { FindBarController } from '@core/component/createFindBarController';
 import { FindBar } from '@core/component/FindBar';
 import { IS_MAC } from '@core/constant/isMac';
-import { blockElementSignal } from '@core/signal/blockElement';
 import { createEffect, createSignal, onCleanup, Show, untrack } from 'solid-js';
+import { usePdfDocument } from '../context/pdf-document-context';
 import {
-  isSearchOpenSignal,
-  searchSignal,
   useJumpToResult,
   useSearchClose,
   useSearchResults,
@@ -14,15 +11,16 @@ import {
 } from '../signal/search';
 
 export function SimpleSearch() {
+  const pdf = usePdfDocument();
   const searchStart = useSearchStart();
   const searchResults = useSearchResults();
   const jumpToResult = useJumpToResult();
   const closeSearchBar = useSearchClose();
-  const locationPending = searchLocationPendingSignal.get;
+  const [locationPending] = pdf.state.signals.searchLocationPending;
   const [inputEl, setInputEl] = createSignal<HTMLInputElement>();
 
-  const [isOpen, setIsOpen] = isSearchOpenSignal;
-  const [searchText, setSearchText] = searchSignal;
+  const [isOpen, setIsOpen] = pdf.state.signals.isSearchOpen;
+  const [searchText, setSearchText] = pdf.state.signals.search;
   const [isPending, setIsPending] = createSignal(false);
 
   // Re-run the active search when the bar opens (or re-opens with prior text).
@@ -115,15 +113,12 @@ export function SimpleSearch() {
     }
   };
 
-  const blockElement = blockElementSignal.get;
   createEffect(() => {
-    const element = blockElement();
+    const element = pdf.rootElement();
     if (!element) return;
     element.addEventListener('keydown', handleHotkey);
-    document.addEventListener('keydown', handleHotkey);
     onCleanup(() => {
       element.removeEventListener('keydown', handleHotkey);
-      document.removeEventListener('keydown', handleHotkey);
     });
   });
 

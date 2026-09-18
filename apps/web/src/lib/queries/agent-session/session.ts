@@ -1,5 +1,5 @@
 /**
- * Bounded snapshot poll for a Cursor session whose `external.url` is still
+ * Bounded snapshot poll for a cloud session whose `external.url` is still
  * missing.
  *
  * Cursor mints that url inside the session's first prompt, and nothing
@@ -26,7 +26,7 @@ export const EXTERNAL_URL_POLL_ATTEMPTS = 15;
 
 /**
  * Re-read an agent session snapshot while `sessionId` is set. Callers pass
- * `undefined` when the session is not a Cursor bot, already has a url, or
+ * `undefined` when the session is not a cloud harness, already has a url, or
  * has not loaded yet — the query disables rather than fetching.
  *
  * `gcTime: 0` drops the observer when the call site unmounts so reopening

@@ -19,8 +19,9 @@ const ready = (
   tabId: string,
   ownerEpoch: number,
   databaseActionProof: DatabaseActionProof
-): CoordinatorAction[] =>
-  core.engineReady({
+): CoordinatorAction[] => {
+  core.beginEngineOpen(tabId, ownerEpoch);
+  return core.engineReady({
     tabId,
     ownerEpoch,
     ownerLockName: OWNER_LOCK,
@@ -32,12 +33,48 @@ const ready = (
         ? 'reset-storage-uncertain'
         : 'opened-existing',
   });
+};
 
 const init = (id: number) => ({ id, kind: 'init', scope: 'scope' }) as const;
 
 const clear = (id: number) => ({ id, kind: 'clear' }) as const;
 
 describe('CoordinatorCore', () => {
+  it('preserves storage after bootstrap loss but requires recovery once opening was granted', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.ownerLost('tab-a', 1, 'asset timeout');
+    expect(action(core.resumeAfterLoss(), 'elect-owner').databaseAction).toBe(
+      'open-existing'
+    );
+    expect(core.beginEngineOpen('tab-a', 1)).toBe(false);
+    expect(core.beginEngineOpen('tab-a', 2)).toBe(true);
+    expect(core.beginEngineOpen('tab-a', 2)).toBe(false);
+    core.ownerLost('tab-a', 2, 'database open timeout');
+    expect(action(core.resumeAfterLoss(), 'elect-owner').databaseAction).toBe(
+      'wipe-before-open'
+    );
+    // Failing to load assets during recovery must not erase a prior reset requirement.
+    core.ownerLost('tab-a', 3, 'asset download failed');
+    expect(action(core.resumeAfterLoss(), 'elect-owner').databaseAction).toBe(
+      'wipe-before-open'
+    );
+  });
+
+  it('preserves storage when the only tab closes before the open grant', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.tabLost('tab-a');
+    core.resumeAfterLoss();
+    expect(core.state).toEqual({
+      kind: 'waiting-for-tab',
+      nextDatabaseAction: 'open-existing',
+    });
+    expect(
+      action(core.registerTab('tab-b'), 'elect-owner').databaseAction
+    ).toBe('open-existing');
+  });
+
   it('covers waiting, activating, active, draining, and graceful reactivation', () => {
     const core = new CoordinatorCore('scope');
     expect(core.state).toEqual({
@@ -221,6 +258,7 @@ describe('CoordinatorCore', () => {
       previousTabId: 'tab-a',
       previousEpoch: 1,
       nextEpoch: 2,
+      databaseAction: 'wipe-before-open',
       reason: 'worker failed',
     });
     expect(action(core.resumeAfterLoss(), 'elect-owner')).toMatchObject({
@@ -377,6 +415,7 @@ describe('CoordinatorCore', () => {
     core.registerTab('tab-a');
     core.registerTab('tab-b');
 
+    core.beginEngineOpen('tab-a', 1);
     const wrongLock = core.engineReady({
       tabId: 'tab-a',
       ownerEpoch: 1,
@@ -390,6 +429,7 @@ describe('CoordinatorCore', () => {
       'wrong physical owner lock'
     );
     core.resumeAfterLoss();
+    core.beginEngineOpen('tab-b', 2);
     const wrongProof = core.engineReady({
       tabId: 'tab-b',
       ownerEpoch: 2,

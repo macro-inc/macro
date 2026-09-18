@@ -29,6 +29,7 @@ members = [
   "crates/crm",
   "crates/cursor_api_key",
   "crates/cursor_cloud_agents",
+  "crates/claude_cloud_agents",
   "crates/embedding",
   "crates/email_api_client",
   "crates/entity_mutation",
@@ -51,6 +52,7 @@ members = [
   "crates/graphql_properties",
   "crates/graphql_soup",
   "crates/graphql_soup_filter_input",
+  "crates/gtm_invite",
   "crates/harness_id",
   "crates/harness_token",
   "crates/harnesses",
@@ -67,6 +69,7 @@ members = [
   "crates/macro_sync_service_jwt",
   "crates/maybe_send",
   "crates/memory",
+  "crates/messages",
   "crates/model_owner",
   "crates/mcp_select",
   "crates/mcp_toolset",
@@ -302,6 +305,7 @@ sqlx = { version = "0.8.6", features = [
   "uuid",
 ] }
 sqlx-core = { version = "0.8.6" }
+sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
 strum = { version = "0.27.1", features = ["derive"] }
 tempfile = "3"
 thiserror = "2.0.0"

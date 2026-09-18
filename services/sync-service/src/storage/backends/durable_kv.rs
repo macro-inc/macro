@@ -98,6 +98,18 @@ impl DurableKVStorage {
         document_state: &DocumentState,
         op_update: &[u8],
     ) -> Result<Vec<String>> {
+        self.apply_op_with_attribution(document_state, op_update, None)
+            .await
+    }
+
+    /// Attribution is supplied only by the verified JWT boundary, never CRDT
+    /// peer IDs or request-body fields. Metadata shares the operation-log ID.
+    pub async fn apply_op_with_attribution(
+        &self,
+        document_state: &DocumentState,
+        op_update: &[u8],
+        attribution: Option<&crate::spreadsheet::SpreadsheetAttribution>,
+    ) -> Result<Vec<String>> {
         let op_id = self.ids.id();
         let op_key = pending_op_key(&op_id);
         let touched_nodes = document_state.import(op_update)?;
@@ -107,6 +119,11 @@ impl DurableKVStorage {
             .unwrap_context("applied_keys mutex poisoned")
             .insert(op_key);
         self.inner.put(&all_op_key(&op_id), op_update).await?;
+        if let Some(attribution) = attribution {
+            let metadata = serde_json::to_vec(attribution)
+                .context("failed to serialize signed spreadsheet attribution")?;
+            self.inner.put(&format!("actor/{op_id}"), metadata).await?;
+        }
         Ok(touched_nodes)
     }
 

@@ -58,6 +58,7 @@ bzip2 = { workspace = true, default-features = false, features = [
 cal = { path = "../../crates/cal", features = ["axum", "outbound"] }
 call = { path = "../../crates/call" }
 channel_bots = { path = "../../crates/channel_bots" }
+messages = { path = "../../crates/messages", features = ["broker", "delivery", "inbound"] }
 channels = { path = "../../crates/channels", features = [
   "entity_mutation",
   "inbound",
@@ -115,6 +116,7 @@ graphql_soup = { path = "../../crates/graphql_soup" }
 harnesses = { path = "../../crates/harnesses" }
 hex = { workspace = true }
 http-body-util = { workspace = true }
+initiative = { path = "../../crates/initiative", features = ["inbound", "postgres"] }
 jsonwebtoken = { workspace = true }
 last_online_tracker = { path = "../../crates/last_online_tracker" }
 lazy_static = { workspace = true }
@@ -204,6 +206,7 @@ sqs_client = { path = "../../crates/sqs_client", default-features = false, featu
   "search",
 ] }
 sqs_worker = { path = "../../crates/sqs_worker" }
+static_file_service_client = { path = "../../crates/static_file_service_client" }
 sync_service_client = { path = "../../crates/sync_service_client" }
 sync_service_hex = { path = "../../crates/sync_service", package = "sync_service_hex", features = [
   "inbound",

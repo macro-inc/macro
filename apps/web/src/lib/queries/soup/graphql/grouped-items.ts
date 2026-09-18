@@ -27,6 +27,10 @@ import type { SoupAstBody, SoupAstItemsData, SoupAstParams } from '../items';
 import { mapSoupPageToEntityList } from '../transform-utils';
 import { makeGraphqlGroupedSoupInput } from './ast';
 import type { GraphqlSoupAstItemsQuery } from './items';
+import {
+  usePendingGraphqlSoupDeleteIds,
+  withoutPendingGraphqlSoupDeletes,
+} from './optimistic-deletions';
 
 export type GraphqlGroupedSoupAstItemsQueryArgs = {
   params: SoupAstParams;
@@ -83,6 +87,7 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   options: Accessor<GraphqlGroupedSoupAstItemsQueryOptions>
 ): GraphqlSoupAstItemsQuery {
   const instructionsIdQuery = useInstructionsMdIdQuery();
+  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
   const input = createMemo(() => {
     const { params, body, groupBy } = args();
     if (!groupBy) return;
@@ -138,7 +143,8 @@ export function createGraphqlGroupedSoupAstItemsQuery(
   );
 
   return {
-    data: () => query.data,
+    data: () =>
+      withoutPendingGraphqlSoupDeletes(query.data, pendingDeleteIds()),
     error,
     isSupported,
     isEnabled: () => query.isEnabled,

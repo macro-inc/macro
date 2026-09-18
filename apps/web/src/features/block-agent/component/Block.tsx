@@ -11,6 +11,7 @@ import { nativeNetworkStatus } from '@core/mobile/native-network-status';
 import { createMethodRegistration } from '@core/orchestrator';
 import { blockHandleSignal } from '@core/signal/load';
 import { useSearchParams } from '@solidjs/router';
+import { EmptyStatePanel } from '@ui';
 import { createSignal, Show, useContext } from 'solid-js';
 import {
   AgentSessionProvider,
@@ -38,8 +39,15 @@ function AgentBlockContent() {
       if (target) setSearchTarget(target);
     },
   });
-  const { session, metadata, loadFailed, loadRetryable, pending, retryLoad } =
-    useAgentSession();
+  const {
+    session,
+    metadata,
+    loadFailed,
+    loadRetryable,
+    pending,
+    retryLoad,
+    startupError,
+  } = useAgentSession();
   const canAutofocusSplitContent = useCanAutofocusSplitContent();
   const { navigatedFromJK } = useNavigatedFromJK();
 
@@ -56,10 +64,23 @@ function AgentBlockContent() {
     <Show
       when={!loadUnavailable()}
       fallback={
-        <LoadErrorPanel
-          title="Unable to load this document"
-          onRetry={loadRetryable() ? retryLoad : undefined}
-        />
+        <Show
+          when={startupError()}
+          fallback={
+            <LoadErrorPanel
+              title="Unable to load this agent session"
+              onRetry={loadRetryable() ? retryLoad : undefined}
+            />
+          }
+        >
+          {(error) => (
+            <EmptyStatePanel
+              centered
+              title="Unable to start this agent"
+              description={error()}
+            />
+          )}
+        </Show>
       }
     >
       {/* One shared static-markdown editor for every text part, rather than

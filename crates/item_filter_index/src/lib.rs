@@ -29,7 +29,9 @@ use uuid::Uuid;
 mod test;
 
 mod channels;
+mod document;
 pub mod mail;
+pub mod properties;
 
 /// Stable direct-field profile name retained for existing browser projections.
 pub const SOUP_FLAT_V1: &str = "soup-flat-v1";
@@ -39,6 +41,8 @@ pub const SOUP_FLAT_V2: &str = "soup-flat-v2";
 pub const SOUP_FLAT_V3: &str = "soup-flat-v3";
 /// Browser-composed profile with complete active-notification membership.
 pub const SOUP_FLAT_V4: &str = "soup-flat-v4";
+/// Host-composed profile with complete selectable property snapshots.
+pub const SOUP_FLAT_V5: &str = "soup-flat-v5";
 
 // Keep this lightweight crate wasm-compatible instead of depending on the
 // native `system_properties` crate. A native test locks this stable UUID to
@@ -73,6 +77,11 @@ pub mod vocabulary {
     /// Browser-composed active-notification profile.
     pub fn profile_v4() -> Profile {
         Profile::new(token(super::SOUP_FLAT_V4))
+    }
+
+    /// Host-composed property-aware Soup profile.
+    pub fn profile_v5() -> Profile {
+        Profile::new(token(super::SOUP_FLAT_V5))
     }
 
     /// IDs of unseen notifications for the viewer and primary entity.
@@ -140,7 +149,7 @@ pub mod vocabulary {
         token("owner")
     }
 
-    /// Document file-type attribute.
+    /// Raw stored document file-type text; absent for SQL NULL.
     pub fn file_type() -> Token {
         token("file-type")
     }
@@ -521,7 +530,7 @@ fn compile_soup_flat(
         SoupIndexSort::Unsupported => unreachable!("eligibility checked sort"),
     };
     let mut document_predicate =
-        compile_expr(ast.document_filter.as_deref(), compile_document_literal)?;
+        document::compile(ast.document_filter.as_deref(), compile_document_literal)?;
     if let Some(properties_filter) = ast.properties_filter.as_deref() {
         let compile_properties_literal =
             compile_properties_literal.expect("eligibility checked property support");

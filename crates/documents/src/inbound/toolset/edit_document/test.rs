@@ -399,6 +399,15 @@ struct FakeEditingWorker {
 }
 
 impl EditingWorkerService for FakeEditingWorker {
+    async fn spreadsheet(
+        &self,
+        _document_id: &str,
+        _document_token: &DocumentPermissionToken,
+        _request: &crate::domain::spreadsheet::SpreadsheetRequest,
+    ) -> anyhow::Result<crate::domain::spreadsheet::SpreadsheetResponse> {
+        panic!("unexpected spreadsheet call")
+    }
+
     async fn edit(
         &self,
         document_id: &str,

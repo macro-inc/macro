@@ -26,5 +26,4 @@ export interface EmailReplySession {
     replyType: Accessor<ReplyType | undefined>;
     clear(): void;
   };
-  getMarkDoneNavigationTargetId(): string | undefined;
 }

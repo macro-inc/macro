@@ -11,6 +11,29 @@ fn caller() -> MacroUserIdStr<'static> {
     MacroUserIdStr::try_from_email("models@example.com").unwrap()
 }
 
+#[tokio::test]
+async fn claude_is_unavailable_unless_explicitly_configured() {
+    let service = AgentModelsServiceImpl::new(
+        Access(true),
+        Probe::new(unsupported),
+        Probe::new(unsupported),
+        Probe::new(unsupported),
+        Duration::from_secs(1),
+    );
+    let result = service
+        .load(
+            caller(),
+            LoadAgentModels {
+                harness: ModelHarness::ClaudeCloud,
+                harness_id: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert_eq!(result.status, AgentModelsStatus::Unsupported);
+    assert!(result.models.is_empty());
+}
+
 fn options() -> Vec<SessionConfigOption> {
     vec![SessionConfigOption::select(
         "model",

@@ -194,6 +194,22 @@ where
         prompt: &str,
         _cwd: &std::path::Path,
     ) -> Result<SessionIntent, rootcause::Report> {
+        // A caller-selected repository was authorized by the opening service.
+        // Keep that choice on retries and resumes instead of asking a model to replace it.
+        let session =
+            self.sessions.get(self.session_id).await.map_err(|error| {
+                rootcause::report!("could not read selected repository: {error}")
+            })?;
+        if session.repo_branch.is_some()
+            && let Some(url) = session.repo_url.as_deref()
+        {
+            let repository = RepoUrl::parse(url)
+                .ok_or_else(|| rootcause::report!("invalid selected repository"))?;
+            return Ok(SessionIntent {
+                repository: Some(repository),
+                open_pull_request: true,
+            });
+        }
         let mut had_candidates = false;
         let result = async {
             let candidates = self.reachable_repositories().await?;

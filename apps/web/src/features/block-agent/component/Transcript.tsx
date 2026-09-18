@@ -19,12 +19,23 @@ import {
 import { match } from 'ts-pattern';
 import { useAgentSession } from '../context/AgentSessionContext';
 import type { AgentMessageTarget } from '../core/search-location';
+import { isLiveTurn, liveTurnMessage } from '../state/live-turn';
 import { WorkingLine } from '../ui/WorkingLine';
 import { Message } from './AgentMessage';
 import { ReplyToSelection } from './ReplyToSelection';
 
 export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
   const { messages, quoteSelection, sessionId, turn } = useAgentSession();
+  // At most one turn runs, and the fold's `turn` is the one word on whether
+  // it does - so which message shimmers is decided here, once, not by each
+  // message from its own `stop` (see `state/live-turn`). A speculated stop
+  // reads as `stopping`, which settles the live message before the log
+  // closes it.
+  const working = () => {
+    const state = turn();
+    return state === 'starting' || state === 'running' || state === 'blocked';
+  };
+  const liveTurn = () => liveTurnMessage(messages(), working());
   const initialTarget = props.searchTarget;
   const initialSessionId = sessionId();
   const splitPanel = useSplitPanel();
@@ -145,7 +156,10 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
                     highlightedId() === id ? 'true' : undefined
                   }
                 >
-                  <Message message={message()} turn={turn()} />
+                  <Message
+                    message={message()}
+                    inFlight={isLiveTurn(message(), liveTurn())}
+                  />
                 </div>
               )}
             </Show>

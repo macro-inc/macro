@@ -12,6 +12,7 @@ import type { AgentSessionResponsePullRequestUrl } from './agentSessionResponseP
 import type { AgentSessionResponseRepoUrl } from './agentSessionResponseRepoUrl';
 import type { AgentSessionResponseThreadChannelId } from './agentSessionResponseThreadChannelId';
 import type { AgentSessionResponseThreadId } from './agentSessionResponseThreadId';
+import type { AgentSessionResponseThreadParent } from './agentSessionResponseThreadParent';
 import type { SandboxSize } from './sandboxSize';
 import type { SessionStatusDto } from './sessionStatusDto';
 
@@ -58,10 +59,11 @@ at creation. Absent otherwise, so existing payloads are unchanged. */
   /** The session's status. */
   status: SessionStatusDto;
   /** The channel `thread_id` lives in, when the session was spawned from a
-thread. */
+channel thread. Derived from `thread_parent`. */
   threadChannelId?: AgentSessionResponseThreadChannelId;
   /** The root message of the thread the session was created from, if any. */
   threadId?: AgentSessionResponseThreadId;
+  threadParent?: AgentSessionResponseThreadParent;
   /** The directory the session's harness runs in on its runtime. */
   workspace: string;
 }

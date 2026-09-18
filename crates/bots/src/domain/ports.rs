@@ -338,6 +338,16 @@ pub trait BotService: Send + Sync + 'static {
         channel_id: Uuid,
     ) -> impl Future<Output = Result<(), BotError>> + Send;
 
+    /// Authorize an autonomous bot's channel messages using its active channel
+    /// membership alone. The receipt names no acting user and reaches no other entity.
+    fn channel_message_access(
+        &self,
+        bot_id: BotId,
+        channel_id: Uuid,
+    ) -> impl Future<
+        Output = Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError>,
+    > + Send;
+
     /// Authenticate a raw bearer token.
     fn authenticate_token(
         &self,

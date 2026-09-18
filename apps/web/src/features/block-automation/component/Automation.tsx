@@ -54,7 +54,7 @@ type HistoryRecord = {
 };
 
 function HistoryRow(props: { record: HistoryRecord }) {
-  const { replaceOrInsertSplit } = useSplitLayout();
+  const { openWithSplit } = useSplitLayout();
   const chatId = () => props.record.resource_id ?? undefined;
   const chatQuery = useChatQuery(chatId);
   const name = () =>
@@ -73,9 +73,13 @@ function HistoryRow(props: { record: HistoryRecord }) {
         'flex items-center gap-2 border-b border-edge-muted px-3 py-2 text-sm',
         clickable() ? 'cursor-default hover:bg-hover' : 'cursor-default'
       )}
-      onClick={() => {
+      onClick={(event) => {
         const id = chatId();
-        if (id) replaceOrInsertSplit({ type: 'chat', id });
+        if (id)
+          openWithSplit(
+            { type: 'chat', id },
+            { activate: true, preferNewSplit: event.shiftKey }
+          );
       }}
     >
       <div class="size-4 shrink-0">

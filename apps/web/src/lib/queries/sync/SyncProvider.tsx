@@ -21,6 +21,10 @@ import {
   invalidateAgentSessionMetadata,
 } from '@queries/agent-session/session-metadata-sync';
 import {
+  handleChannelPictureChanged,
+  invalidateChannelPictures,
+} from '@queries/channel/picture';
+import {
   handleCommsAttachment,
   handleCommsMessage,
   handleCommsReaction,
@@ -69,6 +73,10 @@ function withParsedWebsocketPayload<T>(
 }
 
 export function QuerySyncProvider(props: SyncProviderProps) {
+  ws.addEventListener(WebsocketEvent.Open, invalidateChannelPictures);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidateChannelPictures)
+  );
   // Also cover the first connection: a lookup can finish before the socket opens.
   ws.addEventListener(WebsocketEvent.Open, invalidateAgentSessionMetadata);
   onCleanup(() =>
@@ -91,6 +99,13 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       })
       .with({ type: 'comms_message' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleCommsMessage);
+      })
+      .with({ type: 'comms_channel_picture' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleChannelPictureChanged
+        );
       })
       // One frame appended to a live agent session's log. Routed to the
       // channel's fold rather than to any cache: the frame is not a message,

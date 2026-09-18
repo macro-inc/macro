@@ -268,9 +268,10 @@ type CallStoreState = {
   /** Which channel block has the Call tab selected (synced from channel UI). */
   callPageChannelId: string | null;
   backgroundEffect: BackgroundEffect;
-  // Mirrors the call's `share_with_team` flag. Defaults to true to match the
-  // server-side default for newly-created calls; synced from the toggle
-  // endpoint's response on each flip.
+  // Mirrors the active call's pending share-with-team toggle (applied as
+  // canonical team sharing when the call is archived). Seeded from the call
+  // record once it loads and kept in sync by the
+  // `call_share_with_team_toggled` event and local toggles.
   isSharedWithTeam: boolean;
 };
 
@@ -295,7 +296,7 @@ const initialState: CallStoreState = {
   joinError: null,
   callPageChannelId: null,
   backgroundEffect: { type: 'none' },
-  isSharedWithTeam: true,
+  isSharedWithTeam: false,
 };
 
 // Persisted across reloads — background effect is a privacy preference users
@@ -431,9 +432,9 @@ export type CallState = {
   backgroundEffect: () => BackgroundEffect;
   /** Set the background effect (blur with intensity or image background) */
   setBackgroundEffect: (effect: BackgroundEffect) => Promise<void>;
-  /** Whether the call is currently shared with the creator's team */
+  /** Whether the active call is currently shared with the creator's team */
   isSharedWithTeam: () => boolean;
-  /** Update the locally-cached share-with-team flag (call after a toggle RPC) */
+  /** Update the locally-cached team-sharing flag (after a record load, an edit, or a sync event) */
   setSharedWithTeam: (value: boolean) => void;
 };
 
@@ -1207,7 +1208,6 @@ function createCallState() {
     setRemoteParticipants: (participants) => {
       setStore('remoteParticipants', participants);
     },
-    setSharedWithTeam: (value) => setStore('isSharedWithTeam', value),
     clearOptimisticJoin: () => {
       setStore('optimisticJoinChannelId', null);
       setStore('joinError', null);

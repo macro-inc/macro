@@ -26,14 +26,25 @@ import ShareIcon from '@phosphor/share.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import { AgentPullRequestChip } from './AgentPullRequestChip';
 import { harnessTitle } from './compose-agent-session-options';
 
 export { harnessTitle };
 
+/** Shared title precedence for standalone and workspace agent sessions. */
+export function agentSessionTitle(
+  session: AgentSessionResponse | undefined,
+  transcriptTitle?: string | null
+): string {
+  const name = session?.name;
+  if (name && name !== 'Agent Session') return name;
+  return transcriptTitle ?? name ?? harnessTitle(session?.harness);
+}
+
 /**
  * Agent-session identity in the split header chrome plus the standard split
- * toolbar: static label, shared entity actions, and session-specific
- * repository and external-provider links.
+ * toolbar: static label, shared entity actions, the session's pull request
+ * once one exists, and external-provider links.
  *
  * Rename lives on the title menu (channel / automation), not on a tap of
  * the name — `StaticSplitLabel` without `onRename` so a touch tap opens
@@ -48,12 +59,7 @@ export function AgentSplitHeader(props: {
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
   const { sessionId, metadata } = useAgentSession();
-  const title = () => {
-    const persistedName = props.session?.name;
-    if (persistedName && persistedName !== 'Agent Session')
-      return persistedName;
-    return props.title ?? persistedName ?? harnessTitle(props.session?.harness);
-  };
+  const title = () => agentSessionTitle(props.session, props.title);
 
   const entity = (): AgentSessionEntity | undefined => {
     const session = props.session;
@@ -93,6 +99,7 @@ export function AgentSplitHeader(props: {
     {
       label: () => {
         const provider = props.session?.external?.provider;
+        if (provider === 'claude-cloud') return 'Open in Claude';
         if (!provider) return 'Open externally';
         return `Open in ${provider.charAt(0).toUpperCase()}${provider.slice(1)}`;
       },
@@ -136,9 +143,12 @@ export function AgentSplitHeader(props: {
           would push non-Share tools onto a second toolbar row. Markup
           mirrors its own header-tools branch; on mobile the tools collapse
           into the title menu via `menuTools` below instead. */}
-      <Show when={!isMobile()}>
-        <SplitHeaderRight>
-          <div class="order-[1000] flex items-center gap-1">
+      <SplitHeaderRight>
+        <div class="order-[1000] flex items-center gap-1.5">
+          <Show when={props.session?.pullRequestUrl}>
+            {(url) => <AgentPullRequestChip url={url()} />}
+          </Show>
+          <Show when={!isMobile()}>
             <For each={tools}>
               {(tool) => (
                 <Show when={!tool.condition || tool.condition()}>
@@ -146,9 +156,9 @@ export function AgentSplitHeader(props: {
                 </Show>
               )}
             </For>
-          </div>
-        </SplitHeaderRight>
-      </Show>
+          </Show>
+        </div>
+      </SplitHeaderRight>
 
       <Show when={entity()}>
         {(session) => (

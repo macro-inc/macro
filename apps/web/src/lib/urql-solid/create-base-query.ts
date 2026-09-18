@@ -42,9 +42,9 @@ export function createBaseQuery<
     equals: false,
   });
 
-  const [state, setState] = createStore<Result>(
-    untrack(() => initialObserver.getCurrentResult())
-  );
+  let previous = untrack(() => initialObserver.getCurrentResult());
+  // The store mutates its root; observer snapshots must remain independent.
+  const [state, setState] = createStore<Result>({ ...previous });
 
   const result = new Proxy(state, {
     get(target, property) {
@@ -55,7 +55,18 @@ export function createBaseQuery<
   initialObserver.setReference?.(result);
 
   const update = (next: Result): void => {
-    setState(reconcile(next));
+    untrack(() => {
+      const reconciled = { ...next };
+      for (const key in reconciled) {
+        if (Object.is(previous[key], next[key])) {
+          // reconcile unwraps its entire input before comparing it. Existing
+          // store proxies let unwrap skip unchanged branches in constant time.
+          reconciled[key] = state[key];
+        }
+      }
+      previous = next;
+      setState(reconcile(reconciled));
+    });
   };
 
   createComputed(() => {

@@ -1,3 +1,4 @@
+import { agentsRouteId } from '@app/features/agents-view/core/route';
 import {
   getListNavigationSource,
   listNavigationSourceId,
@@ -6,6 +7,7 @@ import {
 } from '@app/features/soup/collection/list-navigation-source';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import { toast } from '@core/component/Toast/Toast';
+import { createContentInstanceRegistry } from '@core/contentInstanceRegistry';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
@@ -53,6 +55,7 @@ beforeAll(() => {
 
 function createMockOrchestrator(): BlockOrchestrator {
   return {
+    contentInstances: createContentInstanceRegistry(),
     isBlockMounted: vi.fn(() => false),
     createBlockInstance: vi.fn((_type, id, _splitId) => ({
       node: { type: 'mock-node', id },
@@ -64,13 +67,103 @@ function createMockOrchestrator(): BlockOrchestrator {
 }
 
 describe('layoutManager', () => {
+  it.each([true, false, undefined])(
+    'honors activate=%s when direct split creation finds an existing entity',
+    (activate) => {
+      createRoot((dispose) => {
+        const content = { type: 'email', id: 'already-open' } as const;
+        const manager = createSplitLayout(createMockOrchestrator(), [
+          content,
+          { type: 'component', id: 'inbox' },
+        ]);
+        const [existing, other] = manager.splits();
+        manager.activateSplit(other.id);
+        vi.mocked(toast.alert).mockClear();
+
+        const result = manager.createNewSplit({
+          content,
+          activate,
+          allowDuplicate: true,
+          referredFrom: 'sidebar',
+        });
+
+        expect(result?.id).toBe(existing.id);
+        expect(manager.splits()).toHaveLength(2);
+        expect(manager.activeSplitId()).toBe(activate ? existing.id : other.id);
+        expect(toast.alert).toHaveBeenCalledWith('Content already open');
+        dispose();
+      });
+    }
+  );
+
+  it.each([
+    { mode: 'chat', type: 'agent_session', block: 'agent' },
+    { mode: 'code', type: 'agent_session', block: 'agent' },
+    { mode: 'chat', type: 'chat', block: 'chat' },
+  ] as const)(
+    'reuses $mode $type conversations across Agents routes and blocks',
+    ({ mode, type, block }) => {
+      const route: SplitContent = {
+        type: 'component',
+        id: agentsRouteId({ mode, conversation: { type, id: 'conversation' } }),
+      };
+      const entity: SplitContent = { type: block, id: 'conversation' };
+      for (const [initial, target] of [
+        [route, entity],
+        [entity, route],
+      ]) {
+        createRoot((dispose) => {
+          const orchestrator = createMockOrchestrator();
+          const manager = createSplitLayout(orchestrator, [
+            initial,
+            { type: 'component', id: 'inbox' },
+          ]);
+          const [existing, other] = manager.splits();
+          const mount = existing.mount;
+          expect(manager.getSplitByContent(target.type, target.id)?.id).toBe(
+            existing.id
+          );
+
+          manager.activateSplit(other.id);
+          const direct = manager.createNewSplit({
+            content: target,
+            activate: true,
+            allowDuplicate: true,
+            referredFrom: 'sidebar',
+          });
+          expect(direct?.id).toBe(existing.id);
+          expect(manager.activeSplitId()).toBe(existing.id);
+
+          manager.activateSplit(other.id);
+          const opened = manager.openWithSplit(target, {
+            activate: true,
+            allowDuplicate: true,
+            handle: manager.getSplit(other.id),
+          });
+          expect(opened?.id).toBe(existing.id);
+          expect(manager.activeSplitId()).toBe(existing.id);
+          expect(manager.splits()).toHaveLength(2);
+          expect(existing.mount).toBe(mount);
+          expect(existing.content).toEqual(initial);
+          expect(other.content).toEqual({ type: 'component', id: 'inbox' });
+          dispose();
+        });
+      }
+    }
+  );
+
   it('rejects opening a previewed block until its mount is released', () => {
     createRoot((dispose) => {
       const orchestrator = createMockOrchestrator();
       const manager = createSplitLayout(orchestrator, [
         { type: 'component', id: 'inbox' },
       ]);
-      vi.mocked(orchestrator.isBlockMounted).mockReturnValue(true);
+      const release = orchestrator.contentInstances.register(() => [
+        {
+          owner: 'preview',
+          content: { type: 'channel', id: 'preview-channel' },
+        },
+      ]);
 
       expect(
         manager.openWithSplit(
@@ -80,15 +173,68 @@ describe('layoutManager', () => {
       ).toBeUndefined();
       expect(manager.splits()).toHaveLength(1);
       expect(orchestrator.createBlockInstance).not.toHaveBeenCalled();
-      expect(toast.alert).toHaveBeenCalledWith('Content already open.');
+      expect(toast.alert).toHaveBeenCalledWith('Content already open');
 
-      vi.mocked(orchestrator.isBlockMounted).mockReturnValue(false);
+      release();
       manager.openWithSplit(
         { type: 'channel', id: 'preview-channel' },
         { preferNewSplit: true }
       );
       expect(manager.splits()).toHaveLength(2);
       expect(orchestrator.createBlockInstance).toHaveBeenCalledOnce();
+      dispose();
+    });
+  });
+
+  it('blocks detail-owned email through direct split creation, replacement, and history', () => {
+    createRoot((dispose) => {
+      const orchestrator = createMockOrchestrator();
+      const manager = createSplitLayout(orchestrator, [
+        { type: 'email', id: 'one' },
+      ]);
+      const handle = manager.getSplit(manager.splits()[0].id)!;
+      handle.replace({ next: { type: 'email', id: 'two' } });
+      const release = orchestrator.contentInstances.register(() => [
+        { owner: 'detail', content: { type: 'email', id: 'one' } },
+      ]);
+      expect(
+        manager.createNewSplit({
+          content: { type: 'email', id: 'one' },
+          referredFrom: null,
+          allowDuplicate: true,
+        })
+      ).toBeUndefined();
+      handle.replace({ next: { type: 'email', id: 'one' } });
+      handle.goBack();
+      handle.removeFromHistory((content) => content.id === 'two');
+      expect(handle.content().id).toBe('two');
+      expect(handle.history()).toHaveLength(2);
+      release();
+      handle.goBack();
+      expect(handle.content().id).toBe('one');
+      dispose();
+    });
+  });
+
+  it('exposes split ownership before block mount and releases it on close', () => {
+    createRoot((dispose) => {
+      const orchestrator = createMockOrchestrator();
+      const manager = createSplitLayout(orchestrator, [
+        { type: 'email', id: 'one' },
+      ]);
+      expect(
+        orchestrator.contentInstances.isOpenElsewhere({
+          type: 'email',
+          id: 'one',
+        })
+      ).toBe(true);
+      manager.removeSplit(manager.splits()[0].id);
+      expect(
+        orchestrator.contentInstances.isOpenElsewhere({
+          type: 'email',
+          id: 'one',
+        })
+      ).toBe(false);
       dispose();
     });
   });
@@ -346,19 +492,19 @@ describe('layoutManager', () => {
       createRoot((dispose) => {
         const manager = createSplitLayout(createMockOrchestrator(), [
           { type: 'component', id: 'inbox' },
-          { type: 'md', id: 'doc-1' },
+          { type: 'email', id: 'other' },
         ]);
         const [listSplitState, docSplitState] = manager.splits();
         const listSplit = manager.getSplit(listSplitState.id)!;
         const docSplit = manager.getSplit(docSplitState.id)!;
 
-        // The list split walks through doc-1 — which the other split is
-        // already showing — before landing on a channel.
-        listSplit.replace({ next: { type: 'md', id: 'doc-1' } });
+        // Visit the email, navigate away, then open it in the other split.
+        listSplit.replace({ next: { type: 'email', id: 'doc-1' } });
         listSplit.replace({ next: { type: 'channel', id: 'ch-1' } });
+        docSplit.replace({ next: { type: 'email', id: 'doc-1' } });
 
         const moved = listSplit.goBackTo(
-          (content) => content.type === 'md' && content.id === 'doc-1'
+          (content) => content.type === 'email' && content.id === 'doc-1'
         );
 
         // doc-1 is unmountable here, so nothing moves: the split keeps showing
@@ -369,7 +515,10 @@ describe('layoutManager', () => {
           type: 'channel',
           id: 'ch-1',
         });
-        expect(docSplit.content()).toMatchObject({ type: 'md', id: 'doc-1' });
+        expect(docSplit.content()).toMatchObject({
+          type: 'email',
+          id: 'doc-1',
+        });
 
         dispose();
       });
@@ -628,6 +777,7 @@ describe('layoutManager', () => {
         const handle = manager.replaceAllSplits(target, {
           referredFrom: 'sidebar',
         });
+        if (!handle) throw new Error('Expected content to open');
 
         expect(manager.splits()).toHaveLength(1);
         expect(manager.splits()[0].id).toBe(keptSplitId);
@@ -655,6 +805,7 @@ describe('layoutManager', () => {
         const handle = manager.replaceAllSplits(target, {
           referredFrom: 'sidebar',
         });
+        if (!handle) throw new Error('Expected content to open');
 
         expect(manager.splits()).toHaveLength(1);
         expect(manager.splits()[0].id).toBe(keptSplitId);
@@ -685,6 +836,7 @@ describe('layoutManager', () => {
           referredFrom: null,
           insertIndex: 1,
         });
+        if (!inserted) throw new Error('Expected content to open');
 
         expect(manager.splits().map((split) => split.content.id)).toEqual([
           'left',
@@ -1195,6 +1347,7 @@ describe('layoutManager', () => {
           referredFrom: null,
           insertIndex: 1,
         });
+        if (!inserted) throw new Error('Expected content to open');
 
         expect(manager.splits().map((split) => split.id)).toEqual([
           controllerId,
@@ -1222,6 +1375,7 @@ describe('layoutManager', () => {
           content: { type: 'md', id: 'between' },
           referredFrom: null,
         });
+        if (!between) throw new Error('Expected content to open');
 
         manager.reconcile([
           { type: 'component', id: 'inbox' },
@@ -1598,7 +1752,7 @@ describe('layoutManager', () => {
       createRoot((dispose) => {
         const { manager, controllerId } = setup();
         manager.createNewSplit({
-          content: { type: 'md', id: 'doc-open-elsewhere' },
+          content: { type: 'email', id: 'doc-open-elsewhere' },
           referredFrom: null,
         });
         manager.activateSplit(controllerId);
@@ -1606,13 +1760,13 @@ describe('layoutManager', () => {
         const viewerId = manager.viewerOf(controllerId)!;
 
         const result = manager.openWithSplit(
-          { type: 'md', id: 'doc-open-elsewhere' },
+          { type: 'email', id: 'doc-open-elsewhere' },
           { referredFrom: null, handle: manager.getSplit(controllerId) }
         );
 
         expect(manager.splits()).toHaveLength(3);
         expect(result?.content()).toMatchObject({
-          type: 'md',
+          type: 'email',
           id: 'doc-open-elsewhere',
         });
         expect(manager.activeSplitId()).toBe(controllerId);
@@ -1895,6 +2049,7 @@ describe('layoutManager', () => {
           content: { type: 'component', id: 'composer' },
           onClose,
         });
+        if (!popover) throw new Error('Expected content to open');
 
         popover.close();
 
@@ -1915,6 +2070,7 @@ describe('layoutManager', () => {
         const popover = manager.createPopoverSplit({
           content: { type: 'component', id: 'composer' },
         });
+        if (!popover) throw new Error('Expected content to open');
 
         popover.close();
 
