@@ -16,4 +16,5 @@ pub mod rusqlite_executor;
 #[cfg(feature = "postgres")]
 pub mod magic;
 
-pub mod redis_event_publisher;
+#[cfg(feature = "gateway")]
+pub mod gateway_event_publisher;

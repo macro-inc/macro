@@ -30,6 +30,7 @@ use entity_access::inbound::axum_extractors::DatabaseAccessLevelExtractor;
 use macro_authorization::{
     MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
 };
+use model_error_response::ErrorResponse;
 use models_properties::shared::DataType;
 use serde::Deserialize;
 use uuid::Uuid;
@@ -197,6 +198,17 @@ pub struct ColumnPath {
 }
 
 /// List the caller's databases.
+#[utoipa::path(
+    get,
+    tag = "databases",
+    operation_id = "list_databases",
+    path = "/databases",
+    responses(
+        (status = 200, body = Vec<ListedDatabase>),
+        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 pub async fn list_databases_handler<S, Eas, Auth>(
     State(state): State<DatabasesRouterState<S, Eas, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -211,6 +223,19 @@ where
 }
 
 /// Create a database owned by the caller.
+#[utoipa::path(
+    post,
+    tag = "databases",
+    operation_id = "create_database",
+    path = "/databases",
+    request_body = CreateDatabaseRequest,
+    responses(
+        (status = 201, body = Database),
+        (status = 400, body = ErrorResponse),
+        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 pub async fn create_database_handler<S, Eas, Auth>(
     State(state): State<DatabasesRouterState<S, Eas, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -233,6 +258,20 @@ where
 }
 
 /// Schema detail of one database.
+#[utoipa::path(
+    get,
+    tag = "databases",
+    operation_id = "get_database",
+    path = "/databases/{id}",
+    params(("id" = Uuid, Path, description = "Database id")),
+    responses(
+        (status = 200, body = DatabaseDetail),
+        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+        (status = 403, description = "No access to the database", body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 pub async fn get_database_handler<S, Eas, Auth>(
     access: DatabaseAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     State(state): State<DatabasesRouterState<S, Eas, Auth>>,
@@ -251,6 +290,22 @@ where
 }
 
 /// Execute SQL as the caller. The whole read/write surface.
+#[utoipa::path(
+    post,
+    tag = "databases",
+    operation_id = "exec_database_sql",
+    path = "/databases/exec",
+    request_body = ExecRequestBody,
+    responses(
+        (status = 200, body = ExecOutcome),
+        (status = 400, description = "SQL error (message verbatim from SQLite) or untranslatable change", body = ErrorResponse),
+        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+        (status = 403, description = "Write to a read-only table or column", body = ErrorResponse),
+        (status = 409, description = "A written table moved past its base version", body = ErrorResponse),
+        (status = 422, description = "Query budget exceeded", body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 pub async fn exec_handler<S, Eas, Auth>(
     State(state): State<DatabasesRouterState<S, Eas, Auth>>,
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
@@ -280,6 +335,19 @@ where
 }
 
 /// Download a database as a SQLite file.
+#[utoipa::path(
+    get,
+    tag = "databases",
+    operation_id = "download_database_sqlite",
+    path = "/databases/{id}/sqlite",
+    params(("id" = Uuid, Path, description = "Database id")),
+    responses(
+        (status = 200, description = "A SQLite database file", content_type = "application/vnd.sqlite3", body = Vec<u8>),
+        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+        (status = 403, description = "No access to the database", body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 pub async fn sqlite_snapshot_handler<S, Eas, Auth>(
     access: DatabaseAccessLevelExtractor<ViewAccessLevel, Eas, Auth>,
     State(state): State<DatabasesRouterState<S, Eas, Auth>>,
@@ -308,6 +376,21 @@ where
 }
 
 /// Create a table in a database.
+#[utoipa::path(
+    post,
+    tag = "databases",
+    operation_id = "create_database_table",
+    path = "/databases/{id}/tables",
+    params(("id" = Uuid, Path, description = "Database id")),
+    request_body = CreateTableRequest,
+    responses(
+        (status = 201, body = Table),
+        (status = 400, body = ErrorResponse),
+        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+        (status = 403, description = "No edit access to the database", body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 pub async fn create_table_handler<S, Eas, Auth>(
     access: DatabaseAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
     State(state): State<DatabasesRouterState<S, Eas, Auth>>,
@@ -342,6 +425,25 @@ pub struct CreateColumnResponse {
 }
 
 /// Add a column to a table.
+#[utoipa::path(
+    post,
+    tag = "databases",
+    operation_id = "create_database_column",
+    path = "/databases/{id}/tables/{table_id}/columns",
+    params(
+        ("id" = Uuid, Path, description = "Database id"),
+        ("table_id" = Uuid, Path, description = "Table id"),
+    ),
+    request_body = CreateColumnRequest,
+    responses(
+        (status = 201, body = CreateColumnResponse),
+        (status = 400, body = ErrorResponse),
+        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+        (status = 403, description = "No edit access to the database", body = ErrorResponse),
+        (status = 404, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+    )
+)]
 pub async fn create_column_handler<S, Eas, Auth>(
     access: DatabaseAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
     State(state): State<DatabasesRouterState<S, Eas, Auth>>,

@@ -72,6 +72,15 @@ use collab_surface::{
     outbound::pg_collab_surface_repo::PgCollabSurfaceRepo,
     outbound::surface_init::LexicalSyncSurfaceInitializer,
 };
+use databases::{
+    domain::service::DatabasesServiceImpl,
+    inbound::axum_router::DatabasesRouterState,
+    outbound::{
+        gateway_event_publisher::GatewayTableEventPublisher, magic::MagicTableRegistry,
+        pg_access_directory::PgAccessDirectory, pg_databases_repo::PgDatabasesRepo,
+        pg_definition_store::PgDefinitionStore, rusqlite_executor::RusqliteExecutor,
+    },
+};
 use foreign_entity::{
     domain::service::ForeignEntityServiceImpl, inbound::axum_router::ForeignEntityRouterState,
     outbound::pg_foreign_entity_repo::PgForeignEntityRepo,
@@ -448,6 +457,20 @@ pub(crate) type UserApiKeyServiceType = UserApiKeyServiceImpl<PgUserApiKeysRepo>
 pub(crate) type DssUserApiKeyState =
     UserApiKeyRouterState<UserApiKeyServiceType, AuthorizationService>;
 
+/// Type alias for the databases service.
+pub(crate) type DatabasesServiceType = DatabasesServiceImpl<
+    PgDatabasesRepo,
+    PgDefinitionStore,
+    MagicTableRegistry,
+    RusqliteExecutor,
+    GatewayTableEventPublisher,
+    PgAccessDirectory,
+>;
+
+/// Type alias for the databases router state.
+pub(crate) type DssDatabasesState =
+    DatabasesRouterState<DatabasesServiceType, EntityAccessService, AuthorizationService>;
+
 /// Type alias for the reminders service.
 pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
 
@@ -515,6 +538,7 @@ pub(crate) struct ApiContext {
     pub favorites_service: Arc<FavoritesServiceType>,
     pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
+    pub databases_state: DssDatabasesState,
     pub collab_surface_state: DssCollabSurfaceState,
     pub foreign_entity_state: DssForeignEntityState,
     pub macro_event_broker: DssEventBroker,

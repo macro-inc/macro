@@ -93,6 +93,12 @@ entity_access = { path = "../../crates/entity_access", features = [
   "inbound",
   "schema",
 ] }
+databases = { path = "../../crates/databases", features = [
+  "gateway",
+  "inbound",
+  "postgres",
+  "sqlite",
+] }
 entity_access_management = { path = "../../crates/entity_access_management" }
 entity_mutation = { path = "../../crates/entity_mutation" }
 favorites = { path = "../../crates/favorites", features = [

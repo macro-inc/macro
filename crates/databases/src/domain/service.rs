@@ -337,9 +337,20 @@ where
         }
     }
 
-    async fn publish(&self, versions: &HashMap<TableId, crate::domain::models::TableVersion>) {
+    async fn publish(
+        &self,
+        database_of: &HashMap<TableId, DatabaseId>,
+        versions: &HashMap<TableId, crate::domain::models::TableVersion>,
+    ) {
         for (table_id, version) in versions {
-            if let Err(error) = self.events.table_changed(*table_id, *version).await {
+            let Some(database_id) = database_of.get(table_id) else {
+                continue;
+            };
+            if let Err(error) = self
+                .events
+                .table_changed(*database_id, *table_id, *version)
+                .await
+            {
                 // Liveness is best-effort: the write already committed.
                 tracing::warn!(error = ?error, %table_id, "failed to publish table change");
             }
@@ -469,7 +480,8 @@ where
             .await
             .map_err(repo_err)?;
         if let Ok(versions) = self.repo.table_versions(&[cmd.table_id]).await {
-            self.publish(&versions).await;
+            self.publish(&HashMap::from([(cmd.table_id, database_id)]), &versions)
+                .await;
         }
         Ok(column_id)
     }
@@ -539,7 +551,11 @@ where
                 .await
                 .map_err(infra)?
         };
-        self.publish(&new_versions).await;
+        let database_of: HashMap<TableId, DatabaseId> = entries
+            .iter()
+            .map(|e| (e.table.id, e.table.database_id))
+            .collect();
+        self.publish(&database_of, &new_versions).await;
 
         let read_tables =
             deps.tables

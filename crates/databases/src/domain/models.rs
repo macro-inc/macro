@@ -29,15 +29,16 @@ pub type PropertyDefinitionId = Uuid;
 ///
 /// The cache key for query materializations and the invalidation signal for
 /// live query chips.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct TableVersion(pub i64);
 
 // ===== Entities =====
 
 /// A database: a named collection of tables, owned and shared as one entity.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize, Deserialize)]
 pub struct Database {
     /// Identifier.
+    #[schema(value_type = Uuid)]
     pub id: DatabaseId,
     /// Display name.
     pub name: String,
@@ -50,11 +51,13 @@ pub struct Database {
 }
 
 /// One table (tab) of a database.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize, Deserialize)]
 pub struct Table {
     /// Identifier.
+    #[schema(value_type = Uuid)]
     pub id: TableId,
     /// Owning database.
+    #[schema(value_type = Uuid)]
     pub database_id: DatabaseId,
     /// Display name; also the basis of the table's SQL name.
     pub name: String,
@@ -68,13 +71,16 @@ pub struct Table {
 ///
 /// The definition carries name, [`DataType`], multi-select flag, and options;
 /// this carries only where it appears and column-kind configuration.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize, Deserialize)]
 pub struct Column {
     /// Identifier of the placement.
+    #[schema(value_type = Uuid)]
     pub id: ColumnId,
     /// Table the column appears on.
+    #[schema(value_type = Uuid)]
     pub table_id: TableId,
     /// The bound property definition.
+    #[schema(value_type = Uuid)]
     pub property_definition_id: PropertyDefinitionId,
     /// Fractional index for column ordering.
     pub position: String,
@@ -83,19 +89,22 @@ pub struct Column {
 }
 
 /// Column-kind specific configuration stored on the placement.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum ColumnConfig {
     /// A link column targeting another table; edges live in the junction.
     Link {
         /// Target database.
+        #[schema(value_type = Uuid)]
         database_id: DatabaseId,
         /// Target table.
+        #[schema(value_type = Uuid)]
         table_id: TableId,
     },
     /// A derived lookup through a link or entity column on the same table.
     Lookup {
         /// The link/entity column the lookup reads through.
+        #[schema(value_type = Uuid)]
         via_column_id: ColumnId,
         /// Target field on the other side (a definition id or magic column name).
         target: String,
@@ -322,7 +331,7 @@ pub struct ReferencedTable {
 
 /// A value in the SQLite materialization, kept engine-agnostic so the domain
 /// never depends on rusqlite types. Serializes as a plain JSON scalar.
-#[derive(Debug, Clone, PartialEq, Serialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, PartialEq, Serialize)]
 #[serde(untagged)]
 pub enum SqlValue {
     /// SQL NULL.
@@ -346,7 +355,7 @@ pub struct MaterializedTable {
 }
 
 /// A SELECT's result set with provenance for hydration and write-through.
-#[derive(Debug, Clone, Serialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize)]
 pub struct QueryResult {
     /// Result columns.
     pub columns: Vec<ResultColumn>,
@@ -355,11 +364,12 @@ pub struct QueryResult {
 }
 
 /// One result column with its origin.
-#[derive(Debug, Clone, Serialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize)]
 pub struct ResultColumn {
     /// Column name or alias.
     pub name: String,
     /// Entity type of id values, when known — drives chip rendering.
+    #[schema(inline)]
     pub entity_type: Option<EntityType>,
     /// Origin `(table, column)` when the column traces to a single base
     /// column — the precondition for write-through.
@@ -446,17 +456,20 @@ pub enum RowChange {
 pub type AppliedChanges = (Vec<RowId>, HashMap<TableId, TableVersion>);
 
 /// Outcome of an [`ExecRequest`].
-#[derive(Debug, Clone, Serialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize)]
 pub struct ExecOutcome {
     /// Result sets of the SELECT statements, in order.
     pub results: Vec<QueryResult>,
     /// How many row changes were applied to Postgres.
     pub changes_applied: usize,
     /// Server-minted ids for rows the statement inserted.
+    #[schema(value_type = Vec<Uuid>)]
     pub inserted_row_ids: Vec<RowId>,
     /// New versions of every written table, for client-side liveness.
+    #[schema(value_type = HashMap<String, TableVersion>)]
     pub new_versions: HashMap<TableId, TableVersion>,
     /// Dependency set of the statement, for liveness subscription.
+    #[schema(value_type = Vec<Uuid>)]
     pub read_tables: Vec<TableId>,
 }
 
@@ -472,7 +485,7 @@ pub struct SqliteSnapshot {
 // ===== Access & rendering models =====
 
 /// The access a viewer holds on a database, from its `entity_access` rows.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AccessGrant {
     /// Read rows and run read-only SQL.
@@ -504,7 +517,7 @@ impl AccessGrant {
 }
 
 /// A database as listed for a viewer.
-#[derive(Debug, Clone, Serialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize)]
 pub struct ListedDatabase {
     /// The database.
     pub database: Database,
@@ -515,7 +528,7 @@ pub struct ListedDatabase {
 /// Everything a client needs to render and edit one database: tables,
 /// column placements with their definitions, and the SQL names the query
 /// surface exposes them under.
-#[derive(Debug, Clone, Serialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize)]
 pub struct DatabaseDetail {
     /// The database.
     pub database: Database,
@@ -526,7 +539,7 @@ pub struct DatabaseDetail {
 }
 
 /// One table with its columns and SQL name.
-#[derive(Debug, Clone, Serialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize)]
 pub struct TableDetail {
     /// The table.
     pub table: Table,
@@ -537,7 +550,7 @@ pub struct TableDetail {
 }
 
 /// One column placement with the definition behind it.
-#[derive(Debug, Clone, Serialize)]
+#[derive(utoipa::ToSchema, Debug, Clone, Serialize)]
 pub struct ColumnDetail {
     /// The placement.
     pub column: Column,

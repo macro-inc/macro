@@ -198,9 +198,10 @@ pub trait TableEventPublisher: Send + Sync + 'static {
     /// The error type returned by publish operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Publish `{table_id, version}` to the gateway fan-out.
+    /// Publish `{database_id, table_id, version}` to the gateway fan-out.
     fn table_changed(
         &self,
+        database_id: DatabaseId,
         table_id: TableId,
         version: TableVersion,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;

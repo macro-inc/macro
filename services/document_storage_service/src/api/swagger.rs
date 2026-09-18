@@ -71,6 +71,20 @@ use collab_surface::domain::models::SurfaceState;
 use collab_surface::inbound::axum_router::{
     CollabSurfaceResponse, CollabSurfaceTokenResponse, EnsureCollabSurfaceRequest,
 };
+use databases::domain::models::{
+    AccessGrant as DatabaseAccessGrant, Column as DatabaseColumn,
+    ColumnConfig as DatabaseColumnConfig, ColumnDetail as DatabaseColumnDetail, Database,
+    DatabaseDetail, ExecOutcome as DatabaseExecOutcome, ListedDatabase,
+    QueryResult as DatabaseQueryResult, ResultColumn as DatabaseResultColumn,
+    SqlValue as DatabaseSqlValue, Table as DatabaseTable, TableDetail as DatabaseTableDetail,
+    TableVersion as DatabaseTableVersion,
+};
+use databases::inbound::axum_router::{
+    ColumnBindingRequest as DatabaseColumnBindingRequest,
+    CreateColumnRequest as DatabaseCreateColumnRequest,
+    CreateColumnResponse as DatabaseCreateColumnResponse, CreateDatabaseRequest,
+    CreateTableRequest as DatabaseCreateTableRequest, ExecRequestBody as DatabaseExecRequestBody,
+};
 use document_sub_type::DocumentSubType;
 use documents_hex::inbound::axum_router::{
     edit_document::EditDocumentResponse, get_branch_name::BranchNameResponse,
@@ -323,6 +337,14 @@ use utoipa::OpenApi;
         reminders::inbound::axum_router::get_reminder_handler,
         reminders::inbound::axum_router::update_reminder_handler,
         reminders::inbound::axum_router::delete_reminder_handler,
+        // databases
+        databases::inbound::axum_router::list_databases_handler,
+        databases::inbound::axum_router::create_database_handler,
+        databases::inbound::axum_router::get_database_handler,
+        databases::inbound::axum_router::exec_handler,
+        databases::inbound::axum_router::sqlite_snapshot_handler,
+        databases::inbound::axum_router::create_table_handler,
+        databases::inbound::axum_router::create_column_handler,
         // collab surfaces
         collab_surface::inbound::axum_router::ensure_surface_handler,
         collab_surface::inbound::axum_router::get_surface_handler,
@@ -473,6 +495,27 @@ use utoipa::OpenApi;
             Reminder,
             RemindersList,
             ReminderSchedule,
+            // databases
+            Database,
+            DatabaseTable,
+            DatabaseColumn,
+            DatabaseColumnConfig,
+            DatabaseTableVersion,
+            DatabaseAccessGrant,
+            ListedDatabase,
+            DatabaseDetail,
+            DatabaseTableDetail,
+            DatabaseColumnDetail,
+            DatabaseExecOutcome,
+            DatabaseQueryResult,
+            DatabaseResultColumn,
+            DatabaseSqlValue,
+            CreateDatabaseRequest,
+            DatabaseCreateTableRequest,
+            DatabaseColumnBindingRequest,
+            DatabaseCreateColumnRequest,
+            DatabaseCreateColumnResponse,
+            DatabaseExecRequestBody,
             CreateReminderRequest,
             UpdateReminderRequest,
             CollabSurfaceResponse,

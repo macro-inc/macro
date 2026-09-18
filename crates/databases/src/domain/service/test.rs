@@ -384,6 +384,7 @@ impl TableEventPublisher for FakeEvents {
     type Err = FakeError;
     async fn table_changed(
         &self,
+        _database_id: DatabaseId,
         table_id: TableId,
         version: TableVersion,
     ) -> Result<(), FakeError> {
