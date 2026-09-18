@@ -1,5 +1,284 @@
 # Documents
 
+## Spreadsheets
+
+Spreadsheets are an internal pilot controlled by the `enable-spreadsheets` PostHog
+flag in every environment. Team targeting is configured in PostHog; ordinary
+document permissions continue to control access to each workbook.
+
+Choose **Create → Spreadsheet**, or **New → Spreadsheet** in Files or a folder.
+Native workbooks open at `/app/spreadsheet/<uuid>` and use the normal document
+title bar with **Ask Macro** and **Share** at the top right. The **File actions**
+ellipsis beside the title uses the same menu as documents, including rename,
+favorite, move, copy, and permission-appropriate file actions. Native spreadsheets
+use a green grid icon in file lists and search. The grid fills
+the panel beneath the formatting and formula bars. They have the `.spreadsheet` file type; uploading an
+Excel or CSV file in Files or a channel opens a read-only spreadsheet preview, including existing `/app/unknown/<uuid>` links and CSV code routes. Review **Import notes**, then choose **Edit in Macro** to create a collaborative native copy. The original file and its link remain intact. Conversion waits for a durable save before opening the copy; a failed save can be retried without creating another copy. The normal document download action retrieves the original; the spreadsheet footer exports the imported representation.
+
+You can also open a native spreadsheet and use the bottom-right **Import and export → Import…** menu to import its sheets.
+
+Select a cell to inspect its address and input in the formula bar. Double-click
+a cell, start typing, or use the formula bar to edit its value. Formulas begin
+with `=` and may refer to cells or ranges, for example `=SUM(B2:B5)`. Check both
+the rendered result and formula bar: a formula's displayed result differs from
+its stored input. Paste a rectangular selection copied from another spreadsheet
+to populate multiple cells. The toolbar offers number formatting, bold, undo,
+and redo; sharing uses the same document permissions as other Macro files.
+
+On a phone, tap once to select and tap the same cell again promptly to edit.
+Swiping the grid scrolls without extending selection. Drag **Move selection start**
+or **Move selection end** to select a range. The formula bar exposes **Apply edit**
+and **Cancel edit** while editing, so a software keyboard is sufficient. Swipe the
+formatting ribbon horizontally to reach more controls. On narrow screens, **Add rows**
+is in the active sheet's actions menu; **Import and export** stays at the bottom right.
+
+Both editors offer formula autocomplete. Type `=` or a function prefix such as
+`=SU`, use Up/Down to choose a suggestion, and Tab or Enter to insert it. Clicking
+a suggestion also keeps focus in the editor. The popup shows a description,
+signature, and example; after `(` it highlights the current argument, including
+inside nested formulas. Escape dismisses help first, then cancels editing on a
+second press. Suggestions do not appear inside quoted text or in view-only mode.
+
+While editing a formula, click a cell or drag across cells to insert a reference
+at the caret (for example, type `=SUM(`, then drag B4 through B7). The draft updates
+to `=SUM(B4:B7` without committing or moving the active cell. A dashed outline shows
+the referenced range. Release, type `)`, and press Enter to calculate. This works
+in both the cell editor and formula bar, including reverse drags, replacement of
+an existing reference, and subsequent arguments after a comma or operator. To reference another sheet,
+click its tab while the formula is awaiting a reference, then click or drag the
+source cells. The draft stays in the formula bar; Enter commits it to the original
+sheet and cell. Names with spaces are quoted automatically. Escape cancels and
+returns to the original sheet.
+On touch screens, tap a cell while editing a formula, then drag **Move reference
+start** or **Move reference end** to extend its reference. Tapping a suggestion or
+adjusting a reference should keep the input focused and the software keyboard open.
+
+Drag across cells, Shift-click, or use Shift + arrow keys to select a range.
+Drag across row/column headers or Shift-click a second header to select multiple
+whole rows/columns. Arrow keys then move from the selection's active cell. The
+focused grid owns typing and navigation; app navigation shortcuts do not run while
+it has focus.
+The active cell keeps a complete border while editing; a range has a shaded
+fill and an outer border. Verify selection in both drag directions and after
+scrolling, including near the last row and column.
+Only nearby rows are mounted. Use **Go to cell** or keyboard navigation to reach
+off-screen cells; verify the target is visible below the sticky column header.
+
+Copy within Macro and paste elsewhere to translate relative references: copying
+`=B4-C4` down becomes `=B5-C5`, while `$B$4` stays fixed. Drag the small handle
+at the selection's bottom-right corner to fill down/up or right/left. Select a
+range and use **Format and data → Fill down / Fill right** or **Cmd/Ctrl+D** /
+**Cmd/Ctrl+R**. Drag fill continues arithmetic number sequences and daily,
+weekly, monthly, or quarterly date sequences (including month ends). Text and
+irregular patterns repeat; relative formula references translate. Keyboard/menu
+Fill down/right explicitly copies the starting row/column. Plain-text paste from
+other apps keeps formulas as supplied.
+
+Drag a column header's right boundary or row header's bottom boundary to resize;
+double-click the boundary to auto-fit. Row separators support Up/Down arrows and
+Enter to restore automatic height. Explicit row heights take precedence over wrap.
+At 100% zoom, default columns are 100 pixels wide and rows are 21 pixels high;
+larger text and wrapping expand the row. Saved custom column widths take precedence.
+The resize separator also supports Left/Right arrows and Enter for auto-fit.
+Use **Add rows** in the footer to append 100 rows (up to 1,000 total). Resizing
+and row additions save collaboratively and can be undone.
+
+The document title and Share button sit above a compact formatting ribbon:
+undo/redo, paste, zoom and view options, currency/percent/decimals/number format,
+font and size, text styles, text/fill color, borders, alignment, wrapping,
+functions, format/data actions, and find. Icon controls expose accessible button
+names and tooltips. **Paste special** offers **Paste** and **Paste values only**.
+Select a range first; formatting applies to all selected cells. Toggling bold,
+italic, underline, or strikethrough on a mixed selection first enables it for the
+entire selection. Whole-column formatting preserves the viewport. In a cell that
+is already percentage-formatted, typing `5` means `5%`; formulas and AI/API numeric
+values still use fractional values (`0.05` for 5%). Font sizes are
+points. Wrapped rows grow automatically up to 160 pixels at 100% zoom. Check
+selection and formula-reference outlines after changing wrapping, font size, or zoom.
+Excel black text and borders on unfilled cells follow the app's foreground color
+so imported sheets remain readable in dark mode. Explicit text/fill color pairs
+remain unchanged; theme changes never alter saved or exported workbook colors.
+
+**View options** directly toggles gridlines, the formula bar, and formula display;
+these settings and zoom are local to the editor. **Go to cell** accepts ranges such
+as `A3:E7`.
+Escape from the address or font-size field returns keyboard navigation to the grid.
+**Functions** starts an editable formula: for a selected range it proposes
+the result in the empty cell below; for one cell it opens `=FUNCTION(` for reference
+picking. An occupied result cell is never overwritten.
+
+The **Find and replace** ribbon button (Cmd/Ctrl+F in the grid) supports
+case-sensitive and whole-cell matching. Find next selects each result. Formula results can be searched
+but replacements preserve the formulas unless **Search within formulas** is checked.
+**Format and data** sorts the selected rectangle by its active column, keeping each
+row's values, styles, and relative formulas together, or trims whitespace in text
+cells. The same menu offers fill down/right, clear formatting, and clear values.
+Select data without its header when sorting. A concurrent edit cancels a pending
+sort; references elsewhere in the sheet are not rewritten to follow sorted rows.
+
+The footer's bottom-right **Import and export → Import…** accepts `.csv` and `.xlsx`.
+Right-click a row number or column letter for Macro's contextual menu: clipboard actions,
+clear, hide/unhide, resize and fit-to-data; columns also offer whole-sheet sorting.
+The menu keeps an existing whole-row/column selection when opened within it.
+Insert/delete shifts references and named ranges in local workbooks only; these
+commands are disabled on shared workbooks (including offline sessions) until
+collaborative rows and columns have stable identities. Adding blank rows at the
+bottom remains available. Hidden cells are skipped by keyboard navigation.
+
+Cells support Macro mentions without Markdown formatting. Type `@` in a cell or
+the formula bar to search people, documents, channels and email, then choose an
+item with the pointer or keyboard. Pasting a Macro app link renders a document
+pill, preserving navigation parameters. Formulas still use the formula editor;
+`@` inside a formula or email address does not start mention search. Other Markdown
+is literal text. Mentions remain attached through copy/fill, undo and collaboration;
+Excel/CSV export uses their display text. Plain URLs and email addresses are clickable;
+web links use the same hover preview as channel messages. Click the surrounding cell
+or use the formula bar to edit link text. AI `set_cells` accepts Macro URLs or the
+same `<m-user-mention>` / `<m-document-mention>` encoding as docs. Formula references
+to mention cells use literal labels, never execute a label as a formula.
+
+CSV imports a file up to 1 MB into the selection, adding rows if needed within the
+1,000 × 26 limit. Existing cells in that rectangle
+are replaced, with undo available. Excel imports accept up to 5 MB, 10 sheets, and
+1,000 rows × 26 columns per sheet. An import preview lists each sheet and warns about
+unsupported content (for example charts, validation rules, and rich text). Choose
+**Insert new sheets** to keep existing work, or **Replace workbook** to replace it
+in one undoable operation. Names must be unique when inserting sheets. Canceling
+leaves the workbook untouched; a replacement is blocked if the workbook changed
+while the preview was open. Legacy `.xls`, macros, and encrypted files are rejected.
+
+**Import and export → Download as Excel (.xlsx)** exports every sheet with formulas,
+current formula result caches, precise numeric values, custom Excel number formats, fonts, borders, and column widths. Named ranges and named constants are retained; unsupported named expressions show explicit calculation errors. Imported merged ranges, hidden sheets/rows/columns, row heights, filters, and frozen panes are retained for export. Macro hides imported rows and columns, shows hidden sheets and individual cells of merged ranges; editing a covered merged cell omits that merge during export with a warning so the edit is preserved. Complex Excel features such as pivots, structured table formulas, charts, conditional formatting, validation, and rich text are not fully supported; review import notes before conversion.
+CSV imports preserve long identifiers and leading zeros as text and never execute formula-like strings.
+**Download as CSV** in the same menu exports only the active sheet's current
+calculated values. Clipboard menu actions use the browser clipboard; if access is
+unavailable, use Cmd/Ctrl+V or Cmd/Ctrl+Shift+V in the grid.
+
+Use **+** in the footer to add a sheet, select its tab to switch, and open the
+adjacent sheet menu to rename, duplicate, or delete. Double-click a tab to rename it,
+or right-click any tab for its Rename, Duplicate, and Delete actions. Sheet operations can be undone;
+the last sheet cannot be deleted. Each sheet remembers its selection. Tab navigation
+supports Left/Right and Home/End; a view-only user can switch tabs and copy cells.
+Adding or duplicating a sheet focuses its grid so typing immediately edits the new sheet.
+Formulas can refer across sheets, such as `=Sheet1!B9` or `='Launch budget'!B9`.
+Rename and delete are currently blocked when live formulas directly reference that
+sheet, to avoid breaking those references; `INDIRECT` text cannot be checked this way.
+The 10-sheet limit applies to local additions/imports; concurrent offline additions
+can merge above it without hiding another user's work.
+
+Ribbon dropdowns, the import/export menu, and sheet actions use the shared Macro
+menu styling. Verify keyboard navigation, checkbox toggles, Escape, and restoring
+editor focus after menu actions or Escape and after Find/rename dialogs close.
+Clicking outside a ribbon menu onto the address or formula input should keep
+focus in that input. In narrow windows, sheet
+tabs should scroll while **Add rows** and the compact **Import and export** button
+remain visible. Imported-file warnings and dialogs should remain accessible in
+short or narrow windows.
+
+Calculation runs in a worker. If it times out, source editing and undo remain
+available; simplify the formula or undo and use **Retry**. Check that a pending
+calculation does not freeze selection, and that export waits for current results.
+Appearance-only changes such as strikethrough do not recalculate. During value or
+formula changes, the last calculated results stay visible until the next results
+arrive. The footer shows **Calculating…** only for work taking longer than 250 ms;
+quick edits should neither flash raw formulas nor shift the footer.
+
+Edits save through the collaborative document connection. Verify collaboration
+with the same document open for two users: edit different cells, then the same
+cell, and confirm both views converge. Also edit A1 on different sheets and confirm
+they remain independent. Remote selections have a tinted range outline, an active-cell border, and a name label in the same collaborator color. The footer repeats their names/colors. Idle connected selections stay visible; disconnected peers expire. Cursors should only appear for peers on the active sheet;
+switching a local tab must not move another user's tab. Switching back should
+immediately restore the remembered cursor for collaborators, without another cell click. A remote sheet deletion
+must cancel any draft on that sheet instead of committing it into the fallback sheet. Undo should reverse only the local
+user's edit. Close and immediately reopen after editing (including while offline)
+to check local recovery; reload to check server persistence. Viewers must be able to select and
+copy cells without editing them.
+If another user subsequently changes the same cell property or layout value,
+undo/redo keeps that newer work and reports a conflict without consuming the
+history step. Structural history also refuses to remove a sheet name still used
+by a surviving direct formula reference.
+
+For local UI verification without creating hosted documents, development builds
+provide `/app/component/spreadsheet-demo`. It runs the real spreadsheet UI with
+local collaboration state. Clicking **Share** saves its current cells, formulas,
+formatting, all sheets, column widths, and added rows as a native document, then opens the
+normal sharing dialog. It waits for the save acknowledgement before leaving the
+sample; a failed save keeps the sheet editable and supports retry. Native creation,
+sharing, and network persistence require the spreadsheet-enabled document and sync
+services.
+
+Phone verification should cover portrait and landscape, native grid/ribbon swipes,
+range handles, formula suggestions, sheet rename, view-only controls, and the
+software keyboard. The isolated browser fixture has separate Android Chrome and
+iPhone WebKit projects. Chromium uses trusted touch drags; WebKit uses native taps
+and mouse-pointer handle drags. A reduced test viewport only checks layout; verify
+actual keyboard resizing and iOS gesture behavior in the simulator or on a device.
+
+Right-click a cell for the Macro cell menu: Cut, Copy, Paste, Paste values only,
+Clear values, Clear formatting, Fill down/right, and Comment on saved workbooks.
+Right-click inside a selected range to act on that range; outside it targets the
+clicked cell. **Shift + F10** or the keyboard context-menu key opens the same menu
+for the selection; Escape returns focus to the grid. Fill requires a multi-cell
+range along that direction. Commenters can copy and comment without editing cells.
+Right-click inside the cell text editor retains the native text-editing menu.
+
+Opening a saved spreadsheet from Files/Drive (including a favorite) keeps the
+Drive navigation sidebar in place. Collapse it with the sidebar control; the
+spreadsheet header then shows the navigation toggle to reopen it. Opening a
+spreadsheet does not change the saved sidebar preference. The header keeps the
+Files location breadcrumbs before the sheet title; click a location breadcrumb
+to return to that file listing.
+
+## Spreadsheet comments
+
+On a saved spreadsheet, select a cell or range and choose **Comment** in the
+formatting ribbon (or **⌘/Ctrl + Alt + M**) to compose beside the cell. A comment
+captures the sheet ID and selected range; later selection changes do not move
+the draft's attachment. The top-right triangle marks the first cell of a
+commented range. Hover any cell in that range to read its threads; choose
+**Reply** in the card to respond without opening the sidebar. Clicking the
+triangle also opens the card on touch devices. Interacting with a card keeps it
+open until dismissed so a reply is not lost when moving the pointer.
+
+**Comments** in the document header opens all workbook threads. Range labels
+navigate to the corresponding sheet and cells; deleted-sheet threads remain
+readable. These are the same document annotation comments used by docs/tasks:
+mentions and replies use the existing inbox notifications and comment links.
+Opening an inbox notification opens the sidebar and targets its comment/range.
+Comment-only access can post/reply; view-only access can read. Edit/delete applies
+to the author's own comments, and failures retain the input draft. Draft demos
+must be saved before persistent comments are available.
+
+## Ask Macro about a spreadsheet
+
+**Ask Macro** sits immediately left of **Share**. Select the relevant cells, then
+click it to open a new chat in a split beside the workbook. The composer starts
+with the workbook mention followed by one space; nothing sends automatically.
+The mention captures the active sheet ID/name and normalized selected range at
+click time. Changing the selection later does not change that draft attachment.
+A viewer can ask questions; editing still requires edit permission.
+
+In the local spreadsheet demo, Ask Macro first saves the entire workbook and
+waits for acknowledgement. A failed save leaves the draft editable and supports
+retry, without opening an empty chat. This path needs the updated native-document
+backend, just like Share.
+
+The AI can use **ReadSpreadsheet** to inspect sheet names, used ranges, raw inputs,
+formulas, typed results, errors, and formatting. **CalculateSpreadsheet** evaluates
+scratch formulas and what-if inputs without changing the workbook.
+**EditSpreadsheet** applies a validated batch of cell/formula/format edits, fill,
+row additions, column resizing, and sheet creation/rename/duplication/deletion.
+Edits require a revision from a fresh read; a concurrent change rejects the entire
+batch so the AI can reread. Tool rows expand to show the actual results and warnings.
+
+Verify with a saved workbook: select B4:E9, click Ask Macro, check the adjacent
+chat's mention and trailing space, and ask for a total or a what-if calculation.
+The workbook should stay unchanged for scratch calculations. Ask for an edit and
+check both source/formula and displayed result in the sheet and another connected
+client. A viewer's edit must fail; a concurrent manual edit must force a fresh
+read. These tool calls require the updated AI backend, AI editing worker, and sync
+service; the frontend alone cannot test their hosted path.
+
 ## Create and type
 
 1. `Create` → `Document D`. The app navigates to `/app/md/<uuid>` with the **title field
@@ -167,9 +446,11 @@ Right side of a doc (toggle with `Hide/Show Side Panel`):
   oldest fetched entry (usually `created this`) pinned last; the toggle flips to `Show less`
   once expanded.
 - Header: `Share`, `Copy Share Link`, overflow menu — use `Share` to inspect or change the
-  doc's visibility/permissions. Documents and AI chats also have a `Team access` dropdown
-  (None / View / Comment / Edit) for sharing directly with the owner's team. That is
-  independent of the team-scoped link control.
+  doc's visibility/permissions. Documents, AI chats, and folders have a `Team access`
+  control (None / View / Comment / Edit) for sharing directly with the owner's team.
+  That is independent of the team-scoped link control. Folders hide link sharing, so
+  Team access is its own card on desktop and a Team tab on mobile, not nested in the
+  Link card.
 
 ## Known failure: "expected instance of LoroDoc"
 
@@ -177,3 +458,13 @@ Opening any doc can crash with a full-screen dialog `expected instance of LoroDo
 `[observability] expected instance of LoroDoc`). Seen after the Vite dev server reconnects
 (HMR leaves two copies of the loro wasm module alive). `Try Again` and a normal reload do NOT
 fix it; a **hard reload ignoring cache** (`navigate_page` with `ignoreCache: true`) does.
+
+AI can create a native workbook without an open editor using `CreateDocument`
+with `fileExtension: "spreadsheet"`, empty `fileContent`, and `isTask: false`.
+Read the returned document with `ReadSpreadsheet`, then populate it with
+`EditSpreadsheet`; do not create a CSV as a substitute for a native workbook.
+Spreadsheet reads and edits run against server state even when no tab is open.
+An edit uses the revision from a fresh read and atomically applies a CRDT delta
+that is broadcast to connected collaborators. A stale revision is rejected:
+reread and reconsider the change instead of blindly retrying. Unsynced edits
+still follow normal CRDT collaboration semantics when they reconnect.

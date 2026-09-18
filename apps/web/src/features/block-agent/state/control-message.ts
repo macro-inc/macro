@@ -33,32 +33,43 @@ export function lastTurnMessage(
   return undefined;
 }
 
-/** How the runtime disposed of one control, read off its folded message. */
-export type ControlOutcome = Extract<
-  FoldedMessage['parts'][number],
-  { kind: 'control' }
->['outcome'];
-
 /**
- * The outcome of the control action `requestId`, once the fold has folded it.
+ * The model a change still in flight is switching to, if any.
  *
- * The control endpoint returns each accepted action's id, and the fold
- * stamps that same id as `requestId` on the folded message the action
- * derives — so this is exact correlation, not a newest-wins scan. The
- * composer uses it to resolve a pending model switch: the fold's `model`
- * only moves for an accepted change, so a rejection is only visible here.
- * `undefined` until the fold has seen the action's frame.
+ * A model change is in flight from the moment it is issued - the fold shows
+ * it as a pending control, then as an accepted one - until the runtime's
+ * response moves `metadata.model`. Read off the newest set-model control:
+ * one still unconfirmed by the log (`pending`), or one the runtime has not
+ * answered (`outcome: pending`). A rejected change renders its own line and
+ * moves nothing, so it is not "changing".
  */
-export function controlOutcome(
+export function changingModel(
   messages: readonly FoldedMessage[],
-  requestId: string
-): ControlOutcome | undefined {
+  current: string | null
+): string | undefined {
   for (let index = messages.length - 1; index >= 0; index--) {
     const message = messages[index]!;
-    if (message.requestId !== requestId) continue;
-    for (const part of message.parts) {
-      if (part.kind === 'control') return part.outcome;
-    }
+    const part = message.parts[0];
+    if (message.parts.length !== 1 || part?.kind !== 'control') continue;
+    if (part.control.kind !== 'set_model') continue;
+    const inFlight = message.pending || part.outcome.kind === 'pending';
+    if (!inFlight || part.control.model === current) return undefined;
+    return part.control.model;
   }
   return undefined;
+}
+
+/**
+ * A stop this client issued that the log has not confirmed. While one is
+ * pending the session reads as stopped whatever the runtime is doing - a
+ * sandbox still waking included.
+ */
+export function hasPendingStop(messages: readonly FoldedMessage[]): boolean {
+  return messages.some(
+    (message) =>
+      message.pending &&
+      message.parts.length === 1 &&
+      message.parts[0]?.kind === 'control' &&
+      message.parts[0].control.kind === 'stop'
+  );
 }

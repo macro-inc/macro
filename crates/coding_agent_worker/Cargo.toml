@@ -9,6 +9,7 @@ name = "macrod"
 path = "src/main.rs"
 
 [dependencies]
+messages = { path = "../messages", features = ["broker"] }
 # Direct crate imports are the whole typegen story: the protocol envelope,
 # the trigger event vocabulary, and the delivery signature all come from the
 # owning crates, compiler-checked.
@@ -62,4 +63,4 @@ channels = { path = "../channels", default-features = false }
 chrono = { workspace = true }
 harness_id = { path = "../harness_id", features = ["test-utils"] }
 tempfile = { workspace = true }
-tokio = { workspace = true, features = ["io-util", "net"] }
+tokio = { workspace = true, features = ["io-util", "net", "test-util"] }

@@ -18,6 +18,7 @@ use model::document::DocumentBasic;
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 
+use crate::domain::ports::sync::DocumentSyncPort;
 use connection::domain::ports::ConnectionService;
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use foreign_entity::domain::ports::ForeignEntityService;
@@ -80,7 +81,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> RenameEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> RenameEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 where
     Self: DocumentService,
 {
@@ -116,7 +118,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> MoveEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> MoveEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 where
     Self: DocumentService,
 {
@@ -167,7 +170,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> UpdateEntitySharePolicy for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> UpdateEntitySharePolicy for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 where
     Self: DocumentService,
 {
@@ -203,7 +207,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> TrashEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> TrashEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 where
     Self: DocumentService,
 {
@@ -238,7 +243,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> DuplicateEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> DuplicateEntity for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 where
     Self: DocumentService,
 {

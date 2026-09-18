@@ -1,17 +1,9 @@
-import {
-  useCurrentScale,
-  useGetPopupContextViewer,
-  useIsPopup,
-  useVisiblePages,
-} from '@block-pdf/signal/pdfViewer';
-import { activePlaceableIdSignal } from '@block-pdf/signal/placeables';
-import { activeCommentThreadSignal } from '@block-pdf/store/comments/commentStore';
+import { useIsPopup } from '@block-pdf/signal/pdfViewer';
 import { isThreadPlaceable } from '@block-pdf/store/comments/freeComments';
 import { useUpdatePlaceablePosition } from '@block-pdf/store/placeables';
 import { type IPlaceable, PayloadMode } from '@block-pdf/type/placeables';
 import { getPdfPageRect } from '@block-pdf/util/pdfjsUtils';
 import { PDF_TO_CSS_UNITS } from '@block-pdf/util/pixelsPerInch';
-import { createBlockSignal } from '@core/block';
 import { setEquals } from '@core/util/compareUtils';
 import { isInDOMRect } from '@core/util/rect';
 import { debounce } from '@solid-primitives/scheduled';
@@ -27,14 +19,13 @@ import {
   Switch,
   untrack,
 } from 'solid-js';
+import { usePdfDocument } from '../context/pdf-document-context';
 import {
   FreeCommentPlaceable,
   NewFreeCommentPlaceable,
 } from './placeables/FreeCommentPlaceable';
 import { Signature } from './placeables/Signature';
 import { TextBox } from './placeables/TextBox';
-
-const isPopupDragSignal = createBlockSignal<boolean>(false);
 
 export const Placeable: Component<{
   pageNum: number;
@@ -44,7 +35,11 @@ export const Placeable: Component<{
   id: string;
   canEdit: boolean;
 }> = (props) => {
-  const getViewer = useGetPopupContextViewer();
+  const pdf = usePdfDocument();
+  const isPopup = useIsPopup();
+  const { signals, derived } = pdf.state;
+  const getViewer = () =>
+    isPopup ? signals.popupViewer[0]() : signals.rootViewer[0]();
 
   const [textAreaRef, setTextAreaRef] = createSignal<HTMLTextAreaElement>();
   let placeableRef!: HTMLDivElement;
@@ -53,7 +48,11 @@ export const Placeable: Component<{
 
   const parentId = () => props.pageNum + 1;
 
-  const visiblePages = useVisiblePages();
+  const visiblePages = () =>
+    (isPopup
+      ? signals.visiblePagesChangedPopup[0]()
+      : signals.visiblePagesChanged[0]()
+    )?.visiblePages;
   const visiblePageNumbers = createMemo((prev: Set<number>) => {
     const visiblePageIds = visiblePages()?.ids ?? new Set();
     const equals = setEquals(prev, visiblePageIds);
@@ -62,11 +61,10 @@ export const Placeable: Component<{
   }, new Set());
 
   const updatePlaceablePosition = useUpdatePlaceablePosition();
-  const setActivePlaceableId = activePlaceableIdSignal.set;
-  const setActiveCommentThreadId = activeCommentThreadSignal.set;
+  const setActivePlaceableId = signals.activePlaceableId[1];
+  const setActiveCommentThreadId = signals.activeCommentThread[1];
 
-  const isPopup = useIsPopup();
-  const [isPopupDrag, setIsPopupDrag] = isPopupDragSignal;
+  const [isPopupDrag, setIsPopupDrag] = signals.isPopupDrag;
 
   const [mousePosition, setMousePosition] = createSignal({ x: 0, y: 0 });
   const [dragOffset, setDragOffset] = createSignal({ x: 0, y: 0 });
@@ -328,7 +326,8 @@ export const Placeable: Component<{
     });
   });
 
-  const currentScale = useCurrentScale();
+  const currentScale = () =>
+    (isPopup ? derived.popupCurrentScale() : derived.currentScale()) ?? 1;
   const scale = createMemo(
     () =>
       getViewer()?.getScale({ pageNumber: 1 })?.scale ??

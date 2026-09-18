@@ -1,6 +1,8 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
+import type { ErrorResponseHandler } from '@core/util/safeFetch';
 import type {
+  AgentRepositoriesResponse,
   AgentSessionLogResponse,
   AgentSessionQueueResponse,
   AgentSessionResponse,
@@ -18,6 +20,20 @@ import type {
 export type { SandboxSize, SandboxSizeBody };
 
 const agentHarnessHost = SERVER_HOSTS['agent-harness'];
+
+/** Session endpoints return safe, user-facing errors as plain text. */
+const sessionError: ErrorResponseHandler<never> = async (response) => {
+  const message = response.headers.get('content-type')?.startsWith('text/plain')
+    ? (await response.text()).trim()
+    : '';
+  return {
+    code: response.status === 401 ? 'UNAUTHORIZED' : 'HTTP_ERROR',
+    message:
+      message === 'repository is not available to this user'
+        ? 'Connect GitHub to Macro with access to the selected repository, or choose a repository your Macro account can access.'
+        : message || `Agent request failed (HTTP ${response.status}).`,
+  };
+};
 
 /** Authenticated client for controlling live agent sessions. */
 export const agentHarnessServiceClient = {
@@ -51,7 +67,19 @@ export const agentHarnessServiceClient = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
+        errorResponseHandler: sessionError,
       }
+    );
+  },
+
+  /**
+   * The GitHub repositories the caller can select for a coding session, with
+   * the branch each one's sessions start on by default.
+   */
+  listRepositories() {
+    return fetchWithToken<AgentRepositoriesResponse>(
+      `${agentHarnessHost}/agent-repositories`,
+      { method: 'GET' }
     );
   },
 
@@ -92,6 +120,7 @@ export const agentHarnessServiceClient = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(request),
+        errorResponseHandler: sessionError,
       }
     );
   },

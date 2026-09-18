@@ -9,10 +9,12 @@ mod message;
 mod preview;
 mod project;
 mod project_scope_dynamic_query;
+mod send;
 mod settings;
 mod signal_flag;
 mod thread;
 mod thread_labels;
+mod thread_unread;
 
 use std::sync::Arc;
 

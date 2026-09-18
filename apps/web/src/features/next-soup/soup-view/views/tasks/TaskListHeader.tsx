@@ -1,9 +1,9 @@
 import type { SystemSortOption } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useListLayout } from '@entity/composed/list-entity/shared';
+import StatusInProgress from '@icon/square-task-in-progress-circle.svg';
 import ArrowDownIcon from '@phosphor/arrow-down.svg';
 import PriorityHigh from '@phosphor/cell-signal-high.svg';
-import StatusInProgress from '@phosphor/circle-half.svg';
 import UsersIcon from '@phosphor/users.svg';
 import { Tooltip } from '@ui';
 import { cn } from '@ui/utils/classname';

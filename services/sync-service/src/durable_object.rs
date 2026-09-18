@@ -46,12 +46,17 @@ pub mod status_codes {
 
 const DOCUMENT_ID_KEY: &str = "DOCUMENT_ID";
 
+mod spreadsheet_api;
+mod spreadsheet_effects;
+
 mod path {
     pub const CONNECT: &str = "connect";
     pub const EXISTS: &str = "exists";
     pub const INITIALIZE: &str = "initialize";
     pub const RAW: &str = "raw";
     pub const SNAPSHOT: &str = "snapshot";
+    pub const SPREADSHEET_SNAPSHOT: &str = "spreadsheet-snapshot";
+    pub const SPREADSHEET_UPDATE: &str = "spreadsheet-update";
     pub const ACTIVE_PEERS_MARKER: &str = "active_peers";
     pub const PEER: &str = "peer";
     pub const METADATA: &str = "metadata";
@@ -404,6 +409,7 @@ pub fn get_ws_id(state: &State, ws: &WebSocket) -> Result<String> {
 async fn report_new_doc_state(
     document_id: &str,
     snapshot: &[u8],
+    has_markdown_content: bool,
     env: &Env,
     attribution: Option<EditAttribution>,
 ) {
@@ -414,7 +420,9 @@ async fn report_new_doc_state(
         warn!(error=?err, "failed to push snapshot to DSS");
     }
     #[cfg(feature = "search-service")]
-    if let Err(err) = crate::sps::update(document_id, env, attribution).await {
+    if has_markdown_content
+        && let Err(err) = crate::sps::update(document_id, env, attribution).await
+    {
         warn!(error=?err, "failed to update search index");
     }
 }
@@ -528,6 +536,9 @@ impl DocumentSyncSession {
             // connect authenticates via jwt in query
             (path::CONNECT, Some(document_id)) => {
                 return self.connect_handler(req, document_id).await;
+            }
+            (path::SPREADSHEET_SNAPSHOT | path::SPREADSHEET_UPDATE, Some(document_id)) => {
+                return self.spreadsheet_handler(req, document_id).await;
             }
 
             // EXIST, PEER, and WAKEUP don't require auth
@@ -645,8 +656,16 @@ impl DocumentSyncSession {
             let document_id_owned = document_id.to_string();
             let env = self.env.clone();
             let attribution = self.edit_attribution();
+            let has_markdown_content = state.has_markdown_content();
             self.state.wait_until(async move {
-                report_new_doc_state(&document_id_owned, &snapshot, &env, attribution).await;
+                report_new_doc_state(
+                    &document_id_owned,
+                    &snapshot,
+                    has_markdown_content,
+                    &env,
+                    attribution,
+                )
+                .await;
             });
         }
 
@@ -1039,6 +1058,18 @@ pub static ROUTER: LazyLock<Router<&str>> = LazyLock::new(|| {
         .insert("/document/{document_id}/snapshot", path::SNAPSHOT)
         .unwrap();
     router
+        .insert(
+            "/document/{document_id}/spreadsheet-snapshot",
+            path::SPREADSHEET_SNAPSHOT,
+        )
+        .unwrap();
+    router
+        .insert(
+            "/document/{document_id}/spreadsheet-update",
+            path::SPREADSHEET_UPDATE,
+        )
+        .unwrap();
+    router
         .insert("/document/{document_id}/peer/{peer_id}", path::PEER)
         .unwrap();
     router
@@ -1255,7 +1286,7 @@ impl DurableObject for DocumentSyncSession {
                 if let Some(document_id) = document_id
                     && let Ok(snapshot) = doc_state.export_shallow_snapshot()
                 {
-                    report_new_doc_state(&document_id, &snapshot, &env, attribution).await;
+                    report_new_doc_state(&document_id, &snapshot, doc_state.has_markdown_content(), &env, attribution).await;
                     report_interaction(&document_id, &env, InteractionReason::Edited).await;
                 }
             });
@@ -1323,8 +1354,16 @@ impl DurableObject for DocumentSyncSession {
                 }
                 let attribution = self.edit_attribution();
                 let env = self.env.clone();
+                let has_markdown_content = state.has_markdown_content();
                 self.state.wait_until(async move {
-                    report_new_doc_state(&document_id, &snapshot, &env, attribution).await;
+                    report_new_doc_state(
+                        &document_id,
+                        &snapshot,
+                        has_markdown_content,
+                        &env,
+                        attribution,
+                    )
+                    .await;
                     report_interaction(&document_id, &env, flush.interaction_reason()).await;
                 });
             }

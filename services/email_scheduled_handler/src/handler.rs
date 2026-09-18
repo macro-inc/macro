@@ -24,12 +24,25 @@ pub async fn handler(
         tracing::info!(notifications = ?notifications, "Sending scheduled email pubsub messages");
     }
 
-    for notif in notifications.into_iter() {
-        let message_id = notif.message_id;
-        let link_id = notif.link_id;
+    for pending in notifications.into_iter() {
+        let message_id = pending.message_id;
+        let link_id = pending.link_id;
+
+        // A stranded row means the send path committed the message but failed
+        // to enqueue it and failed to revert it, so this sweep is the only
+        // reason the mail goes out at all. Warn so the underlying failure is
+        // visible instead of being quietly papered over.
+        if pending.stranded {
+            tracing::warn!(
+                link_id = link_id.to_string(),
+                message_id = message_id.to_string(),
+                "Re-enqueueing a send whose original enqueue never landed",
+            );
+        }
+
         if let Err(e) = ctx
             .sqs_client
-            .enqueue_email_scheduled_message(notif, None)
+            .enqueue_email_scheduled_message(pending.into(), None)
             .await
         {
             tracing::error!(
@@ -44,27 +57,73 @@ pub async fn handler(
     Ok(())
 }
 
+/// How long past its `send_time` a non-draft scheduled row must sit before the
+/// sweep treats it as stranded rather than in flight.
+///
+/// The undo-window send path (`email`'s `send_message_impl`) inserts its
+/// message as a non-draft and puts the queue message on a short delay, so such
+/// a row is normally delivered seconds after its `send_time`. The grace period
+/// has to clear that delay plus the scheduled queue's whole redelivery cycle
+/// (five receives at a 30s visibility timeout) so a rescue can never race a
+/// delivery that is still coming and double-send the message.
+const STRANDED_SEND_GRACE_SECS: f64 = 300.0;
+
+/// An overdue scheduled send, plus how it reached this sweep.
+#[derive(Debug)]
+pub struct PendingScheduledSend {
+    pub link_id: sqlx::types::Uuid,
+    pub message_id: sqlx::types::Uuid,
+    /// `true` for an undo-window send this sweep is rescuing, `false` for an
+    /// ordinary send-later draft whose delivery this sweep always owned.
+    pub stranded: bool,
+}
+
+impl From<PendingScheduledSend> for ScheduledPubsubMessage {
+    fn from(pending: PendingScheduledSend) -> Self {
+        ScheduledPubsubMessage {
+            link_id: pending.link_id,
+            message_id: pending.message_id,
+        }
+    }
+}
+
 /// Fetches all scheduled messages that are ready to be sent.
-/// Only returns messages where:
-/// - send_time has passed (< now())
-/// - sent = false
-/// - the associated email message is still a draft (is_draft = true)
+///
+/// Returns rows whose `send_time` has passed and that neither the scheduled
+/// table (`esm.sent`) nor the message itself (`em.is_sent`) records as sent,
+/// in two shapes:
+/// - send-later drafts (`em.is_draft = TRUE`), for which this sweep is the
+///   only thing that ever enqueues a delivery;
+/// - undo-window sends (`em.is_draft = FALSE`), which enqueue their own
+///   delivery at send time and so are only picked up once they are
+///   [`STRANDED_SEND_GRACE_SECS`] overdue and unclaimed (`processing = FALSE`)
+///   — the signature of a send whose enqueue never landed.
 #[tracing::instrument(skip(pool), err)]
 pub async fn fetch_pending_scheduled_messages(
     pool: &PgPool,
-) -> anyhow::Result<Vec<ScheduledPubsubMessage>> {
+) -> anyhow::Result<Vec<PendingScheduledSend>> {
     let messages = sqlx::query_as!(
-        ScheduledPubsubMessage,
+        PendingScheduledSend,
         r#"
         SELECT
-            esm.link_id, esm.message_id
+            esm.link_id,
+            esm.message_id,
+            NOT em.is_draft AS "stranded!"
         FROM email_scheduled_messages esm
         JOIN email_messages em ON em.id = esm.message_id
         WHERE
             esm.send_time < now()
             AND esm.sent = FALSE
-            AND em.is_draft = TRUE
+            AND em.is_sent = FALSE
+            AND (
+                em.is_draft = TRUE
+                OR (
+                    esm.processing = FALSE
+                    AND esm.send_time < now() - make_interval(secs => $1)
+                )
+            )
         "#,
+        STRANDED_SEND_GRACE_SECS,
     )
     .fetch_all(pool)
     .await?;

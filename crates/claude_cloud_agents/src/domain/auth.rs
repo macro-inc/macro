@@ -1,22 +1,17 @@
 //! One-time, owner-bound browser consent. No provider tokens cross the inbound boundary.
+use super::credentials::{ConnectionState, GrantTransaction};
 use super::model::{Credentials, Error, Secret};
 use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
-use std::{
-    collections::HashMap,
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use subtle::ConstantTimeEq;
-use tokio::sync::Mutex;
 
 const LOGIN_TTL: Duration = Duration::from_secs(600);
-const MAX_ATTEMPTS: usize = 1024;
 
 /// Redacted, user-actionable connection errors.
 #[derive(Debug, thiserror::Error)]
 pub enum AuthError {
-    /// This deployment does not enable interactive demo connections.
-    #[error("Claude connection is available only in the local demo")]
+    /// This deployment has no configured connection store.
+    #[error("Claude connection is not configured on this deployment")]
     Disabled,
     /// Attempt expired, was canceled, replayed, or belongs to another user.
     #[error("Sign-in expired or was replaced. Start Connect Claude again.")]
@@ -24,7 +19,7 @@ pub enum AuthError {
     /// Manual callback input must contain Claude's code and matching state.
     #[error("Paste the complete one-time code from Claude, including the # suffix.")]
     InvalidCode,
-    /// Global capacity or repeated starts are bounded.
+    /// Repeated starts are bounded per owner.
     #[error("Please wait a moment before starting another sign-in.")]
     Busy,
     /// Provider or storage failures never include response bodies or secrets.
@@ -67,6 +62,11 @@ pub trait OAuthProvider: Send + Sync + 'static {
 
 /// Owner-keyed credential storage capability.
 pub trait ConnectionStore: Send + Sync + 'static {
+    /// Lock the owner's complete connection state across replicas.
+    fn lock(
+        &self,
+        owner: &str,
+    ) -> impl Future<Output = Result<Box<dyn GrantTransaction>, Error>> + Send;
     /// Query presence without returning secrets.
     fn connected(&self, owner: &str) -> impl Future<Output = bool> + Send;
     /// Save a grant for exactly the authenticated owner.
@@ -96,19 +96,31 @@ pub trait ClaudeAuth: Send + Sync + 'static {
     fn disconnect(&self, owner: &str) -> impl Future<Output = Result<(), AuthError>> + Send;
 }
 
-struct Attempt {
-    id: String,
-    state: String,
-    verifier: Option<Secret>,
-    started: Instant,
+/// Encrypted pending consent. No verifier is returned to the browser.
+#[derive(Clone, serde::Serialize, serde::Deserialize)]
+pub struct Attempt {
+    /// Opaque handle bound to the owner by storage.
+    pub id: String,
+    /// Expected OAuth state.
+    pub state: String,
+    /// Consumed durably before token exchange.
+    pub verifier: Option<Secret>,
+    /// Unix timestamp used across replicas and restarts.
+    pub started: u64,
 }
 
-/// Local-demo policy: bounded, expiring, one-use attempts, bound to authenticated users.
+fn now() -> Result<u64, Error> {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map(|time| time.as_secs())
+        .map_err(|_| Error::Credentials)
+}
+
+/// Expiring, one-use browser consent bound to authenticated users.
 pub struct AuthService<P, S> {
     provider: P,
     store: Option<S>,
     ephemeral: bool,
-    attempts: Arc<Mutex<HashMap<String, Attempt>>>,
 }
 
 impl<P, S> AuthService<P, S> {
@@ -118,7 +130,6 @@ impl<P, S> AuthService<P, S> {
             provider,
             store,
             ephemeral,
-            attempts: Arc::default(),
         }
     }
 }
@@ -140,13 +151,14 @@ impl<P: OAuthProvider, S: ConnectionStore> ClaudeAuth for AuthService<P, S> {
     }
 
     async fn begin(&self, owner: &str) -> Result<Login, AuthError> {
-        self.store.as_ref().ok_or(AuthError::Disabled)?;
-        let mut attempts = self.attempts.lock().await;
-        attempts.retain(|_, attempt| attempt.started.elapsed() < LOGIN_TTL);
-        if attempts
-            .get(owner)
-            .is_some_and(|a| a.started.elapsed() < Duration::from_secs(2))
-            || (!attempts.contains_key(owner) && attempts.len() >= MAX_ATTEMPTS)
+        let store = self.store.as_ref().ok_or(AuthError::Disabled)?;
+        let mut transaction = store.lock(owner).await?;
+        let started = now()?;
+        if transaction
+            .state()
+            .attempt
+            .as_ref()
+            .is_some_and(|attempt| started.saturating_sub(attempt.started) < 2)
         {
             return Err(AuthError::Busy);
         }
@@ -154,15 +166,13 @@ impl<P: OAuthProvider, S: ConnectionStore> ClaudeAuth for AuthService<P, S> {
         let verifier = Secret::parse(random_secret())?;
         let attempt_id = random_secret();
         let authorization_url = self.provider.authorization_url(&state, &verifier);
-        attempts.insert(
-            owner.to_owned(),
-            Attempt {
-                id: attempt_id.clone(),
-                state,
-                verifier: Some(verifier),
-                started: Instant::now(),
-            },
-        );
+        transaction.state().attempt = Some(Attempt {
+            id: attempt_id.clone(),
+            state,
+            verifier: Some(verifier),
+            started,
+        });
+        transaction.commit().await?;
         Ok(Login {
             attempt_id,
             authorization_url,
@@ -190,39 +200,57 @@ impl<P: OAuthProvider, S: ConnectionStore> ClaudeAuth for AuthService<P, S> {
             return Err(AuthError::InvalidCode);
         }
         let verifier = {
-            let mut attempts = self.attempts.lock().await;
-            let attempt = attempts.get_mut(owner).ok_or(AuthError::InvalidAttempt)?;
-            if attempt.id != attempt_id || attempt.started.elapsed() >= LOGIN_TTL {
+            let mut transaction = store.lock(owner).await?;
+            let attempt = transaction
+                .state()
+                .attempt
+                .as_mut()
+                .ok_or(AuthError::InvalidAttempt)?;
+            if attempt.id != attempt_id
+                || now()?.saturating_sub(attempt.started) >= LOGIN_TTL.as_secs()
+            {
                 return Err(AuthError::InvalidAttempt);
             }
             if !bool::from(attempt.state.as_bytes().ct_eq(state.as_bytes())) {
                 return Err(AuthError::InvalidCode);
             }
             // Taking the verifier consumes the attempt before making any network request.
-            attempt.verifier.take().ok_or(AuthError::InvalidAttempt)?
+            let verifier = attempt.verifier.take().ok_or(AuthError::InvalidAttempt)?;
+            transaction.commit().await?;
+            verifier
         };
         let result = self
             .provider
             .exchange(Secret::parse(code.to_owned())?, state, verifier)
             .await;
-        let mut attempts = self.attempts.lock().await;
-        if !attempts
-            .get(owner)
-            .is_some_and(|a| a.id == attempt_id && a.started.elapsed() < LOGIN_TTL)
-        {
+        let mut transaction = store.lock(owner).await?;
+        if !transaction.state().attempt.as_ref().is_some_and(|attempt| {
+            attempt.id == attempt_id
+                && now()
+                    .is_ok_and(|time| time.saturating_sub(attempt.started) < LOGIN_TTL.as_secs())
+        }) {
             return Err(AuthError::InvalidAttempt);
         }
-        attempts.remove(owner);
-        // Serialize save against disconnect/restart of consent; late completion cannot reconnect.
-        store.save(owner, result?).await?;
+        transaction.state().attempt = None;
+        match result {
+            Ok(grant) => {
+                transaction.state().grant = Some(grant);
+                transaction.state().refresh_id = None;
+                transaction.commit().await?;
+            }
+            Err(error) => {
+                transaction.commit().await?;
+                return Err(error.into());
+            }
+        }
         Ok(())
     }
 
     async fn disconnect(&self, owner: &str) -> Result<(), AuthError> {
         let store = self.store.as_ref().ok_or(AuthError::Disabled)?;
-        let mut attempts = self.attempts.lock().await;
-        attempts.remove(owner);
-        store.remove(owner).await?;
+        let mut transaction = store.lock(owner).await?;
+        *transaction.state() = ConnectionState::default();
+        transaction.commit().await?;
         Ok(())
     }
 }

@@ -2,8 +2,8 @@
 edition = "2024"
 name = "cache-wasm"
 publish = false
-# Rebuild for canonical Mail tab previews and viewer-scoped shared eligibility.
-version = "0.6.14"
+# Rebuild for raw file-type projections and SQL-compatible nullable filters.
+version = "0.6.16"
 
 [features]
 default = []

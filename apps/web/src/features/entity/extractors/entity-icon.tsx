@@ -1,3 +1,4 @@
+import { ChannelAvatar } from '@channel/channel-avatar';
 import {
   EntityIcon as CoreEntityIcon,
   type EntityIconProps as CoreEntityIconProps,
@@ -67,6 +68,15 @@ export function EntityIcon(props: EntityIconProps) {
     props.entity.channelType === 'direct_message';
 
   const isChatEntity = () => props.entity.type === 'chat';
+  const channelId = () => {
+    const entity = props.entity;
+    if (entity.type === 'channel') return entity.id;
+    if (
+      entity.type === 'channel_message' &&
+      entity.channelType !== 'direct_message'
+    )
+      return entity.channelId;
+  };
 
   return (
     <Switch
@@ -87,6 +97,22 @@ export function EntityIcon(props: EntityIconProps) {
           showTooltip={props.showTooltip}
           weight={props.weight}
         />
+      </Match>
+      <Match when={channelId()}>
+        {(id) => (
+          <ChannelAvatar
+            channelId={id()}
+            class={`size-full ${props.class ?? ''}`}
+            fallback={
+              <CoreEntityIcon
+                targetType={iconType()}
+                size="fill"
+                class={props.class}
+                weight={props.weight}
+              />
+            }
+          />
+        )}
       </Match>
       <Match when={isChatEntity()}>
         <ChatProviderIcon

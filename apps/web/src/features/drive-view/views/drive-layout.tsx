@@ -6,9 +6,11 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { SplitPanel } from '@components/app/split-panel';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import FolderIcon from '@phosphor/folder.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { Button, Dropdown } from '@ui';
 import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import { DriveBreadcrumbsOutlet } from '../components/DriveBreadcrumbs';
@@ -42,8 +44,14 @@ export function DriveLayout(props: {
   onToggleFolder: (id: string) => void;
   onFavoritesOpen: (open: boolean) => void;
   onRootOpen: (open: boolean) => void;
+  /** Tag option ids narrowing the current location. */
+  activeTagIds: readonly string[];
+  onTags: (ids: string[]) => void;
+  onTagsOpen: (open: boolean) => void;
   createMenu: () => JSX.Element;
   favorites: () => JSX.Element;
+  /** The favorites section is hidden entirely when the user has none. */
+  hasFavorites: boolean;
   locationMenu: DriveLocationMenu;
   detail?: JSX.Element;
   children: JSX.Element;
@@ -71,32 +79,31 @@ export function DriveLayout(props: {
           setNavigationOpen(false);
         }}
       />
-      <CollapsibleSection.Root
-        open={props.state.favoritesOpen}
-        onOpenChange={props.onFavoritesOpen}
-      >
-        <CollapsibleSection.Trigger class="text-xs">
-          <span class="min-w-0 truncate">Favorites</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
-        <CollapsibleSection.Content>
-          <props.favorites />
-        </CollapsibleSection.Content>
-      </CollapsibleSection.Root>
+      <Show when={props.hasFavorites}>
+        <CollapsibleSection.Root
+          open={props.state.favoritesOpen}
+          onOpenChange={props.onFavoritesOpen}
+        >
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Favorites</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+          <CollapsibleSection.Content>
+            <props.favorites />
+          </CollapsibleSection.Content>
+        </CollapsibleSection.Root>
+      </Show>
       <CollapsibleSection.Root
         open={props.state.rootOpen}
         onOpenChange={props.onRootOpen}
       >
-        <div class="flex items-center gap-1">
-          <CollapsibleSection.Trigger class="min-w-0 flex-1 text-xs">
+        <CollapsibleSection.Header>
+          <CollapsibleSection.Trigger class="flex-1">
             <span class="min-w-0 truncate">Folders</span>
             <CollapsibleSection.Indicator />
           </CollapsibleSection.Trigger>
-          <Button
-            variant="ghost"
-            size="icon-sm"
+          <CollapsibleSection.Action
             label="Search folders"
-            class="ml-auto mr-2 shrink-0 rounded-lg"
             onClick={() => {
               const open = !searchingFolders();
               setSearchingFolders(open);
@@ -105,8 +112,8 @@ export function DriveLayout(props: {
             }}
           >
             <SearchIcon class="size-3.5" />
-          </Button>
-        </div>
+          </CollapsibleSection.Action>
+        </CollapsibleSection.Header>
         <CollapsibleSection.Content>
           <Show when={searchingFolders()}>
             <SearchBar
@@ -132,7 +139,7 @@ export function DriveLayout(props: {
                 <span>Drive</span>
               </ViewSidebar.Item>
             </props.locationMenu>
-            <div class="ml-3 border-l border-edge pl-3">
+            <ViewSidebar.Branch>
               <Show
                 when={!props.foldersLoading}
                 fallback={
@@ -176,10 +183,17 @@ export function DriveLayout(props: {
                   </Show>
                 </Show>
               </Show>
-            </div>
+            </ViewSidebar.Branch>
           </ViewSidebar.Nav>
         </CollapsibleSection.Content>
       </CollapsibleSection.Root>
+      <SidebarTagsSection
+        activeIds={props.activeTagIds}
+        onActiveIdsChange={props.onTags}
+        open={props.state.tagsOpen}
+        onOpenChange={props.onTagsOpen}
+        onNavigate={() => setNavigationOpen(false)}
+      />
     </>
   );
 
@@ -187,23 +201,23 @@ export function DriveLayout(props: {
     <SplitPanel.Root>
       <SplitPanel.Body>
         <ViewShell.Root
+          asidePreferenceKey="documents"
           resizable
           aside={{ preserveDuringResize: false }}
           main={{ preferredWidth: 640 }}
         >
           <ViewShell.Aside>
-            <ViewSidebar.Root
-              aria-label="Drive navigation"
-              class="gap-4 bg-panel"
-            >
+            <ViewSidebar.Root aria-label="Drive navigation">
               <ViewSidebar.Header>
                 <div class="flex min-w-0 items-center gap-1">
-                  <SplitPanel.CloseButton />
+                  <ViewSidebar.CloseButton />
                   <ViewSidebar.Title>Drive</ViewSidebar.Title>
                 </div>
               </ViewSidebar.Header>
-              <ViewSidebar.Content class="flex flex-col gap-6">
+              <ViewSidebar.Primary>
                 <props.createMenu />
+              </ViewSidebar.Primary>
+              <ViewSidebar.Content>
                 <SidebarContent />
               </ViewSidebar.Content>
             </ViewSidebar.Root>
@@ -214,7 +228,6 @@ export function DriveLayout(props: {
               fallback={
                 <>
                   <ViewShell.TopBar class="touch:flex">
-                    <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
                     <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
                       Drive
                     </h1>
@@ -226,28 +239,37 @@ export function DriveLayout(props: {
                   <ViewShell.Header>
                     <div class="flex min-w-0 flex-col gap-3">
                       <div class="hidden min-w-0 items-center gap-2 @max-[720px]/view-shell:flex">
-                        <Dropdown
-                          open={navigationOpen()}
-                          onOpenChange={setNavigationOpen}
-                          placement="bottom-start"
+                        <Show
+                          when={isTouchDevice()}
+                          fallback={
+                            <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
+                              {title()}
+                            </h1>
+                          }
                         >
-                          <h1 class="min-w-0">
-                            <Dropdown.Trigger
-                              variant="ghost"
-                              size="sm"
-                              class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
-                              aria-label={`Select Drive view: ${title()}`}
-                            >
-                              <span class="truncate">{title()}</span>
-                              <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
-                            </Dropdown.Trigger>
-                          </h1>
-                          <Dropdown.Content class="max-h-[70vh] w-72 overflow-auto rounded-2xl">
-                            <Dropdown.Group class="gap-5 p-3">
-                              <SidebarContent />
-                            </Dropdown.Group>
-                          </Dropdown.Content>
-                        </Dropdown>
+                          <Dropdown
+                            open={navigationOpen()}
+                            onOpenChange={setNavigationOpen}
+                            placement="bottom-start"
+                          >
+                            <h1 class="min-w-0">
+                              <Dropdown.Trigger
+                                variant="ghost"
+                                size="sm"
+                                class="h-auto min-w-0 max-w-full gap-1 rounded-lg px-2 py-1 text-xl font-semibold tracking-[-0.03em] text-ink"
+                                aria-label={`Select Drive view: ${title()}`}
+                              >
+                                <span class="truncate">{title()}</span>
+                                <CaretDownIcon class="size-3.5 shrink-0 text-ink-muted" />
+                              </Dropdown.Trigger>
+                            </h1>
+                            <Dropdown.Content class="max-h-[70vh] w-72 overflow-auto rounded-2xl">
+                              <Dropdown.Group class="gap-5 p-3">
+                                <SidebarContent />
+                              </Dropdown.Group>
+                            </Dropdown.Content>
+                          </Dropdown>
+                        </Show>
                         <div class="ml-auto shrink-0">
                           <props.createMenu />
                         </div>

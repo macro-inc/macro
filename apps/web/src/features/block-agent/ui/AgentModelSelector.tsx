@@ -35,7 +35,6 @@ import type { ModelOption } from '@service-agent-fold/generated/types';
 import { Button, cn, Dropdown } from '@ui';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import { groupOptions, withoutRedundantGroups } from './model-groups';
-import { TextShimmer } from './TextShimmer';
 
 /** Compact ghost pill — same size as the short-list trigger and chat's selector. */
 const PILL_TRIGGER_CLASS =
@@ -63,9 +62,9 @@ export interface AgentModelSelectorProps {
   /** Current model id, when the fold has learned it. */
   model: string | null;
   /**
-   * A change to this model is on the wire. The pill shows it, shimmering,
-   * so the switch is visibly in progress rather than appearing not to have
-   * registered — the request can block for a whole container resume.
+   * A change to this model the fold has shown but `metadata.model` has not
+   * caught up to. The pill reads it as the current model at once and stays
+   * interactive; a runtime rejection later reverts it through the fold.
    */
   changingTo?: string;
   /** The models the harness offers, in the order it listed them. */
@@ -103,8 +102,6 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
       : options();
     return groupOptions(matching);
   });
-  const disabled = () => props.disabled || props.changingTo !== undefined;
-
   const openSheet = (open: boolean) => {
     setSheetOpen(open);
     if (!open) setQuery('');
@@ -129,14 +126,10 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         variant="ghost"
         size="sm"
         aria-label="Agent model"
-        disabled={disabled()}
+        disabled={props.disabled}
         class="h-8 max-w-[60vw] min-w-0 justify-start gap-1 rounded-lg border-none bg-transparent px-1.5 text-left text-sm text-ink-subtle hover:bg-hover"
       >
-        <TextShimmer
-          text={label()}
-          active={props.changingTo !== undefined}
-          class="min-w-0 truncate"
-        />
+        <span class="min-w-0 truncate">{label()}</span>
         <CaretDown class="size-3.5 shrink-0" />
       </MobileDrawer.Trigger>
       <MobileDrawer.Portal>
@@ -209,9 +202,9 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
         variant="ghost"
         size="sm"
         class={PILL_TRIGGER_CLASS}
-        disabled={disabled()}
+        disabled={props.disabled}
       >
-        <TextShimmer text={label()} active={props.changingTo !== undefined} />
+        {label()}
         <CaretDown />
       </Dropdown.Trigger>
       <Dropdown.Content class="w-60 max-w-[calc(100vw-1rem)] overflow-hidden">
@@ -254,7 +247,7 @@ export function AgentModelSelector(props: AgentModelSelectorProps) {
             value={shown()}
             options={catalogOptions()}
             onSelect={pick}
-            disabled={disabled()}
+            disabled={props.disabled}
             ariaLabel="Agent model"
             searchPlaceholder="Search models"
             triggerClass={PILL_TRIGGER_CLASS}

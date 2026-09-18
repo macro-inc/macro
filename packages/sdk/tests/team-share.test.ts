@@ -1,9 +1,13 @@
 import { describe, expect, test } from 'bun:test';
 import { createClient } from '../generated/storage/client';
 import { Sdk } from '../generated/storage/sdk.gen';
-import type { EditDocumentData } from '../generated/storage/types.gen';
+import type {
+  EditCallRecordData,
+  EditDocumentData,
+} from '../generated/storage/types.gen';
 
 const documentId = '0198a4cc-e138-7670-a308-a6b766602700';
+const callId = '0198a4cc-e138-7670-a308-a6b766602701';
 const baseUrl = 'https://api.example.test';
 
 function recordingSdk() {
@@ -71,6 +75,44 @@ describe('document edit team-share serialization', () => {
     expect(request.url).toBe(`${baseUrl}/documents/${documentId}`);
     expect(request.method).toBe('PATCH');
     expect(request.headers.get('content-type')).toBe('application/json');
+    expect(await request.text()).toBe(serializedBody);
+  });
+});
+
+// Calls share with the creator's team through the same `sharePermission`
+// patch; the backend only accepts `view` (or `null` to revoke).
+const callEditCases: Array<{
+  name: string;
+  body: EditCallRecordData['body'];
+  serializedBody: string;
+}> = [
+  {
+    name: 'view shares the call with the team',
+    body: { sharePermission: { teamShareAccessLevel: 'view' } },
+    serializedBody: '{"sharePermission":{"teamShareAccessLevel":"view"}}',
+  },
+  {
+    name: 'explicit null revokes team sharing',
+    body: { sharePermission: { teamShareAccessLevel: null } },
+    serializedBody: '{"sharePermission":{"teamShareAccessLevel":null}}',
+  },
+  {
+    name: 'a rename alone never touches team sharing',
+    body: { customName: 'Weekly sync' },
+    serializedBody: '{"customName":"Weekly sync"}',
+  },
+];
+
+describe('call record team-share serialization', () => {
+  test.each(callEditCases)('$name', async ({ body, serializedBody }) => {
+    const { sdk, requests } = recordingSdk();
+
+    await sdk.editCallRecord({ path: { call_id: callId }, body });
+
+    expect(requests).toHaveLength(1);
+    const [request] = requests;
+    expect(request.url).toBe(`${baseUrl}/call/record/${callId}`);
+    expect(request.method).toBe('PATCH');
     expect(await request.text()).toBe(serializedBody);
   });
 });

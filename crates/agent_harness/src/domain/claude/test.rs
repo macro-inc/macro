@@ -14,13 +14,19 @@ use std::sync::Mutex;
 #[derive(Default)]
 struct Provider {
     calls: Arc<Mutex<Vec<(String, String)>>>,
+    models: Arc<Mutex<Vec<String>>>,
     uncertain: bool,
+    preparations: Arc<Mutex<Vec<(String, String)>>>,
+    preparation_fails: bool,
 }
 #[derive(Clone)]
 struct Client {
     owner: String,
     calls: Arc<Mutex<Vec<(String, String)>>>,
+    models: Arc<Mutex<Vec<String>>>,
     uncertain: bool,
+    preparations: Arc<Mutex<Vec<(String, String)>>>,
+    preparation_fails: bool,
 }
 impl CloudProvider for Provider {
     type Client = Client;
@@ -28,15 +34,40 @@ impl CloudProvider for Provider {
         Ok(Client {
             owner: owner.into(),
             calls: self.calls.clone(),
+            models: self.models.clone(),
             uncertain: self.uncertain,
+            preparations: self.preparations.clone(),
+            preparation_fails: self.preparation_fails,
         })
     }
 }
 impl CloudLifecycle for Client {
+    async fn prepare_mcp_access(
+        &self,
+        host: &str,
+    ) -> claude_cloud_agents::domain::model::Result<()> {
+        self.preparations
+            .lock()
+            .unwrap()
+            .push((self.owner.clone(), host.into()));
+        if self.preparation_fails {
+            return Err(Error::EnvironmentNetwork);
+        }
+        Ok(())
+    }
     async fn create(
         &self,
         instructions: &str,
+        model: &claude_cloud_agents::domain::models::Model,
     ) -> claude_cloud_agents::domain::model::Result<SessionId> {
+        self.models.lock().unwrap().push(model.id().to_owned());
+        assert!(
+            self.preparations
+                .lock()
+                .unwrap()
+                .iter()
+                .any(|(owner, host)| owner == &self.owner && host == "dev-gateway.macro.com")
+        );
         self.calls
             .lock()
             .unwrap()
@@ -51,7 +82,11 @@ impl CloudLifecycle for Client {
     }
 }
 impl Cloud for Client {
-    async fn recent_sessions(&self) -> claude_cloud_agents::domain::model::Result<Vec<SessionId>> {
+    async fn models(
+        &self,
+    ) -> claude_cloud_agents::domain::model::Result<
+        Vec<claude_cloud_agents::domain::models::ModelOption>,
+    > {
         Ok(vec![])
     }
     async fn history(
@@ -111,6 +146,7 @@ async fn seed(
 ) -> AgentSessionId {
     let id = AgentSessionId::new();
     repo.create(CreateAgentSessionParams {
+        repo_branch: None,
         id,
         bot_id: bot,
         owner_id: macro_user_id::user_id::MacroUserIdStr::try_from(owner.to_owned()).unwrap(),
@@ -147,13 +183,24 @@ async fn distinct_agents_keep_their_owner_instructions_model_and_remote_session(
         "Fix tests",
     )
     .await;
+    repo.set_model(first, "claude-fable-5-1").await.unwrap();
     let provider = Arc::new(Provider::default());
-    let sessions = ClaudeSessions::new(provider.clone(), repo, mappings());
+    let sessions = ClaudeSessions::new(
+        provider.clone(),
+        repo,
+        mappings(),
+        "dev-gateway.macro.com".into(),
+    );
     let one = sessions.attach(first).await.unwrap();
     let two = sessions.attach(second).await.unwrap();
     assert_ne!(one.id(), two.id());
-    assert_eq!(one.model().await.id(), "claude-default");
+    assert_eq!(one.model().await.id(), "claude-fable-5-1");
+    assert_eq!(
+        *provider.models.lock().unwrap(),
+        vec!["claude-fable-5-1", "claude-default"]
+    );
     assert_eq!(sessions.attach(first).await.unwrap().id(), one.id());
+    assert_eq!(provider.preparations.lock().unwrap().len(), 2);
     assert_eq!(
         *provider.calls.lock().unwrap(),
         vec![
@@ -177,7 +224,12 @@ async fn uncertain_create_remains_pending_and_is_never_retried() {
         uncertain: true,
         ..Default::default()
     });
-    let sessions = ClaudeSessions::new(provider.clone(), repo, mappings());
+    let sessions = ClaudeSessions::new(
+        provider.clone(),
+        repo,
+        mappings(),
+        "dev-gateway.macro.com".into(),
+    );
     assert!(sessions.attach(id).await.is_err());
     assert!(sessions.attach(id).await.is_err());
     assert_eq!(provider.calls.lock().unwrap().len(), 1);
@@ -194,7 +246,12 @@ async fn reattach_restores_egress_with_the_saved_agent_selection() {
         "Review code",
     )
     .await;
-    let sessions = ClaudeSessions::new(Arc::new(Provider::default()), repo.clone(), mappings());
+    let sessions = ClaudeSessions::new(
+        Arc::new(Provider::default()),
+        repo.clone(),
+        mappings(),
+        "dev-gateway.macro.com".into(),
+    );
     let egress = EgressProvisionerMock::default();
     let token = sessions.refresh_egress(id, &egress).await.unwrap();
     assert_eq!(token, "test-session-token");
@@ -212,4 +269,38 @@ async fn reattach_restores_egress_with_the_saved_agent_selection() {
             .unwrap()
             .is_some()
     );
+}
+
+#[tokio::test]
+async fn network_setup_failure_never_creates_or_leaves_a_pending_intent() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let id = seed(
+        &repo,
+        bot_id::BotId::TEST_A,
+        "macro|one@example.com",
+        "Review code",
+    )
+    .await;
+    let provider = Arc::new(Provider {
+        preparation_fails: true,
+        ..Default::default()
+    });
+    let sessions = ClaudeSessions::new(
+        provider.clone(),
+        repo,
+        mappings(),
+        "dev-gateway.macro.com".into(),
+    );
+    for _ in 0..2 {
+        let error = sessions.attach(id).await.err().unwrap();
+        assert!(error.to_string().contains("MCP gateway"));
+        assert!(
+            ExternalSessionRepo::get(&sessions.external, id)
+                .await
+                .unwrap()
+                .is_none()
+        );
+    }
+    assert!(provider.calls.lock().unwrap().is_empty());
+    assert_eq!(provider.preparations.lock().unwrap().len(), 2);
 }

@@ -6,18 +6,24 @@
 | --- | --- |
 | `/app` | Redirects to inbox |
 | `/app/welcome` | Login page (when unauthenticated) |
-| `/app/component/inbox` | Home (notifications + recent activity) |
+| `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
+| `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
+| `/app/component/inbox` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/component/mail` | Email client |
 | `/app/component/channels` | Channels list |
 | `/app/component/documents` | Files (documents list) |
 | `/app/component/tasks` | Tasks table |
 | `/app/component/agents` | AI chats / agents list |
+| `/app/agents/<uuid>` | Chat agent session with the Agents sidebar |
+| `/app/coders/<uuid>` | Code session with the Agents sidebar |
+| `/app/agent-chats/<uuid>` | Legacy AI chat opened in the Agents workspace |
 | `/app/component/calls` | Calls list |
 | `/app/component/companies` | Customers (CRM; needs a team) |
 | `/app/component/activity` | Activity heatmap + feed |
 | `/app/component/home` | Assistant (AI-first landing) |
 | `/app/calendar/view` | Calendar |
 | `/app/md/<uuid>` | A document |
+| `/app/spreadsheet/<uuid>` | A native Macro spreadsheet |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
@@ -27,6 +33,50 @@
 Splits: the app is a tiling window manager. A second pane appends its own segment to the URL
 (`/app/<left>/<right>`). Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
+
+The app views are referred to as **workspaces**. Expanded workspace sidebars start
+at the shared 256px width; manual resizing and narrow layouts can change the
+displayed width. Workspace navigation uses shared 32px rows (44px on touch), 16px
+glyphs in aligned 20px icon slots, a 6px text gap, and compact sentence-case section
+headings. Tags and folders have a separate disclosure button on the **right** of
+the row: clicking the label selects the destination; clicking Expand/Collapse
+only opens or closes its children. Long destination names are single-line and
+expose the full name on hover. Section chevrons point right and stay visible when
+collapsed. Expanded chevrons point down and appear when hovering their section;
+the section heading also brightens on hover. Sections and nested branches briefly
+animate height and opacity when toggled, and respect reduced-motion preferences.
+The sidebar spacing contract uses 8px outer gutters, 24px between sections, and
+4px between a section header and its rows. Leading icons and trailing actions
+share rails 26px from either edge, including collapse, search, add, and tree
+controls. Use the shared slots described in
+[the sidebar spacing guide](../../apps/web/src/components/view-shell/README.md).
+
+Desktop app navigation panels have **Hide navigation** at the right end of their
+48px title bar. It hides only that split's navigation; **Show navigation** (the
+hamburger) appears before the main header's title/breadcrumbs, including when a
+document, email, or conversation is open. Home's filter sits beside its label.
+The split's **Close** control aligns with the navigation icons when expanded and
+appears immediately before the hamburger when collapsed. Both use 16px icons in
+24px desktop buttons. Close remains hidden when the split cannot be closed.
+The hamburger sits directly beside the item title or view breadcrumbs. Narrow
+desktop Drive headers use a plain view title; use the hamburger to navigate.
+**Cmd+.** (Ctrl+. on Windows/Linux) toggles navigation in the active split, even
+while typing. It leaves the outer app rail and other splits in place. Docked
+navigation and the adjacent content animate their width over 140ms, with a brief
+sidebar fade; reduced-motion preferences skip the animation.
+Narrow navigation overlays use the same brief width and opacity animation.
+Visibility is a sticky preference per app type (Home, Email, Chat, Tasks, Drive,
+Agents, Customers), independent of other apps and restored on reload. Narrow
+workspaces reopen navigation as an overlay; the backdrop or **Hide navigation**
+closes it. The overlay never contains the split's **Close** button. Mobile keeps
+its existing navigation controls. Block detail panels (including Calendar) have
+**Hide side panel** in their own header and a hamburger **Show side panel** beside
+the main title when hidden, with separate preferences per block type.
+
+Multiple desktop splits appear as individually bordered, medium-rounded panels with
+6px top, right, and bottom insets and 6px resizable gaps, including preview pairs.
+The leftmost panel sits flush against the app rail, whose divider is hidden while
+multiple splits are open. A single split stays edge to edge. Touch layouts keep their existing presentation.
 
 Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
@@ -71,7 +121,9 @@ stay centered and the preview body fills the remaining height below the divider.
 - Bottom: button named after the user's email — menu with `Command menu (Ctrl K)`,
   `Settings (Ctrl ;)`, `Log out`.
 
-With the new app views enabled, the outer sidebar is an icon rail. Its tooltips
+With the new app views enabled, the outer sidebar is an icon rail. Start a new AI
+chat from the Agents workspace; the rail has no separate new-chat-in-a-new-split
+button. Its tooltips
 use the standard 400 ms hover delay and 300 ms grace period between items. Home,
 Email, and Chat show a small accent dot when the loaded data contains an unread
 item. Home uses Signal; Email uses Important across all linked inboxes.
@@ -79,6 +131,12 @@ Noise does not light either dot. These are presence indicators, not counts; they
 do not fetch additional pages to find every unread item. Opening a view alone does
 not clear its dot — reading or completing the represented items does. The button's
 accessible description is `Unread items` while its dot is active.
+
+The Agents sidebar mixes chat and coding sessions in one newest-first list.
+Its **New conversation** button opens the unified composer with one **Agent**
+selector on the right. Choosing a coding agent reveals the repository drawer;
+there is no Chat/Code switch. New sessions use the selected agent's default model
+and the URL for its kind. Opening an existing row restores its own kind and URL.
 
 Home's inner rail starts with a full-width **New chat** plus button that returns
 to Home's starting pane without creating a chat. Email and Tasks use the same
@@ -90,6 +148,13 @@ These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
 sidebar layout default to 256px; manually resized Chat widths remain saved.
+After dragging a view's inner sidebar divider (or using its arrow keys), resizing
+the containing split preserves the chosen sidebar width while space permits.
+Narrow splits may shrink or collapse the sidebar; widening restores its chosen
+width for the mounted view.
+Widening the sidebar while its split is constrained also reduces the main
+content's soft width preference, so the next split resize keeps that choice
+instead of snapping the sidebar back to its constrained width.
 
 Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
@@ -130,7 +195,7 @@ changes roll back rather than becoming committed local favorites.
 
 ## Create menu
 
-On mobile, the bottom dock fits fixed-width buttons in this order: Home,
+On mobile, the bottom dock fits fixed-width buttons in this order: Notifications,
 Calendar, Email, Channels, Files, Agents, Tasks, Calls, and CRM (when enabled). Calendar appears in the
 dock and search scope pills only when the calendar UI flag is enabled.
 Resizing the screen moves views between the dock
@@ -169,7 +234,7 @@ company-creation sheet.
 
 The labeled glass button one row above Search opens the current page's creation
 flow directly: **+ Task** on Tasks, **+ Email** on Email, **+ Message** on Channels,
-**+ Document** on Files, and **+ Event** on Calendar. On Home/Notifications,
+**+ Document** on Files, and **+ Event** on Calendar. On Notifications,
 **+ New** opens a blurred backdrop and a stack of glass actions: Email, Message,
 Document, Event, Task, More. Event follows the calendar UI flag; unavailable
 launcher actions are omitted. The plus rotates into an X; tap it or the backdrop,
@@ -250,6 +315,11 @@ Settings → Harness, above Cursor, with the
 Anthropic logo. Settings → Agents selects an agent's harness but does not host
 Claude's connection form. **Connect Claude** starts authorization and opens sign-in
 on the first click; a fallback link remains if the browser blocks the tab.
+Approve on Claude's page, copy the complete `code#state`, then use **Finish
+connecting**. Hosted and local deployments use the same flow. Grants and pending
+sign-in attempts are encrypted in MacroDB and survive restarts or replica changes.
+If the card says sign-in is not configured, the deployment is missing its Claude
+OAuth KMS key; changing the frontend flag cannot fix that backend configuration.
 Claude's model picker uses provider-reported IDs,
 names, descriptions, and order. Settings discovers from recent account sessions;
 session catalogs update through replay, polling, and streaming. Before any catalog
@@ -264,3 +334,26 @@ refreshes the session credential and restores the saved selection.
 Claude sessions expose **Open in Claude** in the header
 toolbar (or its overflow menu). With a live runtime, messages sent in Claude are
 polled into Macro about every two seconds; disconnected runtimes must resume first.
+
+Home does not bind Delete or Backspace to deleting list items. These keys remain
+available to the open editor (for example, clearing a selected spreadsheet range).
+Use the item menu to delete an item from Home.
+
+`C A` (Create → Agent) opens the Agents new-conversation page and focuses its
+message input; `C Shift+A` requests a new split. It does not open a modal or
+create a session before the user sends. Repeating it focuses the existing draft.
+
+### Content already open
+
+Entity content can be open in only one split or inline preview/detail view at a
+time. Shell components may have duplicate splits when `allowDuplicate` is enabled.
+An Agents conversation route counts as the same entity as its agent or chat block.
+Opening an entity already in a split focuses that split when activation is
+requested; the sidebar's **Open in new split** also shows a **Content already open** toast.
+Selecting an entity owned by another view from a detail view leaves the current
+detail and navigation history unchanged and shows a **Content already open**
+toast. Close or navigate away
+from the owning view before opening it elsewhere. The same rule applies to mouse
+selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
+never render inline previews or detail views: a tap opens the entity in the
+split, so the toast only appears when the content is genuinely open elsewhere.

@@ -196,6 +196,11 @@ impl InfraEnv {
             "OVERRIDE_LEXICAL_SERVICE_URL".into(),
             "http://lexical-service:8096".into(),
         );
+        // Channel picture authorization reads file metadata from inside DSS.
+        env.insert(
+            "OVERRIDE_STATIC_FILE_SERVICE_URL".into(),
+            "http://static-file-service:8080".into(),
+        );
         // Same failure mode for the email connect flows: without these,
         // first-inbox provisioning (auth-service → `/email/init`) and Gmail
         // token fetches (email-service → `/internal/google_access_token`)
@@ -283,6 +288,11 @@ impl QueueEnv {
                 env.insert(key.into(), form.value(queue.name));
             }
         }
+        // Without these the `ai_tools` SQS client is built with no queue name
+        // and every enqueue fails, so an agent session can neither send email
+        // nor sync thread labels. Deployed environments set them in Doppler.
+        env.insert("ENABLE_EMAIL_SCHEDULED_QUEUE".into(), "true".into());
+        env.insert("ENABLE_GMAIL_OPS_QUEUE".into(), "true".into());
     }
 }
 

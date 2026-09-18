@@ -46,6 +46,43 @@ filter sheets. Desktop uses the centered composer dialog.
 Tasks are documents under the hood (creation hits `POST /dss/documents/create_task`), so they
 also show up in Files/`All` and in AI-chat document listings.
 
+## Bulk delete
+
+Select task rows with their leading checkboxes, choose **Actions → Delete items**,
+then confirm **Delete**. With GraphQL Soup enabled, selected rows disappear while
+requests are pending, including rows loaded through grouped pagination. The
+confirmation closes when the whole batch succeeds. After a partial failure it
+reports how many items were deleted and keeps only failed items in the dialog for
+retry; successful items must not be submitted again. Confirmed deletions are
+removed from split histories immediately, even if the dialog is then canceled.
+Cancel clears stale selection and focuses a surviving failed item or a live
+neighbor; it does not undo successful deletions or run deferred email deletions.
+After a partial deletion is retried successfully, focus uses a surviving neighbor
+captured before deletion (next, then previous), rather than restarting at the top
+of the list. If both neighbors disappeared, it falls back near the original list
+position, skipping group headers and load-more rows.
+Failed items return to Soup and search immediately, while successful removals
+remain absent from both.
+Successfully deleted items stay hidden until all enabled GraphQL Soup lists
+revalidate successfully, even if the first refresh fails. Refresh is attempted
+at most three times (one- and two-second retry delays); suppression expires one
+minute after deletion finishes if revalidation remains unavailable. The
+GraphQL-disabled path retains its existing behavior.
+
+For verification, use disposable tasks and delay only their DELETE requests:
+rows should disappear before those requests complete. Then fail a Soup refresh:
+successful deletes should remain hidden after the confirmation closes and clear
+their suppression after a successful retry. Partial deletion failures restore
+only the failed items.
+
+## Other list actions
+
+With GraphQL Soup enabled, **Rename** updates the row title before the request
+finishes, as well as updating previews. **Move to folder**, **Remove from folder**,
+and **Duplicate** refresh mounted GraphQL lists after the server responds; a
+manual page reload is not required. Duplication does not show a placeholder before
+the server returns the new item ID. Use disposable tasks/folders for these checks.
+
 ## View and edit task properties
 
 An open task shows Status, Priority, and Assignees as property pills below its title. Task

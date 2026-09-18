@@ -1,18 +1,18 @@
+import { usePdfDocument } from '@block-pdf/context/pdf-document-context';
+import { usePdfCommentRealtimeBehavior } from '@block-pdf/store/commentsResource';
 import { createEffect, createMemo } from 'solid-js';
+import { useCommentLayoutBehavior } from './commentLayout';
 import {
   useDeleteNewComments,
   useScrollToCommentThread,
 } from './commentOperations';
-import {
-  activeCommentThreadSignal,
-  commentsStore,
-  noScrollToActiveCommentThreadSignal,
-} from './commentStore';
+import { useCommentStoreBehavior } from './commentStore';
 
 // remove the new temporary comment when it is no longer active
 const useDeleteNewCommentEffect = () => {
   const deleteNewComments = useDeleteNewComments();
-  const activeCommentThread = activeCommentThreadSignal.get;
+  const [activeCommentThread] =
+    usePdfDocument().state.signals.activeCommentThread;
 
   createEffect(() => {
     const activeThreadId = activeCommentThread();
@@ -25,10 +25,10 @@ const useDeleteNewCommentEffect = () => {
 // scroll to the active comment thread
 const useScrollToActiveThreadEffect = () => {
   const scrollToCommentThread = useScrollToCommentThread();
-  const comments = commentsStore.get;
-  const activeCommentThread = activeCommentThreadSignal.get;
-
-  const noScrollToActiveCommentThread = noScrollToActiveCommentThreadSignal.get;
+  const { signals, stores } = usePdfDocument().state;
+  const [comments] = stores.comments;
+  const [activeCommentThread] = signals.activeCommentThread;
+  const [noScrollToActiveCommentThread] = signals.noScrollToActiveCommentThread;
   const noScroll = createMemo(() => {
     return noScrollToActiveCommentThread();
   });
@@ -49,6 +49,9 @@ const useScrollToActiveThreadEffect = () => {
 };
 
 export const usePdfCommentEffects = () => {
+  useCommentStoreBehavior();
+  useCommentLayoutBehavior();
+  usePdfCommentRealtimeBehavior();
   useDeleteNewCommentEffect();
   useScrollToActiveThreadEffect();
 };

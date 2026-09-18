@@ -47,7 +47,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
                     match &app.harness_process {
                         Some((pid, name)) => Span::raw(format!("{name} · pid {pid}")),
                         None => Span::styled(
-                            "not spawned - starts on the first trigger",
+                            "not running - check connection and Logs",
                             Style::new().fg(DIM).italic(),
                         ),
                     },
@@ -56,7 +56,7 @@ pub(super) fn render(frame: &mut Frame, app: &App, area: Rect) {
             lines.push(Line::raw(""));
             lines.push(Line::styled(
                 if app.serving() {
-                    "Serving from this window; the dot turns green once a session dials in."
+                    "Serving from this window; the dot turns green when the runtime connects."
                 } else {
                     "The daemon is not running; check the Logs tab for why."
                 },

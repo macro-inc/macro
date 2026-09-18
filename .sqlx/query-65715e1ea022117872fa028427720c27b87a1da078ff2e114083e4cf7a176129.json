@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.parent_entity_id FROM agent_session s\n               JOIN comms_messages m ON m.id = s.thread_id\n               JOIN comms_message_threads t ON t.root_id = m.id\n               WHERE s.id = $1 AND m.parent_entity_type = 'document' AND t.deleted_at IS NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "parent_entity_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "65715e1ea022117872fa028427720c27b87a1da078ff2e114083e4cf7a176129"
+}

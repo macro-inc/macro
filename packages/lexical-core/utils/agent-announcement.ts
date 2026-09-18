@@ -8,29 +8,33 @@ import {
 } from '../nodes/MagicChipNode';
 import {
   $createReplyTargetNode,
-  stripLeadingReplyTargetMarkdown,
   type ReplyTargetData,
+  stripLeadingReplyTargetMarkdown,
 } from '../nodes/ReplyTargetNode';
 import { ALL_TRANSFORMERS } from '../transformers';
 
 /** Everything the announcement for one agent-session prompt is built from. */
 export type AgentSessionAnnouncement = {
-  /** Message the agent announcement explicitly replies to. */
-  replyTarget: ReplyTargetData;
+  /**
+   * Message the agent announcement explicitly replies to. Absent when the
+   * conversation cannot be referenced by a reply target yet, in which case
+   * the announcement is the chip alone.
+   */
+  replyTarget?: ReplyTargetData;
   /** The Magic Chip anchoring the session's live response. */
   chip: MagicChipData;
 };
 
 /**
- * Compose the channel message that announces an agent session: a structured
- * reply target followed by the session's Magic Chip. Built headlessly from
- * real Lexical nodes so the serialized markdown always matches what the
- * editor itself produces.
+ * Compose the message that announces an agent session: a structured reply
+ * target followed by the session's Magic Chip. Built headlessly from real
+ * Lexical nodes so the serialized markdown always matches what the editor
+ * itself produces.
  */
 export function composeAgentSessionAnnouncement(
   announcement: AgentSessionAnnouncement
 ): string {
-  const replyTarget = {
+  const replyTarget = announcement.replyTarget && {
     ...announcement.replyTarget,
     displayText: stripLeadingReplyTargetMarkdown(
       announcement.replyTarget.displayText
@@ -44,7 +48,7 @@ export function composeAgentSessionAnnouncement(
 
   editor.update(
     () => {
-      if (replyTarget.displayText) {
+      if (replyTarget?.displayText) {
         $getRoot().append($createReplyTargetNode(replyTarget));
       }
       $getRoot().append($createMagicChipNode(announcement.chip));

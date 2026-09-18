@@ -13,7 +13,14 @@ const mocks = vi.hoisted(() => ({
   getDocumentPermissions: vi.fn(),
   getChatPermissions: vi.fn(),
   updateChatPermissions: vi.fn(),
+  fetchCallSharePermission: vi.fn(),
+  updateCallTeamShare: vi.fn(),
+  setCallRecordTeamShareCache: vi.fn(),
+  callRecordShared: true,
+  callRecordQuerySuccess: true,
   getProjectPermissions: vi.fn(),
+  editProject: vi.fn(),
+  editDocument: vi.fn(),
   copyLink: vi.fn(),
   blockPermissionsRead: vi.fn(),
   inBlock: true,
@@ -77,7 +84,11 @@ vi.mock('@core/util/channels', () => ({ useSendMessageToPeople: () => mocks }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: {
     getDocumentPermissions: mocks.getDocumentPermissions,
-    projects: { getPermissions: mocks.getProjectPermissions },
+    editDocument: mocks.editDocument,
+    projects: {
+      getPermissions: mocks.getProjectPermissions,
+      edit: mocks.editProject,
+    },
   },
   blockNameToItemType: (name: string) =>
     name === 'agent' ? 'agent_session' : 'document',
@@ -101,7 +112,27 @@ vi.mock('@channel/use-channel-participants', () => ({
 }));
 vi.mock('@core/component/EntityIcon', () => ({ EntityIcon: () => null }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
-vi.mock('@core/component/Tabs', () => ({ Tabs: () => null }));
+vi.mock('@core/component/Tabs', () => ({
+  Tabs: (props: {
+    list: { value: string; label: string }[];
+    value?: string;
+    onChange?: (value: string) => void;
+  }) => (
+    <div role="tablist">
+      <For each={props.list}>
+        {(tab) => (
+          <button
+            role="tab"
+            aria-selected={props.value === tab.value}
+            onClick={() => props.onChange?.(tab.value)}
+          >
+            {tab.label}
+          </button>
+        )}
+      </For>
+    </div>
+  ),
+}));
 vi.mock('@core/signal/blockElement', () => ({
   blockHotkeyScopeSignal: { get: () => '' },
 }));
@@ -125,6 +156,35 @@ vi.mock('@service-cognition/client', () => ({
     getChatPermissions: mocks.getChatPermissions,
     updateChatPermissions: mocks.updateChatPermissions,
   },
+}));
+vi.mock('@queries/call/call', () => ({
+  fetchCallSharePermission: (...args: unknown[]) =>
+    mocks.fetchCallSharePermission(...args),
+  updateCallTeamShare: (...args: unknown[]) =>
+    mocks.updateCallTeamShare(...args),
+  setCallRecordTeamShareCache: (...args: unknown[]) =>
+    mocks.setCallRecordTeamShareCache(...args),
+  sharePermissionFromCallRecord: (record: {
+    callId: string;
+    createdBy: string;
+    shareWithTeam: boolean;
+  }) => ({
+    id: record.callId,
+    owner: record.createdBy,
+    teamShareAccessLevel: record.shareWithTeam ? 'view' : null,
+  }),
+  useCallRecordQuery: () => ({
+    get isSuccess() {
+      return mocks.callRecordQuerySuccess;
+    },
+    get data() {
+      return {
+        callId: 'call-1',
+        createdBy: 'owner',
+        shareWithTeam: mocks.callRecordShared,
+      };
+    },
+  }),
 }));
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({
@@ -206,7 +266,9 @@ vi.mock('@ui', () => {
       Group: Container,
     }),
     ButtonGroup: Object.assign(Container, { Divider: () => null }),
-    SegmentedControl: () => null,
+    SegmentedControl: (props: { 'aria-label'?: string }) => (
+      <div role="group" aria-label={props['aria-label']} />
+    ),
     cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
     Hotkey: () => null,
   };
@@ -216,7 +278,12 @@ beforeEach(() => {
   mocks.inBlock = true;
   mocks.mobile = false;
   mocks.hasTeam = false;
+  mocks.callRecordShared = true;
+  mocks.callRecordQuerySuccess = true;
   mocks.updateChatPermissions.mockResolvedValue({ isErr: () => false });
+  mocks.updateCallTeamShare.mockResolvedValue({ isErr: () => false });
+  mocks.editProject.mockResolvedValue({ isErr: () => false });
+  mocks.editDocument.mockResolvedValue({ isErr: () => false });
   Object.defineProperty(navigator, 'clipboard', {
     configurable: true,
     value: { writeText: mocks.copyLink },
@@ -394,6 +461,117 @@ function mountChatShare() {
   ));
 }
 
+function mountCallShare() {
+  mocks.blockPermissionsRead.mockReturnValue({
+    isErr: () => false,
+    value: {
+      id: 'perm-call',
+      owner: 'owner',
+      linkShare: null,
+      linkShareAccessLevel: null,
+      teamShareAccessLevel: 'view',
+      channelSharePermissions: [],
+    },
+  });
+  render(() => (
+    <ShareModal
+      id="call-1"
+      name="Weekly sync"
+      owner="owner"
+      itemType="call"
+      blockAlias="call"
+      userPermissions={Permissions.OWNER}
+      isSharePermOpen
+      setIsSharePermOpen={vi.fn()}
+    />
+  ));
+}
+
+describe('call team sharing', () => {
+  it('lets the owner share the call with their team at view', async () => {
+    mocks.hasTeam = true;
+    mountCallShare();
+
+    expect(screen.getByText('Team access')).toBeTruthy();
+    expect(
+      screen.getByText("Share this call directly with the owner's team.")
+    ).toBeTruthy();
+    expect(
+      screen
+        .getByRole('group', { name: 'Team access level' })
+        .getAttribute('data-value')
+    ).toBe('view');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Set Team access level view' })
+    );
+
+    await vi.waitFor(() =>
+      expect(mocks.updateCallTeamShare).toHaveBeenCalledWith('call-1', true)
+    );
+    expect(mocks.setCallRecordTeamShareCache).toHaveBeenCalledWith(
+      'call-1',
+      true
+    );
+    expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
+    expect(mocks.editDocument).not.toHaveBeenCalled();
+    expect(mocks.editProject).not.toHaveBeenCalled();
+  });
+
+  it('clears call team access with an explicit null', async () => {
+    mocks.hasTeam = true;
+    mountCallShare();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Set Team access level NONE' })
+    );
+
+    await vi.waitFor(() =>
+      expect(mocks.updateCallTeamShare).toHaveBeenCalledWith('call-1', false)
+    );
+    expect(mocks.setCallRecordTeamShareCache).toHaveBeenCalledWith(
+      'call-1',
+      false
+    );
+  });
+
+  it('shows team access from the call record cache after the checkbox writes it', () => {
+    mocks.hasTeam = true;
+    mocks.callRecordShared = false;
+    mountCallShare();
+
+    expect(
+      screen
+        .getByRole('group', { name: 'Team access level' })
+        .getAttribute('data-value')
+    ).toBe('NONE');
+  });
+
+  it('hides call team access when the owner has no team', () => {
+    mocks.hasTeam = false;
+    mountCallShare();
+
+    expect(screen.queryByText('Team access')).toBeNull();
+    expect(
+      screen.queryByRole('group', { name: 'Team access level' })
+    ).toBeNull();
+    expect(mocks.updateCallTeamShare).not.toHaveBeenCalled();
+  });
+
+  it('loads team access from the call record outside a block', () => {
+    mocks.inBlock = false;
+    mocks.hasTeam = true;
+    mountCallShare();
+
+    expect(
+      screen
+        .getByRole('group', { name: 'Team access level' })
+        .getAttribute('data-value')
+    ).toBe('view');
+    expect(mocks.fetchCallSharePermission).not.toHaveBeenCalled();
+  });
+});
+
 describe('chat team sharing', () => {
   it('lets the owner share the chat with their team through the chat permissions endpoint', async () => {
     mocks.hasTeam = true;
@@ -402,6 +580,9 @@ describe('chat team sharing', () => {
     expect(screen.getByText('Team access')).toBeTruthy();
     expect(
       screen.getByText("Share this chat directly with the owner's team.")
+    ).toBeTruthy();
+    expect(
+      screen.getByRole('group', { name: 'Link sharing scope' })
     ).toBeTruthy();
     expect(
       screen
@@ -447,5 +628,114 @@ describe('chat team sharing', () => {
       screen.queryByRole('group', { name: 'Team access level' })
     ).toBeNull();
     expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
+  });
+});
+
+function mountProjectShare() {
+  mocks.blockPermissionsRead.mockReturnValue({
+    isErr: () => false,
+    value: {
+      id: 'perm-project',
+      owner: 'owner',
+      linkShare: null,
+      linkShareAccessLevel: null,
+      teamShareAccessLevel: 'view',
+      channelSharePermissions: [],
+    },
+  });
+  render(() => (
+    <ShareModal
+      id="project-1"
+      name="Launch folder"
+      owner="owner"
+      itemType="project"
+      blockAlias="project"
+      userPermissions={Permissions.OWNER}
+      isSharePermOpen
+      setIsSharePermOpen={vi.fn()}
+    />
+  ));
+}
+
+describe('project team sharing', () => {
+  it('lets the owner share the folder with their team without a link sharing card', async () => {
+    mocks.hasTeam = true;
+    mountProjectShare();
+
+    expect(screen.getByText('Team access')).toBeTruthy();
+    expect(
+      screen.getByText("Share this folder directly with the owner's team.")
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('group', { name: 'Link sharing scope' })
+    ).toBeNull();
+    expect(screen.queryByText('Link sharing off')).toBeNull();
+    expect(
+      screen
+        .getByRole('group', { name: 'Team access level' })
+        .getAttribute('data-value')
+    ).toBe('view');
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Set Team access level edit' })
+    );
+
+    await vi.waitFor(() =>
+      expect(mocks.editProject).toHaveBeenCalledWith({
+        id: 'project-1',
+        sharePermission: { teamShareAccessLevel: 'edit' },
+      })
+    );
+    expect(mocks.updateChatPermissions).not.toHaveBeenCalled();
+    expect(mocks.editDocument).not.toHaveBeenCalled();
+  });
+
+  it('clears folder team access with an explicit null', async () => {
+    mocks.hasTeam = true;
+    mountProjectShare();
+
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Set Team access level NONE' })
+    );
+
+    await vi.waitFor(() =>
+      expect(mocks.editProject).toHaveBeenCalledWith({
+        id: 'project-1',
+        sharePermission: { teamShareAccessLevel: null },
+      })
+    );
+  });
+
+  it('hides folder team access when the owner has no team', () => {
+    mocks.hasTeam = false;
+    mountProjectShare();
+
+    expect(screen.queryByText('Team access')).toBeNull();
+    expect(
+      screen.queryByRole('group', { name: 'Team access level' })
+    ).toBeNull();
+    expect(
+      screen.queryByRole('group', { name: 'Link sharing scope' })
+    ).toBeNull();
+    expect(mocks.editProject).not.toHaveBeenCalled();
+  });
+
+  it('puts folder team access on a Team tab and omits the Link tab', () => {
+    mocks.mobile = true;
+    mocks.hasTeam = true;
+    mountProjectShare();
+
+    expect(screen.queryByRole('tab', { name: 'Link' })).toBeNull();
+    expect(screen.queryByText('Team access')).toBeNull();
+
+    fireEvent.click(screen.getByRole('tab', { name: 'Team' }));
+
+    expect(screen.getByText('Team access')).toBeTruthy();
+    expect(
+      screen.getByText("Share this folder directly with the owner's team.")
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('group', { name: 'Link sharing scope' })
+    ).toBeNull();
   });
 });

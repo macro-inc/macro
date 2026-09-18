@@ -284,6 +284,14 @@ impl EmailRepo for EmailPgRepo {
         draft::insert_message(&self.pool, input, contacts, link_id, new_thread, is_draft).await
     }
 
+    async fn revert_sent_message_to_draft(
+        &self,
+        message_id: Uuid,
+        link_id: Uuid,
+    ) -> Result<(), Self::Err> {
+        draft::revert_sent_message_to_draft(&self.pool, message_id, link_id).await
+    }
+
     async fn get_label_by_id(
         &self,
         label_id: Uuid,
@@ -318,6 +326,16 @@ impl EmailRepo for EmailPgRepo {
     ) -> Result<(), Self::Err> {
         label::delete_message_labels_batch(&self.pool, message_ids, provider_label_id, link_id)
             .await
+    }
+
+    async fn set_thread_read_state(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        message_ids: &[Uuid],
+        is_read: bool,
+    ) -> Result<(), Self::Err> {
+        label::set_thread_read_state(&self.pool, thread_id, link_id, message_ids, is_read).await
     }
 
     async fn update_message_read_status_batch(

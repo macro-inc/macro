@@ -153,13 +153,11 @@ vi.mock('@core/mobile/virtualKeyboard', () => ({
 vi.mock('@core/mobile/useTouchOutsideToDismissKeyboard', () => ({
   useTouchOutsideToDismissKeyboard: () => {},
 }));
-vi.mock('@core/util/getItemBlockName', () => ({}));
 vi.mock('@core/util/upload', () => ({}));
 vi.mock('@solid-primitives/resize-observer', () => ({
   createElementSize: () => ({ width: 44, height: 20 }),
 }));
 vi.mock('./Attachment', () => ({ AttachmentList: () => null }));
-vi.mock('./ChatAttachMenu', () => ({ ChatAttachMenu: () => null }));
 vi.mock('./useAiDataConsent', () => ({
   useAiDataConsentGate: () => ({ ConsentDialog: () => null }),
 }));

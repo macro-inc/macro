@@ -24,6 +24,18 @@ session-specific modal. Folder moves, duplication, and property/tag editing are
 not offered because those APIs do not support sessions. Runtime controls remain
 session-specific.
 
+A session transcript shows each tool call as a collapsible row (consecutive calls
+fold into a `Called N tools` group; click it to see the rows). A tool reached over
+an MCP server - Macro's own (`ReadContent · macro`) from a Cursor, Claude, or
+Codex session, or a third-party server (`ask_question · deepwiki`) - is titled by
+the tool's name with the server as its subtitle, never by the harness's dispatcher
+(`mcp`). Clicking the row expands the exchange: a `Request` section with the
+tool's own arguments and a `Response` section with what it returned, both as
+syntax-lit, pretty-printed JSON (prose results show as text), each with a copy
+button that copies the whole section; a call that failed is faded, shows the
+error as its subtitle, and adds an `Error` section. Rows for a call still running
+show whatever has arrived so far.
+
 ## Message composer
 
 Channel messages and thread replies have a microphone next to Send, including
@@ -254,11 +266,28 @@ a channel cached away from its latest page, and a delta longer than one page use
 
 ## Chat navigation rail
 
+The title bar's **Hide navigation** control hides the whole rail. Reopen it with
+**Show navigation** (the hamburger) immediately before the conversation title,
+or in the Chat header when no conversation is selected. Chat remembers this
+choice independently of other workspaces and restores it after reload. Chat uses
+the shared 256px default sidebar width and resize limits. In splits narrower than
+720px, navigation collapses; the hamburger or `Cmd+.` opens it as a slide-over
+with the same full sidebar contents. There is no separate skinny sidebar mode.
+
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
 optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
 channels. Channel favorites open in the channel preview. Shift-clicking a
 favorite, channel, or DM opens that conversation in a new split instead.
+If a restored Chat selection is already open in another view, its preview stays
+closed but the saved selection is retained. Close the other view, then select
+the conversation again or reopen Chat to restore its preview. Verify that an
+unrelated rail preference change while blocked does not erase the saved selection.
+While reading older history or composing in the preview, incoming notifications
+(including ones for other channels) must not jump to latest, blank/refetch the
+messages, or revoke composer focus. To check this, leave an unsent draft in a
+preview scrolled into older history and deliver a notification. Selecting another
+conversation or explicitly navigating to a message must still work.
 The search action beside the tabs opens a search field below them and replaces
 the active tab contents with matching channels and direct messages from one
 activity-ordered source. Search results use compact rows on `All` and
@@ -273,10 +302,6 @@ exist in the DOM.
 Channels and DMs each have a sort action before their create action. They can be
 sorted by last viewed, last updated, or date created, and each choice persists
 independently as a user preference.
-In slim mode, Favorites remains a separate collapsible section, while Channels
-and DMs render in one continuous list without section headings. The gear action
-in the footer controls whether each group appears and exposes the same
-independently persisted sort choices.
 Compact channel and DM rows in All have the same height. Section headings place
 their caret immediately after the title and reveal it on hover or while the
 section is collapsed; hovering only undims the heading text, while
@@ -326,3 +351,20 @@ bottom through composer resizing and server acknowledgement. Check that restorin
 the caret after send does not pan the page while the keyboard resizes. Repeat with dictation
 and check that sent text does not return. Scroll into history before an incoming
 message or acknowledgement and verify that it does not pull you to latest.
+
+
+## Channel pictures
+
+Channels and group chats can have a custom picture. Any active participant can
+`Rename` a named channel from the title menu. Direct messages cannot be renamed.
+Only admins and owners also get `Set channel picture` and `Remove channel
+picture`. Choose `Set channel picture` to add or replace a picture. Select a PNG, JPG,
+WebP, or GIF up to 16 MB. The upload must finish before the picture is saved;
+the server accepts only supported images uploaded by the person setting the
+picture. An error leaves the previous picture in place. When a picture is set, the menu also offers
+`Remove channel picture` to restore the standard channel icon. The picture
+beside the title is display-only and also appears in shared channel rows.
+Picture changes refresh other participants' open sessions, including after
+reconnecting.
+Members see the picture without editing controls. One-to-one direct messages
+continue to show the other person's user picture.

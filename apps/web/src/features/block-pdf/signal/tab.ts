@@ -1,12 +1,6 @@
-import {
-  createBlockSignal,
-  createBlockStore,
-  useIsNestedBlock,
-} from '@core/block';
 import { ENABLE_PDF_TABS } from '@core/constant/featureFlags';
 import { createCallback } from '@solid-primitives/rootless';
-import { useCurrentPageNumber, useGetRootViewer } from './pdfViewer';
-import { showTabBarSignal } from './placeables';
+import { usePdfDocument } from '../context/pdf-document-context';
 
 const TOP_PADDING = 0.2;
 
@@ -20,12 +14,12 @@ export type TabInfo = {
 };
 
 export function useGoToLocationHash() {
-  const getRootViewer = useGetRootViewer();
+  const [rootViewer] = usePdfDocument().state.signals.rootViewer;
   const createTab = useCreateTab();
   const tabCount = useTabCount();
 
   return createCallback((hash: string, newTab = false) => {
-    const viewer = getRootViewer();
+    const viewer = rootViewer();
     if (!viewer) return;
     if (ENABLE_PDF_TABS && newTab && tabCount() < MAX_TAB_COUNT) {
       createTab();
@@ -36,7 +30,7 @@ export function useGoToLocationHash() {
 }
 
 export function useGoToLocation() {
-  const getRootViewer = useGetRootViewer();
+  const [rootViewer] = usePdfDocument().state.signals.rootViewer;
   const createTab = useCreateTab();
   const tabCount = useTabCount();
   return createCallback(
@@ -46,7 +40,7 @@ export function useGoToLocation() {
       callout: number;
       newTab: boolean;
     }) => {
-      const viewer = getRootViewer();
+      const viewer = rootViewer();
       if (!viewer) return;
 
       if (ENABLE_PDF_TABS && loc.newTab && tabCount() < MAX_TAB_COUNT) {
@@ -78,46 +72,8 @@ const defaultTabData = (id: number) => ({
   id,
 });
 
-// Store a simple signal that goes up when we make a new tab
-const tabIdSignal = createBlockSignal<number>(0);
-
-export const tabDataStore = createBlockStore<TabInfo[]>([defaultTabData(0)]);
-export const activeTabIdSignal = createBlockSignal<number>(0);
-export const tabHistorySignal = createBlockSignal<number[]>([0]);
-
-function tabById(id: number): TabInfo | undefined {
-  return tabDataStore.get.find((t) => t.id === id);
-}
-
-function tabIndexById(id: number): number {
-  return tabDataStore.get.findIndex((t) => t.id === id);
-}
-
-function updateTabById(
-  id: number,
-  info?: { label?: string; locationHash?: string }
-): void {
-  const index = tabIndexById(id);
-  if (index === -1) return;
-  if (info?.label) {
-    tabDataStore.set(index, 'label', info.label);
-  }
-  if (info?.locationHash) {
-    tabDataStore.set(index, 'locationHash', info.locationHash);
-  }
-}
-
-function createTab(info: { label: string; locationHash: string }): number {
-  tabIdSignal.set((p) => p + 1);
-  const id = tabIdSignal.get();
-  tabDataStore.set([
-    ...tabDataStore.get,
-    {
-      ...info,
-      id,
-    },
-  ]);
-  return id;
+function tabById(tabs: readonly TabInfo[], id: number): TabInfo | undefined {
+  return tabs.find((tab) => tab.id === id);
 }
 
 /**
@@ -125,22 +81,25 @@ function createTab(info: { label: string; locationHash: string }): number {
  * selected tab id, and pushes it to the tab history.
  */
 export function useNavigateToTab() {
+  const pdf = usePdfDocument();
   const updateCurrentTab = useUpdateCurrentTab();
-  const setTabHistory = tabHistorySignal.set;
-  const getRootViewer = useGetRootViewer();
+  const [tabs] = pdf.state.stores.tabData;
+  const [, setActiveTabId] = pdf.state.signals.activeTabId;
+  const [, setTabHistory] = pdf.state.signals.tabHistory;
+  const [rootViewer] = pdf.state.signals.rootViewer;
 
   return createCallback((id: number) => {
-    const viewer = getRootViewer();
+    const viewer = rootViewer();
     if (!viewer) return;
 
     // Store the current location in the current tab.
     updateCurrentTab();
-    const tab = tabById(id);
+    const tab = tabById(tabs, id);
     if (tab === undefined) {
       return;
     }
     tab.locationHash && viewer.goToLocationHash(tab.locationHash);
-    activeTabIdSignal.set(id);
+    setActiveTabId(id);
     setTabHistory((p) => [...p, id]);
   });
 }
@@ -150,16 +109,20 @@ export function useNavigateToTab() {
  * pdf viewer in the currently active tab.
  */
 export function useUpdateCurrentTab() {
-  const getRootViewer = useGetRootViewer();
-  const currentPageNumber = useCurrentPageNumber();
+  const pdf = usePdfDocument();
+  const [rootViewer] = pdf.state.signals.rootViewer;
+  const [activeTabId] = pdf.state.signals.activeTabId;
+  const [tabs, setTabs] = pdf.state.stores.tabData;
+  const currentPageNumber = pdf.state.derived.currentPageNumber;
   return createCallback(() => {
-    const viewer = getRootViewer();
+    const viewer = rootViewer();
     if (!viewer) return;
 
-    updateTabById(activeTabIdSignal.get(), {
-      label: `Page ${currentPageNumber()}`,
-      locationHash: viewer.getLocationHash(),
-    });
+    const index = tabs.findIndex((tab) => tab.id === activeTabId());
+    if (index === -1) return;
+    setTabs(index, 'label', `Page ${currentPageNumber()}`);
+    const locationHash = viewer.getLocationHash();
+    if (locationHash) setTabs(index, 'locationHash', locationHash);
   });
 }
 
@@ -167,23 +130,31 @@ export function useUpdateCurrentTab() {
  * Create a block-scoped function that creates a new tab.
  */
 export function useCreateTab() {
+  const pdf = usePdfDocument();
   const navigateToTab = useNavigateToTab();
-  const [_, setActiveTabId] = activeTabIdSignal;
-  const getRootViewer = useGetRootViewer();
-  const currentPageNumber = useCurrentPageNumber();
-  const setShowTabBar = showTabBarSignal.set;
-  const isNestedBlock = useIsNestedBlock();
+  const [tabId, setTabId] = pdf.state.signals.tabId;
+  const [, setActiveTabId] = pdf.state.signals.activeTabId;
+  const [, setShowTabBar] = pdf.state.signals.showTabBar;
+  const [tabs, setTabs] = pdf.state.stores.tabData;
+  const [rootViewer] = pdf.state.signals.rootViewer;
+  const currentPageNumber = pdf.state.derived.currentPageNumber;
 
   return createCallback((info?: { label: string; locationHash: string }) => {
-    if (isNestedBlock) return;
+    if (pdf.isNested()) return;
 
-    const viewer = getRootViewer();
+    const viewer = rootViewer();
     if (!viewer) return;
 
-    const newId = createTab({
-      locationHash: info?.locationHash ?? viewer.getLocationHash() ?? '',
-      label: info?.label ?? `Page ${currentPageNumber()}`,
-    });
+    setTabId((previous) => previous + 1);
+    const newId = tabId();
+    setTabs([
+      ...tabs,
+      {
+        locationHash: info?.locationHash ?? viewer.getLocationHash() ?? '',
+        label: info?.label ?? `Page ${currentPageNumber()}`,
+        id: newId,
+      },
+    ]);
     setShowTabBar(true);
     navigateToTab(newId);
     setActiveTabId(newId);
@@ -194,10 +165,11 @@ export function useCreateTab() {
  * Create a block-scoped function that resets tab state.
  */
 export function useClearTabs() {
-  const setActiveTabId = activeTabIdSignal.set;
-  const setTabHistory = tabHistorySignal.set;
-  const setTabId = tabIdSignal.set;
-  const setTabData = tabDataStore.set;
+  const pdf = usePdfDocument();
+  const [, setActiveTabId] = pdf.state.signals.activeTabId;
+  const [, setTabHistory] = pdf.state.signals.tabHistory;
+  const [, setTabId] = pdf.state.signals.tabId;
+  const [, setTabData] = pdf.state.stores.tabData;
   return () => {
     setTabId(0);
     setActiveTabId(0);
@@ -210,8 +182,9 @@ export function useClearTabs() {
  * Create a block-scoped function deletes a tab by id.
  */
 export function useDeleteTab() {
-  const [tabs, setTabs] = tabDataStore;
-  const [tabHistory, setTabHistory] = tabHistorySignal;
+  const pdf = usePdfDocument();
+  const [tabs, setTabs] = pdf.state.stores.tabData;
+  const [tabHistory, setTabHistory] = pdf.state.signals.tabHistory;
   const navigateToTab = useNavigateToTab();
 
   return createCallback((id: number) => {
@@ -230,6 +203,6 @@ export function useDeleteTab() {
 }
 
 export function useTabCount() {
-  const [tabs] = tabDataStore;
+  const [tabs] = usePdfDocument().state.stores.tabData;
   return createCallback(() => tabs.length);
 }

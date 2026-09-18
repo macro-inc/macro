@@ -59,9 +59,18 @@ that entity's last operation in the batch. Emitted `SoupUpdated` items are non-n
 If viewer-scoped hydration finds no item, the backend logs and omits that update;
 it does not imply deletion. Only explicit `GraphqlCacheDeletion` events remove records.
 
-## Home — `/app/component/inbox`
+## Home (desktop) / Notifications (mobile) — `/app/component/inbox`
 
-With the new app views enabled, Home defaults to a Signal feed merging
+Touch devices render the legacy Notifications view without waiting for the new app
+views feature flag. Desktop waits for flag readiness before choosing the new Home
+view or its legacy fallback.
+
+GraphQL-attached notification rows share the global feed's local seen/done
+overrides: Mark Done and Undo reflect local intent without waiting for an older
+cached notification snapshot to be replaced. These display overrides do not turn
+incomplete predicate-index facts into authoritative membership evidence.
+
+On desktop with the new app views enabled, Home defaults to a Signal feed merging
 notifications with Activity's `touched_by_me` recents, including sent emails and
 AI chats. Each entity appears once, ordered by its latest notification or own
 action. On desktop, the funnel button to the right of **Home** opens **Filter Home**.
@@ -73,8 +82,7 @@ and sent mail. **Channels** controls
 both channels and reply threads; **Chats** and **Agents** have separate toggles.
 Unchecking every type shows an empty feed. **Reset filters** shows every type and
 both read states again. A badge counts hidden types plus an active status filter.
-Read status and type selections persist. The mobile drawer offers the same
-Status choices and type checkboxes.
+Read status and type selections persist.
 There are no desktop Signal/Noise tabs. A **Home** heading
 labels the top left of the block, matching the **Email**, **Tasks**, **Chat**, and
 **Agents** sidebar headings. The full-width **New chat** plus pill below the heading clears the preview and returns to the Home
@@ -87,7 +95,7 @@ split history restores that entry's filter selection. An explicit facet selectio
 overrides saved filters. Returning through split history resets navigation to Signal.
 
 Channel thread replies remain separate Home entries from their parent channel,
-using single-line rows and a reply arrow icon on desktop and touch devices, labeled
+using single-line rows and a reply arrow icon on desktop, labeled
 with the sender and channel (for example, **Peter in #battlefield**). Channel names
 prefer the current channel cache, then a matching thread notification's name,
 then **Unknown channel** if neither source has a name. Selecting a
@@ -124,7 +132,13 @@ are isolated from the input. If generation stalls for 45 seconds, the shimmer
 is replaced with a retry action; a late result still appears automatically.
 Generation status updates do not extend that deadline. Retry starts a fresh
 45-second wait. Shift+Enter adds a line. Selecting a Home row replaces
-the composer with its preview. Mobile continues to show the activity list alone.
+the composer with its preview. Home uses the shared 256px sidebar and collapses
+navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
+slide-over. Activating a row or **New chat** closes that overlay to show content;
+arrow-key browsing keeps it open. Preview headers start with **Home >**. Clicking
+**Home** clears the preview and returns to the starting pane without changing
+sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
+show the activity list alone.
 
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
 Desktop AI chats, agents, and channel composers share Home's rounded composer
@@ -159,8 +173,13 @@ source shows a retry notice while the other source stays usable. Document typing
 alone is not yet attributed by Activity; Home reflects the actions the existing
 Activity system records.
 
-On mobile, Signal/Noise tabs and filters float above the full-height scrolling list. On iOS, rows
-fade underneath the filters and status bar using the shared top edge gradient.
+On mobile, this route always renders the original Notifications soup view,
+regardless of the new-app-views flag. The dock and search scope use the bell icon
+and **Notifications** label; Home is desktop-only. Notifications uses the existing
+Inbox presets, Signal/Noise tabs, notification cards, read/type filters, swipe
+actions, and pull-to-refresh, without Home's merged own-activity feed or chat
+starting pane. Opening a row navigates to its entity. On iOS, rows fade underneath
+the filters and status bar using the shared top edge gradient.
 
 Notifications have three lifecycle states: `unseen`, `seen`, and `done`. Active means
 unseen or seen. Viewing must not reopen a done notification; undoing done (`Ctrl+Z`
@@ -218,6 +237,21 @@ default All selections are not marked.
 Email Status and Done are single choices that close the menu; attachment filters
 stay open for multiple selections. Tags supports search, pins selected tags first
 on opening, and is omitted when no tags exist. **f** opens the filter menu.
+
+### Read state and trash
+
+With GraphQL Soup enabled, **Mark read/unread** updates the normalized email row
+optimistically. Permanent server errors roll it back; retryable transport failures
+can leave the action in the durable queue. Mark unread sends only the thread ID;
+the server resolves that inbox's UNREAD label and returns the canonical thread
+(`__typename`, `id`, `isRead`) to reconcile the cache. The row should flip immediately
+even when the client labels cache is missing or stale—no label fetch precedes the
+optimistic update. Queued read/unread writes retain revalidation descriptors for
+active flat and grouped lists, including loaded continuation pages. Once replay
+commits (even after a reload), those queries refresh from the server; they should
+not refetch over the optimistic state merely because a write was queued. Trash
+and its Undo refresh mounted GraphQL lists after the server operation finishes.
+The GraphQL-disabled REST path is unchanged.
 
 ### Cached Mail filtering
 
@@ -317,6 +351,8 @@ Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
 open shadow root: Playwright text locators can reach them, but a card's ordinary
 `innerText` or `querySelector` does not traverse that root.
 
+Sending a reply from an inbox thread marks that thread done but stays on it;
+only the explicit Mark done action opens the next email.
 After a successful send, the `Email sent` notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
 a slow background refresh must not keep the restored editor disabled. A rejected
@@ -382,7 +418,14 @@ mobile navigation even when `enable-new-app-views` is enabled.
 
 On desktop, with `enable-new-app-views` enabled, Files opens **Drive** using the
 same shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
-`Shared with me`, collapsible Favorites, and a searchable folder hierarchy.
+`Shared with me`, collapsible Favorites, a searchable folder hierarchy, and a
+collapsible Tags section beneath the folders. Tags lists every tag you can apply,
+nested by `/` in the tag name, with a `New tag` action in its header. Choosing a
+tag shows only that tag's files within the current tab or folder and exits any
+inline file detail; choosing the highlighted tag again clears it, and the same
+selection appears under the **Filter** menu's Tags submenu. Navigating to another
+tab or folder clears tag filters. A folder with no files matching the active tag
+shows the list's no-match state rather than `This folder is empty`.
 Drive omits split-history back/forward buttons in both wide and narrow layouts;
 the split close button remains available when multiple splits are open.
 Files opened in place from Drive show a return link labeled with their originating
@@ -405,6 +448,8 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Folder menus also offer
 Favorite/Unfavorite, Move to folder, Copy Link, and owner-only Rename and Delete.
+A folder's Share dialog, when the owner belongs to a team, has Team access
+(None, View, Comment, or Edit) without a Link sharing card or Link tab.
 Favorites use the same open actions and **Remove from favorites** menu as Tasks.
 The **Filter** menu reuses the
 legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**
@@ -414,14 +459,13 @@ is restricted to your own files. Recent offers only file-scope filtering.
 Recent uses the viewer's own interaction order and does not offer a sort override.
 The New menu and drag/drop uploads target the selected folder. File rows retain
 selection and context menus; ordinary folder clicks and Enter browse inside Drive,
-while Markdown, code/CSV, image, video, and unrecognized file clicks and Enter
-replace the list with a breadcrumbed detail. Choose the current location
+while Markdown, code/CSV, image, video, PDF/DOCX, canvas, and unrecognized file
+clicks and Enter replace the list with a breadcrumbed detail. Choose the current location
 breadcrumb to return to the list; choosing an ancestor file drops newer detail
 entries. Opening a list row or sidebar favorite starts a new detail path; only
-navigation originating inside a detail appends to that path. Modified clicks and
-file types without a dedicated detail, including PDF and canvas, retain existing
-split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
-and folders. Navigation state and expanded folders are restored when returning
+navigation originating inside a detail appends to that path. Modified clicks
+retain existing split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
+folders, and tags. Navigation state and expanded folders are restored when returning
 from an opened file.
 
 ## Calendar — `/app/calendar/view`
@@ -497,6 +541,19 @@ Tabs `All` / `Missed` / `Unattended`; `Call` button to start one. Recordings, tr
 and summaries appear here; empty state notes "Calls are available to agents."
 
 On phones, recorded call headers omit the **Call Again** action.
+
+### Sharing a call
+
+A call's **Share** dialog has a `Team access` control (None or View) for the same canonical
+team share. The side panel has a `Sharing` section with one `Share with team` checkbox, and the
+in-call controls carry the same checkbox while a call is live. It is canonical team sharing (the
+same `Team access` model documents and AI chats use), fixed at **view**. While the call is **live**
+the checkbox is a pending toggle (on by default) that any participant with edit access can flip;
+other participants see it update live. When the call ends it is applied: with the toggle on,
+everyone on the creator's team can open the recorded call, read the transcript and AI summary,
+and find it under Calls and in search; off means nothing is shared. Afterwards only the call's
+**creator** can change it — everyone else sees the checkbox read-only with a note saying so.
+Team sharing is independent of channel access and of link sharing.
 
 ## Customers (CRM) — `/app/component/companies`
 
@@ -651,7 +708,9 @@ but unconnected app gets a tool result saying so, and the agent's reply renders 
 
 `Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
 The model list is loaded live and independently for In-memory, connected Cursor, and every
-registered macrod harness. A harness can show `Loading models…`, an unsupported message, or
+registered macrod harness. The selected harness stays selected when the list refreshes.
+A paired macrod connects on startup, so models can load before any agents are bound.
+A harness can show `Loading models…`, an unsupported message, or
 a retryable error without hiding the other harnesses. Editing preserves a saved model that
 is no longer offered and labels it `saved, unavailable`. A macrod with no responding runtime
 can remain loading until the 10-second discovery timeout; use Retry after reconnecting it.

@@ -14,6 +14,10 @@ note: |-
   `@core/user/macroId` identity helpers are a documented exception. Adopting features add their layer paths to
   `files` in each ts-/tsx-feature-* rule.
 files:
+  - apps/web/src/features/block-spreadsheet/queries/**
+  - apps/web/src/features/block-spreadsheet/primitives/**
+  - apps/web/src/features/block-spreadsheet/components/**
+  - apps/web/src/features/block-spreadsheet/views/**
   - apps/web/src/features/property/tags/components/**
   - apps/web/src/features/property/tags/queries/**
   - apps/web/src/features/property/tags/primitives/**

@@ -162,16 +162,16 @@ export function TaskList(props: TaskListProps) {
     const newSplit =
       metadata?.newSplit === true || metadata?.event?.shiftKey === true;
 
-    if (newSplit) {
-      openEntity(sourceRow.entity, { openInNewSplit: true });
-
+    if (
+      !newSplit &&
+      openTask(
+        { id: sourceRow.entity.id, fallbackName: sourceRow.entity.name },
+        { event: metadata?.event }
+      )
+    )
       return;
-    }
 
-    openTask({
-      id: sourceRow.entity.id,
-      fallbackName: sourceRow.entity.name,
-    });
+    openEntity(sourceRow.entity, { openInNewSplit: newSplit });
   }
 
   registerListActivationHandler(onActivate);

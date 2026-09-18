@@ -22,17 +22,19 @@ reqwest = "0.13"
 rootcause = "0.12"
 semver = "1"
 serde = "1"
-tauri = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
+tauri = { git = "https://github.com/macro-inc/tauri", rev = "957785f5" }
 thiserror = "2"
 tokio = "1"
 tracing = "0.1"
 url = "2.5.4"
 
 [patch.crates-io]
-tauri = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
-tauri-runtime = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
-tauri-runtime-wry = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
-tauri-utils = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
-tauri-macros = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
-tauri-codegen = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
-tauri-build = { git = "https://github.com/seanaye/tauri", rev = "95a7521b" }
+# Backport tao#1257 plus nullable launch-option accessors; see the fork's FORK.md.
+tao = { git = "https://github.com/macro-inc/tao", rev = "6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8" }
+tauri = { git = "https://github.com/macro-inc/tauri", rev = "957785f5" }
+tauri-runtime = { git = "https://github.com/macro-inc/tauri", rev = "957785f5" }
+tauri-runtime-wry = { git = "https://github.com/macro-inc/tauri", rev = "957785f5" }
+tauri-utils = { git = "https://github.com/macro-inc/tauri", rev = "957785f5" }
+tauri-macros = { git = "https://github.com/macro-inc/tauri", rev = "957785f5" }
+tauri-codegen = { git = "https://github.com/macro-inc/tauri", rev = "957785f5" }
+tauri-build = { git = "https://github.com/macro-inc/tauri", rev = "957785f5" }

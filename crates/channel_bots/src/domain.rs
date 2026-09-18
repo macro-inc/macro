@@ -24,3 +24,6 @@ pub(crate) fn sender_label(sender_id: &str) -> String {
         .unwrap_or(sender_id)
         .to_string()
 }
+
+#[cfg(test)]
+pub(crate) mod test;

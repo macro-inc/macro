@@ -31,8 +31,8 @@ export function ComposeSubject(props: {
   return (
     <div
       class={cn(
-        'w-full flex gap-2 border-b border-edge-muted focus-within:border-accent py-2',
-        ctx.isMobile() ? 'items-start' : 'items-center'
+        'w-full flex gap-2 border-b border-edge-muted focus-within:border-ink/20',
+        ctx.isMobile() ? 'items-start py-2' : 'items-center py-3'
       )}
     >
       <div
@@ -52,7 +52,7 @@ export function ComposeSubject(props: {
               type="text"
               value={ctx.subject()}
               placeholder="Subject"
-              class="w-full resize-none text-base placeholder:text-ink-placeholder p-1"
+              class="w-full resize-none bg-transparent text-base text-ink placeholder:text-ink-placeholder outline-none"
               onInput={(e) => ctx.setSubject(e.currentTarget.value)}
               onKeyDown={blurOnEscape}
               disabled={ctx.disabled()}

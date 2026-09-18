@@ -28,7 +28,6 @@ import {
   createMemo,
   createSignal,
   createUniqueId,
-  on,
   onCleanup,
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -39,7 +38,6 @@ import {
   deduplicateChannels,
 } from '../../queries';
 import type {
-  ChannelsGroup,
   ChannelsQueryScope,
   ChannelsRailSection,
   ChannelsTab,
@@ -57,7 +55,6 @@ import {
 import { ExpandedChannelsRail } from './ExpandedChannelsRail';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
-import { SlimChannelsRail } from './SlimChannelsRail';
 
 const CHANNEL_RAIL_SECTIONS: ChannelsRailSection[] = [
   'favorites',
@@ -74,8 +71,6 @@ const CHANNEL_SEARCH_FILTERS = {
 
 export type ChannelsRailProps = {
   sources: ChannelsSources;
-  mode: 'full' | 'slim';
-  onModeChange: (mode: 'full' | 'slim') => void;
   searchOpen: boolean;
   onSearchOpenChange: (open: boolean) => void;
 };
@@ -90,11 +85,7 @@ type ChannelRailItemsByScope = Record<
 export function buildChannelRailRows(
   tab: ChannelsTab,
   expandedGroups: Record<ChannelsRailSection, boolean>,
-  items: ChannelRailItemsByScope,
-  options: {
-    mode: 'full' | 'slim';
-    slimGroups: Record<ChannelsGroup, boolean>;
-  }
+  items: ChannelRailItemsByScope
 ): ChannelRailRow[] {
   if (tab === 'recents') {
     return items.recents.map((channel, localIndex) => ({
@@ -125,28 +116,6 @@ export function buildChannelRailRows(
         )
       );
     }
-  }
-
-  if (options.mode === 'slim') {
-    let virtualIndex = 0;
-    for (const group of BROWSE_QUERY_SCOPES) {
-      if (!options.slimGroups[group]) continue;
-
-      rows.push(
-        ...items[group].map(
-          (channel, localIndex): ChannelRailRow => ({
-            kind: 'conversation',
-            id: `channel:${channel.id}`,
-            group,
-            scope: group,
-            localIndex,
-            virtualIndex: virtualIndex++,
-            channel,
-          })
-        )
-      );
-    }
-    return rows;
   }
 
   rows.push({
@@ -193,14 +162,8 @@ export function buildChannelRailRows(
 }
 
 export function ChannelsRail(props: ChannelsRailProps) {
-  const {
-    state,
-    setGroupOpen,
-    setSelectedChannelId,
-    setSlimGroupEnabled,
-    setSortBy,
-    setTab,
-  } = useChannelsView();
+  const { state, setGroupOpen, setSelectedChannelId, setSortBy, setTab } =
+    useChannelsView();
 
   const panel = useSplitPanelOrThrow();
   const layout = useSplitLayout();
@@ -238,7 +201,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const openSearch = () => {
-    if (props.mode === 'slim') props.onModeChange('full');
     props.onSearchOpenChange(true);
     queueMicrotask(() => searchInput?.focus());
   };
@@ -345,20 +307,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
       );
     }
 
-    return buildChannelRailRows(
-      state.tab,
-      state.expandedGroups,
-      {
-        favorites: favorites(),
-        channels: props.sources.channels.items(),
-        direct_messages: props.sources.direct_messages.items(),
-        recents: props.sources.recents.items(),
-      },
-      {
-        mode: props.mode,
-        slimGroups: state.slimGroups,
-      }
-    );
+    return buildChannelRailRows(state.tab, state.expandedGroups, {
+      favorites: favorites(),
+      channels: props.sources.channels.items(),
+      direct_messages: props.sources.direct_messages.items(),
+      recents: props.sources.recents.items(),
+    });
   });
 
   const list = withSplitPanelOwner(listOwnedSlotName('controller'), () =>
@@ -415,10 +369,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       if (row.kind === 'conversation') {
         const virtualizer = virtualizers()[row.scope];
         if (virtualizer) {
-          virtualizer.scrollToIndex(
-            row.virtualIndex ?? row.localIndex,
-            options
-          );
+          virtualizer.scrollToIndex(row.localIndex, options);
           return;
         }
       }
@@ -509,7 +460,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   createEffect(() => {
-    if (!restoreListScroll() || props.mode !== 'full') return;
+    if (!restoreListScroll()) return;
 
     const searchOpen = props.searchOpen;
     const sourcesReady = searchOpen
@@ -522,7 +473,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     if (!sourcesReady) return;
 
     const frame = requestAnimationFrame(() => {
-      if (props.searchOpen !== searchOpen || props.mode !== 'full') return;
+      if (props.searchOpen !== searchOpen) return;
 
       if (searchOpen) {
         scrollSearchToSelectedOrStart();
@@ -626,10 +577,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
         alternateDescription: 'Open in new split',
       },
       disclosure: {
-        getKey: (row) =>
-          props.mode === 'slim' && row.kind === 'conversation'
-            ? undefined
-            : row.group,
+        getKey: (row) => row.group,
         isExpanded: (group) =>
           state.expandedGroups[group as ChannelsRailSection],
         setExpanded: (group, expanded) =>
@@ -665,10 +613,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
 
   const sectionHotkeys = createHotkeyGroup();
   const sectionHotkeysEnabled = () =>
-    panel.isPanelActive() &&
-    props.mode === 'full' &&
-    !props.searchOpen &&
-    state.tab === 'browse';
+    panel.isPanelActive() && !props.searchOpen && state.tab === 'browse';
 
   registerHotkey({
     hotkey: ']',
@@ -685,27 +630,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     keyDownHandler: () => jumpToSection(-1),
   }).withGroup(sectionHotkeys);
   onCleanup(() => sectionHotkeys.dispose());
-
-  createEffect(
-    on(
-      () => props.mode,
-      () => {
-        if (props.mode === 'slim') {
-          closeSearch();
-          return;
-        }
-
-        const focusedIndex = list.focus.index();
-        if (focusedIndex < 0) return;
-
-        const frame = requestAnimationFrame(() => {
-          scrollHandle.scrollToIndex(focusedIndex);
-        });
-        onCleanup(() => cancelAnimationFrame(frame));
-      },
-      { defer: true }
-    )
-  );
 
   const activateRow = (rowId: ChannelRailRow['id'], event?: MouseEvent) => {
     list.activate.key(rowId, {
@@ -736,10 +660,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     list,
     tab: () => state.tab,
     selectTab,
-    setMode: (mode) => {
-      if (mode === 'slim') closeSearch();
-      props.onModeChange(mode);
-    },
     sources: props.sources,
     favorites,
     selectedChannelId: () => state.selectedChannelId,
@@ -747,8 +667,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     toggleGroup: (group) => setGroupOpen(group, !state.expandedGroups[group]),
     sortBy: (group) => state.sortBy[group],
     setSortBy,
-    slimGroupEnabled: (group) => state.slimGroups[group],
-    setSlimGroupEnabled,
     registerRootRef: setListRoot,
     activateRow,
     registerScrollRef: (group, element) => {
@@ -767,26 +685,22 @@ export function ChannelsRail(props: ChannelsRailProps) {
         aria-label="Chat navigation"
         class="flex size-full min-h-0 flex-col gap-3 bg-panel"
       >
-        {props.mode === 'full' ? (
-          <ExpandedChannelsRail
-            search={{
-              isOpen: () => props.searchOpen,
-              query: searchQuery,
-              results: searchResults,
-              isLoading: searchLoading,
-              error: searchError,
-              open: openSearch,
-              close: closeSearch,
-              setQuery: setSearchQuery,
-              registerInput: (element) => {
-                searchInput = element;
-              },
-              retry: retrySearch,
-            }}
-          />
-        ) : (
-          <SlimChannelsRail />
-        )}
+        <ExpandedChannelsRail
+          search={{
+            isOpen: () => props.searchOpen,
+            query: searchQuery,
+            results: searchResults,
+            isLoading: searchLoading,
+            error: searchError,
+            open: openSearch,
+            close: closeSearch,
+            setQuery: setSearchQuery,
+            registerInput: (element) => {
+              searchInput = element;
+            },
+            retry: retrySearch,
+          }}
+        />
       </aside>
     </ChannelsRailProvider>
   );

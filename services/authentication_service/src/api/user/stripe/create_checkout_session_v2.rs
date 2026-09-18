@@ -2,7 +2,9 @@ use axum::{Json, extract::State};
 use entity_access::domain::models::OwnerTeamRole;
 use entity_access::domain::ports::EntityAccessService;
 use entity_access::inbound::axum_extractors::OptionalMacroUserTeamExtractorV2;
+use gtm_invite::domain::ports::GtmInviteService;
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
+use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 use utoipa::ToSchema;
 
@@ -90,24 +92,40 @@ pub async fn create_checkout_session<Eas: EntityAccessService>(
         return Err(StripeOperationError::AlreadySubscribed);
     }
 
-    // If a discount code is provided, look up the promotion code ID
-    let promo_code_id = if let Some(ref discount) = req.discount {
-        let mut list_params = stripe::ListPromotionCodes::new();
-        list_params.code = Some(discount);
-        list_params.active = Some(true);
-        list_params.limit = Some(1);
-
-        let promo_codes = stripe::PromotionCode::list(&ctx.stripe_client, &list_params).await?;
-
-        let promo_code = promo_codes
-            .data
-            .into_iter()
-            .next()
-            .ok_or(StripeOperationError::PromoCodeNotFound)?;
-
-        Some(promo_code.id)
-    } else {
-        None
+    // An explicit discount code is authoritative and must exist. Without one,
+    // an account that signed up through a GTM invite link gets the link's
+    // promotion applied for it — best-effort, so a code that went missing in
+    // Stripe degrades to a regular checkout instead of blocking it.
+    let promo_code_id = match req.discount.as_deref() {
+        Some(discount) => Some(
+            find_active_promotion_code(&ctx.stripe_client, discount)
+                .await?
+                .ok_or(StripeOperationError::PromoCodeNotFound)?,
+        ),
+        None => match gtm_invite_promo_code(&ctx, &user.authorization.user.macro_user_id).await {
+            Some(code) => match find_active_promotion_code(&ctx.stripe_client, &code).await {
+                Ok(Some(id)) => {
+                    tracing::info!(promo_code = %code, "applying GTM invite promotion to checkout");
+                    Some(id)
+                }
+                Ok(None) => {
+                    tracing::error!(
+                        promo_code = %code,
+                        "GTM invite promotion code is not active in Stripe; checking out without it"
+                    );
+                    None
+                }
+                Err(e) => {
+                    tracing::error!(
+                        error=?e,
+                        promo_code = %code,
+                        "failed to look up GTM invite promotion code; checking out without it"
+                    );
+                    None
+                }
+            },
+            None => None,
+        },
     };
 
     // Build subscription metadata from optional tracking fields
@@ -176,4 +194,31 @@ pub async fn create_checkout_session<Eas: EntityAccessService>(
     url::Url::parse(&url).map_err(|_| StripeOperationError::UnexpectedStripeResponse)?;
 
     Ok(Json(StripeSessionResponse { url }))
+}
+
+/// Finds the active Stripe promotion code customers redeem as `code`.
+async fn find_active_promotion_code(
+    stripe_client: &stripe::Client,
+    code: &str,
+) -> Result<Option<stripe::PromotionCodeId>, stripe::StripeError> {
+    let mut list_params = stripe::ListPromotionCodes::new();
+    list_params.code = Some(code);
+    list_params.active = Some(true);
+    list_params.limit = Some(1);
+
+    let promo_codes = stripe::PromotionCode::list(stripe_client, &list_params).await?;
+
+    Ok(promo_codes.data.into_iter().next().map(|promo| promo.id))
+}
+
+/// The promotion code an account holds from a redeemed GTM invite link, if any.
+async fn gtm_invite_promo_code(ctx: &ApiContext, user_id: &MacroUserIdStr<'_>) -> Option<String> {
+    match ctx.gtm_invite_service.active_offer_for_user(user_id).await {
+        Ok(Some(link)) => Some(link.promo_code.to_string()),
+        Ok(None) => None,
+        Err(e) => {
+            tracing::error!(error=?e, "failed to look up GTM invite offer for checkout");
+            None
+        }
+    }
 }

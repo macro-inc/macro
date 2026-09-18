@@ -1,3 +1,4 @@
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 /**
  * The agent block's composer: the chat input's look and its markdown editing
  * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), including `@`
@@ -16,6 +17,7 @@ import { createComposerDictation } from '@app/features/dictation/composer-dictat
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
@@ -42,6 +44,17 @@ export interface AgentInputProps {
    * input is empty, Enter and the matching button do exactly that.
    */
   hasQueuedMessages?: boolean;
+  /**
+   * A stop is already on its way. The queue advances when the turn it ends
+   * actually ends, so a second stop does nothing but post again.
+   */
+  stopPending?: boolean;
+  /**
+   * Enter or the send button with an empty input and a queued message. Falls
+   * back to `onStop`, which is the mechanism: the queue advances when the
+   * turn it waits on ends.
+   */
+  onSendNext?: () => void;
   disabled?: boolean;
   autofocus?: boolean;
   /**
@@ -72,13 +85,14 @@ export interface AgentInputProps {
   registerFocus?: (focus: (() => void) | undefined) => void;
 }
 
-/** Past this height a phone draft is scroll-capped so it cannot eat the dock. */
-const SINGLE_LINE_HEIGHT = 40;
-
 export function AgentInput(props: AgentInputProps) {
   const [markdown, setMarkdown] = createSignal('');
   let containerRef: HTMLDivElement | undefined;
-  let bodyRef: HTMLDivElement | undefined;
+  const [layout, setLayout] = createSignal<HTMLDivElement>();
+  const [height, setHeight] = createSignal<number>();
+  createResizeObserver(layout, (_, element) => {
+    setHeight(element.getBoundingClientRect().height);
+  });
   useTouchOutsideToDismissKeyboard(() => containerRef);
   const dictation = createComposerDictation(() => editor.lexical);
 
@@ -87,14 +101,6 @@ export function AgentInput(props: AgentInputProps) {
   const canSend = () =>
     markdown().trim().length > 0 && !props.disabled && !dictation.active();
 
-  // Caps tall drafts on a phone so the editor cannot eat the viewport
-  // above the dock. Controls live in a footer row, not over the text.
-  const isMultiline = () => {
-    if (markdown().trim().length === 0) return false;
-    if (!bodyRef) return false;
-    return bodyRef.scrollHeight > SINGLE_LINE_HEIGHT;
-  };
-
   const send = () => {
     if (!canSend()) return;
     const content = markdown().trim();
@@ -102,19 +108,27 @@ export function AgentInput(props: AgentInputProps) {
     props.onSend(content);
   };
 
+  // Deliberately not gated on `busy`. A speculated stop reads as done
+  // everywhere else, so `busy` is already false while the runtime is still
+  // winding the turn down - and that is exactly when a waiting message is
+  // most worth advancing. What does gate it is a stop already in flight:
+  // repeating it just posts another cancel for the same turn.
   const canSendNext = () =>
     !dictation.active() &&
     markdown().trim().length === 0 &&
-    props.busy &&
-    props.hasQueuedMessages &&
+    props.hasQueuedMessages === true &&
+    !props.stopPending &&
     !props.disabled &&
     props.onStop !== undefined;
 
   const sendNext = () => {
     if (!canSendNext()) return;
-    // Stop bypasses the server queue. The cancelled turn ending immediately
-    // dispatches its oldest waiting action, so the queue remains FIFO.
-    props.onStop?.();
+    // Stop bypasses the server queue: the fold shows it at once as a pending
+    // Stopped line, and when the runtime ends the cancelled turn the server
+    // dispatches the oldest waiting action, so the queue remains FIFO. How
+    // soon that is depends on the runtime - a booting sandbox cannot be
+    // interrupted until it is up.
+    (props.onSendNext ?? props.onStop)?.();
   };
 
   const editor = buildConfig('chat')
@@ -144,6 +158,14 @@ export function AgentInput(props: AgentInputProps) {
       onEnd: () => {},
     })
     .onChange(setMarkdown);
+
+  const { isCompact, hasMultilineContent } = createComposerLayout(
+    editor.buildHandle().lexical,
+    {
+      container: layout,
+      mode: () => (isTouchDevice() ? 'expanded' : 'auto'),
+    }
+  );
 
   onMount(() => {
     props.registerFocus?.(() => editor.controls.focus());
@@ -187,21 +209,25 @@ export function AgentInput(props: AgentInputProps) {
       </Show>
       {/* h-auto beats Surface's size-full so the in-flow controls are not
           clipped over the editor (that was Auto sitting on the placeholder). */}
-      <ComposerSurface class="relative h-auto">
+      <ComposerSurface
+        class="relative h-auto transition-[height] duration-150 ease-out motion-reduce:transition-none"
+        style={{ height: height() === undefined ? undefined : `${height()}px` }}
+      >
         {/* Desktop: one row, send right of the text. Touch: the text gets
             the whole width and the controls drop to a footer row (model
             left, send right) — the chat-tall / channel footer shape. */}
         <div
           inert={dictation.active()}
           classList={{ invisible: dictation.active() }}
-          class="flex items-end gap-[3.75px] p-[7.5px] min-h-[48.75px] touch:min-h-0 touch:flex-col touch:items-stretch touch:gap-0 touch:p-0"
+          ref={setLayout}
+          data-composer-compact={isCompact()}
+          class="group/composer flex items-end data-[composer-compact=false]:flex-col data-[composer-compact=false]:items-stretch gap-[3.75px] p-[7.5px] min-h-[48.75px] touch:min-h-0 touch:flex-col touch:items-stretch touch:gap-0 touch:p-0"
           onPointerDown={focusEditor}
           onMouseDown={focusEditor}
         >
           <div
             id={AGENT_INPUT_TEXT_AREA_ID}
-            ref={bodyRef}
-            class="min-w-0 flex-1 text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"
+            class="min-w-0 flex-1 group-data-[composer-compact=false]/composer:flex-none text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"
             classList={{
               // While empty only the placeholder renders; keep it to one clipped
               // line so it doesn't wrap into the single-line height.
@@ -209,7 +235,7 @@ export function AgentInput(props: AgentInputProps) {
                 markdown().trim().length === 0,
               // Long drafts must not eat the mobile viewport above the dock.
               'max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto':
-                isMultiline() && isMobile(),
+                hasMultilineContent() && isMobile(),
             }}
           >
             <ComposerEditor
@@ -232,19 +258,19 @@ export function AgentInput(props: AgentInputProps) {
                 disabled={props.disabled}
               />
               <Show
-                when={props.busy && props.onStop}
+                when={canSendNext()}
                 fallback={
-                  <SendButton
-                    appearance="composer"
-                    tooltip="Send"
-                    disabled={!canSend()}
-                    onClick={send}
-                  />
-                }
-              >
-                <Show
-                  when={canSendNext()}
-                  fallback={
+                  <Show
+                    when={props.busy && props.onStop}
+                    fallback={
+                      <SendButton
+                        appearance="composer"
+                        tooltip="Send"
+                        disabled={!canSend()}
+                        onClick={send}
+                      />
+                    }
+                  >
                     <Button
                       variant={isTouchDevice() ? 'ghost' : 'strong'}
                       size="icon-composer"
@@ -258,18 +284,18 @@ export function AgentInput(props: AgentInputProps) {
                     >
                       <div class="size-3.5 not-touch:size-[13.125px] rounded-sm bg-current" />
                     </Button>
-                  }
+                  </Show>
+                }
+              >
+                <SendButton
+                  appearance="composer"
+                  aria-label="Send next queued message"
+                  tooltip="Send next queued message"
+                  shortcut="Enter"
+                  onClick={sendNext}
                 >
-                  <SendButton
-                    appearance="composer"
-                    aria-label="Send next queued message"
-                    tooltip="Send next queued message"
-                    shortcut="Enter"
-                    onClick={sendNext}
-                  >
-                    <EnterIcon />
-                  </SendButton>
-                </Show>
+                  <EnterIcon />
+                </SendButton>
               </Show>
             </div>
           </div>

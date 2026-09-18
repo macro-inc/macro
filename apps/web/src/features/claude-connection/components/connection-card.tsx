@@ -26,7 +26,7 @@ export function ConnectionCard(props: ConnectionCardProps) {
       </div>
       <div class="flex min-w-0 flex-1 flex-col gap-3">
         <div class="flex items-center gap-2">
-          <h2 class="text-sm font-medium text-ink">Claude Cloud (demo)</h2>
+          <h2 class="text-sm font-medium text-ink">Claude Cloud</h2>
           <Show when={props.status?.connected}>
             <span class="text-xs text-success">Connected</span>
           </Show>
@@ -49,13 +49,13 @@ export function ConnectionCard(props: ConnectionCardProps) {
             when={props.status?.enabled}
             fallback={
               <p class="text-xs text-ink-muted">
-                Browser connection is enabled only in the local demo backend.
+                Claude sign-in is not configured on this deployment.
               </p>
             }
           >
             <p class="text-xs text-ink-muted">
               {props.status?.ephemeral
-                ? 'Local demo: credentials stay in server memory. Reconnect after a backend restart.'
+                ? 'Credentials stay in server memory. Reconnect after a backend restart.'
                 : 'Your connection is saved securely and survives backend restarts.'}{' '}
               Macro never asks for your Claude password.
             </p>
@@ -142,9 +142,9 @@ export function ConnectionCard(props: ConnectionCardProps) {
         </Show>
         <Show when={props.status?.connected}>
           <p class="text-xs text-ink-muted">
-            Ready. In Settings → Agents, choose Claude Cloud (demo) as the
-            agent’s harness. Disconnecting forgets Macro’s grant; it does not
-            revoke consent at Claude or stop an already-running cloud turn.
+            Ready. In Settings → Agents, choose Claude Cloud as the agent’s
+            harness. Disconnecting forgets Macro’s grant; it does not revoke
+            consent at Claude or stop an already-running cloud turn.
           </p>
         </Show>
         <Show when={props.error}>

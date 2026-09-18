@@ -1,4 +1,5 @@
 import { usePreference } from '@app/preferences/use-preference';
+import { useMaybeBlockAliasedName } from '@core/block';
 import { Resize, ResizeZoneContext } from '@core/component/Resize/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -71,13 +72,19 @@ function createWideOpenState(
 function Root(
   props: ParentProps<{ defaultOpen?: boolean; persistKey?: string }>
 ) {
+  const splitPanel = useSplitPanel();
+  const content = splitPanel?.handle.content();
+  const persistKey =
+    props.persistKey ??
+    useMaybeBlockAliasedName() ??
+    (content?.type === 'component' ? content.id : content?.type);
   const [sections, setSections] = createSignal<SidePanelSectionEntry[]>([]);
   const [openIds, setOpenIds] = createSignal<string[]>([]);
   // Independent open state per mode so wide and narrow can have different
   // defaults (and the user's preference in one mode doesn't bleed into the
   // other after a resize).
   const [isWideOpen, setIsWideOpen] = createWideOpenState(
-    props.persistKey,
+    persistKey,
     props.defaultOpen ?? true
   );
   const [isNarrowOpen, setIsNarrowOpen] = createSignal(false);
@@ -113,7 +120,6 @@ function Root(
   };
 
   const hasSections = createMemo(() => sections().length > 0);
-  const splitPanel = useSplitPanel();
   if (splitPanel?.splitHotkeyScope) {
     registerHotkey({
       hotkey: ']',
@@ -250,7 +256,7 @@ function SidePanelLayoutInner(
           maxSize={SIDE_MAX_PX}
           index={1}
         >
-          <div class={'relative size-full z-split-panel-chrome'}>
+          <div class="relative flex size-full min-h-0 flex-col z-split-panel-chrome">
             <SidePanelOutlet
               sections={props.sections}
               openIds={props.openIds}
@@ -329,6 +335,7 @@ function Toggle() {
 }
 
 function SidePanelHeaderToggle() {
+  const panel = useSplitPanel();
   const ctx = useContext(SidePanelContext);
   if (!ctx) {
     throw new Error('<SidePanelHeaderToggle> must be inside <SidePanel.Root>');
@@ -336,18 +343,27 @@ function SidePanelHeaderToggle() {
 
   return (
     <Show when={ctx.hasSections()}>
-      <SplitHeaderRight>
-        <div class="order-last flex items-center">
-          <HeaderIsland
-            class={cn(
-              'size-10 justify-center !px-0',
-              ctx.isOpen() && 'text-accent'
-            )}
-          >
+      <Show when={!isTouchDevice() && !panel?.isInlinePreview}>
+        <SplitHeaderRight>
+          <div class="order-[1001] flex shrink-0 items-center">
             <Toggle />
-          </HeaderIsland>
-        </div>
-      </SplitHeaderRight>
+          </div>
+        </SplitHeaderRight>
+      </Show>
+      <Show when={isTouchDevice() || panel?.isInlinePreview}>
+        <SplitHeaderRight>
+          <div class="order-last flex items-center">
+            <HeaderIsland
+              class={cn(
+                'size-10 justify-center !px-0',
+                ctx.isOpen() && 'text-accent'
+              )}
+            >
+              <Toggle />
+            </HeaderIsland>
+          </div>
+        </SplitHeaderRight>
+      </Show>
     </Show>
   );
 }

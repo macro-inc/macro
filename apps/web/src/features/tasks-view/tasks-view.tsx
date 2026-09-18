@@ -71,6 +71,7 @@ function TasksViewRoot() {
     <SplitPanel.Root>
       <SplitPanel.Body>
         <ViewShell.Root
+          asidePreferenceKey="tasks"
           resizable
           aside={{ preserveDuringResize: false }}
           main={{ preferredWidth: 640 }}
@@ -105,9 +106,7 @@ function TasksViewRoot() {
 /** Production Tasks view. */
 export function TasksView(props: TasksViewProps) {
   return (
-    <EntityDetailNavigationStack.Root
-      shouldNavigate={(_, options) => options?.event?.shiftKey !== true}
-    >
+    <EntityDetailNavigationStack.Root>
       <ListEntityMetadataQueryProvider>
         <TasksViewProvider initialState={props.initialState}>
           <TasksViewBreadcrumbs>

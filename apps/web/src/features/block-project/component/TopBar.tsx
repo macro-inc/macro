@@ -11,7 +11,6 @@ import {
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
 import { PreviewButton } from '@components/app/split-layout/components/PreviewButton';
-import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import {
   BlockSplitFileMenu,
   type FileOperation,
@@ -29,7 +28,6 @@ import {
   SplitToolbarRight,
 } from '@components/app/split-layout/components/SplitToolbar';
 import { useBlockId } from '@core/block';
-import { DETAILS_DRAWER_ID } from '@core/component/DetailsDrawer';
 import { toast } from '@core/component/Toast/Toast';
 import {
   getShareDrawerRecipientInput,
@@ -40,7 +38,6 @@ import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { isMobile } from '@core/mobile/isMobile';
 import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import Info from '@phosphor/info.svg';
 import IconShared from '@phosphor/share.svg';
 import { createMemo, For, Show } from 'solid-js';
 import { ProjectCreateMenu, useProjectCreateTools } from './ProjectCreateMenu';
@@ -57,7 +54,6 @@ export function TopBar() {
     () => projectBlockDataSignal()?.projectMetadata.name ?? ''
   );
 
-  const detailsControl = useDrawerControl(DETAILS_DRAWER_ID);
   const shareCtx = useShareDialogContext();
 
   function handleCopyLink() {
@@ -71,15 +67,6 @@ export function TopBar() {
   }
 
   const ops = createMemo<FileOperation[]>(() => [
-    ...(!isSpecialProject
-      ? [
-          {
-            label: 'Details',
-            icon: Info,
-            action: detailsControl.toggle,
-          },
-        ]
-      : []),
     ...(isOwner() && !isSpecialProject
       ? [
           { op: 'rename' as const },

@@ -78,7 +78,6 @@ async function startOwner(registerForLogout = false): Promise<void> {
   owner = createWorkerCacheHost({
     scope,
     requestTimeoutMs: 20_000,
-    initializationTimeoutMs: 20_000,
     rolloutCohort: 'treatment',
   });
   if (registerForLogout) unregisterOwner = registerCacheHost(owner);

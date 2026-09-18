@@ -32,7 +32,7 @@ export function InboxListLayout(
             title="Home"
             label="New chat"
             onCreate={props.onNewChat}
-            actions={<InboxFilterDropdown />}
+            titleActions={<InboxFilterDropdown />}
           />
         }
       >

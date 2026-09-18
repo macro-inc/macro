@@ -1,5 +1,5 @@
-import { createBlockStore } from '@core/block';
 import { produce } from 'solid-js/store';
+import { usePdfDocument } from '../context/pdf-document-context';
 import Section from '../model/Section';
 import TocItem from '../model/TocItem';
 import type { IBookmark } from '../type/Bookmark';
@@ -9,14 +9,20 @@ import { InvalidActionError } from '../util/errors';
 import TocUtils from '../util/TocUtils';
 import { XMLUtils } from '../util/XMLUtils';
 
+const DEFAULT_WIDTH_PX = 150;
+
+function getDefaultWidth(): number {
+  if (typeof window === 'undefined') return DEFAULT_WIDTH_PX;
+  return Math.max(DEFAULT_WIDTH_PX, Math.round(window.innerWidth * 0.15));
+}
+
 // import {
 //   ITableOfContentsContext,
 //   TPageToSectionMap,
 //   getDefaultWidth,
 // } from './DefaultTableOfContentsState';
-const DEFAULT_WIDTH_PX = 150;
 export type TPageToSectionMap = Partial<{ [yPos: number]: Section }>[];
-interface ITableOfContentsContext {
+export interface ITableOfContentsContext {
   // original copies of each TOC mode; allows for quickly swapping between the two
   original: {
     aiToc: TocItem[] | null;
@@ -45,34 +51,6 @@ interface ITableOfContentsContext {
   // used for clicking on section references within the document
   aiTocIdToSectionMap: Partial<{ [sectionId: number]: Section }>;
 }
-function getDefaultWidth(): number {
-  if (typeof window === 'undefined') return DEFAULT_WIDTH_PX;
-  return Math.max(DEFAULT_WIDTH_PX, Math.round(window.innerWidth * 0.15));
-}
-const defaultState: ITableOfContentsContext = {
-  original: {
-    aiToc: null,
-    pdfBookmarks: null,
-  },
-  currentMode: 'bookmarks',
-  width: getDefaultWidth(),
-
-  isLoaded: false,
-  sectionToDeleteID: null,
-  renameFormValue: '',
-  sectionToRenameID: null,
-  items: [],
-  pageToSectionMap: [],
-  unsavedBookmarks: false,
-  coparse: null,
-
-  idToSectionMap: {},
-  idToPathMap: {},
-  idToNearestTitleMap: {},
-  openItems: {},
-  aiTocIdToSectionMap: {},
-};
-
 /* -------------------------------------------------------------------------- *
  * Types
  * -------------------------------------------------------------------------- */
@@ -1330,24 +1308,22 @@ export function findSectionByUuid(
   return foundSection;
 }
 
-const tableOfContentStore =
-  createBlockStore<ITableOfContentsContext>(defaultState);
-
 export function useTableOfContentsValue() {
-  const tocStore = tableOfContentStore.get;
+  const [tocStore] = usePdfDocument().state.stores.tableOfContents;
   return () => tocStore;
 }
 
 export function useTableOfContentsUpdate() {
-  const setTocStore = tableOfContentStore.set;
+  const [, setTocStore] = usePdfDocument().state.stores.tableOfContents;
   return (action: ITableOfContentsAction) => {
-    // @ts-ignore
-    setTocStore(produce((state) => producer(state, action)));
+    setTocStore(
+      produce<ITableOfContentsContext>((state) => producer(state, action))
+    );
   };
 }
 
 export function useGetIdToSectionMap() {
-  const tocStore = tableOfContentStore.get;
+  const [tocStore] = usePdfDocument().state.stores.tableOfContents;
   return () =>
     tocStore.currentMode === 'bookmarks'
       ? tocStore.aiTocIdToSectionMap
@@ -1355,6 +1331,6 @@ export function useGetIdToSectionMap() {
 }
 
 export function useGetPageToSectionMap() {
-  const tocStore = tableOfContentStore.get;
+  const [tocStore] = usePdfDocument().state.stores.tableOfContents;
   return () => tocStore.pageToSectionMap;
 }

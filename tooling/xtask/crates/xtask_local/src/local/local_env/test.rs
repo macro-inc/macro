@@ -213,6 +213,10 @@ fn emits_in_network_service_url_overrides() {
             "OVERRIDE_LEXICAL_SERVICE_URL",
             "http://lexical-service:8096",
         ),
+        (
+            "OVERRIDE_STATIC_FILE_SERVICE_URL",
+            "http://static-file-service:8080",
+        ),
     ] {
         assert_eq!(env.get(key).map(String::as_str), Some(expected));
     }

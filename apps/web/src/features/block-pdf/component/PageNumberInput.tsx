@@ -1,14 +1,11 @@
-import { blockElementSignal } from '@core/signal/blockElement';
 import { createCallback } from '@solid-primitives/rootless';
 import { cn } from '@ui';
 import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
-import {
-  pageCount,
-  useCurrentPageNumber,
-  useGetRootViewer,
-} from '../signal/pdfViewer';
+import { usePdfDocument } from '../context/pdf-document-context';
+import { useCurrentPageNumber, useGetRootViewer } from '../signal/pdfViewer';
 
 export function PageNumberInput() {
+  const pdf = usePdfDocument();
   // const context = useContext(BarContext);
   // if (!context) throw new Error('PageNumberInput must be used within a Bar');
   // const truncation = context.truncation;
@@ -19,7 +16,7 @@ export function PageNumberInput() {
   const [intermediateVal, setIntermediate] = createSignal<string>('');
 
   const inputValue = () => intermediateVal() || currentPageNumber();
-  const getPageCount = () => pageCount() ?? 1;
+  const getPageCount = () => pdf.state.derived.pageCount() ?? 1;
 
   const getWidthClass = (value: number | string) => {
     const strLength = value.toString().length;
@@ -46,9 +43,8 @@ export function PageNumberInput() {
     }
   });
 
-  const blockElement = blockElementSignal.get;
   createEffect(() => {
-    const element = blockElement();
+    const element = pdf.rootElement();
     if (!element) return;
 
     element.addEventListener('keydown', handleKeyDown);

@@ -1,3 +1,4 @@
+import { AgentSession } from '@core/agent-session/AgentSession';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
@@ -14,12 +15,15 @@ import {
   type AgentSessionRenamedEvent,
   type AgentSessionUpdatedEvent,
 } from '@queries/agent-session/realtime-protocol';
-import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
 import {
   handleAgentSessionRenamed,
   handleAgentSessionUpdated,
   invalidateAgentSessionMetadata,
 } from '@queries/agent-session/session-metadata-sync';
+import {
+  handleChannelPictureChanged,
+  invalidateChannelPictures,
+} from '@queries/channel/picture';
 import {
   handleCommsAttachment,
   handleCommsMessage,
@@ -69,6 +73,10 @@ function withParsedWebsocketPayload<T>(
 }
 
 export function QuerySyncProvider(props: SyncProviderProps) {
+  ws.addEventListener(WebsocketEvent.Open, invalidateChannelPictures);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidateChannelPictures)
+  );
   // Also cover the first connection: a lookup can finish before the socket opens.
   ws.addEventListener(WebsocketEvent.Open, invalidateAgentSessionMetadata);
   onCleanup(() =>
@@ -92,6 +100,13 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       .with({ type: 'comms_message' }, () => {
         withParsedWebsocketPayload(data.type, data.data, handleCommsMessage);
       })
+      .with({ type: 'comms_channel_picture' }, () => {
+        withParsedWebsocketPayload(
+          data.type,
+          data.data,
+          handleChannelPictureChanged
+        );
+      })
       // One frame appended to a live agent session's log. Routed to the
       // channel's fold rather than to any cache: the frame is not a message,
       // it is a step towards one, and only the fold knows which.
@@ -99,7 +114,7 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         withParsedWebsocketPayload<AgentSessionLogEvent>(
           data.type,
           data.data,
-          handleAgentSessionLog
+          (event) => AgentSession.ingest(event)
         );
       })
       .with({ type: AGENT_SESSION_UPDATED_EVENT }, () => {

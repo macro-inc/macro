@@ -429,4 +429,5 @@ SessionMetadata {
         "acp_ready",
     ),
     pending_elicitation: None,
+    turn: Running,
 }

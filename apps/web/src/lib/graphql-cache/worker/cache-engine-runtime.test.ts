@@ -22,6 +22,7 @@ import type { CacheWorkerCoreOptions } from './worker-core';
 
 class FakePort extends EventTarget {
   readonly messages: unknown[] = [];
+  autoOpen = true;
   closed = false;
   started = false;
   onmessage: ((event: MessageEvent<unknown>) => void) | null = null;
@@ -29,6 +30,18 @@ class FakePort extends EventTarget {
 
   postMessage(message: unknown): void {
     this.messages.push(message);
+    const payload = effectPayload(message) as
+      | { kind?: string; ownerEpoch?: number }
+      | undefined;
+    if (this.autoOpen && payload?.kind === 'engine-assets-ready') {
+      queueMicrotask(() =>
+        this.receive({
+          ...version,
+          kind: 'open-engine',
+          ownerEpoch: payload.ownerEpoch,
+        })
+      );
+    }
   }
 
   close(): void {
@@ -171,6 +184,70 @@ const cacheResponses = (port: FakePort) =>
   );
 
 describe('cache engine worker runtime', () => {
+  it('does not touch storage until assets load and the coordinator grants opening', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    direct.autoOpen = false;
+    let finishLoading!: () => void;
+    const prepare = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          finishLoading = resolve;
+        })
+    );
+    const handleRequest = vi.fn(async (port, request: CacheRequest) => {
+      port.postMessage({ id: request.id, ok: true, result: null });
+    });
+    installCacheEngineWorker({
+      scope,
+      ownerLockIsHeld: async () => true,
+      createCore: () => ({
+        prepare,
+        handleRequest,
+        addPort: vi.fn(),
+        drain: vi.fn(),
+      }),
+    });
+    scope.activate(activation(), direct);
+    expect(prepare).toHaveBeenCalledOnce();
+    expect(handleRequest).not.toHaveBeenCalled();
+    expect(messagesOfKind(direct, 'engine-assets-ready')).toHaveLength(0);
+    finishLoading();
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-assets-ready')).toHaveLength(1)
+    );
+    expect(handleRequest).not.toHaveBeenCalled();
+    direct.receive({ ...version, kind: 'open-engine', ownerEpoch: 7 });
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(1)
+    );
+    expect(handleRequest).toHaveBeenCalledOnce();
+  });
+
+  it('reports failed asset loading without initializing or opening storage', async () => {
+    const scope = new FakeWorkerScope();
+    const direct = new FakePort();
+    const handleRequest = vi.fn();
+    installCacheEngineWorker({
+      scope,
+      createCore: () => ({
+        prepare: async () => {
+          throw new Error('WASM download failed');
+        },
+        handleRequest,
+        addPort: vi.fn(),
+        drain: vi.fn(),
+      }),
+    });
+    scope.activate(activation(), direct);
+    await vi.waitFor(() =>
+      expect(messagesOfKind(direct, 'activation-failed')).toHaveLength(1)
+    );
+    expect(handleRequest).not.toHaveBeenCalled();
+    expect(messagesOfKind(direct, 'engine-assets-ready')).toHaveLength(0);
+    expect(messagesOfKind(direct, 'engine-ready')).toHaveLength(0);
+  });
+
   it('selects atomic recovery-open and only proves wipe after initialization', async () => {
     const scope = new FakeWorkerScope();
     const direct = new FakePort();

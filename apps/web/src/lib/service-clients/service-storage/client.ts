@@ -154,6 +154,7 @@ import type { ReorderFavoritesRequest } from './generated/schemas/reorderFavorit
 import type { ReorderPinRequest } from './generated/schemas/reorderPinRequest';
 import type { ReplaceCrmStagesRequest } from './generated/schemas/replaceCrmStagesRequest';
 import type { SaveDocumentResponseData } from './generated/schemas/saveDocumentResponseData';
+import type { SetChannelPictureRequest } from './generated/schemas/setChannelPictureRequest';
 import type { SetCompanyNameRequest } from './generated/schemas/setCompanyNameRequest';
 import type { SetContactNameRequest } from './generated/schemas/setContactNameRequest';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
@@ -811,6 +812,14 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
+  async setChannelPicture(args: WithChannelId & SetChannelPictureRequest) {
+    const { channel_id, ...request } = args;
+    return await dssFetch(`/channels/${channel_id}/profile_picture`, {
+      method: 'PUT',
+      body: JSON.stringify(request),
+    });
+  },
+
   async patchChannel(args: WithChannelId & PatchChannelRequest) {
     const { channel_id, ...request } = args;
     return (
@@ -1456,6 +1465,28 @@ export const storageServiceClient = {
       presignedUrl: data.presignedUrl,
       contentType: data.contentType,
       fileType: data.fileType ?? undefined,
+    });
+  },
+
+  async createSpreadsheetDocument(request: {
+    documentName: string;
+    projectId?: string;
+    sha: string;
+  }) {
+    const result = await dssFetch<CreateDocumentResponse>('/documents', {
+      method: 'POST',
+      body: JSON.stringify({ ...request, fileType: 'spreadsheet' }),
+    });
+    return result.andThen(({ data }) => {
+      if (data.presignedUrl) {
+        return err([
+          {
+            code: 'INVALID_RESPONSE' as const,
+            message: 'The server does not support native spreadsheets yet.',
+          },
+        ]);
+      }
+      return ok({ metadata: data.documentMetadata });
     });
   },
 

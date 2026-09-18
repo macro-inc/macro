@@ -5,13 +5,11 @@ import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/
 
 export const NO_LINK_SHARE = 'NONE' as const;
 
-/**
- * Entity types whose backend honors `sharePermission.teamShareAccessLevel`
- * (documents via `PATCH /documents/{id}`, AI chats via `PATCH /chats/{id}`).
- */
 const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ItemType> = new Set<ItemType>([
   'document',
   'chat',
+  'call',
+  'project',
 ]);
 
 export function isTeamShareSupportedForItem(itemType: ItemType): boolean {
@@ -25,6 +23,8 @@ export function getShareItemNoun(itemType: ItemType): string {
       return 'email thread';
     case 'agent_session':
       return 'agent session';
+    case 'project':
+      return 'folder';
     default:
       return itemType;
   }
@@ -41,6 +41,8 @@ export const NO_TEAM_SHARE = 'NONE' as const;
 export type TeamShareLevel = Exclude<AccessLevel, 'owner'>;
 
 export type TeamShareScope = TeamShareLevel | typeof NO_TEAM_SHARE;
+
+export type CallTeamShareScope = typeof NO_TEAM_SHARE | 'view';
 
 export type TeamSharePayload = Required<
   Pick<UpdateSharePermissionRequestV2, 'teamShareAccessLevel'>
@@ -97,6 +99,19 @@ export const TEAM_SHARE_SCOPE_OPTIONS = (
   value: scope,
   label: TEAM_SHARE_COPY[scope],
 }));
+
+export const CALL_TEAM_SHARE_SCOPE_OPTIONS = (
+  ['NONE', 'view'] as const satisfies readonly CallTeamShareScope[]
+).map((scope) => ({
+  value: scope,
+  label: TEAM_SHARE_COPY[scope],
+}));
+
+export function teamShareScopeOptionsForItem(itemType: ItemType) {
+  return itemType === 'call'
+    ? CALL_TEAM_SHARE_SCOPE_OPTIONS
+    : TEAM_SHARE_SCOPE_OPTIONS;
+}
 
 export function getLinkShareScope(
   linkShare: LinkShare | null | undefined

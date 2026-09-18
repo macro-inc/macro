@@ -1,31 +1,22 @@
-//! Announce sessions by posting into the mention's thread as the bot.
-//!
-//! Implements [`SessionAnnouncer`] over the channels domain's own
-//! [`ChannelService`] port, so the post gets the full side-effect fan-out -
-//! persistence, realtime, notifications, broker - exactly as if it came
-//! through the channel API. The composition root decides which
-//! `ChannelService` implementation (and side-effect stack) this wraps.
-//!
-//! The announcement places a structured reply target above the session's
-//! magic chip. The content is composed by the lexical service — the one place
-//! that builds message markdown from real Lexical nodes — so this adapter
-//! never formats markdown itself.
+//! Announce agent responses in their originating message thread through the shared service.
 
 #[cfg(test)]
 mod test;
 
 use std::sync::Arc;
 
-use channel_sender::ChannelSender;
-use channels::domain::models::{PostMessageNotificationPolicy, PostMessageRequest};
-use channels::domain::ports::ChannelService;
+use entity_access::domain::{models::BotAccessScope, ports::EntityAccessService};
 use lexical_client::LexicalClient;
 use lexical_client::parse_markdown::{AgentAnnouncementChip, AgentAnnouncementReplyTarget};
+use messages::domain::{
+    api::MessageCommands,
+    models::{MessageAttribution, MessageParent, PostMessage, PostMessageNotificationPolicy},
+    service::MessageWrite,
+};
 
 use crate::domain::error::{HarnessError, Result};
 use crate::domain::model::{AnnouncedMessage, SessionAnnouncement};
 use crate::domain::ports::SessionAnnouncer;
-use macro_uuid::Uuid;
 
 fn announcement_chip(announcement: &SessionAnnouncement) -> AgentAnnouncementChip {
     AgentAnnouncementChip {
@@ -38,7 +29,11 @@ fn announcement_chip(announcement: &SessionAnnouncement) -> AgentAnnouncementChi
 
 fn announcement_reply_target(announcement: &SessionAnnouncement) -> AgentAnnouncementReplyTarget {
     AgentAnnouncementReplyTarget {
-        channel_id: announcement.origin_channel_id.to_string(),
+        parent: announcement.origin_parent.clone(),
+        channel_id: match &announcement.origin_parent {
+            MessageParent::Channel(channel_id) => Some(channel_id.to_string()),
+            MessageParent::Document(_) => None,
+        },
         target_message_id: announcement.origin_message_id.to_string(),
         target_thread_id: announcement.origin_thread_id.to_string(),
         display_text: announcement.prompted_content.clone(),
@@ -46,69 +41,72 @@ fn announcement_reply_target(announcement: &SessionAnnouncement) -> AgentAnnounc
     }
 }
 
-/// Posts session announcements as their session's bot through a
-/// [`ChannelService`].
-pub struct ChannelAnnouncer<Channels> {
-    channels: Arc<Channels>,
+/// Posts as the session bot with the invoking user's current parent capability.
+pub struct MessageAnnouncer<Access> {
+    messages: Arc<dyn MessageCommands>,
+    access: Arc<Access>,
     lexical: LexicalClient,
 }
 
-impl<Channels> ChannelAnnouncer<Channels> {
-    /// Post through `channels`, with content composed by `lexical`. The
-    /// sender is per-announcement: whichever bot the session runs for.
-    pub fn new(channels: Arc<Channels>, lexical: LexicalClient) -> Self {
-        Self { channels, lexical }
+impl<Access> MessageAnnouncer<Access> {
+    /// Compose the common message service, authorization service, and Markdown composer.
+    pub fn new(
+        messages: Arc<dyn MessageCommands>,
+        access: Arc<Access>,
+        lexical: LexicalClient,
+    ) -> Self {
+        Self {
+            messages,
+            access,
+            lexical,
+        }
     }
 }
 
-impl<Channels> SessionAnnouncer for ChannelAnnouncer<Channels>
-where
-    Channels: ChannelService + Send + Sync + 'static,
-{
+impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> {
     async fn announce(&self, announcement: SessionAnnouncement) -> Result<AnnouncedMessage> {
-        let reply_target = announcement_reply_target(&announcement);
-        let chip = announcement_chip(&announcement);
-        let content = self
-            .lexical
-            .compose_agent_announcement(&reply_target, &chip)
+        // Minted on the invoking user's current capability: an author who
+        // may no longer write to the parent gets no chip posted for them.
+        let access = self
+            .access
+            .generate_bot_entity_access_receipt::<MessageWrite>(
+                announcement.bot_id,
+                BotAccessScope::user(announcement.triggered_by.clone()),
+                &announcement.origin_parent.entity_id(),
+                announcement.origin_parent.access_entity_type(),
+            )
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
-
+        let content = self
+            .lexical
+            .compose_agent_announcement(
+                &announcement_reply_target(&announcement),
+                &announcement_chip(&announcement),
+            )
+            .await
+            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
         let posted = self
-            .channels
-            .post_message(
-                ChannelSender::new_from_bot(announcement.bot_id),
-                announcement.origin_channel_id,
-                PostMessageRequest {
-                    content,
-                    mentions: Vec::new(),
-                    thread_id: Some(announcement.origin_thread_id),
-                    attachments: Vec::new(),
-                    nonce: None,
+            .messages
+            .post(
+                access,
+                PostMessage {
+                    attribution: MessageAttribution::ActingUser,
                     // The chip is a pointer, not news: the thread hears
                     // about the session when it finishes or asks, through
                     // the lifecycle notifications, not when it boots.
                     notification_policy: PostMessageNotificationPolicy::Silent,
-                    // Attributed to whoever mentioned the bot, so the reply
-                    // reads as their agent answering.
-                    triggered_by: Some(announcement.triggered_by.as_ref().to_owned()),
+                    content,
+                    thread_id: Some(announcement.origin_thread_id),
+                    anchor: None,
+                    mentions: Vec::new(),
+                    attachments: Vec::new(),
+                    nonce: None,
                 },
             )
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
-
-        // Message ids are uuids everywhere in the channels domain; anything
-        // else here is a bug in the poster, not a shape to tolerate.
-        let message_id = Uuid::parse_str(&posted.id).map_err(|error| {
-            HarnessError::Announce(
-                rootcause::report!(error)
-                    .context(format!(
-                        "announcement posted a non-uuid message id {}",
-                        posted.id
-                    ))
-                    .into(),
-            )
-        })?;
-        Ok(AnnouncedMessage { message_id })
+        Ok(AnnouncedMessage {
+            message_id: posted.id,
+        })
     }
 }

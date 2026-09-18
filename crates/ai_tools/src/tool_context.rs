@@ -196,10 +196,44 @@ pub fn build_channel_tool_context_without_side_effects(
     pool: sqlx::PgPool,
     lexical_client: Arc<lexical_client::LexicalClient>,
 ) -> ToolChannelToolContext {
+    let messages = Arc::new(shared_message_service(
+        pool.clone(),
+        messages::domain::ports::NoMessageEventPublisher,
+        lexical_client.clone(),
+    ));
     build_channel_tool_context_with_dispatcher(
         pool,
         std::sync::Arc::new(NoopChannelEventDispatcher),
         lexical_client,
+        messages,
+    )
+}
+
+/// Shared message service used by agent tools: the same persistence, reference
+/// authorization, and group-mention policy as the channel HTTP API, over the
+/// delivery `effects` a host composed.
+pub fn shared_message_service<E: messages::domain::ports::MessageEventPublisher>(
+    pool: sqlx::PgPool,
+    effects: E,
+    lexical_client: Arc<lexical_client::LexicalClient>,
+) -> messages::domain::service::MessageService<
+    messages::outbound::pg_message_repo::PgMessageRepository,
+    E,
+> {
+    messages::domain::service::MessageService::new(
+        messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone()),
+        effects,
+    )
+    .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
+        PgChannelsRepo::new(pool.clone()),
+    ))
+    .with_mention_extractor(LexicalMentionExtractor::new(lexical_client))
+    .with_references(
+        messages::outbound::entity_access_audience::EntityAccessMessageReferences(
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(pool),
+            ),
+        ),
     )
 }
 
@@ -241,16 +275,37 @@ pub fn build_channel_tool_context_with_side_effects(
     });
     let side_effects = ChannelSideEffectService::new(
         PgChannelSideEffectContext::new(pool.clone()),
-        ConnectionGatewayChannelRealtimePublisher::new(clients.connection_gateway),
+        ConnectionGatewayChannelRealtimePublisher::new(clients.connection_gateway.clone()),
         NotificationChannelSender::new(notification_ingress),
         ContactsChannelDispatcher::new(contacts_ingress),
     )
-    .with_macro_event_broker(clients.macro_event_broker);
-    build_channel_tool_context_with_dispatcher(
-        pool,
-        Arc::new(SpawnedChannelEventDispatcher::new(side_effects)),
-        lexical_client,
-    )
+    .with_macro_event_broker(clients.macro_event_broker.clone());
+    let dispatcher: ToolChannelEventDispatcher =
+        Arc::new(SpawnedChannelEventDispatcher::new(side_effects));
+    let access = entity_access::domain::service::EntityAccessServiceImpl::new(
+        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+    );
+    let effects = messages::domain::effects::MessageEffects::new(
+        messages::outbound::broker::BrokerMessagePublisher::new(clients.macro_event_broker),
+        messages::domain::ports::NoMessageEventPublisher,
+        channels::domain::message_delivery::ChannelMessageDelivery::new(
+            PgChannelsRepo::new(pool.clone()),
+            dispatcher.clone(),
+            channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
+                pool.clone(),
+                Arc::new(access),
+            ),
+            messages::outbound::connection_gateway::ConnectionGatewayMessages(
+                clients.connection_gateway,
+            ),
+        ),
+    );
+    let messages = Arc::new(shared_message_service(
+        pool.clone(),
+        effects,
+        lexical_client.clone(),
+    ));
+    build_channel_tool_context_with_dispatcher(pool, dispatcher, lexical_client, messages)
 }
 
 /// Build the channel AI tool context wired to `dispatcher`, so messages sent by
@@ -260,8 +315,10 @@ pub fn build_channel_tool_context_with_dispatcher(
     pool: sqlx::PgPool,
     dispatcher: ToolChannelEventDispatcher,
     lexical_client: Arc<lexical_client::LexicalClient>,
+    messages: Arc<dyn messages::domain::api::MessageCommands>,
 ) -> ToolChannelToolContext {
     ChannelToolContext::new(
+        messages,
         ChannelServiceImpl::with_dependencies(
             PgChannelsRepo::new(pool.clone()),
             dispatcher,
@@ -696,6 +753,7 @@ pub type ToolDocumentService = documents::domain::service::DocumentServiceImpl<
     ToolEntityAccessManagementService,
     ToolForeignEntityService,
     ToolEventBroker,
+    sync_service_client::SyncServiceClient,
 >;
 
 /// Type alias for the entity access service implementation

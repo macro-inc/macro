@@ -1,12 +1,12 @@
+import StatusCanceled from '@icon/square-task-cancelled-circle.svg';
+import StatusCreated from '@icon/square-task-created-circle.svg';
+import StatusDone from '@icon/square-task-done-circle.svg';
+import StatusInProgress from '@icon/square-task-in-progress-circle.svg';
+import StatusInReview from '@icon/square-task-in-review-circle.svg';
 import PriorityHigh from '@phosphor/cell-signal-high.svg';
 import PriorityLow from '@phosphor/cell-signal-low.svg';
 import PriorityMedium from '@phosphor/cell-signal-medium.svg';
-import StatusDone from '@phosphor/check-circle.svg';
-import StatusCreated from '@phosphor/circle-dashed.svg';
-import StatusInProgress from '@phosphor/circle-half.svg';
-import StatusInReview from '@phosphor/eye.svg';
 import PriorityUrgent from '@phosphor/warning-circle.svg';
-import StatusCanceled from '@phosphor/x-circle.svg';
 import { type Component, Match, Switch } from 'solid-js';
 import { twMerge } from 'tailwind-merge';
 import { PROPERTY_OPTION_IDS } from '../../constants';

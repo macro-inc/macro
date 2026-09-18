@@ -1,13 +1,22 @@
+import { usePreference } from '@app/preferences/use-preference';
 import {
   type BreakpointAccessors,
   type BreakpointThresholds,
   createSizeBreakpoints,
 } from '@app/util/create-size-breakpoints';
+import { SplitPanelContext } from '@components/app/split-layout/context';
+import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import ListIcon from '@phosphor/list.svg';
+import SidebarIcon from '@phosphor/sidebar-simple.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import { cn } from '@ui';
+import { Button, cn } from '@ui';
 import {
   type Accessor,
+  batch,
+  type ComponentProps,
   createContext,
   createSignal,
   createUniqueId,
@@ -18,6 +27,8 @@ import {
   splitProps,
   useContext,
 } from 'solid-js';
+import { CollapseTransition } from './CollapseTransition';
+import { createSidebarMotion } from './create-sidebar-motion';
 import {
   type AsideLayout,
   type AsideMode,
@@ -42,6 +53,11 @@ export type ViewShellLayout = {
     layout: Accessor<AsideLayout>;
     mode: Accessor<AsideMode>;
     isCollapsed: Accessor<boolean>;
+    canCollapse: Accessor<boolean>;
+    isOverlay: Accessor<boolean>;
+    collapse: () => void;
+    expand: () => void;
+    toggle: () => void;
   };
   main: {
     layout: Accessor<MainLayout>;
@@ -56,7 +72,10 @@ export type ViewShellLayout = {
   };
 };
 
-type ViewShellInternal = ViewShellLayout & { id: string };
+type ViewShellInternal = ViewShellLayout & {
+  id: string;
+  atLayoutBreakpoint: Accessor<boolean>;
+};
 
 const RESIZE_GUTTER = 1;
 
@@ -104,6 +123,8 @@ export type ViewShellRootProps = Omit<
   resizable?: boolean;
   /** Set to false when the workspace has no navigation region. */
   aside?: false | Partial<AsideLayout>;
+  /** Sticky navigation visibility, scoped to this app type rather than an entry. */
+  asidePreferenceKey?: string;
   main?: Partial<MainLayout>;
   detail?: Partial<DetailLayout>;
   /** Controlled detail open state. Omit for uncontrolled. */
@@ -126,6 +147,7 @@ function Root(props: ViewShellRootProps) {
     'layoutBreakpoint',
     'resizable',
     'aside',
+    'asidePreferenceKey',
     'main',
     'detail',
     'detailOpen',
@@ -133,8 +155,16 @@ function Root(props: ViewShellRootProps) {
     'onDetailOpenChange',
   ]);
 
+  const [asideCollapsed, setAsideCollapsed] = local.asidePreferenceKey
+    ? usePreference(
+        `macro:pref:view-sidebar:collapsed:${local.asidePreferenceKey}`,
+        { default: false }
+      )
+    : createSignal(false);
+  const [narrowAsideOpen, setNarrowAsideOpen] = createSignal(false);
   const id = createUniqueId();
   const [root, setRoot] = createSignal<HTMLDivElement>();
+  const animateSidebar = createSidebarMotion(root);
   const size = createElementSize(root);
 
   const thresholds = (): BreakpointThresholds =>
@@ -188,14 +218,20 @@ function Root(props: ViewShellRootProps) {
   };
 
   const asideMode = (): AsideMode =>
-    local.aside === false || atLayoutBreakpoint() ? 'collapsed' : 'docked';
+    local.aside === false ||
+    asideCollapsed() ||
+    (atLayoutBreakpoint() && !narrowAsideOpen())
+      ? 'collapsed'
+      : 'docked';
+  const asideOverlay = () => atLayoutBreakpoint() && asideMode() === 'docked';
 
   const canFitInlineDetail = () => {
     const currentWidth = width();
     if (currentWidth === undefined) return false;
 
-    const asideMin = asideMode() === 'docked' ? asideLayout().min : 0;
-    const panelCount = asideMode() === 'docked' ? 3 : 2;
+    const asideMin =
+      asideMode() === 'docked' && !asideOverlay() ? asideLayout().min : 0;
+    const panelCount = asideMode() === 'docked' && !asideOverlay() ? 3 : 2;
     const minimumWidth =
       asideMin +
       mainLayout().min +
@@ -216,10 +252,34 @@ function Root(props: ViewShellRootProps) {
     id,
     width,
     breakpoints,
+    atLayoutBreakpoint,
     aside: {
       layout: asideLayout,
       mode: asideMode,
       isCollapsed: () => asideMode() === 'collapsed',
+      canCollapse: () =>
+        local.asidePreferenceKey !== undefined && local.aside !== false,
+      isOverlay: asideOverlay,
+      collapse: () => {
+        animateSidebar(() =>
+          batch(() => {
+            setAsideCollapsed(true);
+            setNarrowAsideOpen(false);
+          })
+        );
+      },
+      expand: () => {
+        animateSidebar(() =>
+          batch(() => {
+            setAsideCollapsed(false);
+            setNarrowAsideOpen(true);
+          })
+        );
+      },
+      toggle: () => {
+        if (value.aside.isCollapsed()) value.aside.expand();
+        else value.aside.collapse();
+      },
     },
     main: {
       layout: mainLayout,
@@ -239,6 +299,22 @@ function Root(props: ViewShellRootProps) {
       },
     },
   };
+
+  const panel = useContext(SplitPanelContext);
+  if (panel) {
+    registerHotkey({
+      hotkey: 'cmd+.',
+      hotkeyToken: TOKENS.workspace.toggleNavigation,
+      scopeId: panel.splitHotkeyScope,
+      description: 'Toggle workspace navigation',
+      condition: () => panel.isPanelActive() && value.aside.canCollapse(),
+      runWithInputFocused: true,
+      keyDownHandler: () => {
+        value.aside.toggle();
+        return true;
+      },
+    });
+  }
 
   return (
     <ViewShellContext.Provider value={value}>
@@ -280,9 +356,42 @@ function Aside(props: ViewShellAsideProps) {
     'onWidthChangeEnd',
   ]);
   const ws = useViewShellInternal();
+  const [resizedWidth, setResizedWidth] = createSignal<{
+    configuredWidth: number;
+    width: number;
+    mainWidth?: number;
+  }>();
+  const resizePreference = () => {
+    const resized = resizedWidth();
+    return resized?.configuredWidth === ws.aside.layout().width
+      ? resized
+      : undefined;
+  };
+  const preferredWidth = () => {
+    return resizePreference()?.width ?? ws.aside.layout().width;
+  };
+  const onWidthChangeEnd = (width: number) => {
+    const shellWidth = ws.width();
+    // A drag also chooses how much space Main gives up. Keeping its old soft
+    // preference would immediately undo a drag made in a constrained shell.
+    const mainWidth =
+      shellWidth !== undefined && ws.detail.placement() !== 'inline'
+        ? shellWidth - RESIZE_GUTTER - width
+        : undefined;
+    batch(() => {
+      local.onWidthChangeEnd?.(width);
+      // A consumer may persist the width back into the layout in this callback.
+      setResizedWidth({
+        configuredWidth: ws.aside.layout().width,
+        width,
+        mainWidth,
+      });
+    });
+  };
   const redistributionPreferredSize = () => {
     const layout = ws.aside.layout();
-    if (layout.preserveDuringResize !== false) return layout.width;
+    const width = preferredWidth();
+    if (layout.preserveDuringResize !== false) return width;
 
     const shellWidth = ws.width();
     const mainLayout = ws.main.layout();
@@ -291,36 +400,172 @@ function Aside(props: ViewShellAsideProps) {
       mainLayout.preferredWidth === undefined ||
       ws.detail.placement() === 'inline'
     ) {
-      return layout.width;
+      return width;
     }
 
     const availableForAside =
       shellWidth -
       RESIZE_GUTTER -
-      Math.max(mainLayout.preferredWidth, mainLayout.min);
+      Math.max(
+        Math.min(
+          mainLayout.preferredWidth,
+          resizePreference()?.mainWidth ?? Infinity
+        ),
+        mainLayout.min
+      );
 
-    return Math.min(layout.width, Math.max(layout.min, availableForAside));
+    return Math.min(width, Math.max(layout.min, availableForAside));
   };
 
+  let overlayAside: HTMLDivElement | undefined;
+  const overlayWidth = () =>
+    Math.min(preferredWidth(), ws.width() ?? preferredWidth());
+
+  // Layout owns the host: closing an overlay must not mount a second sidebar
+  // while its exit animation is still retaining the first one.
   return (
-    <Resize.Panel
-      id={`${ws.id}-aside`}
-      index={0}
-      minSize={ws.aside.layout().min}
-      maxSize={ws.aside.layout().max}
-      redistributionPreferredSize={redistributionPreferredSize()}
-      target={{ kind: 'px', px: ws.aside.layout().width }}
-      collapsed={() => ws.aside.isCollapsed()}
-      onSizeChangeEnd={local.onWidthChangeEnd}
+    <Show
+      when={ws.atLayoutBreakpoint()}
+      fallback={
+        <Resize.Panel
+          id={`${ws.id}-aside`}
+          index={0}
+          minSize={ws.aside.layout().min}
+          maxSize={ws.aside.layout().max}
+          redistributionPreferredSize={redistributionPreferredSize()}
+          target={{ kind: 'px', px: preferredWidth() }}
+          collapsed={() => ws.aside.isCollapsed()}
+          onSizeChangeEnd={onWidthChangeEnd}
+        >
+          <div
+            {...rest}
+            class={cn('size-full min-h-0 min-w-0', local.class)}
+            data-view-shell-aside=""
+            inert={ws.aside.isCollapsed()}
+            aria-hidden={ws.aside.isCollapsed()}
+          >
+            {local.children}
+          </div>
+        </Resize.Panel>
+      }
     >
-      <div
-        {...rest}
-        class={cn('size-full min-h-0 min-w-0', local.class)}
-        data-view-shell-aside=""
+      <CollapseTransition
+        open={ws.aside.isOverlay()}
+        axis="width"
+        container={() => overlayAside}
       >
-        {local.children}
-      </div>
-    </Resize.Panel>
+        <div
+          class="absolute inset-0 z-20"
+          onKeyDown={(event) => {
+            if (event.key === 'Escape') {
+              event.stopPropagation();
+              ws.aside.collapse();
+            }
+          }}
+        >
+          <button
+            type="button"
+            aria-label="Close navigation backdrop"
+            class="absolute inset-0 bg-modal-overlay"
+            onClick={ws.aside.collapse}
+          />
+          <div
+            {...rest}
+            class={cn(
+              'relative h-full max-w-full bg-panel shadow-menu',
+              local.class
+            )}
+            ref={overlayAside}
+            style={{ width: `${overlayWidth()}px` }}
+            data-view-shell-aside=""
+          >
+            {/* Keep text at its resting width while the outer frame reveals it. */}
+            <div class="h-full" style={{ width: `${overlayWidth()}px` }}>
+              {local.children}
+            </div>
+          </div>
+        </div>
+      </CollapseTransition>
+    </Show>
+  );
+}
+
+/** A navigation overlay must not offer an action that closes its owning split. */
+export function ViewSidebarCloseButton(
+  props: ComponentProps<typeof SplitPanel.CloseButton>
+) {
+  const ws = useContext(ViewShellContext);
+  return (
+    <Show when={!ws?.atLayoutBreakpoint()}>
+      <SplitPanel.CloseButton {...props} />
+    </Show>
+  );
+}
+
+/** Safe outside a shell so block preview headers can share this control. */
+export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
+  const ws = useContext(ViewShellContext);
+  const visible = () =>
+    ws?.aside.canCollapse() &&
+    (props.action === 'expand'
+      ? ws.aside.isCollapsed() || ws.aside.isOverlay()
+      : !ws.aside.isCollapsed());
+  return (
+    <Show when={visible()}>
+      <Button
+        variant="ghost"
+        size="icon-sm"
+        class={cn(
+          'shrink-0 touch:hidden',
+          props.action === 'collapse' && 'ml-auto',
+          props.action === 'collapse' &&
+            ws?.aside.isOverlay() &&
+            'motion-safe:animate-[dialog-overlay-open_60ms_ease-out_80ms_both]'
+        )}
+        label={
+          props.action === 'expand' ? 'Show navigation' : 'Hide navigation'
+        }
+        hotkey={TOKENS.workspace.toggleNavigation}
+        aria-expanded={props.action !== 'expand'}
+        data-view-sidebar-toggle={props.action}
+        onClick={(event) => {
+          const shell = event.currentTarget.closest('[data-view-shell]');
+          if (props.action === 'expand') ws?.aside.expand();
+          else ws?.aside.collapse();
+          const nextAction = props.action === 'expand' ? 'collapse' : 'expand';
+          queueMicrotask(() =>
+            shell
+              ?.querySelector<HTMLButtonElement>(
+                `[data-view-sidebar-toggle="${nextAction}"]`
+              )
+              ?.focus()
+          );
+        }}
+      >
+        <Show
+          when={props.action === 'expand'}
+          fallback={<SidebarIcon class="size-4" />}
+        >
+          <ListIcon class="size-4" />
+        </Show>
+      </Button>
+    </Show>
+  );
+}
+
+/** Shared leading controls, kept in place beneath navigation overlays. */
+export function ViewNavigationControls() {
+  const ws = useContext(ViewShellContext);
+  return (
+    <Show when={ws?.aside.isCollapsed() || ws?.aside.isOverlay()}>
+      <SplitPanel.ControlGroup
+        inert={ws?.aside.isOverlay()}
+        aria-hidden={ws?.aside.isOverlay()}
+      >
+        <SplitPanel.CloseButton />
+        <ViewSidebarToggle action="expand" />
+      </SplitPanel.ControlGroup>
+    </Show>
   );
 }
 
@@ -361,11 +606,12 @@ function TopBar(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <div
       {...rest}
       class={cn(
-        'flex h-12 min-w-0 shrink-0 items-center gap-1 border-b border-edge-muted px-4 py-3 touch:hidden',
+        'flex h-12 min-w-0 shrink-0 items-center gap-1 border-b border-edge-muted px-2 py-3 not-touch:pl-[13px] touch:hidden',
         local.class
       )}
       data-view-shell-top-bar=""
     >
+      <ViewNavigationControls />
       {local.children}
     </div>
   );
@@ -395,10 +641,7 @@ function Content(props: JSX.HTMLAttributes<HTMLDivElement>) {
     <Show when={ws.detail.placement() !== 'replace'}>
       <div
         {...rest}
-        class={cn(
-          'min-h-0 min-w-0 flex-1 px-4 pb-4 @max-[760px]/view-shell:px-3 @max-[720px]/view-shell:pb-2 @max-[480px]/view-shell:px-2',
-          local.class
-        )}
+        class={cn('min-h-0 min-w-0 flex-1', local.class)}
         data-view-shell-content=""
       >
         {local.children}

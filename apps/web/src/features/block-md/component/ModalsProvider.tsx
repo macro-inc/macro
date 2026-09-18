@@ -1,7 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { DetailsDrawer } from '@core/component/DetailsDrawer';
 import { NotificationsDrawer } from '@core/component/NotificationsModal';
-import { ReferencesDrawer } from '@core/component/ReferencesModal';
 import { Permissions } from '@core/component/SharePermissions';
 import {
   ShareDialogContext,
@@ -66,11 +64,6 @@ export function ModalsProvider(
         entity={{ id: documentId(), type: 'document' }}
         notificationSource={notificationSource}
       />
-      <ReferencesDrawer
-        documentId={documentId()}
-        documentName={displayName()}
-      />
-      <DetailsDrawer documentId={documentId()} />
       <Suspense>
         <ShareModal
           isSharePermOpen={shareOpen()}

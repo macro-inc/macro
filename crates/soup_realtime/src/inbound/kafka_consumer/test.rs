@@ -6,7 +6,7 @@ use channels::domain::{
         ChannelEventAttachment, ChannelMessageAttachmentCreatedMetadata,
         ChannelMessageDeletedMetadata, ChannelMessagePostedMetadata, ChannelTopicEvent,
     },
-    models::{ChannelSender, ChannelType, SimpleMention},
+    models::{ChannelSender, ChannelType},
 };
 use chat::domain::events::{
     ChatMessageDeletedMetadata, ChatMessageRole, ChatMessageSentMetadata, ChatTopicEvent,
@@ -25,6 +25,7 @@ use email::domain::events::{
 };
 use macro_event_broker::{Event, EventBrokerError, MacroEventCollection as _, MessageParts};
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::SimpleMention;
 use projects::domain::events::{ProjectDeletedMetadata, ProjectTopicEvent};
 use properties::domain::events::{
     EntityPropertiesClearedMetadata, EntityPropertyDeletedMetadata, EntityPropertyUpdatedMetadata,

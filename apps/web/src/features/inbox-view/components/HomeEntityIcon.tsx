@@ -1,13 +1,11 @@
+import { ViewSidebar } from '@app/components/view-shell';
 import { EntityIcon } from '@entity/extractors/entity-icon';
 import { type EntityData, isGithubPrEntity } from '@entity/types/entity';
 
 /** Shared entity icons sized for compact Home rows. */
 export function HomeEntityIcon(props: { entity: EntityData }) {
   return (
-    <span
-      class="flex size-5 shrink-0 items-center justify-center"
-      aria-hidden="true"
-    >
+    <ViewSidebar.Icon>
       <span
         class={
           props.entity.type === 'channel' &&
@@ -23,6 +21,6 @@ export function HomeEntityIcon(props: { entity: EntityData }) {
           showTooltip={false}
         />
       </span>
-    </span>
+    </ViewSidebar.Icon>
   );
 }

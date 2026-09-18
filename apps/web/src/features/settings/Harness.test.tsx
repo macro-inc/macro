@@ -323,7 +323,7 @@ describe('Harness', () => {
 
     expect(screen.getByRole('heading', { name: 'In-memory' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
-    const claude = screen.getByRole('heading', { name: 'Claude Cloud (demo)' });
+    const claude = screen.getByRole('heading', { name: 'Claude Cloud' });
     const cursor = screen.getByRole('heading', { name: 'Cursor' });
     expect(
       claude.compareDocumentPosition(cursor) & Node.DOCUMENT_POSITION_FOLLOWING

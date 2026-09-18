@@ -2,12 +2,12 @@ import { useCalendarUiFlag } from '@app/features/calendar/hooks/use-calendar-ui-
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { enableCrm } from '@core/constant/featureFlags';
-import HouseIcon from '@phosphor/house.svg';
+import BellIcon from '@phosphor/bell.svg';
+import BellFillIcon from '@phosphor-fill/bell-fill.svg';
 import CalendarFillIcon from '@phosphor-fill/calendar-fill.svg';
 import EmailFillIcon from '@phosphor-fill/envelope-fill.svg';
 import FilesFillIcon from '@phosphor-fill/files-fill.svg';
 import ChannelFillIcon from '@phosphor-fill/hash-straight-fill.svg';
-import HouseFillIcon from '@phosphor-fill/house-fill.svg';
 import { createMemo } from 'solid-js';
 import type { MobileDockIcon } from './MobileDockButton';
 import type { MobileNavViewId } from './mobile-nav-views';
@@ -30,10 +30,10 @@ export type MobileDockView = {
 const MOBILE_DOCK_VIEWS: readonly MobileDockView[] = [
   {
     id: 'inbox',
-    label: 'Home',
-    icon: HouseIcon,
-    iconActive: HouseFillIcon,
-    pillIcon: HouseIcon,
+    label: 'Notifications',
+    icon: BellIcon,
+    iconActive: BellFillIcon,
+    pillIcon: BellIcon,
   },
   {
     id: 'calendar',

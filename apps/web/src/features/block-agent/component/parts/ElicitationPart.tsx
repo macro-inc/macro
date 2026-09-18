@@ -61,9 +61,10 @@ export function ElicitationPart(props: { part: ElicitationPartData }) {
     elicitation.pending()?.requestId === props.part.requestId;
 
   const agentName = () => bot()?.name ?? 'The agent';
-  // Controls are inert while an answer is on the wire and for anyone
-  // without edit access.
-  const locked = () => elicitation.answering() || !elicitation.canAnswer();
+  // Controls are inert for anyone without edit access. An answer in flight
+  // needs no lock of its own: the fold speculates it, so the card has
+  // already left its live state by the time the POST lands.
+  const locked = () => !elicitation.canAnswer();
   const waitingFor = () =>
     elicitation.canAnswer() ? 'Waiting for you' : 'Waiting for an editor';
 
@@ -142,7 +143,6 @@ function LiveUserTool(props: {
           fallback={fallback}
           review={{
             canAnswer: elicitation.canAnswer,
-            answering: elicitation.answering,
             respond: props.onRespond,
           }}
         />
@@ -176,6 +176,7 @@ function ResolvedElicitation(props: { part: ElicitationPartData }) {
           common={{
             id: props.part.toolCall ?? String(props.part.requestId),
             label: reviewed().request.tool,
+            server: undefined,
             status:
               reviewed().toolOutcome.kind === 'failed' ? 'failed' : 'completed',
             muted: reviewed().toolOutcome.kind === 'failed',

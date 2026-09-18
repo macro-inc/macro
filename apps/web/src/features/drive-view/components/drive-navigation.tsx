@@ -24,14 +24,15 @@ export function DriveNavigation(props: {
               active={
                 props.location.kind === 'tab' && props.location.tab === tab.id
               }
-              class="font-normal"
               onClick={() => props.onNavigate(tab.id)}
             >
-              <Dynamic
-                component={icons[tab.id]}
-                class="size-4 shrink-0"
-                aria-hidden="true"
-              />
+              <ViewSidebar.Icon>
+                <Dynamic
+                  component={icons[tab.id]}
+                  class="size-4 shrink-0"
+                  aria-hidden="true"
+                />
+              </ViewSidebar.Icon>
               <span class="truncate">{tab.label}</span>
             </ViewSidebar.Item>
           </props.locationMenu>

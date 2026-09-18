@@ -104,7 +104,8 @@ export type ReplyComposerOptions = {
   onMarkDone?: (opts?: {
     silent?: boolean;
     onUndoHandle?: (handle: EmailUndoHandle) => void;
-    nextEntityId?: string;
+    /** False keeps the view on this thread instead of opening the next one. */
+    navigate?: boolean;
   }) => void;
   setShowReply?: Setter<boolean>;
 };
@@ -593,9 +594,6 @@ export function createReplyComposer(
     // onMarkDone (archiveThread) toggles: an already-archived thread (e.g.
     // replying from search or the sent view) would be unarchived.
     const willMarkDone = markDone || currentThread.inbox_visible;
-    const nextEntityId = willMarkDone
-      ? ctx.getMarkDoneNavigationTargetId()
-      : undefined;
 
     setSendPhase('preparing');
     try {
@@ -763,12 +761,14 @@ export function createReplyComposer(
       }
       if (willMarkDone) {
         try {
+          // Stay on the sent thread: the explicit Mark done action is what
+          // advances to the next email, not sending a reply.
           props.onMarkDone?.({
             silent: true,
             onUndoHandle: (handle) => {
               markDoneUndoHandle = handle;
             },
-            nextEntityId,
+            navigate: false,
           });
         } catch (error) {
           props.notices.reportError(error);

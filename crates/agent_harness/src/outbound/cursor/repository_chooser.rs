@@ -105,10 +105,17 @@ where
         fields(agent.session.id = %self.session_id)
     )]
     async fn reachable_repositories(&self) -> Result<Vec<String>, rootcause::Report> {
-        self.repositories
+        // The model chooses between urls: they are what the session row is
+        // pinned to, and a candidate's default branch is no help in deciding
+        // which repository a prompt belongs to.
+        Ok(self
+            .repositories
             .for_user(&self.owner)
             .await
-            .map_err(|error| rootcause::report!("could not list reachable repositories: {error}"))
+            .map_err(|error| rootcause::report!("could not list reachable repositories: {error}"))?
+            .into_iter()
+            .map(|repository| repository.url)
+            .collect())
     }
 
     /// The five prior sessions, excluding the placeholder being initialized.
@@ -194,6 +201,22 @@ where
         prompt: &str,
         _cwd: &std::path::Path,
     ) -> Result<SessionIntent, rootcause::Report> {
+        // A caller-selected repository was authorized by the opening service.
+        // Keep that choice on retries and resumes instead of asking a model to replace it.
+        let session =
+            self.sessions.get(self.session_id).await.map_err(|error| {
+                rootcause::report!("could not read selected repository: {error}")
+            })?;
+        if session.repo_branch.is_some()
+            && let Some(url) = session.repo_url.as_deref()
+        {
+            let repository = RepoUrl::parse(url)
+                .ok_or_else(|| rootcause::report!("invalid selected repository"))?;
+            return Ok(SessionIntent {
+                repository: Some(repository),
+                open_pull_request: true,
+            });
+        }
         let mut had_candidates = false;
         let result = async {
             let candidates = self.reachable_repositories().await?;

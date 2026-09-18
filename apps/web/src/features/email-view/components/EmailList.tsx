@@ -128,14 +128,13 @@ export function EmailList(props: EmailListProps) {
     if (
       !newSplit &&
       metadata?.event?.altKey !== true &&
-      !panel.handle.isControllerSplit()
-    ) {
-      openThread({
-        id: sourceRow.entity.id,
-        fallbackName: sourceRow.entity.name,
-      });
+      !panel.handle.isControllerSplit() &&
+      openThread(
+        { id: sourceRow.entity.id, fallbackName: sourceRow.entity.name },
+        { event: metadata?.event }
+      )
+    )
       return;
-    }
 
     openEntity(sourceRow.entity, {
       event: metadata?.event,
