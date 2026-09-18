@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import PlusIcon from '@phosphor/plus.svg';
 import TrashIcon from '@phosphor/trash-simple.svg';
 import {
+  ExecError,
   execSql,
   invalidateDatabase,
   invalidateDatabaseRows,
@@ -89,11 +90,10 @@ export function DatabaseGrid(props: DatabaseGridProps) {
         baseVersions: { [props.table.table.id]: props.table.table.version },
       });
     } catch (error) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes('409')) {
+      if (error instanceof ExecError && error.code === 'VERSION_CONFLICT') {
         toast.failure('Someone else changed this table — reloading');
       } else {
-        toast.failure(message);
+        toast.failure(error instanceof Error ? error.message : String(error));
       }
     }
     await Promise.all([

@@ -1,6 +1,6 @@
 import { macroThemeExtension } from '@block-code/component/cmTheme';
 import { SQLite, sql } from '@codemirror/lang-sql';
-import { EditorState } from '@codemirror/state';
+import { EditorState, Prec } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import PlayIcon from '@phosphor/play.svg';
 import XIcon from '@phosphor/x.svg';
@@ -66,16 +66,19 @@ export function SqlConsole(props: SqlConsoleProps) {
         extensions: [
           basicSetup,
           sql({ dialect: SQLite, schema: completionSchema() }),
-          keymap.of([
-            {
-              key: 'Mod-Enter',
-              preventDefault: true,
-              run: () => {
-                void run();
-                return true;
+          // basicSetup binds Mod-Enter to "insert blank line"; outrank it.
+          Prec.highest(
+            keymap.of([
+              {
+                key: 'Mod-Enter',
+                preventDefault: true,
+                run: () => {
+                  void run();
+                  return true;
+                },
               },
-            },
-          ]),
+            ])
+          ),
           macroThemeExtension,
         ],
       }),

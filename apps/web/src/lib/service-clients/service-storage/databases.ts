@@ -14,11 +14,11 @@ import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import {
   type FetchWithTokenErrorCode,
+  type FetchWithTokenInit,
   fetchToken,
   fetchWithToken,
 } from '@core/util/fetchWithToken';
 import type { ObjectLike, ResultError } from '@core/util/result';
-import type { SafeFetchInit } from '@core/util/safeFetch';
 import { getMacroApiToken } from '@service-auth/fetch';
 import type { DataType } from '@service-properties/generated/schemas/dataType';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
@@ -199,11 +199,46 @@ const dssHost = SERVER_HOSTS['document-storage-service'];
  * `./client` so the databases module stays a leaf — `client.ts` re-exports
  * this namespace, and importing back out of it would close an import cycle.
  */
-function databasesFetch<T extends ObjectLike>(
+function databasesFetch<
+  T extends ObjectLike,
+  CustomErrorCode extends string = never,
+>(
   path: string,
-  init?: SafeFetchInit
-): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>> {
-  return fetchWithToken<T>(`${dssHost}${path}`, init);
+  init?: FetchWithTokenInit<CustomErrorCode>
+): Promise<
+  Result<T, ResultError<FetchWithTokenErrorCode | CustomErrorCode>[]>
+> {
+  return fetchWithToken<T, CustomErrorCode>(`${dssHost}${path}`, init);
+}
+
+/**
+ * Why `POST /databases/exec` refused a statement, mirroring the status codes
+ * `QueryError` maps to. The message is the service's text body: for
+ * `SQL_ERROR` that is SQLite's own message, verbatim.
+ */
+export type ExecErrorCode =
+  | 'SQL_ERROR'
+  | 'READ_ONLY'
+  | 'VERSION_CONFLICT'
+  | 'BUDGET_EXCEEDED';
+
+async function execErrorResponseHandler(
+  response: Response
+): Promise<ResultError<FetchWithTokenErrorCode | ExecErrorCode>> {
+  const message =
+    (await response.text()) || `HTTP error! status: ${response.status}`;
+  switch (response.status) {
+    case 400:
+      return { code: 'SQL_ERROR', message };
+    case 403:
+      return { code: 'READ_ONLY', message };
+    case 409:
+      return { code: 'VERSION_CONFLICT', message };
+    case 422:
+      return { code: 'BUDGET_EXCEEDED', message };
+    default:
+      return { code: 'HTTP_ERROR', message };
+  }
 }
 
 export const databasesClient = {
@@ -249,9 +284,10 @@ export const databasesClient = {
    * no row CRUD endpoints.
    */
   async exec(request: ExecRequest) {
-    return await databasesFetch<ExecOutcome>('/databases/exec', {
+    return await databasesFetch<ExecOutcome, ExecErrorCode>('/databases/exec', {
       method: 'POST',
       body: JSON.stringify(request),
+      errorResponseHandler: execErrorResponseHandler,
     });
   },
 

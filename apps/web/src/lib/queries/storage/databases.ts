@@ -5,11 +5,13 @@
  * goes through `POST /databases/exec`, which is the whole data surface.
  */
 import { analytics } from '@app/lib/analytics';
+import type { FetchWithTokenErrorCode } from '@core/util/fetchWithToken';
 import { throwOnErr } from '@core/util/result';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type {
   DatabaseDetail,
+  ExecErrorCode,
   ExecOutcome,
   ExecRequest,
   ListedDatabase,
@@ -53,12 +55,25 @@ export function useDatabaseDetailQuery(databaseId: () => string | undefined) {
   });
 }
 
-/** Run SQL as the current viewer. Throws the service's message on failure. */
+/** A refused `exec`: the service's message plus why it refused. */
+export class ExecError extends Error {
+  constructor(
+    readonly code: FetchWithTokenErrorCode | ExecErrorCode,
+    message: string
+  ) {
+    super(message);
+    this.name = 'ExecError';
+  }
+}
+
+/** Run SQL as the current viewer. Throws an [`ExecError`] on failure. */
 export async function execSql(request: ExecRequest): Promise<ExecOutcome> {
   const result = await storageServiceClient.databases.exec(request);
   if (result.isErr()) {
-    throw new Error(
-      result.error[0]?.message ?? 'The database could not run that statement.'
+    const failure = result.error[0];
+    throw new ExecError(
+      failure?.code ?? 'HTTP_ERROR',
+      failure?.message ?? 'The database could not run that statement.'
     );
   }
   return result.value;

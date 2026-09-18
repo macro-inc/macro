@@ -62,16 +62,18 @@ export function AddColumnMenu(props: AddColumnMenuProps) {
         <PlusIcon class="size-3" />
       </Dropdown.Trigger>
       <Dropdown.Content>
-        <Dropdown.GroupLabel>New column</Dropdown.GroupLabel>
-        <For each={COLUMN_TYPES}>
-          {(type) => (
-            <Dropdown.Item
-              onSelect={() => addColumn(type.label, type.dataType)}
-            >
-              {type.label}
-            </Dropdown.Item>
-          )}
-        </For>
+        <Dropdown.Group>
+          <Dropdown.GroupLabel>New column</Dropdown.GroupLabel>
+          <For each={COLUMN_TYPES}>
+            {(type) => (
+              <Dropdown.Item
+                onSelect={() => addColumn(type.label, type.dataType)}
+              >
+                {type.label}
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
       </Dropdown.Content>
     </Dropdown>
   );
