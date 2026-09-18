@@ -47,8 +47,8 @@ use crate::domain::model::{
     ModelChoice, RepoUrl, RunStatus,
 };
 use crate::domain::ports::{
-    ArtifactStore, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream, SessionNotifier,
-    StreamConnectError,
+    ArtifactStore, CursorAgents, CursorArtifacts, RepositoryChooser, RunStream, SessionIntent,
+    SessionNotifier, StreamConnectError,
 };
 use agent_client_protocol::schema::v1::{
     ContentBlock, SessionId, SessionUpdate, StopReason, TextContent,
@@ -199,8 +199,9 @@ fn explain_repository_rejection(error: SessionError) -> SessionError {
     };
     tracing::warn!(
         repo = %unavailable.repo,
+        reason = %unavailable.reason,
         detail = %unavailable.detail,
-        "cursor rejected the prompt: the repository is not connected to this cursor account"
+        "cursor rejected the prompt: it could not use the session's repository"
     );
     SessionError::Rejected(unavailable.user_message())
 }
@@ -217,6 +218,45 @@ fn is_prompt_rejection(error: &SessionError) -> bool {
     }
 }
 
+/// A prompt Cursor refused before the session had an agent, and why.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct RejectedPrompt {
+    /// What the person asked, as it would have gone to Cursor.
+    text: String,
+    /// The refusal as it was shown to them, when there was a readable one.
+    reason: Option<String>,
+}
+
+/// The prompt that finally mints an agent, carrying the ones Cursor refused
+/// before it so the agent reads the whole conversation the person had.
+///
+/// Plain text rather than structure because that is all `create_agent`
+/// takes; the framing tells the agent which message is current and that the
+/// earlier ones were never acted on, so it neither re-does nor ignores them.
+fn prompt_with_rejected(rejected: &[RejectedPrompt], prompt: &str) -> String {
+    if rejected.is_empty() {
+        return prompt.to_owned();
+    }
+    let mut text = String::from(
+        "The following earlier message(s) in this conversation never reached an agent: \
+         each attempt to start one was refused by Cursor. They are included so nothing the \
+         person asked is lost. The message under \"Latest message\" is the one to respond to.\n",
+    );
+    for earlier in rejected {
+        text.push_str("\n--- Earlier message ---\n");
+        text.push_str(&earlier.text);
+        if let Some(reason) = &earlier.reason {
+            text.push_str("\n(Refused with: ");
+            text.push_str(reason);
+            text.push(')');
+        }
+        text.push('\n');
+    }
+    text.push_str("\n--- Latest message ---\n");
+    text.push_str(prompt);
+    text
+}
+
 /// One session's mutable state. Guarded by a std mutex: every critical
 /// section is a handful of field reads/writes, never an await.
 #[derive(Debug, Default)]
@@ -228,6 +268,23 @@ struct SessionState {
     /// prompt chose. Still needed after the agent exists - Cursor fixed the
     /// repository at creation, and a restore has to hand the same one back.
     repo: Option<RepoUrl>,
+    /// The first prompt's repository decision, kept until an agent exists.
+    ///
+    /// Cursor can reject the create that follows the decision — a branch it
+    /// could not verify, a repository the account has not connected — and the
+    /// next prompt is then usually "what happened?", which is no evidence of
+    /// where the work belongs. So the decision is made once, on the prompt
+    /// that carried the evidence, and reused by every create attempt until
+    /// one succeeds. Cleared with the process: a restored session re-decides.
+    intent: Option<SessionIntent>,
+    /// Prompts Cursor refused before any agent existed, oldest first.
+    ///
+    /// A refused prompt is journaled as aborted and never reaches Cursor; if
+    /// the next one alone minted the agent, the agent would answer a question
+    /// about a message it never saw. So they ride along with the prompt that
+    /// finally creates it. Cancelled prompts are deliberately not here — the
+    /// person withdrew those. Cleared once a prompt is accepted.
+    rejected_prompts: Vec<RejectedPrompt>,
     /// The Cursor agent, once the first prompt has minted it.
     agent: Option<CursorAgentId>,
     /// The run currently streaming, so cancel knows what to cancel.
@@ -706,6 +763,7 @@ where
             return Ok(StopReason::Cancelled);
         }
 
+        let creating_agent = prior_agent.is_none();
         let created = match prior_agent {
             Some(agent) => {
                 // Queue behind any run still going (the same agent advances
@@ -717,20 +775,38 @@ where
             None => {
                 // Snapshotted out of the lock: `create_agent` is a network
                 // call, and the state mutex must never be held across an await.
-                let mcp_servers = session
-                    .state
-                    .lock()
-                    .expect("session state poisoned")
-                    .mcp_servers
-                    .clone();
+                let (mcp_servers, decided, rejected) = {
+                    let state = session.state.lock().expect("session state poisoned");
+                    (
+                        state.mcp_servers.clone(),
+                        state.intent.clone(),
+                        state.rejected_prompts.clone(),
+                    )
+                };
                 // The first prompt is the only evidence there is for which
                 // repository this session belongs to, and Cursor fixes an
                 // agent's repository at creation - so the decision is made
-                // here, before the agent exists, and never revisited.
-                match self.chooser.choose(prompt, &session.cwd).await {
+                // here, before the agent exists, and never revisited: a
+                // create Cursor refused leaves the decision standing for the
+                // next attempt rather than re-reading a prompt that is now
+                // about the refusal.
+                let intent = match decided {
+                    Some(intent) => {
+                        tracing::info!(
+                            repo = ?intent.repository.as_ref().map(RepoUrl::as_str),
+                            "reusing the repository decided by this session's first prompt"
+                        );
+                        Ok(intent)
+                    }
+                    None => self.chooser.choose(prompt, &session.cwd).await,
+                };
+                match intent {
                     Ok(intent) => {
-                        session.state.lock().expect("session state poisoned").repo =
-                            intent.repository.clone();
+                        {
+                            let mut state = session.state.lock().expect("session state poisoned");
+                            state.repo = intent.repository.clone();
+                            state.intent = Some(intent.clone());
+                        }
                         if intent.repository.is_none() {
                             tracing::warn!(
                                 "no repository chosen - this session will not appear in the Cursor sessions list"
@@ -738,7 +814,7 @@ where
                         }
                         self.cursor
                             .create_agent(
-                                prompt,
+                                &prompt_with_rejected(&rejected, prompt),
                                 intent.repository.as_ref(),
                                 intent.open_pull_request,
                                 &mcp_servers,
@@ -776,6 +852,24 @@ where
                     if cancel.is_cancelled() {
                         return Ok(StopReason::Cancelled);
                     }
+                    // Only a create's refusal is carried: a follow-up run
+                    // refused on an existing agent is already in a conversation
+                    // the agent can see.
+                    if creating_agent {
+                        let reason = match &error {
+                            SessionError::Rejected(message) => Some(message.clone()),
+                            _ => None,
+                        };
+                        session
+                            .state
+                            .lock()
+                            .expect("session state poisoned")
+                            .rejected_prompts
+                            .push(RejectedPrompt {
+                                text: prompt.to_owned(),
+                                reason,
+                            });
+                    }
                 }
                 return Err(error);
             }
@@ -788,7 +882,11 @@ where
             false,
         )
         .await?;
-        session.state.lock().expect("session state poisoned").agent = Some(agent.clone());
+        {
+            let mut state = session.state.lock().expect("session state poisoned");
+            state.agent = Some(agent.clone());
+            state.rejected_prompts.clear();
+        }
         // Acceptance is durable even if recovery of an older run fails. Do
         // not observe/project the new run until every older run is reconciled.
         self.backfill_foreign_runs(session_id, &session, &agent, Some(&run))

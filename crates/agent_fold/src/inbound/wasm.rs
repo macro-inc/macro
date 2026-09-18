@@ -1,109 +1,89 @@
 //! The fold, as the browser calls it.
 //!
-//! Two entry points over one fold. [`fold_session`] takes a session id and
-//! that session's whole log and gives back the messages it derives.
-//! [`FoldStream`] is the same fold kept open: construct one per live session,
-//! push frames as they arrive, and each push reports the single message it
-//! changed. The log arrives in exactly the shape the raw-log endpoint serves,
-//! a recording stores, and the realtime event carries - `{userId?, direction,
-//! content}` per frame - so a caller passes bytes through rather than
-//! translating them, and catching up and following are the same code.
+//! One entry point: [`FoldStream`], a session's fold kept open. Construct one
+//! per live session and push [`FoldInput`]s into it in order - a snapshot of
+//! the fetched log first, then confirmed rows as they arrive over the socket,
+//! and the client's own actions the moment it issues them. Each push reports
+//! what it changed.
+//!
+//! The confirmed rows arrive in exactly the shape the raw-log endpoint serves
+//! and the realtime event carries - `{createdAt, id, userId?, direction,
+//! content}` per row - so a caller passes bytes through rather than
+//! translating them. A speculated action arrives as the same JSON the control
+//! endpoint accepts, so the client never learns a second shape for it.
 //!
 //! The shape JavaScript actually sees lives in [`crate::inbound::wire`], not
 //! here - this module is only the wasm-bindgen glue that carries values of
 //! those types across the boundary. See that module's docs for why they are
 //! kept apart.
-//!
-//! # Why catching up is not a loop of pushes
-//!
-//! [`FoldStream::extend`] exists rather than leaving a caller to push a
-//! fetched log frame by frame. A push serializes the message it changed
-//! across the boundary, and a session's frames overwhelmingly change the same
-//! agent message over and over - so replaying 6500 frames one at a time would
-//! serialize 6500 whole messages to produce one. `extend` folds them all and
-//! serializes the answer once.
 
-use crate::domain::fold::fold;
-use crate::domain::ingestion::{LogCursor, LogIngestion};
+use crate::domain::ingestion::LogCursor;
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
-use crate::domain::model::{FoldedMessage as ModelFoldedMessage, SessionMetadata};
-use crate::domain::ports::FoldMachine;
+use crate::domain::model::SessionMetadata;
+use crate::domain::speculation::{FoldInput, Speculation, SpeculativeFold};
 use crate::inbound::wire::{FoldedMessage, FoldedStreamEvent};
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
 use macro_user_id::user_id::MacroUserIdStr;
 use serde::Deserialize;
 use wasm_bindgen::prelude::*;
 
-/// Fold one session's log into the messages a channel renders.
+/// One live session's fold, held open between inputs.
 ///
-/// `session_id` is the session the entries belong to; it is not repeated per
-/// entry, and it is what the returned `agentSessionMessageId`s are built from.
-///
-/// Errors only on input this cannot read - a session id that is not a UUID, or
-/// entries that are not log frames. The fold itself is total: an unrecognized
-/// or half-finished frame yields a partially-known message rather than a
-/// failure, because rendering some of a session always beats rendering none.
-///
-/// # Errors
-///
-/// Returns a JS string describing what could not be read.
-#[wasm_bindgen]
-pub fn fold_session(session_id: &str, entries: JsValue) -> Result<JsValue, JsValue> {
-    let session = parse_session(session_id)?;
-    let messages = fold(parse_log(session, entries)?);
-    encode_messages(session, messages)
-}
-
-/// One live session's fold, held open between frames.
-///
-/// The streaming counterpart to [`fold_session`], wrapping the same
-/// [`crate::domain::fold::FoldMachineImpl`] the server folds with. A caller following a session
-/// keeps one of these per session for as long as the session lasts: frames
-/// must arrive in log order. Successful loads replace its committed history.
-///
-/// A durable-log client catches up with [`Self::snapshot`] and follows with
-/// [`Self::push_rows`]. Raw recording consumers use [`Self::extend`] and
-/// [`Self::push`] without requiring row metadata. Refolding the
-/// fetched log into a throwaway and then pushing live frames into a second
-/// machine would derive the same messages twice from different halves of the
-/// log; there is one machine per session precisely so that cannot happen.
+/// Wraps [`SpeculativeFold`], which wraps the same
+/// [`crate::domain::fold::FoldMachineImpl`] the server folds with. A caller
+/// following a session keeps one of these per session for as long as the
+/// session lasts and pushes every input through [`Self::push`]: the fetched
+/// log and the streamed frames after it go into one machine, so a channel
+/// opened mid-session continues the fold rather than starting a second one
+/// beside it.
 #[wasm_bindgen]
 pub struct FoldStream {
     /// Half of the composite id every message this machine derives is keyed
-    /// by, and the reason the session id is taken once rather than per frame.
+    /// by, and the reason the session id is taken once rather than per input.
     session: AgentSessionId,
-    ingestion: LogIngestion,
+    fold: SpeculativeFold,
 }
 
 #[wasm_bindgen]
 impl FoldStream {
-    /// Replace this fold with a durable effective-history snapshot.
+    /// A fold for `session_id` that has seen nothing. The first input pushed
+    /// must be a snapshot.
     ///
     /// # Errors
-    /// Returns a JS string if any durable row cannot be read.
-    pub fn snapshot(&mut self, entries: JsValue) -> Result<JsValue, JsValue> {
-        let entries: Vec<DurableEntry> = serde_wasm_bindgen::from_value(entries)
-            .map_err(|error| JsValue::from_str(&format!("log rows are not readable: {error}")))?;
-        self.ingestion.replace_snapshot(
-            entries
-                .into_iter()
-                .map(|entry| (entry.cursor, entry.frame.into_log(self.session)))
-                .collect(),
-        );
-        self.messages()
+    ///
+    /// Returns a JS string when the session id is not a UUID.
+    #[wasm_bindgen(constructor)]
+    pub fn new(session_id: &str) -> Result<FoldStream, JsValue> {
+        let session = parse_session(session_id)?;
+        Ok(Self {
+            session,
+            fold: SpeculativeFold::new(session),
+        })
     }
 
-    /// Ingest durable live rows in delivery order, including snapshot overlap.
+    /// Fold inputs in order, reporting the changes they implied as an array
+    /// of `{kind: "new" | "update", message}`, `{kind: "replace", messages}`
+    /// and `{kind: "metadata", metadata}` events. Empty for inputs that
+    /// change nothing renderable, which is most confirmed rows.
     ///
     /// # Errors
-    /// Returns a JS string if any row cannot be read or events cannot be encoded.
-    pub fn push_rows(&mut self, entries: JsValue) -> Result<JsValue, JsValue> {
-        let entries: Vec<DurableEntry> = serde_wasm_bindgen::from_value(entries)
-            .map_err(|error| JsValue::from_str(&format!("log rows are not readable: {error}")))?;
+    ///
+    /// Returns a JS string when an input cannot be read, when a live or
+    /// speculative input arrives before any snapshot, or when an action
+    /// cannot be encoded as the frame the harness would log.
+    pub fn push(&mut self, inputs: JsValue) -> Result<JsValue, JsValue> {
+        let inputs: Vec<WireInput> = serde_wasm_bindgen::from_value(inputs).map_err(|error| {
+            JsValue::from_str(&format!("fold inputs are not readable: {error}"))
+        })?;
         let mut events = Vec::new();
-        for entry in entries {
+        for input in inputs {
+            let input = input.into_input(self.session)?;
+            let changes = self
+                .fold
+                .push(input)
+                .map_err(|error| JsValue::from_str(&error.to_string()))?;
             events.extend(
-                self.ingestion
-                    .push(entry.cursor, entry.frame.into_log(self.session))
+                changes
                     .into_iter()
                     .map(|event| FoldedStreamEvent::new(self.session, event)),
             );
@@ -112,85 +92,28 @@ impl FoldStream {
             .map_err(|error| JsValue::from_str(&format!("fold events are not encodable: {error}")))
     }
 
-    /// A machine for `session_id` that has folded nothing.
-    ///
-    /// # Errors
-    ///
-    /// Returns a JS string when the session id is not a UUID.
-    #[wasm_bindgen(constructor)]
-    pub fn new(session_id: &str) -> Result<FoldStream, JsValue> {
-        Ok(Self {
-            session: parse_session(session_id)?,
-            ingestion: LogIngestion::default(),
-        })
-    }
-
-    /// Fold a run of frames in one go, answering with every message derived
-    /// so far - the catch-up path. See the module docs for why this is not a
-    /// loop of [`Self::push`].
-    ///
-    /// # Errors
-    ///
-    /// Returns a JS string when the entries are not log frames.
-    pub fn extend(&mut self, entries: JsValue) -> Result<JsValue, JsValue> {
-        for entry in parse_log(self.session, entries)? {
-            let _ = self.ingestion.machine.push(entry);
-        }
-        self.messages()
-    }
-
-    /// Fold one more frame, reporting the changes it implied as an array of
-    /// `{kind: "new" | "update", message}`, `{kind: "replace", messages}`,
-    /// and `{kind: "metadata", metadata}`
-    /// events - empty for a frame that changes nothing, which is most of
-    /// them.
-    ///
-    /// # Errors
-    ///
-    /// Returns a JS string when the entry is not a log frame.
-    pub fn push(&mut self, entry: JsValue) -> Result<JsValue, JsValue> {
-        let entry: LogEntry = serde_wasm_bindgen::from_value(entry)
-            .map_err(|error| JsValue::from_str(&format!("log entry is not readable: {error}")))?;
-
-        let events: Vec<FoldedStreamEvent> = self
-            .ingestion
-            .machine
-            .push(entry.into_log(self.session))
-            .into_iter()
-            .map(|event| FoldedStreamEvent::new(self.session, event))
-            .collect();
-
-        encode(&events)
-            .map_err(|error| JsValue::from_str(&format!("fold events are not encodable: {error}")))
-    }
-
     /// The session metadata as it now stands - what the latest
-    /// `{kind: "metadata"}` event carried, for a caller that caught up with
-    /// [`Self::extend`] and saw no events.
+    /// `{kind: "metadata"}` event carried.
     ///
     /// # Errors
     ///
     /// Returns a JS string describing what could not be encoded.
     pub fn metadata(&self) -> Result<JsValue, JsValue> {
-        let metadata: SessionMetadata = self.ingestion.machine.metadata().clone().into();
-        encode(&metadata).map_err(|error| {
+        let metadata: &SessionMetadata = self.fold.metadata();
+        encode(metadata).map_err(|error| {
             JsValue::from_str(&format!("session metadata is not encodable: {error}"))
         })
     }
 
-    /// Every message folded so far, oldest first.
-    ///
-    /// The same answer [`fold_session`] gives for the frames pushed so far -
-    /// they are one fold - which is what a reader relies on when a channel
-    /// that has been following a session is reopened.
+    /// Every message as the reader should see it, oldest first - the
+    /// confirmed conversation with this client's unconfirmed actions on top.
     ///
     /// # Errors
     ///
     /// Returns a JS string describing what could not be encoded.
     pub fn messages(&self) -> Result<JsValue, JsValue> {
         let messages: Vec<FoldedMessage> = self
-            .ingestion
-            .machine
+            .fold
             .messages()
             .iter()
             .cloned()
@@ -211,31 +134,6 @@ fn parse_session(session_id: &str) -> Result<AgentSessionId, JsValue> {
         .map_err(|error| JsValue::from_str(&format!("session id is not a uuid: {error}")))
 }
 
-/// Read an array of served log entries as this session's log frames.
-fn parse_log(session: AgentSessionId, entries: JsValue) -> Result<Vec<AgentSessionLog>, JsValue> {
-    let entries: Vec<LogEntry> = serde_wasm_bindgen::from_value(entries)
-        .map_err(|error| JsValue::from_str(&format!("log entries are not readable: {error}")))?;
-
-    Ok(entries
-        .into_iter()
-        .map(|entry| entry.into_log(session))
-        .collect())
-}
-
-/// Encode folded messages for the browser.
-fn encode_messages(
-    session: AgentSessionId,
-    messages: Vec<ModelFoldedMessage>,
-) -> Result<JsValue, JsValue> {
-    let messages: Vec<FoldedMessage> = messages
-        .into_iter()
-        .map(|message| FoldedMessage::new(session, message))
-        .collect();
-
-    encode(&messages)
-        .map_err(|error| JsValue::from_str(&format!("folded messages are not encodable: {error}")))
-}
-
 /// Encode a value for the browser as plain JSON-shaped data.
 ///
 /// `serde_wasm_bindgen`'s default turns a `serde_json::Value` object into an
@@ -244,6 +142,51 @@ fn encode_messages(
 /// JSON-compatible serializer is the one that honors it.
 fn encode<T: serde::Serialize>(value: &T) -> Result<JsValue, serde_wasm_bindgen::Error> {
     serde::Serialize::serialize(value, &serde_wasm_bindgen::Serializer::json_compatible())
+}
+
+/// One input, as JavaScript sends it. Mirrors the `FoldInput` union in the
+/// worker protocol.
+#[derive(Deserialize)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+enum WireInput {
+    /// `{kind: "snapshot", rows: DurableEntry[]}`
+    Snapshot { rows: Vec<DurableEntry> },
+    /// `{kind: "confirmed", row: DurableEntry}`
+    Confirmed { row: DurableEntry },
+    /// `{kind: "speculated", actionId, action, userId?}` - `action` is the
+    /// control endpoint's request body. The user id is the caller's own, so
+    /// it is read strictly: a client that cannot name itself has a bug.
+    #[serde(rename_all = "camelCase")]
+    Speculated {
+        action_id: AgentActionId,
+        action: AgentAction,
+        #[serde(default)]
+        user_id: Option<MacroUserIdStr<'static>>,
+    },
+    /// `{kind: "retracted", actionId}`
+    #[serde(rename_all = "camelCase")]
+    Retracted { action_id: AgentActionId },
+}
+
+impl WireInput {
+    fn into_input(self, session: AgentSessionId) -> Result<FoldInput, JsValue> {
+        Ok(match self {
+            Self::Snapshot { rows } => FoldInput::Snapshot(
+                rows.into_iter()
+                    .map(|row| (row.cursor, row.frame.into_log(session)))
+                    .collect(),
+            ),
+            Self::Confirmed { row } => {
+                FoldInput::Confirmed(row.cursor, row.frame.into_log(session))
+            }
+            Self::Speculated {
+                action_id,
+                action,
+                user_id,
+            } => FoldInput::Speculated(Speculation::new(action_id, action, user_id)),
+            Self::Retracted { action_id } => FoldInput::Retracted(action_id),
+        })
+    }
 }
 
 /// One entry of a session's protocol log, as the endpoint serves it.
@@ -258,6 +201,8 @@ struct LogEntry {
     message: Message,
 }
 
+/// A log entry with its durable cursor, as the endpoint and the realtime
+/// event both carry it.
 #[derive(Deserialize)]
 struct DurableEntry {
     #[serde(flatten)]

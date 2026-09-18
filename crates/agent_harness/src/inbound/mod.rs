@@ -6,4 +6,6 @@
 pub mod kafka;
 /// Authenticated model discovery.
 pub mod model_load;
+/// Authenticated repository listing.
+pub mod repositories;
 pub mod runtime_gateway;

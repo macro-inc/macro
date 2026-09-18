@@ -3,7 +3,7 @@
  *
  * The driver owns a recording split in two: entries before `splitIndex` are
  * served as the persisted log (`getLog`), the rest stream one at a time
- * through the real realtime entry point, `handleAgentSessionLog` — so
+ * through the real realtime entry point, `AgentSession.ingest` — so
  * buffering, Rust row ingestion, the worker fold, and the status projection all
  * run exactly as they do against the gateway.
  *
@@ -13,8 +13,8 @@
  * split so the first streamed frames duplicate fetched ones (they must drop).
  */
 
+import { AgentSession } from '@core/agent-session/AgentSession';
 import type { ResultError } from '@core/util/result';
-import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
 import type {
   AgentSessionLogEntryDto,
   AgentSessionResponse,
@@ -119,7 +119,7 @@ export function createReplayDriver(options: ReplayDriverOptions): ReplayDriver {
   let timer: ReturnType<typeof setTimeout> | undefined;
 
   const emit = (entry: AgentSessionLogEntryDto) => {
-    handleAgentSessionLog({ agentSessionId, ...entry });
+    AgentSession.ingest({ agentSessionId, ...entry });
   };
 
   const pause = () => {

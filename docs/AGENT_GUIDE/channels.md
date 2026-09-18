@@ -24,6 +24,18 @@ session-specific modal. Folder moves, duplication, and property/tag editing are
 not offered because those APIs do not support sessions. Runtime controls remain
 session-specific.
 
+A session transcript shows each tool call as a collapsible row (consecutive calls
+fold into a `Called N tools` group; click it to see the rows). A tool reached over
+an MCP server - Macro's own (`ReadContent · macro`) from a Cursor, Claude, or
+Codex session, or a third-party server (`ask_question · deepwiki`) - is titled by
+the tool's name with the server as its subtitle, never by the harness's dispatcher
+(`mcp`). Clicking the row expands the exchange: a `Request` section with the
+tool's own arguments and a `Response` section with what it returned, both as
+syntax-lit, pretty-printed JSON (prose results show as text), each with a copy
+button that copies the whole section; a call that failed is faded, shows the
+error as its subtitle, and adds an `Error` section. Rows for a call still running
+show whatever has arrived so far.
+
 ## Message composer
 
 Composer and conversation body text use `text-base` (15px at the default root
@@ -98,7 +110,7 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` open
+bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` / `@claude` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 A follow-up sent while that session is still working stops the current turn,
@@ -117,15 +129,29 @@ cropped at the chip's height with a fade at its foot; clicking it expands it in 
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
 
-`@codex` requires both `enable-chat-v3-agents` and `enable-codex-agents`.
-It appears when the mentioning user has connected ChatGPT and saved a
-cloud environment in Settings → Harness. New sessions use that environment on
+`@codex` and `@claude` are offered to every user before account setup. The built-in
+`@cursor` entry requires the `enable-cursor-agents` rollout flag (local override:
+`VITE_ENABLE_CURSOR_AGENTS`). Custom agents keep their channel visibility rules
+regardless of which harness they use.
+A mention without a connected account creates no session and replies in the thread
+with a **Connect Cursor**, **Connect Codex**, or **Connect Claude** chip. Each chip
+opens Settings → Harness, where all three connection cards are visible. The same
+chip reads **connected** after setup; mention the bot again to start a session.
+Codex also prompts for a cloud environment when ChatGPT is connected but no
+environment has been saved. New sessions use that environment on
 `main`; there is no automatic repository selection. Follow-up mentions continue the same agent session. When
 the provider URL arrives, the session header offers **Open in Codex**. Codex
 assistant text appears as complete messages while tool activity and thinking
 can continue updating during the turn. Mention
 eligibility is covered by component/query tests; the channel interaction requires
 a configured backend for end-to-end verification.
+
+Within the Cursor rollout, `@cursor` is offered whether connected or not. A mention from someone with
+no Cursor API key opens no session: the Cursor bot replies in the thread that
+`@cursor` runs on their own account and is not connected yet, followed by a
+**Connect Cursor** chip. Clicking the chip opens Settings → Harness; once a key
+is saved the same chip reads **Cursor connected** and stops navigating. The
+original mention is not replayed - mention `@cursor` again after connecting.
 
 Cursor sessions choose a repository from the mentioning user's linked GitHub App
 installations on their first prompt. A session without a repository can still use
@@ -257,6 +283,10 @@ optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
 channels. Channel favorites open in the channel preview. Shift-clicking a
 favorite, channel, or DM opens that conversation in a new split instead.
+If a restored Chat selection is already open in another view, its preview stays
+closed but the saved selection is retained. Close the other view, then select
+the conversation again or reopen Chat to restore its preview. Verify that an
+unrelated rail preference change while blocked does not erase the saved selection.
 While reading older history or composing in the preview, incoming notifications
 (including ones for other channels) must not jump to latest, blank/refetch the
 messages, or revoke composer focus. To check this, leave an unsent draft in a
@@ -329,9 +359,10 @@ message or acknowledgement and verify that it does not pull you to latest.
 
 ## Channel pictures
 
-Channels and group chats can have a custom picture. Admins and owners (the same
-people who can rename a channel) can open the title menu. Beside `Rename`,
-choose `Set channel picture` to add or replace a picture. Select a PNG, JPG,
+Channels and group chats can have a custom picture. Any active participant can
+`Rename` a named channel from the title menu. Direct messages cannot be renamed.
+Only admins and owners also get `Set channel picture` and `Remove channel
+picture`. Choose `Set channel picture` to add or replace a picture. Select a PNG, JPG,
 WebP, or GIF up to 16 MB. The upload must finish before the picture is saved;
 the server accepts only supported images uploaded by the person setting the
 picture. An error leaves the previous picture in place. When a picture is set, the menu also offers

@@ -128,7 +128,7 @@ export function createSheetActions(
     source.setCells(edits);
     setNotice(`Trimmed whitespace in ${Object.keys(edits).length} cells`);
   }
-  async function sort(descending: boolean) {
+  async function sort(descending: boolean, sheetColumn?: number) {
     grid.commit();
     if (!source.canEdit() || source.busy() || pending()) return;
     const selection = grid.selection();
@@ -145,7 +145,18 @@ export function createSheetActions(
     setNotice('Sorting selected range…');
     try {
       const edits = await source.copyCells(
-        sortedRangeCopies(before, source.values(), selection, descending)
+        sortedRangeCopies(
+          before,
+          source.values(),
+          sheetColumn === undefined
+            ? selection
+            : {
+                anchor: { row: 0, column: 0 },
+                focus: { row: source.rowCount() - 1, column: 25 },
+              },
+          descending,
+          sheetColumn
+        )
       );
       if (revision !== operation) return;
       if (

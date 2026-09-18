@@ -54,6 +54,36 @@ function store() {
 const signal = () => new AbortController().signal;
 
 describe('deterministic spreadsheet worker runtime', () => {
+  it('AI can write and reread native mention cells without an open editor', async () => {
+    const { doc, storage, revision } = store();
+    const value =
+      '<m-user-mention>{"userId":"macro|test@macro.com","email":"test@macro.com","displayName":"Taylor"}</m-user-mention>';
+    await runSpreadsheetRequest(
+      {
+        action: 'edit',
+        expectedRevision: revision(),
+        operations: [
+          {
+            type: 'set_cells',
+            sheetId: 'sheet1',
+            cells: [
+              { address: 'B1', value },
+              { address: 'C1', value: '=B1&" owns this"' },
+            ],
+          },
+        ],
+      },
+      storage,
+      calculator,
+      signal()
+    );
+    expect(readSpreadsheetCells(doc).B1.value).toBe(value);
+    const result = calculator.calculate(readSpreadsheetCells(doc));
+    expect(result.B1.display).toBe('@Taylor');
+    expect(result.C1.display).toBe('@Taylor owns this');
+    expect(storage.commit).toHaveBeenCalledOnce();
+  });
+
   it('reads and calculates without calling persistence; edits return the committed revision', async () => {
     const { doc, storage, revision } = store();
     const read = await runSpreadsheetRequest(
@@ -287,4 +317,31 @@ describe('deterministic spreadsheet worker runtime', () => {
       }).success
     ).toBe(false);
   });
+});
+
+it('accepts imported financial styles in AI edits while rejecting unknown border types', () => {
+  const body = {
+    documentId: crypto.randomUUID(),
+    documentToken: 'token',
+    request: {
+      action: 'edit',
+      expectedRevision: 'rev',
+      operations: [
+        {
+          type: 'format_cells',
+          sheetId: 'sheet1',
+          range: 'A1',
+          style: {
+            numberFormat: '#,##0.00;[Red](#,##0.00)',
+            fontName: 'Calibri',
+            borderBottomStyle: 'double',
+            borderBottomColor: '#123456',
+          },
+        },
+      ],
+    },
+  };
+  expect(spreadsheetBodySchema.safeParse(body).success).toBe(true);
+  body.request.operations[0].style.borderBottomStyle = 'bogus';
+  expect(spreadsheetBodySchema.safeParse(body).success).toBe(false);
 });

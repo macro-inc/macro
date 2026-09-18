@@ -23,8 +23,8 @@ use ai_toolset::{AsyncToolCollection, RequestContext, ToolCallError};
 use bot_id::BotId;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, AdminParticipantRole, BotAccessScope, EntityAccessReceipt,
-        EntityType, MemberParticipantRole, RequiredPermission,
+        AccessError, AccessLevel, BotAccessScope, EntityAccessReceipt, EntityType,
+        MemberParticipantRole, RequiredPermission,
     },
     ports::EntityAccessService,
 };
@@ -131,13 +131,13 @@ where
             .map_err(channel_access_error)
     }
 
-    /// Mint the same admin receipt HTTP uses before renaming a channel.
-    pub async fn require_channel_admin(
+    /// Mint a member receipt before renaming a channel.
+    pub async fn require_channel_rename(
         &self,
         request_context: &RequestContext,
         channel_id: Uuid,
-    ) -> Result<EntityAccessReceipt<AdminParticipantRole>, ToolCallError> {
-        self.channel_receipt(request_context, channel_id, ChannelReceiptKind::Admin)
+    ) -> Result<EntityAccessReceipt<MemberParticipantRole>, ToolCallError> {
+        self.channel_receipt(request_context, channel_id, ChannelReceiptKind::Rename)
             .await
     }
 
@@ -171,7 +171,7 @@ where
 
 #[derive(Clone, Copy)]
 enum ChannelReceiptKind {
-    Admin,
+    Rename,
     Member,
 }
 
@@ -196,19 +196,16 @@ fn channel_access_error(err: AccessError) -> ToolCallError {
 fn channel_receipt_error(kind: ChannelReceiptKind, err: AccessError) -> ToolCallError {
     let description = match (kind, &err) {
         (
-            ChannelReceiptKind::Admin,
+            ChannelReceiptKind::Rename,
             AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_),
-        ) => "you need channel admin access to rename this channel",
+        ) => "you must be a member of the channel to rename it",
         (
             ChannelReceiptKind::Member,
             AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_),
         ) => "you must be a member of the channel to change its participants",
         (_, AccessError::NotFound(_)) => "channel not found",
         (_, AccessError::BadRequest(_)) => "invalid channel id",
-        (ChannelReceiptKind::Admin, AccessError::Unavailable(_) | AccessError::Internal(_)) => {
-            "failed to verify channel admin access"
-        }
-        (ChannelReceiptKind::Member, AccessError::Unavailable(_) | AccessError::Internal(_)) => {
+        (_, AccessError::Unavailable(_) | AccessError::Internal(_)) => {
             "failed to verify channel membership"
         }
     };

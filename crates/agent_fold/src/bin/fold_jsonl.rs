@@ -473,13 +473,20 @@ fn render_tool(label: &str, status: ToolStatus, detail: &ToolDetail) -> String {
             kind,
             output,
             input,
+            result,
+            error,
         } => {
             let _ = writeln!(out, "{}", indent(&format!("kind: {kind}")));
-            if let Some(output) = output {
+            if let Some(input) = input {
+                let _ = writeln!(out, "{}", indent(&format!("input: {}", pretty(input))));
+            }
+            if let Some(result) = result {
+                let _ = writeln!(out, "{}", indent(&format!("result: {}", pretty(result))));
+            } else if let Some(output) = output {
                 let _ = writeln!(out, "{}", indent(output.trim_end()));
             }
-            if let Some(input) = input {
-                let _ = writeln!(out, "{}", indent(&pretty(input)));
+            if let Some(error) = error {
+                let _ = writeln!(out, "{}", indent(&format!("error: {error}")));
             }
         }
         ToolDetail::Macro {

@@ -18,7 +18,13 @@ import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler'
 import { usePullRequestByGithubKeyQuery } from '@queries/storage/pr-mention';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { cn, Layer } from '@ui';
-import { createMemo, type JSX, type ParentProps, Show } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  type JSX,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 
 function metadataRecord(metadata: unknown): Record<string, unknown> {
@@ -158,14 +164,31 @@ function EntityChip(props: {
   );
 }
 
-export function AgentPullRequestChip(props: { url: string }): JSX.Element {
-  const reference = createMemo(() => parseGithubPrUrl(props.url));
+function useLinkedPullRequest(url: Accessor<string>) {
+  const reference = createMemo(() => parseGithubPrUrl(url()));
   const githubKey = createMemo(() => {
     const parsed = reference();
     return parsed ? toGithubKey(parsed) : undefined;
   });
   const query = usePullRequestByGithubKeyQuery(githubKey);
-  const entity = () => (query.isSuccess ? query.data : undefined);
+  const entity = () =>
+    query.isSuccess ? (query.data ?? undefined) : undefined;
+  return { reference, entity };
+}
+
+/** Leading list icon, with the same PR status as the chip. */
+export function AgentPullRequestIcon(props: { url: string }): JSX.Element {
+  const { entity } = useLinkedPullRequest(() => props.url);
+  return (
+    <GithubPullRequestStatusIcon
+      status={pullRequestStatus(entity())}
+      class="size-4"
+    />
+  );
+}
+
+export function AgentPullRequestChip(props: { url: string }): JSX.Element {
+  const { reference, entity } = useLinkedPullRequest(() => props.url);
 
   return (
     <Layer depth={2}>

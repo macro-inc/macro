@@ -1,9 +1,6 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { useCodexAgentsAccess } from '@core/codex/flag';
 import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
 import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';
-import { claudeCloud } from '@core/constant/featureFlags';
 import { ThrownResultError } from '@core/util/result';
 import CursorIcon from '@icon/wide-cursor-ide.svg';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
@@ -45,8 +42,6 @@ function lastConnectedText(harness: RegisteredHarness): string {
 
 /** Settings UI for choosing and configuring the available agent harnesses. */
 export function Harness() {
-  const canUseCodex = useCodexAgentsAccess();
-  const claudeCloudFlag = useFeatureFlag(claudeCloud);
   const [cursorApiKey, setCursorApiKey] = createSignal('');
   const cursorStatus = useCursorApiKeyStatusQuery();
   const saveCursorApiKey = useSaveCursorApiKey();
@@ -181,9 +176,7 @@ export function Harness() {
           </div>
         </section>
 
-        <Show when={claudeCloudFlag().enabled}>
-          <ClaudeConnection />
-        </Show>
+        <ClaudeConnection />
 
         <section class="flex gap-4 px-6 py-5">
           <HarnessIcon>
@@ -370,9 +363,7 @@ export function Harness() {
           </div>
         </section>
 
-        <Show when={canUseCodex()}>
-          <CodexHarness />
-        </Show>
+        <CodexHarness />
 
         <section class="flex gap-4 px-6 py-5">
           <HarnessIcon>

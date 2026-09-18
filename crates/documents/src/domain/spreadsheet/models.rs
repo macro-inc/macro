@@ -62,10 +62,76 @@ pub enum SpreadsheetNumberFormat {
     Text,
 }
 
+/// Excel border line style.
+#[derive(Debug, Clone, Deserialize, Serialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub enum SpreadsheetBorderStyle {
+    /// Restore the default border style.
+    #[serde(rename = "")]
+    Reset,
+    /// Thin line.
+    Thin,
+    /// Medium line.
+    Medium,
+    /// Thick line.
+    Thick,
+    /// Double line.
+    Double,
+    /// Dotted line.
+    Dotted,
+    /// Dashed line.
+    Dashed,
+    /// DashDot line.
+    DashDot,
+    /// DashDotDot line.
+    DashDotDot,
+    /// SlantDashDot line.
+    SlantDashDot,
+    /// Hair line.
+    Hair,
+    /// MediumDashed line.
+    MediumDashed,
+    /// MediumDashDot line.
+    MediumDashDot,
+    /// MediumDashDotDot line.
+    MediumDashDotDot,
+}
+
 /// Sparse cell styling patch. Omitted fields remain unchanged.
 #[derive(Debug, Clone, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 pub struct SpreadsheetStyle {
+    /// Exact Excel number format, up to 512 characters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub number_format: Option<String>,
+    /// Exact Excel font name, up to 128 characters.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub font_name: Option<String>,
+    /// Top border style.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_top_style: Option<SpreadsheetBorderStyle>,
+    /// Top border color.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_top_color: Option<String>,
+    /// Right border style.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_right_style: Option<SpreadsheetBorderStyle>,
+    /// Right border color.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_right_color: Option<String>,
+    /// Bottom border style.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_bottom_style: Option<SpreadsheetBorderStyle>,
+    /// Bottom border color.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_bottom_color: Option<String>,
+    /// Left border style.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_left_style: Option<SpreadsheetBorderStyle>,
+    /// Left border color.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub border_left_color: Option<String>,
+
     /// Bold text.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub bold: Option<bool>,
@@ -125,7 +191,10 @@ pub struct SpreadsheetStyle {
 pub struct SpreadsheetCellInput {
     /// A1 address, from A1 through Z1000.
     pub address: String,
-    /// Raw text or formula, at most 10,000 characters.
+    /// Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
+    /// For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
+    /// or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
+    /// Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
     pub value: String,
 }
 

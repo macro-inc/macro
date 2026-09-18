@@ -219,23 +219,23 @@ beforeEach(() => {
 
 describe('Harness', () => {
   it.each([false, true])(
-    'gates Codex settings on rollout access %s',
+    'offers Codex settings even when rollout access is %s',
     (enabled) => {
       codexAccess.enabled = enabled;
       render(() => <Harness />);
-      expect(screen.queryByTestId('codex-harness') !== null).toBe(enabled);
+      expect(screen.getByTestId('codex-harness')).toBeTruthy();
     }
   );
 
-  it('does not mount Claude connection or fetch its status when the flag is off', () => {
+  it('offers Claude connection when the rollout flag is off', () => {
     claudeFlag.enabled = false;
     claudeFlag.source.mockClear();
     try {
       render(() => <Harness />);
       expect(
         screen.queryByRole('region', { name: 'Claude Cloud connection' })
-      ).toBeNull();
-      expect(claudeFlag.source).not.toHaveBeenCalled();
+      ).toBeTruthy();
+      expect(claudeFlag.source).toHaveBeenCalled();
       expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
     } finally {
       claudeFlag.enabled = true;

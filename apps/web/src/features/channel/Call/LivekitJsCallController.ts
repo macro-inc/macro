@@ -8,6 +8,7 @@ import {
   RoomEvent,
   Track,
 } from 'livekit-client';
+import { batch } from 'solid-js';
 import { startReceiverStatsSampling } from './call-audio-receiver-stats';
 
 type LivekitJsCallControllerState = {
@@ -42,6 +43,12 @@ export function createLivekitJsCallController(
   options: LivekitJsCallControllerOptions
 ) {
   let stopReceiverStatsSampling: (() => void) | null = null;
+  let disposed = false;
+  let connectGeneration = 0;
+
+  function isCurrentRoom(room: Room) {
+    return !disposed && options.room() === room;
+  }
 
   function stopReceiverStats() {
     stopReceiverStatsSampling?.();
@@ -49,35 +56,54 @@ export function createLivekitJsCallController(
   }
 
   function syncParticipantMap(room: Room) {
+    if (!isCurrentRoom(room)) return;
     options.setRemoteParticipants(new Map(room.remoteParticipants));
     options.bumpTrackVersion();
   }
 
-  function attachRoomListeners(room: Room) {
+  function attachRoomListeners(
+    room: Room,
+    call: Pick<CallTokenResponse, 'channelId' | 'callId'>
+  ) {
+    const bumpTrackVersion = () => {
+      if (isCurrentRoom(room)) options.bumpTrackVersion();
+    };
+
     room.on(RoomEvent.ConnectionStateChanged, (state: ConnectionState) => {
-      const snapshot = options.state();
+      if (!isCurrentRoom(room)) return;
       console.debug('[call] connection state changed', {
         state,
-        room: snapshot.activeChannelId,
-        call: snapshot.activeCallId,
+        room: call.channelId,
+        call: call.callId,
       });
-      options.setConnectionState(state);
+      // A terminal disconnect clears the UI state, but the current Room can
+      // still report a late recovery. Restore its identity with the connection
+      // state so audio and channel UI agree about which call is connected.
+      batch(() => {
+        if (options.isActiveConnectionState(state)) {
+          options.setActiveCall(call.channelId, call.callId);
+        }
+        options.setConnectionState(state);
+      });
     });
 
     room.on(RoomEvent.ParticipantConnected, () => syncParticipantMap(room));
     room.on(RoomEvent.ParticipantDisconnected, () => syncParticipantMap(room));
 
-    room.on(RoomEvent.TrackSubscribed, options.bumpTrackVersion);
-    room.on(RoomEvent.TrackUnsubscribed, options.bumpTrackVersion);
-    room.on(RoomEvent.TrackPublished, options.bumpTrackVersion);
-    room.on(RoomEvent.TrackUnpublished, options.bumpTrackVersion);
-    room.on(RoomEvent.TrackMuted, options.bumpTrackVersion);
-    room.on(RoomEvent.TrackUnmuted, options.bumpTrackVersion);
-    room.on(RoomEvent.LocalTrackPublished, options.bumpTrackVersion);
+    room.on(RoomEvent.TrackSubscribed, bumpTrackVersion);
+    room.on(RoomEvent.TrackUnsubscribed, bumpTrackVersion);
+    room.on(RoomEvent.TrackPublished, bumpTrackVersion);
+    room.on(RoomEvent.TrackUnpublished, bumpTrackVersion);
+    room.on(RoomEvent.TrackMuted, bumpTrackVersion);
+    room.on(RoomEvent.TrackUnmuted, bumpTrackVersion);
+    room.on(RoomEvent.LocalTrackPublished, bumpTrackVersion);
 
-    room.on(RoomEvent.ActiveSpeakersChanged, options.bumpSpeakerVersion);
+    room.on(RoomEvent.ActiveSpeakersChanged, () => {
+      if (isCurrentRoom(room)) options.bumpSpeakerVersion();
+    });
 
     room.on(RoomEvent.LocalTrackUnpublished, (pub: LocalTrackPublication) => {
+      if (!isCurrentRoom(room)) return;
       if (pub.source === Track.Source.ScreenShare) {
         options.setScreenSharing(false);
       }
@@ -85,37 +111,37 @@ export function createLivekitJsCallController(
     });
 
     room.on(RoomEvent.Disconnected, (reason?: unknown) => {
-      const snapshot = options.state();
+      if (!isCurrentRoom(room)) return;
       console.warn('[call] room disconnected', {
         reason,
-        room: snapshot.activeChannelId,
-        call: snapshot.activeCallId,
+        room: call.channelId,
+        call: call.callId,
       });
       options.resetState();
     });
   }
 
-  function destroyRoom() {
+  function destroyRoom(room: Room) {
+    room.removeAllListeners();
+    if (!isCurrentRoom(room)) return;
+
     options.cancelPendingMediaSetup();
     stopReceiverStats();
     options.destroyProcessors();
 
-    const room = options.room();
-    if (room) {
-      room.removeAllListeners();
-      options.setRoom(null);
-    }
-
+    options.setRoom(null);
     options.resetState();
   }
 
   async function connect(tokenResponse: CallTokenResponse) {
+    if (disposed) return;
     const existingRoom = options.room();
     const state = options.state();
 
     if (
       existingRoom &&
       state.activeChannelId === tokenResponse.channelId &&
+      state.activeCallId === tokenResponse.callId &&
       options.isActiveConnectionState(state.connectionState)
     ) {
       // A duplicate join can arrive while LiveKit is already connected or
@@ -130,13 +156,18 @@ export function createLivekitJsCallController(
       return;
     }
 
+    const generation = ++connectGeneration;
+
     // If switching channels, or if a previous disconnected room instance is
     // still hanging around after a failed reconnect, tear it down and build a
     // fresh Room. This gives retry/auto-rejoin the same clean slate as a manual
     // leave + join.
     if (existingRoom) {
       await existingRoom.disconnect();
-      destroyRoom();
+      // An earlier leave may have cleared this room while we waited. The
+      // latest join should still proceed; only a newer request supersedes it.
+      if (disposed || generation !== connectGeneration) return;
+      destroyRoom(existingRoom);
     }
 
     const targetRoom = new Room({
@@ -148,16 +179,21 @@ export function createLivekitJsCallController(
         dtx: false,
       },
     });
-    attachRoomListeners(targetRoom);
+    attachRoomListeners(targetRoom, {
+      channelId: tokenResponse.channelId,
+      callId: tokenResponse.callId,
+    });
     options.setRoom(targetRoom);
     options.setActiveCall(tokenResponse.channelId, tokenResponse.callId);
 
     try {
       await targetRoom.connect(tokenResponse.serverUrl, tokenResponse.token);
+      if (!isCurrentRoom(targetRoom) || generation !== connectGeneration)
+        return;
       options.clearOptimisticJoin();
     } catch (e) {
       console.error('failed to connect to LiveKit room', e);
-      destroyRoom();
+      destroyRoom(targetRoom);
       throw e;
     }
 
@@ -188,6 +224,7 @@ export function createLivekitJsCallController(
   }
 
   async function disconnect() {
+    connectGeneration += 1;
     const room = options.room();
     if (!room) return;
 
@@ -199,15 +236,12 @@ export function createLivekitJsCallController(
       // room.disconnect() can settle after the user has rejoined, and
       // destroying the replacement session would strand a live connection
       // the UI no longer tracks.
-      if (options.room() === room) {
-        destroyRoom();
-      } else {
-        room.removeAllListeners();
-      }
+      destroyRoom(room);
     }
   }
 
   function disconnectBeforeUnload() {
+    connectGeneration += 1;
     const room = options.room();
     if (!room) return;
 
@@ -217,6 +251,7 @@ export function createLivekitJsCallController(
   }
 
   function dispose() {
+    disposed = true;
     options.cancelPendingMediaSetup();
     stopReceiverStats();
     const room = options.room();

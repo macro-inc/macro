@@ -1,4 +1,4 @@
-import type { Cell, Color, Style } from 'exceljs';
+import type { BorderStyle, Cell, Color, Style } from 'exceljs';
 import { strFromU8 } from 'fflate';
 import {
   SPREADSHEET_DEFAULT_STYLE,
@@ -46,10 +46,7 @@ function colorValue(
   warnings.add('Some indexed or custom theme colors could not be imported.');
   return undefined;
 }
-function readNumberFormat(
-  format: string,
-  warnings: Set<string>
-): SpreadsheetCellStyle {
+function readNumberFormat(format: string): SpreadsheetCellStyle {
   if (!format || format.toLowerCase() === 'general') return {};
   if (format === '@') return { format: 'text' };
   const tokens = format.replace(/"[^"]*"|\\.|\[[^\]]*\]/g, '').split(';')[0];
@@ -64,14 +61,15 @@ function readNumberFormat(
   else if (/[0#]/.test(tokens))
     style = { format: tokens.includes(',') ? 'number' : 'general', decimals };
   else style = {};
-  const standard =
-    /^(?:General|@|#,##0(?:\.[0#]{1,10})?|0(?:\.[0#]{1,10})?%?|\$#,##0(?:\.[0#]{1,10})?|0(?:\.[0#]{1,10})?E\+00|m\/d\/(?:yy|yyyy)|mm\/dd\/yyyy|h:mm(?::ss)?(?: AM\/PM)?)$/i.test(
-      format
-    );
-  if (!standard)
-    warnings.add(
-      'Custom number formats are approximated by the available number, date, time or currency formats.'
-    );
+  // Retain the actual format instead of approximating accounting sections,
+  // negative parentheses, scaling, currencies, or date/time precision.
+  if (
+    format.length > 512 ||
+    Array.from(format).some((character) => character.charCodeAt(0) < 32)
+  )
+    throw new Error('A cell has an unsupported Excel number format.');
+  if (writeXlsxStyle({ value: '', ...style }).numFmt !== format)
+    style.numberFormat = format;
   return style;
 }
 export function readXlsxStyle(
@@ -79,7 +77,7 @@ export function readXlsxStyle(
   theme: (string | undefined)[],
   warnings: Set<string>
 ): SpreadsheetCellStyle {
-  const result = readNumberFormat(cell.numFmt, warnings);
+  const result = readNumberFormat(cell.numFmt);
   const font = cell.font;
   if (font) {
     if (font.bold) result.bold = true;
@@ -98,13 +96,12 @@ export function readXlsxStyle(
           ? 'serif'
           : 'sans';
       if (
-        !['Arial', 'Calibri', 'Inter', 'Georgia', 'Courier New'].includes(
-          font.name
-        )
+        font.name !==
+        { sans: 'Arial', serif: 'Georgia', mono: 'Courier New' }[
+          result.fontFamily
+        ]
       )
-        warnings.add(
-          'Fonts are mapped to the available sans, serif and monospace families.'
-        );
+        result.fontName = font.name;
     }
     const color = colorValue(font.color, theme, warnings);
     if (color) result.textColor = color;
@@ -168,14 +165,9 @@ export function readXlsxStyle(
     const border = cell.border?.[edge];
     if (border?.style) {
       result[key] = true;
-      if (
-        border.style !== 'thin' ||
-        (border.color?.argb &&
-          !/^(?:FF)?(?:000000|808080)$/i.test(border.color.argb))
-      )
-        warnings.add(
-          'Border colors and line styles are simplified to standard cell borders.'
-        );
+      if (border.style !== 'thin') result[`${key}Style`] = border.style;
+      const color = colorValue(border.color, theme, warnings);
+      if (color && color !== '#808080') result[`${key}Color`] = color;
     }
   }
   if (cell.border?.diagonal?.style)
@@ -205,11 +197,13 @@ export function writeXlsxStyle(cell: SpreadsheetCell): Partial<Style> {
     argb: `FF${value.slice(1).toUpperCase()}`,
   });
   return {
-    numFmt: numberFormat,
+    numFmt: style.numberFormat || numberFormat,
     font: {
-      name: { sans: 'Arial', serif: 'Georgia', mono: 'Courier New' }[
-        style.fontFamily
-      ],
+      name:
+        style.fontName ||
+        { sans: 'Arial', serif: 'Georgia', mono: 'Courier New' }[
+          style.fontFamily
+        ],
       size: style.fontSize,
       bold: style.bold,
       italic: style.italic,
@@ -241,7 +235,22 @@ export function writeXlsxStyle(cell: SpreadsheetCell): Partial<Style> {
         ] as const
       )
         .filter(([, enabled]) => enabled)
-        .map(([edge]) => [edge, { style: 'thin', color: { argb: 'FF808080' } }])
+        .map(([edge]) => {
+          const key = `border${edge[0].toUpperCase()}${edge.slice(1)}` as
+            | 'borderTop'
+            | 'borderRight'
+            | 'borderBottom'
+            | 'borderLeft';
+          return [
+            edge,
+            {
+              style: (style[`${key}Style`] || 'thin') as BorderStyle,
+              color: style[`${key}Color`]
+                ? rgb(style[`${key}Color`])
+                : { argb: 'FF808080' },
+            },
+          ];
+        })
     ),
   };
 }

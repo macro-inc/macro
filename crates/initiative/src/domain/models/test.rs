@@ -29,6 +29,35 @@ fn wire_types_serialize_camel_case() {
 }
 
 #[test]
+fn description_document_id_round_trips_uuid_strings() {
+    let id = DescriptionDocumentId::from_uuid(Uuid::from_u128(2));
+    let parsed = DescriptionDocumentId::from_str(&id.to_string()).expect("uuid string");
+    assert_eq!(parsed, id);
+    assert_eq!(
+        serde_json::to_value(id).expect("json"),
+        serde_json::json!("00000000-0000-0000-0000-000000000002")
+    );
+}
+
+#[test]
+fn update_request_has_no_description_field() {
+    let request: UpdateInitiativeRequest = serde_json::from_value(serde_json::json!({
+        "name": "Renamed",
+        "description": "edited in the document instead"
+    }))
+    .expect("unknown fields are ignored");
+    assert_eq!(
+        request,
+        UpdateInitiativeRequest {
+            name: Some("Renamed".into()),
+            ..Default::default()
+        }
+    );
+    let json = serde_json::to_value(UpdateInitiativeRequest::default()).expect("json");
+    assert_eq!(json, serde_json::json!({}));
+}
+
+#[test]
 fn create_request_deserializes_camel_case() {
     let request: CreateInitiativeRequest = serde_json::from_value(serde_json::json!({
         "name": "Launch",

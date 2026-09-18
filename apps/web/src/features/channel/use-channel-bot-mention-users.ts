@@ -1,9 +1,7 @@
-import { useCodexAgentsAccess } from '@core/codex/flag';
-import { isCodexBotId } from '@core/constant/codexAgent';
+import { isCursorBotId } from '@core/constant/cursorAgent';
+import { useCursorAgentsAccess } from '@core/cursor/flag';
 import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
-import { useCodexStatusQuery } from '@queries/auth/codex';
-import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
 import { queryReadyGate } from '@queries/gate';
 import type { Agent } from '@service-storage/generated/schemas/agent';
@@ -19,33 +17,24 @@ function mentionUser(bot: Bot): IUser {
   };
 }
 
-/** Build mention entries from installed channel bots and virtual global agents. */
+/**
+ * Build mention entries from installed channel bots and virtual global
+ * agents. Account setup does not hide a mention: the harness answers with
+ * a connection prompt in the thread when setup is needed. The built-in
+ * Cursor entry follows the Cursor rollout flag.
+ */
 export function availableBotMentionUsers(
   channelBots: readonly Bot[],
   agents: readonly Agent[],
-  cursorConnected: boolean,
-  codexConnected = false
+  cursorEnabled: boolean
 ): IUser[] {
   const globalAgents = agents.filter(
-    (agent) =>
-      agent.channel_scope === 'all' &&
-      agent.bot.has_agent &&
-      (agent.harness !== 'cursor' || cursorConnected) &&
-      (agent.harness !== 'codex-cloud' || codexConnected)
-  );
-  const codexBotIds = new Set(
-    agents
-      .filter((agent) => agent.harness === 'codex-cloud')
-      .map((agent) => agent.bot.id)
+    (agent) => agent.channel_scope === 'all' && agent.bot.has_agent
   );
   const seen = new Set<string>();
 
   return [...channelBots, ...globalAgents.map((agent) => agent.bot)]
-    .filter(
-      (bot) =>
-        codexConnected ||
-        (!isCodexBotId(`bot|${bot.id}`) && !codexBotIds.has(bot.id))
-    )
+    .filter((bot) => cursorEnabled || !isCursorBotId(bot.id))
     .map(mentionUser)
     .filter((user) => {
       if (seen.has(user.id)) return false;
@@ -66,19 +55,13 @@ export function useChannelBotMentionUsers(
 ): Accessor<IUser[]> {
   const channelBots = useChannelBotsQuery(channelId);
   const agents = useAgentsQuery();
-  const cursorStatus = useCursorApiKeyStatusQuery();
-  const canUseCodex = useCodexAgentsAccess();
-  const codexStatus = useCodexStatusQuery(canUseCodex);
+  const canUseCursor = useCursorAgentsAccess();
 
   return createMemo(() =>
     availableBotMentionUsers(
       queryReadyGate(channelBots) ? channelBots.data : [],
       queryReadyGate(agents) ? agents.data : [],
-      queryReadyGate(cursorStatus) ? cursorStatus.data.registered : false,
-      canUseCodex() &&
-        codexStatus.isSuccess &&
-        codexStatus.data.connected &&
-        !!codexStatus.data.environmentId?.trim()
+      canUseCursor()
     )
   );
 }

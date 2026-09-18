@@ -692,9 +692,9 @@ async fn update_db_thread_metadata(
 }
 
 /// Update the denormalized thread-level read status, verified by link_id.
-#[tracing::instrument(err, skip(pool))]
+#[tracing::instrument(err, skip(executor))]
 pub(super) async fn update_thread_read_status(
-    pool: &PgPool,
+    executor: impl sqlx::PgExecutor<'_>,
     thread_id: Uuid,
     link_id: Uuid,
     is_read: bool,
@@ -713,7 +713,7 @@ pub(super) async fn update_thread_read_status(
         thread_id,
         link_id,
     )
-    .execute(pool)
+    .execute(executor)
     .await?;
 
     Ok(())

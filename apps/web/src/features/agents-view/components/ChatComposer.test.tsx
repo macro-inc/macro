@@ -1,9 +1,18 @@
+import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  createEditor,
+  type LexicalEditor,
+} from 'lexical';
 import { createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChatComposer, ChatSessionInput } from './ChatComposer';
 
 const editor = vi.hoisted(() => ({
+  lexical: undefined as LexicalEditor | undefined,
   clear: vi.fn(),
   setMarkdown: vi.fn(),
   enter: undefined as
@@ -17,7 +26,9 @@ vi.mock(
   '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder',
   () => ({
     buildConfig: () => {
+      editor.lexical = createEditor({ nodes: [QuoteNode] });
       const builder = {
+        buildHandle: () => ({ lexical: editor.lexical }),
         namespace: () => builder,
         withMentions: () => builder,
         withEmojis: () => builder,
@@ -42,11 +53,7 @@ vi.mock(
           focus: vi.fn(),
           getMarkdown: () => editor.text,
         },
-        lexical: {
-          update: vi.fn(),
-          dispatchCommand: vi.fn(),
-          getRootElement: () => null,
-        },
+        lexical: editor.lexical,
       };
       return builder;
     },
@@ -60,6 +67,14 @@ vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
 }));
 
 beforeEach(() => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   vi.clearAllMocks();
   editor.text = '';
   editor.enter = undefined;
@@ -193,4 +208,28 @@ describe('Chat session input', () => {
     screen.getByRole('textbox', { name: 'Filter models' }).dispatchEvent(event);
     expect(event.defaultPrevented).toBe(false);
   });
+});
+
+it('expands for a short quote and collapses when replaced with a paragraph', () => {
+  const { container } = render(() => <ChatSessionInput onSend={vi.fn()} />);
+  const layout = container.querySelector('[data-composer-compact]');
+  expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+  editor.lexical!.update(
+    () => {
+      $getRoot()
+        .clear()
+        .append($createQuoteNode().append($createTextNode('short')));
+    },
+    { discrete: true }
+  );
+  expect(layout?.getAttribute('data-composer-compact')).toBe('false');
+  editor.lexical!.update(
+    () => {
+      $getRoot()
+        .clear()
+        .append($createParagraphNode().append($createTextNode('short')));
+    },
+    { discrete: true }
+  );
+  expect(layout?.getAttribute('data-composer-compact')).toBe('true');
 });

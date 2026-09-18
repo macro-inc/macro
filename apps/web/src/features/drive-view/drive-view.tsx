@@ -85,15 +85,6 @@ export type DriveViewProps = {
   initialClientFilters?: SetPredicatesInput<string>;
 };
 
-function shouldOpenInline(event?: KeyboardEvent | MouseEvent) {
-  return !(
-    event?.shiftKey ||
-    event?.metaKey ||
-    event?.ctrlKey ||
-    event?.altKey
-  );
-}
-
 function favoriteDetailTarget(
   favorite: Favorite,
   fallbackName: string
@@ -164,6 +155,7 @@ function DriveViewContent(props: DriveViewProps) {
       expandedFolderIds: [],
       favoritesOpen: true,
       rootOpen: true,
+      tagsOpen: true,
     },
   });
   onCleanup(
@@ -193,15 +185,17 @@ function DriveViewContent(props: DriveViewProps) {
         ) && isCreatableEnabled(block.blockName)
     );
 
+  /** Exit any inline detail so the list reflects the chosen location or tags. */
+  const showList = () => {
+    navigationStack.clear();
+    panel.handle.resetPreview();
+  };
   const { navigate, setScope } = createDriveNavigation({
     state,
     setState,
     folders,
     results: createDriveResults(view, userId),
-    onNavigate: () => {
-      navigationStack.clear();
-      panel.handle.resetPreview();
-    },
+    onNavigate: showList,
   });
   const selectTab = (tab: DriveTab) => navigate({ kind: 'tab', tab });
   const selectFolder = (id: string | null) => navigate({ kind: 'folder', id });
@@ -380,7 +374,10 @@ function DriveViewContent(props: DriveViewProps) {
               const target = favoriteDetailTarget(item, name);
               if (item.entityType === 'project' && !event.shiftKey)
                 selectFolder(item.entityId);
-              else if (target && shouldOpenInline(event)) {
+              else if (
+                target &&
+                navigationStack.shouldNavigate(target, { event })
+              ) {
                 navigationStack.reset(target);
                 return;
               } else
@@ -392,9 +389,6 @@ function DriveViewContent(props: DriveViewProps) {
           />
         )}
       </For>
-      <Show when={favorites().length === 0}>
-        <p class="px-3 py-2 text-sm text-ink-extra-muted">No favorites yet</p>
-      </Show>
     </ViewSidebar.Nav>
   );
 
@@ -502,101 +496,116 @@ function DriveViewContent(props: DriveViewProps) {
           selectFolder(parentId ?? null);
         }}
       />
-      <DriveLayout
-        locationMenu={LocationMenu}
-        state={state()}
-        folders={folders()}
-        foldersLoading={projects.isPending}
-        foldersError={projects.isError}
-        onRetryFolders={() => void projects.refetch()}
-        search={view.searchText()}
-        onSearch={view.setSearchText}
-        searchRef={(element) => {
-          searchInput = element;
-        }}
-        onTab={selectTab}
-        onFolder={selectFolder}
-        filterMenu={FilterMenu}
-        onSort={(sort) => {
-          setState((current) => ({ ...current, sort }));
-          view.soup.sort.setAll([sort]);
-        }}
-        onToggleFolder={(id) =>
-          setState((current) => ({
-            ...current,
-            expandedFolderIds: current.expandedFolderIds.includes(id)
-              ? current.expandedFolderIds.filter((value) => value !== id)
-              : [...current.expandedFolderIds, id],
-          }))
-        }
-        onFavoritesOpen={(favoritesOpen) =>
-          setState((current) => ({ ...current, favoritesOpen }))
-        }
-        onRootOpen={(rootOpen) =>
-          setState((current) => ({ ...current, rootOpen }))
-        }
-        createMenu={CreateMenu}
-        favorites={Favorites}
-        detail={
-          navigationStack.active() ? (
-            <TagSetsProvider tagSets={view.tagFilter.tagSets}>
+      <TagSetsProvider tagSets={view.tagFilter.tagSets}>
+        <DriveLayout
+          locationMenu={LocationMenu}
+          state={state()}
+          folders={folders()}
+          foldersLoading={projects.isPending}
+          foldersError={projects.isError}
+          onRetryFolders={() => void projects.refetch()}
+          search={view.searchText()}
+          onSearch={view.setSearchText}
+          searchRef={(element) => {
+            searchInput = element;
+          }}
+          onTab={selectTab}
+          onFolder={selectFolder}
+          filterMenu={FilterMenu}
+          onSort={(sort) => {
+            setState((current) => ({ ...current, sort }));
+            view.soup.sort.setAll([sort]);
+          }}
+          onToggleFolder={(id) =>
+            setState((current) => ({
+              ...current,
+              expandedFolderIds: current.expandedFolderIds.includes(id)
+                ? current.expandedFolderIds.filter((value) => value !== id)
+                : [...current.expandedFolderIds, id],
+            }))
+          }
+          onFavoritesOpen={(favoritesOpen) =>
+            setState((current) => ({ ...current, favoritesOpen }))
+          }
+          onRootOpen={(rootOpen) =>
+            setState((current) => ({ ...current, rootOpen }))
+          }
+          activeTagIds={view.tagFilter.activeIds()}
+          onTags={(ids) =>
+            batch(() => {
+              view.tagFilter.onChange(ids);
+              showList();
+            })
+          }
+          onTagsOpen={(tagsOpen) =>
+            setState((current) => ({ ...current, tagsOpen }))
+          }
+          createMenu={CreateMenu}
+          favorites={Favorites}
+          hasFavorites={favorites().length > 0}
+          detail={
+            navigationStack.active() ? (
               <DriveDetailView
                 breadcrumbOrderOffset={locationBreadcrumbs().length}
               />
-            </TagSetsProvider>
-          ) : undefined
-        }
-      >
-        <Suspense
-          fallback={
-            <div class="grid size-full place-items-center text-ink-muted">
-              <SpinnerIcon
-                aria-label="Loading files"
-                class="size-5 animate-spin"
-              />
-            </div>
+            ) : undefined
           }
         >
-          <SoupViewList
-            emptyState={
-              projectId() && state().scope === 'default'
-                ? () => (
-                    <EmptyStatePanel
-                      centered
-                      graphic={EmptyStateFolderGraphic}
-                      title="This folder is empty"
-                      description="Create something new or drop files here to add them to this folder."
-                      primaryAction={{
-                        label: 'Back to Drive',
-                        icon: ArrowLeftIcon,
-                        onClick: () => selectFolder(null),
-                      }}
-                    />
-                  )
-                : undefined
+          <Suspense
+            fallback={
+              <div class="grid size-full place-items-center text-ink-muted">
+                <SpinnerIcon
+                  aria-label="Loading files"
+                  class="size-5 animate-spin"
+                />
+              </div>
             }
-            onOpenProject={selectFolder}
-            onOpenEntity={(entity, event) => {
-              if (entity.type !== 'document') return false;
+          >
+            <SoupViewList
+              emptyState={
+                // A folder emptied by a tag filter is a filter miss, not a vacant folder.
+                projectId() &&
+                state().scope === 'default' &&
+                view.tagFilter.activeIds().length === 0
+                  ? () => (
+                      <EmptyStatePanel
+                        centered
+                        graphic={EmptyStateFolderGraphic}
+                        title="This folder is empty"
+                        description="Create something new or drop files here to add them to this folder."
+                        primaryAction={{
+                          label: 'Back to Drive',
+                          icon: ArrowLeftIcon,
+                          onClick: () => selectFolder(null),
+                        }}
+                      />
+                    )
+                  : undefined
+              }
+              onOpenProject={selectFolder}
+              onOpenEntity={(entity, event) => {
+                if (entity.type !== 'document') return false;
 
-              const target = entityDetailTarget.document({
-                id: entity.id,
-                fileType: entity.fileType,
-                subType: entity.subType,
-                fallbackName: entity.name,
-              });
-              if (!entityDetailBlockType(target)) return false;
-              if (!shouldOpenInline(event)) return false;
-              navigationStack.reset(target);
-              return true;
-            }}
-            uploadProjectId={projectId()}
-            disableTabHotkeys
-            navigationKey={JSON.stringify([state().location, state().scope])}
-            timestamp={isRecent() ? (entity) => entity.touchedAt : undefined}
-          />
-        </Suspense>
-      </DriveLayout>
+                const target = entityDetailTarget.document({
+                  id: entity.id,
+                  fileType: entity.fileType,
+                  subType: entity.subType,
+                  fallbackName: entity.name,
+                });
+                if (!entityDetailBlockType(target)) return false;
+                if (!navigationStack.shouldNavigate(target, { event }))
+                  return false;
+                navigationStack.reset(target);
+                return true;
+              }}
+              uploadProjectId={projectId()}
+              disableTabHotkeys
+              navigationKey={JSON.stringify([state().location, state().scope])}
+              timestamp={isRecent() ? (entity) => entity.touchedAt : undefined}
+            />
+          </Suspense>
+        </DriveLayout>
+      </TagSetsProvider>
     </ViewBreadcrumbs.Root>
   );
 }
@@ -604,9 +613,7 @@ function DriveViewContent(props: DriveViewProps) {
 /** App composition: shared queries, inline details, and upload/create capabilities. */
 export function DriveView(props: DriveViewProps) {
   return (
-    <EntityDetailNavigationStack.Root
-      shouldNavigate={(_target, options) => shouldOpenInline(options?.event)}
-    >
+    <EntityDetailNavigationStack.Root>
       <DriveViewContent {...props} />
     </EntityDetailNavigationStack.Root>
   );

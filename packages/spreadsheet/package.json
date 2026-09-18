@@ -9,7 +9,8 @@
   "dependencies": {
     "@ironcalc/wasm": "0.8.4",
     "@loro-mirror/core": "workspace:*",
-    "loro-crdt": "catalog:"
+    "loro-crdt": "catalog:",
+    "ssf": "0.11.2"
   },
   "scripts": {
     "type-check": "tsc --noEmit --project tsconfig.json",

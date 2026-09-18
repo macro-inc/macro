@@ -19,20 +19,69 @@ use macro_event_broker::{Event, MacroEvent, TopicEvent};
 use macro_event_topics::MacroAgentSessionLifecycleTopic;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use messages::domain::models::MessageParent;
 use serde::{Deserialize, Serialize};
 
 use super::model::{AgentSessionId, TurnId};
 
-/// The channel thread a session was opened from, when it was.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+/// The thread a session was opened from, when it was.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct ThreadOrigin {
-    /// Channel the thread lives in.
-    pub channel_id: Uuid,
+    /// Entity owning the thread: the channel or document it was posted in.
+    pub parent: MessageParent,
+    /// Channel the thread lives in, for channel parents only. Kept beside
+    /// `parent` for consumers written when every origin was a channel.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub channel_id: Option<Uuid>,
     /// Root message of the thread.
     pub thread_id: Uuid,
     /// The message whose mention opened the session.
     pub originating_message_id: Uuid,
+}
+
+impl ThreadOrigin {
+    /// An origin on `parent`, with `channel_id` derived from it.
+    #[must_use]
+    pub fn new(parent: MessageParent, thread_id: Uuid, originating_message_id: Uuid) -> Self {
+        let channel_id = match &parent {
+            MessageParent::Channel(channel_id) => Some(*channel_id),
+            MessageParent::Document(_) => None,
+        };
+        Self {
+            parent,
+            channel_id,
+            thread_id,
+            originating_message_id,
+        }
+    }
+}
+
+/// Wire shape of [`ThreadOrigin`]: events published before parents existed
+/// carry only `channel_id`, and still decode as channel origins.
+#[derive(Deserialize)]
+struct ThreadOriginWire {
+    #[serde(default)]
+    parent: Option<MessageParent>,
+    #[serde(default)]
+    channel_id: Option<Uuid>,
+    thread_id: Uuid,
+    originating_message_id: Uuid,
+}
+
+impl<'de> Deserialize<'de> for ThreadOrigin {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let wire = ThreadOriginWire::deserialize(deserializer)?;
+        let parent = wire
+            .parent
+            .or(wire.channel_id.map(MessageParent::Channel))
+            .ok_or_else(|| serde::de::Error::missing_field("parent"))?;
+        Ok(Self::new(
+            parent,
+            wire.thread_id,
+            wire.originating_message_id,
+        ))
+    }
 }
 
 /// Who and what a session is; carried by every lifecycle event so a

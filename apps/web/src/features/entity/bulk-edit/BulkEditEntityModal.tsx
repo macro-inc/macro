@@ -8,7 +8,7 @@ import {
   type Setter,
   Show,
 } from 'solid-js';
-import { BulkDeleteView } from './BulkDeleteView';
+import { BulkDeleteView, type PartialDeleteHandler } from './BulkDeleteView';
 import { BulkMoveToProjectView } from './BulkMoveToProjectView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
 
@@ -20,6 +20,7 @@ const BulkEditEntityModalContent = (props: {
   onFinish?: () => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
+  onPartialDelete?: PartialDeleteHandler;
 }) => {
   const [pending, setPending] = createSignal(false);
   const handleFinish = () => {
@@ -69,6 +70,7 @@ const BulkEditEntityModalContent = (props: {
         </Show>
         <Show when={props.view === 'delete'}>
           <BulkDeleteView
+            onPartialDelete={props.onPartialDelete}
             entities={props.entities}
             onFinish={handleFinish}
             onCancel={handleCancel}
@@ -109,6 +111,7 @@ const [globalModalProps, setGlobalModalProps] = createSignal<{
   onFinish?: () => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
+  onPartialDelete?: PartialDeleteHandler;
 } | null>(null);
 const [modalOpen, setModalOpen] = createControlledOpenSignal(false, {
   id: 'entity-edit',
@@ -120,6 +123,7 @@ export const openBulkEditModal = (props: {
   onFinish?: () => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
+  onPartialDelete?: PartialDeleteHandler;
 }) => {
   setModalOpen(true);
   setGlobalModalProps(props);
@@ -159,6 +163,7 @@ export const GlobalBulkEditEntityModal = () => {
           onFinish={handleFinish}
           onCancel={handleCancel}
           onError={handleError}
+          onPartialDelete={props().onPartialDelete}
         />
       )}
     </Show>

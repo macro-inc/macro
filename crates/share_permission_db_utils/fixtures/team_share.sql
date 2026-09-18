@@ -11,12 +11,13 @@ INSERT INTO team_user (team_id, user_id, team_role) VALUES
 INSERT INTO "Project" (id, name, "userId") VALUES
     ('20000000-0000-0000-0000-000000000001', 'Root', 'macro|owner@example.com');
 INSERT INTO "Document" (id, name, owner) VALUES
-    ('20000000-0000-0000-0000-000000000002', 'Document', 'macro|owner@example.com');
+    ('20000000-0000-0000-0000-000000000002', 'Document', 'macro|owner@example.com'),
+    ('20000000-0000-0000-0000-000000000008', 'Initiative description', 'macro|owner@example.com');
 INSERT INTO "Chat" (id, name, "userId") VALUES
     ('20000000-0000-0000-0000-000000000003', 'Chat', 'macro|owner@example.com');
 INSERT INTO "SharePermission" (id) VALUES ('project'), ('document'), ('chat'), ('active-call'), ('archived-call'), ('initiative');
-INSERT INTO initiative (id, name, owner_user_id, share_permission_id) VALUES
-    ('20000000-0000-0000-0000-000000000007', 'Initiative', 'macro|owner@example.com', 'initiative');
+INSERT INTO initiative (id, name, owner_user_id, share_permission_id, description_document_id) VALUES
+    ('20000000-0000-0000-0000-000000000007', 'Initiative', 'macro|owner@example.com', 'initiative', '20000000-0000-0000-0000-000000000008');
 INSERT INTO "ProjectPermission" ("projectId", "sharePermissionId") VALUES ('20000000-0000-0000-0000-000000000001', 'project');
 INSERT INTO "DocumentPermission" ("documentId", "sharePermissionId") VALUES ('20000000-0000-0000-0000-000000000002', 'document');
 INSERT INTO "ChatPermission" ("chatId", "sharePermissionId") VALUES ('20000000-0000-0000-0000-000000000003', 'chat');

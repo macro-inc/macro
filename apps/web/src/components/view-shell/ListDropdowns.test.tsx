@@ -111,17 +111,17 @@ it('keeps multi-select menus open while adding and removing filters', async () =
 it('closes a single-select menu after choosing an option and retains it on reopen', async () => {
   const { selected, open, setOpen } = setup(true);
   await openSubmenu();
-  selectOption(await screen.findByRole('menuitemcheckbox', { name: 'Alice' }));
+  selectOption(await screen.findByRole('menuitemradio', { name: 'Alice' }));
   expect(selected()).toEqual(['alice']);
   await waitFor(() => expect(open()).toBe(false));
   setOpen(true);
   await openSubmenu();
   expect(
-    (
-      await screen.findByRole('menuitemcheckbox', { name: 'Alice' })
-    ).getAttribute('aria-checked')
+    (await screen.findByRole('menuitemradio', { name: 'Alice' })).getAttribute(
+      'aria-checked'
+    )
   ).toBe('true');
-  selectOption(screen.getByRole('menuitemcheckbox', { name: 'Bob' }));
+  selectOption(screen.getByRole('menuitemradio', { name: 'Bob' }));
   expect(selected()).toEqual(['bob']);
   await waitFor(() => expect(open()).toBe(false));
 });

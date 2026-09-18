@@ -41,8 +41,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_entity::{Entity, EntityType};
 use model_notifications::{
-    AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
-    AgentSessionWaitingForInputMetadata,
+    AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
+    AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata,
 };
 use notification::domain::models::apple::PushNotificationData;
 use notification::domain::models::request::SendNotificationRequestBuilder;
@@ -216,7 +216,17 @@ fn session_ref(
         session_name: identity.session_name.clone(),
         bot_id: identity.bot_id.as_uuid(),
         bot_name: identity.bot_name.clone(),
-        channel_id: identity.origin.as_ref().map(|origin| origin.channel_id),
+        parent: identity
+            .origin
+            .as_ref()
+            .map(|origin| AgentSessionOriginParent {
+                kind: origin.parent.entity_type().to_owned(),
+                id: origin.parent.entity_id(),
+            }),
+        channel_id: identity
+            .origin
+            .as_ref()
+            .and_then(|origin| origin.channel_id),
         thread_id: identity.origin.as_ref().map(|origin| origin.thread_id),
         announcement_message_id,
     }

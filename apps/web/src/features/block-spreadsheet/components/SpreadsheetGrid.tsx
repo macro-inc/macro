@@ -1,4 +1,5 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -12,6 +13,8 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import type { SpreadsheetCommentsCapability } from '../context/spreadsheet-comments';
+import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
 import { SPREADSHEET_CLIPBOARD_TYPE } from '../core/cell-copy';
 import type { FormulaTextSelection } from '../core/formula-reference';
 import {
@@ -32,9 +35,20 @@ import {
 } from '../core/spreadsheet-document';
 import type { SpreadsheetCursor } from '../core/spreadsheet-presence';
 import type { CompleteFormula } from '../primitives/create-formula-assistance';
+import { cellBorderColor, cellForeground } from './cell-colors';
 import { FormulaInput } from './FormulaInput';
+import { type CellAction, SpreadsheetCellMenu } from './SpreadsheetCellMenu';
+import {
+  type HeaderAction,
+  SpreadsheetHeaderMenu,
+} from './SpreadsheetHeaderMenu';
 
-export type GridValue = { display: string; number?: number; error?: string };
+export type GridValue = {
+  display: string;
+  number?: number;
+  error?: string;
+  warning?: string;
+};
 
 const ROW_HEIGHT = 21;
 const COLUMN_HEADER_HEIGHT = 24;
@@ -88,15 +102,27 @@ function wrappedLines(
 
 export function SpreadsheetGrid(props: {
   cells: SpreadsheetCells;
+  comments?: SpreadsheetCommentsCapability;
+  mentions?: SpreadsheetMentions;
   sheetId?: string;
   complete?: CompleteFormula;
   rowCount?: number;
   columnWidths?: Record<number, number>;
+  rowHeights?: Record<number, number>;
+  hiddenRows?: number[];
+  hiddenColumns?: number[];
+  canChangeStructure?: boolean;
+  onCellAction?: (action: Exclude<CellAction, 'comment'>) => void;
+  onHeaderAction?: (axis: 'row' | 'column', action: HeaderAction) => void;
   zoom?: number;
   showGridlines?: boolean;
   showFormulas?: boolean;
   onResizeColumn?: (column: number, width: number) => void;
-  onFill?: (source: CellSelection, target: CellSelection) => void;
+  onResizeRow?: (row: number, height: number | undefined) => void;
+  onFill?: (
+    source: CellSelection,
+    target: CellSelection
+  ) => void | Promise<void>;
   onCopyMetadata?: (cut?: boolean) => string;
   values: Record<string, GridValue>;
   remoteCursors: SpreadsheetCursor[];
@@ -134,14 +160,23 @@ export function SpreadsheetGrid(props: {
   const headerHeight = () => COLUMN_HEADER_HEIGHT * scale();
   const headerWidth = () => ROW_HEADER_WIDTH * scale();
   const rowCount = () => props.rowCount ?? GRID_ROWS;
-  const columns = Array.from({ length: GRID_COLUMNS }, (_, index) => index);
+  const allColumns = Array.from({ length: GRID_COLUMNS }, (_, index) => index);
+  const columns = () =>
+    allColumns.filter((column) => !props.hiddenColumns?.includes(column));
   const [fillTarget, setFillTarget] = createSignal<CellSelection>();
   const [resizing, setResizing] = createSignal<{
     column: number;
     width: number;
   }>();
   let fillSource: CellSelection | undefined;
+  let fillGeneration = 0;
   let resizeStart: { x: number; width: number } | undefined;
+  const [resizingRow, setResizingRow] = createSignal<{
+    row: number;
+    height: number;
+  }>();
+  let rowResizeStart: { y: number; height: number } | undefined;
+  let headerDrag: { axis: 'row' | 'column'; anchor: number } | undefined;
   let touchGesture:
     | {
         kind: 'tap';
@@ -170,10 +205,17 @@ export function SpreadsheetGrid(props: {
       ? resizing()!.width
       : (props.columnWidths?.[column] ?? DEFAULT_COLUMN_WIDTH);
   const width = (column: number) => `${columnWidth(column) * scale()}px`;
-  const display = (address: string) =>
-    props.showFormulas && props.cells[address]?.value.startsWith('=')
-      ? props.cells[address].value
-      : (props.values[address]?.display ?? props.cells[address]?.value ?? '');
+  const display = (address: string) => {
+    const cell = props.cells[address];
+    const formula = cell?.value.startsWith('=') && cell.format !== 'text';
+    if (props.showFormulas && formula) return cell.value;
+    // Newly filled formulas have no cached result yet. Keep them blank until
+    // calculation finishes instead of briefly flashing the formula expression.
+    return (
+      props.values[address]?.display ??
+      (formula ? '' : cellPlainText(cell?.value ?? ''))
+    );
+  };
   const rootStyle = getComputedStyle(document.documentElement);
   const fontFamilies = {
     sans: rootStyle.getPropertyValue('--font-sans') || 'sans-serif',
@@ -181,7 +223,9 @@ export function SpreadsheetGrid(props: {
     mono: rootStyle.getPropertyValue('--font-mono') || 'monospace',
   };
   const fontFamily = (cell?: SpreadsheetCell) =>
-    fontFamilies[cell?.fontFamily ?? 'sans'];
+    cell?.fontName
+      ? `${JSON.stringify(cell.fontName)}, ${fontFamilies[cell.fontFamily ?? 'sans']}`
+      : fontFamilies[cell?.fontFamily ?? 'sans'];
   // No cell measurement runs on pointer movement: only document, calculation,
   // column width, and zoom changes invalidate row geometry.
   const context =
@@ -189,12 +233,21 @@ export function SpreadsheetGrid(props: {
       ? null
       : document.createElement('canvas').getContext('2d');
   const rowHeights = createMemo(() => {
-    const heights = Array<number>(rowCount()).fill(ROW_HEIGHT);
+    const heights = Array.from({ length: rowCount() }, (_, row) =>
+      resizingRow()?.row === row
+        ? resizingRow()!.height
+        : Math.max(ROW_HEIGHT, ((props.rowHeights?.[row] ?? 0) * 4) / 3)
+    );
     // Gridlines stay one CSS pixel wide when the workbook is zoomed.
     const borderInset = 1 / scale();
     for (const [address, cell] of Object.entries(props.cells)) {
       const position = parseCellAddress(address);
       if (!position || position.row >= heights.length) continue;
+      if (
+        props.rowHeights?.[position.row] !== undefined ||
+        resizingRow()?.row === position.row
+      )
+        continue;
       const pixels = fontPixels(cell);
       const lineHeight = pixels * CELL_LINE_HEIGHT;
       const verticalInset = CELL_PADDING_Y * 2 + borderInset;
@@ -215,7 +268,9 @@ export function SpreadsheetGrid(props: {
         Math.min(MAX_ROW_HEIGHT, Math.ceil(lines * lineHeight + verticalInset))
       );
     }
-    return heights.map((height) => height * scale());
+    return heights.map((height, row) =>
+      props.hiddenRows?.includes(row) ? 0 : height * scale()
+    );
   });
   const rowOffsets = createMemo(() => {
     const offsets = [headerHeight()];
@@ -240,7 +295,9 @@ export function SpreadsheetGrid(props: {
         props.selection.anchor.row,
         props.selection.focus.row,
       ]),
-    ].sort((a, b) => a - b)
+    ]
+      .filter((row) => !props.hiddenRows?.includes(row))
+      .sort((a, b) => a - b)
   );
   const bounds = createMemo(() =>
     selectionBounds(fillTarget() ?? props.selection)
@@ -258,8 +315,13 @@ export function SpreadsheetGrid(props: {
   const activeCell = createSelector(() => cellAddress(props.selection.anchor));
   const columnOffsets = createMemo(() => {
     const offsets = [headerWidth()];
-    for (const column of columns)
-      offsets.push(offsets[column] + Number.parseFloat(width(column)));
+    for (const column of allColumns)
+      offsets.push(
+        offsets[column] +
+          (props.hiddenColumns?.includes(column)
+            ? 0
+            : Number.parseFloat(width(column)))
+      );
     return offsets;
   });
   const rangeStyle = (area = bounds()) => {
@@ -332,29 +394,44 @@ export function SpreadsheetGrid(props: {
       tapCell(gesture.tapPosition, event.timeStamp);
     }
     dragging = false;
+    headerDrag = undefined;
     props.onReferenceEnd?.();
     const target = fillTarget();
-    if (fillSource && target && !props.readonly)
-      props.onFill?.(fillSource, target);
+    const source = fillSource;
     fillSource = undefined;
-    setFillTarget(undefined);
+    if (source && target && !props.readonly) {
+      const generation = ++fillGeneration;
+      // Keep the preview until formula relocation has committed the new cells.
+      void Promise.resolve(props.onFill?.(source, target)).finally(() => {
+        if (generation === fillGeneration) setFillTarget(undefined);
+      });
+    }
     const resize = resizing();
     if (resize && !props.readonly)
       props.onResizeColumn?.(resize.column, resize.width);
     setResizing(undefined);
     resizeStart = undefined;
+    const rowResize = resizingRow();
+    if (rowResize && !props.readonly)
+      props.onResizeRow?.(rowResize.row, rowResize.height);
+    setResizingRow(undefined);
+    rowResizeStart = undefined;
   }
 
   function cancelPointer() {
     stopTouchGesture();
     lastTap = undefined;
     dragging = false;
+    headerDrag = undefined;
     keepReferenceFocus = false;
     props.onReferenceEnd?.();
     fillSource = undefined;
+    fillGeneration++;
     setFillTarget(undefined);
     setResizing(undefined);
     resizeStart = undefined;
+    setResizingRow(undefined);
+    rowResizeStart = undefined;
   }
 
   function previewFill(position: CellPosition) {
@@ -418,8 +495,38 @@ export function SpreadsheetGrid(props: {
   let dragging = false;
   let keepReferenceFocus = false;
   const isInput = (target: EventTarget | null) =>
-    target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement;
+    target instanceof HTMLInputElement ||
+    target instanceof HTMLTextAreaElement ||
+    (target instanceof HTMLElement && !!target.closest('[contenteditable]'));
   const focusGrid = () => grid.focus({ preventScroll: true });
+  const selectHeaderRange = (
+    axis: 'row' | 'column',
+    index: number,
+    anchor = index
+  ) => {
+    if (axis === 'row')
+      props.onSelectRange(
+        { row: anchor, column: 0 },
+        { row: index, column: GRID_COLUMNS - 1 }
+      );
+    else
+      props.onSelectRange(
+        { row: 0, column: anchor },
+        { row: rowCount() - 1, column: index }
+      );
+    focusGrid();
+  };
+  const startHeader = (
+    event: PointerEvent,
+    axis: 'row' | 'column',
+    index: number
+  ) => {
+    if (event.button !== 0 || event.ctrlKey) return;
+    event.preventDefault();
+    const anchor = event.shiftKey ? props.selection.anchor[axis] : index;
+    headerDrag = { axis, anchor };
+    selectHeaderRange(axis, index, anchor);
+  };
 
   function positionAtPoint(x: number, y: number): CellPosition {
     const rect = grid.getBoundingClientRect();
@@ -465,6 +572,15 @@ export function SpreadsheetGrid(props: {
   }
 
   function movePointer(event: PointerEvent) {
+    if (headerDrag && event.buttons === 1) {
+      const position = positionAtPoint(event.clientX, event.clientY);
+      selectHeaderRange(
+        headerDrag.axis,
+        position[headerDrag.axis],
+        headerDrag.anchor
+      );
+      return;
+    }
     const gesture = touchGesture;
     if (!gesture || gesture.pointerId !== event.pointerId) return;
     if (gesture.kind === 'tap') {
@@ -601,538 +717,868 @@ export function SpreadsheetGrid(props: {
     });
   });
 
+  let headerSelection: CellSelection | undefined;
+  function selectHeader(
+    axis: 'row' | 'column',
+    index: number,
+    preserve = false
+  ) {
+    const area = selectionBounds(props.selection);
+    if (
+      preserve &&
+      (axis === 'row'
+        ? area.left === 0 &&
+          area.right === GRID_COLUMNS - 1 &&
+          index >= area.top &&
+          index <= area.bottom
+        : area.top === 0 &&
+          area.bottom === rowCount() - 1 &&
+          index >= area.left &&
+          index <= area.right)
+    )
+      return;
+    props.onSelectRange(
+      axis === 'row' ? { row: index, column: 0 } : { row: 0, column: index },
+      axis === 'row'
+        ? { row: index, column: GRID_COLUMNS - 1 }
+        : { row: rowCount() - 1, column: index }
+    );
+  }
+  function openHeader(axis: 'row' | 'column', index: number) {
+    selectHeader(axis, index, true);
+    headerSelection = {
+      anchor: { ...props.selection.anchor },
+      focus: { ...props.selection.focus },
+    };
+  }
+  function headerAction(axis: 'row' | 'column', action: HeaderAction) {
+    if (headerSelection)
+      props.onSelectRange(headerSelection.anchor, headerSelection.focus);
+    props.onHeaderAction?.(axis, action);
+  }
+  let cellMenuSelection: CellSelection | undefined;
+  let cellMenuSheet: string | undefined;
+  function prepareCellMenu(position: CellPosition) {
+    cancelPointer();
+    props.onCommit();
+    const area = selectionBounds(props.selection);
+    if (
+      position.row < area.top ||
+      position.row > area.bottom ||
+      position.column < area.left ||
+      position.column > area.right
+    )
+      props.onSelect(position);
+    cellMenuSelection = {
+      anchor: { ...props.selection.anchor },
+      focus: { ...props.selection.focus },
+    };
+    cellMenuSheet = props.sheetId;
+  }
+  function cellAction(action: CellAction) {
+    if (cellMenuSheet !== props.sheetId || !cellMenuSelection) return;
+    props.onSelectRange(cellMenuSelection.anchor, cellMenuSelection.focus);
+    if (action === 'comment') {
+      if (props.comments?.canComment())
+        props.comments.add(
+          grid.querySelector<HTMLElement>(
+            `[data-address="${cellAddress(cellMenuSelection.anchor)}"]`
+          ) ?? undefined
+        );
+    } else if (action === 'copy' || !props.readonly)
+      props.onCellAction?.(action);
+  }
   return (
-    <div
-      ref={(element) => {
-        grid = element;
-        setScrollElement(element);
-      }}
-      role="grid"
-      aria-label="Spreadsheet"
-      aria-rowcount={rowCount() + 1}
-      aria-colcount={GRID_COLUMNS + 1}
-      aria-multiselectable="true"
-      aria-readonly={props.readonly}
-      aria-activedescendant={`${id}-${cellAddress(props.selection.anchor)}`}
-      tabIndex={0}
-      class="relative min-h-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y touch-pinch-zoom outline-none bg-panel selection:bg-accent/20"
-      style={{
-        '--spreadsheet-cell-padding': `${CELL_PADDING_X * scale()}px`,
-        '--spreadsheet-cell-padding-y': `${CELL_PADDING_Y * scale()}px`,
-      }}
-      onScroll={(event) => {
-        setScrollTop(event.currentTarget.scrollTop);
-        if (touchGesture?.kind === 'tap') touchGesture.moved = true;
-      }}
-      onMouseDown={(event) => {
-        // iOS still sends compatibility mousedown after cancelled pointerdown.
-        if (keepReferenceFocus && !isInput(event.target))
-          event.preventDefault();
-      }}
-      onClick={() => {
-        keepReferenceFocus = false;
-      }}
-      onKeyDown={(event) => {
-        if (isInput(event.target)) return;
-        event.stopPropagation();
-        props.onKeyDown(event);
-        if (!props.editing) revealSelection();
-      }}
-      onCopy={(event) => {
-        if (isInput(event.target)) return;
-        event.preventDefault();
-        event.clipboardData?.setData('text/plain', props.onCopy());
-        if (props.onCopyMetadata)
-          event.clipboardData?.setData(
-            SPREADSHEET_CLIPBOARD_TYPE,
-            props.onCopyMetadata()
-          );
-      }}
-      onCut={(event) => {
-        if (isInput(event.target)) return;
-        if (!event.clipboardData) return;
-        event.preventDefault();
-        // A viewer can copy with the cut shortcut, but no cells move. Mark its
-        // metadata as a copy so formulas still translate on a later paste.
-        const cut = !props.readonly;
-        event.clipboardData.setData('text/plain', props.onCopy(cut));
-        if (props.onCopyMetadata)
-          event.clipboardData.setData(
-            SPREADSHEET_CLIPBOARD_TYPE,
-            props.onCopyMetadata(cut)
-          );
-        if (cut) props.onClear();
-      }}
-      onPaste={(event) => {
-        if (isInput(event.target)) return;
-        event.preventDefault();
-        if (
-          !props.readonly &&
-          event.clipboardData?.types.includes('text/plain')
-        )
-          props.onPaste(
-            event.clipboardData.getData('text/plain'),
-            event.clipboardData.getData(SPREADSHEET_CLIPBOARD_TYPE) || undefined
-          );
-      }}
+    <SpreadsheetCellMenu
+      readonly={props.readonly}
+      canComment={props.comments?.canComment()}
+      hasComments={!!props.comments}
+      canFillDown={
+        selectionBounds(props.selection).bottom >
+        selectionBounds(props.selection).top
+      }
+      canFillRight={
+        selectionBounds(props.selection).right >
+        selectionBounds(props.selection).left
+      }
+      onRestoreFocus={focusGrid}
+      onAction={cellAction}
     >
-      <div
-        class="relative w-max min-w-full"
-        style={{ height: `${rowOffsets()[rowCount()]}px` }}
-      >
+      {(openCellMenu) => (
         <div
-          role="row"
-          aria-rowindex={1}
-          class="sticky top-0 z-20 flex bg-panel text-ink-muted font-medium select-none"
+          ref={(element) => {
+            grid = element;
+            setScrollElement(element);
+          }}
+          role="grid"
+          data-keyboard-input
+          aria-label="Spreadsheet"
+          aria-rowcount={rowCount() + 1}
+          aria-colcount={GRID_COLUMNS + 1}
+          aria-multiselectable="true"
+          aria-readonly={props.readonly}
+          aria-activedescendant={`${id}-${cellAddress(props.selection.anchor)}`}
+          tabIndex={0}
+          class="relative min-h-0 flex-1 overflow-auto overscroll-contain touch-pan-x touch-pan-y touch-pinch-zoom outline-none bg-panel selection:bg-accent/20"
           style={{
-            height: `${headerHeight()}px`,
-            'font-size': `${11 * scale()}px`,
+            '--spreadsheet-cell-padding': `${CELL_PADDING_X * scale()}px`,
+            '--spreadsheet-cell-padding-y': `${CELL_PADDING_Y * scale()}px`,
+          }}
+          onScroll={(event) => {
+            setScrollTop(event.currentTarget.scrollTop);
+            if (touchGesture?.kind === 'tap') touchGesture.moved = true;
+          }}
+          onMouseDown={(event) => {
+            // iOS still sends compatibility mousedown after cancelled pointerdown.
+            if (keepReferenceFocus && !isInput(event.target))
+              event.preventDefault();
+          }}
+          onClick={() => {
+            keepReferenceFocus = false;
+          }}
+          onContextMenu={(event) => {
+            if (isInput(event.target)) return;
+            const cell = event.target.closest<HTMLElement>('[data-address]');
+            if (!cell || !grid.contains(cell)) return;
+            const parsed = parseCellAddress(cell.dataset.address ?? '');
+            if (!parsed) return;
+            event.preventDefault();
+            event.stopPropagation();
+            prepareCellMenu(parsed);
+            openCellMenu(event.clientX, event.clientY);
+          }}
+          onKeyDown={(event) => {
+            // Solid portals retain logical ancestry; menu keys belong to the menu.
+            if (
+              !event.currentTarget.contains(event.target) ||
+              isInput(event.target) ||
+              event.target.closest('a[href]')
+            )
+              return;
+            event.stopPropagation();
+            if (
+              event.key === 'ContextMenu' ||
+              (event.shiftKey && event.key === 'F10')
+            ) {
+              event.preventDefault();
+              prepareCellMenu(props.selection.anchor);
+              const cell = grid.querySelector<HTMLElement>(
+                `[data-address="${cellAddress(props.selection.anchor)}"]`
+              );
+              const rect =
+                cell?.getBoundingClientRect() ?? grid.getBoundingClientRect();
+              openCellMenu(rect.left + Math.min(rect.width, 24), rect.bottom);
+              return;
+            }
+            const previous = props.selection.focus;
+            props.onKeyDown(event);
+            if (
+              !props.editing &&
+              (previous.row !== props.selection.focus.row ||
+                previous.column !== props.selection.focus.column)
+            )
+              revealSelection();
+          }}
+          onCopy={(event) => {
+            if (isInput(event.target)) return;
+            event.preventDefault();
+            event.clipboardData?.setData('text/plain', props.onCopy());
+            if (props.onCopyMetadata)
+              event.clipboardData?.setData(
+                SPREADSHEET_CLIPBOARD_TYPE,
+                props.onCopyMetadata()
+              );
+          }}
+          onCut={(event) => {
+            if (isInput(event.target)) return;
+            if (!event.clipboardData) return;
+            event.preventDefault();
+            // A viewer can copy with the cut shortcut, but no cells move. Mark its
+            // metadata as a copy so formulas still translate on a later paste.
+            const cut = !props.readonly;
+            event.clipboardData.setData('text/plain', props.onCopy(cut));
+            if (props.onCopyMetadata)
+              event.clipboardData.setData(
+                SPREADSHEET_CLIPBOARD_TYPE,
+                props.onCopyMetadata(cut)
+              );
+            if (cut) props.onClear();
+          }}
+          onPaste={(event) => {
+            if (isInput(event.target)) return;
+            event.preventDefault();
+            if (
+              !props.readonly &&
+              event.clipboardData?.types.includes('text/plain')
+            )
+              props.onPaste(
+                event.clipboardData.getData('text/plain'),
+                event.clipboardData.getData(SPREADSHEET_CLIPBOARD_TYPE) ||
+                  undefined
+              );
           }}
         >
           <div
-            role="columnheader"
-            aria-label="Select all cells"
-            class="sticky left-0 z-30 shrink-0 border-b border-r border-edge bg-panel"
-            style={{ width: `${headerWidth()}px` }}
+            class="relative w-max min-w-full"
+            style={{ height: `${rowOffsets()[rowCount()]}px` }}
           >
-            <button
-              type="button"
-              aria-label="Select all cells"
-              class="size-full hover:bg-hover"
-              onClick={() => {
-                props.onSelectRange(
-                  { row: 0, column: 0 },
-                  { row: rowCount() - 1, column: GRID_COLUMNS - 1 }
-                );
-                focusGrid();
-              }}
-            >
-              ▦
-            </button>
-          </div>
-          <For each={columns}>
-            {(column) => (
-              <div
-                role="columnheader"
-                aria-colindex={column + 2}
-                style={{ width: width(column) }}
-                class="relative shrink-0 border-b border-r border-edge-muted"
-                classList={{
-                  'bg-accent-bg text-accent':
-                    column >= bounds().left && column <= bounds().right,
-                }}
-              >
-                <button
-                  type="button"
-                  tabIndex={-1}
-                  aria-label={`Select column ${String.fromCharCode(65 + column)}`}
-                  class="size-full hover:bg-hover"
-                  onClick={() => {
-                    props.onSelectRange(
-                      { row: 0, column },
-                      { row: rowCount() - 1, column }
-                    );
-                    focusGrid();
-                  }}
-                >
-                  {String.fromCharCode(65 + column)}
-                </button>
-                <Show when={!props.readonly && props.onResizeColumn}>
-                  <div
-                    role="separator"
-                    aria-label={`Resize column ${String.fromCharCode(65 + column)}`}
-                    aria-orientation="vertical"
-                    aria-valuenow={
-                      props.columnWidths?.[column] ?? DEFAULT_COLUMN_WIDTH
-                    }
-                    aria-valuemin={MIN_COLUMN_WIDTH}
-                    aria-valuemax={MAX_COLUMN_WIDTH}
-                    tabIndex={0}
-                    title="Drag to resize · Double-click to fit"
-                    class="absolute -right-1 top-0 z-[1] h-full w-2 touch-none cursor-col-resize hover:bg-accent/30 focus-visible:bg-accent/30 outline-none"
-                    onPointerDown={(event) => {
-                      if (event.button !== 0) return;
-                      event.preventDefault();
-                      event.stopPropagation();
-                      resizeStart = {
-                        x: event.clientX,
-                        width:
-                          props.columnWidths?.[column] ?? DEFAULT_COLUMN_WIDTH,
-                      };
-                      setResizing({ column, width: resizeStart.width });
-                      event.currentTarget.setPointerCapture(event.pointerId);
-                    }}
-                    onPointerMove={(event) => {
-                      if (!resizeStart || resizing()?.column !== column) return;
-                      setResizing({
-                        column,
-                        width: Math.max(
-                          MIN_COLUMN_WIDTH,
-                          Math.min(
-                            MAX_COLUMN_WIDTH,
-                            resizeStart.width +
-                              (event.clientX - resizeStart.x) / scale()
-                          )
-                        ),
-                      });
-                    }}
-                    onDblClick={() => autoFit(column)}
-                    onKeyDown={(event) => {
-                      event.stopPropagation();
-                      if (event.key === 'Enter') {
-                        event.preventDefault();
-                        autoFit(column);
-                      }
-                      if (
-                        event.key === 'ArrowLeft' ||
-                        event.key === 'ArrowRight'
-                      ) {
-                        event.preventDefault();
-                        props.onResizeColumn?.(
-                          column,
-                          (props.columnWidths?.[column] ??
-                            DEFAULT_COLUMN_WIDTH) +
-                            (event.key === 'ArrowRight' ? 16 : -16)
-                        );
-                      }
-                    }}
-                  />
-                </Show>
-              </div>
-            )}
-          </For>
-        </div>
-        <For each={visibleRows()}>
-          {(row) => (
             <div
               role="row"
-              aria-rowindex={row + 2}
-              class="absolute left-0 flex w-max min-w-full"
+              aria-rowindex={1}
+              class="sticky top-0 z-20 flex bg-panel text-ink-muted font-medium select-none"
               style={{
-                top: `${rowOffsets()[row]}px`,
-                height: `${rowHeights()[row]}px`,
+                height: `${headerHeight()}px`,
+                'font-size': `${11 * scale()}px`,
               }}
             >
               <div
-                role="rowheader"
-                class="sticky left-0 z-10 shrink-0 border-b border-r border-edge-muted bg-panel text-center text-ink-muted select-none"
-                style={{
-                  width: `${headerWidth()}px`,
-                  'font-size': `${11 * scale()}px`,
-                }}
-                classList={{
-                  'bg-accent-bg text-accent':
-                    row >= bounds().top && row <= bounds().bottom,
-                }}
+                role="columnheader"
+                aria-label="Select all cells"
+                class="sticky left-0 z-30 shrink-0 border-b border-r border-edge bg-panel"
+                style={{ width: `${headerWidth()}px` }}
               >
                 <button
                   type="button"
-                  tabIndex={-1}
-                  aria-label={`Select row ${row + 1}`}
+                  aria-label="Select all cells"
                   class="size-full hover:bg-hover"
                   onClick={() => {
                     props.onSelectRange(
-                      { row, column: 0 },
-                      { row, column: GRID_COLUMNS - 1 }
+                      { row: 0, column: 0 },
+                      { row: rowCount() - 1, column: GRID_COLUMNS - 1 }
                     );
                     focusGrid();
                   }}
                 >
-                  {row + 1}
+                  ▦
                 </button>
               </div>
-              <For each={columns}>
-                {(column) => {
-                  const address = cellAddress({ row, column });
-                  const position = { row, column };
-                  const active = () => activeCell(address);
-                  const selected = () => selectedCell(position);
-                  const value = () => props.values[address];
-                  const cell = () => props.cells[address];
-                  const borders = () => {
-                    const shadows = [];
-                    if (cell()?.borderTop)
-                      shadows.push('inset 0 1px 0 var(--color-ink)');
-                    if (cell()?.borderRight)
-                      shadows.push('inset -1px 0 0 var(--color-ink)');
-                    if (cell()?.borderBottom)
-                      shadows.push('inset 0 -1px 0 var(--color-ink)');
-                    if (cell()?.borderLeft)
-                      shadows.push('inset 1px 0 0 var(--color-ink)');
-                    return shadows.join(', ') || undefined;
-                  };
-                  const horizontalAlign = () => {
-                    const align = cell()?.horizontalAlign;
-                    return align && align !== 'auto'
-                      ? align
-                      : value()?.number !== undefined &&
-                          !(props.showFormulas && cell()?.value.startsWith('='))
-                        ? 'right'
-                        : 'left';
-                  };
-                  return (
-                    <div
-                      id={`${id}-${address}`}
-                      role="gridcell"
-                      aria-colindex={column + 2}
-                      aria-label={`${address}${display(address) ? `: ${display(address)}` : ''}`}
-                      aria-selected={selected()}
-                      data-address={address}
-                      title={value()?.error ?? props.cells[address]?.value}
-                      style={{
-                        width: width(column),
-                        'scroll-margin-top': `${headerHeight()}px`,
-                        'scroll-margin-left': `${headerWidth()}px`,
-                        'box-shadow': borders(),
-                        'border-color':
-                          props.showGridlines === false
-                            ? 'transparent'
-                            : undefined,
-                        'background-color': cell()?.fillColor || undefined,
-                        color: cell()?.textColor || undefined,
-                        'font-family': fontFamily(cell()),
-                        'font-size': `${fontPixels(cell()) * scale()}px`,
-                        'font-style': cell()?.italic ? 'italic' : undefined,
-                        'text-decoration-line':
-                          [
-                            cell()?.underline ? 'underline' : '',
-                            cell()?.strikethrough ? 'line-through' : '',
-                          ]
-                            .filter(Boolean)
-                            .join(' ') || undefined,
-                        'text-align': horizontalAlign(),
-                        'justify-content':
-                          cell()?.verticalAlign === 'top'
-                            ? 'flex-start'
-                            : cell()?.verticalAlign === 'bottom'
-                              ? 'flex-end'
-                              : 'center',
-                        'padding-block': 'var(--spreadsheet-cell-padding-y)',
-                        'line-height': CELL_LINE_HEIGHT,
-                      }}
-                      class="relative flex flex-col shrink-0 border-b border-r border-edge-muted bg-surface text-ink select-none"
-                      classList={{
-                        'font-semibold': cell()?.bold,
-                        'tabular-nums': value()?.number !== undefined,
-                        'text-failure': !!value()?.error,
-                      }}
-                      onPointerDown={(event) => {
-                        if (event.button !== 0 || isInput(event.target)) return;
-                        setTouchMode(event.pointerType === 'touch');
-                        if (event.pointerType === 'touch') {
-                          if (event.isPrimary === false) {
-                            cancelPointer();
-                            return;
-                          }
-                          // Defer selection until a tap is known; native panning
-                          // owns movement and pointercancel without changing cells.
-                          touchGesture = {
-                            kind: 'tap',
-                            pointerId: event.pointerId,
-                            x: event.clientX,
-                            y: event.clientY,
-                            position,
-                            moved: false,
-                          };
-                          keepReferenceFocus = !!(
-                            props.editing || props.formulaEditing
-                          );
-                          return;
-                        }
-                        event.preventDefault();
-                        keepReferenceFocus =
-                          props.onReferenceStart?.({ row, column }) ?? false;
-                        if (keepReferenceFocus) return;
-                        dragging = true;
-                        props.onSelect({ row, column }, event.shiftKey);
-                        focusGrid();
-                      }}
-                      onPointerEnter={(event) => {
-                        if (event.pointerType === 'touch') return;
-                        if (props.pickingReference && event.buttons === 1) {
-                          props.onReferenceMove?.({ row, column });
-                          return;
-                        }
-                        if (fillSource && event.buttons === 1) {
-                          previewFill({ row, column });
-                          return;
-                        }
-                        if (dragging && event.buttons === 1)
-                          props.onSelect({ row, column }, true);
-                        else dragging = false;
-                      }}
-                      onDblClick={() => {
-                        if (!touchMode() && !props.referenceSelection)
-                          props.onEdit();
+              <For each={columns()}>
+                {(column) => (
+                  <div
+                    role="columnheader"
+                    aria-colindex={column + 2}
+                    style={{ width: width(column) }}
+                    class="relative shrink-0 border-b border-r border-edge-muted"
+                    classList={{
+                      'bg-accent-bg text-accent':
+                        column >= bounds().left && column <= bounds().right,
+                    }}
+                  >
+                    <SpreadsheetHeaderMenu
+                      canChangeStructure={props.canChangeStructure}
+                      axis="column"
+                      count={bounds().right - bounds().left + 1}
+                      readonly={props.readonly}
+                      onOpen={() => openHeader('column', column)}
+                      onRestoreFocus={focusGrid}
+                      onAction={(action) => {
+                        if (action === 'autofit') {
+                          for (let c = bounds().left; c <= bounds().right; c++)
+                            autoFit(c);
+                        } else headerAction('column', action);
                       }}
                     >
-                      <Show
-                        when={active() && props.editing}
-                        fallback={
-                          <div
-                            class="w-full min-h-0 overflow-hidden text-ellipsis px-[var(--spreadsheet-cell-padding)]"
-                            style={{
-                              'white-space': cell()?.wrap
-                                ? 'pre-wrap'
-                                : 'nowrap',
-                              'overflow-wrap': cell()?.wrap
-                                ? 'anywhere'
-                                : undefined,
-                            }}
-                          >
-                            {display(address)}
-                          </div>
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        aria-label={`Select column ${String.fromCharCode(65 + column)}`}
+                        class="size-full hover:bg-hover"
+                        onPointerDown={(event) =>
+                          startHeader(event, 'column', column)
                         }
+                        onClick={(event) => {
+                          if (event.detail === 0)
+                            selectHeaderRange(
+                              'column',
+                              column,
+                              event.shiftKey
+                                ? props.selection.anchor.column
+                                : column
+                            );
+                        }}
                       >
-                        <FormulaInput
-                          label={`Edit ${address}`}
-                          autoFocus
-                          complete={props.complete}
-                          readonly={props.readonly}
-                          selectionRequest={props.editorSelection}
-                          pickingReference={
-                            props.pickingReference ||
-                            (isTouchDevice() && !!props.referenceSelection)
+                        {String.fromCharCode(65 + column)}
+                      </button>
+                    </SpreadsheetHeaderMenu>
+                    <Show when={!props.readonly && props.onResizeColumn}>
+                      <div
+                        role="separator"
+                        aria-label={`Resize column ${String.fromCharCode(65 + column)}`}
+                        aria-orientation="vertical"
+                        aria-valuenow={
+                          props.columnWidths?.[column] ?? DEFAULT_COLUMN_WIDTH
+                        }
+                        aria-valuemin={MIN_COLUMN_WIDTH}
+                        aria-valuemax={MAX_COLUMN_WIDTH}
+                        tabIndex={0}
+                        title="Drag to resize · Double-click to fit"
+                        class="absolute -right-1 top-0 z-[1] h-full w-2 touch-none cursor-col-resize hover:bg-accent/30 focus-visible:bg-accent/30 outline-none"
+                        onPointerDown={(event) => {
+                          if (event.button !== 0) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          resizeStart = {
+                            x: event.clientX,
+                            width:
+                              props.columnWidths?.[column] ??
+                              DEFAULT_COLUMN_WIDTH,
+                          };
+                          setResizing({ column, width: resizeStart.width });
+                          event.currentTarget.setPointerCapture(
+                            event.pointerId
+                          );
+                        }}
+                        onPointerMove={(event) => {
+                          if (!resizeStart || resizing()?.column !== column)
+                            return;
+                          setResizing({
+                            column,
+                            width: Math.max(
+                              MIN_COLUMN_WIDTH,
+                              Math.min(
+                                MAX_COLUMN_WIDTH,
+                                resizeStart.width +
+                                  (event.clientX - resizeStart.x) / scale()
+                              )
+                            ),
+                          });
+                        }}
+                        onDblClick={() => autoFit(column)}
+                        onKeyDown={(event) => {
+                          event.stopPropagation();
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            autoFit(column);
                           }
-                          onSelectionChange={props.onTextSelection}
-                          class="absolute inset-0 size-full resize-none overflow-hidden bg-surface px-[var(--spreadsheet-cell-padding)] py-[var(--spreadsheet-cell-padding-y)] font-normal text-left text-ink outline-none select-text"
-                          value={props.draft}
-                          onInput={props.onDraft}
-                          onKeyDown={editKeyDown}
-                          onBlur={props.onCommit}
-                        />
-                      </Show>
-                      <Show when={value()?.error}>
-                        <span class="absolute right-0.5 top-0.5 size-1 rounded-full bg-failure" />
-                      </Show>
-                    </div>
-                  );
-                }}
+                          if (
+                            event.key === 'ArrowLeft' ||
+                            event.key === 'ArrowRight'
+                          ) {
+                            event.preventDefault();
+                            props.onResizeColumn?.(
+                              column,
+                              (props.columnWidths?.[column] ??
+                                DEFAULT_COLUMN_WIDTH) +
+                                (event.key === 'ArrowRight' ? 16 : -16)
+                            );
+                          }
+                        }}
+                      />
+                    </Show>
+                  </div>
+                )}
               </For>
             </div>
-          )}
-        </For>
-        <For each={props.remoteCursors}>
-          {(cursor) => (
-            <>
-              <div
-                data-remote-selection={cursor.peerId}
-                class="absolute pointer-events-none z-[2] border-2"
-                style={{
-                  ...rangeStyle(selectionBounds(cursor.selection)),
-                  'border-color': cursor.color,
-                  background: `color-mix(in srgb, ${cursor.color} 8%, transparent)`,
-                }}
-              />
-              <div
-                data-remote-cursor={cursor.peerId}
-                aria-label={`${cursor.name}: ${cellAddress(cursor.selection.focus)}`}
-                class="absolute pointer-events-none z-[4] border-2"
-                style={{
-                  ...rangeStyle(
-                    selectionBounds({
-                      anchor: cursor.selection.focus,
-                      focus: cursor.selection.focus,
-                    })
-                  ),
-                  'border-color': cursor.color,
-                }}
-              >
-                <span
-                  data-remote-cursor-name
-                  class="absolute left-[-2px] max-w-40 truncate rounded-t-sm px-1.5 py-0.5 text-[11px] font-medium leading-4 text-surface shadow-sm"
+            <For each={visibleRows()}>
+              {(row) => (
+                <div
+                  role="row"
+                  aria-rowindex={row + 2}
+                  class="absolute left-0 flex w-max min-w-full"
                   style={{
-                    background: cursor.color,
-                    bottom:
-                      cursor.selection.focus.row === 0 ? undefined : '100%',
-                    top: cursor.selection.focus.row === 0 ? '100%' : undefined,
+                    top: `${rowOffsets()[row]}px`,
+                    height: `${rowHeights()[row]}px`,
                   }}
                 >
-                  {cursor.name}
-                </span>
-              </div>
-            </>
-          )}
-        </For>
-        <div
-          aria-hidden="true"
-          data-selection-range
-          class="pointer-events-none absolute z-[1] border border-accent bg-accent/10"
-          style={rangeStyle()}
-        />
-        <div
-          aria-hidden="true"
-          data-selection-active
-          class="pointer-events-none absolute z-[2] border-2 border-accent"
-          style={activeStyle()}
-        />
-        <Show when={props.referenceSelection}>
-          {(range) => (
+                  <div
+                    role="rowheader"
+                    class="sticky left-0 z-10 shrink-0 border-b border-r border-edge-muted bg-panel text-center text-ink-muted select-none"
+                    style={{
+                      width: `${headerWidth()}px`,
+                      'font-size': `${11 * scale()}px`,
+                    }}
+                    classList={{
+                      'bg-accent-bg text-accent':
+                        row >= bounds().top && row <= bounds().bottom,
+                    }}
+                  >
+                    <SpreadsheetHeaderMenu
+                      canChangeStructure={props.canChangeStructure}
+                      axis="row"
+                      count={bounds().bottom - bounds().top + 1}
+                      readonly={props.readonly}
+                      onOpen={() => openHeader('row', row)}
+                      onRestoreFocus={focusGrid}
+                      onAction={(action) => headerAction('row', action)}
+                    >
+                      <button
+                        type="button"
+                        tabIndex={-1}
+                        aria-label={`Select row ${row + 1}`}
+                        class="size-full hover:bg-hover"
+                        onPointerDown={(event) =>
+                          startHeader(event, 'row', row)
+                        }
+                        onClick={(event) => {
+                          if (event.detail === 0)
+                            selectHeaderRange(
+                              'row',
+                              row,
+                              event.shiftKey ? props.selection.anchor.row : row
+                            );
+                        }}
+                      >
+                        {row + 1}
+                      </button>
+                    </SpreadsheetHeaderMenu>
+                    <Show when={!props.readonly && props.onResizeRow}>
+                      <div
+                        role="separator"
+                        aria-label={`Resize row ${row + 1}`}
+                        aria-orientation="horizontal"
+                        aria-valuenow={rowHeights()[row] / scale()}
+                        aria-valuemin={ROW_HEIGHT}
+                        aria-valuemax={1000}
+                        tabIndex={0}
+                        title="Drag to resize · Double-click to fit"
+                        class="absolute -bottom-1 left-0 z-[1] h-2 w-full touch-none cursor-row-resize hover:bg-accent/30 focus-visible:bg-accent/30 outline-none"
+                        onPointerDown={(event) => {
+                          if (event.button !== 0) return;
+                          event.preventDefault();
+                          event.stopPropagation();
+                          rowResizeStart = {
+                            y: event.clientY,
+                            height: rowHeights()[row] / scale(),
+                          };
+                          setResizingRow({
+                            row,
+                            height: rowResizeStart.height,
+                          });
+                          event.currentTarget.setPointerCapture(
+                            event.pointerId
+                          );
+                        }}
+                        onPointerMove={(event) => {
+                          if (!rowResizeStart || resizingRow()?.row !== row)
+                            return;
+                          setResizingRow({
+                            row,
+                            height: Math.max(
+                              ROW_HEIGHT,
+                              Math.min(
+                                1000,
+                                rowResizeStart.height +
+                                  (event.clientY - rowResizeStart.y) / scale()
+                              )
+                            ),
+                          });
+                        }}
+                        onDblClick={() => props.onResizeRow?.(row, undefined)}
+                        onKeyDown={(event) => {
+                          event.stopPropagation();
+                          if (event.key === 'Enter') {
+                            event.preventDefault();
+                            props.onResizeRow?.(row, undefined);
+                          } else if (
+                            event.key === 'ArrowUp' ||
+                            event.key === 'ArrowDown'
+                          ) {
+                            event.preventDefault();
+                            props.onResizeRow?.(
+                              row,
+                              Math.max(
+                                ROW_HEIGHT,
+                                Math.min(
+                                  1000,
+                                  rowHeights()[row] / scale() +
+                                    (event.key === 'ArrowDown' ? 8 : -8)
+                                )
+                              )
+                            );
+                          }
+                        }}
+                      />
+                    </Show>
+                  </div>
+                  <For each={columns()}>
+                    {(column) => {
+                      const address = cellAddress({ row, column });
+                      const position = { row, column };
+                      const active = () => activeCell(address);
+                      const selected = () => selectedCell(position);
+                      const value = () => props.values[address];
+                      const cell = () => props.cells[address];
+                      const border = (
+                        edge: 'Top' | 'Right' | 'Bottom' | 'Left'
+                      ) => {
+                        if (!cell()?.[`border${edge}`]) return undefined;
+                        const style = cell()?.[`border${edge}Style`] || 'thin';
+                        const width =
+                          style === 'double' || style === 'thick'
+                            ? 3
+                            : style.startsWith('medium')
+                              ? 2
+                              : 1;
+                        const line =
+                          style === 'double'
+                            ? 'double'
+                            : style.toLowerCase().includes('dash')
+                              ? 'dashed'
+                              : style === 'dotted'
+                                ? 'dotted'
+                                : 'solid';
+                        return `${width}px ${line} ${cellBorderColor(cell()?.[`border${edge}Color`], cell()?.fillColor)}`;
+                      };
+                      const horizontalAlign = () => {
+                        const align = cell()?.horizontalAlign;
+                        return align && align !== 'auto'
+                          ? align
+                          : value()?.number !== undefined &&
+                              !(
+                                props.showFormulas &&
+                                cell()?.value.startsWith('=')
+                              )
+                            ? 'right'
+                            : 'left';
+                      };
+                      const decorated = () =>
+                        !!props.mentions &&
+                        !(
+                          cell()?.value.startsWith('=') &&
+                          cell()?.format !== 'text'
+                        ) &&
+                        /<m-(?:user|document)-mention>|https?:\/\/|www\.|[^\s@]+@[^\s@]+\.[^\s@]+/i.test(
+                          cell()?.value ?? ''
+                        );
+                      return (
+                        <div
+                          id={`${id}-${address}`}
+                          role="gridcell"
+                          aria-colindex={column + 2}
+                          aria-label={`${address}${display(address) ? `: ${display(address)}` : ''}`}
+                          aria-selected={selected()}
+                          data-address={address}
+                          aria-description={
+                            props.comments?.hasComment(address)
+                              ? 'Has comments'
+                              : undefined
+                          }
+                          onMouseEnter={(event) => {
+                            if (
+                              !props.editing &&
+                              !props.formulaEditing &&
+                              !event.buttons
+                            )
+                              props.comments?.enter(
+                                address,
+                                event.currentTarget
+                              );
+                          }}
+                          onMouseLeave={() => props.comments?.leave()}
+                          title={
+                            value()?.error ??
+                            value()?.warning ??
+                            (decorated()
+                              ? undefined
+                              : cellPlainText(
+                                  props.cells[address]?.value ?? ''
+                                ).replace(/^'/, ''))
+                          }
+                          style={{
+                            width: width(column),
+                            'scroll-margin-top': `${headerHeight()}px`,
+                            'scroll-margin-left': `${headerWidth()}px`,
+                            'border-top': border('Top'),
+                            'border-right':
+                              border('Right') ??
+                              (props.showGridlines === false
+                                ? '1px solid transparent'
+                                : undefined),
+                            'border-bottom':
+                              border('Bottom') ??
+                              (props.showGridlines === false
+                                ? '1px solid transparent'
+                                : undefined),
+                            'border-left': border('Left'),
+                            'background-color': cell()?.fillColor || undefined,
+                            color: cellForeground(
+                              cell()?.textColor,
+                              cell()?.fillColor
+                            ),
+                            'font-family': fontFamily(cell()),
+                            'font-size': `${fontPixels(cell()) * scale()}px`,
+                            'font-style': cell()?.italic ? 'italic' : undefined,
+                            'text-decoration-line':
+                              [
+                                cell()?.underline ? 'underline' : '',
+                                cell()?.strikethrough ? 'line-through' : '',
+                              ]
+                                .filter(Boolean)
+                                .join(' ') || undefined,
+                            'text-align': horizontalAlign(),
+                            'justify-content':
+                              cell()?.verticalAlign === 'top'
+                                ? 'flex-start'
+                                : cell()?.verticalAlign === 'bottom'
+                                  ? 'flex-end'
+                                  : 'center',
+                            'padding-block':
+                              'var(--spreadsheet-cell-padding-y)',
+                            'line-height': CELL_LINE_HEIGHT,
+                          }}
+                          class="relative flex flex-col shrink-0 border-b border-r border-edge-muted bg-surface text-ink select-none"
+                          classList={{
+                            'font-semibold': cell()?.bold,
+                            'tabular-nums': value()?.number !== undefined,
+                            'text-failure': !!value()?.error,
+                          }}
+                          onPointerDown={(event) => {
+                            if (
+                              event.button !== 0 ||
+                              event.ctrlKey ||
+                              isInput(event.target)
+                            )
+                              return;
+                            setTouchMode(event.pointerType === 'touch');
+                            if (event.pointerType === 'touch') {
+                              if (event.isPrimary === false) {
+                                cancelPointer();
+                                return;
+                              }
+                              // Defer selection until a tap is known; native panning
+                              // owns movement and pointercancel without changing cells.
+                              touchGesture = {
+                                kind: 'tap',
+                                pointerId: event.pointerId,
+                                x: event.clientX,
+                                y: event.clientY,
+                                position,
+                                moved: false,
+                              };
+                              keepReferenceFocus = !!(
+                                props.editing || props.formulaEditing
+                              );
+                              return;
+                            }
+                            event.preventDefault();
+                            keepReferenceFocus =
+                              props.onReferenceStart?.({ row, column }) ??
+                              false;
+                            if (keepReferenceFocus) return;
+                            dragging = true;
+                            props.onSelect({ row, column }, event.shiftKey);
+                            focusGrid();
+                          }}
+                          onPointerEnter={(event) => {
+                            if (event.pointerType === 'touch') return;
+                            if (props.pickingReference && event.buttons === 1) {
+                              props.onReferenceMove?.({ row, column });
+                              return;
+                            }
+                            if (fillSource && event.buttons === 1) {
+                              previewFill({ row, column });
+                              return;
+                            }
+                            if (dragging && event.buttons === 1)
+                              props.onSelect({ row, column }, true);
+                            else dragging = false;
+                          }}
+                          onDblClick={() => {
+                            if (!touchMode() && !props.referenceSelection)
+                              props.onEdit();
+                          }}
+                        >
+                          <Show
+                            when={active() && props.editing}
+                            fallback={
+                              <div
+                                class="w-full min-h-0 overflow-hidden text-ellipsis px-[var(--spreadsheet-cell-padding)]"
+                                style={{
+                                  'white-space': cell()?.wrap
+                                    ? 'pre-wrap'
+                                    : 'nowrap',
+                                  'overflow-wrap': cell()?.wrap
+                                    ? 'anywhere'
+                                    : undefined,
+                                }}
+                              >
+                                {decorated()
+                                  ? props.mentions!.renderText(
+                                      cell()!.value.replace(/^'/, '')
+                                    )
+                                  : display(address)}
+                              </div>
+                            }
+                          >
+                            <FormulaInput
+                              mentions={props.mentions}
+                              label={`Edit ${address}`}
+                              autoFocus
+                              complete={props.complete}
+                              readonly={props.readonly}
+                              selectionRequest={props.editorSelection}
+                              pickingReference={
+                                props.pickingReference ||
+                                (isTouchDevice() && !!props.referenceSelection)
+                              }
+                              onSelectionChange={props.onTextSelection}
+                              class="absolute inset-0 size-full resize-none overflow-hidden bg-surface px-[var(--spreadsheet-cell-padding)] py-[var(--spreadsheet-cell-padding-y)] font-normal text-left text-ink outline-none select-text"
+                              value={props.draft}
+                              onInput={props.onDraft}
+                              onKeyDown={editKeyDown}
+                              onBlur={() => {
+                                if (props.editing) props.onCommit();
+                              }}
+                            />
+                          </Show>
+                          <Show when={props.comments?.hasComment(address)}>
+                            <button
+                              type="button"
+                              aria-label={`Comments on ${address}`}
+                              onKeyDown={(event) => event.stopPropagation()}
+                              class="absolute right-0 top-0 z-[3] h-3 w-3 bg-transparent p-0 touch:h-5 touch:w-5"
+                              onPointerDown={(event) => event.stopPropagation()}
+                              onMouseDown={(event) => {
+                                event.preventDefault();
+                                event.stopPropagation();
+                              }}
+                              onDblClick={(event) => event.stopPropagation()}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                props.comments?.show(
+                                  address,
+                                  event.currentTarget.parentElement!
+                                );
+                              }}
+                            >
+                              <span class="pointer-events-none absolute right-0 top-0 size-0 border-t-[7px] border-l-[7px] border-t-accent border-l-transparent" />
+                            </button>
+                          </Show>
+                          <Show when={value()?.error}>
+                            <span class="absolute right-0.5 top-0.5 size-1 rounded-full bg-failure" />
+                          </Show>
+                        </div>
+                      );
+                    }}
+                  </For>
+                </div>
+              )}
+            </For>
+            <For each={props.remoteCursors}>
+              {(cursor) => (
+                <>
+                  <div
+                    data-remote-selection={cursor.peerId}
+                    class="absolute pointer-events-none z-[2] border-2"
+                    style={{
+                      ...rangeStyle(selectionBounds(cursor.selection)),
+                      'border-color': cursor.color,
+                      background: `color-mix(in srgb, ${cursor.color} 8%, transparent)`,
+                    }}
+                  />
+                  <div
+                    data-remote-cursor={cursor.peerId}
+                    aria-label={`${cursor.name}: ${cellAddress(cursor.selection.focus)}`}
+                    class="absolute pointer-events-none z-[4] border-2"
+                    style={{
+                      ...rangeStyle(
+                        selectionBounds({
+                          anchor: cursor.selection.focus,
+                          focus: cursor.selection.focus,
+                        })
+                      ),
+                      'border-color': cursor.color,
+                    }}
+                  >
+                    <span
+                      data-remote-cursor-name
+                      class="absolute left-[-2px] max-w-40 truncate rounded-t-sm px-1.5 py-0.5 text-[11px] font-medium leading-4 text-surface shadow-sm"
+                      style={{
+                        background: cursor.color,
+                        bottom:
+                          cursor.selection.focus.row === 0 ? undefined : '100%',
+                        top:
+                          cursor.selection.focus.row === 0 ? '100%' : undefined,
+                      }}
+                    >
+                      {cursor.name}
+                    </span>
+                  </div>
+                </>
+              )}
+            </For>
             <div
               aria-hidden="true"
-              data-formula-reference
-              class="pointer-events-none absolute z-[3] border-2 border-dashed border-accent bg-accent/10"
-              style={rangeStyle(selectionBounds(range()))}
+              data-selection-range
+              class="pointer-events-none absolute z-[1] border border-accent bg-accent/10"
+              style={rangeStyle()}
             />
-          )}
-        </Show>
-        <Show
-          when={
-            !touchMode() &&
-            !props.readonly &&
-            !props.editing &&
-            !props.formulaEditing &&
-            props.onFill
-          }
-        >
-          <button
-            type="button"
-            tabIndex={-1}
-            aria-label="Drag to fill selection"
-            title="Drag to fill · ⌘/Ctrl D fills down · ⌘/Ctrl R fills right"
-            class="absolute z-[3] size-2.5 border-2 border-surface bg-accent cursor-crosshair touch-none"
-            style={{
-              left: `${columnOffsets()[bounds().right + 1] - 5}px`,
-              top: `${rowOffsets()[bounds().bottom + 1] - 5}px`,
-            }}
-            onPointerDown={(event) => {
-              if (event.button !== 0) return;
-              event.preventDefault();
-              event.stopPropagation();
-              props.onCommit();
-              fillSource = props.selection;
-              setFillTarget(props.selection);
-              focusGrid();
-            }}
-          />
-        </Show>
-        <Show
-          when={
-            touchMode() &&
-            (props.referenceSelection ||
-              (!props.editing && !props.formulaEditing))
-          }
-        >
-          <For each={[true, false]}>
-            {(start) => (
+            <div
+              aria-hidden="true"
+              data-selection-active
+              class="pointer-events-none absolute z-[2] border-2 border-accent"
+              style={activeStyle()}
+            />
+            <Show when={props.referenceSelection}>
+              {(range) => (
+                <div
+                  aria-hidden="true"
+                  data-formula-reference
+                  class="pointer-events-none absolute z-[3] border-2 border-dashed border-accent bg-accent/10"
+                  style={rangeStyle(selectionBounds(range()))}
+                />
+              )}
+            </Show>
+            <Show
+              when={
+                !touchMode() &&
+                !props.readonly &&
+                !props.editing &&
+                !props.formulaEditing &&
+                props.onFill
+              }
+            >
               <button
                 type="button"
                 tabIndex={-1}
-                aria-label={`Move ${props.referenceSelection ? 'reference' : 'selection'} ${start ? 'start' : 'end'}`}
-                class="absolute z-[4] flex size-[44px] touch-none select-none items-center justify-center outline-none"
+                aria-label="Drag to fill selection"
+                title="Drag to fill · ⌘/Ctrl D fills down · ⌘/Ctrl R fills right"
+                class="absolute z-[3] size-2.5 border-2 border-surface bg-accent cursor-crosshair touch-none"
                 style={{
-                  left: `${columnOffsets()[start ? selectionBounds(touchRange()).left : selectionBounds(touchRange()).right + 1] - 22}px`,
-                  top: `${rowOffsets()[start ? selectionBounds(touchRange()).top : selectionBounds(touchRange()).bottom + 1] - 22}px`,
+                  left: `${columnOffsets()[bounds().right + 1] - 5}px`,
+                  top: `${rowOffsets()[bounds().bottom + 1] - 5}px`,
                 }}
-                onPointerDown={(event) => startTouchHandle(event, start)}
-                onMouseDown={(event) => event.preventDefault()}
-              >
-                <span class="pointer-events-none size-3 rounded-full border-2 border-surface bg-accent shadow-sm" />
-              </button>
-            )}
-          </For>
-        </Show>
-      </div>
-    </div>
+                onPointerDown={(event) => {
+                  if (event.button !== 0) return;
+                  event.preventDefault();
+                  event.stopPropagation();
+                  props.onCommit();
+                  fillGeneration++;
+                  fillSource = props.selection;
+                  setFillTarget(props.selection);
+                  focusGrid();
+                }}
+              />
+            </Show>
+            <Show
+              when={
+                touchMode() &&
+                (props.referenceSelection ||
+                  (!props.editing && !props.formulaEditing))
+              }
+            >
+              <For each={[true, false]}>
+                {(start) => (
+                  <button
+                    type="button"
+                    tabIndex={-1}
+                    aria-label={`Move ${props.referenceSelection ? 'reference' : 'selection'} ${start ? 'start' : 'end'}`}
+                    class="absolute z-[4] flex size-[44px] touch-none select-none items-center justify-center outline-none"
+                    style={{
+                      left: `${columnOffsets()[start ? selectionBounds(touchRange()).left : selectionBounds(touchRange()).right + 1] - 22}px`,
+                      top: `${rowOffsets()[start ? selectionBounds(touchRange()).top : selectionBounds(touchRange()).bottom + 1] - 22}px`,
+                    }}
+                    onPointerDown={(event) => startTouchHandle(event, start)}
+                    onMouseDown={(event) => event.preventDefault()}
+                  >
+                    <span class="pointer-events-none size-3 rounded-full border-2 border-surface bg-accent shadow-sm" />
+                  </button>
+                )}
+              </For>
+            </Show>
+          </div>
+        </div>
+      )}
+    </SpreadsheetCellMenu>
   );
 }

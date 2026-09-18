@@ -6,6 +6,7 @@ mod delete;
 mod edit;
 mod revert_delete;
 mod share;
+mod team_share;
 mod upload_folder;
 
 #[cfg(test)]
@@ -21,8 +22,8 @@ use model::project::{
 use sqlx::PgPool;
 
 use crate::domain::models::{
-    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, PurgedProjectTree, RevertDeleteResult,
-    SoftDeleteResult, UploadFolderRepoArgs,
+    CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, ProjectError, PurgedProjectTree,
+    RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 use crate::domain::ports::ProjectRepo;
 
@@ -185,6 +186,15 @@ impl ProjectRepo for PgProjectRepo {
         share::get_project_share_permission(&self.pool, project_id).await
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn get_team_share_facts(
+        &self,
+        project_id: &str,
+    ) -> Result<models_permissions::share_permission::team_share::TeamShareFacts, ProjectError>
+    {
+        team_share::get_team_share_facts(&self.pool, project_id).await
+    }
+
     #[tracing::instrument(err, skip(self, project_ids))]
     async fn batch_get_project_preview(
         &self,
@@ -253,8 +263,17 @@ impl ProjectRepo for PgProjectRepo {
     }
 
     #[tracing::instrument(err, skip(self, args))]
-    async fn edit_project(&self, args: EditProjectArgs) -> Result<Project, Self::Err> {
+    async fn edit_project(&self, args: EditProjectArgs) -> Result<Project, ProjectError> {
         let mut transaction = self.pool.begin().await?;
+        // Canonical team sharing first: it takes the shared guard before any
+        // `SharePermission` row lock and refuses an unauthorized team level.
+        team_share::apply_team_share(
+            &mut transaction,
+            &args.project_id,
+            args.share_permission.as_ref(),
+            args.team_share.as_ref(),
+        )
+        .await?;
         let project = edit::edit_project(&mut transaction, &args).await?;
         transaction.commit().await?;
         Ok(project)

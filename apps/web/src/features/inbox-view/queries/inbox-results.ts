@@ -14,7 +14,7 @@ import {
 } from './home-date-buckets';
 import {
   type InboxViewContext,
-  inboxTabOrdersByNotification,
+  inboxTabIsNotificationFeed,
 } from './inbox-query';
 
 type InboxOrderContext = Pick<InboxViewContext, 'tab' | 'capabilities'>;
@@ -23,16 +23,19 @@ export const inboxSortTimestamp = (entity: EntityData) =>
   entity.sortTs ?? entity.updatedAt ?? entity.createdAt;
 
 /**
- * The timestamp a row is bucketed on. Tabs served by the `notified_at` sort
- * bucket on the viewer's latest notification, matching the order the rows
- * arrive in; rows without a stamp (websocket inserts) and the other tabs fall
- * back to content recency.
+ * The timestamp a row is bucketed on. The notification feeds (Signal, Noise)
+ * bucket on the viewer's latest notification so a fresh comment on a stale
+ * entity reads as today's news. A live websocket notification stamps
+ * `notifiedAt` right away (`bumpSoupEntityNotifiedAt`), so this holds even
+ * while the server keeps sorting by content recency — the `notified_at` server
+ * sort is gated for cost, but client bucketing is free. Rows without a stamp,
+ * and the other tabs, fall back to content recency.
  */
 export const inboxGroupTimestamp = (
   entity: EntityData,
   context: InboxOrderContext
 ) =>
-  (inboxTabOrdersByNotification(context) ? entity.notifiedAt : undefined) ??
+  (inboxTabIsNotificationFeed(context.tab) ? entity.notifiedAt : undefined) ??
   inboxSortTimestamp(entity);
 
 export function groupInboxEntitiesByDate<T extends EntityData>(

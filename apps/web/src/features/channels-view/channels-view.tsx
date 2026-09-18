@@ -5,7 +5,6 @@ import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { ListEntityMetadataQueryProvider } from '@entity';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { createMemo, createSignal, onMount, Show, Suspense } from 'solid-js';
@@ -28,12 +27,13 @@ export type ChannelsViewProps = {
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
-  const { state, setAsideWidth, setMobileTab } = useChannelsView();
+  const { state, mobileLayout, previewChannelId, setAsideWidth, setMobileTab } =
+    useChannelsView();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
     (scope) => {
-      if (isTouchDevice())
+      if (mobileLayout())
         return scope !== 'search' && state.mobileTab === scope;
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
@@ -51,13 +51,13 @@ function ChannelsViewRoot() {
     ])
   );
   const loadedSelectedChannel = createMemo(() =>
-    resolveSelectedChannel(state.selectedChannelId, loadedChannels())
+    resolveSelectedChannel(previewChannelId(), loadedChannels())
   );
   const selectedChannelQuery = useChannelByIdQuery(
-    () => state.selectedChannelId,
+    previewChannelId,
     () =>
-      !isTouchDevice() &&
-      state.selectedChannelId !== undefined &&
+      !mobileLayout() &&
+      previewChannelId() !== undefined &&
       loadedSelectedChannel() === undefined
   );
   const selectedChannel = createMemo(() => {
@@ -68,7 +68,7 @@ function ChannelsViewRoot() {
     }
 
     return resolveSelectedChannel(
-      state.selectedChannelId,
+      previewChannelId(),
       loadedChannels(),
       selectedChannelQuery.data?.entities
     );
@@ -82,7 +82,7 @@ function ChannelsViewRoot() {
         <SplitPanel.Root>
           <SplitPanel.Body>
             <Show
-              when={isTouchDevice()}
+              when={mobileLayout()}
               fallback={
                 <div class="size-full min-h-0 bg-panel">
                   <ViewShell.Root

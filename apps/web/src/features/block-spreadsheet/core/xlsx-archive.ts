@@ -161,10 +161,6 @@ export function xlsxFeatureWarnings(
     if (!name.endsWith('.xml')) continue;
     const text = strFromU8(bytes);
     if (/<!DOCTYPE|<!ENTITY/i.test(text)) throw invalid();
-    if (/<(?:\w+:)?definedName[\s>]/.test(text))
-      warnings.add(
-        'Named ranges are not imported; formulas using names may show errors.'
-      );
     if (/<(?:\w+:)?conditionalFormatting[\s>]/.test(text))
       warnings.add('Conditional formatting rules are not imported.');
     if (/<(?:\w+:)?dataValidation[\s>]/.test(text))

@@ -3,6 +3,10 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use models_permissions::share_permission::team_share::{TeamShareRequest, authorize_team_share};
 use sqlx::PgPool;
 
+fn project() -> Entity<'static> {
+    EntityType::Project.with_entity_string("20000000-0000-0000-0000-000000000001".to_string())
+}
+
 fn document() -> Entity<'static> {
     EntityType::Document.with_entity_string("20000000-0000-0000-0000-000000000002".to_string())
 }
@@ -260,6 +264,111 @@ async fn initialize_grants_comment_to_owner_team_for_initiative(
         direct_team_rows(&mut tx, &uuid, EntityType::Initiative, team_id).await?,
         vec![AccessLevel::Comment]
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("team_share"))
+)]
+async fn apply_project_team_share_copies_and_clears_nested_contents(
+    pool: PgPool,
+) -> rootcause::Result<()> {
+    let mut tx = pool.begin().await?;
+    let entity = project();
+    let project_id = entity.entity_id.as_ref();
+    let nested_document = document();
+    let document_id = Uuid::parse_str(&nested_document.entity_id)?;
+    let nested_id = Uuid::from_u128(0x20000000_0000_0000_0000_000000000010);
+    sqlx::query!(
+        r#"UPDATE "Document" SET "projectId" = $1 WHERE id = $2"#,
+        project_id,
+        nested_document.entity_id.as_ref(),
+    )
+    .execute(tx.as_mut())
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "Document" (id, name, owner, "projectId")
+        VALUES ($1, 'Later', 'macro|owner@example.com', $2)"#,
+        nested_id.to_string(),
+        project_id,
+    )
+    .execute(tx.as_mut())
+    .await?;
+
+    let facts = load_facts(&mut tx, &entity).await?;
+    let team_id = facts
+        .owner_team_id
+        .expect("fixture owner belongs to a team");
+    apply(&mut tx, &command(&facts, Some(AccessLevel::Edit))).await?;
+
+    let inherited = sqlx::query!(
+        r#"SELECT entity_id, entity_type, access_level AS "access_level: AccessLevel"
+        FROM entity_access
+        WHERE granted_from_project_id = $1 AND source_type = 'team' AND source_id = $2
+        ORDER BY entity_id"#,
+        project_id,
+        team_id.to_string(),
+    )
+    .fetch_all(tx.as_mut())
+    .await?;
+    assert_eq!(inherited.len(), 2);
+    assert_eq!(inherited[0].entity_id, document_id);
+    assert_eq!(inherited[0].entity_type, "document");
+    assert_eq!(inherited[0].access_level, AccessLevel::Edit);
+    assert_eq!(inherited[1].entity_id, nested_id);
+    assert_eq!(inherited[1].access_level, AccessLevel::Edit);
+
+    let stale_id = Uuid::from_u128(0x20000000_0000_0000_0000_000000000099);
+    sqlx::query!(
+        r#"INSERT INTO entity_access
+            (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+        VALUES ($1, 'email_thread', $2, 'team', 'edit', $3)"#,
+        stale_id,
+        team_id.to_string(),
+        project_id,
+    )
+    .execute(tx.as_mut())
+    .await?;
+
+    let facts = load_facts(&mut tx, &entity).await?;
+    apply(&mut tx, &command(&facts, Some(AccessLevel::View))).await?;
+    let inherited = sqlx::query!(
+        r#"SELECT entity_id, entity_type, access_level AS "access_level: AccessLevel"
+        FROM entity_access
+        WHERE granted_from_project_id = $1 AND source_type = 'team'
+        ORDER BY entity_id"#,
+        project_id,
+    )
+    .fetch_all(tx.as_mut())
+    .await?;
+    assert_eq!(inherited.len(), 2);
+    assert_eq!(inherited[0].entity_id, document_id);
+    assert_eq!(inherited[0].access_level, AccessLevel::View);
+    assert_eq!(inherited[1].entity_id, nested_id);
+    assert_eq!(inherited[1].access_level, AccessLevel::View);
+
+    sqlx::query!(
+        r#"INSERT INTO entity_access
+            (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+        VALUES ($1, 'chat', $2, 'team', 'view', $3)"#,
+        Uuid::parse_str(&chat().entity_id)?,
+        team_id.to_string(),
+        project_id,
+    )
+    .execute(tx.as_mut())
+    .await?;
+
+    let facts = load_facts(&mut tx, &entity).await?;
+    apply(&mut tx, &command(&facts, None)).await?;
+    let remaining = sqlx::query_scalar!(
+        r#"SELECT count(*) FROM entity_access
+        WHERE granted_from_project_id = $1 AND source_type = 'team'"#,
+        project_id,
+    )
+    .fetch_one(tx.as_mut())
+    .await?;
+    assert_eq!(remaining, Some(0));
     Ok(())
 }
 

@@ -61,8 +61,6 @@ function isTextEntry(target: EventTarget | null) {
 
 /** What the chip's answer to a question does. */
 export type MagicChipAnswer = {
-  /** An answer is on the wire; the buttons wait. */
-  answering: boolean;
   respond: (answer: ElicitationAnswer) => Promise<boolean>;
 };
 
@@ -315,8 +313,7 @@ const Question: Component<ChipAsking> = (props) => (
               tool={review().tool}
               toolCall={review().toolCall}
               review={{
-                canAnswer: () => props.asking.canAnswer,
-                answering: () => props.locked && props.asking.canAnswer,
+                canAnswer: () => props.asking.canAnswer && !props.locked,
                 respond: props.respond,
               }}
             />
@@ -376,8 +373,7 @@ export const MagicChipView: Component<{
     const current = asking();
     const state = question();
     if (!current || !state) return undefined;
-    const locked =
-      !current.canAnswer || !props.answer || props.answer.answering;
+    const locked = !current.canAnswer || !props.answer;
     return {
       asking: current,
       question: state,

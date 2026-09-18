@@ -14,8 +14,9 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 use super::error::{HarnessError, Result};
 use super::model::{
-    AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, HarnessCommand, PriorChannelMessage,
-    ProvisionedEgress, SandboxEgress, SessionAnnouncement, SpawnContainer,
+    AgentKind, AgentRuntimeConfig, AnnouncedMessage, CommandOutcome, DeclinedMention,
+    HarnessCommand, PriorMessage, ProvisionedEgress, ReachableRepository, SandboxEgress,
+    SessionAnnouncement, SessionBlocker, SpawnContainer,
 };
 use super::notifications::PlannedNotification;
 use super::sandbox::SandboxResizeEffect;
@@ -32,13 +33,13 @@ pub enum CommandTarget {
 /// The repositories a user can reach through Macro's GitHub App.
 ///
 /// A port rather than the `github` crate's service directly, so the harness
-/// states what it needs - a list of repository urls for one user - without the
-/// installation records, App credentials and HTTP client that answering it
-/// takes. Reaching nothing is an empty list, not an error.
+/// states what it needs - each repository's url and default branch, for one
+/// user - without the installation records, App credentials and HTTP client
+/// that answering it takes. Reaching nothing is an empty list, not an error.
 #[async_trait::async_trait]
 pub trait ReachableRepositories: Send + Sync + 'static {
-    /// Every repository `user` reaches, as `https://github.com/owner/name`.
-    async fn for_user(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<String>>;
+    /// Every repository `user` reaches, sorted by `owner/name`.
+    async fn for_user(&self, user: &MacroUserIdStr<'_>) -> Result<Vec<ReachableRepository>>;
 }
 
 /// Forwards commands to the replica currently responsible for execution.
@@ -112,22 +113,22 @@ pub trait AgentRuntimeDirectory: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Option<AgentRuntimeConfig>>> + Send;
 }
 
-/// Loads messages preceding a channel-originated agent prompt.
-pub trait ChannelPromptContext: Send + Sync + 'static {
-    /// Verify that a user who triggered a prompt remains a channel member.
-    fn authorize_member(
+/// Authorizes message origins and loads conversation context for agent prompts.
+pub trait MessagePromptContext: Send + Sync + 'static {
+    /// Recheck the actor's posting permission and verify the live message belongs
+    /// to exactly this parent and root before provisioning or dispatching work.
+    fn authorize_origin(
         &self,
-        actor: &macro_user_id::user_id::MacroUserIdStr<'static>,
-        channel_id: macro_uuid::Uuid,
+        actor: &MacroUserIdStr<'static>,
+        origin: &super::model::AnnounceOrigin,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Return up to ten non-deleted messages immediately before `message_id`
-    /// in chronological order.
+    /// Read up to ten preceding live messages with a fresh access check.
     fn preceding_messages(
         &self,
-        channel_id: macro_uuid::Uuid,
-        message_id: macro_uuid::Uuid,
-    ) -> impl Future<Output = Result<Vec<PriorChannelMessage>>> + Send;
+        actor: &MacroUserIdStr<'static>,
+        origin: &super::model::AnnounceOrigin,
+    ) -> impl Future<Output = Result<Vec<PriorMessage>>> + Send;
 }
 
 /// Composes an agent prompt from raw markdown and optional channel history.
@@ -137,7 +138,8 @@ pub trait AgentPromptComposer: Send + Sync + 'static {
     fn compose(
         &self,
         prompt_markdown: &str,
-        messages: Option<&[PriorChannelMessage]>,
+        parent: Option<&messages::domain::models::MessageParent>,
+        messages: Option<&[PriorMessage]>,
     ) -> impl Future<Output = Result<String>> + Send;
 }
 
@@ -226,6 +228,13 @@ pub trait SessionAnnouncer: Send + Sync + 'static {
         &self,
         announcement: SessionAnnouncement,
     ) -> impl Future<Output = Result<AnnouncedMessage>> + Send;
+
+    /// Tell a thread why its mention opened no session.
+    ///
+    /// The other thing the bot can say into a thread: not "here is your
+    /// session" but "here is what you need first". Same channel, same
+    /// sender, no session to point at.
+    fn decline(&self, declined: DeclinedMention) -> impl Future<Output = Result<()>> + Send;
 }
 
 /// Where a session finds its bot's live runtime connection.
@@ -309,6 +318,24 @@ pub trait SandboxEgressProvisioner: Send + Sync + 'static {
 pub trait ContainerManager: Send + Sync + 'static {
     /// Transport returned by this provider.
     type Transport: AgentConnector;
+
+    /// Whether `owner` is set up for a `kind` session, before anything is
+    /// created for one.
+    ///
+    /// `Ok(None)` is the ordinary answer and the default: most providers
+    /// need nothing from the person mentioning them. A provider that runs
+    /// on the owner's own account answers with what they still have to do,
+    /// so the domain can say so in the thread instead of minting a session
+    /// row whose spawn is doomed. An `Err` is an infrastructure failure -
+    /// the question itself could not be asked.
+    fn preflight(
+        &self,
+        kind: AgentKind,
+        owner: &MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<SessionBlocker>>> + Send {
+        let _ = (kind, owner);
+        async { Ok(None) }
+    }
 
     /// Boot a new container for a session that has never had one.
     fn spawn(

@@ -22,7 +22,8 @@ use bot_id::BotId;
 use entity_access::domain::{
     models::{
         AccessError, AccessLevel, BotAccessScope, CallChannelInfo, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo,
+        EntityPermission, EntityType, MemberParticipantRole, RequiredPermission, TeamRole,
+        UserTeamInfo,
     },
     ports::{EntityAccessService, NoOpEntityAccessService},
 };
@@ -297,13 +298,19 @@ impl ChannelService for ToolTestChannelService {
 
     async fn patch_channel(
         &self,
-        actor: Sender,
-        channel_id: Uuid,
+        access: EntityAccessReceipt<MemberParticipantRole>,
         req: PatchChannelRequest,
     ) -> Result<(), ChannelMutationErr> {
         if let Some(message) = &self.patch_error {
             return Err(ChannelMutationErr::BadRequest(message.clone()));
         }
+        let actor = Sender::new_from_user(
+            access
+                .get_authenticated_user()
+                .cloned()
+                .expect("authenticated user"),
+        );
+        let channel_id = Uuid::parse_str(&access.entity().entity_id).expect("channel id");
         self.patches
             .lock()
             .expect("patch lock")
@@ -557,7 +564,8 @@ fn rename_channel_schema_is_valid() {
     assert!(result.is_ok(), "{result:?}");
     let validated = result.unwrap();
     assert_eq!(validated.name, "RenameChannel");
-    assert!(validated.description.contains("Rename"));
+    assert!(validated.description.contains("participant"));
+    assert!(!validated.description.to_lowercase().contains("admin"));
 }
 
 #[test]
@@ -839,7 +847,7 @@ async fn create_channel_surfaces_domain_errors() {
 }
 
 #[tokio::test]
-async fn rename_channel_requires_admin_and_patches_only_the_name() {
+async fn rename_channel_requires_member_and_patches_only_the_name() {
     let channel_id = Uuid::new_v4();
     let service = ToolTestChannelService {
         metadata_name: Some("Old Name".to_string()),
@@ -856,7 +864,7 @@ async fn rename_channel_requires_admin_and_patches_only_the_name() {
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await
-    .expect("admin can rename");
+    .expect("member can rename");
 
     assert_eq!(response.name, "New Name");
     assert_eq!(response.previous_name.as_deref(), Some("Old Name"));
@@ -870,7 +878,7 @@ async fn rename_channel_requires_admin_and_patches_only_the_name() {
 }
 
 #[tokio::test]
-async fn rename_channel_rejects_non_admins() {
+async fn rename_channel_rejects_non_members() {
     let context = ChannelToolContext::new(
         Arc::new(RecordingMessages::default()),
         ToolTestChannelService::default(),
@@ -886,11 +894,11 @@ async fn rename_channel_rejects_non_admins() {
     }
     .call(ServiceContext(context), RequestContext::new(user_id()))
     .await
-    .expect_err("non-admin");
+    .expect_err("non-member");
 
     assert_eq!(
         error.description,
-        "you need channel admin access to rename this channel"
+        "you must be a member of the channel to rename it"
     );
 }
 

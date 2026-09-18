@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            esm.link_id,\n            esm.message_id,\n            NOT em.is_draft AS \"stranded!\"\n        FROM email_scheduled_messages esm\n        JOIN email_messages em ON em.id = esm.message_id\n        WHERE\n            esm.send_time < now()\n            AND esm.sent = FALSE\n            AND em.is_sent = FALSE\n            AND (\n                em.is_draft = TRUE\n                OR (\n                    esm.processing = FALSE\n                    AND esm.send_time < now() - make_interval(secs => $1)\n                )\n            )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "stranded!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "c54f9aedb2f87d706edc410248f8879e136513efae3979d59eb795ca3459d538"
+}

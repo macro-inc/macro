@@ -212,10 +212,9 @@ pub struct AgentSession {
     pub owner_id: MacroUserIdStr<'static>,
     /// The root message where the bot was originally invoked, if any.
     pub thread_id: Option<Uuid>,
-    /// The channel `thread_id` lives in, when the session was spawned from a
-    /// thread. Derived from the thread root's message row rather than
-    /// stored — the message's channel is authoritative.
-    pub thread_channel_id: Option<Uuid>,
+    /// Entity owning the originating thread, derived from its root message.
+    /// The persisted message parent is authoritative for routing and access.
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
     /// The exact message that originally invoked the bot, if any.
     pub originating_message_id: Option<Uuid>,
     /// the bot id of the bot running the agent
@@ -428,8 +427,8 @@ pub struct SessionLog {
     clippy::large_enum_variant,
     reason = "one data variant against None; boxing would only move the size"
 )]
-pub enum ChannelSession {
-    /// No session matched the channel context.
+pub enum ThreadSession {
+    /// No session matched the thread context.
     None,
     /// The bot's session was created from the incoming thread.
     CreatedFromThread(AgentSession),
@@ -470,6 +469,21 @@ impl AgentSessionPreview {
             Self::NoAccess(id) | Self::DoesNotExist(id) => *id,
         }
     }
+}
+
+/// One session found by [`AgentSessionRepo::preview`](super::ports::AgentSessionRepo::preview),
+/// before access policy: what a chip would show, whether an access row grants
+/// the viewer at least view access, and where the session came from, so the
+/// service can resolve inherited access that no row materializes.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SessionPreviewCandidate {
+    /// What a chip renders once access is settled.
+    pub data: AgentSessionPreviewData,
+    /// Whether a materialized grant - the viewer, a channel they are in, or a
+    /// team they belong to - gives them at least view access.
+    pub has_grant: bool,
+    /// Parent of the thread the session was opened from, when it was.
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
 }
 
 /// The subset of an [`AgentSession`] a chip or mention renders.

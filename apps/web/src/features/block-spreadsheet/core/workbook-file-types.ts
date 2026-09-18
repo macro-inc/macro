@@ -1,3 +1,4 @@
+import type { WorkbookSheetMetadata } from '@macro-inc/spreadsheet/workbook-metadata';
 import type { SpreadsheetCalculation } from './calculation';
 import type { SpreadsheetCells } from './spreadsheet-document';
 
@@ -13,6 +14,7 @@ export type WorkbookFileSheet = {
   rowCount: number;
   columnWidths: Record<number, number>;
   values?: SpreadsheetCalculation;
+  metadata?: WorkbookSheetMetadata;
 };
 export type WorkbookFileData = {
   sheets: WorkbookFileSheet[];

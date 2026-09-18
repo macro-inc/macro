@@ -124,6 +124,10 @@ type CompleteMutationRoot {
 	"""
 	markEmailThreadSeen(input: MarkEmailThreadSeenInput!): GraphqlSoupEmailThread!
 	"""
+	Mark an accessible email thread unread and return its authoritative cache record.
+	"""
+	markEmailThreadUnread(input: MarkEmailThreadUnreadInput!): GraphqlSoupEmailThread!
+	"""
 	Add or remove one label from an accessible email thread and return its authoritative cache record.
 	"""
 	updateEmailThreadLabel(input: UpdateEmailThreadLabelInput!): GraphqlSoupEmailThread!
@@ -1680,6 +1684,10 @@ enum GraphqlDocumentSubType {
 	The skill option.
 	"""
 	SKILL
+	"""
+	The initiative description option.
+	"""
+	INITIATIVE_DESCRIPTION
 }
 
 """
@@ -2970,6 +2978,16 @@ type GraphqlInboxReauthRequiredMetadata {
 }
 
 """
+represents the initiative description subtype fields
+"""
+type GraphqlInitiativeDescriptionSubType {
+	"""
+	this object has nothing as a field but we need at least 1 field
+	"""
+	nothing: Boolean!
+}
+
+"""
 Metadata for a team invitation.
 """
 type GraphqlInviteToTeamMetadata {
@@ -3259,6 +3277,10 @@ enum GraphqlNotificationDocumentSubType {
 	Skill document.
 	"""
 	SKILL
+	"""
+	The description document of an initiative.
+	"""
+	INITIATIVE_DESCRIPTION
 }
 
 """
@@ -4716,7 +4738,7 @@ type GraphqlSoupDocument implements GraphqlSoupEntity {
 """
 GraphQL representation of the soup document sub type.
 """
-union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType | GraphqlSkillSubType
+union GraphqlSoupDocumentSubType = GraphqlTaskSubType | GraphqlSnippetSubType | GraphqlSkillSubType | GraphqlInitiativeDescriptionSubType
 
 """
 GraphQL representation of the soup email attachment.
@@ -5848,6 +5870,16 @@ Input for marking an email thread as seen.
 input MarkEmailThreadSeenInput {
 	"""
 	Email thread to mark as seen.
+	"""
+	threadId: ID!
+}
+
+"""
+Input for marking an email thread unread.
+"""
+input MarkEmailThreadUnreadInput {
+	"""
+	Email thread to mark unread; its inbox determines the UNREAD label.
 	"""
 	threadId: ID!
 }

@@ -172,6 +172,42 @@ describe('CacheCoordinatorPageAdapter', () => {
     expect(attach?.transfer).toHaveLength(1);
   });
 
+  it('forwards startup phases once, ignores stale epochs, and rejects a backwards phase', async () => {
+    const port = new FakeCoordinatorPort();
+    const progress = vi.fn();
+    const error = vi.fn();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+      createDedicatedWorker: () => new FakeWorker(),
+      onStartupProgress: progress,
+      onTerminalError: error,
+    });
+    const started = adapter.start();
+    await vi.waitFor(() => expect(port.messages).toHaveLength(1));
+    port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+    const loading = {
+      ...version,
+      kind: 'engine-startup',
+      ownerEpoch: 2,
+      phase: 'loading-assets',
+      databaseAction: 'open-existing',
+      timeoutMs: 300_000,
+    };
+    port.receive(loading);
+    port.receive(loading);
+    port.receive({ ...loading, ownerEpoch: 1 });
+    expect(progress).toHaveBeenCalledTimes(1);
+    port.receive({ ...loading, phase: 'opening-database', timeoutMs: 20_000 });
+    expect(progress).toHaveBeenCalledTimes(2);
+    port.receive(loading);
+    expect(error).toHaveBeenCalledOnce();
+    expect(port.closed).toBe(true);
+  });
+
   it('terminates and clears a failed worker before reporting owner loss', async () => {
     const order: string[] = [];
     const coordinatorPort = new FakeCoordinatorPort();
