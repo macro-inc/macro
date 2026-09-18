@@ -256,6 +256,19 @@ async fn edit_team_share_copies_and_clears_nested_document_grants(pool: PgPool) 
         [(document_id, "document".to_string(), AccessLevel::Edit)]
     );
 
+    let stale_id = Uuid::from_u128(0xc5555555_5555_5555_5555_555555555555);
+    sqlx::query!(
+        r#"INSERT INTO entity_access
+            (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+        VALUES ($1, 'email_thread', $2, 'team', 'edit', $3)"#,
+        stale_id,
+        TEAM_ID.to_string(),
+        project_id,
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
     edit_team_share(&repo, &project_id, Some(AccessLevel::View))
         .await
         .unwrap();

@@ -121,10 +121,18 @@ pub async fn delete_direct(
     Ok(())
 }
 
+/// Bind parameters per nested `entity_access` row in the inherited-grant upsert.
+const NESTED_TEAM_GRANT_BINDS_PER_ROW: usize = 6;
+/// Nested rows per INSERT. Six binds each; stay under Postgres' 65535-parameter limit.
+const NESTED_TEAM_GRANT_CHUNK_SIZE: usize = 8_192;
+const _: () = assert!(NESTED_TEAM_GRANT_CHUNK_SIZE * NESTED_TEAM_GRANT_BINDS_PER_ROW < 65_535);
+
 /// Copy or remove this project's managed team grant on nested contents.
 ///
 /// Document and chat access reads `entity_access` on the child, not the folder.
 /// Person and channel folder sharing already write `granted_from_project_id` rows.
+/// Same-team refreshes delete then rebuild so inherited rows whose entities left
+/// the tree cannot linger.
 pub async fn replace_project_contributions(
     transaction: &mut Transaction<'_, Postgres>,
     project_id: &Uuid,
@@ -132,10 +140,7 @@ pub async fn replace_project_contributions(
     target: Option<(Uuid, AccessLevel)>,
 ) -> Result<(), sqlx::Error> {
     let project_id_str = project_id.to_string();
-    let target_team_id = target.map(|(team_id, _)| team_id);
-    if let Some(previous_team_id) = previous_team_id
-        && target_team_id != Some(previous_team_id)
-    {
+    if let Some(previous_team_id) = previous_team_id {
         sqlx::query!(
             r#"DELETE FROM entity_access
             WHERE granted_from_project_id = $1
@@ -164,22 +169,24 @@ pub async fn replace_project_contributions(
         return Ok(());
     }
     let team_id_str = team_id.to_string();
-    let mut query = QueryBuilder::new(
-        "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id) ",
-    );
-    query.push_values(rows, |mut row, (nested_id, nested_type)| {
-        row.push_bind(nested_id)
-            .push_bind(nested_type)
-            .push_bind(team_id_str.clone())
-            .push_bind(EntityAccessSourceType::Team)
-            .push_bind(level)
-            .push_bind(project_id_str.clone());
-    });
-    query.push(
-        " ON CONFLICT (entity_id, entity_type, source_id, source_type, granted_from_project_id) \
-          WHERE granted_from_project_id IS NOT NULL \
-          DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()",
-    );
-    query.build().execute(transaction.as_mut()).await?;
+    for chunk in rows.chunks(NESTED_TEAM_GRANT_CHUNK_SIZE) {
+        let mut query = QueryBuilder::new(
+            "INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id) ",
+        );
+        query.push_values(chunk, |mut row, (nested_id, nested_type)| {
+            row.push_bind(*nested_id)
+                .push_bind(nested_type)
+                .push_bind(team_id_str.clone())
+                .push_bind(EntityAccessSourceType::Team)
+                .push_bind(level)
+                .push_bind(project_id_str.clone());
+        });
+        query.push(
+            " ON CONFLICT (entity_id, entity_type, source_id, source_type, granted_from_project_id) \
+              WHERE granted_from_project_id IS NOT NULL \
+              DO UPDATE SET access_level = EXCLUDED.access_level, updated_at = NOW()",
+        );
+        query.build().execute(transaction.as_mut()).await?;
+    }
     Ok(())
 }

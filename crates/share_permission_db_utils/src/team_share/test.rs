@@ -319,10 +319,22 @@ async fn apply_project_team_share_copies_and_clears_nested_contents(
     assert_eq!(inherited[1].entity_id, nested_id);
     assert_eq!(inherited[1].access_level, AccessLevel::Edit);
 
+    let stale_id = Uuid::from_u128(0x20000000_0000_0000_0000_000000000099);
+    sqlx::query!(
+        r#"INSERT INTO entity_access
+            (entity_id, entity_type, source_id, source_type, access_level, granted_from_project_id)
+        VALUES ($1, 'email_thread', $2, 'team', 'edit', $3)"#,
+        stale_id,
+        team_id.to_string(),
+        project_id,
+    )
+    .execute(tx.as_mut())
+    .await?;
+
     let facts = load_facts(&mut tx, &entity).await?;
     apply(&mut tx, &command(&facts, Some(AccessLevel::View))).await?;
-    let levels = sqlx::query_scalar!(
-        r#"SELECT access_level AS "access_level: AccessLevel"
+    let inherited = sqlx::query!(
+        r#"SELECT entity_id, entity_type, access_level AS "access_level: AccessLevel"
         FROM entity_access
         WHERE granted_from_project_id = $1 AND source_type = 'team'
         ORDER BY entity_id"#,
@@ -330,7 +342,11 @@ async fn apply_project_team_share_copies_and_clears_nested_contents(
     )
     .fetch_all(tx.as_mut())
     .await?;
-    assert_eq!(levels, vec![AccessLevel::View, AccessLevel::View]);
+    assert_eq!(inherited.len(), 2);
+    assert_eq!(inherited[0].entity_id, document_id);
+    assert_eq!(inherited[0].access_level, AccessLevel::View);
+    assert_eq!(inherited[1].entity_id, nested_id);
+    assert_eq!(inherited[1].access_level, AccessLevel::View);
 
     sqlx::query!(
         r#"INSERT INTO entity_access
