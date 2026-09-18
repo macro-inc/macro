@@ -1,5 +1,13 @@
 # Other Surfaces
 
+## Canvas colors
+
+To check the default canvas color, create a rectangle and a text box without
+changing the swatch. The rectangle should have a light neutral fill and a dark
+outline; the text should be dark and visible. Also check the neutral swatch after
+selecting another color. Neutral colors use an OKLCH `none` hue, which must render
+as gray rather than transparent.
+
 ## Live updates in flat Soup lists
 
 With browser or native Tauri GraphQL caching enabled, locally supported flat lists reconcile their
