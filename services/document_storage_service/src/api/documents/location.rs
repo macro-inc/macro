@@ -331,7 +331,9 @@ pub(in crate::api::documents) fn get_presigned_url(
     let signed_url = if !macro_aws_config::is_local_aws() {
         get_signed_url(&constructed_url, options)?
     } else {
-        constructed_url
+        // Unsigned locally: the distribution URL is LocalStack itself, so
+        // move it onto the host port the browser can reach.
+        macro_aws_config::transform_aws_url(&constructed_url)
     };
 
     Ok(signed_url)

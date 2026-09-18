@@ -201,6 +201,7 @@ fn local_env_flavor(
                 "DATABASE_URL",
                 "REDIS_URI",
                 "LOCAL_AWS_URL",
+                "LOCAL_AWS_PUBLIC_URL",
                 "FUSIONAUTH_BASE_URL",
                 "FUSIONAUTH_PUBLIC_URL",
                 "FUSIONAUTH_CLIENT_ID",
@@ -230,6 +231,18 @@ fn local_env_flavor(
                         "{key}={v} is not a local endpoint (expected host '{host}')"
                     ));
                 }
+            }
+            // Browser-facing S3 URLs must land on the host port Compose
+            // publishes for this instance's LocalStack, or every upload
+            // targets a port nothing listens on.
+            let expected_public_aws_url =
+                format!("http://localhost:{}", instance.port(Port::LocalStack));
+            if env.get("LOCAL_AWS_PUBLIC_URL") != Some(&expected_public_aws_url) {
+                failures.push(format!(
+                    "LOCAL_AWS_PUBLIC_URL={:?} does not match the instance LocalStack port \
+                     ({expected_public_aws_url})",
+                    env.get("LOCAL_AWS_PUBLIC_URL"),
+                ));
             }
             // The post-login redirect must point at where this flavor
             // actually serves the app (proxy for static, dev server port

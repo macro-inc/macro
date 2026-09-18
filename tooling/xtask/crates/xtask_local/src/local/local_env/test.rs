@@ -26,6 +26,7 @@ fn emits_required_keys() {
         "REDIS_URI",
         "OPENSEARCH_URL",
         "LOCAL_AWS_URL",
+        "LOCAL_AWS_PUBLIC_URL",
         "AWS_ACCESS_KEY_ID",
         "STATIC_STORAGE_BUCKET",
         "CONNECTION_GATEWAY_TABLE",
@@ -283,6 +284,58 @@ fn instance_secrets_are_scoped_but_identity_is_fixed() {
         a.get("FUSIONAUTH_API_KEY_SECRET_KEY"),
         b.get("FUSIONAUTH_API_KEY_SECRET_KEY"),
         "the fixed FusionAuth identity should be constant across instances"
+    );
+}
+
+/// Presigned upload/download URLs are rewritten onto `LOCAL_AWS_PUBLIC_URL`,
+/// so it must be the host port Compose publishes for this instance's
+/// LocalStack — for the default instance, a named one, and an explicit
+/// `--port-base` — while the SDK keeps talking to the docker alias.
+#[test]
+fn local_aws_public_url_uses_the_instance_localstack_port() {
+    let default = Instance::derive(None, None).unwrap();
+    let named = Instance::derive(Some("editor"), None).unwrap();
+    let port_base = Instance::derive(Some("editor"), Some(31000)).unwrap();
+    assert_ne!(named.port_base(), port_base.port_base());
+
+    for instance in [&default, &named, &port_base] {
+        let env = LocalEnv::for_instance(Mode::Local, instance, true, None).to_env();
+        let localstack = instance.port(Port::LocalStack);
+        assert_eq!(
+            env.get("LOCAL_AWS_URL").map(String::as_str),
+            Some("http://localstack:4566"),
+            "{}",
+            instance.name()
+        );
+        assert_eq!(
+            env.get("LOCAL_AWS_PUBLIC_URL").map(String::as_str),
+            Some(format!("http://localhost:{localstack}").as_str()),
+            "{}",
+            instance.name()
+        );
+        // Document downloads are unsigned `{distribution}/{key}` locally, so
+        // the distribution is the doc-storage bucket on the public origin.
+        assert_eq!(
+            env.get("DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL")
+                .map(String::as_str),
+            Some(format!("http://localhost:{localstack}/doc-storage").as_str()),
+            "{}",
+            instance.name()
+        );
+    }
+    assert_eq!(
+        LocalEnv::for_instance(Mode::Local, &default, true, None)
+            .to_env()
+            .get("LOCAL_AWS_PUBLIC_URL")
+            .map(String::as_str),
+        Some("http://localhost:4566")
+    );
+    assert_eq!(
+        LocalEnv::for_instance(Mode::Local, &port_base, true, None)
+            .to_env()
+            .get("LOCAL_AWS_PUBLIC_URL")
+            .map(String::as_str),
+        Some(format!("http://localhost:{}", 31000 + Port::LocalStack.offset()).as_str())
     );
 }
 

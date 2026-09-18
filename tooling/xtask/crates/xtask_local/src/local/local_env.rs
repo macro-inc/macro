@@ -77,7 +77,7 @@ impl LocalEnv {
                 "http://localhost:{}/static-file",
                 instance.port(Port::Proxy)
             ),
-            infra: InfraEnv::local(),
+            infra: InfraEnv::local(instance),
             storage: StorageEnv::local(),
             queues: QueueEnv::local(),
             mail: MailEnv::local(),
@@ -143,20 +143,39 @@ struct InfraEnv {
     redis_uri: String,
     opensearch_url: String,
     local_aws_url: String,
+    /// Where a browser on the host reaches LocalStack: the host port Compose
+    /// publishes for this instance (`gen_compose` maps it onto 4566). Presigned
+    /// upload/download URLs are rewritten onto this origin; without it a named
+    /// instance mints `localhost:4566`, where nothing listens, so every upload
+    /// fails and the document stays pending.
+    local_aws_public_url: String,
     kafka_brokers: String,
 }
 
 impl InfraEnv {
-    fn local() -> Self {
+    fn local(instance: &Instance) -> Self {
         InfraEnv {
             database_url: "postgres://user:password@postgres:5432/macrodb".into(),
             redis_uri: "redis://redis:6379".into(),
             opensearch_url: "http://search:9200".into(),
             local_aws_url: "http://localstack:4566".into(),
+            local_aws_public_url: format!("http://localhost:{}", instance.port(Port::LocalStack)),
             // The broker's in-network listener (see docker/docker-compose-databases.yml);
             // host processes use localhost:9092 instead.
             kafka_brokers: "kafka:29092".into(),
         }
+    }
+
+    /// The doc-storage "distribution" locally is the bucket on LocalStack
+    /// itself: document download URLs are `{this}/{key}`, unsigned (the
+    /// `is_local_aws()` branch skips CloudFront signing). Browser-facing, so it
+    /// sits on the public origin.
+    fn document_storage_distribution_url(&self) -> String {
+        format!(
+            "{}/{}",
+            self.local_aws_public_url,
+            resources::DOC_STORAGE_BUCKET
+        )
     }
 
     fn write(&self, env: &mut BTreeMap<String, String>) {
@@ -170,6 +189,14 @@ impl InfraEnv {
         env.insert("LAST_ONLINE_REDIS_URI".into(), self.redis_uri.clone());
         env.insert("OPENSEARCH_URL".into(), self.opensearch_url.clone());
         env.insert("LOCAL_AWS_URL".into(), self.local_aws_url.clone());
+        env.insert(
+            "LOCAL_AWS_PUBLIC_URL".into(),
+            self.local_aws_public_url.clone(),
+        );
+        env.insert(
+            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL".into(),
+            self.document_storage_distribution_url(),
+        );
         env.insert("KAFKA_BROKERS".into(), self.kafka_brokers.clone());
         // In-network services resolve the gateway through the OVERRIDE_ var;
         // without it the resolver's Environment::Local default
@@ -550,13 +577,10 @@ impl BootStubEnv {
         env.insert("PIPEDREAM_WEBHOOK_SECRET".into(), "local".into());
         env.insert("OPENSEARCH_USERNAME".into(), "macrouser".into());
         env.insert("OPENSEARCH_PASSWORD".into(), "local".into());
-        // document_storage_service's presigned-URL config. Locally the
-        // `is_local_aws()` branch skips CloudFront signing entirely, so only a
-        // well-formed base URL is needed.
-        env.insert(
-            "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL".into(),
-            "http://localhost:8100".into(),
-        );
+        // document_storage_service's CloudFront signer. Locally the
+        // `is_local_aws()` branch skips signing entirely, so these only need
+        // to be well-formed; the distribution URL itself is instance-derived
+        // plumbing and lives in `InfraEnv`.
         env.insert(
             "DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_SIGNER_PUBLIC_KEY_ID".into(),
             "local-cloudfront-signer".into(),

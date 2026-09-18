@@ -115,9 +115,9 @@ impl StaticFileServiceClient {
         let put_file_data: PutFileResponse = serde_json::from_value(res)?;
 
         // The service mints the presigned URL for a browser on the host
-        // (`localhost:4566`); an uploader inside the Docker network has to
-        // use LocalStack's own hostname to reach the same object. No-op
-        // outside local AWS.
+        // (`LOCAL_AWS_PUBLIC_URL`); an uploader inside the Docker network has
+        // to use LocalStack's own endpoint (`LOCAL_AWS_URL`) to reach the same
+        // object. No-op outside local AWS.
         let presigned_url =
             macro_aws_config::transform_aws_url_for_internal_fetch(&put_file_data.upload_url);
 

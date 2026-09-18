@@ -153,6 +153,7 @@ fn apply_dev_overrides(instance: &Instance, env: &mut BTreeMap<String, String>) 
     );
     // run-dev must not point at local infra.
     env.remove("LOCAL_AWS_URL");
+    env.remove("LOCAL_AWS_PUBLIC_URL");
     env.remove("SMTP_HOST");
     env.remove("SMTP_PORT");
 }
