@@ -191,6 +191,8 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       fallbackName: task.fallbackName,
     });
     if (!navigationStack.shouldNavigate(target, options)) return false;
+    // A refused reset already alerted; there is nothing to fall back to.
+    if (!navigationStack.reset(target)) return true;
     const row = source
       .items()
       .find((item) => item.kind === 'entity' && item.entity.id === task.id);
@@ -199,7 +201,6 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       list.selection.setAnchor(row.id);
     }
 
-    navigationStack.reset(target);
     return true;
   };
   const closeTask = navigationStack.clear;
