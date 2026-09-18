@@ -124,19 +124,29 @@ export function Layout(props: RouteSectionProps) {
       !isSoloSettings()
   );
 
+  const publicScheduling = () =>
+    location.pathname.startsWith(`${ROUTER_BASE_CONCAT}book/`) ||
+    location.pathname.startsWith(`${ROUTER_BASE_CONCAT}booking/`);
   return (
-    <SidebarVisibilityContext.Provider value={sidebarVisible}>
-      <SidebarCollapseContext.Provider
-        value={{
-          isCollapsed: () => sidebarVisible() && sidebarState() === 'slim',
-          expand: () => setSidebarState('expanded'),
-        }}
-      >
-        <MobileSettingsProvider>
-          <LayoutInner {...props} />
-        </MobileSettingsProvider>
-      </SidebarCollapseContext.Provider>
-    </SidebarVisibilityContext.Provider>
+    <Show
+      when={publicScheduling()}
+      fallback={
+        <SidebarVisibilityContext.Provider value={sidebarVisible}>
+          <SidebarCollapseContext.Provider
+            value={{
+              isCollapsed: () => sidebarVisible() && sidebarState() === 'slim',
+              expand: () => setSidebarState('expanded'),
+            }}
+          >
+            <MobileSettingsProvider>
+              <LayoutInner {...props} />
+            </MobileSettingsProvider>
+          </SidebarCollapseContext.Provider>
+        </SidebarVisibilityContext.Provider>
+      }
+    >
+      <div class="h-dvh overflow-y-auto bg-page text-ink">{props.children}</div>
+    </Show>
   );
 }
 

@@ -991,6 +991,7 @@ fn mutation_bodies_serialize_reminders_in_google_shape() {
     });
 
     let draft = CalendarEventDraft {
+        idempotency_key: None,
         title: "New".to_string(),
         description: None,
         location: None,
@@ -1127,6 +1128,7 @@ fn conference_writes_declare_conference_support() {
 #[test]
 fn drafts_carry_conference_requests_and_their_parameter() {
     let draft = CalendarEventDraft {
+        idempotency_key: None,
         title: "Kickoff".to_string(),
         description: None,
         location: None,
@@ -1159,6 +1161,7 @@ fn drafts_carry_conference_requests_and_their_parameter() {
 
 fn timed_draft(out_of_office: Option<OutOfOfficeProperties>) -> CalendarEventDraft {
     CalendarEventDraft {
+        idempotency_key: None,
         title: "Away".to_string(),
         description: None,
         location: None,
@@ -1348,4 +1351,99 @@ fn conference_data_survives_the_raw_payload_round_trip() {
         conference_url(round_tripped.conference_data.as_ref()).as_deref(),
         Some("https://meet.google.com/abc-defg-hij")
     );
+}
+
+#[cfg(feature = "inbound")]
+#[tokio::test]
+async fn keyed_create_recovers_lost_response_and_duplicate_conflict_without_second_insert() {
+    use axum::{
+        Json, Router,
+        extract::State,
+        http::StatusCode,
+        response::IntoResponse,
+        routing::{get, post},
+    };
+    use std::sync::{
+        Arc, Mutex,
+        atomic::{AtomicUsize, Ordering},
+    };
+    #[derive(Clone)]
+    struct Remote {
+        event: Arc<Mutex<Option<serde_json::Value>>>,
+        posts: Arc<AtomicUsize>,
+        insert_status: StatusCode,
+    }
+    async fn read(State(s): State<Remote>) -> axum::response::Response {
+        match s.event.lock().unwrap().clone() {
+            Some(event) => Json(event).into_response(),
+            None => StatusCode::NOT_FOUND.into_response(),
+        }
+    }
+    async fn insert(
+        State(s): State<Remote>,
+        Json(body): Json<serde_json::Value>,
+    ) -> axum::response::Response {
+        s.posts.fetch_add(1, Ordering::SeqCst);
+        let mut event = body;
+        event["iCalUID"] = serde_json::json!("stable@example.test");
+        event["created"] = serde_json::json!("2026-07-20T14:00:00Z");
+        event["updated"] = serde_json::json!("2026-07-20T14:00:00Z");
+        *s.event.lock().unwrap() = Some(event);
+        (
+            s.insert_status,
+            Json(serde_json::json!({"error":{"message":"injected uncertain result"}})),
+        )
+            .into_response()
+    }
+    for insert_status in [StatusCode::SERVICE_UNAVAILABLE, StatusCode::CONFLICT] {
+        let remote = Remote {
+            event: Default::default(),
+            posts: Default::default(),
+            insert_status,
+        };
+        let app = Router::new()
+            .route("/calendars/primary/events", post(insert))
+            .route("/calendars/primary/events/{id}", get(read))
+            .with_state(remote.clone());
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let endpoint = format!("http://{}", listener.local_addr().unwrap());
+        let task = tokio::spawn(async move {
+            axum::serve(listener, app).await.unwrap();
+        });
+        let client = GoogleCalendarClient {
+            client: Client::new(),
+            gate: UnmeteredGate,
+            api_base: endpoint,
+        };
+        let target = GoogleCalendarTarget {
+            owner_id: "macro|test@example.test".into(),
+            email_link_id: Uuid::now_v7(),
+            account_id: Uuid::now_v7(),
+            calendar_id: Uuid::now_v7(),
+            provider_calendar_id: "primary".into(),
+            is_read_only: false,
+            range: OccurrenceRange::maintenance_horizon(Utc::now()),
+        };
+        let mut draft = timed_draft(None);
+        draft.idempotency_key = Some(Uuid::now_v7());
+        let first = client.create_event("test-token", &target, &draft).await;
+        assert_eq!(first.is_ok(), insert_status == StatusCode::CONFLICT);
+        client
+            .create_event("test-token", &target, &draft)
+            .await
+            .unwrap();
+        assert_eq!(remote.posts.load(Ordering::SeqCst), 1);
+        let provider_id = remote.event.lock().unwrap().as_ref().unwrap()["id"]
+            .as_str()
+            .unwrap()
+            .to_owned();
+        assert_eq!(
+            provider_id,
+            crate::domain::models::creation_provider_id(
+                draft.idempotency_key.unwrap(),
+                &target.owner_id
+            )
+        );
+        task.abort();
+    }
 }

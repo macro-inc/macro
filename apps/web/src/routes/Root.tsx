@@ -116,6 +116,10 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
+import {
+  BookingReceiptPage,
+  PublicBookingPage,
+} from '../features/scheduling/public-booking';
 import { BasePathComponent } from './BasePath';
 import { TaskRoute } from './TaskRoute';
 
@@ -227,6 +231,8 @@ function OnboardingRoute() {
 }
 
 const ROUTES: RouteDefinition[] = [
+  { path: '/book/:profile/:slug?', component: PublicBookingPage },
+  { path: '/booking/:id', component: BookingReceiptPage },
   {
     path: '/task-slug/:taskSlug',
     component: TaskRoute,

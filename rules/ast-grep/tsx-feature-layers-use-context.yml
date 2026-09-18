@@ -14,6 +14,11 @@ note: |-
   `@core/user/macroId` identity helpers are a documented exception. Adopting features add their layer paths to
   `files` in each ts-/tsx-feature-* rule.
 files:
+  - apps/web/src/features/scheduling/context/**
+  - apps/web/src/features/scheduling/queries/**
+  - apps/web/src/features/scheduling/primitives/**
+  - apps/web/src/features/scheduling/components/**
+  - apps/web/src/features/scheduling/views/**
   - apps/web/src/features/block-spreadsheet/queries/**
   - apps/web/src/features/block-spreadsheet/primitives/**
   - apps/web/src/features/block-spreadsheet/components/**

@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE scheduling_booking SET status = $2, record = $3, recovery_at = $5 WHERE id = $1 AND status = $4 AND COALESCE(record->>'revision', '0') = $8 AND ($4 <> 'processing' OR (record->'operation'->>'id' IS NOT DISTINCT FROM $6 AND record->'operation'->>'attempt' IS NOT DISTINCT FROM $7))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Jsonb",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "51460044bcd559f7bd4f736786de74681260ed36429b886cdfb14215cf2a28ed"
+}

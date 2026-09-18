@@ -53,6 +53,7 @@ impl GoogleRequestGate for UnmeteredGate {
 pub struct GoogleCalendarClient<G = UnmeteredGate> {
     client: Client,
     gate: G,
+    api_base: String,
 }
 
 impl GoogleCalendarClient<UnmeteredGate> {
@@ -61,6 +62,7 @@ impl GoogleCalendarClient<UnmeteredGate> {
         Self {
             client,
             gate: UnmeteredGate,
+            api_base: GOOGLE_CALENDAR_API.into(),
         }
     }
 }
@@ -68,7 +70,11 @@ impl GoogleCalendarClient<UnmeteredGate> {
 impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
     /// Construct a client whose requests must pass the supplied quota gate.
     pub fn with_gate(client: Client, gate: G) -> Self {
-        Self { client, gate }
+        Self {
+            client,
+            gate,
+            api_base: GOOGLE_CALENDAR_API.into(),
+        }
     }
 
     async fn calendars(
@@ -82,7 +88,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
-                .get(format!("{GOOGLE_CALENDAR_API}/users/me/calendarList"))
+                .get(format!("{}/users/me/calendarList", self.api_base))
                 .bearer_auth(access_token)
                 .query(&[("maxResults", "250"), ("minAccessRole", "reader")]);
             if let Some(token) = &page_token {
@@ -114,7 +120,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
-                .get(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
+                .get(format!("{}/calendars/{calendar}/events", self.api_base))
                 .bearer_auth(access_token)
                 .query(&[
                     ("maxResults", "2500".to_string()),
@@ -156,7 +162,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
-                .get(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
+                .get(format!("{}/calendars/{calendar}/events", self.api_base))
                 .bearer_auth(access_token)
                 .query(&[
                     ("maxResults", "2500"),
@@ -209,7 +215,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         let response = self
             .client
             .get(format!(
-                "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}"
+                "{}/calendars/{calendar}/events/{event}",
+                self.api_base
             ))
             .bearer_auth(access_token)
             .send()
@@ -248,7 +255,7 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             self.gate.acquire(email_link_id).await?;
             let mut request = self
                 .client
-                .get(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
+                .get(format!("{}/calendars/{calendar}/events", self.api_base))
                 .bearer_auth(access_token)
                 .query(&[
                     ("maxResults", "2500"),
@@ -287,7 +294,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
             let mut request = self
                 .client
                 .get(format!(
-                    "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}/instances"
+                    "{}/calendars/{calendar}/events/{event}/instances",
+                    self.api_base
                 ))
                 .bearer_auth(access_token)
                 .query(&[
@@ -575,7 +583,8 @@ impl<G: GoogleRequestGate> GoogleCalendarProvider for GoogleCalendarClient<G> {
             GoogleRequestKind::Mutation,
             self.client
                 .post(format!(
-                    "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/watch"
+                    "{}/calendars/{calendar}/events/watch",
+                    self.api_base
                 ))
                 .bearer_auth(access_token)
                 .json(&serde_json::json!({
@@ -922,7 +931,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         let response = self
             .client
             .delete(format!(
-                "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}"
+                "{}/calendars/{calendar}/events/{event}",
+                self.api_base
             ))
             .bearer_auth(access_token)
             .query(&[SEND_UPDATES])
@@ -989,7 +999,8 @@ impl<G: GoogleRequestGate> GoogleCalendarClient<G> {
         let request = self
             .client
             .patch(format!(
-                "{GOOGLE_CALENDAR_API}/calendars/{calendar}/events/{event}"
+                "{}/calendars/{calendar}/events/{event}",
+                self.api_base
             ))
             .bearer_auth(access_token)
             .query(&[SEND_UPDATES]);
@@ -1031,21 +1042,69 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         draft: &CalendarEventDraft,
     ) -> Result<CalendarEventUpsert, GoogleProviderError> {
         let calendar = urlencoding::encode(&target.provider_calendar_id);
-        let body = draft_body(draft);
+        let mut body = draft_body(draft);
+        // Scope caller keys to the organizer. Hex UUIDs are valid Google base32hex IDs.
+        let provider_id = draft
+            .idempotency_key
+            .map(|key| crate::domain::models::creation_provider_id(key, &target.owner_id));
+        if let Some(id) = &provider_id {
+            body["id"] = serde_json::json!(id);
+            if let Some(existing) = self
+                .event(
+                    access_token,
+                    target.email_link_id,
+                    &target.provider_calendar_id,
+                    id,
+                )
+                .await?
+            {
+                return self
+                    .mutation_readback(access_token, target, existing)
+                    .await?
+                    .ok_or_else(|| {
+                        GoogleProviderError::new(
+                            GoogleProviderErrorKind::Permanent,
+                            "The reserved calendar event was removed",
+                        )
+                    });
+            }
+        }
         self.gate.acquire(target.email_link_id).await?;
         let request = self
             .client
-            .post(format!("{GOOGLE_CALENDAR_API}/calendars/{calendar}/events"))
+            .post(format!("{}/calendars/{calendar}/events", self.api_base))
             .bearer_auth(access_token)
             .query(&[SEND_UPDATES]);
-        let created: GoogleEvent = send_google(
-            GoogleRequestKind::Mutation,
-            with_conference_query(request, &body).json(&body),
-        )
-        .await?;
-        // The insert already happened and carries no idempotency key, so a
-        // readback miss must not surface as retryable: a client retry would
-        // POST a duplicate event.
+        let response = with_conference_query(request, &body)
+            .json(&body)
+            .send()
+            .await
+            .map_err(provider_transport_error)?;
+        let status = response.status();
+        let created: GoogleEvent = if status == StatusCode::CONFLICT && provider_id.is_some() {
+            self.event(
+                access_token,
+                target.email_link_id,
+                &target.provider_calendar_id,
+                provider_id.as_deref().unwrap_or_default(),
+            )
+            .await?
+            .ok_or_else(|| {
+                GoogleProviderError::new(
+                    GoogleProviderErrorKind::Transient,
+                    "Calendar creation is still converging",
+                )
+            })?
+        } else if status.is_success() {
+            response.json().await.map_err(provider_transport_error)?
+        } else {
+            let body = response.text().await.map_err(provider_transport_error)?;
+            return Err(provider_response_error(
+                GoogleRequestKind::Mutation,
+                status,
+                &body,
+            ));
+        };
         self.mutation_readback(access_token, target, created)
             .await?
             .ok_or_else(|| {
@@ -1334,7 +1393,7 @@ impl<G: GoogleRequestGate> GoogleCalendarMutationProvider for GoogleCalendarClie
         self.gate.acquire(email_link_id).await?;
         let response = self
             .client
-            .post(format!("{GOOGLE_CALENDAR_API}/channels/stop"))
+            .post(format!("{}/channels/stop", self.api_base))
             .bearer_auth(access_token)
             .json(&serde_json::json!({
                 "id": channel_id,

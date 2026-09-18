@@ -15,6 +15,7 @@ import {
 import { settingsSlugToTab, settingsTabToSlug } from './settingsTabsConfig';
 
 export type SettingsTab =
+  | 'Calendar'
   | 'Account'
   | 'API Keys'
   | 'Notifications'

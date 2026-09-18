@@ -114,6 +114,8 @@ impl From<CalendarAttendeeInputBody> for CalendarAttendeeInput {
 #[derive(Debug, Deserialize, utoipa::ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateCalendarEventRequest {
+    /// Stable retry identity, scoped to the authenticated organizer.
+    pub idempotency_key: Option<Uuid>,
     /// Exact calendar to create the event on; takes precedence over the
     /// inbox default.
     pub calendar_id: Option<Uuid>,
@@ -419,6 +421,7 @@ where
     Auth: MacroAuthorizationService,
 {
     let draft = CalendarEventDraft {
+        idempotency_key: request.idempotency_key,
         title: request.title,
         description: request.description,
         location: request.location,

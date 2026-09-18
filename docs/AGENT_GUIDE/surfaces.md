@@ -453,6 +453,55 @@ footer. Answering a recurring invitation opens a rounded glass sheet: choose
 `This event` or `All events`, then `Save response`. Cancel or Close returns to
 the event details without sending a response.
 
+Calendar scheduling lives in **Settings → Calendar** (`/app/settings/calendar`).
+The scheduling sidebar opens Event types, Bookings, Availability, Teams, Insights,
+and Booking page. Event editors have a grouped settings sidebar; booking status
+filters use the same segmented control as the CRM sidebar.
+In Availability, each weekday has an enable switch, time ranges, an add button,
+and a copy-hours menu; select target days and Apply before saving the schedule.
+Date overrides and the searchable timezone picker sit below the weekly hours.
+Choose Personal or your Macro team in `Calendar owner`. Team owners/admins can
+edit team links; ordinary members can view them. `Event types` creates, edits,
+pauses, duplicates, previews, and copies booking links. Event settings include
+weekly availability, collective/all-host or round-robin/one-host assignment,
+notice, buffers, booking horizon, daily limits, and custom questions. New event
+types stay paused until `Accept bookings` is selected and changes are saved.
+`Availability` manages named weekly schedules and date overrides in an IANA time
+zone. Set a default schedule for new event types; a schedule cannot be deleted
+until its event types use another one. Collective and round-robin team meetings
+respect each host’s personal default hours when configured, plus busy calendars.
+`Teams` uses existing Macro team membership and links to team settings.
+`Booking page` edits the public name and description. `Bookings` shows
+upcoming, unconfirmed, past, and cancelled meetings; admins can confirm requests,
+reschedule, or cancel them. Search by guest/title/email and filter by event type.
+Cancellation asks for confirmation. After a confirmed meeting ends, an assigned
+host or team admin can mark attendance or a host/guest no-show. Pending requests
+from older configurations appear under Unconfirmed. New approval-only links are disabled;
+new links use automatic confirmation and provider calendar invitations. Existing approval
+links must switch to automatic confirmation before accepting new bookings.
+
+`Insights` reports the selected personal/team owner with 7/30/90-day or custom
+ranges, event/host filters, previous-period comparisons, event trends, meeting
+hours, no-shows, popular events, and host counts. Download exports the filtered
+bookings to CSV. Metrics use booking start dates in the default schedule’s time
+zone; failed/processing requests are excluded. Completed means ended confirmed
+bookings excluding recorded no-shows. Rescheduled counts bookings with recorded
+reschedule history. Ratings/CSAT are not shown because no survey data is collected.
+Oversized result sets return an error instead of silently truncating insights.
+
+The calendar header includes `Copy booking link` and `Open calendar scheduling
+settings`. Copy opens settings when no active personal link exists. Public
+`/app/book/:profile/:slug?` pages accept bookings without Macro sign-in. Uncertain
+calendar writes retain the booking and show its private receipt while automatic recovery runs.
+After a network response cannot be verified, `Check booking status` retries the original request;
+do not create a replacement booking. Receipt pages poll while the calendar update is pending. Visitors
+choose their time zone, date, time, and required details. The private
+`/app/booking/:id#token` receipt supports cancellation and rescheduling; preserve
+that private link. Rescheduling dates are labelled in the availability schedule's
+time zone. Calendar provider failures show an error; they never report a
+confirmed booking. Current integrations check hosts' connected calendars and
+write invitations/Google Meet through the existing calendar service.
+
 Week view with `New event`, `Choose calendar view` menu, prev/next week, `Search events`,
 `Calendar settings`, and a mini month picker in the side panel. Events require connecting a
 Google account (`Connect calendar`). The `Calendar settings` (gear) menu has an `Accounts`

@@ -1,0 +1,32 @@
+[package]
+name = "calendar_scheduling"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[features]
+default = []
+postgres = ["dep:sqlx"]
+inbound = ["dep:axum", "dep:macro_authorization"]
+calendar = ["dep:calendar_events", "dep:teams", "dep:macro_user_id"]
+
+[dependencies]
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+rootcause = { workspace = true }
+tracing = { workspace = true }
+axum = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
+calendar_events = { path = "../calendar_events", optional = true }
+teams = { path = "../teams", default-features = false, features = ["ports"], optional = true }
+macro_user_id = { path = "../macro_user_id", optional = true }
+
+[dev-dependencies]
+model_user = { path = "../model_user" }
+reqwest = { workspace = true }
+tokio = { workspace = true }

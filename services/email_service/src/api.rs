@@ -70,14 +70,24 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
     // Calendar mutations follow the calendar sync kill switch: without sync
     // a provider write would never be reflected locally.
     let calendar_router = if state.config.calendar_sync_enabled {
-        calendar_watch::router().merge(
-            calendar_events::inbound::mutation_router::calendar_mutation_router(
-                CalendarMutationRouterState::new(
-                    state.calendar_mutation_service.clone(),
-                    state.authorization_state.clone(),
+        calendar_watch::router()
+            .nest(
+                "/scheduling",
+                calendar_scheduling::inbound::router::router(
+                    calendar_scheduling::inbound::router::RouterState::new(
+                        state.scheduling_service.clone(),
+                        state.authorization_state.clone(),
+                    ),
                 ),
-            ),
-        )
+            )
+            .merge(
+                calendar_events::inbound::mutation_router::calendar_mutation_router(
+                    CalendarMutationRouterState::new(
+                        state.calendar_mutation_service.clone(),
+                        state.authorization_state.clone(),
+                    ),
+                ),
+            )
     } else {
         calendar_watch::router()
     };

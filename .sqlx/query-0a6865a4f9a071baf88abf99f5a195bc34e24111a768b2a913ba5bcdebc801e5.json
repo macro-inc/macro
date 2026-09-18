@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE scheduling_public_budget SET window_start = now() - interval '2 hours' WHERE profile_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0a6865a4f9a071baf88abf99f5a195bc34e24111a768b2a913ba5bcdebc801e5"
+}

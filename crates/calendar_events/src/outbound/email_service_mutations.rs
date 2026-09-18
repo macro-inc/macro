@@ -172,6 +172,7 @@ fn create_body(
         "reminders": draft.reminders,
         "conference": draft.conference,
         "outOfOffice": draft.out_of_office,
+        "idempotencyKey": draft.idempotency_key,
     })
 }
 
