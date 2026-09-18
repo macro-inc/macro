@@ -278,10 +278,6 @@ service; the frontend alone cannot test their hosted path.
 
 ## Create and type
 
-Editable document headings show their Markdown level (`#` through `######`) beside
-the heading text. These visual markers are omitted from stored content, clipboard
-text, read-only views, and print output.
-
 1. `Create` → `Document D`. The app navigates to `/app/md/<uuid>` with the **title field
    focused**.
 2. `type_text` the title, then `submitKey: "Enter"` to drop into the body.
