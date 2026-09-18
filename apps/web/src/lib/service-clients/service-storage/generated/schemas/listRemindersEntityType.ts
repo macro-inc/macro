@@ -27,4 +27,5 @@ export const ListRemindersEntityType = {
   reminder: 'reminder',
   skill: 'skill',
   agent_session: 'agent_session',
+  database: 'database',
 } as const;

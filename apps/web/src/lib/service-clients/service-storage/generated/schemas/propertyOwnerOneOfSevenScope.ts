@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type PropertyOwnerOneOfFiveScope =
-  (typeof PropertyOwnerOneOfFiveScope)[keyof typeof PropertyOwnerOneOfFiveScope];
+export type PropertyOwnerOneOfSevenScope =
+  (typeof PropertyOwnerOneOfSevenScope)[keyof typeof PropertyOwnerOneOfSevenScope];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const PropertyOwnerOneOfFiveScope = {
-  database: 'database',
+export const PropertyOwnerOneOfSevenScope = {
+  system: 'system',
 } as const;

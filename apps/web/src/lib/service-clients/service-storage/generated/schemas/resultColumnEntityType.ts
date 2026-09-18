@@ -6,9 +6,9 @@
  */
 
 /**
- * Type of the entity to attach the reminder to. Requires `entityId`.
+ * Entity type of id values, when known — drives chip rendering.
  */
-export type CreateReminderRequestEntityType =
+export type ResultColumnEntityType =
   | null
   | 'user'
   | 'chat'

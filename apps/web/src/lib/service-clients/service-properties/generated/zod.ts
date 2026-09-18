@@ -83,12 +83,22 @@ export const listPropertiesResponseItem = zod
               .describe('Team-scoped property.'),
             zod
               .object({
+                database_id: zod.uuid(),
+                scope: zod.enum(['database']),
+              })
+              .describe(
+                'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+              ),
+            zod
+              .object({
                 scope: zod.enum(['system']),
               })
-              .describe('System-owned property (no user or team owner).'),
+              .describe(
+                'System-owned property (no user, team, or database owner).'
+              ),
           ])
           .describe(
-            'Defines who owns a property - user-scoped, team-scoped, or system.'
+            'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
           ),
         specific_entity_type: zod
           .union([
@@ -163,12 +173,22 @@ export const listPropertiesResponseItem = zod
                   .describe('Team-scoped property.'),
                 zod
                   .object({
+                    database_id: zod.uuid(),
+                    scope: zod.enum(['database']),
+                  })
+                  .describe(
+                    'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+                  ),
+                zod
+                  .object({
                     scope: zod.enum(['system']),
                   })
-                  .describe('System-owned property (no user or team owner).'),
+                  .describe(
+                    'System-owned property (no user, team, or database owner).'
+                  ),
               ])
               .describe(
-                'Defines who owns a property - user-scoped, team-scoped, or system.'
+                'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
               ),
             specific_entity_type: zod
               .union([
@@ -393,12 +413,22 @@ export const getPropertyDefinitionResponse = zod
           .describe('Team-scoped property.'),
         zod
           .object({
+            database_id: zod.uuid(),
+            scope: zod.enum(['database']),
+          })
+          .describe(
+            'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+          ),
+        zod
+          .object({
             scope: zod.enum(['system']),
           })
-          .describe('System-owned property (no user or team owner).'),
+          .describe(
+            'System-owned property (no user, team, or database owner).'
+          ),
       ])
       .describe(
-        'Defines who owns a property - user-scoped, team-scoped, or system.'
+        'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
       ),
     specific_entity_type: zod
       .union([
@@ -680,14 +710,22 @@ export const getBulkEntityPropertiesResponse = zod.record(
                       .describe('Team-scoped property.'),
                     zod
                       .object({
+                        database_id: zod.uuid(),
+                        scope: zod.enum(['database']),
+                      })
+                      .describe(
+                        'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+                      ),
+                    zod
+                      .object({
                         scope: zod.enum(['system']),
                       })
                       .describe(
-                        'System-owned property (no user or team owner).'
+                        'System-owned property (no user, team, or database owner).'
                       ),
                   ])
                   .describe(
-                    'Defines who owns a property - user-scoped, team-scoped, or system.'
+                    'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
                   ),
                 specific_entity_type: zod
                   .union([
@@ -995,12 +1033,22 @@ export const getEntityPropertiesResponse = zod
                     .describe('Team-scoped property.'),
                   zod
                     .object({
+                      database_id: zod.uuid(),
+                      scope: zod.enum(['database']),
+                    })
+                    .describe(
+                      'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+                    ),
+                  zod
+                    .object({
                       scope: zod.enum(['system']),
                     })
-                    .describe('System-owned property (no user or team owner).'),
+                    .describe(
+                      'System-owned property (no user, team, or database owner).'
+                    ),
                 ])
                 .describe(
-                  'Defines who owns a property - user-scoped, team-scoped, or system.'
+                  'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
                 ),
               specific_entity_type: zod
                 .union([
@@ -1654,12 +1702,22 @@ export const listTagsResponseItem = zod
               .describe('Team-scoped property.'),
             zod
               .object({
+                database_id: zod.uuid(),
+                scope: zod.enum(['database']),
+              })
+              .describe(
+                'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+              ),
+            zod
+              .object({
                 scope: zod.enum(['system']),
               })
-              .describe('System-owned property (no user or team owner).'),
+              .describe(
+                'System-owned property (no user, team, or database owner).'
+              ),
           ])
           .describe(
-            'Defines who owns a property - user-scoped, team-scoped, or system.'
+            'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
           )
           .and(
             zod.object({
@@ -1795,12 +1853,22 @@ export const ensureTagSetResponse = zod
               .describe('Team-scoped property.'),
             zod
               .object({
+                database_id: zod.uuid(),
+                scope: zod.enum(['database']),
+              })
+              .describe(
+                'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+              ),
+            zod
+              .object({
                 scope: zod.enum(['system']),
               })
-              .describe('System-owned property (no user or team owner).'),
+              .describe(
+                'System-owned property (no user, team, or database owner).'
+              ),
           ])
           .describe(
-            'Defines who owns a property - user-scoped, team-scoped, or system.'
+            'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
           )
           .and(
             zod.object({

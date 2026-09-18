@@ -5,10 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type PropertyOwnerOneOfFiveScope =
-  (typeof PropertyOwnerOneOfFiveScope)[keyof typeof PropertyOwnerOneOfFiveScope];
+export type ColumnBindingRequestOneOfKind =
+  (typeof ColumnBindingRequestOneOfKind)[keyof typeof ColumnBindingRequestOneOfKind];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const PropertyOwnerOneOfFiveScope = {
-  database: 'database',
+export const ColumnBindingRequestOneOfKind = {
+  new: 'new',
 } as const;
