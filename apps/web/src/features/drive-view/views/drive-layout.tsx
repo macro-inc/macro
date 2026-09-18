@@ -10,6 +10,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import FolderIcon from '@phosphor/folder.svg';
 import SearchIcon from '@phosphor/magnifying-glass.svg';
+import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import { Button, Dropdown } from '@ui';
 import { createMemo, createSignal, type JSX, Show } from 'solid-js';
 import { DriveBreadcrumbsOutlet } from '../components/DriveBreadcrumbs';
@@ -43,6 +44,10 @@ export function DriveLayout(props: {
   onToggleFolder: (id: string) => void;
   onFavoritesOpen: (open: boolean) => void;
   onRootOpen: (open: boolean) => void;
+  /** Tag option ids narrowing the current location. */
+  activeTagIds: readonly string[];
+  onTags: (ids: string[]) => void;
+  onTagsOpen: (open: boolean) => void;
   createMenu: () => JSX.Element;
   favorites: () => JSX.Element;
   locationMenu: DriveLocationMenu;
@@ -178,6 +183,13 @@ export function DriveLayout(props: {
           </ViewSidebar.Nav>
         </CollapsibleSection.Content>
       </CollapsibleSection.Root>
+      <SidebarTagsSection
+        activeIds={props.activeTagIds}
+        onActiveIdsChange={props.onTags}
+        open={props.state.tagsOpen}
+        onOpenChange={props.onTagsOpen}
+        onNavigate={() => setNavigationOpen(false)}
+      />
     </>
   );
 
