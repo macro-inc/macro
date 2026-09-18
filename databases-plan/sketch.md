@@ -72,3 +72,7 @@ touching Postgres.
 - Naming: users only ever see "table"; launcher letter (`b`? `t`?).
 - Where the query endpoint lives (start in document_storage_service, extract later).
 - Rate/size limits for chips (per-doc query budget, result row caps).
+
+## Multiplayer
+
+Making table state CRDT-backed (Loro doc per table via `collab_surface`, Postgres as projection, SQL writes through the Durable Object) is scoped in [crdt-collaboration.md](crdt-collaboration.md).
