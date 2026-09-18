@@ -6736,6 +6736,106 @@
         }
       }
     },
+    "/dictation/transcribe": {
+      "post": {
+        "tags": ["dictation"],
+        "summary": "Transcribe a transient recording with OpenAI Whisper.",
+        "description": "Available to every signed-in user on every plan; does not consume chat\ncredits. Audio and transcripts are never persisted.",
+        "operationId": "transcribe_dictation",
+        "parameters": [
+          {
+            "name": "language",
+            "in": "query",
+            "description": "ISO 639-1 language hint",
+            "required": false,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "description": "Encoded WebM, MP4, Ogg, or WAV audio up to 8 MiB and five minutes",
+          "content": {
+            "audio/webm": {
+              "schema": {
+                "type": "string",
+                "format": "binary",
+                "description": "OpenAPI representation of the raw encoded audio body extracted as `Bytes`."
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TranscribeResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Empty, oversized, or malformed request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Only signed-in users may dictate",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "413": {
+            "description": "Body exceeds 8 MiB"
+          },
+          "415": {
+            "description": "Unsupported audio container",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Per-user rate limit or provider capacity exceeded"
+          },
+          "502": {
+            "description": "Provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/documents": {
       "get": {
         "tags": ["document"],
@@ -30349,6 +30449,17 @@
           "user_id": {
             "type": "string",
             "description": "User who owns this discussion, including imported discussions."
+          }
+        }
+      },
+      "TranscribeResponse": {
+        "type": "object",
+        "description": "Transcription result.",
+        "required": ["text"],
+        "properties": {
+          "text": {
+            "type": "string",
+            "description": "Recognized text."
           }
         }
       },

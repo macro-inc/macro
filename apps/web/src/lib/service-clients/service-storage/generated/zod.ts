@@ -5773,6 +5773,21 @@ export const putCrmTeamStagesResponse = zod
   .describe("The team's custom stage set.");
 
 /**
+ * Available to every signed-in user on every plan; does not consume chat
+credits. Audio and transcripts are never persisted.
+ * @summary Transcribe a transient recording with OpenAI Whisper.
+ */
+export const transcribeDictationQueryParams = zod.object({
+  language: zod.string().optional().describe('ISO 639-1 language hint'),
+});
+
+export const transcribeDictationResponse = zod
+  .object({
+    text: zod.string().describe('Recognized text.'),
+  })
+  .describe('Transcription result.');
+
+/**
  * @summary Gets the users documents to populate their recent document list
  */
 export const getUserDocumentsHandlerQueryParams = zod.object({
