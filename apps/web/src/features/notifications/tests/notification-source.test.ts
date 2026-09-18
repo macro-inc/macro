@@ -237,6 +237,143 @@ describe('createNotificationSource', () => {
     }
   );
 
+  it.each(['seen', 'done'] as const)(
+    'retains %s intent on a stale Soup edge when its feed row disappears or confirms the write',
+    async (state) => {
+      mocks.graphqlEnabled = true;
+      const row = notification(`edge-leaves-feed-${state}`, 'document', 'task');
+      const [raw, setRaw] = createSignal<UnifiedNotification[]>([row]);
+      const [pending, setPending] = createSignal(true);
+      let finish!: () => void;
+      const mutation =
+        state === 'seen' ? mocks.seenMutation : mocks.doneMutation;
+      mutation.mutateAsync.mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          })
+      );
+      mocks.notificationsQuery = {
+        get data() {
+          return raw();
+        },
+        get isFetching() {
+          return pending();
+        },
+        transport: 'graphql',
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      const edge = () => source.withLocalOverrides!(row);
+      const result =
+        state === 'seen' ? source.markAsRead(row) : source.markAsDone(row);
+      try {
+        expect(edge().state).toBe(state);
+        setRaw([]);
+        await Promise.resolve();
+        expect(edge().state).toBe(state);
+        finish();
+        await result;
+        setPending(false);
+        setRaw([{ ...row, state }]);
+        await Promise.resolve();
+        // A quiet, acknowledged feed is not proof that every Soup edge caught up.
+        expect(edge().state).toBe(state);
+        setRaw([]);
+        await Promise.resolve();
+        expect(edge().state).toBe(state);
+        expect(row.state).toBe('unseen');
+      } finally {
+        finish();
+        await result;
+        setDoneOverride([row.id], undefined);
+        dispose();
+      }
+    }
+  );
+
+  it.each(['seen', 'done'] as const)(
+    'rolls back a failed %s action after its notification leaves the feed',
+    async (state) => {
+      mocks.graphqlEnabled = true;
+      const row = notification(
+        `edge-leaves-feed-rollback-${state}`,
+        'document',
+        'task'
+      );
+      const [raw, setRaw] = createSignal<UnifiedNotification[]>([row]);
+      let fail!: (error: Error) => void;
+      const mutation =
+        state === 'seen' ? mocks.seenMutation : mocks.doneMutation;
+      mutation.mutateAsync.mockImplementationOnce(
+        () =>
+          new Promise<void>((_resolve, reject) => {
+            fail = reject;
+          })
+      );
+      mocks.notificationsQuery = {
+        get data() {
+          return raw();
+        },
+        isFetching: false,
+        transport: 'graphql',
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      const result =
+        state === 'seen' ? source.markAsRead(row) : source.markAsDone(row);
+      const rejected = expect(result).rejects.toThrow('failed');
+      try {
+        setRaw([]);
+        await Promise.resolve();
+        expect(source.withLocalOverrides!(row).state).toBe(state);
+        fail(new Error('failed'));
+        await rejected;
+        expect(source.withLocalOverrides!(row).state).toBe('unseen');
+      } finally {
+        fail(new Error('failed'));
+        await rejected;
+        dispose();
+      }
+    }
+  );
+
+  it.each(['seen', 'done'] as const)(
+    'still prunes absent %s overrides for REST-only readers',
+    async (state) => {
+      const row = notification(`rest-leaves-feed-${state}`, 'document', 'task');
+      const [raw, setRaw] = createSignal<UnifiedNotification[]>([row]);
+      mocks.notificationsQuery = {
+        get data() {
+          return raw();
+        },
+        isFetching: false,
+        transport: 'rest',
+      };
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      try {
+        await (state === 'seen'
+          ? source.markAsRead(row)
+          : source.markAsDone(row));
+        expect(source.notifications()[0].state).toBe(state);
+        setRaw([]);
+        await Promise.resolve();
+        setRaw([row]);
+        expect(source.notifications()[0].state).toBe('unseen');
+      } finally {
+        setDoneOverride([row.id], undefined);
+        dispose();
+      }
+    }
+  );
+
   it('keeps done through a late seen action, and reopens as seen across stale snapshots', async () => {
     const row = notification('lifecycle-stale', 'document', 'doc');
     mocks.notificationsQuery = {

@@ -159,8 +159,9 @@ export function setDoneOverride(
 // snapshot may present the notification as unread: a full refetch reads its
 // pages over several seconds and a page read before the mark's POST commits
 // resurrects pre-write state when it lands. Entries are removed on mutation
-// failure (that rollback is deliberate) and pruned once the cache confirms
-// the seen state at a quiet moment.
+// failure (that rollback is deliberate). REST-only overrides can be pruned
+// once the feed confirms the seen state at a quiet moment; GraphQL Soup edges
+// can still hold older snapshots independently of that feed.
 type SeenOverride = { viewedAt: string; token: symbol };
 const [seenOverrides, setSeenOverrides] = createRoot(() =>
   createStore<Record<string, SeenOverride | undefined>>({})
@@ -254,30 +255,20 @@ export function createNotificationSource(
     return raw.map(withNotificationOverrides);
   });
 
-  // Prune overrides for notifications that are no longer in the query cache
-  // (aged out of QUERY_LIMIT, deleted server-side) so the map doesn't grow
-  // unbounded. Overrides whose value happens to match the cache are NOT
-  // pruned — during an in-flight mutation the cache may still hold the
-  // pre-mutation value and a stale fetch could flip it back before the
-  // API lands.
-  let previousDoneQueryIds = new Set<string>();
+  // Only the REST feed owns all notification readers. In GraphQL mode an id
+  // leaving (or being confirmed by) this feed says nothing about still-mounted
+  // Soup edges. Keep their intent until explicitly cleared, replaced, or rolled
+  // back rather than letting pagination resurrect stale edge state.
   createEffect(() => {
+    if (isFeatureEnabled(enableGraphqlSoup)) return;
     const raw = notificationsQuery.data;
     if (!raw) return;
     const presentIds = new Set(raw.map((n) => n.id));
-    const previousIds = previousDoneQueryIds;
-    previousDoneQueryIds = presentIds;
     const overrides = doneOverrides();
     if (overrides.size === 0) return;
     const toPrune: string[] = [];
     for (const id of overrides.keys()) {
-      // A Soup edge can exist outside this paginated notification feed.
-      // Do not discard its local intent just because this source never saw it.
-      if (
-        !presentIds.has(id) &&
-        (!isFeatureEnabled(enableGraphqlSoup) || previousIds.has(id))
-      )
-        toPrune.push(id);
+      if (!presentIds.has(id)) toPrune.push(id);
     }
     if (toPrune.length > 0) setDoneOverride(toPrune, undefined);
   });
@@ -287,12 +278,10 @@ export function createNotificationSource(
   // while a mark is in flight the seen cache row is the optimistic write, and
   // a fetch that is still running may hold a pre-write snapshot that will
   // land later; in both cases the override must survive.
-  let previousSeenQueryIds = new Set<string>();
   createEffect(() => {
+    if (isFeatureEnabled(enableGraphqlSoup)) return;
     const raw = notificationsQuery.data;
     if (!raw) return;
-    const previousIds = previousSeenQueryIds;
-    previousSeenQueryIds = new Set(raw.map((notification) => notification.id));
     const seenIds = Object.keys(seenOverrides);
     if (seenIds.length === 0) return;
     const quiet =
@@ -302,10 +291,7 @@ export function createNotificationSource(
     const toPrune: string[] = [];
     for (const id of seenIds) {
       const row = byId.get(id);
-      if (!row) {
-        if (!isFeatureEnabled(enableGraphqlSoup) || previousIds.has(id))
-          toPrune.push(id);
-      } else if (row.state !== 'unseen' && quiet) toPrune.push(id);
+      if (!row || (row.state !== 'unseen' && quiet)) toPrune.push(id);
     }
     if (toPrune.length > 0) setSeenOverride(toPrune, undefined);
   });

@@ -8,7 +8,6 @@ import type {
   ItemPreviewQueryVariables,
   ItemPreviewsQuery,
 } from '@service-storage/graphql/generated/graphql';
-import { parse, visit } from 'graphql';
 import { type Accessor, createRoot, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -657,9 +656,17 @@ describe('GraphQL item previews', () => {
     });
   });
 
-  it.each(['document', 'chat', 'project'] as const)(
-    'optimistic %s rename writes the canonical name field consumed by Soup, not only displayName',
-    async (type) => {
+  it.each([
+    { type: 'document', nameKey: 'documentName' },
+    { type: 'chat', nameKey: 'chatName' },
+    { type: 'project', nameKey: 'projectName' },
+    { type: 'channel', nameKey: 'channelDisplayName' },
+    { type: 'call', nameKey: 'customName' },
+    { type: 'crm_company', nameKey: 'companyName' },
+    { type: 'email', nameKey: 'emailName' },
+  ] as const)(
+    'optimistic $type rename writes $nameKey, not only displayName',
+    async ({ type, nameKey }) => {
       const writes: Parameters<CacheHost['writeQuery']>[0][] = [];
       getGraphqlSoupCacheHostMock.mockReturnValue({
         disabled: false,
@@ -676,28 +683,16 @@ describe('GraphQL item previews', () => {
 
       expect(writes).toHaveLength(1);
       const write = writes[0];
-      // Resolve aliases through the emitted document. Soup reads name via
-      // documentName/chatName/projectName; updating displayName alone only
-      // changes previews and leaves the list's normalized name field stale.
-      const nameResponseKeys = new Set<string>();
-      visit(parse(write.query), {
-        Field(node) {
-          if (node.name.value === 'name') {
-            nameResponseKeys.add(node.alias?.value ?? node.name.value);
-          }
-        },
-      });
       const data = write.data as {
         user: { soup: { items: Array<Record<string, unknown>> } };
       };
       const target = data.user.soup.items.find(
         (item) => item.id === 'rename-target'
       );
-      expect(target).toBeDefined();
-      expect(
-        [...nameResponseKeys].some((key) => target?.[key] === 'Renamed'),
-        'The optimistic write must update the canonical GraphQL name field'
-      ).toBe(true);
+      expect(target).toMatchObject({
+        displayName: 'Renamed',
+        [nameKey]: 'Renamed',
+      });
     }
   );
 
