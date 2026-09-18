@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                feature,\n                user_id,\n                entity,\n                model,\n                input_tokens,\n                output_tokens,\n                price_per_million_in,\n                price_per_million_out,\n                total,\n                created_at\n            FROM ai_usage\n            WHERE ($1::timestamptz IS NULL OR created_at >= $1)\n              AND ($2::timestamptz IS NULL OR created_at < $2)\n              AND (cardinality($3::text[]) = 0 OR user_id = ANY($3))\n              AND (cardinality($4::text[]) = 0 OR feature = ANY($4))\n            ORDER BY created_at DESC\n            ",
+  "query": "\n            SELECT\n                feature,\n                user_id,\n                entity,\n                model,\n                input_tokens,\n                output_tokens,\n                audio_seconds,\n                price_per_million_in,\n                price_per_million_out,\n                price_per_audio_minute,\n                total,\n                created_at\n            FROM ai_usage\n            WHERE ($1::timestamptz IS NULL OR created_at >= $1)\n              AND ($2::timestamptz IS NULL OR created_at < $2)\n              AND (cardinality($3::text[]) = 0 OR user_id = ANY($3))\n              AND (cardinality($4::text[]) = 0 OR feature = ANY($4))\n            ORDER BY created_at DESC\n            ",
   "describe": {
     "columns": [
       {
@@ -35,21 +35,31 @@
       },
       {
         "ordinal": 6,
+        "name": "audio_seconds",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 7,
         "name": "price_per_million_in",
         "type_info": "Float4"
       },
       {
-        "ordinal": 7,
+        "ordinal": 8,
         "name": "price_per_million_out",
         "type_info": "Float4"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
+        "name": "price_per_audio_minute",
+        "type_info": "Float4"
+      },
+      {
+        "ordinal": 10,
         "name": "total",
         "type_info": "Float4"
       },
       {
-        "ordinal": 9,
+        "ordinal": 11,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
@@ -72,8 +82,10 @@
       true,
       true,
       true,
+      true,
+      true,
       false
     ]
   },
-  "hash": "cc6d835ae3a35891b84f625bc774d487f4907b7f4ac77a6b870113b7ea2581fb"
+  "hash": "40ce78006bc37d7088397407fae17e249fa9f8524426c950480b3df116d6729e"
 }

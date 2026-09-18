@@ -8,6 +8,12 @@ import { createResizeObserver } from '@solid-primitives/resize-observer';
  * `@core/component/AI/component/input/ChatInput.tsx`.
  */
 
+import {
+  DictationButton,
+  DictationFeedback,
+  DictationPanel,
+} from '@app/features/dictation/components/dictation-controls';
+import { createComposerDictation } from '@app/features/dictation/composer-dictation';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
@@ -88,10 +94,12 @@ export function AgentInput(props: AgentInputProps) {
     setHeight(element.getBoundingClientRect().height);
   });
   useTouchOutsideToDismissKeyboard(() => containerRef);
+  const dictation = createComposerDictation(() => editor.lexical);
 
   // Sending while busy is allowed — the service queues prompts behind the
   // running turn.
-  const canSend = () => markdown().trim().length > 0 && !props.disabled;
+  const canSend = () =>
+    markdown().trim().length > 0 && !props.disabled && !dictation.active();
 
   const send = () => {
     if (!canSend()) return;
@@ -106,6 +114,7 @@ export function AgentInput(props: AgentInputProps) {
   // most worth advancing. What does gate it is a stop already in flight:
   // repeating it just posts another cancel for the same turn.
   const canSendNext = () =>
+    !dictation.active() &&
     markdown().trim().length === 0 &&
     props.hasQueuedMessages === true &&
     !props.stopPending &&
@@ -201,13 +210,15 @@ export function AgentInput(props: AgentInputProps) {
       {/* h-auto beats Surface's size-full so the in-flow controls are not
           clipped over the editor (that was Auto sitting on the placeholder). */}
       <ComposerSurface
-        class="h-auto transition-[height] duration-150 ease-out motion-reduce:transition-none"
+        class="relative h-auto transition-[height] duration-150 ease-out motion-reduce:transition-none"
         style={{ height: height() === undefined ? undefined : `${height()}px` }}
       >
         {/* Desktop: one row, send right of the text. Touch: the text gets
             the whole width and the controls drop to a footer row (model
             left, send right) — the chat-tall / channel footer shape. */}
         <div
+          inert={dictation.active()}
+          classList={{ invisible: dictation.active() }}
           ref={setLayout}
           data-composer-compact={isCompact()}
           class="group/composer flex items-end data-[composer-compact=false]:flex-col data-[composer-compact=false]:items-stretch gap-[3.75px] p-[7.5px] min-h-[48.75px] touch:min-h-0 touch:flex-col touch:items-stretch touch:gap-0 touch:p-0"
@@ -241,7 +252,11 @@ export function AgentInput(props: AgentInputProps) {
             <Show when={isTouchDevice() && props.modelControl}>
               <div class="min-w-0">{props.modelControl}</div>
             </Show>
-            <div class="ml-auto shrink-0">
+            <div class="ml-auto flex shrink-0 items-center gap-[3.75px]">
+              <DictationButton
+                dictation={dictation}
+                disabled={props.disabled}
+              />
               <Show
                 when={canSendNext()}
                 fallback={
@@ -285,7 +300,9 @@ export function AgentInput(props: AgentInputProps) {
             </div>
           </div>
         </div>
+        <DictationPanel dictation={dictation} />
       </ComposerSurface>
+      <DictationFeedback dictation={dictation} />
     </div>
   );
 }

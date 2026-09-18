@@ -932,19 +932,30 @@ async fn run() -> anyhow::Result<()> {
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
 
-    // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
-    // (resolved from the `openai-key` secret at deploy time by the infra stack),
-    // the same way `document_cognition_service` consumes it. Fail fast if it's
-    // empty so the service never starts with a broken task-dedup embedder.
+    // MacroConfig reads the shared OPENAI_API_KEY from Doppler's APP_SECRETS_JSON
+    // or the local environment. Validate once before constructing consumers.
     let openai_api_key = config.openai_api_key.as_ref().to_owned();
     anyhow::ensure!(
         !openai_api_key.trim().is_empty(),
-        "OpenAI API key is required for task dedup embeddings",
+        "OpenAI API key is required for task dedup embeddings and dictation",
     );
     let cohere_api_key = config.cohere_api_key.as_ref().to_owned();
     anyhow::ensure!(
         !cohere_api_key.trim().is_empty(),
         "Cohere API key is required for task dedup reranking",
+    );
+    let dictation_state = dictation::inbound::axum_router::DictationRouterState::new(
+        dictation::domain::DictationServiceImpl::new(
+            dictation::outbound::WhisperTranscriber::new(&config.openai_api_key)?,
+            dictation::outbound::SymphoniaRecordingInspector,
+            ai_usage::pg_recorder(db.clone()),
+        ),
+        RateLimitServiceImpl {
+            repo: RedisRateLimitAdapter {
+                redis: redis_client.clone(),
+            },
+        },
+        authorization_state.clone(),
     );
     let task_dedup_service = Arc::new(TaskDedupService::new(
         TextEmbedding3Small::new(openai_api_key),
@@ -1427,6 +1438,7 @@ async fn run() -> anyhow::Result<()> {
         ));
 
     let api_context = ApiContext {
+        dictation_state,
         contacts_ingress: contacts_ingress.clone(),
         soup_router_state: SoupRouterState::from_arc(
             soup_service.clone(),

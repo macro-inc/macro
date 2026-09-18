@@ -150,6 +150,7 @@ use utoipa::OpenApi;
         terms_of_service = "https://macro.com/terms",
     ),
     paths(
+        dictation::inbound::axum_router::transcribe_handler,
         health::health_handler,
         calendar_events::inbound::axum_router::list_occurrences,
         calendar_events::inbound::axum_router::mention_previews,
@@ -720,6 +721,7 @@ use utoipa::OpenApi;
             webhook::domain::models::WebhookFilter,
             webhook::domain::models::WebhookStatus,
             webhook::domain::models::WebhookValidationTestEvent,
+            dictation::inbound::axum_router::TranscribeResponse,
 
             DocumentSubType,
 

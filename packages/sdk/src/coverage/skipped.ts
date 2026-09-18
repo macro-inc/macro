@@ -322,6 +322,8 @@ export const storageExcluded = [
   'postItemsSoupAstGrouped',
   'removeBotFromChannelByBot',
   'resolveChannelMessage',
+  // Composer dictation is an app-internal, user-only upload flow.
+  'transcribeDictation',
   'uploadExtractFolderHandler',
   'uploadFolderHandler',
   'upsertHistoryHandler',
