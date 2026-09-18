@@ -42,11 +42,6 @@ export function ChangesReadyCard(props: {
       </div>
       <div class="flex items-center gap-2 font-mono text-[11px] text-ink-placeholder">
         <span>{describeFileCount(props.fileCount)}</span>
-        <DiffChanges
-          variant="bars"
-          additions={props.additions}
-          deletions={props.deletions}
-        />
         <DiffChanges additions={props.additions} deletions={props.deletions} />
       </div>
       <div class="flex flex-wrap gap-1.5">

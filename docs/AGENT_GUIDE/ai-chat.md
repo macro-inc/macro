@@ -414,7 +414,7 @@ changes pane**. Below it a review bar reads `N of M files viewed` with a
 progress bar (`role="progressbar"`, `aria-label="Files viewed"`) and
 **Collapse all / Expand all** and **Mark all viewed / Clear viewed** buttons.
 The body is a file tree (`nav[aria-label="Changed files"]`, directories
-compressed along single-child chains, status letters A/M/D/R and +/− bars)
+compressed along single-child chains, status letters A/M/D/R and +/− counts)
 next to a stack of file cards. Each card's sticky header has a disclosure
 caret, the path, `+adds −dels`, a **Viewed** toggle (`aria-pressed`; marking a
 file viewed collapses it) and **Copy path**. Diffs render with Pierre; hover a

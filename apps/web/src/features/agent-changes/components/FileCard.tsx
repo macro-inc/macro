@@ -95,12 +95,6 @@ export function FileCard(props: {
         </button>
         <span class="flex shrink-0 items-center gap-2 text-[11px]">
           <DiffChanges
-            variant="bars"
-            additions={file().additions}
-            deletions={file().deletions}
-            class="max-sm:hidden"
-          />
-          <DiffChanges
             additions={file().additions}
             deletions={file().deletions}
           />

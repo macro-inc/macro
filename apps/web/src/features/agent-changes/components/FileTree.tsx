@@ -96,7 +96,6 @@ function Rows(props: {
               }
             >
               <DiffChanges
-                variant="bars"
                 additions={node.file.additions}
                 deletions={node.file.deletions}
               />
