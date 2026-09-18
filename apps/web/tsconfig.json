@@ -140,6 +140,9 @@
       "@block-calendar/*": [
         "./src/features/block-calendar/*"
       ],
+      "@block-database/*": [
+        "./src/features/block-database/*"
+      ],
       "@block-code/*": [
         "./src/features/block-code/*"
       ],

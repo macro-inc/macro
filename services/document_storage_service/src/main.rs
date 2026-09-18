@@ -1174,6 +1174,14 @@ async fn run() -> anyhow::Result<()> {
         ),
     ));
 
+    // Shared by the databases router and the unified entity-mutation router.
+    let databases_service = Arc::new(databases::outbound::build_service(
+        db.clone(),
+        databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+            conn_gateway_client.as_ref().clone(),
+        ),
+    ));
+
     let collab_surface_service = CollabSurfaceServiceImpl::new(
         Arc::new(PgCollabSurfaceRepo::new(db.clone())),
         Arc::new(LexicalSyncSurfaceInitializer::new(
@@ -1417,6 +1425,7 @@ async fn run() -> anyhow::Result<()> {
             call_service.clone(),
             Arc::new(email_service.clone()),
             project_service.clone(),
+            databases_service.clone(),
             entity_access_service.clone(),
             Arc::new(outbound::entity_mutation::DssEntityLifecycleAdapter::new(
                 db.clone(),
@@ -1455,6 +1464,11 @@ async fn run() -> anyhow::Result<()> {
         ),
         initiative_state: InitiativeRouterState::new(
             initiative_service,
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
+        databases_state: databases::inbound::axum_router::DatabasesRouterState::new(
+            databases_service,
             entity_access_service.clone(),
             authorization_state.clone(),
         ),

@@ -31,6 +31,15 @@ import { createDocumentHandler } from './CreateDocument';
 import { createProjectHandler } from './CreateProject';
 import { createTagHandler } from './CreateTag';
 import { getCompanyHandler, listCompaniesHandler } from './Crm';
+import {
+  addColumnHandler,
+  addColumnOptionsHandler,
+  createDatabaseHandler,
+  createTableHandler,
+  describeDatabaseHandler,
+  listDatabasesHandler,
+  queryDatabaseHandler,
+} from './DatabaseTools';
 import { deleteTagHandler } from './DeleteTag';
 import { displayResultsHandler } from './DisplayResults';
 import { editDocumentHandler } from './EditDocument';
@@ -127,6 +136,13 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   GetEntityProperties: getEntityPropertiesHandler,
   ListCompanies: listCompaniesHandler,
   ListImportEntities: listImportEntitiesHandler,
+  ListDatabases: listDatabasesHandler,
+  DescribeDatabase: describeDatabaseHandler,
+  QueryDatabase: queryDatabaseHandler,
+  CreateDatabase: createDatabaseHandler,
+  CreateTable: createTableHandler,
+  AddColumn: addColumnHandler,
+  AddColumnOptions: addColumnOptionsHandler,
   ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,

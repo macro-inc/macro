@@ -23,6 +23,7 @@ pub async fn get_property_definition(
             id,
             team_id,
             user_id,
+            database_id,
             display_name,
             data_type as "data_type: DataType",
             is_multi_select,
@@ -32,6 +33,8 @@ pub async fn get_property_definition(
             is_system
         FROM property_definitions
         WHERE id = $1
+          -- Database columns are not part of the shared property namespace.
+          AND database_id IS NULL
         "#,
         property_id
     )
@@ -43,6 +46,7 @@ pub async fn get_property_definition(
             id: row.id,
             team_id: row.team_id,
             user_id: row.user_id,
+            database_id: row.database_id,
             display_name: row.display_name,
             data_type: row.data_type,
             is_multi_select: row.is_multi_select,
@@ -75,6 +79,7 @@ pub async fn get_property_definition_with_owner(
             id,
             team_id,
             user_id,
+            database_id,
             display_name,
             data_type as "data_type: DataType",
             is_multi_select,
@@ -102,6 +107,7 @@ pub async fn get_property_definition_with_owner(
             id: row.id,
             team_id: row.team_id,
             user_id: row.user_id,
+            database_id: row.database_id,
             display_name: row.display_name,
             data_type: row.data_type,
             is_multi_select: row.is_multi_select,
@@ -129,6 +135,7 @@ pub async fn list_property_definitions(
             id,
             team_id,
             user_id,
+            database_id,
             display_name,
             data_type as "data_type: DataType",
             is_multi_select,
@@ -159,6 +166,7 @@ pub async fn list_property_definitions(
                 id: row.id,
                 team_id: row.team_id,
                 user_id: row.user_id,
+                database_id: row.database_id,
                 display_name: row.display_name,
                 data_type: row.data_type,
                 is_multi_select: row.is_multi_select,
@@ -189,6 +197,7 @@ pub async fn list_property_definitions_with_options(
             pd.id,
             pd.team_id,
             pd.user_id,
+            pd.database_id,
             pd.display_name,
             pd.data_type as "data_type: DataType",
             pd.is_multi_select,
@@ -226,6 +235,7 @@ pub async fn list_property_definitions_with_options(
         let owner = models_properties::PropertyOwner::from_optional_ids(
             row.team_id,
             row.user_id.clone(),
+            row.database_id,
             row.is_system,
         );
 
@@ -336,6 +346,7 @@ pub async fn create_property_definition(
             id,
             team_id,
             user_id,
+            database_id,
             display_name,
             data_type as "data_type: DataType",
             is_multi_select,
@@ -358,6 +369,7 @@ pub async fn create_property_definition(
         id: row.id,
         team_id: row.team_id,
         user_id: row.user_id,
+        database_id: row.database_id,
         display_name: row.display_name,
         data_type: row.data_type,
         is_multi_select: row.is_multi_select,
@@ -437,6 +449,7 @@ pub async fn get_tag_definition(
             id,
             team_id,
             user_id,
+            database_id,
             display_name,
             data_type as "data_type: DataType",
             is_multi_select,
@@ -464,6 +477,7 @@ pub async fn get_tag_definition(
             id: row.id,
             team_id: row.team_id,
             user_id: row.user_id,
+            database_id: row.database_id,
             display_name: row.display_name,
             data_type: row.data_type,
             is_multi_select: row.is_multi_select,
@@ -529,6 +543,7 @@ pub async fn get_caller_tag_definitions_with_options(
             pd.id,
             pd.team_id,
             pd.user_id,
+            pd.database_id,
             pd.display_name,
             pd.data_type as "data_type: DataType",
             pd.is_multi_select,
@@ -566,6 +581,7 @@ pub async fn get_caller_tag_definitions_with_options(
         let owner = models_properties::PropertyOwner::from_optional_ids(
             row.team_id,
             row.user_id.clone(),
+            row.database_id,
             row.is_system,
         );
 

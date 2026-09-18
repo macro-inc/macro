@@ -6,12 +6,14 @@
  */
 import type { PropertyOwnerOneOf } from './propertyOwnerOneOf';
 import type { PropertyOwnerOneOfFive } from './propertyOwnerOneOfFive';
+import type { PropertyOwnerOneOfSeven } from './propertyOwnerOneOfSeven';
 import type { PropertyOwnerOneOfThree } from './propertyOwnerOneOfThree';
 
 /**
- * Defines who owns a property - user-scoped, team-scoped, or system.
+ * Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.
  */
 export type PropertyOwner =
   | PropertyOwnerOneOf
   | PropertyOwnerOneOfThree
-  | PropertyOwnerOneOfFive;
+  | PropertyOwnerOneOfFive
+  | PropertyOwnerOneOfSeven;

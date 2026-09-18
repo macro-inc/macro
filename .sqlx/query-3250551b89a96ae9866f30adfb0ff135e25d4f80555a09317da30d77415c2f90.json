@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT source_row_id, target_row_id\n            FROM database_row_links\n            WHERE link_column_id = $1\n            ORDER BY position NULLS LAST, created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_row_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "target_row_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "3250551b89a96ae9866f30adfb0ff135e25d4f80555a09317da30d77415c2f90"
+}

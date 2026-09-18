@@ -615,6 +615,8 @@ export type GraphqlEntityType =
   | 'CRM_COMPANY'
   /** CRM contact entity. */
   | 'CRM_CONTACT'
+  /** Macro Database entity (a collection of user-defined tables). */
+  | 'DATABASE'
   /** Document entity. */
   | 'DOCUMENT'
   /** Email thread entity. */

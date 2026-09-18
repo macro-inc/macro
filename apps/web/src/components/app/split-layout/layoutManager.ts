@@ -86,6 +86,18 @@ export type SplitContent = {
 export type SplitContentType = SplitContent['type'];
 
 /**
+ * Build a bare content reference. The `type` literal union is wider than the
+ * 25 constituents TypeScript will distribute over a discriminated union, so
+ * `{ type, id }` no longer narrows on its own.
+ */
+export function contentReference(
+  type: SplitContentType,
+  id: string
+): SplitContent {
+  return type === 'component' ? { type, id } : { type, id };
+}
+
+/**
  * Why a split's mounted content changed. Read via `useNavigationCause` to
  * adjust behavior that depends on whether the user arrived fresh vs. via
  * back/forward (e.g. don't auto-focus the search bar on history navigation).
@@ -1815,7 +1827,7 @@ export function createSplitLayout(
   ): SplitHandle | undefined {
     const match = state.splits.find(
       (s) =>
-        (sameEntityContent(s.content, { type, id }) ||
+        (sameEntityContent(s.content, contentReference(type, id)) ||
           (s.content.type === type && s.content.id === id)) &&
         !isExcluded(s)
     );

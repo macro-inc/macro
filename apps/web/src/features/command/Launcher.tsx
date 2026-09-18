@@ -48,6 +48,7 @@ import type { Span } from '@macro-inc/observability';
 import ChatIcon from '@phosphor/chat.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
 import PlusIcon from '@phosphor/plus.svg';
+import { createDatabase } from '@queries/storage/databases';
 import { createProject } from '@queries/storage/projects';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -396,6 +397,14 @@ export function runCreateAction(
         shouldInsert,
       });
       return;
+    case 'database':
+      createBlock({
+        blockName: 'database',
+        loading: true,
+        createFn: () => createDatabase({ name: 'Untitled database', source }),
+        shouldInsert,
+      });
+      return;
     case 'code':
       createBlock({
         blockName: 'code',
@@ -535,6 +544,21 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     enabled: () => isFeatureEnabled(enableChatV3Agents),
     keyDownHandler: () => {
       runCreateAction('agent', { shouldInsert: pressedKeys().has('shift') });
+      return true;
+    },
+  },
+  {
+    label: 'Database',
+    icon: getIconConfig('database').icon,
+    description: 'Create table',
+    launcherHint: 'Rows, columns, and SQL',
+    keywords: ['new', 'make', 'add', 'database', 'table', 'db', 'sql'],
+    blockName: 'database',
+    hotkeyToken: TOKENS.create.database,
+    altHotkeyToken: TOKENS.create.databaseNewSplit,
+    hotkey: 'b',
+    keyDownHandler: () => {
+      runCreateAction('database', { shouldInsert: pressedKeys().has('shift') });
       return true;
     },
   },

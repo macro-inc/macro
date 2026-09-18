@@ -449,7 +449,7 @@ export type PropertyOptionValue = {
 };
 
 /**
- * Defines who owns a property - user-scoped, team-scoped, or system.
+ * Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.
  */
 export type PropertyOwner = {
     scope: 'user';
@@ -457,6 +457,9 @@ export type PropertyOwner = {
 } | {
     scope: 'team';
     team_id: string;
+} | {
+    database_id: string;
+    scope: 'database';
 } | {
     scope: 'system';
 };

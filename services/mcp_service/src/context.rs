@@ -343,14 +343,15 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
     // Channel messages sent through MCP tools dispatch the same side effects
     // as the document-storage channel API, so mentions and replies notify
     // recipients and stream to connected clients.
+    let connection_gateway = Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
+        config.internal_api_key.to_string(),
+        ConnectionGatewayUrl::new()?.to_string(),
+    ));
     let channel_tool_context = ai_tools::build_channel_tool_context_with_side_effects(
         db.clone(),
         lexical_client.clone(),
         ai_tools::ChannelSideEffectClients {
-            connection_gateway: Arc::new(connection_gateway_client::ConnectionGatewayClient::new(
-                config.internal_api_key.to_string(),
-                ConnectionGatewayUrl::new()?.to_string(),
-            )),
+            connection_gateway: connection_gateway.clone(),
             sqs: queue_aws_client,
             macro_event_broker: macro_event_broker.clone(),
         },
@@ -393,6 +394,15 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
         reminders_tool_context: ai_tools::build_reminders_tool_context(
             db.clone(),
             entity_access_service.clone(),
+        ),
+        databases_tool_context: ai_tools::build_databases_tool_context(
+            db.clone(),
+            entity_access_service.clone(),
+            ai_tools::ToolTableEventPublisher::Gateway(
+                databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+                    connection_gateway.as_ref().clone(),
+                ),
+            ),
         ),
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,

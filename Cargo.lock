@@ -682,6 +682,7 @@ dependencies = [
  "contacts",
  "cool_asserts",
  "crm",
+ "databases",
  "dateparser",
  "documents",
  "email",
@@ -2667,6 +2668,26 @@ dependencies = [
  "num-bigint",
  "num-integer",
  "num-traits",
+]
+
+[[package]]
+name = "bindgen"
+version = "0.69.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "271383c67ccabffb7381723dea0672a673f292304fcb45c01cc648c7a8d58088"
+dependencies = [
+ "bitflags 2.11.1",
+ "cexpr",
+ "clang-sys",
+ "itertools 0.12.1",
+ "lazy_static",
+ "lazycell",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "rustc-hash 1.1.0",
+ "shlex",
+ "syn 2.0.117",
 ]
 
 [[package]]
@@ -4962,6 +4983,44 @@ dependencies = [
 ]
 
 [[package]]
+name = "databases"
+version = "0.1.0"
+dependencies = [
+ "ai_toolset",
+ "anyhow",
+ "async-trait",
+ "axum",
+ "chrono",
+ "connection_gateway_client",
+ "entity_access",
+ "entity_access_db_utils",
+ "entity_mutation",
+ "fallible-streaming-iterator",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_env_var",
+ "macro_user_id",
+ "macro_uuid",
+ "model-entity",
+ "model-error-response",
+ "models_properties",
+ "properties",
+ "rand 0.9.4",
+ "rootcause",
+ "rusqlite",
+ "schemars 1.2.1",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "dataloss_prevention_handler"
 version = "0.1.0"
 dependencies = [
@@ -5348,6 +5407,7 @@ dependencies = [
  "connection_gateway_client",
  "cookie",
  "crm",
+ "databases",
  "document_storage_service_client",
  "documents",
  "doppleganger",
@@ -5474,6 +5534,7 @@ dependencies = [
  "cool_asserts",
  "cowlike",
  "crm",
+ "databases",
  "document_sub_type",
  "documents",
  "doppler-config",
@@ -6678,6 +6739,12 @@ name = "fallible-iterator"
 version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2acce4a10f12dc2fb14a218589d4f1f62ef011b2d0cc4b3cb1bba8e94da14649"
+
+[[package]]
+name = "fallible-streaming-iterator"
+version = "0.1.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7360491ce676a36bf9bb3c56c1aa791658183a54d2744120f27285738d90465a"
 
 [[package]]
 name = "fancy-regex"
@@ -7972,6 +8039,15 @@ dependencies = [
  "allocator-api2 0.2.21",
  "equivalent",
  "foldhash 0.2.0",
+]
+
+[[package]]
+name = "hashlink"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6ba4ff7128dee98c7dc9794b6a411377e1404dba1c97deb8d1a55297bd25d8af"
+dependencies = [
+ "hashbrown 0.14.5",
 ]
 
 [[package]]
@@ -9481,6 +9557,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "lazycell"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "830d08ce1d1d941e6b30645f1a0eb5643013d835ce3779a5fc208261dbe10f55"
+
+[[package]]
 name = "leb128"
 version = "0.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9608,6 +9690,8 @@ version = "0.30.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2e99fb7a497b1e3339bc746195567ed8d3e24945ecd636e3619d20b9de9e9149"
 dependencies = [
+ "bindgen 0.69.5",
+ "cc",
  "pkg-config",
  "vcpkg",
 ]
@@ -10635,6 +10719,7 @@ dependencies = [
  "connection_gateway_client",
  "crm",
  "database_env_vars",
+ "databases",
  "documents",
  "doppler-config",
  "email",
@@ -14386,7 +14471,7 @@ name = "rs-libreoffice-bindings"
 version = "0.0.7"
 source = "git+https://github.com/macro-inc/rs-libreoffice-bindings?rev=056a40ddfac1d9650be30b9f0b4b934e9266c7dc#056a40ddfac1d9650be30b9f0b4b934e9266c7dc"
 dependencies = [
- "bindgen",
+ "bindgen 0.71.1",
  "cc",
 ]
 
@@ -14409,6 +14494,20 @@ dependencies = [
  "spki",
  "subtle",
  "zeroize",
+]
+
+[[package]]
+name = "rusqlite"
+version = "0.32.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7753b721174eb8ff87a9a0e799e2d7bc3749323e773db92e0984debb00019d6e"
+dependencies = [
+ "bitflags 2.11.1",
+ "fallible-iterator 0.3.0",
+ "fallible-streaming-iterator",
+ "hashlink 0.9.1",
+ "libsqlite3-sys",
+ "smallvec",
 ]
 
 [[package]]
@@ -16083,7 +16182,7 @@ dependencies = [
  "futures-io",
  "futures-util",
  "hashbrown 0.15.5",
- "hashlink",
+ "hashlink 0.10.0",
  "indexmap 2.14.0",
  "log",
  "memchr",
