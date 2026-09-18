@@ -1288,6 +1288,8 @@ export * from './threadDeletedAt';
 export * from './threadOrigin';
 export * from './threadResponse';
 export * from './threadUpdatedAt';
+export * from './transcribeDictationParams';
+export * from './transcribeResponse';
 export * from './transcriptSegmentRequest';
 export * from './transcriptSegmentRequestDiarizedSpeakerId';
 export * from './transcriptSegmentRequestEmbedding';

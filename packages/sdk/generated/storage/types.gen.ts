@@ -9213,6 +9213,16 @@ export type ThreadResponse = {
 };
 
 /**
+ * Transcription result.
+ */
+export type TranscribeResponse = {
+    /**
+     * Recognized text.
+     */
+    text: string;
+};
+
+/**
  * A transcript segment from LiveKit Inference STT.
  */
 export type TranscriptSegmentRequest = {
@@ -12352,6 +12362,60 @@ export type PutCrmTeamStagesResponses = {
 };
 
 export type PutCrmTeamStagesResponse = PutCrmTeamStagesResponses[keyof PutCrmTeamStagesResponses];
+
+export type TranscribeDictationData = {
+    /**
+     * OpenAPI representation of the raw encoded audio body extracted as `Bytes`.
+     */
+    body: Blob | File;
+    path?: never;
+    query?: {
+        /**
+         * ISO 639-1 language hint
+         */
+        language?: string;
+    };
+    url: '/dictation/transcribe';
+};
+
+export type TranscribeDictationErrors = {
+    /**
+     * Empty, oversized, or malformed request
+     */
+    400: ErrorResponse;
+    /**
+     * Missing or invalid credentials
+     */
+    401: ErrorResponse;
+    /**
+     * Only signed-in users may dictate
+     */
+    403: ErrorResponse;
+    /**
+     * Body exceeds 8 MiB
+     */
+    413: unknown;
+    /**
+     * Unsupported audio container
+     */
+    415: ErrorResponse;
+    /**
+     * Per-user rate limit or provider capacity exceeded
+     */
+    429: unknown;
+    /**
+     * Provider failure
+     */
+    502: ErrorResponse;
+};
+
+export type TranscribeDictationError = TranscribeDictationErrors[keyof TranscribeDictationErrors];
+
+export type TranscribeDictationResponses = {
+    200: TranscribeResponse;
+};
+
+export type TranscribeDictationResponse = TranscribeDictationResponses[keyof TranscribeDictationResponses];
 
 export type GetUserDocumentsHandlerData = {
     body?: never;
