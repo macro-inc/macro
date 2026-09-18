@@ -273,7 +273,7 @@ async fn maps_domain_errors_to_status_codes_without_leaking_content() {
             DictationError::UnsupportedAudio,
             StatusCode::UNSUPPORTED_MEDIA_TYPE,
         ),
-        (DictationError::Busy, StatusCode::TOO_MANY_REQUESTS),
+        (DictationError::Busy, StatusCode::SERVICE_UNAVAILABLE),
         (DictationError::Provider, StatusCode::BAD_GATEWAY),
     ];
     for (error, status) in cases {
@@ -288,6 +288,13 @@ async fn maps_domain_errors_to_status_codes_without_leaking_content() {
             )
             .await;
         assert_eq!(response.status(), status);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::RETRY_AFTER)
+                .map(|value| value.to_str().unwrap()),
+            (status == StatusCode::SERVICE_UNAVAILABLE).then_some("1")
+        );
         assert_eq!(message(response).await, expected);
     }
 }

@@ -7,11 +7,11 @@
 import type { FeatureUsage } from './featureUsage';
 
 /**
- * The result of a usage query: per-feature breakdown plus a grand total.
+ * Per-feature breakdown and grand total.
  */
 export interface UsageSummary {
   /** Per-feature usage. */
   entries: FeatureUsage[];
-  /** Grand total cost across all features (USD). */
+  /** Grand total (USD). */
   total: number;
 }

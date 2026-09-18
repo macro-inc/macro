@@ -6369,10 +6369,20 @@
             }
           },
           "429": {
-            "description": "Per-user rate limit or provider capacity exceeded"
+            "description": "Per-user hourly rate limit exceeded"
           },
           "502": {
             "description": "Provider failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Transcription capacity exhausted; retry after the Retry-After delay",
             "content": {
               "application/json": {
                 "schema": {

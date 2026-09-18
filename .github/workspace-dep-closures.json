@@ -3182,6 +3182,7 @@
       "services/deleted_item_poller"
     ],
     "dictation": [
+      "crates/ai_usage",
       "crates/bot_id",
       "crates/bot_token",
       "crates/cowlike",
@@ -3193,6 +3194,7 @@
       "crates/macro_env",
       "crates/macro_env_var",
       "crates/macro_user_id",
+      "crates/macro_uuid",
       "crates/model-error-response",
       "crates/model_user",
       "crates/rate_limit",

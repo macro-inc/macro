@@ -958,6 +958,7 @@ async fn run() -> anyhow::Result<()> {
         dictation::domain::DictationServiceImpl::new(
             dictation::outbound::WhisperTranscriber::new(&config.openai_api_key)?,
             dictation::outbound::SymphoniaRecordingInspector,
+            ai_usage::pg_recorder(db.clone()),
         ),
         RateLimitServiceImpl {
             repo: RedisRateLimitAdapter {

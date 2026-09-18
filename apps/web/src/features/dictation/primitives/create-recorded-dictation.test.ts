@@ -57,7 +57,8 @@ describe('Whisper dictation', () => {
     expect(test.onConfirm).toHaveBeenCalledExactlyOnceWith('recognized words');
     expect(test.transcribe).toHaveBeenCalledExactlyOnceWith(
       audio,
-      expect.any(AbortSignal)
+      expect.any(AbortSignal),
+      test.trace
     );
     expect(test.result.phase()).toBe('idle');
     expect(test.result.message()).toBe('');
