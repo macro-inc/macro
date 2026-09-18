@@ -2,8 +2,9 @@
 """Read-only lifecycle/link smoke test for an installed Macro debug simulator app."""
 
 import argparse
+from dataclasses import dataclass
+from datetime import datetime, timezone
 import json
-import os
 from pathlib import Path
 import plistlib
 import re
@@ -18,11 +19,48 @@ COLD_SOURCE = "scene:willConnectToSession:options:"
 WARM_SOURCE = "scene:openURLContexts:"
 
 
-def event_counts(events, pid):
-    """Ignore other processes; distinguish link delivery from lifecycle events."""
+@dataclass(frozen=True)
+class ProcessIdentity:
+    pid: int
+    started_at: datetime
+
+
+def process_identity(pid):
+    # Use isolated Xcode Python for Darwin's libproc: Nix's ctypes/libffi can
+    # abort on macOS 27, and PYTHONPATH must not mix the two installations.
+    # The main runner and portable tests do not import platform-specific ctypes.
+    result = subprocess.run(
+        ["/usr/bin/python3", "-I", str(Path(__file__).with_name("process_identity.py")), str(pid)],
+        capture_output=True, text=True, check=True, timeout=10,
+    )
+    return ProcessIdentity(pid, datetime.fromisoformat(result.stdout.strip()))
+
+
+def check_process(process):
+    if process_identity(process.pid) != process:
+        raise AssertionError(f"Macro PID {process.pid} was reused by another process incarnation")
+
+
+def log_predicate(process):
+    # NSPredicate's NSDate numeric epoch is 2001-01-01, not Unix's 1970 epoch.
+    since = (process.started_at - datetime(2001, 1, 1, tzinfo=timezone.utc)).total_seconds()
+    return (
+        f'processIdentifier == {process.pid} AND date >= CAST({since:.6f}, "NSDate") AND '
+        '(eventMessage CONTAINS "emitting Opened" OR '
+        'eventMessage CONTAINS "mobile window resumed")'
+    )
+
+
+def event_counts(events, process):
+    """Count only events belonging to this PID's current incarnation."""
     counts = {"cold": 0, "warm": 0, "resumed": 0}
     for event in events:
-        if event.get("processID") != pid:
+        if event.get("processID") != process.pid:
+            continue
+        timestamp = datetime.fromisoformat(event["timestamp"])
+        if timestamp.tzinfo is None:
+            raise ValueError("Log timestamps must include their timezone")
+        if timestamp < process.started_at:
             continue
         message = event.get("eventMessage", "")
         if "emitting Opened" in message:
@@ -67,7 +105,7 @@ class Smoke:
         match = re.search(rf"{re.escape(APP)}: (\d+)", result.stdout)
         if not match:
             raise RuntimeError("simctl launch did not return Macro's PID")
-        return int(match.group(1))
+        return process_identity(int(match.group(1)))
 
     def stop(self):
         result = xcrun("simctl", "terminate", self.device, APP, check=False)
@@ -82,23 +120,23 @@ class Smoke:
               self.device, "--payload-url", url, APP)
         return self.launch()
 
-    def checkpoint(self, name, pid, cold, warm, resumed=None):
+    def checkpoint(self, name, process, cold, warm, resumed=None):
         time.sleep(self.settle)
-        # Simulator processes share the host PID namespace. Do not relaunch a
-        # crashed app just to check whether it survived a transition.
-        os.kill(pid, 0)
-        predicate = (
-            f"processIdentifier == {pid} AND "
-            '(eventMessage CONTAINS "emitting Opened" OR '
-            'eventMessage CONTAINS "mobile window resumed")'
-        )
+        # Simulator processes share the host PID namespace. Check the birth
+        # timestamp, not just liveness; never relaunch a crashed app to check it.
+        check_process(process)
+        predicate = log_predicate(process)
         raw = xcrun("simctl", "spawn", self.device, "log", "show", "--last",
                     "30m", "--debug", "--style", "json", "--predicate", predicate).stdout
         (self.output / f"{name}.json").write_text(raw)
         xcrun("simctl", "io", self.device, "screenshot",
               str(self.output / f"{name}.png"))
-        counts = event_counts(json.loads(raw), pid)
-        result = {"test": name, "pid": pid, **counts, "passed": False}
+        check_process(process)
+        counts = event_counts(json.loads(raw), process)
+        result = {
+            "test": name, "pid": process.pid,
+            "started_at": process.started_at.isoformat(), **counts, "passed": False,
+        }
         self.results.append(result)
         check_counts(counts, cold, warm, resumed)
         result["passed"] = True
@@ -110,17 +148,17 @@ class Smoke:
         self.checkpoint("normal", self.launch(), 0, 0)
 
         self.stop()
-        pid = self.link("macro://app/login")
-        self.checkpoint("cold-login", pid, 1, 0)
-        if self.link("macro://app/welcome") != pid:
+        process = self.link("macro://app/login")
+        self.checkpoint("cold-login", process, 1, 0)
+        if self.link("macro://app/welcome") != process:
             raise AssertionError("Warm link unexpectedly restarted Macro")
-        before = self.checkpoint("warm-welcome", pid, 1, 1)
+        before = self.checkpoint("warm-welcome", process, 1, 1)
 
         xcrun("simctl", "launch", self.device, "com.apple.mobilesafari")
         time.sleep(3)
-        if self.launch() != pid:
+        if self.launch() != process:
             raise AssertionError("Foregrounding unexpectedly restarted Macro")
-        self.checkpoint("resumed", pid, 1, 1, before["resumed"] + 1)
+        self.checkpoint("resumed", process, 1, 1, before["resumed"] + 1)
 
         self.stop()
         self.checkpoint("normal-after-links", self.launch(), 0, 0)

@@ -15,7 +15,8 @@ python3 -m unittest discover -s apps/web/tests/native/ios -p 'test_*.py' -v
 Checks the source/generated scene manifests, XcodeGen declaration, iOS 15
 minimum in Tauri/XcodeGen/Xcode, fork ownership/revision consistency, and the
 smoke runner's duplicate/missing-event and resume assertions. No Xcode, account,
-network, or simulator is needed for these checks.
+network, or simulator is needed for these checks. They also cover PID reuse,
+including two process incarnations born within the same second.
 
 ## Live simulator smoke
 
@@ -45,6 +46,14 @@ python3 apps/web/tests/native/ios/smoke.py \
 Use `--settle-seconds 20` on slower machines. The runner creates a private
 (mode 0700) temporary evidence directory and prints its path. Screenshots can
 contain real account data: keep them local and do not commit/upload them.
+
+Each launch records its PID and Darwin process start time (microsecond precision).
+Checkpoints recheck that identity before and after collecting evidence, reject
+exiting/zombie processes, and restrict logs to that process's start time. This
+prevents an older process with a reused PID from satisfying event counts.
+The identity is included in `results.json`. The small Darwin helper runs under
+isolated Xcode Python to avoid mixing Nix's Python/libffi with the system libraries;
+it needs no extra packages.
 
 Automated checks:
 
