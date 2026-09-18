@@ -299,6 +299,17 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Atomically update the UNREAD label assignments and the message/thread read flags.
+    /// `message_ids` must be the messages of the already-authorized thread and inbox.
+    /// An error leaves all three representations unchanged.
+    fn set_thread_read_state(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        message_ids: &[Uuid],
+        is_read: bool,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Update the read status for a batch of messages, verified by link_id.
     fn update_message_read_status_batch(
         &self,
