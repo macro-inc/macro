@@ -6,7 +6,6 @@ use std::time::Duration;
 
 use crate::config::Harness;
 use crate::outbound::acp_probe::{ProbeError, ProbeSubprocess, probe_subprocess};
-use crate::outbound::git_changes::WorkspaceChanges;
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Client, ConnectTo};
 use agent_runtime_protocol::domain::connection::{
     ConnectionError, ModelProbeHandler, RuntimeChannel, RuntimeConnection,
@@ -38,8 +37,7 @@ pub async fn bridge(
     let probes = HarnessModelProbes {
         process: probe_process(harness, cwd),
     };
-    let (mut runtime, acp) =
-        RuntimeConnection::connect_with_handlers(channel, probes, WorkspaceChanges::new(cwd));
+    let (mut runtime, acp) = RuntimeConnection::connect_with_model_probe_handler(channel, probes);
 
     let agent = AcpAgent::new(AcpAgentConfig::new(&harness.command).args(harness.args.clone()))
         // The wire tap: every ndjson line crossing the child's stdio, plus

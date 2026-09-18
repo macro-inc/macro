@@ -56,7 +56,6 @@ export function createChangesModel(options: {
         return current.previous;
       case 'loading':
       case 'load_error':
-      case 'unsupported':
       case 'not_ready':
       case 'none':
         return undefined;

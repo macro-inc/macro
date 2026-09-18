@@ -12,7 +12,6 @@ import type {
   QueryStatus,
 } from '../context/agent-changes-context';
 import type { Changeset, SessionChanges } from '../core/changeset';
-import type { PullRequestDraft } from '../core/pull-request';
 
 export const MOCK_PATCH = `diff --git a/apps/web/src/a.ts b/apps/web/src/a.ts
 index 1111111..2222222 100644
@@ -74,14 +73,12 @@ export type MockAgentChangesContext = AgentChangesContext & {
   opened: string[];
   notified: { message: string; tone: 'success' | 'failure' }[];
   refreshes: () => number;
-  drafts: () => number;
 };
 
 export function createMockAgentChangesContext(
   options: {
     summary?: SessionChanges;
     patch?: string;
-    draft?: PullRequestDraft;
     canSend?: boolean;
     sessionId?: string;
   } = {}
@@ -95,7 +92,6 @@ export function createMockAgentChangesContext(
   const opened: string[] = [];
   const notified: { message: string; tone: 'success' | 'failure' }[] = [];
   let refreshes = 0;
-  let drafts = 0;
 
   const source: ChangesSource = {
     summary,
@@ -108,10 +104,6 @@ export function createMockAgentChangesContext(
     }),
     refresh: async () => {
       refreshes += 1;
-    },
-    draftPullRequest: async () => {
-      drafts += 1;
-      return options.draft ?? { title: 'Drafted title', body: 'Drafted body' };
     },
   };
   const host: ChangesHost = {
@@ -134,6 +126,5 @@ export function createMockAgentChangesContext(
     opened,
     notified,
     refreshes: () => refreshes,
-    drafts: () => drafts,
   };
 }

@@ -14,10 +14,7 @@ export function ChangesReadyCard(props: {
   additions: number;
   deletions: number;
   linkedUrl: string | undefined;
-  creating: boolean;
   onReview: () => void;
-  onCreate: () => void;
-  onEdit: () => void;
   onViewPullRequest: () => void;
   onDismiss: () => void;
 }) {
@@ -62,36 +59,19 @@ export function ChangesReadyCard(props: {
           <RowsIcon class="size-3.5" />
           <span>Review changes</span>
         </Button>
-        <Show
-          when={!props.linkedUrl}
-          fallback={
-            <Button
-              variant="outline"
-              size="sm"
-              class="gap-1.5"
-              onClick={() => props.onViewPullRequest()}
-            >
-              <GitPullRequestIcon class="size-3.5" />
-              <span>
-                {linkedNumber()
-                  ? `Pull request #${linkedNumber()}`
-                  : 'Pull request'}
-              </span>
-            </Button>
-          }
-        >
+        <Show when={props.linkedUrl}>
           <Button
-            variant="cta"
+            variant="outline"
             size="sm"
             class="gap-1.5"
-            disabled={props.creating}
-            onClick={() => props.onCreate()}
+            onClick={props.onViewPullRequest}
           >
             <GitPullRequestIcon class="size-3.5" />
-            <span>{props.creating ? 'Creating…' : 'Create pull request'}</span>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={() => props.onEdit()}>
-            Edit details…
+            <span>
+              {linkedNumber()
+                ? `Pull request #${linkedNumber()}`
+                : 'Pull request'}
+            </span>
           </Button>
         </Show>
       </div>

@@ -81,12 +81,3 @@ export function useRefreshAgentSessionChangesMutation() {
       invalidateAgentSessionChanges(sessionId),
   }));
 }
-
-/** Draft a pull request title and body from the current changeset. */
-export function useDraftPullRequestMutation() {
-  return useMutation(() => ({
-    retry: false,
-    mutationFn: (sessionId: string) =>
-      throwOnErr(() => agentHarnessServiceClient.draftPullRequest(sessionId)),
-  }));
-}

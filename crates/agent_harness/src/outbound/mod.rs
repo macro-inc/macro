@@ -2,7 +2,6 @@
 //! ports are satisfied by.
 
 pub mod agent_prompt_composer;
-pub mod changes;
 pub mod channel_announcer;
 pub mod channel_prompt_context;
 pub mod containers;

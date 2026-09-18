@@ -3,7 +3,7 @@
 use agent_changes::inbound::axum_router::{
     self as changes_router, AgentSessionChangesPatchResponse, AgentSessionChangesResponse,
     CaptureAttemptDto, CaptureOutcomeDto, ChangedFileDto, ChangesetDto, ChangesetSourceDto,
-    FileChangeKindDto, GitRefDto, PullRequestDraftResponse,
+    FileChangeKindDto, GitRefDto,
 };
 use agent_harness::inbound::model_load::{
     self, AgentModelDto, AgentModelsStatusDto, LoadAgentModelsRequest, LoadAgentModelsResponse,
@@ -66,7 +66,6 @@ impl Modify for SecurityAddon {
         changes_router::get_agent_session_changes_handler,
         changes_router::get_agent_session_changes_patch_handler,
         changes_router::refresh_agent_session_changes_handler,
-        changes_router::draft_agent_session_pull_request_handler,
     ),
     components(schemas(
         claude_auth::StatusResponse,
@@ -116,7 +115,6 @@ impl Modify for SecurityAddon {
         CaptureOutcomeDto,
         ChangesetSourceDto,
         FileChangeKindDto,
-        PullRequestDraftResponse,
     )),
     tags(
         (name = "agent-sessions", description = "Agent sessions"),

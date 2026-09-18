@@ -62,7 +62,7 @@ fn changeset(session: AgentSessionId) -> Changeset {
     Changeset {
         id: ChangesetId::new(),
         session,
-        source: ChangesetSource::MacrodGit,
+        source: ChangesetSource::GithubPullRequest,
         range: ChangesetRange {
             repository: Some("https://github.com/example/example".to_owned()),
             base: GitRef {

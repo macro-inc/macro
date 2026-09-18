@@ -22,7 +22,6 @@ import type {
   LoadAgentModelsResponse,
   PreviewAgentSessionsRequest,
   PreviewAgentSessionsResponse,
-  PullRequestDraftResponse,
   RenameAgentSessionRequest,
   SandboxSizeBody,
   StartResponse,
@@ -694,83 +693,6 @@ export const getAgentSessionChangesPatch = async (
     status: res.status,
     headers: res.headers,
   } as getAgentSessionChangesPatchResponse;
-};
-
-/**
- * @summary Draft a pull request title and description from the session's current
-changeset.
- */
-export type draftAgentSessionPullRequestResponse200 = {
-  data: PullRequestDraftResponse;
-  status: 200;
-};
-
-export type draftAgentSessionPullRequestResponse401 = {
-  data: string;
-  status: 401;
-};
-
-export type draftAgentSessionPullRequestResponse403 = {
-  data: string;
-  status: 403;
-};
-
-export type draftAgentSessionPullRequestResponse404 = {
-  data: string;
-  status: 404;
-};
-
-export type draftAgentSessionPullRequestResponse500 = {
-  data: string;
-  status: 500;
-};
-
-export type draftAgentSessionPullRequestResponse502 = {
-  data: string;
-  status: 502;
-};
-
-export type draftAgentSessionPullRequestResponseSuccess =
-  draftAgentSessionPullRequestResponse200 & {
-    headers: Headers;
-  };
-export type draftAgentSessionPullRequestResponseError = (
-  | draftAgentSessionPullRequestResponse401
-  | draftAgentSessionPullRequestResponse403
-  | draftAgentSessionPullRequestResponse404
-  | draftAgentSessionPullRequestResponse500
-  | draftAgentSessionPullRequestResponse502
-) & {
-  headers: Headers;
-};
-
-export type draftAgentSessionPullRequestResponse =
-  | draftAgentSessionPullRequestResponseSuccess
-  | draftAgentSessionPullRequestResponseError;
-
-export const getDraftAgentSessionPullRequestUrl = (sessionId: string) => {
-  return `/agent-sessions/${sessionId}/changes/pull-request-draft`;
-};
-
-export const draftAgentSessionPullRequest = async (
-  sessionId: string,
-  options?: RequestInit
-): Promise<draftAgentSessionPullRequestResponse> => {
-  const res = await fetch(getDraftAgentSessionPullRequestUrl(sessionId), {
-    ...options,
-    method: 'POST',
-  });
-
-  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
-
-  const data: draftAgentSessionPullRequestResponse['data'] = body
-    ? JSON.parse(body)
-    : {};
-  return {
-    data,
-    status: res.status,
-    headers: res.headers,
-  } as draftAgentSessionPullRequestResponse;
 };
 
 /**

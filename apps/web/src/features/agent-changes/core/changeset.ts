@@ -49,11 +49,7 @@ export type Changeset = {
 };
 
 /** How the latest capture attempt ended. */
-export type CaptureOutcome =
-  | 'captured'
-  | 'unsupported'
-  | 'not_ready'
-  | 'failed';
+export type CaptureOutcome = 'captured' | 'not_ready' | 'failed';
 
 /** The latest capture attempt, running or finished. */
 export type CaptureAttempt = {
@@ -105,22 +101,6 @@ export function repositorySlug(
   return `${match[1]}/${match[2]!.replace(/\.git$/, '')}`;
 }
 
-/**
- * GitHub's compare page for the changeset, when both the repository and the
- * head branch are known. The base falls back to the repository's default
- * branch when the capture did not name one.
- */
-export function compareUrl(changeset: Changeset): string | undefined {
-  const repository = changeset.repository?.replace(/\/$/, '');
-  const head = changeset.head.name;
-  if (!repository || !head) return undefined;
-  const base = changeset.base.name;
-  const range = base
-    ? `${encodeURIComponent(base)}...${encodeURIComponent(head)}`
-    : encodeURIComponent(head);
-  return `${repository}/compare/${range}?expand=1`;
-}
-
 /** `head → base`, or whichever side is known, for the branch pill. */
 export function describeRange(changeset: Changeset): string | undefined {
   const head = changeset.head.name ?? shortSha(changeset.head.sha);
@@ -150,7 +130,6 @@ export type ChangesState =
   | { kind: 'capturing'; previous: Changeset | undefined }
   | { kind: 'ready'; changeset: Changeset }
   | { kind: 'empty'; changeset: Changeset }
-  | { kind: 'unsupported'; message: string }
   | { kind: 'not_ready'; message: string }
   | { kind: 'failed'; message: string; previous: Changeset | undefined }
   | { kind: 'none' };
@@ -183,18 +162,12 @@ export function changesState(
       : { kind: 'empty', changeset };
   }
   switch (attempt?.outcome) {
-    case 'unsupported':
-      return {
-        kind: 'unsupported',
-        message:
-          attempt.error ??
-          'This session runs on a harness that does not report its changes.',
-      };
     case 'not_ready':
       return {
         kind: 'not_ready',
         message:
-          attempt.error ?? 'The agent has not pushed anything to compare yet.',
+          attempt.error ??
+          'Link a GitHub pull request to this session to review its changes.',
       };
     case 'failed':
       return {

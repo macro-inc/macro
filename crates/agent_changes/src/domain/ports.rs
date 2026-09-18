@@ -1,48 +1,21 @@
-//! The capabilities the changes service requires from the outside.
-//!
-//! [`ChangesetExtractor`] is the one port every harness answers: given a
-//! session, hand back the patch between where the work started and where it
-//! is now. Everything harness-specific - talking to Cursor, to a daemon, to a
-//! sandbox - lives behind it, so the service, the storage, and the pane never
-//! learn how any particular runtime keeps its files.
+//! Storage and GitHub capabilities required by the changes service.
 
 use std::future::Future;
 
 use agent_session::domain::model::AgentSession;
-use macro_user_id::user_id::MacroUserIdStr;
 
-use super::error::{CompareError, ExtractError};
-use super::model::{
-    AgentSessionId, AttemptOutcome, Changeset, ExtractedChangeset, PullRequestDraft,
-    RepositorySlug, SessionChanges,
-};
+use super::error::ExtractError;
+use super::model::{AgentSessionId, AttemptOutcome, Changeset, ExtractedChangeset, SessionChanges};
 use chrono::{DateTime, Utc};
 
-/// Reads a session's changes from wherever its harness keeps them.
-///
-/// Implemented once per harness family and once more by a router that picks
-/// the family from the session row. Extractors return the raw patch; the
-/// service derives every per-file fact from it, so an extractor never counts
-/// lines or classifies files.
+/// Reads the linked GitHub pull request for a session. The service derives
+/// per-file facts from the raw patch.
 pub trait ChangesetExtractor: Send + Sync + 'static {
     /// The current diff for `session`, or why there is none.
     fn extract(
         &self,
         session: &AgentSession,
     ) -> impl Future<Output = Result<ExtractedChangeset, ExtractError>> + Send;
-}
-
-/// An extractor for harnesses that expose no files. Every session is
-/// [`ExtractError::Unsupported`].
-#[derive(Debug, Clone, Copy, Default)]
-pub struct UnsupportedExtractor;
-
-impl ChangesetExtractor for UnsupportedExtractor {
-    async fn extract(&self, session: &AgentSession) -> Result<ExtractedChangeset, ExtractError> {
-        Err(ExtractError::Unsupported {
-            harness: session.harness.clone(),
-        })
-    }
 }
 
 /// Where a stored patch lives in the blob store.
@@ -146,64 +119,21 @@ pub trait ChangesetBlobStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 
-/// What a repository provider says about a range.
+/// The patch and actual base/head refs of a GitHub pull request.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub struct RepositoryComparison {
-    /// The git-style unified diff from `base` to `head`.
+pub struct PullRequestDiff {
+    /// Git-style unified diff returned by GitHub.
     pub patch: String,
-    /// The commit `base` resolved to, when the provider says.
-    pub base_sha: Option<String>,
-    /// The commit `head` resolved to, when the provider says.
-    pub head_sha: Option<String>,
+    /// The PR's target and source, including forks and non-default bases.
+    pub range: super::model::ChangesetRange,
 }
 
-/// Compares two refs of a repository the user reaches through Macro's
-/// GitHub App. How a pushed branch becomes a patch without a checkout.
-pub trait RepositoryCompare: Send + Sync + 'static {
-    /// The branch a clone of `repository` checks out.
-    fn default_branch(
+/// Reads a pull request using the session owner's GitHub repository access.
+pub trait PullRequestDiffReader: Send + Sync + 'static {
+    /// Read the PR itself; never fall back to a branch or workspace diff.
+    fn read(
         &self,
-        user: &MacroUserIdStr<'static>,
-        repository: &RepositorySlug,
-    ) -> impl Future<Output = Result<String, CompareError>> + Send;
-
-    /// The diff from `base` to `head` (three-dot compare: what `head` has
-    /// that `base` does not).
-    fn compare(
-        &self,
-        user: &MacroUserIdStr<'static>,
-        repository: &RepositorySlug,
-        base: &str,
-        head: &str,
-    ) -> impl Future<Output = Result<RepositoryComparison, CompareError>> + Send;
-}
-
-/// Writes the pull request a changeset would open.
-pub trait PullRequestDraftGenerator: Send + Sync + 'static {
-    /// A title and body for `changeset`, read from its patch and the
-    /// session's name.
-    fn draft(
-        &self,
-        session: &AgentSession,
-        changeset: &Changeset,
-        patch: &str,
-    ) -> impl Future<Output = Result<PullRequestDraft, rootcause::Report>> + Send;
-}
-
-/// A drafter for deployments without a model: always an error the pane
-/// shows as "write it yourself".
-#[derive(Debug, Clone, Copy, Default)]
-pub struct NoPullRequestDrafts;
-
-impl PullRequestDraftGenerator for NoPullRequestDrafts {
-    async fn draft(
-        &self,
-        _session: &AgentSession,
-        _changeset: &Changeset,
-        _patch: &str,
-    ) -> Result<PullRequestDraft, rootcause::Report> {
-        Err(rootcause::report!(
-            "pull request drafting is not configured on this deployment"
-        ))
-    }
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+        pull_request: &super::model::PullRequestRef,
+    ) -> impl Future<Output = Result<PullRequestDiff, super::error::CompareError>> + Send;
 }

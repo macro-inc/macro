@@ -22,7 +22,6 @@ import { CaptureBanner, ChangesNotice } from '../components/ChangesNotice';
 import { FileCard } from '../components/FileCard';
 import { FileTree } from '../components/FileTree';
 import { PierreFileDiff } from '../components/PierreFileDiff';
-import { PullRequestSheet } from '../components/PullRequestSheet';
 import { ReviewBar } from '../components/ReviewBar';
 import { useAgentChanges } from '../context/agent-changes-controller';
 import { type ChangesState, describeRange } from '../core/changeset';
@@ -103,7 +102,7 @@ function DiffStack(props: { entries: FileDiffEntry[] }) {
 
 export function ChangesPane() {
   const controller = useAgentChanges();
-  const { layout, model, review, pullRequest, diffStyle, setDiffStyle } =
+  const { layout, model, review, context, diffStyle, setDiffStyle } =
     controller;
   const state = model.state;
   const changeset = model.changeset;
@@ -131,13 +130,10 @@ export function ChangesPane() {
         range={range()}
         diffStyle={diffStyle()}
         onDiffStyle={setDiffStyle}
-        pullRequest={{
-          linkedUrl: pullRequest.linkedUrl(),
-          busy: pullRequest.busy(),
-          canCompare: pullRequest.compareUrl() !== undefined,
-          enabled: hasFiles(),
-          onAction: pullRequest.start,
-          onView: pullRequest.view,
+        pullRequestUrl={context.host.pullRequestUrl()}
+        onViewPullRequest={() => {
+          const url = context.host.pullRequestUrl();
+          if (url) context.host.openExternal(url);
         }}
         refreshing={model.refreshing() || state().kind === 'capturing'}
         onRefresh={() => void model.refresh()}
@@ -161,18 +157,10 @@ export function ChangesPane() {
             refreshing={model.refreshing()}
           />
         </Match>
-        <Match when={stateOf('unsupported')}>
-          {(current) => (
-            <ChangesNotice
-              title="This session does not report its changes"
-              detail={current().message}
-            />
-          )}
-        </Match>
         <Match when={stateOf('not_ready')}>
           {(current) => (
             <ChangesNotice
-              title="Nothing to compare yet"
+              title="Pull request changes unavailable"
               detail={current().message}
               onRefresh={() => void model.refresh()}
               refreshing={model.refreshing()}
@@ -181,8 +169,8 @@ export function ChangesPane() {
         </Match>
         <Match when={state().kind === 'none'}>
           <ChangesNotice
-            title="No changes captured yet"
-            detail="Changes are captured when the agent finishes a turn. Capture them now to see what it has done so far."
+            title="No pull request changes loaded"
+            detail="Link a GitHub pull request to this session, then refresh to review its changes."
             onRefresh={() => void model.refresh()}
             refreshing={model.refreshing()}
           />
@@ -202,7 +190,7 @@ export function ChangesPane() {
           <ChangesNotice
             icon={<CircleNotchIcon class="animate-spin" />}
             title="Capturing the changes"
-            detail="Reading the diff from the agent's workspace."
+            detail="Reading the linked pull request from GitHub."
           />
         </Match>
         <Match when={showsChangeset()}>
@@ -230,7 +218,7 @@ export function ChangesPane() {
                 detail={
                   range()
                     ? `Nothing differs between ${range()}.`
-                    : 'The agent has not changed any files.'
+                    : 'The pull request has no changed files.'
                 }
                 onRefresh={() => void model.refresh()}
                 refreshing={model.refreshing()}
@@ -289,20 +277,6 @@ export function ChangesPane() {
           </Show>
         </Match>
       </Switch>
-      <Show when={pullRequest.sheet().kind !== 'closed' && changeset()}>
-        {(current) => (
-          <PullRequestSheet
-            sheet={pullRequest.sheet()}
-            changeset={current()}
-            onChange={pullRequest.updateForm}
-            onRegenerate={pullRequest.regenerate}
-            onSubmit={pullRequest.submit}
-            onOpenCompare={() => pullRequest.start('github')}
-            onOpenUrl={controller.context.host.openExternal}
-            onClose={pullRequest.close}
-          />
-        )}
-      </Show>
     </section>
   );
 }

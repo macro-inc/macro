@@ -14,10 +14,8 @@ inbound = [
   "macro_authorization/axum",
   "schema",
 ]
-# Postgres, S3, the GitHub compare client, and the model-backed PR drafter.
+# Postgres, S3, the GitHub pull request client.
 outbound = [
-  "dep:agent",
-  "dep:ai_usage",
   "dep:aws-sdk-s3",
   "dep:github",
   "dep:reqwest",
@@ -30,10 +28,8 @@ schema = ["dep:utoipa"]
 test-utils = []
 
 [dependencies]
-agent = { path = "../agent", optional = true }
 agent_fold = { path = "../agent_fold", default-features = false }
 agent_session = { path = "../agent_session", default-features = false }
-ai_usage = { path = "../ai_usage", optional = true }
 anyhow = { workspace = true }
 aws-sdk-s3 = { workspace = true, optional = true }
 axum = { workspace = true, optional = true }

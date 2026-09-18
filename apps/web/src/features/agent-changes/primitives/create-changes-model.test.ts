@@ -67,7 +67,6 @@ function setup() {
     refresh: async () => {
       refreshes += 1;
     },
-    draftPullRequest: async () => ({ title: '', body: '' }),
   };
   const model = createChangesModel({ source, changesVisible: visible });
   return {

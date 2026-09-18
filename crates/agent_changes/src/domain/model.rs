@@ -4,7 +4,7 @@
 //! repository: the per-file facts a review needs at a glance (path, status,
 //! line counts) plus where the patch itself is stored. Only the latest capture
 //! is kept per session - the Changes pane shows the current state of the
-//! branch, not a history of captures.
+//! linked pull request, not a history of captures.
 
 use chrono::{DateTime, Utc};
 use macro_uuid::Uuid;
@@ -115,8 +115,7 @@ impl GitRef {
 #[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ChangesetRange {
-    /// The repository, as `https://github.com/owner/name`, when known. What
-    /// the pane's "compare on GitHub" link is built from.
+    /// The linked pull request's repository, as `https://github.com/owner/name`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub repository: Option<String>,
     /// The side the work started from.
@@ -125,17 +124,15 @@ pub struct ChangesetRange {
     pub head: GitRef,
 }
 
-/// Which extractor produced a changeset - the harness family it came from.
+/// The source of the captured diff.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
 )]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
 pub enum ChangesetSource {
-    /// A Cursor cloud agent's pushed branch, compared on GitHub.
-    CursorGithubCompare,
-    /// A self-hosted `macrod` daemon's working tree, diffed by git.
-    MacrodGit,
+    /// The diff of the session's linked GitHub pull request.
+    GithubPullRequest,
 }
 
 /// What an extractor hands back: the raw patch plus the range it covers. The
@@ -196,10 +193,7 @@ impl Changeset {
 pub enum AttemptOutcome {
     /// A changeset was stored (possibly an empty one).
     Captured,
-    /// No extractor serves this session's harness.
-    Unsupported,
-    /// The harness has nothing to compare yet - a branch not pushed, a
-    /// daemon not connected. Worth retrying after the next turn.
+    /// The linked pull request is missing or unavailable.
     NotReady,
     /// The extractor or storage failed.
     Failed,
@@ -234,17 +228,6 @@ pub struct SessionChanges {
     pub changeset: Option<Changeset>,
     /// The latest attempt, if any was made.
     pub attempt: Option<CaptureAttempt>,
-}
-
-/// A generated title and description for the pull request a changeset
-/// would become.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PullRequestDraft {
-    /// One line, imperative mood.
-    pub title: String,
-    /// Markdown body.
-    pub body: String,
 }
 
 /// An `owner/name` GitHub repository, parsed from any of the spellings a
@@ -308,3 +291,44 @@ impl std::fmt::Display for RepositorySlug {
 
 #[cfg(test)]
 mod test;
+
+/// A validated GitHub pull request URL, used to build a fixed-origin API request.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PullRequestRef {
+    /// The repository containing the PR, including when its head is a fork.
+    pub repository: RepositorySlug,
+    /// The positive GitHub pull request number.
+    pub number: std::num::NonZeroU64,
+}
+
+impl PullRequestRef {
+    /// Accept GitHub PR links, optionally with a files/commits suffix or fragment.
+    pub fn parse(value: &str) -> Option<Self> {
+        let url = url::Url::parse(value).ok()?;
+        if url.scheme() != "https"
+            || url.host_str() != Some("github.com")
+            || !url.username().is_empty()
+            || url.password().is_some()
+            || url.port().is_some()
+        {
+            return None;
+        }
+        let mut segments = url.path_segments()?;
+        let owner = segments.next()?;
+        let repo = segments.next()?;
+        if segments.next()? != "pull" {
+            return None;
+        }
+        let number = segments.next()?.parse().ok()?;
+        match segments.next() {
+            None => {}
+            Some("") if segments.next().is_none() => {}
+            Some("files" | "commits" | "checks") if segments.next().is_none() => {}
+            _ => return None,
+        }
+        Some(Self {
+            repository: RepositorySlug::parse(&format!("{owner}/{repo}"))?,
+            number,
+        })
+    }
+}

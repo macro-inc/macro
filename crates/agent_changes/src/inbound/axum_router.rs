@@ -3,7 +3,7 @@
 //! Every route authenticates its caller and resolves their grant on the
 //! session with [`AgentSessionAccessLevelExtractor`] before the handler body
 //! runs: reading the summary or the patch needs `View`; asking for a fresh
-//! capture or a pull request draft needs `Edit`, the same bar as prompting
+//! capture needs `Edit`, the same bar as prompting
 //! the agent. Handlers map DTOs to the domain and call one service method;
 //! the receipt travels into the domain so the service can prove the check
 //! happened.
@@ -29,7 +29,7 @@ use utoipa::ToSchema;
 use crate::domain::error::ChangesError;
 use crate::domain::model::{
     AttemptOutcome, CaptureAttempt, ChangedFile, Changeset, ChangesetSource, FileChangeKind,
-    GitRef, PullRequestDraft, SessionChanges,
+    GitRef, SessionChanges,
 };
 use crate::domain::service::AgentChanges;
 
@@ -111,10 +111,6 @@ where
             "/{session_id}/changes/refresh",
             post(refresh_agent_session_changes_handler::<Changes, Access, Auth>),
         )
-        .route(
-            "/{session_id}/changes/pull-request-draft",
-            post(draft_agent_session_pull_request_handler::<Changes, Access, Auth>),
-        )
         .with_state(state)
 }
 
@@ -143,21 +139,18 @@ impl From<FileChangeKind> for FileChangeKindDto {
     }
 }
 
-/// Which harness family the changeset came from, on the wire.
+/// The source of the captured diff, on the wire.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum ChangesetSourceDto {
-    /// A Cursor cloud agent's pushed branch, compared on GitHub.
-    CursorGithubCompare,
-    /// A self-hosted `macrod` daemon's working tree.
-    MacrodGit,
+    /// The diff of the session's linked GitHub pull request.
+    GithubPullRequest,
 }
 
 impl From<ChangesetSource> for ChangesetSourceDto {
     fn from(source: ChangesetSource) -> Self {
         match source {
-            ChangesetSource::CursorGithubCompare => Self::CursorGithubCompare,
-            ChangesetSource::MacrodGit => Self::MacrodGit,
+            ChangesetSource::GithubPullRequest => Self::GithubPullRequest,
         }
     }
 }
@@ -168,9 +161,7 @@ impl From<ChangesetSource> for ChangesetSourceDto {
 pub enum CaptureOutcomeDto {
     /// A changeset (possibly empty) was stored.
     Captured,
-    /// No extractor serves this session's harness.
-    Unsupported,
-    /// The harness had nothing to compare yet; `error` says why.
+    /// The pull request was not available; `error` says why.
     NotReady,
     /// The extractor or storage failed; `error` says what a user can do.
     Failed,
@@ -180,7 +171,6 @@ impl From<AttemptOutcome> for CaptureOutcomeDto {
     fn from(outcome: AttemptOutcome) -> Self {
         match outcome {
             AttemptOutcome::Captured => Self::Captured,
-            AttemptOutcome::Unsupported => Self::Unsupported,
             AttemptOutcome::NotReady => Self::NotReady,
             AttemptOutcome::Failed => Self::Failed,
         }
@@ -253,7 +243,7 @@ impl From<GitRef> for GitRefDto {
 pub struct ChangesetDto {
     /// The capture's id; changes with every capture.
     pub id: Uuid,
-    /// Which harness family it came from.
+    /// Where the diff was read from.
     pub source: ChangesetSourceDto,
     /// `https://github.com/owner/name`, when known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -365,27 +355,6 @@ pub struct AgentSessionChangesPatchResponse {
     pub patch: String,
 }
 
-/// Response body for `POST /agent-sessions/{session_id}/changes/pull-request-draft`.
-///
-/// Clients deserialize this, so both derives are used.
-#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "camelCase")]
-pub struct PullRequestDraftResponse {
-    /// One line, imperative mood.
-    pub title: String,
-    /// Markdown body.
-    pub body: String,
-}
-
-impl From<PullRequestDraft> for PullRequestDraftResponse {
-    fn from(draft: PullRequestDraft) -> Self {
-        Self {
-            title: draft.title,
-            body: draft.body,
-        }
-    }
-}
-
 /// How the domain's refusals and failures answer on the wire.
 #[derive(Debug)]
 pub enum AgentChangesApiError {
@@ -411,14 +380,6 @@ impl IntoResponse for AgentChangesApiError {
             Self::Domain(ChangesError::Session(
                 agent_session::domain::error::AgentSessionError::Forbidden,
             )) => (StatusCode::FORBIDDEN, "forbidden").into_response(),
-            Self::Domain(ChangesError::Draft(error)) => {
-                tracing::warn!(error = ?error, "drafting a pull request failed");
-                (
-                    StatusCode::BAD_GATEWAY,
-                    "the pull request could not be drafted right now",
-                )
-                    .into_response()
-            }
             Self::Domain(error) => {
                 tracing::error!(error = ?error, "agent session changes request failed");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error").into_response()
@@ -512,37 +473,4 @@ pub async fn refresh_agent_session_changes_handler<
         .request_capture(&access.entity_access_receipt)
         .await?;
     Ok((StatusCode::ACCEPTED, Json(changes.into())))
-}
-
-#[utoipa::path(
-    post,
-    path = "/agent-sessions/{session_id}/changes/pull-request-draft",
-    tag = "agent-sessions",
-    operation_id = "draft_agent_session_pull_request",
-    params(("session_id" = Uuid, Path, description = "ID of the agent session")),
-    responses(
-        (status = 200, body = PullRequestDraftResponse),
-        (status = 401, body = String),
-        (status = 403, body = String),
-        (status = 404, body = String),
-        (status = 502, body = String),
-        (status = 500, body = String),
-    )
-)]
-/// Draft a pull request title and description from the session's current
-/// changeset.
-#[tracing::instrument(skip_all, fields(agent.session.id = %access.entity_access_receipt.entity().entity_id), err(Debug))]
-pub async fn draft_agent_session_pull_request_handler<
-    Changes: AgentChanges,
-    Access: EntityAccessService,
-    Auth: MacroAuthorizationService,
->(
-    access: AgentSessionAccessLevelExtractor<EditAccessLevel, Access, Auth>,
-    State(state): State<AgentChangesRouterState<Changes, Access, Auth>>,
-) -> Result<Json<PullRequestDraftResponse>, AgentChangesApiError> {
-    let draft = state
-        .service
-        .draft_pull_request(&access.entity_access_receipt)
-        .await?;
-    Ok(Json(draft.into()))
 }

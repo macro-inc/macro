@@ -23,13 +23,9 @@ use macro_uuid::Uuid;
 use tracing::Instrument as _;
 
 use super::error::{ChangesError, ExtractError, Result};
-use super::model::{
-    AgentSessionId, AttemptOutcome, Changeset, ChangesetId, PullRequestDraft, SessionChanges,
-};
+use super::model::{AgentSessionId, AttemptOutcome, Changeset, ChangesetId, SessionChanges};
 use super::patch::{self, MAX_FILE_PATCH_BYTES, MAX_PATCH_BYTES};
-use super::ports::{
-    ChangesetBlobStore, ChangesetExtractor, ChangesetRepo, PatchBlobKey, PullRequestDraftGenerator,
-};
+use super::ports::{ChangesetBlobStore, ChangesetExtractor, ChangesetRepo, PatchBlobKey};
 
 #[cfg(test)]
 mod test;
@@ -39,9 +35,7 @@ mod test;
 pub enum CaptureOutcome {
     /// A changeset (possibly empty) was stored.
     Captured(Changeset),
-    /// The session's harness has no extractor.
-    Unsupported,
-    /// The harness had nothing to compare yet; the reason was recorded.
+    /// The pull request was not available; the reason was recorded.
     NotReady,
     /// The extractor or the storage failed; the reason was recorded.
     Failed,
@@ -51,7 +45,7 @@ pub enum CaptureOutcome {
 }
 
 /// What the inbound adapters ask of the service, so they can be generic over
-/// one type rather than the service's six.
+/// one type rather than the service's five.
 pub trait AgentChanges: Send + Sync + 'static {
     /// The latest changeset and attempt for the session the receipt names.
     fn changes(
@@ -71,36 +65,29 @@ pub trait AgentChanges: Send + Sync + 'static {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
     ) -> impl Future<Output = Result<SessionChanges>> + Send;
-
-    /// Draft the pull request the current changeset would open.
-    fn draft_pull_request(
-        &self,
-        access: &EntityAccessReceipt<EditAccessLevel>,
-    ) -> impl Future<Output = Result<PullRequestDraft>> + Send;
 }
 
-struct Inner<Sessions, Extractor, Repo, Blobs, Realtime, Drafts> {
+struct Inner<Sessions, Extractor, Repo, Blobs, Realtime> {
     sessions: Sessions,
     extractor: Extractor,
     repo: Repo,
     blobs: Blobs,
     realtime: Realtime,
-    drafts: Drafts,
     /// Sessions with a capture running, and whether another was asked for
     /// while it ran.
     in_flight: Mutex<HashMap<AgentSessionId, bool>>,
 }
 
 /// The changes service: one per process, cloned wherever a capture can start.
-pub struct AgentChangesService<Sessions, Extractor, Repo, Blobs, Realtime, Drafts> {
-    inner: Arc<Inner<Sessions, Extractor, Repo, Blobs, Realtime, Drafts>>,
+pub struct AgentChangesService<Sessions, Extractor, Repo, Blobs, Realtime> {
+    inner: Arc<Inner<Sessions, Extractor, Repo, Blobs, Realtime>>,
 }
 
 // Manual Clone so the port types need not be Clone; a clone is another
 // handle on the same in-flight table, which is what makes "one capture per
 // session" hold across every handle.
-impl<Sessions, Extractor, Repo, Blobs, Realtime, Drafts> Clone
-    for AgentChangesService<Sessions, Extractor, Repo, Blobs, Realtime, Drafts>
+impl<Sessions, Extractor, Repo, Blobs, Realtime> Clone
+    for AgentChangesService<Sessions, Extractor, Repo, Blobs, Realtime>
 {
     fn clone(&self) -> Self {
         Self {
@@ -109,15 +96,14 @@ impl<Sessions, Extractor, Repo, Blobs, Realtime, Drafts> Clone
     }
 }
 
-impl<Sessions, Extractor, Repo, Blobs, Realtime, Drafts>
-    AgentChangesService<Sessions, Extractor, Repo, Blobs, Realtime, Drafts>
+impl<Sessions, Extractor, Repo, Blobs, Realtime>
+    AgentChangesService<Sessions, Extractor, Repo, Blobs, Realtime>
 where
     Sessions: AgentSessionRepo,
     Extractor: ChangesetExtractor,
     Repo: ChangesetRepo,
     Blobs: ChangesetBlobStore,
     Realtime: AgentSessionRealtime + Send + Sync + 'static,
-    Drafts: PullRequestDraftGenerator,
 {
     /// Build the service from its ports.
     pub fn new(
@@ -126,7 +112,6 @@ where
         repo: Repo,
         blobs: Blobs,
         realtime: Realtime,
-        drafts: Drafts,
     ) -> Self {
         Self {
             inner: Arc::new(Inner {
@@ -135,7 +120,6 @@ where
                 repo,
                 blobs,
                 realtime,
-                drafts,
                 in_flight: Mutex::new(HashMap::new()),
             }),
         }
@@ -189,43 +173,6 @@ where
             .get(session)
             .await
             .map_err(ChangesError::Storage)
-    }
-
-    /// Draft the pull request the session's current changeset would open.
-    async fn draft(
-        &self,
-        access: &EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<PullRequestDraft> {
-        let session = session_of(access)?;
-        let changes = self
-            .inner
-            .repo
-            .get(session)
-            .await
-            .map_err(ChangesError::Storage)?;
-        let changeset = changes.changeset.ok_or(ChangesError::NoChangeset)?;
-        let patch = match self
-            .inner
-            .repo
-            .patch_key(session)
-            .await
-            .map_err(ChangesError::Storage)?
-        {
-            Some(key) => self
-                .inner
-                .blobs
-                .get_patch(&key)
-                .await
-                .map_err(ChangesError::Storage)?
-                .unwrap_or_default(),
-            None => String::new(),
-        };
-        let row = self.inner.sessions.get(session).await?;
-        self.inner
-            .drafts
-            .draft(&row, &changeset, &patch)
-            .await
-            .map_err(ChangesError::Draft)
     }
 
     /// Run a capture on a task of its own. Safe to call from anywhere on a
@@ -306,16 +253,6 @@ where
         let extracted = self.inner.extractor.extract(&row).await;
         let outcome = match extracted {
             Ok(extracted) => self.store(&row, extracted).await,
-            Err(ExtractError::Unsupported { harness }) => {
-                tracing::info!(%session, harness, "changes are not available for this harness");
-                self.fail(
-                    session,
-                    AttemptOutcome::Unsupported,
-                    format!("Changes are not available for the {harness} harness."),
-                )
-                .await
-                .map(|()| CaptureOutcome::Unsupported)
-            }
             Err(ExtractError::NotReady(reason)) => {
                 tracing::info!(%session, reason, "changes are not ready to capture");
                 self.fail(session, AttemptOutcome::NotReady, reason)
@@ -431,15 +368,14 @@ where
     }
 }
 
-impl<Sessions, Extractor, Repo, Blobs, Realtime, Drafts> AgentChanges
-    for AgentChangesService<Sessions, Extractor, Repo, Blobs, Realtime, Drafts>
+impl<Sessions, Extractor, Repo, Blobs, Realtime> AgentChanges
+    for AgentChangesService<Sessions, Extractor, Repo, Blobs, Realtime>
 where
     Sessions: AgentSessionRepo,
     Extractor: ChangesetExtractor,
     Repo: ChangesetRepo,
     Blobs: ChangesetBlobStore,
     Realtime: AgentSessionRealtime + Send + Sync + 'static,
-    Drafts: PullRequestDraftGenerator,
 {
     async fn changes(
         &self,
@@ -457,13 +393,6 @@ where
         access: &EntityAccessReceipt<EditAccessLevel>,
     ) -> Result<SessionChanges> {
         self.start_capture(access).await
-    }
-
-    async fn draft_pull_request(
-        &self,
-        access: &EntityAccessReceipt<EditAccessLevel>,
-    ) -> Result<PullRequestDraft> {
-        self.draft(access).await
     }
 }
 
@@ -492,15 +421,14 @@ impl<Service> CaptureOnTurnEnd<Service> {
     }
 }
 
-impl<Sessions, Extractor, Repo, Blobs, Realtime, Drafts> SessionTurnObserver
-    for CaptureOnTurnEnd<AgentChangesService<Sessions, Extractor, Repo, Blobs, Realtime, Drafts>>
+impl<Sessions, Extractor, Repo, Blobs, Realtime> SessionTurnObserver
+    for CaptureOnTurnEnd<AgentChangesService<Sessions, Extractor, Repo, Blobs, Realtime>>
 where
     Sessions: AgentSessionRepo,
     Extractor: ChangesetExtractor,
     Repo: ChangesetRepo,
     Blobs: ChangesetBlobStore,
     Realtime: AgentSessionRealtime + Send + Sync + 'static,
-    Drafts: PullRequestDraftGenerator,
 {
     fn signal(&self, id: AgentSessionId, signal: agent_fold::domain::model::TurnSignal) {
         if matches!(

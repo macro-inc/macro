@@ -132,7 +132,6 @@ export * from './previewAgentSessionsResponse';
 export * from './promptAttachment';
 export * from './promptAttachmentMimeType';
 export * from './promptAttachmentSize';
-export * from './pullRequestDraftResponse';
 export * from './queuedActionDto';
 export * from './queuedActionDtoActorUserId';
 export * from './queuedActionDtoPrompt';

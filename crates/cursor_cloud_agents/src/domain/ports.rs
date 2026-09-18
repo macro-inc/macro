@@ -350,20 +350,3 @@ impl RepositoryChooser for NoRepositoryChooser {
         Ok(SessionIntent::default())
     }
 }
-
-/// The branch a session's Cursor agent last reported pushing.
-///
-/// Cursor says what it pushed exactly once, on the terminal `result` event
-/// of a run (see [`super::event::GitState`]), and that event is journaled
-/// like every other native record. Reading it back from the journal is how
-/// the host learns where the agent's work lives without another API call -
-/// and without depending on Cursor's API to remember it.
-pub trait PushedBranches: Send + Sync + 'static {
-    /// The most recent repository-and-branch a run of the host session
-    /// `agent_session_id` reported pushing to, or `None` when no run has
-    /// reported one yet.
-    fn latest_pushed_branch(
-        &self,
-        agent_session_id: uuid::Uuid,
-    ) -> impl Future<Output = Result<Option<super::event::GitBranch>, rootcause::Report>> + Send;
-}

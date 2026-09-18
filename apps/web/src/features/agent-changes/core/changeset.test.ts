@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import {
   type Changeset,
   changesState,
-  compareUrl,
   describeRange,
   repositorySlug,
   splitPath,
@@ -72,25 +71,6 @@ describe('repositorySlug', () => {
   });
 });
 
-describe('compareUrl', () => {
-  it('points at the three-dot compare with the form expanded', () => {
-    expect(compareUrl(changeset())).toBe(
-      'https://github.com/macro-inc/macro/compare/main...agent%2Funread-archived-sessions?expand=1'
-    );
-  });
-
-  it('needs the repository and the head branch', () => {
-    expect(compareUrl(changeset({ repository: undefined }))).toBeUndefined();
-    expect(compareUrl(changeset({ head: { sha: 'abc' } }))).toBeUndefined();
-  });
-
-  it('compares against the default branch when the base is unknown', () => {
-    expect(compareUrl(changeset({ base: {} }))).toBe(
-      'https://github.com/macro-inc/macro/compare/agent%2Funread-archived-sessions?expand=1'
-    );
-  });
-});
-
 describe('describeRange', () => {
   it('reads head → base', () => {
     expect(describeRange(changeset())).toBe(
@@ -151,13 +131,7 @@ describe('changesState', () => {
     ).toEqual({ kind: 'failed', message: 'GitHub said no', previous });
   });
 
-  it('names unsupported and not-ready outcomes', () => {
-    expect(
-      changesState({
-        attempt: { startedAt: 't', outcome: 'unsupported' },
-        capturing: false,
-      }).kind
-    ).toBe('unsupported');
+  it('names not-ready outcomes', () => {
     expect(
       changesState({
         attempt: { startedAt: 't', outcome: 'not_ready', error: 'No push yet' },

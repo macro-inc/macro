@@ -28,7 +28,7 @@ export function ChangesToggle() {
 export function ChangesHandoff() {
   const controller = useOptionalAgentChanges();
   if (!controller) return null;
-  const { layout, model, review, pullRequest } = controller;
+  const { layout, model, review, context } = controller;
   const visible = () =>
     !layout.changesVisible() &&
     model.files().length > 0 &&
@@ -39,16 +39,16 @@ export function ChangesHandoff() {
         fileCount={model.files().length}
         additions={model.changeset()?.additions ?? 0}
         deletions={model.changeset()?.deletions ?? 0}
-        linkedUrl={pullRequest.linkedUrl()}
-        creating={pullRequest.busy()}
+        linkedUrl={context.host.pullRequestUrl()}
         onReview={() => {
           const first = model.files()[0];
           layout.open();
           if (first) review.activate(first.path);
         }}
-        onCreate={() => pullRequest.start('quick')}
-        onEdit={() => pullRequest.start('edit')}
-        onViewPullRequest={pullRequest.view}
+        onViewPullRequest={() => {
+          const url = context.host.pullRequestUrl();
+          if (url) context.host.openExternal(url);
+        }}
         onDismiss={controller.dismissHandoff}
       />
     </Show>

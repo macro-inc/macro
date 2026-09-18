@@ -44,7 +44,7 @@ changed.
   patchBytes: number;
   /** `https://github.com/owner/name`, when known. */
   repository?: ChangesetDtoRepository;
-  /** Which harness family it came from. */
+  /** Where the diff was read from. */
   source: ChangesetSourceDto;
   /** Some files' hunks were left out of the patch. */
   truncated: boolean;

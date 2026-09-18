@@ -10,7 +10,6 @@
 mod agent_runtime_directory;
 mod api;
 mod bots_directory;
-mod changes_bus;
 mod config;
 mod containers;
 mod harness_bindings;
@@ -24,11 +23,11 @@ mod test;
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
+use agent_changes::domain::pull_request::PullRequestChanges;
 use agent_changes::domain::service::{AgentChangesService, CaptureOnTurnEnd};
 use agent_changes::inbound::axum_router::AgentChangesRouterState;
-use agent_changes::outbound::github_compare::GithubRepositoryCompare;
+use agent_changes::outbound::github_pull_request::GithubPullRequestDiff;
 use agent_changes::outbound::postgres::PgChangesetRepo;
-use agent_changes::outbound::pull_request_draft::HaikuPullRequestDraftGenerator;
 use agent_changes::outbound::s3::S3ChangesetBlobStore;
 use agent_egress::domain::service::EgressServiceImpl;
 use agent_egress::outbound::forwarder::ReqwestForwarder;
@@ -51,9 +50,6 @@ use agent_harness::inbound::model_load::AgentModelsRouterState;
 use agent_harness::inbound::repositories::AgentRepositoriesRouterState;
 use agent_harness::inbound::runtime_gateway::RuntimeGatewayState;
 use agent_harness::outbound::agent_prompt_composer::LexicalAgentPromptComposer;
-use agent_harness::outbound::changes::{
-    CursorChangesetExtractor, MacrodChangesetExtractor, RoutedChangesetExtractor,
-};
 use agent_harness::outbound::channel_announcer::MessageAnnouncer;
 use agent_harness::outbound::channel_prompt_context::MessagePromptContextAdapter;
 use agent_harness::outbound::containers::HarnessContainers;
@@ -93,7 +89,6 @@ use anyhow::Context as _;
 use bot_id::BotId;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
 use bots_directory::PgBotDirectory;
-use changes_bus::MacrodChangesBus;
 use channels::domain::side_effects::{ChannelSideEffectService, SpawnedChannelEventDispatcher};
 use channels::outbound::connection_gateway_realtime::ConnectionGatewayChannelRealtimePublisher;
 use channels::outbound::contacts_dispatcher::ContactsChannelDispatcher;
@@ -105,7 +100,6 @@ use connection_gateway_client::ConnectionGatewayClient;
 use containers::{InMemRuntime, RoutedContainers};
 use cursor_api_key::cipher::{AwsKmsCiphertexts, KmsCursorApiKeyCipher};
 use cursor_cloud_agents::api::cursor_api_base_url;
-use cursor_cloud_agents::outbound::pushed_branches::PgPushedBranches;
 use github::domain::service::{
     InstallationTokenConfig, InstallationTokenService, ReachableRepositoriesService,
 };
@@ -843,30 +837,16 @@ async fn run() -> anyhow::Result<()> {
     let macrod_models =
         MacrodModels::new(Arc::clone(&runtimes), redis.clone(), model_probe_timeout);
 
-    // A session's changes: captured after every turn from wherever its
-    // harness keeps its files - a Cursor agent's pushed branch compared on
-    // GitHub, or a self-hosted daemon's working tree diffed in place over the
-    // same bus that carries its commands - stored as a patch blob, and served
-    // to the Changes pane beside the session.
-    let changes_bus = MacrodChangesBus::new(
-        Arc::clone(&runtimes),
-        redis.clone(),
-        std::time::Duration::from_secs(45),
-    );
-    let changes_extractor = RoutedChangesetExtractor::new(
-        CursorChangesetExtractor::new(
-            PgPushedBranches::new(pool.clone()),
-            GithubRepositoryCompare::new(InstallationTokenService::new(
-                InstallationTokenConfig {
-                    client_id: config.github_sync_app_client_id.clone(),
-                    private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
-                },
-                PgGithubSyncRepo::new(pool.clone()),
-                GithubSyncClientImpl::default(),
-            )),
-        ),
-        MacrodChangesetExtractor::new(PgHarnessBindings::new(pool.clone()), changes_bus.clone()),
-    );
+    // Capture only the session's linked GitHub pull request, for every harness.
+    let changes_extractor =
+        PullRequestChanges::new(GithubPullRequestDiff::new(InstallationTokenService::new(
+            InstallationTokenConfig {
+                client_id: config.github_sync_app_client_id.clone(),
+                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
+            },
+            PgGithubSyncRepo::new(pool.clone()),
+            GithubSyncClientImpl::default(),
+        )));
     let changes = AgentChangesService::new(
         session_repo.clone(),
         changes_extractor,
@@ -879,14 +859,12 @@ async fn run() -> anyhow::Result<()> {
             connection_gateway.clone(),
             session_repo.clone(),
         ),
-        HaikuPullRequestDraftGenerator::new(ai_usage::pg_recorder(pool.clone())),
     );
 
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue, and capture what the turn changed.
     turn_observer.bind((harness.clone(), CaptureOnTurnEnd::new(changes.clone())));
     let runtime_command_models = macrod_models.clone();
-    let runtime_command_changes = changes_bus.clone();
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
     let runtime_command_runtimes = Arc::clone(&runtimes);
@@ -908,7 +886,6 @@ async fn run() -> anyhow::Result<()> {
                     runtime_command_harness.clone(),
                     runtime_commands_ready.clone(),
                     runtime_command_models.clone(),
-                    runtime_command_changes.clone(),
                 )
             },
         )

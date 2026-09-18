@@ -563,87 +563,6 @@
         }
       }
     },
-    "/agent-sessions/{session_id}/changes/pull-request-draft": {
-      "post": {
-        "tags": ["agent-sessions"],
-        "summary": "Draft a pull request title and description from the session's current\nchangeset.",
-        "operationId": "draft_agent_session_pull_request",
-        "parameters": [
-          {
-            "name": "session_id",
-            "in": "path",
-            "description": "ID of the agent session",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "format": "uuid"
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/PullRequestDraftResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          },
-          "502": {
-            "description": "",
-            "content": {
-              "text/plain": {
-                "schema": {
-                  "type": "string"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/agent-sessions/{session_id}/changes/refresh": {
       "post": {
         "tags": ["agent-sessions"],
@@ -1902,22 +1821,6 @@
       "BotId": {
         "type": "string"
       },
-      "CompleteRequest": {
-        "type": "object",
-        "description": "One-time manual code. Deliberately does not implement Debug.",
-        "required": ["attemptId", "code"],
-        "properties": {
-          "attemptId": {
-            "type": "string",
-            "description": "Server-issued handle; never an owner selected by the caller."
-          },
-          "code": {
-            "type": "string",
-            "description": "Claude's complete code#state string, not an access token."
-          }
-        },
-        "additionalProperties": false
-      },
       "CaptureAttemptDto": {
         "type": "object",
         "description": "The latest capture attempt.\n\nClients deserialize this, so both derives are used.",
@@ -1953,7 +1856,7 @@
       "CaptureOutcomeDto": {
         "type": "string",
         "description": "How the latest capture attempt ended, on the wire.",
-        "enum": ["captured", "unsupported", "not_ready", "failed"]
+        "enum": ["captured", "not_ready", "failed"]
       },
       "ChangedFileDto": {
         "type": "object",
@@ -2066,7 +1969,7 @@
           },
           "source": {
             "$ref": "#/components/schemas/ChangesetSourceDto",
-            "description": "Which harness family it came from."
+            "description": "Where the diff was read from."
           },
           "truncated": {
             "type": "boolean",
@@ -2076,8 +1979,24 @@
       },
       "ChangesetSourceDto": {
         "type": "string",
-        "description": "Which harness family the changeset came from, on the wire.",
-        "enum": ["cursor_github_compare", "macrod_git"]
+        "description": "The source of the captured diff, on the wire.",
+        "enum": ["github_pull_request"]
+      },
+      "CompleteRequest": {
+        "type": "object",
+        "description": "One-time manual code. Deliberately does not implement Debug.",
+        "required": ["attemptId", "code"],
+        "properties": {
+          "attemptId": {
+            "type": "string",
+            "description": "Server-issued handle; never an owner selected by the caller."
+          },
+          "code": {
+            "type": "string",
+            "description": "Claude's complete code#state string, not an access token."
+          }
+        },
+        "additionalProperties": false
       },
       "ControlRequest": {
         "allOf": [
@@ -2518,21 +2437,6 @@
           "uri": {
             "type": "string",
             "description": "Where the agent can fetch the file."
-          }
-        }
-      },
-      "PullRequestDraftResponse": {
-        "type": "object",
-        "description": "Response body for `POST /agent-sessions/{session_id}/changes/pull-request-draft`.\n\nClients deserialize this, so both derives are used.",
-        "required": ["title", "body"],
-        "properties": {
-          "body": {
-            "type": "string",
-            "description": "Markdown body."
-          },
-          "title": {
-            "type": "string",
-            "description": "One line, imperative mood."
           }
         }
       },

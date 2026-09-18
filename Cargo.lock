@@ -177,10 +177,8 @@ dependencies = [
 name = "agent_changes"
 version = "0.1.0"
 dependencies = [
- "agent",
  "agent_fold",
  "agent_session",
- "ai_usage",
  "anyhow",
  "aws-sdk-s3",
  "axum",
@@ -278,7 +276,6 @@ version = "0.1.0"
 dependencies = [
  "agent",
  "agent-client-protocol",
- "agent_changes",
  "agent_egress",
  "agent_fold",
  "agent_runtime_protocol",

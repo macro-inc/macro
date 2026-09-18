@@ -23,22 +23,12 @@ pub enum ChangesError {
     /// The summary store or the blob store failed.
     #[error("changes storage failed: {0}")]
     Storage(rootcause::Report),
-    /// The pull request drafter failed.
-    #[error("could not draft a pull request: {0}")]
-    Draft(rootcause::Report),
 }
 
 /// Why an extractor could not hand back a changeset.
 #[derive(Debug, thiserror::Error)]
 pub enum ExtractError {
-    /// No extractor serves this session's harness.
-    #[error("changes are not available for the {harness} harness")]
-    Unsupported {
-        /// The harness slug that has no extractor.
-        harness: String,
-    },
-    /// The harness has nothing to compare yet: a branch not pushed, a
-    /// daemon not connected. The message is shown to the user as is.
+    /// The linked pull request is missing or unavailable. Shown to the user.
     #[error("{0}")]
     NotReady(String),
     /// The provider or the transport failed.
@@ -46,12 +36,11 @@ pub enum ExtractError {
     Failed(rootcause::Report),
 }
 
-/// Why a repository comparison could not be answered.
+/// Why a GitHub pull request diff could not be read.
 #[derive(Debug, thiserror::Error)]
 pub enum CompareError {
-    /// One side of the range does not exist on the provider - typically a
-    /// branch that has not been pushed yet.
-    #[error("the compared ref does not exist on the repository")]
+    /// GitHub cannot find the linked pull request.
+    #[error("the linked pull request does not exist on GitHub")]
     NotFound,
     /// The provider refuses to render a diff this large.
     #[error("the diff is too large for the repository provider to compare")]

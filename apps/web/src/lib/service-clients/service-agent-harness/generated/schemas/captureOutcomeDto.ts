@@ -14,7 +14,6 @@ export type CaptureOutcomeDto =
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const CaptureOutcomeDto = {
   captured: 'captured',
-  unsupported: 'unsupported',
   not_ready: 'not_ready',
   failed: 'failed',
 } as const;

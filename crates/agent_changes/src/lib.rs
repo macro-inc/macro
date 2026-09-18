@@ -1,27 +1,11 @@
 #![deny(missing_docs)]
-//! The changes an agent session made to its repository, as a reviewable
-//! changeset.
+//! Review changes from the GitHub pull request linked to an agent session.
 //!
-//! An agent works somewhere this service cannot see - a Cursor cloud VM, a
-//! daemon on someone's machine - and the transcript only shows the edits its
-//! tools reported. This crate owns the other view: the whole diff
-//! between the branch the session started from and what it has now, captured
-//! after each turn, stored as a patch blob, and served to the Changes pane.
-//!
-//! Hexagonal, like the rest of the agent stack:
-//!
-//! - [`domain`] owns the vocabulary ([`domain::model`]), the unified-diff
-//!   reader that turns a patch into per-file facts ([`domain::patch`]), the
-//!   ports ([`domain::ports`]) - including [`domain::ports::ChangesetExtractor`],
-//!   the one trait every harness answers - and the service that captures,
-//!   stores, and serves changesets ([`domain::service`]).
-//! - [`outbound`] implements the storage and provider ports: Postgres for
-//!   the summary row, S3 for the patch, GitHub for comparing a pushed branch,
-//!   and a fast model for drafting a pull request.
-//! - [`inbound`] is the axum router mounted next to the session routes.
-//!
-//! The harness-specific extractors live with their harnesses in
-//! `agent_harness`, which depends on this crate for the port they implement.
+//! The domain service reads the PR through a port, derives per-file facts,
+//! stores the patch in S3 and the summary in Postgres, and notifies viewers.
+//! Capture runs after each turn and on demand, regardless of the runtime.
+//! HTTP handlers pass session access receipts to the domain service. GitHub
+//! repository access is checked by the owning GitHub token service.
 
 /// Domain models, the patch reader, ports, and the changes service.
 pub mod domain;

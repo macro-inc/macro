@@ -10,7 +10,6 @@
 
 import type { Accessor } from 'solid-js';
 import type { SessionChanges } from '../core/changeset';
-import type { PullRequestDraft } from '../core/pull-request';
 
 export type QueryStatus = 'idle' | 'pending' | 'error' | 'success';
 
@@ -36,8 +35,6 @@ export type ChangesSource = {
   ) => PatchRead;
   /** Ask for a fresh capture. Resolves once the request is accepted. */
   refresh: () => Promise<void>;
-  /** Draft a pull request title and body from the current changeset. */
-  draftPullRequest: () => Promise<PullRequestDraft>;
 };
 
 /** What the surrounding session lends the pane. */

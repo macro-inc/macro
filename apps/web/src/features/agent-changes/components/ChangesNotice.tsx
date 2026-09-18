@@ -36,7 +36,7 @@ export function ChangesNotice(props: {
           <ArrowsClockwiseIcon
             class={props.refreshing ? 'animate-spin' : undefined}
           />
-          <span>Capture again</span>
+          <span>Refresh changes</span>
         </Button>
       </Show>
     </div>

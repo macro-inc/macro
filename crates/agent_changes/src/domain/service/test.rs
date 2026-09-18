@@ -1,6 +1,5 @@
 use super::*;
 use crate::domain::model::{ChangesetRange, ChangesetSource, ExtractedChangeset, GitRef};
-use crate::domain::ports::NoPullRequestDrafts;
 use crate::testing::{MemoryBlobStore, MemoryChangesetRepo, ScriptedExtractor};
 use agent_session::testing::{InMemoryAgentSessionRepo, RecordingRealtime, test_agent_session};
 
@@ -23,12 +22,11 @@ type TestService = AgentChangesService<
     MemoryChangesetRepo,
     MemoryBlobStore,
     RecordingRealtime,
-    NoPullRequestDrafts,
 >;
 
 fn extracted(patch: &str) -> ExtractedChangeset {
     ExtractedChangeset {
-        source: ChangesetSource::MacrodGit,
+        source: ChangesetSource::GithubPullRequest,
         range: ChangesetRange {
             repository: Some("https://github.com/example/example".to_owned()),
             base: GitRef::named("main"),
@@ -50,7 +48,6 @@ fn service(extractor: ScriptedExtractor) -> (TestService, MemoryChangesetRepo, M
         repo.clone(),
         blobs.clone(),
         RecordingRealtime::new(),
-        NoPullRequestDrafts,
     );
     (service, repo, blobs)
 }
@@ -145,40 +142,20 @@ async fn an_empty_patch_is_a_changeset_with_nothing_in_it() {
 }
 
 #[tokio::test]
-async fn an_unsupported_harness_is_recorded_not_raised() {
-    let (service, _repo, _blobs) = service(ScriptedExtractor::unsupported());
-    assert_eq!(
-        service.capture(SESSION).await.unwrap(),
-        CaptureOutcome::Unsupported
-    );
-    let changes = service.changes(&view_access()).await.unwrap();
-    assert!(changes.changeset.is_none());
-    let attempt = changes.attempt.unwrap();
-    assert_eq!(attempt.outcome, Some(AttemptOutcome::Unsupported));
-    assert!(attempt.error.unwrap().contains("claude-code"));
-}
-
-#[tokio::test]
-async fn a_harness_with_nothing_to_compare_keeps_the_previous_changeset() {
+async fn an_unavailable_pull_request_keeps_the_previous_changeset() {
     let extractor = ScriptedExtractor::returning(extracted(PATCH));
     let (service, _repo, _blobs) = service(extractor.clone());
     service.capture(SESSION).await.unwrap();
 
-    let not_ready = ScriptedExtractor::not_ready("The agent has not pushed a branch yet.");
+    let not_ready = ScriptedExtractor::not_ready("GitHub could not return the pull request.");
     let sessions = InMemoryAgentSessionRepo::new();
     sessions.insert_session(test_agent_session(SESSION));
     // Same stores, different extractor: the second service sees the first
     // capture and fails to replace it.
     let repo = service.inner.repo.clone();
     let blobs = service.inner.blobs.clone();
-    let second = AgentChangesService::new(
-        sessions,
-        not_ready,
-        repo,
-        blobs,
-        RecordingRealtime::new(),
-        NoPullRequestDrafts,
-    );
+    let second =
+        AgentChangesService::new(sessions, not_ready, repo, blobs, RecordingRealtime::new());
     assert_eq!(
         second.capture(SESSION).await.unwrap(),
         CaptureOutcome::NotReady
@@ -189,7 +166,7 @@ async fn a_harness_with_nothing_to_compare_keeps_the_previous_changeset() {
     assert_eq!(attempt.outcome, Some(AttemptOutcome::NotReady));
     assert_eq!(
         attempt.error.as_deref(),
-        Some("The agent has not pushed a branch yet.")
+        Some("GitHub could not return the pull request.")
     );
 }
 
@@ -270,19 +247,5 @@ async fn a_receipt_for_another_entity_type_is_refused() {
     assert!(matches!(
         service.changes(&access).await,
         Err(ChangesError::Forbidden)
-    ));
-}
-
-#[tokio::test]
-async fn drafting_needs_a_changeset() {
-    let (service, _repo, _blobs) = service(ScriptedExtractor::returning(extracted(PATCH)));
-    assert!(matches!(
-        service.draft_pull_request(&edit_access()).await,
-        Err(ChangesError::NoChangeset)
-    ));
-    service.capture(SESSION).await.unwrap();
-    assert!(matches!(
-        service.draft_pull_request(&edit_access()).await,
-        Err(ChangesError::Draft(_))
     ));
 }

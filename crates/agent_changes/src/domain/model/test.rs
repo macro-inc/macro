@@ -42,12 +42,44 @@ fn enums_round_trip_through_their_wire_strings() {
         FileChangeKind::Renamed
     );
     assert_eq!(
-        ChangesetSource::CursorGithubCompare.to_string(),
-        "cursor_github_compare"
+        ChangesetSource::GithubPullRequest.to_string(),
+        "github_pull_request"
     );
     assert_eq!(
-        "macrod_git".parse::<ChangesetSource>().unwrap(),
-        ChangesetSource::MacrodGit
+        "github_pull_request".parse::<ChangesetSource>().unwrap(),
+        ChangesetSource::GithubPullRequest
     );
     assert_eq!(AttemptOutcome::NotReady.to_string(), "not_ready");
+}
+
+#[test]
+fn pull_request_urls_accept_github_pr_links_only() {
+    for suffix in [
+        "",
+        "/",
+        "/files",
+        "/commits",
+        "/checks",
+        "#discussion_r1",
+        "?diff=split",
+    ] {
+        let pr = PullRequestRef::parse(&format!("https://github.com/owner/repo/pull/123{suffix}"))
+            .unwrap();
+        assert_eq!(pr.repository.to_string(), "owner/repo");
+        assert_eq!(pr.number.get(), 123);
+    }
+    for url in [
+        "https://github.com/owner/repo/tree/work",
+        "https://github.com/owner/repo/pull/0",
+        "https://github.com/owner/repo/pull/-1",
+        "https://github.com/owner/repo/pull/1/anything",
+        "https://github.com/owner/repo/pull/1//anything",
+        "https://github.com.evil.example/owner/repo/pull/1",
+        "https://evil.example/owner/repo/pull/1",
+        "https://user:secret@github.com/owner/repo/pull/1",
+        "http://github.com/owner/repo/pull/1",
+        "https://github.com/owner/repo/pull/nope",
+    ] {
+        assert!(PullRequestRef::parse(url).is_none(), "accepted {url}");
+    }
 }

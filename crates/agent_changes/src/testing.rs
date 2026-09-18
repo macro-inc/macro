@@ -23,7 +23,6 @@ pub struct ScriptedExtractor {
 #[derive(Default)]
 struct ScriptedState {
     answer: Option<Result<ExtractedChangeset, String>>,
-    unsupported: bool,
     not_ready: Option<String>,
     calls: usize,
 }
@@ -37,15 +36,7 @@ impl ScriptedExtractor {
         this
     }
 
-    /// An extractor that serves no harness.
-    #[must_use]
-    pub fn unsupported() -> Self {
-        let this = Self::default();
-        this.state.lock().expect("scripted state").unsupported = true;
-        this
-    }
-
-    /// An extractor whose harness has nothing to compare yet.
+    /// An extractor whose linked PR is unavailable.
     #[must_use]
     pub fn not_ready(reason: &str) -> Self {
         let this = Self::default();
@@ -74,14 +65,9 @@ impl ScriptedExtractor {
 }
 
 impl ChangesetExtractor for ScriptedExtractor {
-    async fn extract(&self, session: &AgentSession) -> Result<ExtractedChangeset, ExtractError> {
+    async fn extract(&self, _session: &AgentSession) -> Result<ExtractedChangeset, ExtractError> {
         let mut state = self.state.lock().expect("scripted state");
         state.calls += 1;
-        if state.unsupported {
-            return Err(ExtractError::Unsupported {
-                harness: session.harness.clone(),
-            });
-        }
         if let Some(reason) = &state.not_ready {
             return Err(ExtractError::NotReady(reason.clone()));
         }

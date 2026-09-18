@@ -110,25 +110,26 @@ describe('ChangesPane', () => {
     expect(screen.getByRole('button', { name: 'Expand all' })).toBeTruthy();
   });
 
-  it('explains an unsupported harness', () => {
+  it('explains that a linked GitHub PR is required', () => {
     const context = createMockAgentChangesContext({
       summary: {
         capturing: false,
         attempt: {
           startedAt: 't',
           finishedAt: 't',
-          outcome: 'unsupported',
-          error: 'Sandbox sessions do not report changes.',
+          outcome: 'not_ready',
+          error:
+            'Link a GitHub pull request to this session to review its changes.',
         },
       },
     });
     const { controller } = mount(context, () => <ChangesPane />);
     controller().layout.open();
+    expect(screen.getByText('Pull request changes unavailable')).toBeTruthy();
     expect(
-      screen.getByText('This session does not report its changes')
-    ).toBeTruthy();
-    expect(
-      screen.getByText('Sandbox sessions do not report changes.')
+      screen.getByText(
+        'Link a GitHub pull request to this session to review its changes.'
+      )
     ).toBeTruthy();
   });
 
@@ -138,32 +139,22 @@ describe('ChangesPane', () => {
     });
     const { controller } = mount(context, () => <ChangesPane />);
     controller().layout.open();
-    fireEvent.click(screen.getByRole('button', { name: /Capture again/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Refresh changes/ }));
     await waitFor(() => expect(context.refreshes()).toBe(1));
   });
 
-  it('creates a pull request from the header and shows it once linked', async () => {
+  it('opens the linked GitHub PR without creating another one', () => {
     const context = readyContext();
+    const url = 'https://github.com/macro-inc/macro/pull/1482';
+    context.setPullRequestUrl(url);
     const { controller } = mount(context, () => <ChangesPane />);
     controller().layout.open();
-
-    fireEvent.click(
-      screen.getByRole('button', { name: 'Create pull request' })
-    );
-    await waitFor(() => expect(context.sent).toHaveLength(1));
-    expect(context.sent[0]).toContain('- Title: Drafted title');
     expect(
-      screen.getAllByText(/Asking the agent to open the pull request/).length
-    ).toBeGreaterThan(0);
-
-    context.setPullRequestUrl('https://github.com/macro-inc/macro/pull/1482');
-    await waitFor(() =>
-      expect(screen.getByText('Pull request #1482 opened')).toBeTruthy()
-    );
-    fireEvent.click(screen.getByRole('button', { name: 'Back to changes' }));
-    expect(
-      screen.getByRole('button', { name: /Pull request #1482/ })
-    ).toBeTruthy();
+      screen.queryByRole('button', { name: 'Create pull request' })
+    ).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'View pull request' }));
+    expect(context.opened).toEqual([url]);
+    expect(context.sent).toEqual([]);
   });
 
   it('closes and spotlights from its header', () => {

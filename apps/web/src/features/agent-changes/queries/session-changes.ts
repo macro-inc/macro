@@ -7,7 +7,6 @@
 import {
   useAgentSessionChangesPatchQuery,
   useAgentSessionChangesQuery,
-  useDraftPullRequestMutation,
   useRefreshAgentSessionChangesMutation,
 } from '@queries/agent-session/changes';
 import type {
@@ -102,7 +101,6 @@ export function createSessionChangesSource(
 ): ChangesSource {
   const summaryQuery = useAgentSessionChangesQuery(sessionId);
   const refresh = useRefreshAgentSessionChangesMutation();
-  const draft = useDraftPullRequestMutation();
 
   // Gate every `data` read on status: an unguarded read suspends the
   // nearest boundary (apps/web/AGENTS.md).
@@ -133,12 +131,6 @@ export function createSessionChangesSource(
       const id = sessionId();
       if (!id) return;
       await refresh.mutateAsync(id);
-    },
-    draftPullRequest: async () => {
-      const id = sessionId();
-      if (!id) throw new Error('No session to draft a pull request for');
-      const response = await draft.mutateAsync(id);
-      return { title: response.title, body: response.body };
     },
   };
 }

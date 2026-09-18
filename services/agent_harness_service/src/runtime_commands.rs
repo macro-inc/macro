@@ -2,7 +2,6 @@
 
 use std::sync::Arc;
 
-use crate::changes_bus::{ChangesBusEvent, MacrodChangesBus};
 use crate::model_providers::{MacrodModels, ModelProbeEvent};
 
 use agent_harness::domain::service::ForwardedCommands;
@@ -23,7 +22,6 @@ mod test;
 #[serde(untagged)]
 enum RuntimeBusEvent {
     Models(ModelProbeEvent),
-    Changes(ChangesBusEvent),
     Command(Box<RuntimeCommandRequest>),
 }
 
@@ -34,7 +32,6 @@ pub(crate) async fn consume_runtime_commands<Harness>(
     harness_service: Arc<Harness>,
     ready: tokio::sync::watch::Sender<bool>,
     models: MacrodModels,
-    changes: MacrodChangesBus,
 ) -> anyhow::Result<()>
 where
     Harness: ForwardedCommands,
@@ -81,19 +78,6 @@ where
                         .await
                         .inspect_err(|error| {
                             tracing::error!(error = ?error, "runtime model bus event failed");
-                        })
-                        .ok();
-                });
-                continue;
-            }
-            RuntimeBusEvent::Changes(event) => {
-                let changes = changes.clone();
-                probes.spawn(async move {
-                    changes
-                        .observe(event)
-                        .await
-                        .inspect_err(|error| {
-                            tracing::error!(error = ?error, "runtime changes bus event failed");
                         })
                         .ok();
                 });

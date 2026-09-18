@@ -13,7 +13,7 @@ describe('decodeSessionChanges', () => {
       },
       changeset: {
         id: 'cs',
-        source: 'macrod_git',
+        source: 'github_pull_request',
         repository: null,
         base: { name: 'main', sha: null },
         head: { name: null, sha: 'abc' },

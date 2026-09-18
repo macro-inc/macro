@@ -399,15 +399,16 @@ The display choice survives reload and copying; expansion still references the
 same session and does not invoke a bot. Compact mentions do not load transcripts.
 Existing announcement chips remain locked to the turn they announced.
 
-### Reviewing changes and opening a pull request
+### Reviewing a linked GitHub pull request
 
-Coding sessions on Cursor or a self-hosted (`macrod`) runtime capture the
-agent's changes when each turn ends. The session header gains a **Changes**
+Sessions with a linked GitHub pull request capture that PR's diff when each
+turn ends, regardless of the agent runtime. Unpushed workspace changes and
+branches without a PR are not included. The session header gains a **Changes**
 toggle (`aria-pressed`) with the changed-file count; it opens a resizable
 **Changes** pane beside the transcript (drag the 1px divider between them).
 The pane header shows a `head → base` branch pill, a **Unified / Split**
-segmented control (`aria-label="Diff layout"`), a re-capture button, the
-**Create pull request** split button, and **Expand changes to the full width**
+segmented control (`aria-label="Diff layout"`), a refresh button, the
+**View pull request** button (opens GitHub), and **Expand changes to the full width**
 (spotlight; **Bring the session back** returns to the split) and **Close the
 changes pane**. Below it a review bar reads `N of M files viewed` with a
 progress bar (`role="progressbar"`, `aria-label="Files viewed"`) and
@@ -426,22 +427,12 @@ sending posts one prompt listing every note by file and line and marks them
 persist per session in localStorage; a new capture resets viewed marks.
 
 While the pane is closed and a capture has files, a **Changes ready to
-review** card sits above the composer with **Review changes**, **Create pull
-request**, **Edit details…** and a **Dismiss** button. Sessions on runtimes
-that do not report changes (local sandboxes) explain that in the pane; a
-session with nothing captured offers **Capture again**.
-
-**Create pull request** drafts a title and description from the diff (a
-fast model, `POST …/changes/pull-request-draft`) and asks the agent to push
-the branch, open the pull request, and register it with `set_pull_request`.
-The split button's menu offers **Create as draft**, **Edit details first…**
-(a sheet with Title, Description with **Regenerate**, Base branch, Reviewers,
-**Open as a draft**, then **Create pull request** / **Open on GitHub instead**
-/ **Cancel**) and **Open compare on GitHub** (needs the branch pushed). The
-sheet shows **Asking the agent to open the pull request…** until the session's
-`pullRequestUrl` lands, then **Pull request #N opened** with **Open on
-GitHub**; from then on the header and hand-off card show **Pull request #N**
-instead of the create controls.
+review** card sits above the composer with **Review changes**, **Pull request
+#N** (opens GitHub), and **Dismiss**. With no linked PR, the pane explains
+that a GitHub PR is required. Ask the agent to open one and register its URL
+with `set_pull_request`, then use **Refresh changes**. An unavailable or
+oversized PR is explained in the pane; there is no branch or container fallback.
+The pane does not create PRs or generate their descriptions.
 
 ### Transcript navigation
 

@@ -15,7 +15,6 @@ import type {
   LoadAgentModelsRequest,
   LoadAgentModelsResponse,
   PreviewAgentSessionsResponse,
-  PullRequestDraftResponse,
   SandboxSize,
   SandboxSizeBody,
 } from './generated/schemas';
@@ -217,14 +216,6 @@ export const agentHarnessServiceClient = {
   refreshChanges(sessionId: string) {
     return fetchWithToken<AgentSessionChangesResponse>(
       `${agentHarnessHost}/agent-sessions/${sessionId}/changes/refresh`,
-      { method: 'POST' }
-    );
-  },
-
-  /** A pull request title and description drafted from the current changeset. */
-  draftPullRequest(sessionId: string) {
-    return fetchWithToken<PullRequestDraftResponse>(
-      `${agentHarnessHost}/agent-sessions/${sessionId}/changes/pull-request-draft`,
       { method: 'POST' }
     );
   },

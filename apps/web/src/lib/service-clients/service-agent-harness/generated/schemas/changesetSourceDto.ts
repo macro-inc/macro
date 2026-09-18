@@ -6,13 +6,12 @@
  */
 
 /**
- * Which harness family the changeset came from, on the wire.
+ * The source of the captured diff, on the wire.
  */
 export type ChangesetSourceDto =
   (typeof ChangesetSourceDto)[keyof typeof ChangesetSourceDto];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const ChangesetSourceDto = {
-  cursor_github_compare: 'cursor_github_compare',
-  macrod_git: 'macrod_git',
+  github_pull_request: 'github_pull_request',
 } as const;

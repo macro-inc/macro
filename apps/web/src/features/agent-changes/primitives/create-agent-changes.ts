@@ -1,5 +1,5 @@
 /**
- * The pane's one controller: layout, model, review, and pull request flow
+ * The pane's one controller: layout, model, and review
  * built from the capability contract and handed to the views together.
  */
 
@@ -12,10 +12,6 @@ import {
   type PaneLayoutController,
 } from './create-pane-layout';
 import {
-  createPullRequestFlow,
-  type PullRequestController,
-} from './create-pull-request-flow';
-import {
   createReviewState,
   type ReviewController,
 } from './create-review-state';
@@ -27,7 +23,6 @@ export type AgentChangesController = {
   layout: PaneLayoutController;
   model: ChangesModel;
   review: ReviewController;
-  pullRequest: PullRequestController;
   diffStyle: Accessor<DiffStyle>;
   setDiffStyle: (style: DiffStyle) => void;
   /** Post every queued note to the agent as one prompt. */
@@ -63,12 +58,6 @@ export function createAgentChanges(options: {
     changeset: model.changeset,
     storage: options.storage,
   });
-  const pullRequest = createPullRequestFlow({
-    source,
-    host,
-    changeset: model.changeset,
-    ensureVisible: layout.open,
-  });
   const [diffStyle, setDiffStyle] = options.diffStyle;
   const [dismissed, setDismissed] = options.dismissed;
 
@@ -77,7 +66,6 @@ export function createAgentChanges(options: {
     layout,
     model,
     review,
-    pullRequest,
     diffStyle,
     setDiffStyle,
     sendQueuedNotes: () => {

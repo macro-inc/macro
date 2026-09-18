@@ -21,7 +21,7 @@ fn the_changes_response_says_when_a_capture_is_running() {
         changeset: Some(Changeset {
             id: ChangesetId::new(),
             session: crate::domain::model::AgentSessionId::TEST_A,
-            source: ChangesetSource::MacrodGit,
+            source: ChangesetSource::GithubPullRequest,
             range: ChangesetRange::default(),
             files: vec![ChangedFile {
                 path: "a.rs".to_owned(),
@@ -57,7 +57,7 @@ fn the_changes_response_says_when_a_capture_is_running() {
 
     let json = serde_json::to_value(&changeset).unwrap();
     assert_eq!(json["files"][0]["previousPath"], "b.rs");
-    assert_eq!(json["source"], "macrod_git");
+    assert_eq!(json["source"], "github_pull_request");
     assert_eq!(json["files"][0]["kind"], "renamed");
 }
 
@@ -67,9 +67,6 @@ fn errors_answer_with_the_status_the_pane_branches_on() {
     assert_eq!(forbidden.status(), StatusCode::FORBIDDEN);
     let missing = AgentChangesApiError::from(ChangesError::NoChangeset).into_response();
     assert_eq!(missing.status(), StatusCode::NOT_FOUND);
-    let draft =
-        AgentChangesApiError::from(ChangesError::Draft(rootcause::report!("down"))).into_response();
-    assert_eq!(draft.status(), StatusCode::BAD_GATEWAY);
     let storage = AgentChangesApiError::from(ChangesError::Storage(rootcause::report!("down")))
         .into_response();
     assert_eq!(storage.status(), StatusCode::INTERNAL_SERVER_ERROR);
