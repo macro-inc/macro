@@ -62,7 +62,7 @@ describe('lock-on + errors', () => {
     });
   });
 
-  it('$blockById rejects a table or row id', () => {
+  it('$blockById on a table or row id resolves to that node', () => {
     const { session, ids } = setup('intro');
     new Doc(session).apply({
       kind: 'insertNode',
@@ -71,13 +71,13 @@ describe('lock-on + errors', () => {
       at: { after: ids[0]! },
     });
     edit(session, () => {
-      expect(() => $blockById(session, 't')).toThrow(/not a content block/);
+      expect($blockById(session, 't').getType()).toBe('table');
       const table = $getRoot()
         .getChildren()
         .find((n) => $isElementNode(n) && n.getType() === 'table');
       if (!table || !$isElementNode(table)) throw new Error('no table');
-      const rowId = $getId(table.getChildren().filter($isTableRowNode)[0]!);
-      expect(() => $blockById(session, rowId!)).toThrow(/not a content block/);
+      const row = table.getChildren().filter($isTableRowNode)[0]!;
+      expect($blockById(session, $getId(row)!).getType()).toBe('tablerow');
     });
   });
 });

@@ -1,3 +1,4 @@
+import { $createListItemNode, $createListNode } from '@lexical/list';
 import {
   $createTableCellNode,
   $createTableNode,
@@ -97,6 +98,21 @@ describe('validateEditorTree', () => {
         expect(validateEditorTree($getRoot())[0]?.message).toMatch(
           /tablerow child must be tablecell/
         );
+      },
+      { discrete: true }
+    );
+  });
+
+  it('accepts a list of list items', () => {
+    const editor = createTestEditor();
+    editor.update(
+      () => {
+        const list = $createListNode('bullet');
+        const item = $createListItemNode();
+        item.append($createTextNode('ok'));
+        list.append(item);
+        $getRoot().clear().append(list);
+        expect(validateEditorTree($getRoot())).toEqual([]);
       },
       { discrete: true }
     );

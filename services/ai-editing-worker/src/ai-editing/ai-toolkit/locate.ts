@@ -4,7 +4,10 @@ import {
   $isTableRowNode,
 } from '@lexical/table';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
-import { $isContentBlock } from '@macro-inc/lexical-core/utils/editor-tree';
+import {
+  $cellTextTarget,
+  $isContentBlock,
+} from '@macro-inc/lexical-core/utils/editor-tree';
 import {
   $findMatchingParent,
   $getNodeByKey,
@@ -25,26 +28,25 @@ export function $byId(session: LexicalSession, id: string): LexicalNode {
 }
 
 /**
- * Lock onto a content block by id. Inline ids (text/link spans) resolve UP to
- * the containing paragraph/heading/list item. Table structure is not a content
- * block: a `<td>` id resolves DOWN to the cell's first content child, and a
- * `<table>`/`<tr>` id is rejected. Throws if nothing content-block is found.
+ * Lock onto a content block by id. Inline ids resolve UP to the containing
+ * paragraph/heading/list item. A `<td>` id resolves DOWN to a `$setText`-safe
+ * child (paragraph/heading/quote/code, or the first list item). A `<table>`
+ * or `<tr>` id resolves to that node so move/locate/replace still work; text
+ * ops that would reshape them fail later at tree validation.
  */
 export function $blockById(session: LexicalSession, id: string): ElementNode {
   const start = $byId(session, id);
   if ($isTableCellNode(start)) {
-    const content = start.getChildren().find($isContentBlock);
+    const content = $cellTextTarget(start);
     if (!content) {
       throw new Error(
-        `id "${id}" is a <td> with no content block — use setCell or the cell's paragraph id`
+        `id "${id}" is a <td> with no text-bearing block — use setCell or the cell's paragraph id`
       );
     }
     return content;
   }
   if ($isTableNode(start) || $isTableRowNode(start)) {
-    throw new Error(
-      `id "${id}" is a <${start.getType()}>, not a content block`
-    );
+    return start;
   }
   const node = $findMatchingParent(start, $isContentBlock);
   if (!node) {
