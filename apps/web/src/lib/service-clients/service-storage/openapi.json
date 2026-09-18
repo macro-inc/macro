@@ -19496,6 +19496,7 @@
           "inserted_row_ids",
           "new_versions",
           "read_tables",
+          "read_versions",
           "truncated_tables"
         ],
         "properties": {
@@ -19529,6 +19530,16 @@
               "format": "uuid"
             },
             "description": "Dependency set of the statement, for liveness subscription."
+          },
+          "read_versions": {
+            "type": "object",
+            "description": "The version every user table in [`ExecOutcome::read_tables`] was at\nwhen this statement materialized it. Send these back as\n[`ExecRequest::base_versions`] on the follow-up write to get a real\ncompare-and-set over everything the statement read.",
+            "additionalProperties": {
+              "$ref": "#/components/schemas/TableVersion"
+            },
+            "propertyNames": {
+              "type": "string"
+            }
           },
           "results": {
             "type": "array",

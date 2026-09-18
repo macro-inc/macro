@@ -633,6 +633,7 @@ export * from './excludeDefaultViewRequest';
 export * from './excludedDefaultView';
 export * from './execOutcome';
 export * from './execOutcomeNewVersions';
+export * from './execOutcomeReadVersions';
 export * from './execRequestBody';
 export * from './execRequestBodyBaseVersions';
 export * from './exportDocumentResponse';

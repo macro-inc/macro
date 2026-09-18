@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ExecOutcomeNewVersions } from './execOutcomeNewVersions';
+import type { ExecOutcomeReadVersions } from './execOutcomeReadVersions';
 import type { QueryResult } from './queryResult';
 
 /**
@@ -22,6 +23,11 @@ export interface ExecOutcome {
   new_versions: ExecOutcomeNewVersions;
   /** Dependency set of the statement, for liveness subscription. */
   read_tables: string[];
+  /** The version every user table in [`ExecOutcome::read_tables`] was at
+when this statement materialized it. Send these back as
+[`ExecRequest::base_versions`] on the follow-up write to get a real
+compare-and-set over everything the statement read. */
+  read_versions: ExecOutcomeReadVersions;
   /** Result sets of the SELECT statements, in order. */
   results: QueryResult[];
   /** Magic tables whose materialization hit its row cap; aggregates over

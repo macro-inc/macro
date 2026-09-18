@@ -4625,6 +4625,18 @@ export const execDatabaseSqlResponse = zod
     read_tables: zod
       .array(zod.uuid())
       .describe('Dependency set of the statement, for liveness subscription.'),
+    read_versions: zod
+      .record(
+        zod.string(),
+        zod
+          .number()
+          .describe(
+            'Monotonic per-table version, bumped on every row\/column\/link mutation.\n\nThe cache key for query materializations and the invalidation signal for\nlive query chips.'
+          )
+      )
+      .describe(
+        'The version every user table in [`ExecOutcome::read_tables`] was at\nwhen this statement materialized it. Send these back as\n[`ExecRequest::base_versions`] on the follow-up write to get a real\ncompare-and-set over everything the statement read.'
+      ),
     results: zod
       .array(
         zod
