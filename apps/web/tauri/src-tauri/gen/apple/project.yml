@@ -73,7 +73,7 @@ targets:
         LSApplicationQueriesSchemes:
           - macro
         UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: true
+          UIApplicationSupportsMultipleScenes: false
           UISceneConfigurations:
             UIWindowSceneSessionRoleApplication:
               - UISceneConfigurationName: TaoScene

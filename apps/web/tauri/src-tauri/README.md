@@ -30,21 +30,26 @@ Apps built with the iOS 27 SDK must use the scene lifecycle. Keep the
 `UIApplicationSceneManifest` in `Info.ios.plist`,
 `gen/apple/app_iOS/Info.plist`, and `gen/apple/project.yml` in sync:
 
-- Tao 0.35 enables its scene delegate and defers startup to scene connection
-  only when `UIApplicationSupportsMultipleScenes` is true.
-- Declare the `TaoScene` configuration under
-  `UISceneConfigurations.UIWindowSceneSessionRoleApplication` as well;
-  the support flag alone still triggers iOS 27's launch assertion.
+- The fork at `957785f5` uses Tao 0.37, which enables the scene lifecycle from
+  the manifest independently of multi-window support. Keep
+  `UIApplicationSupportsMultipleScenes` false to retain Macro's single-window
+  behavior on both iPhone and iPad.
+- Declare `TaoScene` under
+  `UISceneConfigurations.UIWindowSceneSessionRoleApplication`.
 - Tao registers the delegate dynamically; do not add a separate Swift delegate.
+- Mobile foreground handling uses `RunEvent::WindowEvent` containing
+  `WindowEvent::Resumed`, not top-level `RunEvent::Resumed` or `Focused(true)`.
+  This preserves bundle-update retries on resume without triggering them for
+  ordinary focus changes. The event variant and handler are gated to mobile.
 
-This enables startup, not full multi-window support. Additional iPad scenes and
-cold-start deep links still need follow-up: Tao's first-scene connection does
+Cold-start deep links still need follow-up: Tao's first-scene connection does
 not forward its connection options as an opened-URL event. Warm links work.
 
 Xcode 27 also changes the local build tooling: its SDK requires a deployment
-build setting of at least iOS 15, SwiftPM defaults to `swiftbuild` (the pinned
-`swift-rs` needs `swift build --build-system native`), and Tauri CLI 2.11.4
-mistakes simulators returned by `devicectl` for physical devices. For now use
+build setting of at least iOS 15. The resolved `swift-rs` 1.0.8 supports Xcode
+27's SwiftPM; the previous `--build-system native` workaround is no longer
+needed. Tauri CLI 2.11.4 still mistakes simulators returned by `devicectl` for
+physical devices. For now use
 `cargo tauri ios dev --open` and build the simulator destination with Xcode,
 with `IPHONEOS_DEPLOYMENT_TARGET=15.0`. Use Xcode's tools rather than Nix's
 Apple SDK/linker for native builds. These are build-time workarounds, not

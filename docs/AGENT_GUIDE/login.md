@@ -22,7 +22,10 @@
 
 The native welcome screen offers `Create new account` and `Log into existing
 account` before the login form. Startup and background/foreground resume work
-with the scene lifecycle enabled. A custom-scheme link to `macro://app/login`
+with the scene lifecycle enabled; Macro remains single-window on iPhone and
+iPad. The iPad welcome screen can show an `Optimized for iPhone` notice.
+Mobile resume is delivered per window, independently of ordinary focus changes.
+A custom-scheme link to `macro://app/login`
 works while Macro is running, but a link that cold-starts the app currently
 lands on the welcome screen instead. Open Macro first when testing deep links;
 do not treat cold-start link delivery as verified. See the
