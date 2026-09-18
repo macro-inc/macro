@@ -12,18 +12,10 @@ import {
   insertDocumentMentionAtDragCoordinates,
   updateDragInsertPreviewFromCoordinates,
 } from '@core/component/LexicalMarkdown/utils/dragInsertUtils';
-import { isClaudeBotId } from '@core/constant/claudeAgent';
-import { isCodexBotId } from '@core/constant/codexAgent';
-import { isCursorBotId } from '@core/constant/cursorAgent';
-import {
-  enableChatV3Agents,
-  isFeatureEnabled,
-} from '@core/constant/featureFlags';
-import { useCursorAgentsAccess } from '@core/cursor/flag';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { createMessageComposer } from '@core/messages/create-message-composer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
-import { uniqueByKey } from '@core/util/compareUtils';
 import { isPlatform } from '@core/util/platform';
 import {
   chatRuleset,
@@ -31,6 +23,7 @@ import {
   uploadFile,
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
+import type { MessageParent } from '@service-storage/messages';
 import { CollapsedInput, ComposerSurface } from '@ui';
 import { $getRoot } from 'lexical';
 import {
@@ -41,26 +34,13 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import {
-  claudeMentionUser,
-  codexMentionUser,
-  cursorMentionUser,
-  isMacroAiId,
-  isMacroCoderId,
-  isMacroNewId,
-  macroAiMentionUser,
-  macroCoderMentionUser,
-  macroNewMentionUser,
-} from '../macroAi';
+import { useAgentMentionUsers } from '../use-agent-mention-users';
+import { useMessageBotMentionUsers } from '../use-channel-bot-mention-users';
 import { CHANNEL_FILE_PICKER_ACCEPT } from './accepted-file-types';
-import { createInputAttachmentTracker } from './attachment-tracker';
 import { createConfiguredChannelMarkdownEditor } from './configured-markdown-editor';
 import { createCollapsedInputState } from './create-collapsed-input-state';
-import { createInputState } from './create-input-state';
-import { createTypingTracker } from './create-typing-tracker';
 import { FormatButtons } from './FormatButtons';
 import { Input } from './Input';
-import { createMentionsTracker } from './mentions-tracker';
 import type {
   EntityMentionInsertCoordinates,
   InputAttachmentTracker,
@@ -81,6 +61,7 @@ import { hasSendableInputContent } from './utils/sendable-content';
 
 export type ChannelInputProps = InputCallbacks & {
   input: InputData;
+  parent?: MessageParent;
   markdownNamespace?: string;
   persistenceKey?: InputPersistenceKey;
   attachmentTracker?: InputAttachmentTracker;
@@ -144,53 +125,32 @@ function DefaultActions(props: { input: InputData }) {
 export function ChannelInput(props: ChannelInputProps) {
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [scrollContainer, setScrollContainer] = createSignal<HTMLElement>();
-  const mentionsTracker = createMentionsTracker();
-  const attachmentTracker =
-    props.attachmentTracker ??
-    createInputAttachmentTracker({
-      initialAttachments: props.input.attachments,
-    });
   let clearComposer = () => {};
   // Suppresses focus-out handling during clearComposer's iOS blur/refocus
   // cycle, which is not a user-intended blur.
   let isInternalRefocus = false;
 
-  const typingTracker = createTypingTracker({
-    onStartTyping: () => props.onStartTyping?.(),
-    onStopTyping: () => props.onStopTyping?.(),
-  });
-
-  const inputState = createInputState({
-    initialInput: props.input,
-    mentions: mentionsTracker.mentions,
+  const {
+    inputState,
+    mentionsTracker,
     attachmentTracker,
-    clearComposer: () => clearComposer(),
+    typingTracker,
+    onChange,
+  } = createMessageComposer({
+    input: props.input,
+    attachmentTracker: props.attachmentTracker,
+    persistenceKey: props.persistenceKey,
+    callbacks: props,
+    clearEditor: () => clearComposer(),
+    trackTyping: () => acceptTyping,
     attachFiles: async (files) => {
       await uploadInputAttachments({
         files,
         tracker: attachmentTracker,
-        uploadFile: async (file) => {
-          return uploadFile(file, chatRuleset, {
-            hideProgressIndicator: true,
-          });
-        },
+        uploadFile: (file) =>
+          uploadFile(file, chatRuleset, { hideProgressIndicator: true }),
       });
     },
-    clearInput: () => markdownEditor.controls.clear(),
-    callbacks: {
-      onChange: props.onChange,
-      onSend: (snapshot) => {
-        typingTracker.stop();
-        return props.onSend?.(snapshot);
-      },
-      onToggleFormatRibbon: props.onToggleFormatRibbon,
-      onClose: (snapshot) => {
-        typingTracker.stop();
-        return props.onClose?.(snapshot);
-      },
-      onRemoveAttachment: props.onRemoveAttachment,
-    },
-    persistenceKey: props.persistenceKey,
   });
 
   const collapsedInput = createCollapsedInputState({
@@ -257,46 +217,19 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
-  const canUseCursor = useCursorAgentsAccess();
-
-  // Global agents and channel bots share the participant mention typeahead.
-  // Cursor, Macro New, and Macro Coder follow their respective rollout flags.
-  // Mentions are re-tagged as bot mentions at send time.
-  const mentionUsers: Accessor<IUser[]> = () => {
-    const base = [
-      ...(props.participants?.() ?? []),
-      ...(props.bots?.() ?? []),
-    ].filter((user) => canUseCursor() || !isCursorBotId(user.id));
-    if (
-      isFeatureEnabled(enableChatV3Agents) &&
-      !base.some((user) => isMacroCoderId(user.id))
-    ) {
-      base.unshift(macroCoderMentionUser());
-    }
-    if (
-      isFeatureEnabled(enableChatV3Agents) &&
-      !base.some((user) => isMacroNewId(user.id))
-    ) {
-      base.unshift(macroNewMentionUser());
-    }
-    // Account setup does not hide bots included in the user's rollout.
-    // Their replies link to Settings → Harness when a connection is needed.
-    if (canUseCursor() && !base.some((user) => isCursorBotId(user.id))) {
-      base.unshift(cursorMentionUser());
-    }
-    if (!base.some((user) => isCodexBotId(user.id))) {
-      base.unshift(codexMentionUser());
-    }
-    if (!base.some((user) => isClaudeBotId(user.id))) {
-      base.unshift(claudeMentionUser());
-    }
-    if (!base.some((user) => isMacroAiId(user.id))) {
-      base.unshift(macroAiMentionUser());
-    }
-    return uniqueByKey(base, (user) => user.id);
-  };
+  const parentBots =
+    !props.bots && props.parent
+      ? useMessageBotMentionUsers(() => props.parent!)
+      : () => [];
+  // Connection-prompt behavior for the built-in agents lives in
+  // useAgentMentionUsers; participants and channel/document bots feed it here.
+  const mentionUsers = useAgentMentionUsers(() => [
+    ...(props.participants?.() ?? []),
+    ...(props.bots?.() ?? parentBots()),
+  ]);
 
   const markdownEditor = createConfiguredChannelMarkdownEditor({
+    groupMentions: !props.parent || props.parent.type === 'channel',
     namespace: props.markdownNamespace ?? 'channel-input-markdown',
     enableMentions: true,
     users: mentionUsers,
@@ -307,13 +240,7 @@ export function ChannelInput(props: ChannelInputProps) {
     onMentionRemove: (mention) => {
       mentionsTracker.onMentionRemove(mention);
     },
-    onChange: (markdown) => {
-      const previous = inputState.view().value ?? '';
-      inputState.setValue(markdown);
-      if (!acceptTyping) return;
-      if (markdown.trim() === previous.trim()) return;
-      typingTracker.keystroke();
-    },
+    onChange,
     onEnter: () => {
       if (isTouchDevice()) return false;
       typingTracker.stop();

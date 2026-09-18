@@ -1,5 +1,9 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import type { DeleteCommentInfo } from '@core/comments/commentType';
+import type {
+  CommentId,
+  DeleteCommentInfo,
+  ThreadId,
+} from '@core/comments/commentType';
 import { threadMeasureContainerId } from '@core/comments/Thread';
 import {
   CREATE_COMMENT_COMMAND,
@@ -35,7 +39,9 @@ export function useCreateComment() {
   const updateNodeThreadId = useSetNodeCommentThreadId();
 
   return createCallback(
-    async (info: CreateCommentRequest & { threadId: number }) => {
+    async (
+      info: Omit<CreateCommentRequest, 'threadId'> & { threadId: ThreadId }
+    ) => {
       analytics.track('comment_create', { blockType: 'md' });
       const { threadId, text, mentions } = info;
 
@@ -69,7 +75,8 @@ export function useCreateComment() {
         return response;
       }
 
-      return await createThreadReply(info);
+      if (typeof threadId !== 'number') return null;
+      return await createThreadReply({ ...info, threadId });
     }
   );
 }
@@ -79,11 +86,17 @@ export function useUpdateComment() {
 
   const editComment = useEditCommentResource();
 
-  return createCallback((commentId: number, info: EditCommentRequest) => {
-    analytics.track('comment_update', { blockType: 'md' });
-
-    return editComment(commentId, info);
-  });
+  return createCallback(
+    (
+      commentId: CommentId,
+      info: Omit<EditCommentRequest, 'threadId'> & { threadId: ThreadId }
+    ) => {
+      analytics.track('comment_update', { blockType: 'md' });
+      if (typeof commentId !== 'number' || typeof info.threadId !== 'number')
+        return Promise.resolve(false);
+      return editComment(commentId, { ...info, threadId: info.threadId });
+    }
+  );
 }
 
 export function useCreatePendingComment() {
@@ -113,6 +126,7 @@ export function useDeleteComment() {
     // comment mark deleted -> comment server delete re-attempted
     if (!comment) return true;
 
+    if (typeof commentId !== 'number') return false;
     const deleteInfo = await deleteComment(commentId, {
       removeAnchorThreadOnly: info.removeAnchorThreadOnly,
     });

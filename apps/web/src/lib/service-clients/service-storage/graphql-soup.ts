@@ -731,6 +731,8 @@ function mapGraphqlNotificationMetadata(
             text: metadata.mentionedInDocumentCommentText,
             senderProfilePictureUrl:
               metadata.mentionedInDocumentCommentSenderProfilePictureUrl,
+            senderDisplayName:
+              metadata.mentionedInDocumentCommentSenderDisplayName,
           },
         }) satisfies NotifEventMember<'mentioned_in_document_comment'>
     )
@@ -751,6 +753,8 @@ function mapGraphqlNotificationMetadata(
             text: metadata.repliedToDocumentCommentThreadText,
             senderProfilePictureUrl:
               metadata.repliedToDocumentCommentThreadSenderProfilePictureUrl,
+            senderDisplayName:
+              metadata.repliedToDocumentCommentThreadSenderDisplayName,
           },
         }) satisfies NotifEventMember<'replied_to_document_comment_thread'>
     )
@@ -771,6 +775,7 @@ function mapGraphqlNotificationMetadata(
             text: metadata.commentedOnDocumentText,
             senderProfilePictureUrl:
               metadata.commentedOnDocumentSenderProfilePictureUrl,
+            senderDisplayName: metadata.commentedOnDocumentSenderDisplayName,
           },
         }) satisfies NotifEventMember<'commented_on_document'>
     )

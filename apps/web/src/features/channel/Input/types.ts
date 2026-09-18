@@ -10,6 +10,8 @@ export type InputAttachmentData = {
   id: string;
   name: string;
   kind: InputAttachmentKind;
+  /** Preserve the stored entity kind when editing an existing attachment. */
+  entityType?: string;
   iconType?: EntityIconSelector;
   pending?: boolean;
   /** Preview URL used while uploading or until the final media source has loaded. */

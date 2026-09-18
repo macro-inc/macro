@@ -75,6 +75,11 @@ We have 3 environments "test", "dev", and "prod". When developing we typically u
 
 #### Testing
 
+The tests run in Node.js with Vitest and start the compiled Rust Worker through
+Miniflare directly (`tests/utils.ts`); no Vitest worker-pool plugin is needed.
+Use Node.js 22.12+ (22.x), 24.x, or 26+ for Vitest 5. Install dependencies with
+`npm ci`; `package-lock.json` is the lockfile used by setup and deployment.
+
 #### Running Locally
 Run:
 

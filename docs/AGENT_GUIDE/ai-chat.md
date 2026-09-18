@@ -111,8 +111,9 @@
   the right.
   Existing sessions retain their agent and kind; use **New conversation** to
   choose another. Stop, queued-message advancement, and quoting remain available.
-- Users outside the flag retain the Owned / Running / Shared / Automations /
-  Skills list. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
+- Touch devices and users outside the flag retain the Owned / Running / Shared /
+  Automations / Skills list. On touch devices, conversation links open standalone
+  agent sessions or legacy chats instead of the desktop Agents workspace. A standalone legacy chat is `/app/chat/<uuid>`; doc-scoped chat
   is `/app/md/<doc>/chat/<chat>` (split view).
 
 ## Start a standalone chat

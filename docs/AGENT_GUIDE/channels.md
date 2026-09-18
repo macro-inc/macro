@@ -66,7 +66,8 @@ shorten it and resize the pane. It should expand when the text no longer fits
 beside the buttons and collapse when it fits again, without flickering between
 layouts. Also add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
-should remain usable in both layouts, including when editing an existing message.
+should remain usable in both layouts. Existing message and reply edit inputs show
+only the send control, with no format or discard button; Escape cancels the edit.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
 Check this arrangement at both phone and tablet widths.
 
@@ -259,12 +260,22 @@ messages and composer visible. Expand a thread while its replies are still
 loading: existing preview replies should remain visible until the full list
 arrives. Repeat after reopening the channel to cover both cold and cached data.
 
+Channel messages, thread replies, reactions, edits, deletions, and typing go
+through the shared message API at `GET|POST /dss/messages/channel/<id>` and its
+`items`, `threads`, and `typing` subroutes; the `/dss/channels/<id>/message*`
+routes are no longer called by the web app. Live updates arrive as one
+`message_update` websocket payload per committed change (`posted`, `edited`,
+`message_deleted`, `reaction_changed`, `thread_updated`, `typing`); the older
+`comms_message`, `comms_reaction`, `comms_attachment`, and `comms_typing`
+frames are ignored. Documents share the same client, cache, and components
+behind `enable-unified-document-discussions` (see documents.md).
+
 Reopening a channel already loaded this session requests
-`GET /dss/channels/<id>/messages/catch-up?after=<newest cached created_at>&limit=50`
+`GET /dss/messages/channel/<id>?selection=<cursor of the newest cached root, direction newer, limit 50>`
 and merges the result into the cached first page. A first open, a message link,
-a channel cached away from its latest page, and a delta longer than one page use
-`GET /dss/channels/<id>/messages`. The `channel_messages_load` event records
-`path` (`catch_up` or `full`) and `reason`
+a channel cached away from its latest page, and a delta longer than one page load
+the latest page with the default selection. The `channel_messages_load` event
+records `path` (`catch_up` or `full`) and `reason`
 (`watermark`, `list_ahead`, `no_cache`, `cache_not_at_latest`, `load_around`,
 `delta_overflow`, or `catch_up_error`).
 

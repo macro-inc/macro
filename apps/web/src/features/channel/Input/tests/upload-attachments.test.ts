@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const { getImageDimensionsMock, getVideoDimensionsMock, toastFailureMock } =
   vi.hoisted(() => ({
@@ -32,12 +32,15 @@ vi.mock('@core/component/Toast/Toast', () => ({
 
 describe('uploadInputAttachments', () => {
   beforeEach(() => {
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:attachment-preview');
     getImageDimensionsMock.mockReset();
     getImageDimensionsMock.mockResolvedValue({ width: 0, height: 0 });
     getVideoDimensionsMock.mockReset();
     getVideoDimensionsMock.mockResolvedValue({ width: 0, height: 0 });
     toastFailureMock.mockReset();
   });
+
+  afterEach(() => vi.restoreAllMocks());
 
   it('infers attachment kind from mime type and extension', () => {
     expect(
@@ -83,6 +86,7 @@ describe('uploadInputAttachments', () => {
         name: 'image.png',
         kind: 'image',
         pending: true,
+        previewSrc: 'blob:attachment-preview',
       },
     ]);
 
@@ -100,6 +104,7 @@ describe('uploadInputAttachments', () => {
         kind: 'image',
         mimeType: 'image/png',
         size: 3,
+        previewSrc: 'blob:attachment-preview',
       },
     ]);
   });
@@ -164,6 +169,7 @@ describe('uploadInputAttachments', () => {
         size: 3,
         width: 1920,
         height: 1080,
+        previewSrc: 'blob:attachment-preview',
       },
     ]);
   });

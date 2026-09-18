@@ -5,7 +5,7 @@ import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   availableBotMentionUsers,
-  useChannelBotMentionUsers,
+  useMessageBotMentionUsers,
 } from './use-channel-bot-mention-users';
 
 const flags = vi.hoisted(() => ({ cursor: (): boolean => false }));
@@ -70,7 +70,10 @@ describe('availableBotMentionUsers', () => {
     createRoot((dispose) => {
       const [enabled, setEnabled] = createSignal(false);
       flags.cursor = enabled;
-      const users = useChannelBotMentionUsers(() => 'channel-1');
+      const users = useMessageBotMentionUsers(() => ({
+        type: 'channel' as const,
+        id: 'channel-1',
+      }));
       expect(users().map((user) => user.id)).toEqual(['bot|codex-agent']);
       setEnabled(true);
       expect(users().map((user) => user.id)).toEqual([
@@ -118,7 +121,10 @@ describe('availableBotMentionUsers', () => {
   it('offers Codex from the mention query without requiring account setup', () => {
     createRoot((dispose) => {
       expect(
-        useChannelBotMentionUsers(() => 'channel-1')().map((user) => user.id)
+        useMessageBotMentionUsers(() => ({
+          type: 'channel' as const,
+          id: 'channel-1',
+        }))().map((user) => user.id)
       ).toEqual(['bot|codex-agent']);
       dispose();
     });
@@ -188,5 +194,17 @@ describe('availableBotMentionUsers', () => {
     const cursorAgent = agent('cursor-agent', 'Cursor agent', 'all', 'cursor');
 
     expect(availableBotMentionUsers([], [cursorAgent], true)).toHaveLength(1);
+  });
+
+  it('includes channel-selected agents on a document surface only', () => {
+    const selected = agent('doc-only', 'Doc only', 'selected');
+    expect(
+      availableBotMentionUsers([], [selected], true, 'channel').map((u) => u.id)
+    ).toEqual([]);
+    expect(
+      availableBotMentionUsers([], [selected], true, 'document').map(
+        (u) => u.id
+      )
+    ).toEqual(['bot|doc-only']);
   });
 });
