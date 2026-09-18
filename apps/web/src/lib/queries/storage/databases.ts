@@ -10,6 +10,7 @@ import { throwOnErr } from '@core/util/result';
 import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type {
+  CreateColumnRequest,
   DatabaseDetail,
   ExecErrorCode,
   ExecOutcome,
@@ -79,21 +80,91 @@ export async function execSql(request: ExecRequest): Promise<ExecOutcome> {
   return result.value;
 }
 
+/**
+ * Re-read one database's schema.
+ *
+ * Deliberately narrow: rows live under their own key and are invalidated by
+ * [`invalidateDatabaseRows`], so a schema change never re-runs every open
+ * grid's `SELECT` — let alone another database's.
+ */
 export function invalidateDatabase(databaseId: string) {
-  return Promise.all([
-    queryClient.invalidateQueries({
-      queryKey: databasesKeys.detail(databaseId).queryKey,
-    }),
-    queryClient.invalidateQueries({
-      queryKey: databasesKeys._def,
-    }),
-  ]);
+  return queryClient.invalidateQueries({
+    queryKey: databasesKeys.detail(databaseId).queryKey,
+  });
 }
 
 export function invalidateDatabaseRows(databaseId: string, tableId: string) {
   return queryClient.invalidateQueries({
     queryKey: databasesKeys.rows(databaseId, tableId).queryKey,
   });
+}
+
+/**
+ * Fold the versions a write reported straight into the cached schema.
+ *
+ * The version is the only part of the detail response a write moves, so
+ * patching it in place spares the grid a schema refetch it would otherwise
+ * make on every cell edit.
+ */
+export function applyDatabaseTableVersions(
+  databaseId: string,
+  newVersions: Record<string, number>
+) {
+  if (Object.keys(newVersions).length === 0) return;
+
+  queryClient.setQueryData(
+    databasesKeys.detail(databaseId).queryKey,
+    (previous: DatabaseDetail | undefined): DatabaseDetail | undefined => {
+      if (!previous) return previous;
+      return {
+        ...previous,
+        tables: previous.tables.map((table) => {
+          const version = newVersions[table.table.id];
+          if (version === undefined || version === table.table.version) {
+            return table;
+          }
+          return { ...table, table: { ...table.table, version } };
+        }),
+      };
+    }
+  );
+}
+
+/** Add a table (tab) to a database and return its id. */
+export async function createDatabaseTable(params: {
+  databaseId: string;
+  name: string;
+}): Promise<string | undefined> {
+  const result = await storageServiceClient.databases.createTable({
+    id: params.databaseId,
+    name: params.name,
+  });
+  if (result.isErr()) return undefined;
+
+  await invalidateDatabase(params.databaseId);
+  return result.value.id;
+}
+
+/** Add a column to a table and return its id. */
+export async function createDatabaseColumn(params: {
+  databaseId: string;
+  tableId: string;
+  request: CreateColumnRequest;
+}): Promise<string | undefined> {
+  const result = await storageServiceClient.databases.createColumn({
+    id: params.databaseId,
+    tableId: params.tableId,
+    request: params.request,
+  });
+  if (result.isErr()) return undefined;
+
+  await invalidateDatabase(params.databaseId);
+  return result.value.columnId;
+}
+
+/** Fetch a database's SQLite snapshot as a blob. */
+export function downloadDatabaseSnapshot(databaseId: string): Promise<Blob> {
+  return storageServiceClient.databases.downloadSqlite({ id: databaseId });
 }
 
 /**

@@ -4,9 +4,13 @@ import { EditorState, Prec } from '@codemirror/state';
 import { EditorView, keymap } from '@codemirror/view';
 import PlayIcon from '@phosphor/play.svg';
 import XIcon from '@phosphor/x.svg';
-import { execSql, invalidateDatabase } from '@queries/storage/databases';
+import {
+  execSql,
+  invalidateDatabase,
+  invalidateDatabaseRows,
+} from '@queries/storage/databases';
 import type { DatabaseDetail, ExecOutcome } from '@service-storage/databases';
-import { Button } from '@ui';
+import { Button, Tooltip } from '@ui';
 import { basicSetup } from 'codemirror';
 import { createSignal, For, onCleanup, onMount, Show } from 'solid-js';
 
@@ -47,8 +51,17 @@ export function SqlConsole(props: SqlConsoleProps) {
     try {
       const result = await execSql({ sql: statement });
       setOutcome(result);
-      if (result.changes_applied > 0) {
-        await invalidateDatabase(props.detail.database.id);
+      // `changes_applied` counts row changes only — a DDL statement moves a
+      // table's version without touching a row, so the versions are what says
+      // whether anything on screen is now stale.
+      const changedTableIds = Object.keys(result.new_versions);
+      if (changedTableIds.length > 0) {
+        await Promise.all([
+          invalidateDatabase(props.detail.database.id),
+          ...changedTableIds.map((tableId) =>
+            invalidateDatabaseRows(props.detail.database.id, tableId)
+          ),
+        ]);
       }
     } catch (caught) {
       setOutcome(undefined);
@@ -92,23 +105,28 @@ export function SqlConsole(props: SqlConsoleProps) {
       <div class="flex shrink-0 items-center justify-between gap-2 px-2 py-1">
         <span class="text-ink-muted text-xs">SQL</span>
         <div class="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={run}
-            disabled={running()}
-            title="Run (Cmd/Ctrl+Enter)"
-          >
-            <PlayIcon class="size-3" />
-            Run
-          </Button>
+          <Tooltip label="Run" shortcut="mod+enter">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={run}
+              disabled={running()}
+            >
+              <PlayIcon class="size-3" />
+              Run
+            </Button>
+          </Tooltip>
           <Button variant="ghost" size="sm" onClick={props.onClose}>
             <XIcon class="size-3" />
           </Button>
         </div>
       </div>
 
-      <div class="max-h-40 shrink-0 overflow-auto" ref={containerRef} />
+      <div
+        class="max-h-40 shrink-0 overflow-auto"
+        ref={containerRef}
+        aria-label="SQL editor"
+      />
 
       <div class="min-h-0 flex-1 overflow-auto border-edge border-t">
         <Show when={error()}>

@@ -11,17 +11,31 @@ import type { SqlValue } from '@service-storage/databases';
 /** The server-assigned row identity column present on every user table. */
 export const ROW_ID_COLUMN = 'row_id';
 
-/** Quote a SQL identifier (table or column name). */
-export function quoteIdentifier(name: string): string {
+/**
+ * Quote a SQL identifier (table or column name).
+ *
+ * An empty name would quote to `""`, which SQLite accepts and which would send
+ * a statement naming nothing — so it throws instead of building one.
+ */
+function quoteIdentifier(name: string): string {
+  if (!name) throw new Error('SQL identifier must not be empty');
   return `"${name.replaceAll('"', '""')}"`;
 }
 
-/** Render a value as a SQLite literal. */
-export function quoteLiteral(value: SqlValue | boolean | undefined): string {
+/**
+ * Render a value as a SQLite literal.
+ *
+ * `NaN` and the infinities have no SQLite spelling. Writing them as `NULL`
+ * would silently clear the cell, so they are rejected rather than translated.
+ */
+function quoteLiteral(value: SqlValue | boolean | undefined): string {
   if (value === null || value === undefined) return 'NULL';
   if (typeof value === 'boolean') return value ? '1' : '0';
   if (typeof value === 'number') {
-    return Number.isFinite(value) ? String(value) : 'NULL';
+    if (!Number.isFinite(value)) {
+      throw new Error(`${value} has no SQL representation`);
+    }
+    return String(value);
   }
   return `'${value.replaceAll("'", "''")}'`;
 }

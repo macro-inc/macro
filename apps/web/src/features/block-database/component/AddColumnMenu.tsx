@@ -1,14 +1,16 @@
 import { toast } from '@core/component/Toast/Toast';
 import PlusIcon from '@phosphor/plus.svg';
-import { invalidateDatabase } from '@queries/storage/databases';
+import { createDatabaseColumn } from '@queries/storage/databases';
 import type { DataType } from '@service-properties/generated/schemas/dataType';
-import { storageServiceClient } from '@service-storage/client';
-import { Button, Dropdown } from '@ui';
+import type { DatabaseColumnDetail } from '@service-storage/databases';
+import { Button, Dropdown, Tooltip } from '@ui';
 import { createSignal, For } from 'solid-js';
 
 type AddColumnMenuProps = {
   databaseId: string;
   tableId: string;
+  /** Existing columns, so a new one is not named over an old one. */
+  columns: DatabaseColumnDetail[];
 };
 
 /**
@@ -24,43 +26,62 @@ const COLUMN_TYPES: { label: string; dataType: DataType }[] = [
   { label: 'Link', dataType: 'LINK' },
 ];
 
+/**
+ * First free `Text`, `Text 2`, `Text 3`… for a type's label.
+ *
+ * Without this, two text columns are both named "Text" and only their SQL
+ * names (`text`, `text_2`) tell them apart — and there is no rename-column
+ * endpoint yet to recover from it.
+ */
+function uniqueColumnName(label: string, taken: string[]): string {
+  const used = new Set(taken);
+  if (!used.has(label)) return label;
+  for (let suffix = 2; ; suffix += 1) {
+    const candidate = `${label} ${suffix}`;
+    if (!used.has(candidate)) return candidate;
+  }
+}
+
 export function AddColumnMenu(props: AddColumnMenuProps) {
   const [pending, setPending] = createSignal(false);
 
   const addColumn = async (label: string, dataType: DataType) => {
     if (pending()) return;
     setPending(true);
-    const result = await storageServiceClient.databases.createColumn({
-      id: props.databaseId,
+    const columnId = await createDatabaseColumn({
+      databaseId: props.databaseId,
       tableId: props.tableId,
       request: {
         binding: {
           kind: 'new',
-          name: label,
+          name: uniqueColumnName(
+            label,
+            props.columns.map(
+              (column) => column.definition.definition.display_name
+            )
+          ),
           data_type: dataType,
           is_multi_select: false,
         },
       },
     });
     setPending(false);
-    if (result.isErr()) {
-      toast.failure('Could not add that column');
-      return;
-    }
-    await invalidateDatabase(props.databaseId);
+    if (!columnId) toast.failure('Could not add that column');
   };
 
   return (
     <Dropdown>
-      <Dropdown.Trigger
-        as={Button}
-        variant="ghost"
-        size="sm"
-        class="size-6 p-0"
-        title="Add column"
-      >
-        <PlusIcon class="size-3" />
-      </Dropdown.Trigger>
+      <Tooltip label="Add column">
+        <Dropdown.Trigger
+          as={Button}
+          variant="ghost"
+          size="sm"
+          class="size-6 p-0"
+          aria-label="Add column"
+        >
+          <PlusIcon class="size-3" />
+        </Dropdown.Trigger>
+      </Tooltip>
       <Dropdown.Content>
         <Dropdown.Group>
           <Dropdown.GroupLabel>New column</Dropdown.GroupLabel>

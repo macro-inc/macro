@@ -1,9 +1,9 @@
 import { toast } from '@core/component/Toast/Toast';
+import { Tabs } from '@kobalte/core/tabs';
 import PlusIcon from '@phosphor/plus.svg';
-import { invalidateDatabase } from '@queries/storage/databases';
-import { storageServiceClient } from '@service-storage/client';
+import { createDatabaseTable } from '@queries/storage/databases';
 import type { DatabaseTableDetail } from '@service-storage/databases';
-import { cn } from '@ui';
+import { Tooltip } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 
 type TableTabsProps = {
@@ -17,6 +17,10 @@ type TableTabsProps = {
 /**
  * Tabs are tables. The only place the "a database is a collection" concept
  * surfaces — the rest of the UI says "table".
+ *
+ * Kobalte drives the tab list so roles, `aria-selected` and arrow-key movement
+ * come for free; the panels live outside, because a tab switch swaps the whole
+ * grid rather than a slot inside the list.
  */
 export function TableTabs(props: TableTabsProps) {
   const [creating, setCreating] = createSignal(false);
@@ -24,46 +28,49 @@ export function TableTabs(props: TableTabsProps) {
   const addTable = async () => {
     if (creating()) return;
     setCreating(true);
-    const result = await storageServiceClient.databases.createTable({
-      id: props.databaseId,
+    const tableId = await createDatabaseTable({
+      databaseId: props.databaseId,
       name: `Table ${props.tables.length + 1}`,
     });
     setCreating(false);
-    if (result.isErr()) {
+    if (!tableId) {
       toast.failure('Could not add a tab');
       return;
     }
-    await invalidateDatabase(props.databaseId);
-    props.onSelect(result.value.id);
+    props.onSelect(tableId);
   };
 
   return (
     <div class="flex shrink-0 items-center gap-1 border-edge border-b px-2">
-      <For each={props.tables}>
-        {(table) => (
+      <Tabs
+        value={props.activeTableId ?? ''}
+        onChange={props.onSelect}
+        class="min-w-0 flex-1"
+      >
+        <Tabs.List class="flex items-center gap-1 overflow-x-auto">
+          <For each={props.tables}>
+            {(table) => (
+              <Tabs.Trigger
+                value={table.table.id}
+                class="-mb-px shrink-0 border-transparent border-b-2 px-2.5 py-1.5 text-ink-muted text-xs outline-none hover:text-ink data-selected:border-accent data-selected:text-ink"
+              >
+                {table.table.name}
+              </Tabs.Trigger>
+            )}
+          </For>
+        </Tabs.List>
+      </Tabs>
+      <Show when={props.canEdit}>
+        <Tooltip label="Add tab">
           <button
             type="button"
-            class={cn(
-              '-mb-px border-b-2 px-2.5 py-1.5 text-xs',
-              table.table.id === props.activeTableId
-                ? 'border-accent text-ink'
-                : 'border-transparent text-ink-muted hover:text-ink'
-            )}
-            onClick={() => props.onSelect(table.table.id)}
+            class="rounded-sm p-1 text-ink-extra-muted hover:bg-hover hover:text-ink"
+            aria-label="Add tab"
+            onClick={addTable}
           >
-            {table.table.name}
+            <PlusIcon class="size-3" />
           </button>
-        )}
-      </For>
-      <Show when={props.canEdit}>
-        <button
-          type="button"
-          class="rounded-sm p-1 text-ink-extra-muted hover:bg-hover hover:text-ink"
-          title="Add tab"
-          onClick={addTable}
-        >
-          <PlusIcon class="size-3" />
-        </button>
+        </Tooltip>
       </Show>
     </div>
   );

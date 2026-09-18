@@ -9,16 +9,17 @@
  * option's *display label*, while `Property` carries option *ids*, so the
  * definition's options are the lookup table between them.
  */
-import type { Property, PropertyApiValues, ValueType } from '@property/types';
+import type { Property, PropertyApiValues } from '@property/types';
+import type { DataType } from '@service-properties/generated/schemas/dataType';
 import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
-import type { PropertyOwner } from '@service-properties/generated/schemas/propertyOwner';
 import type {
   DatabaseColumnDetail,
   SqlValue,
 } from '@service-storage/databases';
+import { match } from 'ts-pattern';
 
 /** Property value types the grid can edit in place. */
-const EDITABLE_VALUE_TYPES = new Set<string>([
+const EDITABLE_DATA_TYPES = new Set<DataType>([
   'STRING',
   'NUMBER',
   'BOOLEAN',
@@ -27,12 +28,12 @@ const EDITABLE_VALUE_TYPES = new Set<string>([
 ]);
 
 /** Whether a column's editing is handled by the `@property` editors. */
-export function isPropertyEditableColumn(column: DatabaseColumnDetail) {
+function isPropertyEditableColumn(column: DatabaseColumnDetail) {
   const dataType = column.definition.definition.data_type;
   return (
     column.writable &&
     !column.definition.definition.is_multi_select &&
-    EDITABLE_VALUE_TYPES.has(dataType)
+    EDITABLE_DATA_TYPES.has(dataType)
   );
 }
 
@@ -75,75 +76,76 @@ export function cellToProperty(
   if (!isPropertyEditableColumn(column)) return undefined;
 
   const shared = {
-    // Unique per cell so the editors' focus-restoration lookups land on this
-    // cell rather than on the same column in another row.
+    // `Property.Root` restores focus by `document.querySelector` on
+    // `[data-property-id]`, so the id has to be unique in the document — a
+    // column id alone repeats once per row.
     propertyId: `${rowId}:${column.column.id}`,
     propertyDefinitionId: definition.id,
     displayName: definition.display_name,
     isMultiSelect: definition.is_multi_select,
     isSystemProperty: definition.is_system,
-    owner: definition.owner as PropertyOwner,
+    owner: definition.owner,
     specificEntityType: definition.specific_entity_type,
     options: column.definition.property_options,
     createdAt: definition.created_at,
     updatedAt: definition.updated_at,
   };
 
-  switch (definition.data_type as ValueType) {
-    case 'STRING':
-      return {
-        ...shared,
-        valueType: 'STRING',
-        value: value === null ? null : String(value),
-      };
-    case 'NUMBER':
-      return {
-        ...shared,
-        valueType: 'NUMBER',
-        value: typeof value === 'number' ? value : null,
-      };
-    case 'BOOLEAN':
-      return {
-        ...shared,
-        valueType: 'BOOLEAN',
-        value: value === null ? null : Boolean(value),
-      };
-    case 'LINK':
-      return {
-        ...shared,
-        valueType: 'LINK',
-        value: value === null ? null : [String(value)],
-      };
-    case 'DATE': {
+  // `DataType` is the wire enum and carries kinds the editors cannot drive
+  // from a scalar (`TAG`, `ENTITY`, the selects) — those map to `undefined`.
+  return match<DataType, Property | undefined>(definition.data_type)
+    .with('STRING', () => ({
+      ...shared,
+      valueType: 'STRING' as const,
+      value: value === null ? null : String(value),
+    }))
+    .with('NUMBER', () => ({
+      ...shared,
+      valueType: 'NUMBER' as const,
+      value: typeof value === 'number' ? value : null,
+    }))
+    .with('BOOLEAN', () => ({
+      ...shared,
+      valueType: 'BOOLEAN' as const,
+      value: value === null ? null : Boolean(value),
+    }))
+    .with('LINK', () => ({
+      ...shared,
+      valueType: 'LINK' as const,
+      value: value === null ? null : [String(value)],
+    }))
+    .with('DATE', () => {
       const parsed = value === null ? null : new Date(String(value));
       return {
         ...shared,
-        valueType: 'DATE',
+        valueType: 'DATE' as const,
         value: parsed && !Number.isNaN(parsed.getTime()) ? parsed : null,
       };
-    }
-    default:
-      return undefined;
-  }
+    })
+    .with('SELECT_STRING', 'SELECT_NUMBER', 'ENTITY', 'TAG', () => undefined)
+    .exhaustive();
 }
 
 /** Turn what an editor saved back into the scalar SQL should store. */
 export function apiValuesToSqlValue(values: PropertyApiValues): SqlValue {
-  switch (values.valueType) {
-    case 'STRING':
-      return values.value === '' ? null : values.value;
-    case 'NUMBER':
-      return values.value;
-    case 'BOOLEAN':
-      return values.value === null ? null : values.value ? 1 : 0;
-    case 'DATE':
-      return values.value === null ? null : values.value.toISOString();
-    case 'LINK':
-      return values.values?.[0] ?? null;
-    case 'SELECT_STRING':
-    case 'SELECT_NUMBER':
-    case 'ENTITY':
-      // Not reachable: these column kinds never mount a property editor.
-      return null;
-  }
+  return match(values)
+    .with({ valueType: 'STRING' }, (saved) =>
+      saved.value === '' ? null : saved.value
+    )
+    .with({ valueType: 'NUMBER' }, (saved) => saved.value)
+    .with({ valueType: 'BOOLEAN' }, (saved) =>
+      saved.value === null ? null : saved.value ? 1 : 0
+    )
+    .with({ valueType: 'DATE' }, (saved) =>
+      saved.value === null ? null : saved.value.toISOString()
+    )
+    .with({ valueType: 'LINK' }, (saved) => saved.values?.[0] ?? null)
+    .with(
+      { valueType: 'SELECT_STRING' },
+      { valueType: 'SELECT_NUMBER' },
+      { valueType: 'ENTITY' },
+      // Never reached: these column kinds do not mount a property editor.
+      () => null
+    )
+    .exhaustive();
 }

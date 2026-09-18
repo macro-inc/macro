@@ -68,21 +68,14 @@ export interface DatabaseColumn {
   config: ColumnConfig | null;
 }
 
-/**
- * Who owns a column's definition.
- *
- * A superset of the generated `PropertyOwner`: a database column's definition
- * is scoped to the database, which the properties-service schema does not
- * describe yet.
- */
-export type DatabasePropertyOwner =
-  | PropertyOwner
-  | { scope: 'database'; database_id: string };
-
 /** The property definition behind a column. */
 export interface DatabasePropertyDefinition {
   id: string;
-  owner: DatabasePropertyOwner;
+  /**
+   * A database column's definition is scoped to its database — the
+   * `{ scope: 'database' }` variant of the generated `PropertyOwner`.
+   */
+  owner: PropertyOwner;
   display_name: string;
   data_type: DataType;
   is_multi_select: boolean;
@@ -154,6 +147,14 @@ export interface ExecOutcome {
   new_versions: Record<string, number>;
   /** Tables the statement read, for liveness subscription. */
   read_tables: string[];
+  /**
+   * The version every user table the statement read was at, keyed by table id.
+   *
+   * This is the version a client must send back as `baseVersions` for a write
+   * derived from these rows: the rows and the version then come from the same
+   * read, so a compare-and-swap actually guards what the user saw.
+   */
+  read_versions: Record<string, number>;
   /** Magic tables whose materialization hit its row cap. */
   truncated_tables: string[];
 }
@@ -213,8 +214,8 @@ function databasesFetch<
 
 /**
  * Why `POST /databases/exec` refused a statement, mirroring the status codes
- * `QueryError` maps to. The message is the service's text body: for
- * `SQL_ERROR` that is SQLite's own message, verbatim.
+ * `QueryError` maps to. The message is the service's `ErrorResponse.message`:
+ * for `SQL_ERROR` that is SQLite's own message, verbatim.
  */
 export type ExecErrorCode =
   | 'SQL_ERROR'
@@ -222,11 +223,36 @@ export type ExecErrorCode =
   | 'VERSION_CONFLICT'
   | 'BUDGET_EXCEEDED';
 
+/** The JSON body every `/databases/**` route returns on failure. */
+interface ErrorResponse {
+  message: string;
+}
+
+/**
+ * Pull the human-readable reason out of a failed `/databases/**` response.
+ *
+ * The routes answer with `ErrorResponse` JSON; the raw body is the fallback so
+ * a proxy's plain-text error (or a body that is not JSON at all) still reaches
+ * the user instead of being swallowed.
+ */
+function errorMessageFromBody(body: string, status: number): string {
+  if (body) {
+    try {
+      const parsed: unknown = JSON.parse(body);
+      const message = (parsed as ErrorResponse | null)?.message;
+      if (typeof message === 'string' && message) return message;
+    } catch {
+      // Not JSON — the raw body is the best message available.
+    }
+    return body;
+  }
+  return `HTTP error! status: ${status}`;
+}
+
 async function execErrorResponseHandler(
   response: Response
 ): Promise<ResultError<FetchWithTokenErrorCode | ExecErrorCode>> {
-  const message =
-    (await response.text()) || `HTTP error! status: ${response.status}`;
+  const message = errorMessageFromBody(await response.text(), response.status);
   switch (response.status) {
     case 400:
       return { code: 'SQL_ERROR', message };
