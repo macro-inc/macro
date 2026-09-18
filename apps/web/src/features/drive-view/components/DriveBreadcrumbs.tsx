@@ -90,6 +90,7 @@ export function DriveLocationBreadcrumbItems(props: {
         return (
           <ViewBreadcrumbs.Item
             value={entry.value}
+            label={entry.label}
             metadata={entry}
             order={index()}
           >

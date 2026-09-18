@@ -31,6 +31,7 @@ export function TaskViewBreadcrumbItem() {
   return (
     <ViewBreadcrumbs.Item
       value="tasks-view"
+      label={tabTitle()}
       metadata={{ type: 'tasks' }}
       order={0}
     >

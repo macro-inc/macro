@@ -54,6 +54,7 @@ export function CrmCompanyDetail(props: {
     >
       <ViewBreadcrumbs.Item
         value="crm-view"
+        label={props.viewName}
         metadata={{ type: 'companies' }}
         order={0}
       >
@@ -70,6 +71,7 @@ export function CrmCompanyDetail(props: {
       </ViewBreadcrumbs.Item>
       <ViewBreadcrumbs.Item
         value={`company:${props.company.id}`}
+        label={companyName()}
         metadata={{ type: 'company', id: props.company.id }}
         order={1}
       >
@@ -90,6 +92,7 @@ export function CrmCompanyDetail(props: {
         {(contact) => (
           <ViewBreadcrumbs.Item
             value={`contact:${contact().id}`}
+            label={contactName()}
             metadata={{ type: 'contact', id: contact().id }}
             order={2}
           >

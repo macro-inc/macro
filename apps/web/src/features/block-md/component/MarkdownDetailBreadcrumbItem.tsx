@@ -64,6 +64,7 @@ export function MarkdownDetailBreadcrumbItem(props: {
   return (
     <ViewBreadcrumbs.Item
       value={props.value}
+      label={documentName()}
       metadata={props.metadata}
       order={props.order}
     >

@@ -30,6 +30,7 @@ export function EmailViewBreadcrumbItem() {
   return (
     <ViewBreadcrumbs.Item
       value="email-view"
+      label={tabTitle()}
       metadata={{ type: 'email-view' }}
       order={0}
     >

@@ -1,12 +1,15 @@
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import { cn, Tooltip } from '@ui';
+import { cn, Dropdown, Tooltip } from '@ui';
 import {
   type Accessor,
   children,
   createContext,
+  createEffect,
   createMemo,
+  createSignal,
   For,
   type JSX,
+  on,
   onCleanup,
   onMount,
   type ParentProps,
@@ -18,6 +21,7 @@ import { createStore, produce, type Store } from 'solid-js/store';
 
 export type ViewBreadcrumbsEntry<TMetadata> = {
   value: Accessor<string>;
+  label: Accessor<string>;
   metadata: Accessor<TMetadata>;
   order: Accessor<number | undefined>;
   sequence: number;
@@ -171,6 +175,7 @@ function Separator(props: ViewBreadcrumbsSeparatorProps) {
 
 export type ViewBreadcrumbsItemProps<TMetadata = unknown> = {
   value: string;
+  label: string;
   metadata: TMetadata;
   order?: number;
   children: JSX.Element | ((state: ViewBreadcrumbsItemState) => JSX.Element);
@@ -192,6 +197,7 @@ function Item<TMetadata = unknown>(props: ViewBreadcrumbsItemProps<TMetadata>) {
   onMount(() => {
     unregister = context.register({
       value: () => props.value,
+      label: () => props.label,
       metadata: () => props.metadata,
       order: () => props.order,
       render: resolvedChildren,
@@ -216,6 +222,40 @@ export type ViewBreadcrumbsSeparatorState = {
   next?: ViewBreadcrumbsEntry<unknown>;
 };
 
+const OVERFLOW_EPSILON_PX = 2;
+
+function BreadcrumbOverflowMenu(props: {
+  entries: ViewBreadcrumbsEntry<unknown>[];
+  onSelect: (value: string) => void;
+}) {
+  return (
+    <Dropdown placement="bottom-start">
+      <Dropdown.Trigger
+        variant="ghost"
+        size="sm"
+        class="h-7 min-w-0 shrink-0 px-1 font-semibold text-ink-muted"
+        aria-label={`Show ${props.entries.length} hidden breadcrumbs`}
+      >
+        <span aria-hidden="true">{props.entries.length} more</span>
+      </Dropdown.Trigger>
+      <Dropdown.Content>
+        <Dropdown.Group>
+          <For each={props.entries}>
+            {(entry) => (
+              <Dropdown.Item
+                class="max-w-72"
+                onSelect={() => props.onSelect(entry.value())}
+              >
+                <span class="truncate">{entry.label()}</span>
+              </Dropdown.Item>
+            )}
+          </For>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
+
 /** Renders mounted breadcrumb items in order. */
 function Outlet(props: ViewBreadcrumbsOutletProps) {
   const context = useViewBreadcrumbsContext();
@@ -235,6 +275,85 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
   );
   const hasActiveItem = () =>
     entries().some((entry) => entry.value() === context.value());
+  const hasFallback = () => !hasActiveItem() && local.fallback != null;
+  const middleEntries = createMemo(() =>
+    entries().filter(
+      (_entry, index, all) =>
+        index > 0 && (hasFallback() || index < all.length - 1)
+    )
+  );
+  const [collapsed, setCollapsed] = createSignal(false);
+  let viewport: HTMLDivElement | undefined;
+  let content: HTMLDivElement | undefined;
+  let measureQueued = false;
+  let expandedWidth = 0;
+
+  const measure = () => {
+    measureQueued = false;
+    if (!viewport || !content) return;
+    if (middleEntries().length === 0) {
+      setCollapsed(false);
+      expandedWidth = content.scrollWidth;
+      return;
+    }
+
+    const availableWidth = viewport.clientWidth;
+    if (!collapsed()) {
+      expandedWidth = content.scrollWidth;
+      if (expandedWidth - availableWidth > OVERFLOW_EPSILON_PX) {
+        setCollapsed(true);
+      }
+      return;
+    }
+
+    if (
+      expandedWidth > 0 &&
+      expandedWidth - availableWidth > OVERFLOW_EPSILON_PX
+    ) {
+      return;
+    }
+
+    // Trial the expanded row synchronously, then restore the collapsed row
+    // before paint if it still does not fit.
+    setCollapsed(false);
+    expandedWidth = content.scrollWidth;
+    if (expandedWidth - availableWidth > OVERFLOW_EPSILON_PX) {
+      setCollapsed(true);
+    }
+  };
+  const scheduleMeasure = () => {
+    if (measureQueued) return;
+    measureQueued = true;
+    queueMicrotask(measure);
+  };
+
+  createEffect(
+    on(
+      () =>
+        JSON.stringify([
+          hasFallback(),
+          entries().map((entry) => [
+            entry.sequence,
+            entry.value(),
+            entry.label(),
+            entry.order(),
+          ]),
+        ]),
+      () => {
+        expandedWidth = 0;
+        scheduleMeasure();
+      }
+    )
+  );
+
+  onMount(() => {
+    const observer = new ResizeObserver(scheduleMeasure);
+    if (viewport) observer.observe(viewport, { box: 'border-box' });
+    if (content) observer.observe(content, { box: 'border-box' });
+    scheduleMeasure();
+    onCleanup(() => observer.disconnect());
+  });
+
   const renderSeparator = (
     previous: ViewBreadcrumbsEntry<unknown>,
     next?: ViewBreadcrumbsEntry<unknown>
@@ -244,25 +363,64 @@ function Outlet(props: ViewBreadcrumbsOutletProps) {
     <nav
       aria-label="Breadcrumb"
       {...rest}
-      class={cn('flex min-w-0 items-center gap-0.5 text-sm', local.class)}
+      class={cn('flex min-w-0 flex-1 items-center text-sm', local.class)}
     >
-      <For each={entries()}>
-        {(entry, index) => (
-          <>
-            <Show when={index() > 0}>
-              {renderSeparator(entries()[index() - 1]!, entry)}
+      <div
+        ref={viewport}
+        data-view-breadcrumbs-viewport=""
+        class="min-w-0 max-w-full flex-1 overflow-hidden"
+      >
+        <div
+          ref={content}
+          data-view-breadcrumbs-content=""
+          data-collapsed={collapsed() ? '' : undefined}
+          class={cn(
+            'flex min-w-0 items-center gap-0.5',
+            collapsed() ? 'w-full' : 'w-max'
+          )}
+        >
+          <For each={entries()}>
+            {(entry, index) => {
+              const isMiddle = () =>
+                index() > 0 &&
+                (hasFallback() || index() < entries().length - 1);
+              return (
+                <>
+                  <Show when={collapsed() && index() === 1}>
+                    <span class="flex shrink-0 items-center gap-0.5">
+                      {renderSeparator(entries()[0]!, entry)}
+                      <BreadcrumbOverflowMenu
+                        entries={middleEntries()}
+                        onSelect={context.onChange}
+                      />
+                    </span>
+                  </Show>
+                  <span
+                    data-view-breadcrumbs-segment={entry.value()}
+                    class={cn(
+                      'flex min-w-0 items-center gap-0.5',
+                      index() === 0 && 'shrink-0 [&_button]:max-w-none',
+                      collapsed() && isMiddle() && 'hidden'
+                    )}
+                  >
+                    <Show when={index() > 0}>
+                      {renderSeparator(entries()[index() - 1]!, entry)}
+                    </Show>
+                    {entry.render()}
+                  </span>
+                </>
+              );
+            }}
+          </For>
+          <Show when={hasFallback()}>
+            <Show when={entries().at(-1)}>
+              {(entry) => renderSeparator(entry())}
             </Show>
-            {entry.render()}
-          </>
-        )}
-      </For>
-      <Show when={!hasActiveItem() && local.fallback != null}>
-        <Show when={entries().at(-1)}>
-          {(entry) => renderSeparator(entry())}
-        </Show>
-        {local.fallback}
-      </Show>
-      {local.children}
+            {local.fallback}
+          </Show>
+          {local.children}
+        </div>
+      </div>
     </nav>
   );
 }

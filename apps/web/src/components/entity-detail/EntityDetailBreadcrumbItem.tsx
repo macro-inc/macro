@@ -48,6 +48,7 @@ export function EntityDetailBreadcrumbItem(props: {
   return (
     <ViewBreadcrumbs.Item
       value={props.entry.value}
+      label={breadcrumbName(props.entry.data)}
       metadata={props.entry.data}
       order={props.order}
     >

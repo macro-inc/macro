@@ -41,6 +41,7 @@ function EmailThreadBreadcrumb(props: {
   return (
     <ViewBreadcrumbs.Item
       value={props.value}
+      label={props.title}
       metadata={{ type: 'email', id: props.threadId }}
       order={1}
     >
