@@ -24,7 +24,6 @@ vi.mock('../../../dictation/composer-dictation', () => ({
       active,
       phase: () => (active() ? 'listening' : 'idle'),
       volumeHistory: () => [],
-      transcript: () => '',
       message: () => '',
       label: () => 'Start dictation',
       disabled: () => false,

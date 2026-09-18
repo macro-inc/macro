@@ -27,7 +27,7 @@ session-specific.
 ## Message composer
 
 Channel messages and thread replies have a microphone next to Send, including
-the collapsed composer. It uses the same on-device dictation, OpenAI Whisper fallback, and scrolling
+the collapsed composer. It uses the same OpenAI Whisper dictation and scrolling
 volume timeline as AI chat. **Use dictation** appends text to the draft without
 sending; **Cancel dictation** or Escape preserves the existing draft. Sending
 is blocked during dictation, including keyboard and external send actions.

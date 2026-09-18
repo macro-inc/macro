@@ -2,22 +2,18 @@ import { VOLUME_INTERVAL_MS, type VolumeLevel } from './volume';
 
 /** Mirrors the server body limit for `/dictation/transcribe`. */
 export const MAX_RECORDING_BYTES = 8 * 1024 * 1024;
-export const MAX_RECORDING_MS = 5 * 60 * 1000;
-/**
- * Recorder timeslice. Every chunk yields one volume sample and advances the
- * duration cap, so limits and the timeline share one event-driven clock.
- */
+/** Leave room for codec padding below the server's five-minute limit. */
+export const MAX_RECORDING_MS = 5 * 60 * 1000 - 1_000;
+/** Requested chunk cadence; browsers may deliver chunks late. */
 export const RECORDING_CHUNK_MS = VOLUME_INTERVAL_MS;
-export const MAX_RECORDING_CHUNKS = MAX_RECORDING_MS / RECORDING_CHUNK_MS;
 
 export type AudioRecorderCallbacks = {
   /** Microphone level for the chunk that just finished, while recording. */
   onLevel?: (level: VolumeLevel) => void;
-  /**
-   * Final encoded audio after `stop()`. Omit to run as a microphone meter
-   * only: chunks are dropped instead of retained.
-   */
-  onRecording?: (audio: Blob) => void;
+  /** Final encoded audio, including the browser's last data event. */
+  onRecording: (audio: Blob) => void;
+  /** Another composer acquired the microphone; this session was discarded. */
+  onInterrupted: () => void;
   /** The size or duration cap was reached; the recorder stopped itself. */
   onLimit?: () => void;
   /** Capture failed after it had started. The microphone is already released. */

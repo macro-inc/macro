@@ -1,4 +1,4 @@
-/** Each timeline bar covers one recorder chunk; keep a bounded history. */
+/** Requested sampling cadence; keep a bounded history even during long recordings. */
 export const VOLUME_INTERVAL_MS = 200;
 export const MAX_VOLUME_SAMPLES = 512;
 

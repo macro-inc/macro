@@ -3,7 +3,7 @@ import { createRoot } from 'solid-js';
 import {
   type AudioRecorderCallbacks,
   MAX_RECORDING_BYTES,
-  MAX_RECORDING_CHUNKS,
+  MAX_RECORDING_MS,
   RECORDING_CHUNK_MS,
   type RecorderHandle,
 } from '../core/recording';
@@ -17,36 +17,44 @@ const AUDIO_BITS_PER_SECOND = 64_000;
 /** Stop early enough that the final chunk still fits under the server limit. */
 const SIZE_HEADROOM_BYTES = 64 * 1024;
 
+/** A monotonic clock and cancellable deadline, supplied explicitly in tests. */
+export interface RecordingClock {
+  now(): number;
+  schedule(callback: () => void, delay: number): () => void;
+}
+
+const browserClock: RecordingClock = {
+  now: () => performance.now(),
+  schedule: (callback, delay) => {
+    const timeout = window.setTimeout(callback, delay);
+    return () => window.clearTimeout(timeout);
+  },
+};
+
 type State = 'idle' | 'starting' | 'recording' | 'stopping' | 'done';
 
 const stopTracks = (stream: MediaStream) =>
   stream.getTracks().forEach((track) => track.stop());
 
 /**
- * Captures microphone audio in memory and meters its level.
- *
- * Wraps `getUserMedia`, `MediaRecorder`, and the Web Audio analyser (via
- * `@solid-primitives/stream`) behind one object constructed with the callbacks
- * that receive levels, the finished recording, and failures. The recorder's
- * chunk cadence is the only clock: each chunk emits one level sample and
- * advances the duration cap, so nothing here depends on timers.
- *
- * Only one instance holds the microphone at a time. Starting a recorder
- * cancels whichever one is currently active, so a composer that unmounts
- * mid-recording can never leave the microphone open.
+ * One capture session, initialized with the callbacks receiving its audio.
+ * Owns microphone tracks, the encoder, analyser, and deadline until released.
  */
 export class AudioRecorder implements RecorderHandle {
-  private static active: AudioRecorder | undefined;
-
   private state: State = 'idle';
   private stream: MediaStream | undefined;
   private recorder: MediaRecorder | undefined;
   private releaseMeter: (() => void) | undefined;
+  private cancelDeadline: (() => void) | undefined;
   private chunks: Blob[] = [];
   private size = 0;
-  private chunkCount = 0;
+  private startedAt = 0;
 
-  constructor(private readonly callbacks: AudioRecorderCallbacks) {}
+  constructor(
+    private readonly callbacks: AudioRecorderCallbacks,
+    private readonly owner: AudioRecorderManager = audioRecorder,
+    private readonly clock: RecordingClock = browserClock
+  ) {}
 
   static isSupported(): boolean {
     return !!(
@@ -65,8 +73,7 @@ export class AudioRecorder implements RecorderHandle {
 
   async start(): Promise<void> {
     if (this.state !== 'idle') return;
-    AudioRecorder.active?.cancel();
-    AudioRecorder.active = this;
+    this.owner.claim(this);
     this.state = 'starting';
     let stream: MediaStream;
     try {
@@ -95,9 +102,14 @@ export class AudioRecorder implements RecorderHandle {
       recorder.onerror = () =>
         this.fail(new Error('Audio recording failed. Please try again.'));
       recorder.onstop = () => this.onStop();
-      recorder.start(RECORDING_CHUNK_MS);
       this.recorder = recorder;
+      this.startedAt = this.clock.now();
       this.state = 'recording';
+      recorder.start(RECORDING_CHUNK_MS);
+      this.cancelDeadline = this.clock.schedule(
+        () => this.stopAtLimit(),
+        MAX_RECORDING_MS
+      );
     } catch (error) {
       this.release();
       throw error;
@@ -107,7 +119,7 @@ export class AudioRecorder implements RecorderHandle {
   stop(): void {
     if (this.state !== 'recording' || !this.recorder) return;
     this.state = 'stopping';
-    this.recorder.stop();
+    if (this.recorder.state !== 'inactive') this.recorder.stop();
   }
 
   cancel(): void {
@@ -118,49 +130,63 @@ export class AudioRecorder implements RecorderHandle {
     if (recorder && recorder.state !== 'inactive') recorder.stop();
   }
 
+  /** Release ownership without moving focus away from the next composer. */
+  interrupt(): void {
+    if (this.state === 'done') return;
+    this.cancel();
+    this.callbacks.onInterrupted();
+  }
+
   private startMeter(stream: MediaStream): () => number {
     let amplitude = () => 0;
     this.releaseMeter = createRoot((dispose) => {
       // Library level is 0..100; the analyser is never routed to speakers.
-      const [level, stopAmplitude] = createAmplitudeFromStream(stream);
+      const [level] = createAmplitudeFromStream(stream);
       amplitude = level;
-      return () => {
-        stopAmplitude();
-        dispose();
-      };
+      return dispose;
     });
     return () => amplitude() / 100;
   }
 
+  private stopAtLimit() {
+    if (this.state !== 'recording') return;
+    this.callbacks.onLimit?.();
+    this.stop();
+  }
+
   private onChunk(data: Blob, level: number) {
     if (!this.recording) return;
-    if (this.callbacks.onRecording && data.size) {
-      this.chunks.push(data);
-      this.size += data.size;
+    // Delayed/final chunks can exceed the headroom; never retain or upload them.
+    if (this.size + data.size > MAX_RECORDING_BYTES) {
+      this.fail(
+        new Error('Recording is too large. Please record a shorter message.')
+      );
+      return;
     }
-    this.chunkCount += 1;
+    if (data.size) this.chunks.push(data);
+    this.size += data.size;
     if (this.state !== 'recording') return;
     this.callbacks.onLevel?.(level);
     if (
-      this.chunkCount >= MAX_RECORDING_CHUNKS ||
+      this.clock.now() - this.startedAt >= MAX_RECORDING_MS ||
       this.size >= MAX_RECORDING_BYTES - SIZE_HEADROOM_BYTES
     ) {
-      this.callbacks.onLimit?.();
-      this.stop();
+      this.stopAtLimit();
     }
   }
 
   private onStop() {
-    if (this.state !== 'stopping') return;
+    // Device disconnection also delivers final data followed by a stop event.
+    if (!this.recording) return;
     const audio = new Blob(this.chunks, { type: this.recorder?.mimeType });
     const { onRecording } = this.callbacks;
     this.release();
-    onRecording?.(audio);
+    onRecording(audio);
   }
 
   private fail(error: Error) {
     if (!this.recording) return;
-    this.release();
+    this.cancel();
     this.callbacks.onError(error);
   }
 
@@ -168,6 +194,8 @@ export class AudioRecorder implements RecorderHandle {
     this.state = 'done';
     this.chunks = [];
     this.size = 0;
+    this.cancelDeadline?.();
+    this.cancelDeadline = undefined;
     if (this.recorder) {
       this.recorder.ondataavailable = null;
       this.recorder.onerror = null;
@@ -178,6 +206,29 @@ export class AudioRecorder implements RecorderHandle {
     this.releaseMeter = undefined;
     if (this.stream) stopTracks(this.stream);
     this.stream = undefined;
-    if (AudioRecorder.active === this) AudioRecorder.active = undefined;
+    this.owner.release(this);
   }
 }
+
+/** Shared microphone ownership; callbacks and captured bytes stay session-local. */
+export class AudioRecorderManager {
+  private active: AudioRecorder | undefined;
+
+  constructor(private readonly clock: RecordingClock = browserClock) {}
+
+  createSession(callbacks: AudioRecorderCallbacks): AudioRecorder {
+    return new AudioRecorder(callbacks, this, this.clock);
+  }
+
+  claim(session: AudioRecorder) {
+    this.active?.interrupt();
+    this.active = session;
+  }
+
+  release(session: AudioRecorder) {
+    if (this.active === session) this.active = undefined;
+  }
+}
+
+/** App singleton. Browser resources are acquired only when a session starts. */
+export const audioRecorder = new AudioRecorderManager();

@@ -366,12 +366,12 @@ export function ChannelInput(props: ChannelInputProps) {
   });
   const markdownHandle = markdownEditor.buildHandle();
   const lexicalEditor = () => markdownHandle.lexical;
-  const localDictation = createComposerDictation(lexicalEditor);
+  const composerDictation = createComposerDictation(lexicalEditor);
   const dictation: DictationController = {
-    ...localDictation,
+    ...composerDictation,
     start: () => {
       collapsedInput.expand();
-      return localDictation.start();
+      return composerDictation.start();
     },
   };
   const commands = {
