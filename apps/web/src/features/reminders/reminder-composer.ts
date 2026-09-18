@@ -31,8 +31,8 @@ let createdHandler: ReminderCreatedHandler | undefined;
 /**
  * Hand the pending handler to the caller and forget it.
  *
- * Taken rather than read because the composer closes — and so clears its
- * target — before the create request is awaited.
+ * Taken before closing after a successful create, because closing clears the
+ * handler. A failed create leaves it available for retry.
  */
 export function takeReminderCreatedHandler():
   | ReminderCreatedHandler

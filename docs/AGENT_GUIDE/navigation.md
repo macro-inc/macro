@@ -329,3 +329,31 @@ refreshes the session credential and restores the saved selection.
 Claude sessions expose **Open in Claude** in the header
 toolbar (or its overflow menu). With a live runtime, messages sent in Claude are
 polled into Macro about every two seconds; disconnected runtimes must resume first.
+
+## Entity action dialogs
+
+Rename, Delete, and Move to folder use compact centered dialogs on desktop and
+the shared drawer on mobile, with actions in a separated footer. One selected
+item shows an identity card; multiple items show two compact name chips and
+`+N`, which expands single-line names for review.
+Selected-item chips in action command menus and dialogs use the shared Badge,
+cap each name at 192px, and reveal truncated names on hover. Overflow counts
+remain on one line.
+
+Bulk Rename uses bubble tabs for Prepend, Append, Replace, and Total. It starts
+with empty text for multi-select and shows one before/after example. Replace
+shows only Find and Replace with fields; Total applies one name to all items.
+The action counts changed names and is disabled for unchanged or empty results.
+Pending Rename/Delete operations disable controls and dismissal; errors stay in
+the dialog. Cancel and Escape dismiss without applying changes. Use Cancel when
+reviewing dialogs against hosted data; confirmation performs real mutations.
+
+The New reminder dialog uses the same compact panel and fixed action footer.
+Its referenced item is a capped Badge; repeat options use bubble tabs (Does not
+repeat / Weekly / Monthly). Date, time, weekdays, and timezone retain their
+scheduling behavior. Saving disables controls and dismissal. A failed create
+keeps the form and its values open with an inline error for retry.
+
+Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, reminder creation, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
+
+The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.

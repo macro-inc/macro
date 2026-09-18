@@ -1,6 +1,6 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import type { EntityData } from '@entity';
-import { Dialog, Surface } from '@ui';
+import { ActionDialogShell, Dialog } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -21,11 +21,13 @@ const BulkEditEntityModalContent = (props: {
   onCancel?: () => void;
   onError?: (error: unknown) => void;
 }) => {
+  const [pending, setPending] = createSignal(false);
   const handleFinish = () => {
     props.setIsOpen(false);
     props.onFinish?.();
   };
   const handleCancel = () => {
+    if (pending()) return;
     props.setIsOpen(false);
     props.onCancel?.();
   };
@@ -36,43 +38,45 @@ const BulkEditEntityModalContent = (props: {
   return (
     <Dialog
       open={props.isOpen()}
+      position="center"
+      class={props.view === 'moveToProject' ? 'w-120' : 'w-110'}
       onOpenChange={(open) => {
+        if (pending()) return;
         if (!open) {
           handleCancel();
         }
         props.setIsOpen(open);
       }}
     >
-      <Surface depth={2} class="rounded-xl">
-        <div class="*:max-h-[75vh]">
-          <div class="flex flex-col text-ink">
-            <Show when={props.view === 'rename'}>
-              <BulkRenameEntitiesView
-                entities={props.entities}
-                onFinish={handleFinish}
-                onCancel={handleCancel}
-                onError={handleError}
-              />
-            </Show>
-            <Show when={props.view === 'moveToProject'}>
-              <BulkMoveToProjectView
-                entities={props.entities}
-                onFinish={handleFinish}
-                onCancel={handleCancel}
-                onError={handleError}
-              />
-            </Show>
-            <Show when={props.view === 'delete'}>
-              <BulkDeleteView
-                entities={props.entities}
-                onFinish={handleFinish}
-                onCancel={handleCancel}
-                onError={handleError}
-              />
-            </Show>
-          </div>
-        </div>
-      </Surface>
+      <ActionDialogShell>
+        <Show when={props.view === 'rename'}>
+          <BulkRenameEntitiesView
+            entities={props.entities}
+            onFinish={handleFinish}
+            onCancel={handleCancel}
+            onError={handleError}
+            onPendingChange={setPending}
+          />
+        </Show>
+        <Show when={props.view === 'moveToProject'}>
+          <BulkMoveToProjectView
+            entities={props.entities}
+            onFinish={handleFinish}
+            onCancel={handleCancel}
+            onError={handleError}
+            onPendingChange={setPending}
+          />
+        </Show>
+        <Show when={props.view === 'delete'}>
+          <BulkDeleteView
+            entities={props.entities}
+            onFinish={handleFinish}
+            onCancel={handleCancel}
+            onError={handleError}
+            onPendingChange={setPending}
+          />
+        </Show>
+      </ActionDialogShell>
     </Dialog>
   );
 };
