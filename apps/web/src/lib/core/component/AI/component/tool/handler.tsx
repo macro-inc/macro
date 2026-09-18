@@ -33,6 +33,7 @@ import { createTagHandler } from './CreateTag';
 import { getCompanyHandler, listCompaniesHandler } from './Crm';
 import {
   addColumnHandler,
+  addColumnOptionsHandler,
   createDatabaseHandler,
   createTableHandler,
   describeDatabaseHandler,
@@ -133,6 +134,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   CreateDatabase: createDatabaseHandler,
   CreateTable: createTableHandler,
   AddColumn: addColumnHandler,
+  AddColumnOptions: addColumnOptionsHandler,
   ListEntities: listEntitiesHandler,
   ListInboxes: listInboxesHandler,
   ListLabels: listLabelsHandler,

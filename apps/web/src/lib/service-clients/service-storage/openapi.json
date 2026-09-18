@@ -5963,12 +5963,7 @@
             "content": {
               "application/vnd.sqlite3": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "type": "integer",
-                    "format": "int32",
-                    "minimum": 0
-                  }
+                  "$ref": "#/components/schemas/SqliteFile"
                 }
               }
             }
@@ -6137,6 +6132,117 @@
           },
           "400": {
             "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Missing or invalid credentials",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "No edit access to the database",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/databases/{id}/tables/{table_id}/columns/{column_id}/options": {
+      "post": {
+        "tags": ["databases"],
+        "summary": "Add options to a select column.",
+        "operationId": "add_database_column_options",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Database id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "table_id",
+            "in": "path",
+            "description": "Table id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "column_id",
+            "in": "path",
+            "description": "Column id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddColumnOptionsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ColumnDetail"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Not a select column, or an invalid label",
             "content": {
               "application/json": {
                 "schema": {
@@ -12171,6 +12277,20 @@
         "description": "The kind of activity a user performs in a channel.",
         "enum": ["view", "interact"]
       },
+      "AddColumnOptionsRequest": {
+        "type": "object",
+        "description": "Request body for adding options to a select column.",
+        "required": ["labels"],
+        "properties": {
+          "labels": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Display labels to add. Labels the column already has are ignored."
+          }
+        }
+      },
       "AddFavoriteRequest": {
         "type": "object",
         "description": "Request body for favoriting an entity.",
@@ -15929,6 +16049,13 @@
               "name": {
                 "type": "string",
                 "description": "Column display name."
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "For a select or tag column, the labels SQL will accept. A select\ncolumn created without any accepts nothing until options are added."
               }
             }
           },
@@ -25519,6 +25646,11 @@
           }
         ],
         "description": "A value in the SQLite materialization, kept engine-agnostic so the domain\nnever depends on rusqlite types. Serializes as a plain JSON scalar."
+      },
+      "SqliteFile": {
+        "type": "string",
+        "format": "binary",
+        "description": "The bytes of a SQLite database file.\n\nIts only job is to make the response body binary in the OpenAPI document;\n`Vec<u8>` would be described as an array of integers and generate clients\nthat parse the file as JSON."
       },
       "StarterDocumentsResponse": {
         "type": "object",

@@ -5049,6 +5049,12 @@ export const createDatabaseColumnBody = zod
               .describe('Whether the column holds multiple values.'),
             kind: zod.enum(['new']),
             name: zod.string().describe('Column display name.'),
+            options: zod
+              .array(zod.string())
+              .optional()
+              .describe(
+                'For a select or tag column, the labels SQL will accept. A select\ncolumn created without any accepts nothing until options are added.'
+              ),
           })
           .describe('Create a fresh definition scoped to the database.'),
         zod
@@ -5071,6 +5077,213 @@ export const createDatabaseColumnBody = zod
       .describe('Link this column to another table (many-to-many).'),
   })
   .describe('Request body for creating a column.');
+
+/**
+ * @summary Add options to a select column.
+ */
+export const addDatabaseColumnOptionsParams = zod.object({
+  id: zod.uuid().describe('Database id'),
+  table_id: zod.uuid().describe('Table id'),
+  column_id: zod.uuid().describe('Column id'),
+});
+
+export const addDatabaseColumnOptionsBody = zod
+  .object({
+    labels: zod
+      .array(zod.string())
+      .describe(
+        'Display labels to add. Labels the column already has are ignored.'
+      ),
+  })
+  .describe('Request body for adding options to a select column.');
+
+export const addDatabaseColumnOptionsResponse = zod
+  .object({
+    column: zod
+      .object({
+        config: zod
+          .union([
+            zod.null(),
+            zod
+              .union([
+                zod
+                  .object({
+                    database_id: zod.uuid().describe('Target database.'),
+                    kind: zod.enum(['link']),
+                    table_id: zod.uuid().describe('Target table.'),
+                  })
+                  .describe(
+                    'A link column targeting another table; edges live in the junction.'
+                  ),
+                zod
+                  .object({
+                    kind: zod.enum(['lookup']),
+                    target: zod
+                      .string()
+                      .describe(
+                        'Target field on the other side (a definition id or magic column name).'
+                      ),
+                    via_column_id: zod
+                      .uuid()
+                      .describe(
+                        'The link\/entity column the lookup reads through.'
+                      ),
+                  })
+                  .describe(
+                    'A derived lookup through a link or entity column on the same table.'
+                  ),
+              ])
+              .describe(
+                'Column-kind specific configuration stored on the placement.'
+              ),
+          ])
+          .optional(),
+        id: zod.uuid().describe('Identifier of the placement.'),
+        position: zod
+          .string()
+          .describe('Fractional index for column ordering.'),
+        property_definition_id: zod
+          .uuid()
+          .describe('The bound property definition.'),
+        table_id: zod.uuid().describe('Table the column appears on.'),
+      })
+      .describe(
+        'A column: the placement of a property definition on a table.\n\nThe definition carries name, [`DataType`], multi-select flag, and options;\nthis carries only where it appears and column-kind configuration.'
+      ),
+    definition: zod
+      .object({
+        definition: zod
+          .object({
+            created_at: zod.iso.datetime({}),
+            data_type: zod
+              .enum([
+                'BOOLEAN',
+                'DATE',
+                'NUMBER',
+                'STRING',
+                'SELECT_NUMBER',
+                'SELECT_STRING',
+                'TAG',
+                'ENTITY',
+                'LINK',
+              ])
+              .describe(
+                'Data type for property values, determining storage and validation.'
+              ),
+            display_name: zod.string(),
+            id: zod.uuid(),
+            is_metadata: zod
+              .boolean()
+              .describe(
+                'Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'
+              ),
+            is_multi_select: zod.boolean(),
+            is_system: zod
+              .boolean()
+              .describe(
+                'Flag to indicate if this is a system property (stored in DB).'
+              ),
+            owner: zod
+              .union([
+                zod
+                  .object({
+                    scope: zod.enum(['user']),
+                    user_id: zod.string(),
+                  })
+                  .describe('User-scoped property.'),
+                zod
+                  .object({
+                    scope: zod.enum(['team']),
+                    team_id: zod.uuid(),
+                  })
+                  .describe('Team-scoped property.'),
+                zod
+                  .object({
+                    database_id: zod.uuid(),
+                    scope: zod.enum(['database']),
+                  })
+                  .describe(
+                    'Database-scoped property: the definition is a column of one Macro\ndatabase and is invisible to the shared user\/team property namespace.'
+                  ),
+                zod
+                  .object({
+                    scope: zod.enum(['system']),
+                  })
+                  .describe(
+                    'System-owned property (no user, team, or database owner).'
+                  ),
+              ])
+              .describe(
+                'Defines who owns a property - user-scoped, team-scoped, database-scoped, or system.'
+              ),
+            specific_entity_type: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum([
+                    'CALENDAR_EVENT',
+                    'CALL_RECORD',
+                    'CHANNEL',
+                    'CHAT',
+                    'COMPANY',
+                    'DOCUMENT',
+                    'PROJECT',
+                    'TASK',
+                    'THREAD',
+                    'USER',
+                  ])
+                  .describe(
+                    'Type of entity that can be referenced by entity properties.'
+                  ),
+              ])
+              .optional(),
+            updated_at: zod.iso.datetime({}),
+          })
+          .describe('Property definition model (service representation).'),
+        property_options: zod.array(
+          zod
+            .object({
+              color: zod.string().nullish(),
+              created_at: zod.iso.datetime({}),
+              display_order: zod.number(),
+              id: zod.uuid(),
+              property_definition_id: zod.uuid(),
+              updated_at: zod.iso.datetime({}),
+              value: zod
+                .union([
+                  zod
+                    .object({
+                      type: zod.enum(['string']),
+                      value: zod
+                        .string()
+                        .describe('String value for SelectString properties'),
+                    })
+                    .describe('String value for SelectString properties'),
+                  zod
+                    .object({
+                      type: zod.enum(['number']),
+                      value: zod
+                        .number()
+                        .describe('Number value for SelectNumber properties'),
+                    })
+                    .describe('Number value for SelectNumber properties'),
+                ])
+                .describe(
+                  'The value of a property option - either a string or a number.'
+                ),
+            })
+            .describe(
+              'A selectable option for select-type properties (service representation).'
+            )
+        ),
+      })
+      .describe(
+        'Property definition with its associated options (service representation).'
+      ),
+    sql_name: zod.string().describe('Name to use in SQL.'),
+    writable: zod.boolean().describe('Whether SQL may write this column.'),
+  })
+  .describe('One column placement with the definition behind it.');
 
 /**
  * @summary Gets the users documents to populate their recent document list

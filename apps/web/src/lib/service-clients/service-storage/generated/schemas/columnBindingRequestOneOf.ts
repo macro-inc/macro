@@ -19,4 +19,7 @@ export type ColumnBindingRequestOneOf = {
   kind: ColumnBindingRequestOneOfKind;
   /** Column display name. */
   name: string;
+  /** For a select or tag column, the labels SQL will accept. A select
+column created without any accepts nothing until options are added. */
+  options?: string[];
 };
