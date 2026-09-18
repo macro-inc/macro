@@ -9,6 +9,9 @@ pub mod error;
 /// The Cursor cloud event vocabulary the translation consumes.
 pub mod event;
 
+/// The `<img>` tags Cursor streams for sandbox files, and dropping them.
+pub mod inline_image;
+
 /// Identifiers and small value types.
 pub mod model;
 /// Cursor model catalog expressed as ACP configuration.

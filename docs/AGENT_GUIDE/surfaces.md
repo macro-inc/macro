@@ -398,7 +398,14 @@ mobile navigation even when `enable-new-app-views` is enabled.
 
 On desktop, with `enable-new-app-views` enabled, Files opens **Drive** using the
 same shell as Tasks. The sidebar contains `New file or folder`, `My Files`, `Recent`,
-`Shared with me`, collapsible Favorites, and a searchable folder hierarchy.
+`Shared with me`, collapsible Favorites, a searchable folder hierarchy, and a
+collapsible Tags section beneath the folders. Tags lists every tag you can apply,
+nested by `/` in the tag name, with a `New tag` action in its header. Choosing a
+tag shows only that tag's files within the current tab or folder and exits any
+inline file detail; choosing the highlighted tag again clears it, and the same
+selection appears under the **Filter** menu's Tags submenu. Navigating to another
+tab or folder clears tag filters. A folder with no files matching the active tag
+shows the list's no-match state rather than `This folder is empty`.
 Drive omits split-history back/forward buttons in both wide and narrow layouts;
 the split close button remains available when multiple splits are open.
 Files opened in place from Drive show a return link labeled with their originating
@@ -438,7 +445,7 @@ breadcrumb to return to the list; choosing an ancestor file drops newer detail
 entries. Opening a list row or sidebar favorite starts a new detail path; only
 navigation originating inside a detail appends to that path. Modified clicks
 retain existing split navigation. On narrow layouts, use `Select Drive view` for tabs, favorites,
-and folders. Navigation state and expanded folders are restored when returning
+folders, and tags. Navigation state and expanded folders are restored when returning
 from an opened file.
 
 ## Calendar — `/app/calendar/view`
