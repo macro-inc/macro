@@ -85,6 +85,10 @@ connection = { path = "../../crates/connection", default-features = false, featu
 connection_gateway_client = { path = "../../crates/connection_gateway_client" }
 contacts = { path = "../../crates/contacts" }
 cowlike = { path = "../../crates/cowlike" }
+channel_labels = { path = "../../crates/channel_labels", features = [
+  "inbound",
+  "postgres",
+] }
 crm = { path = "../../crates/crm" }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents_hex = { path = "../../crates/documents", package = "documents" }

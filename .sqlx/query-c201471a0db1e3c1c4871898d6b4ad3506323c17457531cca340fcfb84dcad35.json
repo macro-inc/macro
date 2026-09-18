@@ -1,0 +1,36 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.name as \"name!\", COUNT(*) OVER () as \"total_count!\"\n               FROM comms_channels c\n               JOIN comms_channel_participants p ON p.channel_id = c.id\n               WHERE p.user_id = $1 AND p.left_at IS NULL\n                   AND c.channel_type != 'direct_message'\n                   AND strpos(lower(c.name), lower($2)) > 0\n               ORDER BY lower(c.name), c.id\n               LIMIT $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "total_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "c201471a0db1e3c1c4871898d6b4ad3506323c17457531cca340fcfb84dcad35"
+}

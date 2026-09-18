@@ -1861,6 +1861,458 @@
         }
       }
     },
+    "/channel-labels": {
+      "get": {
+        "tags": ["channel_labels"],
+        "summary": "List the caller's shared or private labels.",
+        "operationId": "list_channel_labels",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabelsList"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["channel_labels"],
+        "summary": "Create a label for the caller's authorized scope.",
+        "operationId": "create_channel_label",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-labels/channels/{channel_id}": {
+      "put": {
+        "tags": ["channel_labels"],
+        "summary": "Move a channel into a label of the caller's authorized scope, or out of any label.",
+        "operationId": "set_channel_label",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "The channel id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-labels/preview": {
+      "post": {
+        "tags": ["channel_labels"],
+        "summary": "Preview visible channels matched by a smart tag, without creating it.",
+        "operationId": "preview_smart_tag",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChannelLabelRule"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SmartTagPreview"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/channel-labels/{label_id}": {
+      "delete": {
+        "tags": ["channel_labels"],
+        "summary": "Delete a label of the caller's authorized scope. Its channels return to the plain list.",
+        "operationId": "delete_channel_label",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "description": "The label id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": ""
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["channel_labels"],
+        "summary": "Rename a label of the caller's authorized scope.",
+        "operationId": "rename_channel_label",
+        "parameters": [
+          {
+            "name": "label_id",
+            "in": "path",
+            "description": "The label id.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RenameChannelLabelRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLabel"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/channels": {
       "post": {
         "tags": ["channels"],
@@ -17432,6 +17884,113 @@
           }
         }
       },
+      "ChannelLabel": {
+        "type": "object",
+        "description": "A shared or account-private label grouping chat channels in the sidebar.\n\n`channel_ids` is viewer-relative: it lists only the labelled channels the\nrequesting user participates in. `channel_count` counts every channel in\nthe label so clients can warn accurately before a delete.",
+        "required": [
+          "id",
+          "name",
+          "sortOrder",
+          "channelIds",
+          "channelCount",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "channelCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "All assignments for a manual label; visible matches for a smart tag."
+          },
+          "channelIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Channels in this label that the requesting user participates in."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the label was created."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable label id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name, unique within the scope (case-insensitive)."
+          },
+          "rule": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelRule",
+                "description": "Automatic membership rule, or `None` for a manually managed label."
+              }
+            ]
+          },
+          "sortOrder": {
+            "type": "number",
+            "format": "double",
+            "description": "Manual ordering value within the scope; lower sorts first."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Owning team, or `None` for account-private labels."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the label was last renamed or reordered."
+          }
+        }
+      },
+      "ChannelLabelRule": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Case-insensitive, literal substring matching on the channel name.",
+            "required": ["contains", "attribute"],
+            "properties": {
+              "attribute": {
+                "type": "string",
+                "enum": ["name"]
+              },
+              "contains": {
+                "type": "string",
+                "description": "The substring to find anywhere in the name."
+              }
+            }
+          }
+        ],
+        "description": "An attribute rule that automatically groups matching channels."
+      },
+      "ChannelLabelsList": {
+        "type": "object",
+        "description": "The authorized scope's labels in manual order.",
+        "required": ["labels"],
+        "properties": {
+          "labels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChannelLabel"
+            },
+            "description": "Every label of the scope, whether or not the caller sees channels in it."
+          },
+          "teamId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Team scope, or `None` for private labels."
+          }
+        }
+      },
       "ChannelMentionedMetadata": {
         "type": "object",
         "description": "Metadata for [`ChannelTopicEvent::Mentioned`].",
@@ -18717,6 +19276,36 @@
           "success": {
             "type": "boolean",
             "description": "Indicates if the document was created successfully"
+          }
+        }
+      },
+      "CreateChannelLabelRequest": {
+        "type": "object",
+        "description": "Request body for creating a label.",
+        "required": ["name"],
+        "properties": {
+          "channelIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Channels to move into the new label."
+          },
+          "name": {
+            "type": "string",
+            "description": "Display name; unique within the scope, case-insensitively."
+          },
+          "rule": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelRule",
+                "description": "Automatic name-matching rule; omitted for manual labels or a name-only rename."
+              }
+            ]
           }
         }
       },
@@ -26862,6 +27451,28 @@
           }
         }
       },
+      "RenameChannelLabelRequest": {
+        "type": "object",
+        "description": "Request body for renaming a label.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "New display name."
+          },
+          "rule": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChannelLabelRule",
+                "description": "Automatic name-matching rule; omitted for manual labels or a name-only rename."
+              }
+            ]
+          }
+        }
+      },
       "ReorderFavoritesRequest": {
         "type": "object",
         "description": "Request body for reordering favorites.",
@@ -27174,6 +27785,17 @@
                 "description": "The turn that was running when it stopped, if any."
               }
             ]
+          }
+        }
+      },
+      "SetChannelLabelRequest": {
+        "type": "object",
+        "description": "Request body for moving a channel between labels.",
+        "properties": {
+          "labelId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The label to put the channel in, or `null` to remove it from its label."
           }
         }
       },
@@ -27494,6 +28116,41 @@
           "entity_type": {
             "type": "string",
             "description": "Mentioned entity type."
+          }
+        }
+      },
+      "SmartTagChannelMatch": {
+        "type": "object",
+        "description": "A channel visible to the caller that matches a smart tag rule.",
+        "required": ["id", "name"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Channel display name."
+          }
+        }
+      },
+      "SmartTagPreview": {
+        "type": "object",
+        "description": "A bounded preview and the total number of visible channels matching a rule.",
+        "required": ["channels", "totalCount"],
+        "properties": {
+          "channels": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SmartTagChannelMatch"
+            },
+            "description": "First matches, in alphabetical order."
+          },
+          "totalCount": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Number of matching channels the caller participates in, including overflow."
           }
         }
       },

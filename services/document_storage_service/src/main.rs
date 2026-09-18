@@ -36,6 +36,10 @@ use call::{
         s3_recording_storage::{RecordingCloudFrontConfig, S3RecordingStorage},
     },
 };
+use channel_labels::{
+    domain::service::ChannelLabelsServiceImpl, inbound::axum_router::ChannelLabelsRouterState,
+    outbound::pg_channel_labels_repo::PgChannelLabelsRepo,
+};
 use channels::{
     domain::{
         list_service::ChannelListServiceImpl,
@@ -1495,6 +1499,13 @@ async fn run() -> anyhow::Result<()> {
         ),
         favorites_service,
         favorites_mutation_service,
+        channel_labels_state: ChannelLabelsRouterState::new(
+            Arc::new(ChannelLabelsServiceImpl::new(PgChannelLabelsRepo::new(
+                db.clone(),
+            ))),
+            entity_access_service.clone(),
+            authorization_state.clone(),
+        ),
         user_api_key_state: UserApiKeyRouterState::new(
             user_api_key_service,
             authorization_state.clone(),

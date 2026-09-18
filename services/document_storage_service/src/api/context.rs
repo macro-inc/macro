@@ -21,6 +21,10 @@ use call::{
     inbound::axum_router::{CallRouterState, InternalCallRouterState, WebhookRouterState},
     outbound::{livekit_rtc_client::LivekitRtcClient, pg_call_repo::PgCallRepo},
 };
+use channel_labels::{
+    domain::service::ChannelLabelsServiceImpl, inbound::axum_router::ChannelLabelsRouterState,
+    outbound::pg_channel_labels_repo::PgChannelLabelsRepo,
+};
 use channels::{
     domain::{
         list_service::ChannelListServiceImpl,
@@ -468,6 +472,13 @@ pub(crate) type FavoritesServiceType = FavoritesServiceImpl<PgFavoritesRepo>;
 pub(crate) type FavoritesMutationServiceType =
     FavoritesMutationServiceImpl<FavoritesServiceType, EntityAccessService>;
 
+/// Type alias for the channel labels service.
+pub(crate) type ChannelLabelsServiceType = ChannelLabelsServiceImpl<PgChannelLabelsRepo>;
+
+/// Type alias for the channel labels router state.
+pub(crate) type DssChannelLabelsState =
+    ChannelLabelsRouterState<ChannelLabelsServiceType, EntityAccessService, AuthorizationService>;
+
 /// Type alias for the favorites router state.
 pub(crate) type DssFavoritesState =
     FavoritesRouterState<FavoritesServiceType, EntityAccessService, AuthorizationService>;
@@ -571,6 +582,7 @@ pub(crate) struct ApiContext {
     pub favorites_state: DssFavoritesState,
     pub favorites_service: Arc<FavoritesServiceType>,
     pub favorites_mutation_service: Arc<FavoritesMutationServiceType>,
+    pub channel_labels_state: DssChannelLabelsState,
     pub user_api_key_state: DssUserApiKeyState,
     pub reminders_state: DssRemindersState,
     pub initiative_state: DssInitiativeState,

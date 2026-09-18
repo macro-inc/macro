@@ -313,10 +313,84 @@ the shared 256px default sidebar width and resize limits. In splits narrower tha
 with the same full sidebar contents. There is no separate skinny sidebar mode.
 
 On desktop, the Chat rail has `All` and `Recent` tabs. All contains an
-optional `Favorites` section above the independently paginated `Channels` and
-`DMs` sections. It appears when the user has channel favorites and only lists
-channels. Channel favorites open in the channel preview. Shift-clicking a
-favorite, channel, or DM opens that conversation in a new split instead.
+optional `Favorites` section, an optional `Unread` section, and the
+independently paginated `Channels` and `DMs` sections. Favorites appears when
+the user has channel favorites and only lists channels. Channel favorites open
+in the channel preview. Shift-clicking a favorite, channel, or DM opens that
+conversation in a new split instead.
+
+`Unread` appears only while at least one channel (not DM) has unread activity.
+It is a flat list, newest unread notification first, with each row's timestamp
+always visible, and a count pill on its heading. Marking a channel read drops
+it from the list. It is capped at a third of the column and scrolls inside.
+
+### Channel labels
+
+Labels group channels inside the `Channels` section. Team members share the
+same labels and can create, rename, delete, or move their channels between them.
+Users without a team have labels private to their account. The naming and delete
+dialogs explain which scope applies. Collapse/expand state is per user.
+Every label remains visible, including empty labels; only channels the viewer
+actively participates in are shown inside it. Direct messages cannot be labelled.
+Names are unique within the team or account, case-insensitively.
+
+Layout: labels come first in creation order, each showing its visible channels
+A→Z, followed by ungrouped channels in the section's selected sort order. The
+`Unread` section remains ordered by activity. A label row has an unread count,
+a `···` menu (`Rename`, `Mark all as read`, `Delete label`), and a disclosure caret.
+Clicking the row or pressing Enter toggles it; `h` / `l` on a label or one of its
+channels collapses or expands that label. `[` / `]` jump between section headings.
+
+Creating: use the `Channels` heading's `+` → `New label`, including when the
+account has no team. The name field receives focus on opening and reopening.
+Enter or `Create label` saves; Escape or Cancel dismisses without saving.
+The dialog stays open while saving and shows a failure inline, preserving the
+name for a retry. A successful empty label appears immediately and survives
+reload. Rename uses the same dialog prefilled. Delete asks for confirmation;
+its button says `Delete for everyone` for shared labels and `Delete label` for
+private ones. Channels remain accessible after deleting their label.
+
+Moving: right-click a channel for `Add to label` / `Move to label`, including a
+`New label…` option, or use `Ungroup from “<label>”`. Drag a channel onto a label
+heading or one of its channels to move in. Drag a grouped channel onto a plain
+channel, the Channels heading, or empty space below the list to ungroup it.
+Dragging one ungrouped channel onto another opens a name dialog; saving creates
+the label with both channels atomically. A failed save changes neither channel.
+Dropping on the source channel or its current label does nothing; Escape from
+the naming dialog leaves both channels unchanged.
+
+For drag verification, start from the channel name and from different horizontal
+positions in a row, then move across row boundaries and scroll the list. The
+highlight follows the visible target under the pointer, with a whole group
+highlighted when moving into it. A drag must not open a preview or reorder the
+source. Check moves into collapsed and empty labels, ungrouping, cancellation,
+and persistence after reload. Grouping in one Chat rail must not trigger a
+second dialog in another rail. If the label service cannot be reached, the
+UI reports the failure instead of claiming the group was saved.
+
+Smart labels: use `Channels` → `+` → `New smart label`. Enter a label name and a
+`Name contains` pattern. Matching ignores capitalization and treats punctuation
+literally; it does not use wildcards or regular expressions. The creation dialog
+shows up to five matching channels as you type, followed by `+N more channels
+matched` for overflow. Empty patterns cannot be saved; a valid pattern with no
+current matches can be saved for future channels. Only channels you participate
+in are matched, and direct messages are excluded.
+
+Group headings have no icon in the sidebar; smart label creation uses a filter
+icon. Channels appear in every matching smart label and keep any manual label
+assignment. A channel in any smart label is excluded
+from the ungrouped list, even when its matching labels are collapsed. Membership
+follows channel names automatically. Loaded channels update with live name
+changes; other matches refresh periodically. Use the heading's `···` →
+`Edit smart label` to change the name or pattern and preview the new matches.
+Smart labels cannot be drag targets or manually assigned through `Move to label`.
+Deleting a smart label preserves channels, other labels, and manual assignments.
+
+Verify overlapping rules, collapsed labels, no matches, overflow, and quickly
+changing patterns (an older response must not replace the latest preview).
+Open the same matched channel from two labels and verify keyboard focus remains
+on the chosen row. Check rule edits and persistence after reload.
+
 If a restored Chat selection is already open in another view, its preview stays
 closed but the saved selection is retained. Close the other view, then select
 the conversation again or reopen Chat to restore its preview. Verify that an
@@ -350,8 +424,8 @@ keyboard activation still toggles the highlighted section.
 Arrow Down / `j` at the last loaded conversation holds focus while that
 section loads its next page. Once loading finishes, the next press advances
 into the appended rows. If the section has no next page, navigation proceeds
-to the next section. `[` and `]` jump between the visible Favorites, Channels,
-and DMs section headers.
+to the next section. `[` and `]` jump between the visible Favorites, Unread,
+Channels, and DMs section headers.
 
 On touch layouts, the `Recent`, `Channels`, and `DMs` pill tabs each retain
 their own loaded pages and load more as their active list approaches the end.

@@ -3515,6 +3515,30 @@ dependencies = [
 ]
 
 [[package]]
+name = "channel_labels"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "cowlike",
+ "entity_access",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "model-entity",
+ "model-error-response",
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "channel_sender"
 version = "0.1.0"
 dependencies = [
@@ -5512,6 +5536,7 @@ dependencies = [
  "calendar_events",
  "call",
  "channel_bots",
+ "channel_labels",
  "channels",
  "chat",
  "chrono",

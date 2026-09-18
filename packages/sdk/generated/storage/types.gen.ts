@@ -2325,6 +2325,74 @@ export type ChannelJoinCodeResponse = {
 };
 
 /**
+ * A shared or account-private label grouping chat channels in the sidebar.
+ *
+ * `channel_ids` is viewer-relative: it lists only the labelled channels the
+ * requesting user participates in. `channel_count` counts every channel in
+ * the label so clients can warn accurately before a delete.
+ */
+export type ChannelLabel = {
+    /**
+     * All assignments for a manual label; visible matches for a smart tag.
+     */
+    channelCount: number;
+    /**
+     * Channels in this label that the requesting user participates in.
+     */
+    channelIds: Array<string>;
+    /**
+     * When the label was created.
+     */
+    createdAt: string;
+    /**
+     * Stable label id.
+     */
+    id: string;
+    /**
+     * Display name, unique within the scope (case-insensitive).
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
+    /**
+     * Manual ordering value within the scope; lower sorts first.
+     */
+    sortOrder: number;
+    /**
+     * Owning team, or `None` for account-private labels.
+     */
+    teamId?: string | null;
+    /**
+     * When the label was last renamed or reordered.
+     */
+    updatedAt: string;
+};
+
+/**
+ * Case-insensitive, literal substring matching on the channel name.
+ */
+export type ChannelLabelRule = {
+    attribute: 'name';
+    /**
+     * The substring to find anywhere in the name.
+     */
+    contains: string;
+};
+
+/**
+ * The authorized scope's labels in manual order.
+ */
+export type ChannelLabelsList = {
+    /**
+     * Every label of the scope, whether or not the caller sees channels in it.
+     */
+    labels: Array<ChannelLabel>;
+    /**
+     * Team scope, or `None` for private labels.
+     */
+    teamId?: string | null;
+};
+
+/**
  * Metadata for [`ChannelTopicEvent::Mentioned`].
  */
 export type ChannelMentionedMetadata = {
@@ -3194,6 +3262,21 @@ export type CreateBulkDocumentResponseData = {
      * Indicates if the document was created successfully
      */
     success: boolean;
+};
+
+/**
+ * Request body for creating a label.
+ */
+export type CreateChannelLabelRequest = {
+    /**
+     * Channels to move into the new label.
+     */
+    channelIds?: Array<string>;
+    /**
+     * Display name; unique within the scope, case-insensitively.
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
 };
 
 /**
@@ -8032,6 +8115,17 @@ export type RemoveParticipantsRequest = {
 };
 
 /**
+ * Request body for renaming a label.
+ */
+export type RenameChannelLabelRequest = {
+    /**
+     * New display name.
+     */
+    name: string;
+    rule?: null | ChannelLabelRule;
+};
+
+/**
  * Request body for reordering favorites.
  */
 export type ReorderFavoritesRequest = {
@@ -8269,6 +8363,16 @@ export type SessionStoppedMetadata = {
 };
 
 /**
+ * Request body for moving a channel between labels.
+ */
+export type SetChannelLabelRequest = {
+    /**
+     * The label to put the channel in, or `null` to remove it from its label.
+     */
+    labelId?: string | null;
+};
+
+/**
  * Replace a channel's picture, or remove it by sending a null file id.
  */
 export type SetChannelPictureRequest = {
@@ -8437,6 +8541,34 @@ export type SimpleMention = {
      * Mentioned entity type.
      */
     entity_type: string;
+};
+
+/**
+ * A channel visible to the caller that matches a smart tag rule.
+ */
+export type SmartTagChannelMatch = {
+    /**
+     * Channel id.
+     */
+    id: string;
+    /**
+     * Channel display name.
+     */
+    name: string;
+};
+
+/**
+ * A bounded preview and the total number of visible channels matching a rule.
+ */
+export type SmartTagPreview = {
+    /**
+     * First matches, in alphabetical order.
+     */
+    channels: Array<SmartTagChannelMatch>;
+    /**
+     * Number of matching channels the caller participates in, including overflow.
+     */
+    totalCount: number;
 };
 
 /**
@@ -11466,6 +11598,157 @@ export type IngestTranscriptResponses = {
      */
     200: unknown;
 };
+
+export type ListChannelLabelsData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/channel-labels';
+};
+
+export type ListChannelLabelsErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListChannelLabelsError = ListChannelLabelsErrors[keyof ListChannelLabelsErrors];
+
+export type ListChannelLabelsResponses = {
+    200: ChannelLabelsList;
+};
+
+export type ListChannelLabelsResponse = ListChannelLabelsResponses[keyof ListChannelLabelsResponses];
+
+export type CreateChannelLabelData = {
+    body: CreateChannelLabelRequest;
+    path?: never;
+    query?: never;
+    url: '/channel-labels';
+};
+
+export type CreateChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type CreateChannelLabelError = CreateChannelLabelErrors[keyof CreateChannelLabelErrors];
+
+export type CreateChannelLabelResponses = {
+    200: ChannelLabel;
+};
+
+export type CreateChannelLabelResponse = CreateChannelLabelResponses[keyof CreateChannelLabelResponses];
+
+export type SetChannelLabelData = {
+    body: SetChannelLabelRequest;
+    path: {
+        /**
+         * The channel id.
+         */
+        channel_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/channels/{channel_id}';
+};
+
+export type SetChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SetChannelLabelError = SetChannelLabelErrors[keyof SetChannelLabelErrors];
+
+export type SetChannelLabelResponses = {
+    204: void;
+};
+
+export type SetChannelLabelResponse = SetChannelLabelResponses[keyof SetChannelLabelResponses];
+
+export type PreviewSmartTagData = {
+    body: ChannelLabelRule;
+    path?: never;
+    query?: never;
+    url: '/channel-labels/preview';
+};
+
+export type PreviewSmartTagErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type PreviewSmartTagError = PreviewSmartTagErrors[keyof PreviewSmartTagErrors];
+
+export type PreviewSmartTagResponses = {
+    200: SmartTagPreview;
+};
+
+export type PreviewSmartTagResponse = PreviewSmartTagResponses[keyof PreviewSmartTagResponses];
+
+export type DeleteChannelLabelData = {
+    body?: never;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/{label_id}';
+};
+
+export type DeleteChannelLabelErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type DeleteChannelLabelError = DeleteChannelLabelErrors[keyof DeleteChannelLabelErrors];
+
+export type DeleteChannelLabelResponses = {
+    204: void;
+};
+
+export type DeleteChannelLabelResponse = DeleteChannelLabelResponses[keyof DeleteChannelLabelResponses];
+
+export type RenameChannelLabelData = {
+    body: RenameChannelLabelRequest;
+    path: {
+        /**
+         * The label id.
+         */
+        label_id: string;
+    };
+    query?: never;
+    url: '/channel-labels/{label_id}';
+};
+
+export type RenameChannelLabelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type RenameChannelLabelError = RenameChannelLabelErrors[keyof RenameChannelLabelErrors];
+
+export type RenameChannelLabelResponses = {
+    200: ChannelLabel;
+};
+
+export type RenameChannelLabelResponse = RenameChannelLabelResponses[keyof RenameChannelLabelResponses];
 
 export type CreateChannelData = {
     body: CreateChannelRequest;

@@ -233,6 +233,12 @@ fn api_router(state: ApiContext) -> Router {
             favorites::inbound::axum_router::favorites_router(state.favorites_state.clone()),
         )
         .nest(
+            "/channel-labels",
+            channel_labels::inbound::axum_router::channel_labels_router(
+                state.channel_labels_state.clone(),
+            ),
+        )
+        .nest(
             "/user-api-keys",
             user_api_key::inbound::axum_router::user_api_key_router(
                 state.user_api_key_state.clone(),
