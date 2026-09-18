@@ -16,7 +16,8 @@ import {
   Thread,
 } from '@core/comments/Thread';
 import { useUserId } from '@core/context/user';
-import { createSelector, For } from 'solid-js';
+import { Key } from '@solid-primitives/keyed';
+import { createSelector } from 'solid-js';
 import { usePdfComments } from '../context/pdf-comments-context';
 import { usePdfDocument } from '../context/pdf-document-context';
 
@@ -29,7 +30,7 @@ const rightMarginStyle = {
 export function RightMarginLayout(props: { pageIndex: number }) {
   return (
     <div
-      class="rightMargin absolute z-pdf-comments pointer-events-auto [transition: width 0.05s linear, right 0.05s linear]"
+      class="rightMargin absolute top-0 z-pdf-comments pointer-events-auto [transition: width 0.05s linear, right 0.05s linear]"
       style={rightMarginStyle}
     >
       <CommentsAndSuggestions pageIndex={props.pageIndex} />
@@ -122,17 +123,17 @@ function CommentsAndSuggestions(props: { pageIndex: number }) {
 
   return (
     <CommentsContext.Provider value={commentsContext}>
-      <For each={threads()}>
+      <Key each={threads()} by="threadId">
         {(root) => (
           <Thread
-            comment={root}
-            layout={root.layout}
-            isActive={isActiveThreadSelector(root.threadId)}
-            theme={commentTheme(root.threadId)}
-            handleMouseDown={handleThreadMouseDown(root.threadId)}
+            comment={root()}
+            layout={root().layout}
+            isActive={isActiveThreadSelector(root().threadId)}
+            theme={commentTheme(root().threadId)}
+            handleMouseDown={handleThreadMouseDown(root().threadId)}
           />
         )}
-      </For>
+      </Key>
     </CommentsContext.Provider>
   );
 }

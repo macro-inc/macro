@@ -51,6 +51,7 @@ import { useLoadAnnotations } from '../store/annotations';
 import { useSetSelectionHighlights } from '../store/highlight';
 import { PayloadMode } from '../type/placeables';
 import { type IPageOverlayProps, PageOverlay } from './PageOverlay';
+import { RightMarginLayout } from './RightMarginLayout';
 import { SimpleSearch } from './SimpleSearch';
 
 false && observedSize;
@@ -145,13 +146,20 @@ function InnerDocument() {
           if (!container) return '';
 
           return (
-            <Portal mount={container}>
-              <PageOverlay
-                pageIndex={pageIndex}
-                viewport={viewport}
-                pageViewDiv={pageViewDiv}
-              />
-            </Portal>
+            <>
+              <Portal mount={container}>
+                <PageOverlay
+                  pageIndex={pageIndex}
+                  viewport={viewport}
+                  pageViewDiv={pageViewDiv}
+                />
+              </Portal>
+              <Show when={!isPopup}>
+                <Portal mount={container}>
+                  <RightMarginLayout pageIndex={pageIndex} />
+                </Portal>
+              </Show>
+            </>
           );
         }}
       </For>

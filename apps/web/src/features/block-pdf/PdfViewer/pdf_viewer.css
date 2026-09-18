@@ -71,11 +71,6 @@
   pointer-events: all;
 }
 
-.pageOverlayInner.noClickOverlay .rightMargin,
-.pageOverlayInner.noClickOverlay .rightMargin * {
-  pointer-events: all;
-}
-
 .page.noSelect * {
   user-select: none;
 }

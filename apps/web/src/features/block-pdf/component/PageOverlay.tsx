@@ -43,7 +43,6 @@ import { useAddNewHighlights, useRemoveHighlight } from '../store/highlight';
 import TocUtils from '../util/TocUtils';
 import { AbsoluteDefinitionLookups } from './AbsoluteDefinitionLookups';
 import { Placeable } from './Placeable';
-import { RightMarginLayout } from './RightMarginLayout';
 import { UserHighlight, useResetUserHighlights } from './UserHighlight';
 
 export interface IPageOverlayProps {
@@ -516,9 +515,6 @@ export function PageOverlay(props: IPageOverlayProps) {
           </For>
         </div>
       </div>
-      <Show when={!isPopup}>
-        <RightMarginLayout pageIndex={props.pageIndex} />
-      </Show>
     </div>
   );
 }

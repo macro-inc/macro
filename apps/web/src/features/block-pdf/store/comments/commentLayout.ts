@@ -173,6 +173,7 @@ export function usePageCommentLayout(pageIndex: Accessor<number>) {
   return {
     threads,
     setThreadHeight: (threadId: number, height: number) => {
+      if (threadHeights[threadId] === height) return;
       setThreadHeights(threadId, height);
     },
   };
