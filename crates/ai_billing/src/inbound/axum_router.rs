@@ -127,23 +127,21 @@ fn validate_return_url(url: &str, request_origin: Option<&str>) -> Result<(), Re
     Ok(())
 }
 
+/// Validate both return URLs of a checkout request, naming the offending
+/// field in the error so the client can surface it.
 fn validate_return_urls(
     req: &CreditCheckoutRequestBody,
     headers: &HeaderMap,
-) -> Result<(), Response> {
+) -> Result<(), AiBillingErrorBody> {
     let origin = headers.get(ORIGIN).and_then(|v| v.to_str().ok());
     for (name, url) in [
         ("successUrl", &req.success_url),
         ("cancelUrl", &req.cancel_url),
     ] {
         if let Err(e) = validate_return_url(url, origin) {
-            return Err((
-                StatusCode::BAD_REQUEST,
-                Json(AiBillingErrorBody {
-                    error: format!("{name} {e}"),
-                }),
-            )
-                .into_response());
+            return Err(AiBillingErrorBody {
+                error: format!("{name} {e}"),
+            });
         }
     }
     Ok(())
@@ -355,8 +353,8 @@ pub async fn create_credit_checkout_handler<B: BillingService, Auth: MacroAuthor
     headers: HeaderMap,
     Json(req): Json<CreditCheckoutRequestBody>,
 ) -> Response {
-    if let Err(response) = validate_return_urls(&req, &headers) {
-        return response;
+    if let Err(body) = validate_return_urls(&req, &headers) {
+        return (StatusCode::BAD_REQUEST, Json(body)).into_response();
     }
     match service
         .create_credit_checkout(

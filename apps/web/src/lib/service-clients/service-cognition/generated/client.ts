@@ -2416,12 +2416,12 @@ export type sendChatMessageResponse401 = {
 };
 
 export type sendChatMessageResponse402 = {
-  data: void;
+  data: ChatMessageError;
   status: 402;
 };
 
 export type sendChatMessageResponse403 = {
-  data: void;
+  data: ChatMessageError;
   status: 403;
 };
 

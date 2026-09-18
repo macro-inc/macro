@@ -95,6 +95,7 @@ fn embedded_assets_select_their_consumers() {
         "complete_graph",
         "documents",
         "seed_cli",
+        "sync_service",
         "xtask_workflows",
     ] {
         assert!(
