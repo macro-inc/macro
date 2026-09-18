@@ -386,9 +386,6 @@ function DriveViewContent(props: DriveViewProps) {
           />
         )}
       </For>
-      <Show when={favorites().length === 0}>
-        <p class="px-3 py-2 text-sm text-ink-extra-muted">No favorites yet</p>
-      </Show>
     </ViewSidebar.Nav>
   );
 
@@ -531,6 +528,7 @@ function DriveViewContent(props: DriveViewProps) {
         }
         createMenu={CreateMenu}
         favorites={Favorites}
+        hasFavorites={favorites().length > 0}
         detail={
           navigationStack.active() ? (
             <TagSetsProvider tagSets={view.tagFilter.tagSets}>

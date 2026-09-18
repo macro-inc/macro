@@ -45,6 +45,8 @@ export function DriveLayout(props: {
   onRootOpen: (open: boolean) => void;
   createMenu: () => JSX.Element;
   favorites: () => JSX.Element;
+  /** The favorites section is hidden entirely when the user has none. */
+  hasFavorites: boolean;
   locationMenu: DriveLocationMenu;
   detail?: JSX.Element;
   children: JSX.Element;
@@ -72,18 +74,20 @@ export function DriveLayout(props: {
           setNavigationOpen(false);
         }}
       />
-      <CollapsibleSection.Root
-        open={props.state.favoritesOpen}
-        onOpenChange={props.onFavoritesOpen}
-      >
-        <CollapsibleSection.Trigger>
-          <span class="min-w-0 truncate">Favorites</span>
-          <CollapsibleSection.Indicator />
-        </CollapsibleSection.Trigger>
-        <CollapsibleSection.Content>
-          <props.favorites />
-        </CollapsibleSection.Content>
-      </CollapsibleSection.Root>
+      <Show when={props.hasFavorites}>
+        <CollapsibleSection.Root
+          open={props.state.favoritesOpen}
+          onOpenChange={props.onFavoritesOpen}
+        >
+          <CollapsibleSection.Trigger>
+            <span class="min-w-0 truncate">Favorites</span>
+            <CollapsibleSection.Indicator />
+          </CollapsibleSection.Trigger>
+          <CollapsibleSection.Content>
+            <props.favorites />
+          </CollapsibleSection.Content>
+        </CollapsibleSection.Root>
+      </Show>
       <CollapsibleSection.Root
         open={props.state.rootOpen}
         onOpenChange={props.onRootOpen}
