@@ -18,9 +18,6 @@ use crate::domain::models::{
 };
 use crate::domain::ports::ScheduledActionRepo;
 
-#[cfg(test)]
-mod test;
-
 pub struct PgScheduledActionRepo {
     pool: PgPool,
 }

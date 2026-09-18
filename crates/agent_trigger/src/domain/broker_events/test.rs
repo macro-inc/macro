@@ -359,7 +359,7 @@ fn mention_sessions_are_keyed_by_bot_id() {
     let event = AgentSessionMacroEvent::new_session(NewAgentSessionEvent::TopLevelMentioned(
         AgentBotMentionedEvent {
             bot_id: BotId::TEST_A,
-            message: message(),
+            message: channel_message(),
         },
     ));
 

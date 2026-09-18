@@ -30,6 +30,7 @@ chrono-tz = { workspace = true }
 cron = { workspace = true }
 database_env_vars = { path = "../../crates/database_env_vars" }
 doppler-config = { workspace = true }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
 futures = { workspace = true }
 macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = [
@@ -47,6 +48,7 @@ macro_event_broker = { path = "../../crates/macro_event_broker" }
 macro_user_id = { path = "../../crates/macro_user_id" }
 macro_uuid = { path = "../../crates/macro_uuid" }
 model = { path = "../../crates/model" }
+model_owner = { path = "../../crates/model_owner" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
