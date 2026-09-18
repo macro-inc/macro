@@ -1,6 +1,7 @@
 import { BulkDeleteFailure } from '@app/features/entity/queries/bulk-delete-result';
 import type { EntityData } from '@entity';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { createRoot, createSignal } from 'solid-js';
+import { beforeEach, describe, expect, it, onTestFinished, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   openBulkEditModal: vi.fn(),
@@ -38,8 +39,24 @@ vi.mock('../utils', () => ({
   trashEmails: mocks.trashEmails,
 }));
 
-import type { SoupRow } from '../create-soup-state';
-import type { EntityActionListState } from './entity-action-context';
+vi.mock('@app/features/next-soup/filters/configs/', () => ({
+  SOUP_FILTERS: [],
+}));
+vi.mock('@app/features/next-soup/soup-view/sort-options', () => ({
+  SORT_CONFIGS: { updated_at: { id: 'updated_at', fn: () => 0 } },
+}));
+vi.mock('@core/mobile/inputModality', () => ({ isModality: () => false }));
+vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
+vi.mock('./make-mark-done-action', () => ({
+  canExecuteMarkDoneOnView: () => true,
+}));
+
+import { createListController } from '@app/components/list/create-list-controller';
+import { createSoupState, type SoupRow } from '../create-soup-state';
+import {
+  type EntityActionListState,
+  toEntityActionListState,
+} from './entity-action-context';
 import { makeDeleteAction } from './make-delete-action';
 
 const ME = 'macro|me@macro.com';
@@ -264,6 +281,182 @@ describe('confirmed partial deletion cleanup', () => {
     modal.onCancel?.();
     expect(mocks.trashEmails).not.toHaveBeenCalled();
   });
+});
+
+function liveListState(
+  adapter: 'legacy' | 'controller',
+  initial: EntityData[],
+  focusId: string
+) {
+  return createRoot((dispose) => {
+    onTestFinished(dispose);
+    if (adapter === 'legacy') {
+      const soup = createSoupState({ initialData: initial });
+      soup.focus.set(focusId);
+      return {
+        soup,
+        setItems: (items: EntityData[]) =>
+          soup.setRows(
+            items.map((original, index) =>
+              soup.buildRow({ id: original.id, original, index })
+            )
+          ),
+      };
+    }
+    const [items, setItems] = createSignal(initial);
+    const controller = createListController({
+      items,
+      getKey: (item: EntityData) => `row:${item.id}`,
+    });
+    const soup = toEntityActionListState({
+      controller,
+      getEntity: (item) => item,
+    });
+    soup.focus.set(focusId);
+    return {
+      soup,
+      setItems: (next: EntityData[]) => {
+        setItems(next);
+      },
+    };
+  });
+}
+
+const focusCases = [
+  {
+    name: 'preserves the originally captured next neighbour',
+    initial: ['top', 'before', 'deleted', 'neighbour', 'retry', 'tail'],
+    final: ['top', 'before', 'neighbour', 'tail'],
+    expected: 'neighbour',
+  },
+  {
+    name: 'skips the rest of a contiguous deleted block',
+    initial: ['top', 'before', 'deleted', 'retry', 'neighbour', 'tail'],
+    final: ['top', 'before', 'neighbour', 'tail'],
+    expected: 'neighbour',
+  },
+  {
+    name: 'falls back to the preceding neighbour at the end of the list',
+    initial: ['top', 'before', 'deleted', 'retry'],
+    final: ['top', 'before'],
+    expected: 'before',
+  },
+  {
+    name: 'keeps the neighbour by identity when rows are inserted or reordered',
+    initial: ['top', 'before', 'deleted', 'neighbour', 'retry', 'tail'],
+    final: ['inserted', 'top', 'before', 'tail', 'neighbour'],
+    expected: 'neighbour',
+  },
+  {
+    name: 'uses the preceding anchor when the next neighbour also disappears',
+    initial: ['top', 'before', 'deleted', 'retry', 'neighbour', 'tail'],
+    final: ['top', 'before', 'tail'],
+    expected: 'before',
+  },
+  {
+    name: 'uses a bounded original position when both anchors disappear',
+    initial: ['top', 'before', 'deleted', 'retry', 'neighbour', 'tail'],
+    final: ['new-top', 'new-nearby'],
+    expected: 'new-nearby',
+  },
+  {
+    name: 'clears focus when no rows remain',
+    initial: ['deleted', 'retry'],
+    final: [],
+    expected: undefined,
+  },
+];
+
+describe.each(['legacy', 'controller'] as const)(
+  'partial delete focus on the real %s list',
+  (adapter) => {
+    it.each(focusCases)('$name', async ({ initial, final, expected }) => {
+      const items = new Map(
+        [...initial, ...final].map((id) => [id, entity('document', { id })])
+      );
+      const { soup, setItems } = liveListState(
+        adapter,
+        initial.map((id) => items.get(id)!),
+        'deleted'
+      );
+      const deleted = items.get('deleted')!;
+      const retry = items.get('retry')!;
+      const action = makeDeleteAction({ userId: () => ME });
+      await action.executeWithSoup([deleted, retry], soup);
+      const modal = currentDeleteModal();
+      // Real list updates invalidate the focused row's index. A mock that only
+      // skips deleted ids, without losing focus, misses the jump-to-top bug.
+      setItems(
+        initial.filter((id) => id !== deleted.id).map((id) => items.get(id)!)
+      );
+      modal.onPartialDelete([deleted], [retry]);
+      setItems(final.map((id) => items.get(id)!));
+      expect(soup.focus.index()).toBe(-1);
+      modal.onFinish();
+      const focusId = soup.focus.id();
+      expect(
+        focusId === undefined ? undefined : soup.items.get(focusId)?.original.id
+      ).toBe(expected);
+      expect(mocks.restoreFocus).toHaveBeenLastCalledWith(focusId);
+    });
+  }
+);
+
+it('skips grouped headers and load-more rows when anchoring partial-delete focus', async () => {
+  const soup = createRoot((dispose) => {
+    onTestFinished(dispose);
+    return createSoupState();
+  });
+  const top = entity('document', { id: 'top' });
+  const deleted = entity('document', { id: 'deleted' });
+  const retry = entity('document', { id: 'retry' });
+  const neighbour = entity('document', { id: 'neighbour' });
+  const group = {
+    key: 'group',
+    label: 'Group',
+    value: 'group',
+    count: 1,
+    isExpanded: () => true,
+    toggle: () => {},
+  };
+  const structural = [
+    soup.buildRow({
+      id: 'header',
+      index: 3,
+      original: neighbour,
+      group,
+      isGrouped: true,
+    }),
+    soup.buildRow({
+      id: 'more',
+      index: 4,
+      original: neighbour,
+      group,
+      isLoadMore: true,
+    }),
+  ];
+  soup.setRows([
+    ...[top, deleted, retry].map((original, index) =>
+      soup.buildRow({ id: original.id, original, index })
+    ),
+    ...structural,
+    soup.buildRow({ id: neighbour.id, original: neighbour, index: 5, group }),
+  ]);
+  soup.focus.set(deleted.id);
+  await makeDeleteAction({ userId: () => ME }).executeWithSoup(
+    [deleted, retry],
+    soup
+  );
+  const modal = currentDeleteModal();
+  modal.onPartialDelete([deleted], [retry]);
+  soup.setRows([
+    soup.buildRow({ id: top.id, original: top, index: 0 }),
+    ...structural.map((row, index) => ({ ...row, index: index + 1 })),
+    soup.buildRow({ id: neighbour.id, original: neighbour, index: 3, group }),
+  ]);
+  expect(soup.focus.index()).toBe(-1);
+  modal.onFinish();
+  expect(soup.focus.id()).toBe(neighbour.id);
 });
 
 describe('makeDeleteAction.canExecute', () => {

@@ -57,6 +57,10 @@ retry; successful items must not be submitted again. Confirmed deletions are
 removed from split histories immediately, even if the dialog is then canceled.
 Cancel clears stale selection and focuses a surviving failed item or a live
 neighbor; it does not undo successful deletions or run deferred email deletions.
+After a partial deletion is retried successfully, focus uses a surviving neighbor
+captured before deletion (next, then previous), rather than restarting at the top
+of the list. If both neighbors disappeared, it falls back near the original list
+position, skipping group headers and load-more rows.
 Failed items return to Soup and search immediately, while successful removals
 remain absent from both.
 Successfully deleted items stay hidden until all enabled GraphQL Soup lists
