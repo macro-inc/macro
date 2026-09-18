@@ -24,7 +24,7 @@ import {
 } from '@core/util/upload';
 import type { EntityData } from '@entity';
 import type { MessageParent } from '@service-storage/messages';
-import { CollapsedInput, ComposerSurface } from '@ui';
+import { CollapsedInput, ComposerSurface, cn } from '@ui';
 import { $getRoot } from 'lexical';
 import {
   type Accessor,
@@ -490,7 +490,9 @@ export function ChannelInput(props: ChannelInputProps) {
           if (isInternalRefocus) return;
           collapsedInput.collapse();
         }}
-        class={isCollapsed() ? 'hidden' : undefined}
+        // `ComposerSurface` stretches itself; a bare div would take its
+        // content width inside a centering flex host, such as the margin card.
+        class={cn(props.flat && 'w-full', isCollapsed() && 'hidden')}
       >
         {renderSurfaceContent()}
       </Dynamic>
