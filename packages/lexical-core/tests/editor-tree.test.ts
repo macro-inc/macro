@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 import { SupportedNodeTypes } from '../node-list';
 import {
   $assertValidEditorTree,
+  $listTextTarget,
   $salvageTableCellChildren,
   validateEditorTree,
 } from '../utils/editor-tree';
@@ -98,6 +99,23 @@ describe('validateEditorTree', () => {
         expect(validateEditorTree($getRoot())[0]?.message).toMatch(
           /tablerow child must be tablecell/
         );
+      },
+      { discrete: true }
+    );
+  });
+
+  it('$listTextTarget locks onto a listitem, not the list', () => {
+    const editor = createTestEditor();
+    editor.update(
+      () => {
+        const list = $createListNode('bullet');
+        const first = $createListItemNode();
+        first.append($createTextNode('one'));
+        const last = $createListItemNode();
+        last.append($createTextNode('two'));
+        list.append(first, last);
+        expect($listTextTarget(list)?.getTextContent()).toBe('one');
+        expect($listTextTarget(list, 'last')?.getTextContent()).toBe('two');
       },
       { discrete: true }
     );

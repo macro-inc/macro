@@ -23,6 +23,7 @@
 import { $createListItemNode, $createListNode } from '@lexical/list';
 import { $isTableCellNode, $isTableRowNode } from '@lexical/table';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import { validateEditorTree } from '@macro-inc/lexical-core/utils/editor-tree';
 import {
   $createTextNode,
   $getRoot,
@@ -150,21 +151,25 @@ describe('a <td> id given to a text-level op', () => {
     ).toContain('X');
   });
 
-  it('setText on a list id does not commit list → text', () => {
+  it('setText on a list id writes the first item and keeps the list', () => {
     const { session } = setup('- one\n- two');
     const doc = new Doc(session);
     const listId = read(session, () => $getId($getRoot().getFirstChild()!));
-    expect(() =>
-      doc.apply({ kind: 'setText', node: listId!, text: 'X' })
-    ).toThrow(/invalid editor tree|list child/);
-    expect(
-      read(session, () =>
-        $getRoot()
-          .getFirstChild()!
-          .getChildren()
-          .every((child) => child.getType() === 'listitem')
-      )
-    ).toBe(true);
+    doc.apply({ kind: 'setText', node: listId!, text: 'X' });
+    const list = read(session, () => {
+      const node = $getRoot().getFirstChild();
+      if (!node || !$isElementNode(node)) throw new Error('list was dropped');
+      return {
+        type: node.getType(),
+        children: node.getChildren().map((child) => child.getType()),
+        text: node.getTextContent(),
+      };
+    });
+    expect(list.type).toBe('list');
+    expect(list.children).toEqual(['listitem', 'listitem']);
+    expect(list.text).toContain('X');
+    expect(list.text).toContain('two');
+    expect(read(session, () => validateEditorTree($getRoot()))).toEqual([]);
   });
 
   it('replaceText and moveNode still accept the table id', () => {
