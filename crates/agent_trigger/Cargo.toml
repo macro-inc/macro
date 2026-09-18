@@ -14,6 +14,7 @@ outbound = ["dep:agent", "dep:ai_usage", "dep:lexical_client", "dep:sqlx", "chan
 [dependencies]
 agent = { path = "../agent", optional = true }
 agent_session = { path = "../agent_session", default-features = false }
+ai_routines = { path = "../ai_routines" }
 ai_usage = { path = "../ai_usage", optional = true }
 anyhow = { workspace = true }
 bot_id = { path = "../bot_id" }

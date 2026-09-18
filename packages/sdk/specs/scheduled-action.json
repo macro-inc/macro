@@ -400,7 +400,7 @@
           },
           "resource_id": {
             "type": ["string", "null"],
-            "description": "ID of the primary resource produced by this run (e.g. a chat thread).\nOpaque to the scheduler; the UI interprets it based on the action kind."
+            "description": "ID of the primary resource produced by this run. Opaque to the scheduler."
           },
           "result": {
             "type": "object"

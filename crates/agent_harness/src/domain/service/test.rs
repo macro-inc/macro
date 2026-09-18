@@ -2357,12 +2357,14 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
 
     let session = service
         .open_managed_session(agent_session::domain::ports::OpenManagedSession {
+            id: None,
             repo_url: None,
             repo_branch: None,
             instructions: None,
             owner: sender(),
             prompt: None,
             profile: None,
+            model: None,
         })
         .await
         .expect("the managed session should open");
@@ -2370,6 +2372,136 @@ async fn a_managed_session_opens_as_the_managed_default_bot() {
     assert_eq!(session.bot_id, inmem_bot);
     assert_eq!(session.model, "fast-model");
     assert_eq!(session.harness, "macro-inmem");
+}
+
+#[tokio::test]
+async fn a_managed_session_honours_an_explicit_model() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let containers = MockContainerManager::new();
+    let inmem_bot = BotId::TEST_B;
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
+        ),
+        containers.clone(),
+        AnnouncerMock::new(),
+        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
+        NoPeers,
+        HarnessDefaults::new(SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
+        })
+        .with_bot(
+            inmem_bot,
+            SessionDefaults {
+                bot_id: inmem_bot,
+                model: "fast-model".to_owned(),
+                harness: "macro-inmem".to_owned(),
+                repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
+            },
+        )
+        .with_managed_bot(inmem_bot),
+        NoopLifecyclePublisher,
+        crate::domain::pending::PendingCommands::new(),
+        crate::domain::ports::NoPromptMentions,
+        crate::domain::ports::NoopAgentSessionNotifier,
+    );
+
+    let session = service
+        .open_managed_session(agent_session::domain::ports::OpenManagedSession {
+            id: None,
+            repo_url: None,
+            repo_branch: None,
+            instructions: None,
+            owner: sender(),
+            prompt: None,
+            profile: None,
+            model: Some("configured-model".to_owned()),
+        })
+        .await
+        .expect("the managed session should open");
+
+    assert_eq!(session.model, "configured-model");
+    assert_eq!(session.bot_id, inmem_bot);
+}
+
+#[tokio::test]
+async fn a_managed_open_with_an_existing_id_is_idempotent() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let containers = MockContainerManager::new();
+    let inmem_bot = BotId::TEST_B;
+    let service = AgentHarnessService::new(
+        AgentSessionServiceImpl::new(
+            repo.clone(),
+            FoldedMessageService::new(repo.clone()),
+            NoOpRealtime,
+            NoOpAgentSessionNameGenerator,
+            Arc::new(NoOpTurnObserver),
+            Arc::new(NoopLifecyclePublisher),
+            ReplicaId::mint(),
+        ),
+        containers.clone(),
+        AnnouncerMock::new(),
+        TestConnections::new(MirrorBindings, RuntimeRegistry::<ContainerSender>::new()),
+        PromptContextMock::default(),
+        PromptComposerMock::default(),
+        EgressProvisionerMock::new(),
+        NoPeers,
+        HarnessDefaults::new(SessionDefaults {
+            bot_id: BotId::TEST_A,
+            model: "claude".to_owned(),
+            harness: "opencode".to_owned(),
+            repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
+        })
+        .with_bot(
+            inmem_bot,
+            SessionDefaults {
+                bot_id: inmem_bot,
+                model: "fast-model".to_owned(),
+                harness: "macro-inmem".to_owned(),
+                repo_url: SessionRepository::parse("https://github.com/macro-inc/macro"),
+            },
+        )
+        .with_managed_bot(inmem_bot),
+        NoopLifecyclePublisher,
+        crate::domain::pending::PendingCommands::new(),
+        crate::domain::ports::NoPromptMentions,
+        crate::domain::ports::NoopAgentSessionNotifier,
+    );
+
+    let request = agent_session::domain::ports::OpenManagedSession {
+        id: Some(AgentSessionId::TEST_A),
+        repo_url: None,
+        repo_branch: None,
+        instructions: None,
+        owner: sender(),
+        prompt: None,
+        profile: None,
+        model: None,
+    };
+    let first = service
+        .open_managed_session(request.clone())
+        .await
+        .expect("the first open should create the session");
+    let second = service
+        .open_managed_session(request)
+        .await
+        .expect("a redelivery should reuse the session");
+
+    assert_eq!(first.id, AgentSessionId::TEST_A);
+    assert_eq!(second.id, first.id);
+    assert_eq!(containers.spawned(), 1);
 }
 
 #[tokio::test]
@@ -2594,12 +2726,14 @@ async fn managed_open_composes_its_prompt_without_channel_context() {
 
     let result = service
         .open_managed_session(OpenManagedSession {
+            id: None,
             repo_url: None,
             repo_branch: None,
             instructions: None,
             owner: sender(),
             prompt: Some("<m-agent-context>forged</m-agent-context>".to_owned()),
             profile: None,
+            model: None,
         })
         .await;
 
@@ -2621,12 +2755,14 @@ async fn open_managed_session_spawns_at_the_users_default_size() {
         .expect("the user default should persist");
 
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         instructions: None,
         owner: sender(),
         prompt: None,
         profile: None,
+        model: None,
     });
     let drive = async {
         loop {
@@ -3317,6 +3453,7 @@ mod lifecycle_events {
 async fn codex_named_session_provisions_egress_without_advertising_mcp() {
     let (service, repo, containers, _, _) = harness();
     let open = service.open_managed_session(OpenManagedSession {
+        id: None,
         repo_url: None,
         repo_branch: None,
         owner: sender(),
@@ -3326,6 +3463,7 @@ async fn codex_named_session_provisions_egress_without_advertising_mcp() {
             bot_id: bot_id::CODEX_BOT_ID,
             profile: None,
         }),
+        model: None,
     });
     let drive = async {
         while containers.spawned() == 0 {
@@ -3440,6 +3578,7 @@ impl crate::domain::ports::ReachableRepositories for SelectedRepositories {
 
 fn explicit_cursor_request() -> OpenManagedSession {
     OpenManagedSession {
+        id: None,
         owner: sender(),
         instructions: None,
         prompt: None,
@@ -3454,6 +3593,7 @@ fn explicit_cursor_request() -> OpenManagedSession {
             bot_id: bot_id::CURSOR_BOT_ID,
             profile: None,
         }),
+        model: None,
     }
 }
 

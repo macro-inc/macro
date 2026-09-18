@@ -81,4 +81,6 @@ topics! {
     MacroCalendarTopic => "macro.calendar",
     /// Agent session lifecycle facts: opened, turns, waiting for input, settled, stopped, renamed, deleted.
     MacroAgentSessionLifecycleTopic => "macro.agent_session_lifecycle",
+    /// Requests to run an AI routine now, from its schedule or its owner.
+    MacroAiRoutinesTopic => "macro.ai_routines",
 }

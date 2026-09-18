@@ -29,6 +29,7 @@ agent_session = { path = "../../crates/agent_session", features = ["ai_tools"] }
 ai_toolset = { path = "../../crates/ai_toolset" }
 rmcp = { workspace = true }
 agent_trigger = { path = "../../crates/agent_trigger", features = ["outbound"] }
+ai_routines = { path = "../../crates/ai_routines" }
 ai_usage = { path = "../../crates/ai_usage" }
 aws-sdk-sqs = { workspace = true }
 bot_id = { path = "../../crates/bot_id" }

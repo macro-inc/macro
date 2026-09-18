@@ -6,15 +6,17 @@
 //! channel. `channel.message_posted` on `macro.channels` is the event the
 //! trigger read before parents existed; it decodes into the same shape with a
 //! channel parent, so a deployment can switch back to it with a config change
-//! until the producer retires it. Only one source is read at a time: every
+//! until the producer retires it. Only one post source is read at a time: every
 //! channel post is published on both topics, so reading both would evaluate
-//! every channel mention twice.
+//! every channel mention twice. Both sources also read `macro.ai_routines`,
+//! which is not duplicated across post topics.
 
 #[cfg(test)]
 mod test;
 
 use super::broker_events::posted_from_channel_event;
 use super::processing::TriggerInput;
+use ai_routines::{AiRoutineMacroEvent, AiRoutineTopicEvent};
 use channels::domain::broker_events::{ChannelMacroEvent, ChannelTopicEvent};
 use macro_event_broker::{MacroEvent as _, MacroEventCollection};
 use macro_uuid::Uuid;
@@ -46,11 +48,11 @@ impl std::str::FromStr for TriggerEventSource {
     }
 }
 
-macro_event_broker::declare_topics!(MessageTriggerEvents: MessageMacroEvent);
-macro_event_broker::declare_topics!(ChannelTriggerEvents: ChannelMacroEvent);
+macro_event_broker::declare_topics!(MessageTriggerEvents: MessageMacroEvent, AiRoutineMacroEvent);
+macro_event_broker::declare_topics!(ChannelTriggerEvents: ChannelMacroEvent, AiRoutineMacroEvent);
 
 /// A decoded broker record from one trigger source.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub struct DecodedTrigger {
     /// Broker event id, for tracing.
     pub event_id: Uuid,
@@ -59,6 +61,9 @@ pub struct DecodedTrigger {
     /// The committed post, when the record was one; other facts on the topic
     /// carry no trigger.
     pub posted: Option<TriggerInput>,
+    /// A routine run request, when the record was one. Routines share the
+    /// trigger consumer so a firing opens a session without a mention.
+    pub routine: Option<AiRoutineMacroEvent>,
 }
 
 /// A topic collection whose records may carry a committed post.
@@ -74,26 +79,31 @@ impl TriggerEvents for MessageTriggerEvents {
     const SOURCE: TriggerEventSource = TriggerEventSource::Messages;
 
     fn into_trigger(self) -> DecodedTrigger {
-        let Self::MessageMacroEvent(event) = self;
-        let envelope = event.event();
-        let (event_type, posted) = match &envelope.event {
-            MessageTopicEvent::Posted(posted) => (
-                "message.posted",
-                Some(TriggerInput {
-                    posted: posted.clone(),
-                    channel_type: None,
-                }),
-            ),
-            MessageTopicEvent::Patched(_) => ("message.patched", None),
-            MessageTopicEvent::Deleted(_) => ("message.deleted", None),
-            MessageTopicEvent::Mentioned(_) => ("message.mentioned", None),
-            MessageTopicEvent::AttachmentCreated(_) => ("message.attachment_created", None),
-            MessageTopicEvent::AttachmentRemoved(_) => ("message.attachment_removed", None),
-        };
-        DecodedTrigger {
-            event_id: envelope.event_id,
-            event_type,
-            posted,
+        match self {
+            Self::MessageMacroEvent(event) => {
+                let envelope = event.event();
+                let (event_type, posted) = match &envelope.event {
+                    MessageTopicEvent::Posted(posted) => (
+                        "message.posted",
+                        Some(TriggerInput {
+                            posted: posted.clone(),
+                            channel_type: None,
+                        }),
+                    ),
+                    MessageTopicEvent::Patched(_) => ("message.patched", None),
+                    MessageTopicEvent::Deleted(_) => ("message.deleted", None),
+                    MessageTopicEvent::Mentioned(_) => ("message.mentioned", None),
+                    MessageTopicEvent::AttachmentCreated(_) => ("message.attachment_created", None),
+                    MessageTopicEvent::AttachmentRemoved(_) => ("message.attachment_removed", None),
+                };
+                DecodedTrigger {
+                    event_id: envelope.event_id,
+                    event_type,
+                    posted,
+                    routine: None,
+                }
+            }
+            Self::AiRoutineMacroEvent(event) => routine_trigger(event),
         }
     }
 }
@@ -102,20 +112,36 @@ impl TriggerEvents for ChannelTriggerEvents {
     const SOURCE: TriggerEventSource = TriggerEventSource::Channels;
 
     fn into_trigger(self) -> DecodedTrigger {
-        let Self::ChannelMacroEvent(event) = self;
-        let envelope = event.event();
-        let posted = match &envelope.event {
-            ChannelTopicEvent::MessagePosted(posted) => Some(TriggerInput {
-                posted: posted_from_channel_event(posted),
-                channel_type: Some(posted.channel_type),
-            }),
-            _ => None,
-        };
-        DecodedTrigger {
-            event_id: envelope.event_id,
-            event_type: channel_event_type(&envelope.event),
-            posted,
+        match self {
+            Self::ChannelMacroEvent(event) => {
+                let envelope = event.event();
+                let posted = match &envelope.event {
+                    ChannelTopicEvent::MessagePosted(posted) => Some(TriggerInput {
+                        posted: posted_from_channel_event(posted),
+                        channel_type: Some(posted.channel_type),
+                    }),
+                    _ => None,
+                };
+                DecodedTrigger {
+                    event_id: envelope.event_id,
+                    event_type: channel_event_type(&envelope.event),
+                    posted,
+                    routine: None,
+                }
+            }
+            Self::AiRoutineMacroEvent(event) => routine_trigger(event),
         }
+    }
+}
+
+fn routine_trigger(event: AiRoutineMacroEvent) -> DecodedTrigger {
+    let envelope = event.event();
+    let AiRoutineTopicEvent::RunRequested(_) = &envelope.event;
+    DecodedTrigger {
+        event_id: envelope.event_id,
+        event_type: envelope.event.name(),
+        posted: None,
+        routine: Some(event),
     }
 }
 

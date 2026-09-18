@@ -5,10 +5,10 @@
 //! `doppler_config` binary loads this `Config` from Doppler for both the dev
 //! and prod environments, surfacing any missing or mistyped values at CI time.
 //!
-//! The AI tool service context built by
-//! [`ai_tools::build_tool_service_context_from_env`] reads several env vars of
-//! its own; those are mirrored here so the Doppler validation binary covers
-//! them as well.
+//! The document-storage fields were mirrored from the in-process agent
+//! runner's tool context. Runs now leave this service as Kafka run requests,
+//! so nothing here reads them any more; they stay declared until the Doppler
+//! projects are pruned, so validation keeps matching what is configured.
 
 use anyhow::Context;
 use database_env_vars::DatabaseUrl;

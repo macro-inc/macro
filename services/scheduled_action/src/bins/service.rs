@@ -1,27 +1,23 @@
 #![recursion_limit = "256"]
 use std::{sync::Arc, time::Duration};
 
-use ai_tools::build_tool_service_context_from_env;
+use ai_routines::AiRoutineTrigger;
 use anyhow::{Context, Result};
 use axum::Router;
-use connection_gateway_client::client::ConnectionGatewayClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
     InternalAuthConfig, MacroAuthJwtValidator, MacroAuthorizationServiceImpl,
     MacroAuthorizationState, PgUserApiKeyAuthorizationRepo, PgUserApiKeyAuthorizer,
 };
 use macro_entrypoint::MacroEntrypoint;
-use macro_service_urls::ConnectionGatewayUrl;
-use notification::domain::service::SqsNotificationIngress;
-use notification::outbound::queue::SqsQueue;
+use macro_event_broker::{KafkaEventPublisher, MacroEventBrokerService};
 use scheduled_action::config::Config;
 use scheduled_action::domain::ports::ScheduledActionDispatcher;
 use scheduled_action::domain::service::ScheduledActionServiceImpl;
 use scheduled_action::inbound::axum_router::{
     ScheduledActionRouterState, health, scheduled_action_router,
 };
-use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdates;
-use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
+use scheduled_action::outbound::kafka_routine_executor::KafkaRoutineExecutor;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
 };
@@ -53,49 +49,33 @@ async fn main() -> Result<()> {
         .await
         .context("failed to connect to macrodb")?;
 
+    // Due actions become run requests on the ai-routines topic; the tracker
+    // lets shutdown wait for publishes still in flight.
     let event_broker_tracker = TaskTracker::new();
-    let tool_context =
-        build_tool_service_context_from_env(db.clone(), event_broker_tracker.clone())
-            .await
-            .context("failed to build tool service context")?;
-
-    let aws_config = macro_aws_config::get_macro_aws_config().await;
-    let notification_ingress = Arc::new(SqsNotificationIngress {
-        queue: SqsQueue::new(
-            aws_sdk_sqs::Client::new(&aws_config),
-            macro_queues::NotificationIngressQueue::new().to_string(),
-        ),
-    });
+    let publisher = Arc::new(MacroEventBrokerService::new(
+        KafkaEventPublisher::new(config.kafka_brokers.as_ref())
+            .context("failed to build the kafka publisher")?,
+        event_broker_tracker.clone(),
+    ));
 
     let secretsmanager_client = secretsmanager_client::SecretsManager::new(
         aws_sdk_secretsmanager::Client::new(&macro_aws_config::get_macro_aws_config().await),
     );
-    let conn_gateway_client = Arc::new(ConnectionGatewayClient::new(
-        config.internal_api_key.to_string(),
-        ConnectionGatewayUrl::new()?.to_string(),
-    ));
-    let live_updates = Arc::new(ConnGatewayLiveUpdates::new(Arc::clone(
-        &conn_gateway_client,
-    )));
 
     let repo = Arc::new(PgScheduledActionRepo::new(db.clone()));
 
-    // The dispatcher consumes its executor, so build a second executor for the
-    // service to use when handling execute-now requests. Both executors share
-    // the underlying repo/pool/tool-context via cheap Arc/PgPool clones.
-    let dispatcher_executor = InProcessExecutor::new(
+    // The dispatcher consumes its executor, so build a second one for the
+    // service's run-now requests. They differ only in the trigger they stamp
+    // on the request.
+    let dispatcher_executor = KafkaRoutineExecutor::new(
         Arc::clone(&repo),
-        db.clone(),
-        tool_context.clone(),
-        Arc::clone(&notification_ingress),
-        Arc::clone(&live_updates),
+        Arc::clone(&publisher),
+        AiRoutineTrigger::Schedule,
     );
-    let service_executor = Arc::new(InProcessExecutor::new(
+    let service_executor = Arc::new(KafkaRoutineExecutor::new(
         Arc::clone(&repo),
-        db.clone(),
-        tool_context,
-        notification_ingress,
-        live_updates,
+        publisher,
+        AiRoutineTrigger::Manual,
     ));
 
     let dispatcher_cancellation_token = CancellationToken::new();

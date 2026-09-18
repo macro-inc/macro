@@ -7,7 +7,6 @@
  */
 
 /**
- * ID of the primary resource produced by this run (e.g. a chat thread).
-Opaque to the scheduler; the UI interprets it based on the action kind.
+ * ID of the primary resource produced by this run. Opaque to the scheduler.
  */
 export type ActionExecutionRecordResourceId = string | null;

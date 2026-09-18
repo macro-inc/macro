@@ -142,6 +142,12 @@ where
         request: agent_session::domain::ports::OpenManagedSession,
     ) -> agent_session::domain::error::Result<AgentSession> {
         let managed_defaults = self.inner.defaults.managed();
+        let session_id = request.id.unwrap_or_else(AgentSessionId::new);
+        if request.id.is_some()
+            && let Ok(existing) = self.inner.sessions.get_session(session_id).await
+        {
+            return Ok(existing);
+        }
         let (bot_id, model, harness, instructions, mut mcp_servers) = match request.profile {
             Some(SelectedManagedPersona {
                 bot_id,
@@ -182,6 +188,10 @@ where
                 servers: Vec::new(),
             };
         }
+        let model = request
+            .model
+            .filter(|model| !model.trim().is_empty())
+            .unwrap_or(model);
         // Explicit source choices are a domain decision, before any session or egress grant exists.
         let selected_repo = if let Some(url) = request.repo_url.as_deref() {
             if kind != AgentKind::Cursor {
@@ -230,7 +240,6 @@ where
             .sessions
             .user_sandbox_size(&request.owner)
             .await?;
-        let session_id = AgentSessionId::new();
         // Same ordering as the trigger path's open: the token has to be minted
         // before the row, because the row is what carries the hash that makes
         // it mean anything.

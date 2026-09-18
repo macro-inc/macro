@@ -11,8 +11,7 @@ export type ActionExecutionRecord = {
     id?: string | null;
     is_success: boolean;
     /**
-     * ID of the primary resource produced by this run (e.g. a chat thread).
-     * Opaque to the scheduler; the UI interprets it based on the action kind.
+     * ID of the primary resource produced by this run. Opaque to the scheduler.
      */
     resource_id?: string | null;
     result: {

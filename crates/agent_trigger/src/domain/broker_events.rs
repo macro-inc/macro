@@ -9,6 +9,7 @@
 //! waits for them to roll, never a channel mention.
 
 use agent_session::domain::model::AgentSessionId;
+use ai_routines::AiRoutineRunRequested;
 use bot_id::BotId;
 use channels::domain::broker_events::{ChannelEventAttachment, ChannelMessagePostedMetadata};
 use channels::domain::models::ChannelType;
@@ -67,6 +68,9 @@ pub enum NewAgentSessionEvent {
     TopLevelMentioned(AgentBotMentionedEvent),
     /// Opened by a bot mention on a message parent other than a channel.
     Mentioned(AgentMentionedEvent),
+    /// Opened to run an AI routine. The request is carried verbatim; a
+    /// routine has no channel and, today, no bot of its own.
+    Routine(AiRoutineRunRequested),
 }
 
 /// The mention a new-session event carries, whichever parent it was on.
@@ -92,6 +96,7 @@ impl NewAgentSessionEvent {
                 bot_id: mentioned.bot_id,
                 message: mentioned.message.clone(),
             }),
+            Self::Routine(_) => None,
         }
     }
 }
@@ -275,7 +280,8 @@ pub struct MissingChannelType {
 /// Keyed by bot id: a session belongs to one bot, so one bot's partition
 /// carries every event of every one of its sessions, in order -- which is what
 /// lets the harness instance owning that partition keep the live sessions in
-/// memory.
+/// memory. A routine open names no bot and keys by routine id instead, so one
+/// routine's runs stay in order.
 #[derive(Debug, Clone)]
 pub struct AgentSessionMacroEvent {
     key: String,
@@ -343,14 +349,16 @@ impl AgentSessionMacroEvent {
         })
     }
 
-    /// Open a session for a bot.
+    /// Open a session. Mention events are keyed by bot; routine events by
+    /// routine, so one routine's runs stay in order on one partition.
     #[must_use]
     pub fn new_session(event: NewAgentSessionEvent) -> Self {
-        let bot_id = match &event {
-            NewAgentSessionEvent::TopLevelMentioned(mentioned) => mentioned.bot_id,
-            NewAgentSessionEvent::Mentioned(mentioned) => mentioned.bot_id,
+        let key = match &event {
+            NewAgentSessionEvent::TopLevelMentioned(mentioned) => mentioned.bot_id.to_string(),
+            NewAgentSessionEvent::Mentioned(mentioned) => mentioned.bot_id.to_string(),
+            NewAgentSessionEvent::Routine(routine) => routine.routine_id.to_string(),
         };
-        Self::new(bot_id, AgentTriggerTopicEvent::New(event))
+        Self::with_event(key, Event::new(AgentTriggerTopicEvent::New(event)))
     }
 
     /// Feed one of a bot's existing sessions, however the message arrived.

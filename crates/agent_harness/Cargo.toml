@@ -18,6 +18,7 @@ agent_fold = { path = "../agent_fold" }
 agent_runtime_protocol = { path = "../agent_runtime_protocol" }
 agent_session = { path = "../agent_session" }
 agent_trigger = { path = "../agent_trigger" }
+ai_routines = { path = "../ai_routines" }
 ai_usage = { path = "../ai_usage" }
 cursor_api_key = { path = "../cursor_api_key" }
 cursor_cloud_agents = { path = "../cursor_cloud_agents" }

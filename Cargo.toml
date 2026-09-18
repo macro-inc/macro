@@ -9,6 +9,7 @@ members = [
   "crates/agent_runtime_protocol", "crates/agent_session",
   "crates/agent_trigger",
   "crates/ai_projections",
+  "crates/ai_routines",
   "crates/ai_usage",
   "crates/bot_id",
   "crates/bot_token",

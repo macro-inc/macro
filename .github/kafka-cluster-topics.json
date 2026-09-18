@@ -1,6 +1,7 @@
 [
   "macro.agent_session_lifecycle",
   "macro.agent_sessions",
+  "macro.ai_routines",
   "macro.bots",
   "macro.calendar",
   "macro.calls",

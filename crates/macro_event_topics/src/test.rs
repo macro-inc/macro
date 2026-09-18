@@ -33,4 +33,5 @@ fn all_topic_names_includes_declared_topics() {
     assert!(all_topic_names().contains(&MacroChatsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroAgentSessionsTopic::TOPIC_STR));
     assert!(all_topic_names().contains(&MacroAgentSessionLifecycleTopic::TOPIC_STR));
+    assert!(all_topic_names().contains(&MacroAiRoutinesTopic::TOPIC_STR));
 }

@@ -1738,6 +1738,7 @@ pub async fn create_agent_session_handler<
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                id: None,
                 repo_url: request.repo_url,
                 repo_branch: request
                     .repo_branch
@@ -1752,6 +1753,7 @@ pub async fn create_agent_session_handler<
                 prompt: request.prompt,
                 profile,
                 instructions,
+                model: None,
             })
             .await?;
         return Ok((

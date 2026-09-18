@@ -15,8 +15,7 @@ export interface ActionExecutionRecord {
   end_time: string;
   id?: ActionExecutionRecordId;
   is_success: boolean;
-  /** ID of the primary resource produced by this run (e.g. a chat thread).
-Opaque to the scheduler; the UI interprets it based on the action kind. */
+  /** ID of the primary resource produced by this run. Opaque to the scheduler. */
   resource_id?: ActionExecutionRecordResourceId;
   result: ActionExecutionRecordResult;
   start_time: string;

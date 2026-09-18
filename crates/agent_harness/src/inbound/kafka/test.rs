@@ -4,6 +4,7 @@ use agent_trigger::domain::broker_events::{
     AgentBotMentionedEvent, AgentMentionedEvent, AgentTriggerTopicEvent, ChannelEventMetadata,
     ExistingAgentSessionEvent, NewAgentSessionEvent, ThreadEventMetadata, ThreadMessageKind,
 };
+use ai_routines::{AiRoutineRunRequested, AiRoutineTrigger};
 use bot_id::{BotId, MACRO_CODER_BOT_ID};
 use channel_sender::ChannelSender;
 use channels::domain::broker_events::ChannelMessagePostedMetadata;
@@ -82,6 +83,20 @@ fn mentioned(bot: BotId, sender: ChannelSender<'static>) -> AgentTriggerTopicEve
             message: message(sender),
         },
     ))
+}
+
+fn routine_run(prompt: &str) -> AgentTriggerTopicEvent {
+    AgentTriggerTopicEvent::New(NewAgentSessionEvent::Routine(AiRoutineRunRequested {
+        routine_id: Uuid::from_u128(7),
+        owner: user(),
+        name: "Morning digest".to_owned(),
+        model: "configured-model".to_owned(),
+        session_id: Uuid::from_u128(8),
+        prompt: prompt.to_owned(),
+        user_prompt: "Summarise what arrived overnight.".to_owned(),
+        requested_at: Utc::now(),
+        trigger: AiRoutineTrigger::Schedule,
+    }))
 }
 
 fn channel_message(bot: BotId) -> AgentTriggerTopicEvent {
@@ -332,4 +347,48 @@ fn a_bot_authored_follow_up_to_a_managed_session_still_delivers() {
         panic!("a managed bot-authored follow-up should deliver");
     };
     assert_eq!(deliver.actor, None);
+}
+
+#[test]
+fn a_routine_run_opens_a_managed_session_on_the_default_persona() {
+    let routed = route_agent_trigger(routine_run("You summarise the owner's inbox."), None)
+        .expect("routine runs are always ours");
+
+    let RoutedTrigger::OpenManaged(request) = routed else {
+        panic!("expected a managed open, got {routed:?}");
+    };
+    assert_eq!(request.owner, user());
+    assert_eq!(
+        request.prompt.as_deref(),
+        Some("Summarise what arrived overnight.")
+    );
+    assert_eq!(
+        request.instructions.as_deref(),
+        Some("You summarise the owner's inbox.")
+    );
+    assert_eq!(
+        request.id,
+        Some(AgentSessionId::new_from_uuid(Uuid::from_u128(8)))
+    );
+    assert_eq!(request.model.as_deref(), Some("configured-model"));
+    assert!(
+        request.profile.is_none(),
+        "routines run on the default persona"
+    );
+}
+
+#[test]
+fn a_routine_run_with_blank_instructions_leaves_them_unset() {
+    let routed =
+        route_agent_trigger(routine_run("   "), None).expect("routine runs are always ours");
+
+    let RoutedTrigger::OpenManaged(request) = routed else {
+        panic!("expected a managed open, got {routed:?}");
+    };
+    assert!(request.instructions.is_none());
+}
+
+#[test]
+fn a_routine_run_names_no_bot() {
+    assert_eq!(agent_trigger_bot_id(&routine_run("instructions")), None);
 }

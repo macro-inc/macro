@@ -69,6 +69,7 @@ export function useAgentSessionQuery(id: Accessor<string>) {
   return useQuery(() => ({
     queryKey: agentSessionKeys.detail(id()).queryKey,
     queryFn: () => throwOnErr(() => agentHarnessServiceClient.get(id())),
+    enabled: Boolean(id()),
     staleTime: 0,
     retry: false,
     refetchInterval: (query) => {

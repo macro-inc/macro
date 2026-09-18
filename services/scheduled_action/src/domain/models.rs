@@ -128,8 +128,7 @@ pub struct ActionExecutionRecord {
     pub id: Option<Uuid>,
     #[schema(value_type = String, format = Uuid)]
     pub action_id: Uuid,
-    /// ID of the primary resource produced by this run (e.g. a chat thread).
-    /// Opaque to the scheduler; the UI interprets it based on the action kind.
+    /// ID of the primary resource produced by this run. Opaque to the scheduler.
     pub resource_id: Option<String>,
     pub start_time: DateTime<Utc>,
     pub end_time: DateTime<Utc>,

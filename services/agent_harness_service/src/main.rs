@@ -69,7 +69,7 @@ use agent_inmem::outbound::tool_catalog::McpToolCatalog;
 use agent_inmem::rig_engine::RigTurnEngine;
 use agent_runtime_directory::PgAgentRuntimeDirectory;
 use agent_session::domain::model::{AgentMcpServers, ReplicaId};
-use agent_session::domain::ports::{NoOpRealtime, SessionOwnership as _};
+use agent_session::domain::ports::{NoOpRealtime, SessionOpener as _, SessionOwnership as _};
 use agent_session::domain::service::AgentSessionServiceImpl;
 use agent_session::inbound::axum_router::{
     AgentSessionControlState, AgentSessionRouterState, CreateSessionState,
@@ -158,7 +158,9 @@ type HarnessWork =
     Pin<Box<dyn Future<Output = agent_harness::domain::error::Result<()>> + Send + 'static>>;
 
 struct PendingHarnessWork {
-    session_id: agent_session::domain::model::AgentSessionId,
+    /// Known up front for commands against a session; a managed open mints
+    /// its own id, so it reports it on its span once it has one.
+    session_id: Option<agent_session::domain::model::AgentSessionId>,
     span: tracing::Span,
     work: HarnessWork,
     description: &'static str,
@@ -1121,7 +1123,7 @@ async fn run() -> anyhow::Result<()> {
                                 .in_scope(|| harness.execute(session_id, command));
                             let execution = async move { execution.await.map(drop) };
                             PendingHarnessWork {
-                                session_id,
+                                session_id: Some(session_id),
                                 span: execution_span,
                                 work: Box::pin(execution),
                                 description: "executed an agent harness command",
@@ -1140,12 +1142,37 @@ async fn run() -> anyhow::Result<()> {
                             );
                             let harness = harness.clone();
                             PendingHarnessWork {
-                                session_id,
+                                session_id: Some(session_id),
                                 span: execution_span,
                                 work: Box::pin(async move {
                                     harness.announce_external_prompt(session_id, prompt).await
                                 }),
                                 description: "announced an external prompt",
+                            }
+                        }
+                        RoutedTrigger::OpenManaged(request) => {
+                            tracing::Span::current()
+                                .record("macro.event.type", "agent_trigger.new");
+                            let execution_span = tracing::info_span!(
+                                "harness.open_managed",
+                                agent.session.id = tracing::field::Empty,
+                                otel.status_code = tracing::field::Empty,
+                                otel.status_description = tracing::field::Empty,
+                            );
+                            let harness = harness.clone();
+                            let session_span = execution_span.clone();
+                            PendingHarnessWork {
+                                session_id: None,
+                                span: execution_span,
+                                work: Box::pin(async move {
+                                    let session = harness.open_managed_session(request).await?;
+                                    session_span.record(
+                                        "agent.session.id",
+                                        tracing::field::display(session.id),
+                                    );
+                                    Ok::<(), agent_harness::domain::error::HarnessError>(())
+                                }),
+                                description: "opened a managed session for a routine run",
                             }
                         }
                     };
@@ -1169,10 +1196,10 @@ async fn run() -> anyhow::Result<()> {
                 if let Some(PendingHarnessWork { session_id, span, work, description }) = pending {
                     tasks.spawn(async move {
                         match work.instrument(span.clone()).await {
-                            Ok(()) => tracing::info!(%session_id, description, "agent harness work completed"),
+                            Ok(()) => tracing::info!(?session_id, description, "agent harness work completed"),
                             Err(error) => {
                                 record_span_error(&span, &error);
-                                tracing::error!(error = ?error, %session_id, "agent harness work failed");
+                                tracing::error!(error = ?error, ?session_id, "agent harness work failed");
                             }
                         }
                     });

@@ -1,8 +1,9 @@
 //! Decide how agent-session broker events are handled by this deployment.
 
 use agent_session::domain::model::AgentSessionId;
+use agent_session::domain::ports::OpenManagedSession;
 use agent_trigger::domain::broker_events::{
-    AgentTriggerTopicEvent, OpeningMention, SessionMessage,
+    AgentTriggerTopicEvent, NewAgentSessionEvent, OpeningMention, SessionMessage,
 };
 use bot_id::BotId;
 
@@ -18,6 +19,9 @@ pub enum RoutedTrigger {
     Command(AgentSessionId, HarnessCommand),
     /// Post the chip for a prompt an external bot's runtime delivers itself.
     Announce(AgentSessionId, AnnouncePrompt),
+    /// Open a managed session with no originating mention, as a routine run
+    /// asks for.
+    OpenManaged(OpenManagedSession),
 }
 
 /// Why an event yielded no work. Only for logging - none of these are
@@ -44,16 +48,31 @@ pub fn agent_trigger_bot_id(event: &AgentTriggerTopicEvent) -> Option<BotId> {
 /// Route one trigger event: work for this deployment, or a reason it was
 /// skipped.
 ///
-/// Opens are only ours when `runtime` resolves to a managed profile. External
-/// bots' runtimes open their own sessions over the API. Events for sessions
-/// that already exist always carry work: a prompt to deliver when the session
-/// is managed here, or just its announcement when the bot's own runtime
-/// delivers the prompt.
+/// Mention opens are only ours when `runtime` resolves to a managed profile.
+/// External bots' runtimes open their own sessions over the API. Routine
+/// opens are always ours: they name no bot and run on this deployment's
+/// default managed persona. Events for sessions that already exist always
+/// carry work: a prompt to deliver when the session is managed here, or just
+/// its announcement when the bot's own runtime delivers the prompt.
 pub fn route_agent_trigger(
     event: AgentTriggerTopicEvent,
     runtime: Option<AgentRuntimeConfig>,
 ) -> Result<RoutedTrigger, Skipped> {
     match event {
+        AgentTriggerTopicEvent::New(NewAgentSessionEvent::Routine(routine)) => {
+            // `runtime` is not consulted: with no bot there is nothing it could
+            // have resolved, and the default persona is picked by the open.
+            Ok(RoutedTrigger::OpenManaged(OpenManagedSession {
+                id: Some(AgentSessionId::new_from_uuid(routine.session_id)),
+                repo_url: None,
+                repo_branch: None,
+                owner: routine.owner,
+                prompt: Some(routine.user_prompt),
+                profile: None,
+                instructions: Some(routine.prompt).filter(|prompt| !prompt.trim().is_empty()),
+                model: Some(routine.model).filter(|model| !model.trim().is_empty()),
+            }))
+        }
         AgentTriggerTopicEvent::New(event) => {
             let Some(OpeningMention { bot_id, message }) = event.mention() else {
                 return Err(Skipped::Unrecognized);

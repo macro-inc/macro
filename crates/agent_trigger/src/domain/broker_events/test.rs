@@ -1,5 +1,6 @@
 use super::*;
 
+use ai_routines::AiRoutineTrigger;
 use channel_sender::ChannelSender;
 use chrono::Utc;
 use macro_user_id::cowlike::CowLike;
@@ -322,4 +323,53 @@ fn channel_kinds_round_trip_in_snake_case() {
         let parsed: ThreadMessageKind = serde_json::from_value(value).expect("deserialize kind");
         assert_eq!(parsed, kind);
     }
+}
+
+fn routine_request() -> AiRoutineRunRequested {
+    AiRoutineRunRequested {
+        routine_id: Uuid::from_u128(7),
+        owner: MacroUserIdStr::parse_from_str("macro|routine-owner@macro.com")
+            .expect("valid user id")
+            .into_owned(),
+        name: "Morning digest".to_owned(),
+        model: "configured-model".to_owned(),
+        session_id: Uuid::from_u128(8),
+        prompt: "You summarise the owner's inbox.".to_owned(),
+        user_prompt: "Summarise what arrived overnight.".to_owned(),
+        requested_at: Utc::now(),
+        trigger: AiRoutineTrigger::Schedule,
+    }
+}
+
+#[test]
+fn serializes_a_new_routine_session() {
+    let event = AgentTriggerTopicEvent::New(NewAgentSessionEvent::Routine(routine_request()));
+
+    let value = serde_json::to_value(event).expect("serialize event");
+
+    assert_eq!(value["event_type"], "agent_trigger.new");
+    assert_eq!(value["metadata"]["source"], "routine");
+    assert_eq!(value["metadata"]["routine_id"], json!(Uuid::from_u128(7)));
+    assert_eq!(value["metadata"]["trigger"], "schedule");
+    assert_eq!(value["metadata"]["session_id"], json!(Uuid::from_u128(8)));
+}
+
+#[test]
+fn mention_sessions_are_keyed_by_bot_id() {
+    let event = AgentSessionMacroEvent::new_session(NewAgentSessionEvent::TopLevelMentioned(
+        AgentBotMentionedEvent {
+            bot_id: BotId::TEST_A,
+            message: channel_message(),
+        },
+    ));
+
+    assert_eq!(event.key(), BotId::TEST_A.to_string());
+}
+
+#[test]
+fn routine_sessions_are_keyed_by_routine_id() {
+    let event =
+        AgentSessionMacroEvent::new_session(NewAgentSessionEvent::Routine(routine_request()));
+
+    assert_eq!(event.key(), Uuid::from_u128(7).to_string());
 }

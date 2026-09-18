@@ -21,58 +21,44 @@ default = []
 local_auth = ["macro_authorization/local_auth"]
 
 [dependencies]
-serde = { workspace = true }
-serde_json = { workspace = true }
-macro_env_var = { path = "../../crates/macro_env_var" }
-macro_queues = { path = "../../crates/macro_queues" }
-macro_config = { path = "../../crates/macro_config" }
+ai_routines = { path = "../../crates/ai_routines" }
+anyhow = { workspace = true }
+axum = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+chrono = { workspace = true }
+chrono-tz = { workspace = true }
+cron = { workspace = true }
+database_env_vars = { path = "../../crates/database_env_vars" }
+doppler-config = { workspace = true }
+entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
+futures = { workspace = true }
+macro_auth = { path = "../../crates/macro_auth" }
 macro_authorization = { path = "../../crates/macro_authorization", features = [
   "postgres",
 ] }
-database_env_vars = { path = "../../crates/database_env_vars" }
-doppler-config = { workspace = true }
-sqlx = { workspace = true }
-macro_user_id = { path = "../../crates/macro_user_id"}
-cron = { workspace = true }
-anyhow = { workspace = true }
-macro_uuid = { path = "../../crates/macro_uuid"}
-chrono = { workspace = true}
-chrono-tz = { workspace = true }
-agent = { path = "../../crates/agent" }
-ai_usage = { path = "../../crates/ai_usage" }
-tokio = { workspace = true, features = ["signal"] }
-tokio-util = { workspace = true, features = ["rt"] }
-futures = { workspace = true }
-tracing = { workspace = true }
-axum = { workspace = true }
-ai_tools = { path = "../../crates/ai_tools" }
-ai_toolset = { path = "../../crates/ai_toolset" }
-aws-sdk-sqs = { workspace = true }
-chat = { path = "../../crates/chat" }
-connection_gateway_client = { path = "../../crates/connection_gateway_client" }
-share_permission_db_utils = { path = "../../crates/share_permission_db_utils" }
-models_permissions = { path = "../../crates/models_permissions" }
-macro_db_client = { path = "../../crates/macro_db_client" }
-memory = { path = "../../crates/memory" }
-model = { path = "../../crates/model" }
-model-entity = { path = "../../crates/model-entity" }
-model_owner = { path = "../../crates/model_owner" }
-entity_registry_db_utils = { path = "../../crates/entity_registry/entity_registry_db_utils" }
-model_notifications = { path = "../../crates/model_notifications" }
-notification = { path = "../../crates/notification" }
-utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
-utoipa-swagger-ui = { workspace = true }
-tower = { workspace = true }
-
 macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_config = { path = "../../crates/macro_config" }
 macro_cors = { path = "../../crates/macro_cors" }
-macro_auth = { path = "../../crates/macro_auth" }
 macro_entrypoint = { path = "../../crates/macro_entrypoint" }
 macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+# Publishes run requests to Kafka; the default `outbound` feature brings the
+# Kafka publisher adapter.
+macro_event_broker = { path = "../../crates/macro_event_broker" }
+macro_user_id = { path = "../../crates/macro_user_id" }
+macro_uuid = { path = "../../crates/macro_uuid" }
+model = { path = "../../crates/model" }
+model_owner = { path = "../../crates/model_owner" }
 secretsmanager_client = { path = "../../crates/secretsmanager_client" }
-aws-sdk-secretsmanager = { workspace = true }
-
-macro_service_urls = { path = "../../crates/macro_service_urls" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tower = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
+utoipa-swagger-ui = { workspace = true }
 workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }
 
 [dev-dependencies]

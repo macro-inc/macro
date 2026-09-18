@@ -26,7 +26,8 @@ import {
   useSchedulesQuery,
   useUpdateScheduleMutation,
 } from '@queries/agent-schedule/schedules';
-import { useChatQuery } from '@queries/chat';
+import { useAgentSessionQuery } from '@queries/agent-session/session';
+import { queryReadyGate } from '@queries/gate';
 import { debounce } from '@solid-primitives/scheduled';
 import { Button, cn } from '@ui';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
@@ -55,13 +56,14 @@ type HistoryRecord = {
 
 function HistoryRow(props: { record: HistoryRecord }) {
   const { openWithSplit } = useSplitLayout();
-  const chatId = () => props.record.resource_id ?? undefined;
-  const chatQuery = useChatQuery(chatId);
+  const sessionId = () => props.record.resource_id ?? '';
+  const sessionQuery = useAgentSessionQuery(sessionId);
+  const session = () =>
+    queryReadyGate(sessionQuery) ? sessionQuery.data : undefined;
   const name = () =>
-    chatQuery.data?.chat?.name?.trim() ||
-    (chatQuery.isLoading ? '' : 'Untitled run');
+    session()?.name?.trim() || (sessionQuery.isLoading ? '' : 'Untitled run');
 
-  const clickable = () => Boolean(chatId());
+  const clickable = () => Boolean(sessionId());
   // Synthetic pending rows (no id) are inserted by the websocket sync on
   // `started` and replaced on `stopped`. Treat them as neutral rather than
   // failures — the panel header already surfaces running state.
@@ -74,16 +76,16 @@ function HistoryRow(props: { record: HistoryRecord }) {
         clickable() ? 'cursor-default hover:bg-hover' : 'cursor-default'
       )}
       onClick={(event) => {
-        const id = chatId();
+        const id = sessionId();
         if (id)
           openWithSplit(
-            { type: 'chat', id },
+            { type: 'agent', id },
             { activate: true, preferNewSplit: event.shiftKey }
           );
       }}
     >
       <div class="size-4 shrink-0">
-        <EntityIcon targetType="chat" size="xs" />
+        <EntityIcon targetType="agent" size="xs" />
       </div>
       <span class="min-w-0 flex-1 truncate">{name()}</span>
       <span

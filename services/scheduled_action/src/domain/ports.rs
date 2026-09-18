@@ -1,7 +1,4 @@
-use super::models::{
-    ActionExecutionRecord, DispatchEvent, InProgressExecution, ScheduledAction,
-    ScheduledActionUpdate,
-};
+use super::models::{ActionExecutionRecord, DispatchEvent, InProgressExecution, ScheduledAction};
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -101,13 +98,11 @@ pub trait ScheduledActionDispatcher {
     fn begin_dispatch_loop(self) -> (Sender<DispatchEvent>, Receiver<InProgressExecution>);
 }
 
+/// Starts one run of a due action. What "starting" means is the adapter's:
+/// today it publishes a run request for the agent trigger consumer to act on.
 pub trait ScheduledActionExecutor {
     fn execute_action(
         &self,
         action: ScheduledAction,
     ) -> impl Future<Output = Result<InProgressExecution>> + Send;
-}
-
-pub trait ScheduledActionLiveUpdate: Send + Sync + 'static {
-    fn publish_update(&self, update: ScheduledActionUpdate) -> impl Future<Output = ()> + Send;
 }

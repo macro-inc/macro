@@ -1,7 +1,7 @@
 //! Committed-post consumer that emits agent-session trigger events.
 
 use agent_session::outbound::postgres::PgAgentSessionRepo;
-use agent_trigger::domain::processing::process_message_event;
+use agent_trigger::domain::processing::{process_message_event, process_routine_event};
 use agent_trigger::domain::service::AgentTriggerService;
 use agent_trigger::domain::sources::{
     ChannelTriggerEvents, MessageTriggerEvents, TriggerEventSource, TriggerEvents,
@@ -176,6 +176,9 @@ async fn consume<Events: TriggerEvents>(
 
             if let Some(posted) = &decoded.posted {
                 process_message_event(trigger, publisher, channel_types, posted).await?;
+            }
+            if let Some(routine) = &decoded.routine {
+                process_routine_event(publisher, routine).await?;
             }
             commit_message(&consumer, kafka_message)?;
             Ok(())

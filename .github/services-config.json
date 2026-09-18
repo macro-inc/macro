@@ -7,7 +7,8 @@
         "crates/agent_fold/**",
         "crates/agent_session/**",
         "crates/agent_trigger/**",
-        "crates/agent_runtime_protocol/**"
+        "crates/agent_runtime_protocol/**",
+        "crates/ai_routines/**"
       ],
       "stack_path": "infra/stacks/agent-harness-service/**",
       "deploy_binaries": [
@@ -16,7 +17,8 @@
     },
     "agent-schedule-service": {
       "source_paths": [
-        "services/scheduled_action/**"
+        "services/scheduled_action/**",
+        "crates/ai_routines/**"
       ],
       "stack_path": "infra/stacks/agent-schedule-service/**",
       "deploy_binaries": [
