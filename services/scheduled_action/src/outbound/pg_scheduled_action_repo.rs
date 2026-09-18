@@ -1,6 +1,3 @@
-#[cfg(test)]
-mod test;
-
 use anyhow::{Result, bail};
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
@@ -20,6 +17,9 @@ use crate::domain::models::{
     Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionRepo;
+
+#[cfg(test)]
+mod test;
 
 pub struct PgScheduledActionRepo {
     pool: PgPool,
