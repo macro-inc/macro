@@ -25,6 +25,7 @@ use call::inbound::toolset::call_toolset;
 use channels::inbound::toolset::channel_toolset;
 use chat::inbound::toolset::chat_toolset;
 use crm::inbound::toolset::crm_toolset;
+use databases::inbound::toolset::databases_toolset;
 use display_results::DisplayResults;
 use documents::inbound::toolset::document_toolset;
 use email::inbound::toolset::{email_toolset, mcp_toolset as email_mcp_toolset};
@@ -56,20 +57,21 @@ pub use tool_context::{
     ToolCalendarToolContext, ToolCallRecordQueryService, ToolCallService, ToolCallToolContext,
     ToolChannelEventDispatcher, ToolChannelMessagesService, ToolChannelToolContext,
     ToolChatService, ToolChatToolContext, ToolCommsService, ToolCrmService, ToolCrmToolContext,
-    ToolDocumentService, ToolDocumentToolContext, ToolEmailService, ToolEmailToolContext,
-    ToolEntityAccessManagementService, ToolEntityAccessService, ToolEntityCreator,
-    ToolForeignEntityService, ToolFrecencyService, ToolImportService, ToolImportToolContext,
-    ToolMcpSelector, ToolNotificationQueue, ToolNotificationService, ToolNotificationToolContext,
-    ToolPipedreamConnection, ToolProjectService, ToolProjectToolContext, ToolPropertiesService,
-    ToolPropertiesToolContext, ToolRemindersService, ToolRemindersToolContext, ToolServiceContext,
-    ToolSkillService, ToolSkillToolContext, ToolSoupService, ToolSystemPropertiesService,
+    ToolDatabasesService, ToolDatabasesToolContext, ToolDocumentService, ToolDocumentToolContext,
+    ToolEmailService, ToolEmailToolContext, ToolEntityAccessManagementService,
+    ToolEntityAccessService, ToolEntityCreator, ToolForeignEntityService, ToolFrecencyService,
+    ToolImportService, ToolImportToolContext, ToolMcpSelector, ToolNotificationQueue,
+    ToolNotificationService, ToolNotificationToolContext, ToolPipedreamConnection,
+    ToolProjectService, ToolProjectToolContext, ToolPropertiesService, ToolPropertiesToolContext,
+    ToolRemindersService, ToolRemindersToolContext, ToolServiceContext, ToolSkillService,
+    ToolSkillToolContext, ToolSoupService, ToolSystemPropertiesService, ToolTableEventPublisher,
     ToolTeamService, ToolTeamToolContext, ToolUserEmailService, build_activity_tool_context,
     build_bot_tool_context, build_calendar_tool_context,
     build_channel_tool_context_with_dispatcher, build_channel_tool_context_with_side_effects,
     build_channel_tool_context_without_side_effects, build_crm_tool_context,
-    build_project_tool_context, build_properties_service, build_properties_tool_context,
-    build_reminders_tool_context, build_skill_tool_context, build_task_properties_adapter,
-    build_team_repository, build_team_tool_context,
+    build_databases_tool_context, build_project_tool_context, build_properties_service,
+    build_properties_tool_context, build_reminders_tool_context, build_skill_tool_context,
+    build_task_properties_adapter, build_team_repository, build_team_tool_context,
 };
 pub type AiToolSet = AsyncToolCollection<ToolServiceContext>;
 
@@ -113,6 +115,7 @@ pub fn all_tools() -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset())
+        .add_subtoolset::<ToolDatabasesToolContext>(databases_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_toolset())
         .add_subtoolset::<ToolCalendarToolContext>(calendar_toolset())
         .add_subtoolset::<ToolImportToolContext>(import_toolset())
@@ -143,6 +146,7 @@ pub fn mcp_tools() -> ToolSetWithPrompt {
     let toolset = subagent_toolset()
         .add_subtoolset::<ToolNotificationToolContext>(notification_toolset())
         .add_subtoolset::<ToolRemindersToolContext>(reminders_toolset())
+        .add_subtoolset::<ToolDatabasesToolContext>(databases_toolset())
         .add_subtoolset::<ToolEmailToolContext>(email_mcp_toolset())
         .add_subtoolset::<ToolCalendarToolContext>(calendar_mcp_toolset())
         .add_subtoolset::<ToolImportToolContext>(import_toolset())

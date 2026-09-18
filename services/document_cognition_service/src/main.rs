@@ -587,6 +587,18 @@ async fn main() -> anyhow::Result<()> {
             db.clone(),
             entity_access_service.clone(),
         ),
+        databases_tool_context: ai_tools::build_databases_tool_context(
+            db.clone(),
+            entity_access_service.clone(),
+            ai_tools::ToolTableEventPublisher::Gateway(
+                databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+                    connection_gateway_client::ConnectionGatewayClient::new(
+                        internal_api_key.clone(),
+                        ConnectionGatewayUrl::new()?.to_string(),
+                    ),
+                ),
+            ),
+        ),
         import_tool_context: import::inbound::toolset::ImportToolContext::wired(
             import_service.clone(),
         ),

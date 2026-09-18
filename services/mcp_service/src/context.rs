@@ -393,6 +393,18 @@ async fn build_tool_context(args: ToolContextBuildArgs<'_>) -> anyhow::Result<To
             db.clone(),
             entity_access_service.clone(),
         ),
+        databases_tool_context: ai_tools::build_databases_tool_context(
+            db.clone(),
+            entity_access_service.clone(),
+            ai_tools::ToolTableEventPublisher::Gateway(
+                databases::outbound::gateway_event_publisher::GatewayTableEventPublisher::new(
+                    connection_gateway_client::ConnectionGatewayClient::new(
+                        config.internal_api_key.to_string(),
+                        ConnectionGatewayUrl::new()?.to_string(),
+                    ),
+                ),
+            ),
+        ),
         import_tool_context: ToolImportToolContext::unwired(),
         chat_tool_context,
         channel_tool_context,
