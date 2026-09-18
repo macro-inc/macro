@@ -15,21 +15,15 @@
 
       /* On touch this row replaces the CollapsedInput pill, so it keeps the
          pill's height, gutter, and gap (h-12.5, px-2, gap-1.5) rather than
-         growing when the editor takes over. */
+         growing when the editor takes over. The single line (with the
+         markdown theme's paragraph margins) is shorter than the row, so the
+         row centers it instead of padding around it. */
       :global(html[data-touch-device='true']) & {
         align-items: center;
         gap: calc(var(--spacing) * 1.5);
         min-height: calc(var(--spacing) * 12.5);
         padding: 0 calc(var(--spacing) * 2);
         --input-editor-padding: 0 calc(var(--spacing) * 1.5);
-
-        /* The markdown theme's paragraph gap only pads a single line here;
-           the row centers it instead. The placeholder mirrors the paragraph
-           so it stays aligned with the caret. */
-        [data-markdown-editable] > p,
-        [data-markdown-placeholder] > p {
-          margin-block: 0;
-        }
       }
     }
 
