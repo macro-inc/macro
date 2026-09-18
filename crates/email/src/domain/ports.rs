@@ -269,6 +269,16 @@ pub trait EmailRepo: Send + Sync + 'static {
         is_draft: bool,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Undo an `insert_message(.., is_draft = false)` whose send never made it
+    /// onto a queue: put the message back to an unsent draft, drop its pending
+    /// scheduled row, and recompute the thread's denormalized metadata.
+    /// Leaves a message the scheduled worker already delivered untouched.
+    fn revert_sent_message_to_draft(
+        &self,
+        message_id: Uuid,
+        link_id: Uuid,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Fetch a label by its database ID and link ID.
     fn get_label_by_id(
         &self,
