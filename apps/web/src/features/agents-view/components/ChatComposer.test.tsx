@@ -1,3 +1,4 @@
+import type { InputAttachmentData } from '@channel/Input/types';
 import { $createQuoteNode, QuoteNode } from '@lexical/rich-text';
 import { fireEvent, render, screen } from '@solidjs/testing-library';
 import {
@@ -19,6 +20,9 @@ const editor = vi.hoisted(() => ({
     | ((event: unknown, markdown: string) => boolean)
     | undefined,
   change: undefined as ((markdown: string) => void) | undefined,
+  paste: undefined as
+    | ((files: File[], directories: FileSystemDirectoryEntry[]) => void)
+    | undefined,
   text: '',
 }));
 
@@ -38,6 +42,12 @@ vi.mock(
         withRestoreFocus: () => builder,
         withSkills: () => builder,
         withAgentCommands: () => builder,
+        withFilePaste: (options: {
+          onPasteFilesAndDirs: typeof editor.paste;
+        }) => {
+          editor.paste = options.onPasteFilesAndDirs;
+          return builder;
+        },
         onEnter: (callback: typeof editor.enter) => {
           editor.enter = callback;
           return builder;
@@ -64,6 +74,24 @@ vi.mock('@core/component/LexicalMarkdown/builder/MarkdownShell', () => ({
   MarkdownShell: (props: { placeholder?: string }) => (
     <div data-testid="editor">{props.placeholder}</div>
   ),
+}));
+
+vi.mock('@channel/Input/Input', () => ({
+  Input: {
+    DropZone: (props: { children: unknown }) => props.children,
+    DropOverlay: () => null,
+    Attachments: () => null,
+    AttachFilesAction: (props: { disabled?: boolean }) => (
+      <button aria-label="Attach files" disabled={props.disabled} />
+    ),
+  },
+}));
+vi.mock('@core/util/upload', () => ({
+  handleFileFolderDrop: async (
+    files: File[],
+    _dirs: unknown[],
+    callback: (entries: { file: File }[]) => void
+  ) => callback(files.map((file) => ({ file }))),
 }));
 
 beforeEach(() => {
@@ -97,7 +125,7 @@ describe('Chat session input', () => {
     ).toBe('Model');
     type('  Follow up  ');
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    expect(send).toHaveBeenCalledWith('Follow up');
+    expect(send).toHaveBeenCalledWith('Follow up', []);
     expect(editor.clear).toHaveBeenCalledOnce();
     expect(
       screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')
@@ -121,7 +149,7 @@ describe('Chat session input', () => {
     expect(stop).toHaveBeenCalledOnce();
     type('Next request');
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
-    expect(send).toHaveBeenCalledWith('Next request');
+    expect(send).toHaveBeenCalledWith('Next request', []);
   });
 
   it('advances a queued prompt with Enter only when the draft is empty', () => {
@@ -134,7 +162,7 @@ describe('Chat session input', () => {
     expect(stop).toHaveBeenCalledOnce();
     type('Another request');
     editor.enter?.(undefined, editor.text);
-    expect(send).toHaveBeenCalledWith('Another request');
+    expect(send).toHaveBeenCalledWith('Another request', []);
     expect(stop).toHaveBeenCalledOnce();
   });
 
@@ -232,4 +260,75 @@ it('expands for a short quote and collapses when replaced with a paragraph', () 
     { discrete: true }
   );
   expect(layout?.getAttribute('data-composer-compact')).toBe('true');
+});
+
+describe('attachments in the shared composer', () => {
+  const image: InputAttachmentData = {
+    id: 'image-id',
+    name: 'pasted.png',
+    kind: 'image',
+    mimeType: 'image/png',
+  };
+
+  it('routes pasted files to the session uploader', () => {
+    const attach = vi.fn();
+    render(() => <ChatSessionInput onSend={vi.fn()} onAttachFiles={attach} />);
+    const file = new File(['image'], 'pasted.png', { type: 'image/png' });
+    editor.paste?.([file], []);
+    expect(attach).toHaveBeenCalledWith([file]);
+    expect(screen.getByRole('button', { name: 'Attach files' })).toBeTruthy();
+  });
+
+  it('holds an image-only prompt while uploading, then sends the image instead of stopping', () => {
+    const send = vi.fn();
+    const stop = vi.fn();
+    const [attachments, setAttachments] = createSignal([
+      { ...image, pending: true },
+    ]);
+    render(() => (
+      <ChatSessionInput
+        busy
+        hasQueuedMessages
+        onSend={send}
+        onStop={stop}
+        attachments={attachments()}
+      />
+    ));
+    expect(
+      screen.getByRole('button', { name: 'Send' }).hasAttribute('disabled')
+    ).toBe(true);
+    editor.enter?.(undefined, '');
+    expect(send).not.toHaveBeenCalled();
+    expect(stop).not.toHaveBeenCalled();
+    setAttachments([{ ...image, pending: false }]);
+    editor.enter?.(undefined, '');
+    expect(send).toHaveBeenCalledWith('', [{ ...image, pending: false }]);
+    expect(stop).not.toHaveBeenCalled();
+  });
+
+  it('sends attachments and text from a new conversation', () => {
+    const send = vi.fn();
+    render(() => (
+      <ChatComposer
+        draft="Describe this"
+        onDraftChange={vi.fn()}
+        selector={null}
+        attachments={[image]}
+        onSend={send}
+      />
+    ));
+    editor.enter?.(undefined, 'Describe this');
+    expect(send).toHaveBeenCalledWith('Describe this', [image]);
+  });
+});
+
+it('keeps the paperclip visible while the session is unavailable', () => {
+  render(() => (
+    <ChatSessionInput disabled onSend={vi.fn()} onAttachFiles={vi.fn()} />
+  ));
+  expect(
+    screen
+      .getByRole('button', { name: 'Attach files' })
+      .hasAttribute('disabled')
+  ).toBe(true);
 });

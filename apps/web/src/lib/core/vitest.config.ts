@@ -29,19 +29,24 @@ export default defineConfig({
           import.meta.url
         )
       ),
+      'solid-transition-group': fileURLToPath(
+        new URL(
+          '../../../../../node_modules/solid-transition-group/dist/index.js',
+          import.meta.url
+        )
+      ),
       'loro-crdt': 'loro-crdt/base64',
     },
   },
+  ssr: {
+    resolve: { conditions: ['browser', 'development'] },
+  },
   test: {
+    // Prebundling transition dependencies creates a second Solid runtime.
     deps: {
       optimizer: {
-        web: {
-          enabled: true,
-          include: [
-            'solid-transition-group',
-            '@solid-primitives/refs',
-            '@solid-primitives/transition-group',
-          ],
+        client: {
+          enabled: false,
         },
       },
     },

@@ -36,7 +36,7 @@ export function MessageCard(props: MessageCardProps) {
           as="div"
           class={cn(
             'relative p-4 outline-none',
-            props.isTouch && 'rounded-lg bg-message border border-edge-muted',
+            props.isTouch && 'rounded-lg bg-surface-1 border border-edge-muted',
             'mobile:rounded-none mobile:border-0 mobile:border-t mobile:bg-transparent mobile:px-4 mobile:ring-0 mobile:shadow-none mobile:focus-visible:bg-hover',
             props.isTouch
               ? props.isSelected

@@ -1,9 +1,11 @@
+import { ChangesToggle } from '@app/features/agent-changes/agent-changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions/use-block-entity-commands';
 import {
   type BlockTool,
   ResponsiveBlockToolbar,
   ToolButton,
 } from '@components/app/ResponsiveBlockToolbar';
+import { useDrawerControl } from '@components/app/split-layout/components/SplitDrawerContext';
 import type { FileOperation } from '@components/app/split-layout/components/SplitFileMenu';
 import {
   SplitHeaderLeft,
@@ -21,11 +23,16 @@ import { isMobile } from '@core/mobile/isMobile';
 import { openExternalUrl } from '@core/util/url';
 import type { AgentSessionEntity } from '@entity';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
+import ChatCircleDots from '@phosphor/chat-circle-dots.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import ShareIcon from '@phosphor/share.svg';
 import type { AgentSessionResponse } from '@service-agent-harness/generated/schemas';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
+import {
+  ORIGIN_THREAD_DRAWER_ID,
+  sessionOriginThread,
+} from '../context/origin-thread';
 import { AgentPullRequestChip } from './AgentPullRequestChip';
 import { harnessTitle } from './compose-agent-session-options';
 
@@ -59,6 +66,7 @@ export function AgentSplitHeader(props: {
   // against a placeholder and keeps reporting it (see `Block.tsx`), so the
   // block id is the one thing here that is not a shareable session id.
   const { sessionId, metadata } = useAgentSession();
+  const conversation = useDrawerControl(ORIGIN_THREAD_DRAWER_ID);
   const title = () => agentSessionTitle(props.session, props.title);
 
   const entity = (): AgentSessionEntity | undefined => {
@@ -96,6 +104,12 @@ export function AgentSplitHeader(props: {
   ];
 
   const tools: BlockTool[] = [
+    {
+      label: 'Open conversation',
+      icon: ChatCircleDots,
+      action: () => conversation.toggle(),
+      condition: () => sessionOriginThread(props.session) !== undefined,
+    },
     {
       label: () => {
         const provider = props.session?.external?.provider;
@@ -149,6 +163,7 @@ export function AgentSplitHeader(props: {
             {(url) => <AgentPullRequestChip url={url()} />}
           </Show>
           <Show when={!isMobile()}>
+            <ChangesToggle />
             <For each={tools}>
               {(tool) => (
                 <Show when={!tool.condition || tool.condition()}>

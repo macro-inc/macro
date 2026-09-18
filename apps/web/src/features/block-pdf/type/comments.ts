@@ -1,11 +1,12 @@
-import type { IComment, Reply, Root } from '@core/comments/commentType';
+import type { Reply, Root } from '@core/comments/commentType';
+import type { Comment } from '@service-storage/generated/schemas/comment';
 
 export type ThreadPayload = {
   threadId: number;
   rootId: number;
   anchorId: string; // uuid
   page: number;
-  comments: IComment[];
+  comments: Comment[];
   isResolved: boolean;
 };
 

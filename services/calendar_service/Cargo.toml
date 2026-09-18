@@ -1,0 +1,67 @@
+[package]
+default-run = "calendar_service"
+edition = "2024"
+name = "calendar_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "calendar_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "calendar_service_openapi"
+path = "src/openapi.rs"
+
+[features]
+connection_gateway = []
+default = ["connection_gateway"]
+
+[dependencies]
+anyhow = { workspace = true }
+authentication_service_client = { path = "../../crates/authentication_service_client" }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+axum = { workspace = true }
+calendar_events = { path = "../../crates/calendar_events", features = [
+  "google",
+  "inbound",
+  "postgres",
+] }
+chrono = { workspace = true }
+connection_gateway_client = { path = "../../crates/connection_gateway_client" }
+email_db_client = { path = "../../crates/email_db_client" }
+email_utils = { path = "../../crates/email_utils" }
+futures = { workspace = true }
+google_token = { path = "../../crates/google_token" }
+macro_auth = { path = "../../crates/macro_auth" }
+macro_authorization = { path = "../../crates/macro_authorization", features = [
+  "postgres",
+] }
+macro_aws_config = { path = "../../crates/macro_aws_config" }
+macro_config = { path = "../../crates/macro_config" }
+macro_cors = { path = "../../crates/macro_cors" }
+macro_entrypoint = { path = "../../crates/macro_entrypoint" }
+macro_env = { path = "../../crates/macro_env" }
+macro_env_var = { path = "../../crates/macro_env_var" }
+macro_event_broker = { path = "../../crates/macro_event_broker" }
+macro_queues = { path = "../../crates/macro_queues" }
+macro_service_urls = { path = "../../crates/macro_service_urls" }
+models_email = { path = "../../crates/models_email" }
+redis = { workspace = true, features = ["tokio-rustls-comp"] }
+reqwest = { workspace = true }
+secretsmanager_client = { path = "../../crates/secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+sqs_worker = { path = "../../crates/sqs_worker" }
+subtle = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["compression-gzip"] }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../crates/workspace-hack" }

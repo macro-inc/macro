@@ -40,6 +40,11 @@ vi.mock('./parts/PermissionPart', () => ({
   PermissionPart: () => <div data-testid="permission" />,
 }));
 vi.mock('./parts/PlanPart', () => ({ PlanPart: () => null }));
+vi.mock('./parts/AttachmentPart', () => ({
+  AttachmentPart: (props: { part: { name: string } }) => (
+    <div data-testid="attachment">{props.part.name}</div>
+  ),
+}));
 vi.mock('./parts/ControlPart', () => ({ ControlPart: () => null }));
 vi.mock('./parts/ElicitationPart', () => ({ ElicitationPart: () => null }));
 vi.mock('../ui', () => ({

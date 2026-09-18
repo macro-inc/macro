@@ -88,6 +88,11 @@ export type AgentPermissionAction = {
  */
 export type AgentPromptAction = {
     /**
+     * Files the prompt refers to, in the order the user attached them.
+     * Delivered after the text as one `resource_link` block each.
+     */
+    attachments?: Array<PromptAttachment>;
+    /**
      * What to tell the agent.
      */
     prompt: string;
@@ -131,6 +136,32 @@ export type AgentRespondElicitationAction = ElicitationAnswer & {
      * [`AgentActionId`], because the agent minted it.
      */
     requestId: ElicitationRequestId;
+};
+
+/**
+ * Response body for `GET /agent-sessions/{session_id}/changes/patch`.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type AgentSessionChangesPatchResponse = {
+    /**
+     * The git-style unified diff of the current changeset.
+     */
+    patch: string;
+};
+
+/**
+ * Response body for `GET /agent-sessions/{session_id}/changes`.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type AgentSessionChangesResponse = {
+    attempt?: null | CaptureAttemptDto;
+    /**
+     * A capture is running right now.
+     */
+    capturing: boolean;
+    changeset?: null | ChangesetDto;
 };
 
 /**
@@ -365,6 +396,126 @@ export type AgentSetModelAction = {
 };
 
 export type BotId = string;
+
+/**
+ * The latest capture attempt.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type CaptureAttemptDto = {
+    /**
+     * Why it did not capture, in a sentence the user can read.
+     */
+    error?: string | null;
+    /**
+     * When it ended; absent while it runs.
+     */
+    finishedAt?: string | null;
+    outcome?: null | CaptureOutcomeDto;
+    /**
+     * When it started.
+     */
+    startedAt: string;
+};
+
+/**
+ * How the latest capture attempt ended, on the wire.
+ */
+export type CaptureOutcomeDto = 'captured' | 'not_ready' | 'failed';
+
+/**
+ * One changed file.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type ChangedFileDto = {
+    /**
+     * Lines added.
+     */
+    additions: number;
+    /**
+     * The diff carries no text for this file.
+     */
+    binary: boolean;
+    /**
+     * Lines removed.
+     */
+    deletions: number;
+    /**
+     * What happened to the file.
+     */
+    kind: FileChangeKindDto;
+    /**
+     * The file's hunks were left out of the patch to fit the size budget.
+     */
+    patchOmitted: boolean;
+    /**
+     * The file's path after the change, or before it for a deletion.
+     */
+    path: string;
+    /**
+     * Where a renamed file came from.
+     */
+    previousPath?: string | null;
+};
+
+/**
+ * One capture of a session's changes.
+ *
+ * Clients deserialize this, so both derives are used.
+ */
+export type ChangesetDto = {
+    /**
+     * Lines added across all files.
+     */
+    additions: number;
+    /**
+     * The side the work started from.
+     */
+    base: GitRefDto;
+    /**
+     * When the diff was taken.
+     */
+    capturedAt: string;
+    /**
+     * Lines removed across all files.
+     */
+    deletions: number;
+    /**
+     * Every changed file, in patch order.
+     */
+    files: Array<ChangedFileDto>;
+    /**
+     * The side carrying the work.
+     */
+    head: GitRefDto;
+    /**
+     * The capture's id; changes with every capture.
+     */
+    id: string;
+    /**
+     * Size of the patch `GET .../changes/patch` serves; zero when nothing
+     * changed.
+     */
+    patchBytes: number;
+    /**
+     * `https://github.com/owner/name`, when known.
+     */
+    repository?: string | null;
+    /**
+     * Where the diff was read from.
+     */
+    source: ChangesetSourceDto;
+    /**
+     * Some files' hunks were left out of the patch.
+     */
+    truncated: boolean;
+};
+
+/**
+ * The source of the captured diff, on the wire.
+ */
+export type ChangesetSourceDto = 'github_pull_request';
 
 /**
  * One-time manual code. Deliberately does not implement Debug.
@@ -609,6 +760,25 @@ export type ExternalSessionResponse = {
 };
 
 /**
+ * What happened to a file, on the wire.
+ */
+export type FileChangeKindDto = 'added' | 'modified' | 'deleted' | 'renamed';
+
+/**
+ * One end of the compared range.
+ */
+export type GitRefDto = {
+    /**
+     * The branch name, when known.
+     */
+    name?: string | null;
+    /**
+     * The commit, when known.
+     */
+    sha?: string | null;
+};
+
+/**
  * HTTP request selecting one provider to probe.
  */
 export type LoadAgentModelsRequest = {
@@ -731,6 +901,35 @@ export type PreviewAgentSessionsResponse = {
 };
 
 /**
+ * A file the prompt refers to, by where the agent can fetch it.
+ *
+ * Mirrors ACP's `resource_link` content block, which every agent must
+ * accept: bytes never ride the prompt, only a URI (a static file service URL
+ * in practice) with enough metadata for a client to render a chip and for
+ * the agent to decide whether to fetch it. Keeping the wire shape ACP-native
+ * means the harness translates without resolving anything, and the fold
+ * reads the same fields back off the logged frame.
+ */
+export type PromptAttachment = {
+    /**
+     * The file's media type, when known.
+     */
+    mimeType?: string | null;
+    /**
+     * Display name, typically the original file name.
+     */
+    name: string;
+    /**
+     * Size in bytes, when known.
+     */
+    size?: number | null;
+    /**
+     * Where the agent can fetch the file.
+     */
+    uri: string;
+};
+
+/**
  * One action waiting in a session's queue.
  *
  * Clients deserialize this, so both derives are used.
@@ -744,6 +943,11 @@ export type QueuedActionDto = {
      * The user who queued it, absent when a bot acted on nobody's behalf.
      */
     actorUserId?: string | null;
+    /**
+     * Files the prompt refers to, for prompts only. Kept through an edit,
+     * which replaces the text alone.
+     */
+    attachments?: Array<PromptAttachment>;
     /**
      * When it was accepted.
      */
@@ -1080,6 +1284,85 @@ export type GetAgentSessionResponses = {
 };
 
 export type GetAgentSessionResponse = GetAgentSessionResponses[keyof GetAgentSessionResponses];
+
+export type GetAgentSessionChangesData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/changes';
+};
+
+export type GetAgentSessionChangesErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type GetAgentSessionChangesError = GetAgentSessionChangesErrors[keyof GetAgentSessionChangesErrors];
+
+export type GetAgentSessionChangesResponses = {
+    200: AgentSessionChangesResponse;
+};
+
+export type GetAgentSessionChangesResponse = GetAgentSessionChangesResponses[keyof GetAgentSessionChangesResponses];
+
+export type GetAgentSessionChangesPatchData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/changes/patch';
+};
+
+export type GetAgentSessionChangesPatchErrors = {
+    401: string;
+    403: string;
+    404: string;
+    500: string;
+};
+
+export type GetAgentSessionChangesPatchError = GetAgentSessionChangesPatchErrors[keyof GetAgentSessionChangesPatchErrors];
+
+export type GetAgentSessionChangesPatchResponses = {
+    200: AgentSessionChangesPatchResponse;
+};
+
+export type GetAgentSessionChangesPatchResponse = GetAgentSessionChangesPatchResponses[keyof GetAgentSessionChangesPatchResponses];
+
+export type RefreshAgentSessionChangesData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the agent session
+         */
+        session_id: string;
+    };
+    query?: never;
+    url: '/agent-sessions/{session_id}/changes/refresh';
+};
+
+export type RefreshAgentSessionChangesErrors = {
+    401: string;
+    403: string;
+    500: string;
+};
+
+export type RefreshAgentSessionChangesError = RefreshAgentSessionChangesErrors[keyof RefreshAgentSessionChangesErrors];
+
+export type RefreshAgentSessionChangesResponses = {
+    202: AgentSessionChangesResponse;
+};
+
+export type RefreshAgentSessionChangesResponse = RefreshAgentSessionChangesResponses[keyof RefreshAgentSessionChangesResponses];
 
 export type ControlAgentSessionData = {
     body: ControlRequest;

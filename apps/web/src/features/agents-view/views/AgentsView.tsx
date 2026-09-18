@@ -206,6 +206,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     const id = startPendingSession({
       botId: start.botId,
       prompt: start.prompt,
+      attachments: start.attachments,
       modelOverride: start.modelOverride,
       repoUrl: start.repoUrl,
       repoBranch: start.repoBranch,

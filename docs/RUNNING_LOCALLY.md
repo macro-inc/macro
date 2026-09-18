@@ -115,6 +115,13 @@ When startup finishes, the command prints the frontend URL and the important ser
 
 Open the frontend URL in your browser.
 
+The local environment supplies both `LOCAL_AWS_URL` (the container endpoint)
+and `LOCAL_AWS_PUBLIC_URL` (the instance's published LocalStack port). SFS and
+other presigned uploads use the public endpoint in browser-facing URLs. If an
+upload attempts `localhost:4566` on a named instance, rebuild the service and
+reload its generated environment; named instances publish storage on their own
+port.
+
 The stack does not create accounts in advance. Passwordless login creates a user
 on demand. Register with any email address. FusionAuth sends you a one-time code
 by email. That email lands in **Mailpit** at http://localhost:8025, not in a real

@@ -24,6 +24,12 @@ mod test;
 
 use std::{future::Future, pin::Pin, sync::Arc};
 
+use agent_changes::domain::pull_request::PullRequestChanges;
+use agent_changes::domain::service::{AgentChangesService, CaptureOnTurnEnd};
+use agent_changes::inbound::axum_router::AgentChangesRouterState;
+use agent_changes::outbound::github_pull_request::GithubPullRequestDiff;
+use agent_changes::outbound::postgres::PgChangesetRepo;
+use agent_changes::outbound::s3::S3ChangesetBlobStore;
 use agent_egress::domain::service::EgressServiceImpl;
 use agent_egress::outbound::forwarder::ReqwestForwarder;
 use agent_egress::outbound::github_tokens::GithubAppTokens;
@@ -33,7 +39,7 @@ use agent_egress::outbound::session_authority::StoredTokenSessionAuthority;
 use agent_fold::domain::service::FoldedMessageService;
 use agent_harness::domain::model::{
     AgentKind, AgentRuntimeConfig, HarnessCommand, HarnessDefaults, SessionDefaults,
-    SessionRepository,
+    SessionRepository, StaticFileLinks,
 };
 use agent_harness::domain::model_load::AgentModelsServiceImpl;
 use agent_harness::domain::ports::AgentRuntimeDirectory as _;
@@ -117,6 +123,7 @@ use macro_event_broker::{
 };
 use macro_service_urls::{
     AgentHarnessEgressUrl, ConnectionGatewayUrl, LexicalServiceUrl, McpServiceUrl,
+    StaticFileServiceUrl,
 };
 use model_providers::{CursorModels, InMemoryModels, MacrodModels, VisibleHarnessAccess};
 use permission_policy::PgPermissionPolicySource;
@@ -341,6 +348,10 @@ async fn run() -> anyhow::Result<()> {
         ))
     };
     let container_shutdown = sandbox.clone();
+
+    // Channel attachments reach a prompt as links the agent can fetch, so
+    // the trigger router needs to know where static files are served from.
+    let static_file_links = StaticFileLinks::new(StaticFileServiceUrl::new()?.to_string());
 
     // Tracks event publishes the in-memory agent's tool context starts;
     // closed and drained on shutdown so nothing is dropped mid-publish.
@@ -612,6 +623,18 @@ async fn run() -> anyhow::Result<()> {
             },
         },
     ));
+    fixed_runtimes.push((
+        bot_id::CLAUDE_BOT_ID,
+        AgentRuntimeConfig {
+            kind: AgentKind::ClaudeCloud,
+            model: claude_cloud_agents::domain::models::Model::default()
+                .id()
+                .to_owned(),
+            harness: "claude-cloud".into(),
+            instructions: String::new(),
+            mcp_servers: AgentMcpServers::OwnerConnections,
+        },
+    ));
     let runtime_directory =
         PgAgentRuntimeDirectory::new(PgBotsRepo::new(pool.clone()), fixed_runtimes.clone());
     // Logged because the failure mode this replaced was silent: a harness that
@@ -770,6 +793,17 @@ async fn run() -> anyhow::Result<()> {
             repo_url: None,
         },
     )
+    .with_bot(
+        bot_id::CLAUDE_BOT_ID,
+        SessionDefaults {
+            bot_id: bot_id::CLAUDE_BOT_ID,
+            model: claude_cloud_agents::domain::models::Model::default()
+                .id()
+                .to_owned(),
+            harness: "claude-cloud".into(),
+            repo_url: None,
+        },
+    )
     // Sessions nothing names a bot for (the create menu's) run in-process;
     // explicitly selected coding agents keep their configured runtimes.
     .with_managed_bot(inmem_bot);
@@ -802,12 +836,37 @@ async fn run() -> anyhow::Result<()> {
         )
         .with_repositories(open_repositories),
     );
-    // Close the loop: turn ends observed by the session actors drain the
-    // harness's prompt queue.
-    turn_observer.bind(harness.clone());
     let model_probe_timeout = std::time::Duration::from_secs(10);
     let macrod_models =
         MacrodModels::new(Arc::clone(&runtimes), redis.clone(), model_probe_timeout);
+
+    // Capture only the session's linked GitHub pull request, for every harness.
+    let changes_extractor =
+        PullRequestChanges::new(GithubPullRequestDiff::new(InstallationTokenService::new(
+            InstallationTokenConfig {
+                client_id: config.github_sync_app_client_id.clone(),
+                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
+            },
+            PgGithubSyncRepo::new(pool.clone()),
+            GithubSyncClientImpl::default(),
+        )));
+    let changes = AgentChangesService::new(
+        session_repo.clone(),
+        changes_extractor,
+        PgChangesetRepo::new(pool.clone()),
+        S3ChangesetBlobStore::new(
+            macro_aws_config::s3_client().await,
+            config.agent_session_changes_bucket.clone(),
+        ),
+        ConnectionGatewayAgentSessionRealtime::new(
+            connection_gateway.clone(),
+            session_repo.clone(),
+        ),
+    );
+
+    // Close the loop: turn ends observed by the session actors drain the
+    // harness's prompt queue, and capture what the turn changed.
+    turn_observer.bind((harness.clone(), CaptureOnTurnEnd::new(changes.clone())));
     let runtime_command_models = macrod_models.clone();
     let runtime_command_redis = redis.clone();
     let runtime_command_harness = harness.clone();
@@ -898,6 +957,11 @@ async fn run() -> anyhow::Result<()> {
         entity_access.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
+    let changes_state = AgentChangesRouterState::new(
+        changes,
+        entity_access.clone(),
+        MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
+    );
     let control_state = AgentSessionControlState::new(
         harness.clone(),
         entity_access,
@@ -939,6 +1003,7 @@ async fn run() -> anyhow::Result<()> {
                 gateway_state,
                 model_state,
                 repositories_state,
+                changes_state,
             )
             .with_claude_auth(claude_auth),
             http_runtime_commands_readiness,
@@ -1057,7 +1122,7 @@ async fn run() -> anyhow::Result<()> {
                         Some(bot_id) => runtime_directory.runtime_for(bot_id).await?,
                         None => None,
                     };
-                    let routed = match route_agent_trigger(trigger_event, runtime) {
+                    let routed = match route_agent_trigger(trigger_event, runtime, &static_file_links) {
                         Ok(routed) => routed,
                         Err(skipped) => {
                             // Info, not debug: a skip is the last visible trace

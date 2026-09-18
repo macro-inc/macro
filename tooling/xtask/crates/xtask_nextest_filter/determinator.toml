@@ -8,5 +8,6 @@ mark-changed = [
   "complete_graph",
   "documents",
   "seed_cli",
+  "sync_service",
   "xtask_workflows",
 ]

@@ -2,12 +2,17 @@ import { createResizeObserver } from '@solid-primitives/resize-observer';
 /**
  * The agent block's composer: the chat input's look and its markdown editing
  * surface (`MarkdownShell` over a lean `EditorConfigBuilder`), including `@`
- * mentions so users can attach Macro items the same way they do in chat.
- * Attachments, upload queue, and chat contexts stay out; model plumbing
- * arrives through the `modelControl` slot. Visual chrome mirrors
+ * mentions so users can attach Macro items the same way they do in chat, and
+ * file attachments - drop, paste, or the paperclip - shown as the channel
+ * composer's chips. Uploading itself stays out: the parent owns the
+ * attachment list and hands files back through `onAttachFiles`. Model
+ * plumbing arrives through the `modelControl` slot. Visual chrome mirrors
  * `@core/component/AI/component/input/ChatInput.tsx`.
  */
 
+import { InputProvider } from '@channel/Input/context';
+import { Input } from '@channel/Input/Input';
+import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { ComposerEditor } from '@core/component/LexicalMarkdown/component/ComposerEditor';
 import type { AgentCommandItem } from '@core/component/LexicalMarkdown/plugins';
@@ -15,6 +20,7 @@ import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/crea
 import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
+import { handleFileFolderDrop } from '@core/util/upload';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
 import EnterIcon from '@phosphor-icons/core/regular/arrow-bend-down-left.svg?component-solid';
 import { Button, ComposerSurface, SendButton } from '@ui';
@@ -56,9 +62,22 @@ export interface AgentInputProps {
    * typing `/` opens a typeahead over them. `/` stays plain text while empty.
    */
   commands?: () => AgentCommandItem[];
-  /** Receives the composed markdown, including any `<m-document-mention>` tags. */
-  onSend: (markdown: string) => void;
+  /**
+   * Receives the composed markdown, including any `<m-document-mention>`
+   * tags, and the attachments as they stood when Send was pressed. Either
+   * may be empty, never both.
+   */
+  onSend: (markdown: string, attachments: InputAttachmentData[]) => void;
   onStop?: () => void;
+  /**
+   * Files attached so far, uploaded or still uploading. Owned by the parent
+   * (an `InputAttachmentTracker`), which is what lets the composer clear
+   * them after a send.
+   */
+  attachments?: InputAttachmentData[];
+  /** Files the user dropped, pasted, or picked. Absent means no attaching. */
+  onAttachFiles?: (files: File[]) => void;
+  onRemoveAttachment?: (attachment: InputAttachmentData) => void;
   /** Model control: a pill above the box on desktop, footer-left on touch. */
   modelControl?: JSX.Element;
   /**
@@ -81,32 +100,65 @@ export interface AgentInputProps {
 
 export function AgentInput(props: AgentInputProps) {
   const [markdown, setMarkdown] = createSignal('');
+  const [isDraggedOver, setIsDraggedOver] = createSignal(false);
   let containerRef: HTMLDivElement | undefined;
   const [layout, setLayout] = createSignal<HTMLDivElement>();
+  const [content, setContent] = createSignal<HTMLDivElement>();
   const [height, setHeight] = createSignal<number>();
-  createResizeObserver(layout, (_, element) => {
+  // The surface is pinned to its content's height, so the measured element has
+  // to enclose the attachment chips as well as the editor row — they sit inside
+  // the surface, and a row-only measurement clips them.
+  createResizeObserver(content, (_, element) => {
     setHeight(element.getBoundingClientRect().height);
   });
   useTouchOutsideToDismissKeyboard(() => containerRef);
 
+  const attachments = () => props.attachments ?? [];
+  const canAttach = () => props.onAttachFiles !== undefined && !props.disabled;
+  const hasPendingAttachments = () =>
+    attachments().some((attachment) => attachment.pending);
+  const attachFiles = (files: File[]) => {
+    if (!canAttach() || files.length === 0) return;
+    props.onAttachFiles?.(files);
+  };
+
   // Sending while busy is allowed — the service queues prompts behind the
-  // running turn.
-  const canSend = () => markdown().trim().length > 0 && !props.disabled;
+  // running turn. A file still uploading holds the send: its URL is not
+  // known yet, and the agent gets exactly what the chips show.
+  const canSend = () =>
+    (markdown().trim().length > 0 || attachments().length > 0) &&
+    !hasPendingAttachments() &&
+    !props.disabled;
+
+  // The channel composer's chips, drop zone, and overlay read their state
+  // from `Input.Root`'s context; this is that context, over this composer's
+  // props. Only attaching and removing do anything - there is no channel
+  // send or format ribbon behind these slots.
+  const inputCommands: InputCommands = {
+    send: async () => false,
+    attachFiles: async (files) => attachFiles(files),
+    toggleFormatRibbon: () => {},
+    close: () => {},
+    removeAttachment: (attachment) => props.onRemoveAttachment?.(attachment),
+  };
 
   const send = () => {
     if (!canSend()) return;
     const content = markdown().trim();
+    const attached = attachments();
     editor.controls.clear();
-    props.onSend(content);
+    props.onSend(content, attached);
   };
 
   // Deliberately not gated on `busy`. A speculated stop reads as done
   // everywhere else, so `busy` is already false while the runtime is still
   // winding the turn down - and that is exactly when a waiting message is
   // most worth advancing. What does gate it is a stop already in flight:
-  // repeating it just posts another cancel for the same turn.
+  // repeating it just posts another cancel for the same turn. Attached files
+  // are something to send in their own right, so they hold it back too.
   const canSendNext = () =>
     markdown().trim().length === 0 &&
+    attachments().length === 0 &&
     props.hasQueuedMessages === true &&
     !props.stopPending &&
     !props.disabled &&
@@ -134,6 +186,15 @@ export function AgentInput(props: AgentInputProps) {
     .withCode()
     .withRestoreFocus()
     .withAgentCommands({ commands: () => props.commands?.() ?? [] })
+    // Pasted files (and, on iOS, recovered clipboard images) become
+    // attachments through the same door as a drop.
+    .withFilePaste({
+      onPasteFilesAndDirs: (files, directories) => {
+        void handleFileFolderDrop(files, directories, (entries) =>
+          attachFiles(entries.map((entry) => entry.file))
+        );
+      },
+    })
     .onEnter(() => {
       if (canSend()) send();
       else sendNext();
@@ -193,99 +254,144 @@ export function AgentInput(props: AgentInputProps) {
   };
 
   return (
-    <div ref={containerRef} data-keep-keyboard class="flex flex-col gap-1.5">
-      {/* Desktop: the model pill sits above the box, as it always has. */}
-      <Show when={!isTouchDevice() && props.modelControl}>
-        <div class="flex items-center px-0.5">{props.modelControl}</div>
-      </Show>
-      {/* h-auto beats Surface's size-full so the in-flow controls are not
-          clipped over the editor (that was Auto sitting on the placeholder). */}
-      <ComposerSurface
-        class="h-auto transition-[height] duration-150 ease-out motion-reduce:transition-none"
-        style={{ height: height() === undefined ? undefined : `${height()}px` }}
-      >
-        {/* Desktop: one row, send right of the text. Touch: the text gets
-            the whole width and the controls drop to a footer row (model
-            left, send right) — the chat-tall / channel footer shape. */}
-        <div
-          ref={setLayout}
-          data-composer-compact={isCompact()}
-          class="group/composer flex items-end data-[composer-compact=false]:flex-col data-[composer-compact=false]:items-stretch gap-[3.75px] p-[7.5px] min-h-[48.75px] touch:min-h-0 touch:flex-col touch:items-stretch touch:gap-0 touch:p-0"
-          onPointerDown={focusEditor}
-          onMouseDown={focusEditor}
+    <InputProvider
+      value={{
+        view: () => ({
+          mode: 'channel',
+          attachments: attachments(),
+          isDraggedOver: isDraggedOver(),
+          hasPendingAttachments: hasPendingAttachments(),
+        }),
+        commands: inputCommands,
+      }}
+    >
+      <div ref={containerRef} data-keep-keyboard class="flex flex-col gap-1.5">
+        {/* Desktop: the model pill sits above the box, as it always has. */}
+        <Show when={!isTouchDevice() && props.modelControl}>
+          <div class="flex items-center px-0.5">{props.modelControl}</div>
+        </Show>
+        {/* h-auto beats Surface's size-full so the in-flow controls are not
+            clipped over the editor (that was Auto sitting on the placeholder). */}
+        <ComposerSurface
+          class="h-auto transition-[height] duration-150 ease-out motion-reduce:transition-none"
+          style={{
+            height: height() === undefined ? undefined : `${height()}px`,
+          }}
         >
-          <div
-            id={AGENT_INPUT_TEXT_AREA_ID}
-            class="min-w-0 flex-1 group-data-[composer-compact=false]/composer:flex-none text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"
-            classList={{
-              // While empty only the placeholder renders; keep it to one clipped
-              // line so it doesn't wrap into the single-line height.
-              'overflow-hidden whitespace-nowrap':
-                markdown().trim().length === 0,
-              // Long drafts must not eat the mobile viewport above the dock.
-              'max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto':
-                hasMultilineContent() && isMobile(),
-            }}
+          <Input.DropZone
+            onDragStart={(valid) => canAttach() && setIsDraggedOver(valid)}
+            onDragEnd={() => setIsDraggedOver(false)}
           >
-            <ComposerEditor
-              config={editor}
-              placeholder={
-                props.placeholder ?? 'Message the agent, @mention anything'
-              }
-              autofocus={!isMobile() && !isTouchDevice() && props.autofocus}
-            />
-          </div>
-
-          {/* In-flow — never absolute over the text. */}
-          <div class="flex shrink-0 items-center gap-[3.75px] touch:h-8 touch:gap-2 touch:p-2 touch:mb-2">
-            <Show when={isTouchDevice() && props.modelControl}>
-              <div class="min-w-0">{props.modelControl}</div>
+            <Show when={canAttach()}>
+              {/* Matches ComposerSurface's own radius so the overlay's rim
+                  sits on the composer's edge, not inside it. */}
+              <Input.DropOverlay
+                class="rounded-[26.25px] touch:rounded-3xl"
+                hint="Drop files here to send them to the agent"
+              />
             </Show>
-            <div class="ml-auto shrink-0">
-              <Show
-                when={canSendNext()}
-                fallback={
-                  <Show
-                    when={props.busy && props.onStop}
-                    fallback={
-                      <SendButton
-                        appearance="composer"
-                        tooltip="Send"
-                        disabled={!canSend()}
-                        onClick={send}
-                      />
+            <div ref={setContent} data-composer-content>
+              {/* Chips above the text, media and documents in their own rows,
+                  exactly as the channel composer lays them out. */}
+              <Input.Attachments kind="media" class="pb-0" />
+              <Input.Attachments kind="document" class="pb-0" />
+              {/* Desktop: one row, send right of the text. Touch: the text gets
+                  the whole width and the controls drop to a footer row (model
+                  left, send right) — the chat-tall / channel footer shape. */}
+              <div
+                ref={setLayout}
+                data-composer-compact={isCompact()}
+                class="group/composer flex items-end data-[composer-compact=false]:flex-col data-[composer-compact=false]:items-stretch gap-[3.75px] p-[7.5px] min-h-[48.75px] touch:min-h-0 touch:flex-col touch:items-stretch touch:gap-0 touch:p-0"
+                onPointerDown={focusEditor}
+                onMouseDown={focusEditor}
+              >
+                <div
+                  id={AGENT_INPUT_TEXT_AREA_ID}
+                  class="min-w-0 flex-1 group-data-[composer-compact=false]/composer:flex-none text-base text-ink not-touch:px-[9.375px] not-touch:py-[4.6875px] not-touch:leading-[24.375px] not-touch:min-h-[24.375px] not-touch:text-composer-ink touch:px-3 touch:py-2"
+                  classList={{
+                    // While empty only the placeholder renders; keep it to one clipped
+                    // line so it doesn't wrap into the single-line height.
+                    'overflow-hidden whitespace-nowrap':
+                      markdown().trim().length === 0,
+                    // Long drafts must not eat the mobile viewport above the dock.
+                    'max-h-[calc(32*var(--dvh,1dvh))] overflow-y-auto':
+                      hasMultilineContent() && isMobile(),
+                  }}
+                >
+                  <ComposerEditor
+                    config={editor}
+                    placeholder={
+                      props.placeholder ??
+                      'Message the agent, @mention anything'
                     }
-                  >
-                    <Button
-                      variant={isTouchDevice() ? 'ghost' : 'strong'}
-                      size="icon-composer"
-                      label="Stop"
-                      onClick={() => props.onStop?.()}
-                      class={
-                        isTouchDevice()
-                          ? 'rounded-full size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
-                          : undefined
+                    autofocus={
+                      !isMobile() && !isTouchDevice() && props.autofocus
+                    }
+                  />
+                </div>
+
+                {/* In-flow — never absolute over the text. */}
+                <div class="flex shrink-0 items-center gap-[3.75px] touch:h-8 touch:gap-2 touch:p-2 touch:mb-2">
+                  <Show when={isTouchDevice() && props.modelControl}>
+                    <div class="min-w-0">{props.modelControl}</div>
+                  </Show>
+                  <Show when={props.onAttachFiles}>
+                    {/* The picker accepts whatever the drop zone does: an
+                        agent's reason to attach a file is usually a source
+                        file, and the static upload stores any type. */}
+                    <Input.AttachFilesAction
+                      accept={null}
+                      disabled={props.disabled}
+                    />
+                  </Show>
+                  <div class="ml-auto shrink-0">
+                    <Show
+                      when={canSendNext()}
+                      fallback={
+                        <Show
+                          when={props.busy && props.onStop}
+                          fallback={
+                            <SendButton
+                              appearance="composer"
+                              tooltip="Send"
+                              disabled={!canSend()}
+                              onClick={send}
+                            />
+                          }
+                        >
+                          <Button
+                            variant={isTouchDevice() ? 'ghost' : 'strong'}
+                            size="icon-composer"
+                            label="Stop"
+                            onClick={() => props.onStop?.()}
+                            class={
+                              isTouchDevice()
+                                ? 'rounded-full size-7.5 text-ink-extra-muted not-disabled:bg-ink/5 not-disabled:hover:bg-ink/10'
+                                : undefined
+                            }
+                          >
+                            <div class="size-3.5 not-touch:size-[13.125px] rounded-sm bg-current" />
+                          </Button>
+                        </Show>
                       }
                     >
-                      <div class="size-3.5 not-touch:size-[13.125px] rounded-sm bg-current" />
-                    </Button>
-                  </Show>
-                }
-              >
-                <SendButton
-                  appearance="composer"
-                  aria-label="Send next queued message"
-                  tooltip="Send next queued message"
-                  shortcut="Enter"
-                  onClick={sendNext}
-                >
-                  <EnterIcon />
-                </SendButton>
-              </Show>
+                      <SendButton
+                        appearance="composer"
+                        aria-label="Send next queued message"
+                        tooltip="Send next queued message"
+                        shortcut="Enter"
+                        onClick={sendNext}
+                      >
+                        <EnterIcon />
+                      </SendButton>
+                    </Show>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
-        </div>
-      </ComposerSurface>
-    </div>
+          </Input.DropZone>
+        </ComposerSurface>
+      </div>
+    </InputProvider>
   );
 }

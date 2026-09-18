@@ -5,7 +5,13 @@
  * marks — so the composer keeps no state of its own.
  */
 
+import {
+  createInputAttachmentTracker,
+  type InputAttachmentData,
+  uploadInputAttachments,
+} from '@channel/Input';
 import { toast } from '@core/component/Toast/Toast';
+import { uploadFile } from '@core/util/upload';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { type Component, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
@@ -20,6 +26,7 @@ import {
 } from '../ui';
 import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
 import { PermissionRequest } from './PermissionRequest';
+import { promptActionOf } from './prompt-action';
 
 export function AgentComposer(props: {
   /**
@@ -81,6 +88,25 @@ export function AgentComposer(props: {
     interactions.pending().filter((request) => request.kind === 'permission');
   const pendingElicitation = () =>
     interactions.pending().some((request) => request.kind === 'elicitation');
+  // Files dropped, pasted, or picked into the composer. Every one goes to
+  // the static file service - documents too, not only media - because the
+  // agent can only reach a file by a URL it can fetch. The chips and the
+  // upload flow are the channel composer's.
+  const attachmentTracker = createInputAttachmentTracker();
+  const attachFiles = (files: File[]) =>
+    void uploadInputAttachments({
+      files,
+      tracker: attachmentTracker,
+      uploadFile: (file) =>
+        uploadFile(file, 'static', { hideProgressIndicator: true }),
+    });
+  // Attachments ride the prompt action itself, so they take the same path as
+  // the text: issued once, speculated by the fold, and queued server-side
+  // behind a running turn with the files still on them.
+  const send = (markdown: string, attachments: InputAttachmentData[]) => {
+    act(promptActionOf(markdown, attachments), 'The message could not be sent');
+    attachmentTracker.clearAttachments();
+  };
 
   // Focus plumbing between the input and the queue list above it: Up at the
   // start of the input lands on the bottom (next-to-dispatch) queue row, and
@@ -98,6 +124,7 @@ export function AgentComposer(props: {
         actionId: entry.actionId,
         kind: entry.kind,
         prompt: entry.prompt ?? undefined,
+        attachments: entry.attachments,
         queuedBy: actor && actor !== userId() ? displayName(actor) : undefined,
       };
     });
@@ -152,11 +179,14 @@ export function AgentComposer(props: {
         // into, but not sent from, until the id lands.
         disabled={loadFailed() || pending()}
         commands={() => metadata()?.availableCommands ?? []}
-        onSend={(prompt) =>
-          act({ type: 'prompt', prompt }, 'The message could not be sent')
-        }
+        onSend={send}
         onStop={() => act({ type: 'stop' }, 'The agent could not be stopped')}
         onSendNext={sendNext}
+        attachments={attachmentTracker.attachments()}
+        onAttachFiles={attachFiles}
+        onRemoveAttachment={(attachment) =>
+          attachmentTracker.removeAttachment(attachment.id)
+        }
         // Installed only while a queue row exists to land on: an installed
         // handler claims the keys (Up, and the shared plugin's other
         // leave-at-start keys), which must keep their defaults when there is

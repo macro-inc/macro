@@ -52,7 +52,7 @@ export function UnifiedReplyInput(props: {
         onDismiss={() => props.onExit()}
       />
       <ThreadReplyChannelInput
-        channelId={props.channelId}
+        parent={{ type: 'channel', id: props.channelId }}
         threadId={props.threadId}
         replyInputState={props.state.replyInputState}
         setReplyInputState={props.state.setReplyInputState}

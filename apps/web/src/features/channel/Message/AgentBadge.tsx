@@ -1,4 +1,4 @@
-import { isBotSenderId } from '@queries/channel/message-sender';
+import { isBotSenderId } from '@queries/messages/message-sender';
 import { cn } from '@ui';
 import { Show } from 'solid-js';
 import { useMessage } from './context';

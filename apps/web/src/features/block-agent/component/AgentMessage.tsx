@@ -27,6 +27,7 @@ import {
   ToolGroup,
   WorkingLine,
 } from '../ui';
+import { AttachmentPart } from './parts/AttachmentPart';
 import { ControlPart } from './parts/ControlPart';
 import { ElicitationPart } from './parts/ElicitationPart';
 import { PermissionPart } from './parts/PermissionPart';
@@ -47,6 +48,7 @@ function AgentMessagePart(props: {
     .with({ kind: 'text' }, (part) => (
       <TextPart text={part.text} inFlight={props.inFlight} />
     ))
+    .with({ kind: 'attachment' }, (part) => <AttachmentPart part={part} />)
     .with({ kind: 'thought' }, (part) => (
       <Thought
         text={part.text}

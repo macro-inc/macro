@@ -658,18 +658,17 @@ export const enableChatV3Agents = defineFlag({
   default: onInDev,
 });
 
-// The `@cursor` mention entry: agent sessions served by Cursor cloud agents
-// on Macro's Cursor account. PostHog-gated per user; the backend additionally
-// restricts these sessions to @macro.com senders. Override with
-// VITE_ENABLE_CURSOR_AGENTS.
+// The built-in @cursor mention, using the mentioning user's own Cursor account.
+// Account setup is checked after the mention; this flag controls discovery.
+// Override with VITE_ENABLE_CURSOR_AGENTS.
 export const enableCursorAgents = defineFlag({
   key: 'enable-cursor-agents',
   env: 'ENABLE_CURSOR_AGENTS',
   default: onInDev,
 });
 
-// Codex cloud agent mentions, composer choices, and harness settings also
-// require enableChatV3Agents. Override with VITE_ENABLE_CODEX_AGENTS.
+// Codex composer choices also require enableChatV3Agents.
+// Override with VITE_ENABLE_CODEX_AGENTS.
 export const enableCodexAgents = defineFlag({
   key: 'enable-codex-agents',
   env: 'ENABLE_CODEX_AGENTS',
@@ -699,4 +698,18 @@ export const enableNotificationSettings = defineFlag({
 export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',
   env: 'ENABLE_SPREADSHEETS',
+});
+
+/**
+ * Document comments read and write through the shared message API and render
+ * with the channel message components; the legacy annotation comment stores
+ * stay in place while this is off. Channels are not gated. On in dev, where the
+ * legacy comments have already been imported into the message store; production
+ * follows PostHog and stays off until its own import has run. Override locally
+ * with VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS.
+ */
+export const enableUnifiedDocumentDiscussions = defineFlag({
+  key: 'enable-unified-document-discussions',
+  env: 'ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS',
+  default: onInDev,
 });

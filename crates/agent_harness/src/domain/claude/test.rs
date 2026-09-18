@@ -13,6 +13,7 @@ use std::sync::Mutex;
 
 #[derive(Default)]
 struct Provider {
+    connection_error: Mutex<Option<Error>>,
     calls: Arc<Mutex<Vec<(String, String)>>>,
     models: Arc<Mutex<Vec<String>>>,
     uncertain: bool,
@@ -31,6 +32,9 @@ struct Client {
 impl CloudProvider for Provider {
     type Client = Client;
     async fn connect(&self, owner: &str) -> claude_cloud_agents::domain::model::Result<Client> {
+        if let Some(error) = self.connection_error.lock().unwrap().take() {
+            return Err(error);
+        }
         Ok(Client {
             owner: owner.into(),
             calls: self.calls.clone(),
@@ -303,4 +307,29 @@ async fn network_setup_failure_never_creates_or_leaves_a_pending_intent() {
     }
     assert!(provider.calls.lock().unwrap().is_empty());
     assert_eq!(provider.preparations.lock().unwrap().len(), 2);
+}
+
+#[tokio::test]
+async fn preflight_only_requests_connection_for_a_missing_account() {
+    let provider = Arc::new(Provider::default());
+    let service = ClaudeSessions::new(
+        provider.clone(),
+        InMemoryAgentSessionRepo::default(),
+        mappings(),
+        "dev-gateway.macro.com".into(),
+    );
+    let owner = MacroUserIdStr::try_from_email("asker@example.com").unwrap();
+    *provider.connection_error.lock().unwrap() = Some(Error::NotConnected);
+    assert_eq!(
+        service.preflight(&owner).await.unwrap(),
+        Some(SessionBlocker::ClaudeNotConnected)
+    );
+    assert_eq!(service.preflight(&owner).await.unwrap(), None);
+    *provider.connection_error.lock().unwrap() = Some(Error::Network);
+    assert!(matches!(
+        service.preflight(&owner).await,
+        Err(HarnessError::Container(_))
+    ));
+    assert!(provider.calls.lock().unwrap().is_empty());
+    assert!(provider.preparations.lock().unwrap().is_empty());
 }

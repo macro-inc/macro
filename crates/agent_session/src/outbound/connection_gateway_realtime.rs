@@ -63,6 +63,11 @@ pub const AGENT_SESSION_RENAMED: &str = "agent_session_renamed";
 /// response can never carry information the socket will not deliver.
 pub const AGENT_SESSION_QUEUE: &str = "agent_session_queue";
 
+/// The realtime message type telling viewers a session's captured changes
+/// moved: a capture started, finished, or failed. Carries only the session
+/// id; viewers refetch `GET /agent-sessions/{id}/changes`.
+pub const AGENT_SESSION_CHANGES: &str = "agent_session_changes";
+
 /// The body of an [`AGENT_SESSION_LOG`] message - the module docs are the
 /// contract.
 #[derive(Debug, Serialize)]
@@ -281,6 +286,33 @@ where
         self.client
             .batch_send_message(
                 "agent_session_updated".to_owned(),
+                payload,
+                recipients
+                    .iter()
+                    .map(|user| GatewayEntityType::User.with_entity_str(user.as_ref()))
+                    .collect(),
+            )
+            .await
+            .map_err(|error| rootcause::report!(error))?;
+        Ok(())
+    }
+
+    #[tracing::instrument(skip(self), err, fields(agent.session.id = %session))]
+    async fn publish_changes_updated(
+        &self,
+        session: AgentSessionId,
+    ) -> Result<(), rootcause::Report> {
+        let recipients = self.participants.viewers(session).await?;
+        if recipients.is_empty() {
+            return Ok(());
+        }
+        let payload = serde_json::to_value(AgentSessionUpdatedEvent {
+            agent_session_id: session.as_uuid(),
+        })
+        .map_err(|error| rootcause::report!(error))?;
+        self.client
+            .batch_send_message(
+                AGENT_SESSION_CHANGES.to_owned(),
                 payload,
                 recipients
                     .iter()

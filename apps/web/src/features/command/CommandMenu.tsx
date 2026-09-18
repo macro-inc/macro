@@ -18,10 +18,12 @@ import type { HotkeyCommand, RegisterHotkeyReturn } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import { debouncedDependent } from '@core/util/debounce';
 import { openExternalUrl } from '@core/util/url';
-import { type EntityData, InlineEntity, isGithubPrEntity } from '@entity';
+import { type EntityData, isGithubPrEntity } from '@entity';
+import { EntitySelectionBadge } from '@entity/components/EntitySelectionBadge';
 import Macro from '@icon/macro-logo.svg';
 import ArrowLeft from '@phosphor/arrow-left.svg';
 import {
+  Badge,
   CommandMenuEmptyState,
   CommandMenuHotkeyHint,
   CommandMenuSearchInput,
@@ -710,25 +712,10 @@ function EntityActionPreview(props: { entities: EntityData[] }) {
   return (
     <>
       <For each={displayEntities()}>
-        {(entity) => {
-          return (
-            <div
-              class={cn(
-                'bg-active border border-edge-muted px-2 py-1 truncate text-xs rounded',
-                {
-                  'max-w-[50%]': props.entities.length === 2,
-                }
-              )}
-            >
-              <InlineEntity entity={entity} />
-            </div>
-          );
-        }}
+        {(entity) => <EntitySelectionBadge entity={entity} />}
       </For>
       <Show when={remainingCount() > 0}>
-        <div class="text-ink-muted text-xs px-2 py-1">
-          +{remainingCount()} more
-        </div>
+        <Badge size="sm">+{remainingCount()} more</Badge>
       </Show>
     </>
   );
