@@ -811,6 +811,7 @@ export const SearchToolResponse = z.object({
                         z.literal('task'),
                         z.literal('snippet'),
                         z.literal('skill'),
+                        z.literal('initiative_description'),
                       ];
                       const errors = schemas.reduce<z.ZodError[]>(
                         (errors, schema) =>
@@ -4905,6 +4906,7 @@ export const ReadMetadataResponse = z.object({
             z.literal('task'),
             z.literal('snippet'),
             z.literal('skill'),
+            z.literal('initiative_description'),
           ];
           const errors = schemas.reduce<z.ZodError[]>(
             (errors, schema) =>

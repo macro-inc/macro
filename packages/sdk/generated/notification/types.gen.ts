@@ -1033,6 +1033,8 @@ export type NotificationDocumentSubType = {
     type: 'snippet';
 } | {
     type: 'skill';
+} | {
+    type: 'initiative_description';
 };
 
 export type NotificationServiceApiVersion = 'v1';
