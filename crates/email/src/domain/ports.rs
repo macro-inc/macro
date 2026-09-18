@@ -299,6 +299,17 @@ pub trait EmailRepo: Send + Sync + 'static {
         link_id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Atomically update the UNREAD label assignments and the message/thread read flags.
+    /// `message_ids` must be the messages of the already-authorized thread and inbox.
+    /// An error leaves all three representations unchanged.
+    fn set_thread_read_state(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        message_ids: &[Uuid],
+        is_read: bool,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Update the read status for a batch of messages, verified by link_id.
     fn update_message_read_status_batch(
         &self,
@@ -593,6 +604,14 @@ pub trait EmailService: Send + Sync + 'static {
         async { Err(no_op_email_err()) }
     }
 
+    /// Mark a caller-accessible thread unread using its own inbox's UNREAD label.
+    /// Provider synchronization and read-state updates use the thread-label flow.
+    fn mark_thread_unread(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
+
     /// Add or remove a label from a caller-accessible thread.
     fn update_thread_labels_for_user(
         &self,
@@ -839,6 +858,14 @@ impl EmailService for NoOpEmailService {
         _label_id: Uuid,
         _add: bool,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn mark_thread_unread(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
         Err(no_op_email_err())
     }
 

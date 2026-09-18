@@ -334,6 +334,11 @@ export function calculateSpreadsheetForAi(
       name,
       cells: { A1: { value: qualifyScratchFormula(formula, sheet.name) } },
       layout: { rowCount: 200, columnWidths: {} },
+      metadata: {
+        definedNames: sheet.metadata?.definedNames?.filter(
+          (entry) => entry.local
+        ),
+      },
     };
     return scratch;
   });

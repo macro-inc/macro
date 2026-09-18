@@ -28,6 +28,8 @@ function setup(
     const [cells, updateCells] = createSignal(initial);
     const [canEdit, setCanEdit] = createSignal(true);
     const [rowCount, setRowCount] = createSignal(200);
+    const [hiddenRows, setHiddenRows] = createSignal<number[]>([]);
+    const [hiddenColumns, setHiddenColumns] = createSignal<number[]>([]);
     const [sheetId, setSheetId] = createSignal(initialSheetId ?? 'sheet1');
     const setCells = vi.fn((edits: SpreadsheetCellEdits) => {
       const next = { ...cells() };
@@ -42,6 +44,8 @@ function setup(
     const redo = vi.fn();
     const grid = createGridController({
       cells,
+      hiddenRows,
+      hiddenColumns,
       setSelection: publishSelection,
       canEdit,
       setCells,
@@ -67,6 +71,8 @@ function setup(
       setCells,
       setCanEdit,
       setRowCount,
+      setHiddenRows,
+      setHiddenColumns,
       setSheetId,
       undo,
       redo,
@@ -76,6 +82,23 @@ function setup(
 }
 
 describe('spreadsheet grid editing', () => {
+  it('keeps Home and typing into a whole-row/column selection out of hidden cells', () => {
+    const { grid, key, setHiddenRows, setHiddenColumns, cells } = setup();
+    setHiddenRows([0]);
+    setHiddenColumns([0]);
+    grid.select({ row: 2, column: 4 });
+    key('Home');
+    expect(grid.activeAddress()).toBe('B3');
+    key('Home', { ctrlKey: true });
+    expect(grid.activeAddress()).toBe('B2');
+    grid.selectRange({ row: 0, column: 0 }, { row: 0, column: 25 });
+    key('x');
+    grid.commit();
+    expect(cells().B2.value).toBe('x');
+    expect(cells().A1).toBeUndefined();
+    key('ArrowLeft');
+    expect(grid.activeAddress()).toBe('B2');
+  });
   it('publishes the current range for direct selection, keyboard movement, and tab restoration', async () => {
     const { grid, publishSelection, setSheetId, key } = setup(
       {},
@@ -590,4 +613,168 @@ it('bounds navigation to added rows and cancels a draft when empty rows are remo
   expect(grid.editing()).toBeUndefined();
   grid.commit();
   expect(setCells).not.toHaveBeenCalled();
+});
+
+function crossSheetSetup() {
+  return createRoot((dispose) => {
+    cleanups.push(dispose);
+    const [sheetId, setSheetId] = createSignal('summary');
+    const [sheets, setSheets] = createSignal([
+      { id: 'summary', name: 'Summary' },
+      { id: 'inputs', name: "Owner's budget" },
+    ]);
+    const [books, setBooks] = createSignal<Record<string, SpreadsheetCells>>({
+      summary: { B4: { value: 'before' } },
+      inputs: {
+        A1: { value: '10' },
+        A2: { value: '20' },
+        B4: { value: 'leave me' },
+      },
+    });
+    const [canEdit, setCanEdit] = createSignal(true);
+    const setSheetCells = vi.fn((id: string, edits: SpreadsheetCellEdits) => {
+      if (!sheets().some((sheet) => sheet.id === id)) return;
+      const cells = { ...books()[id] };
+      for (const [address, value] of Object.entries(edits)) {
+        if (value) cells[address] = { ...cells[address], ...value };
+      }
+      setBooks({ ...books(), [id]: cells });
+    });
+    const grid = createGridController({
+      cells: () => books()[sheetId()],
+      sheetId,
+      sheets,
+      setActiveSheet: setSheetId,
+      setSheetCells,
+      setCells: (edits) => setSheetCells(sheetId(), edits),
+      canEdit,
+      undo: () => {},
+      redo: () => {},
+    });
+    return {
+      grid,
+      books,
+      sheetId,
+      setSheetId,
+      setSheets,
+      setCanEdit,
+      setSheetCells,
+    };
+  });
+}
+
+describe('cross-sheet formula editing', () => {
+  it('keeps the draft while changing tabs and commits the escaped range to its original sheet', () => {
+    const view = crossSheetSetup();
+    view.grid.select({ row: 3, column: 1 });
+    view.grid.beginEdit('cell', '=SUM(');
+    view.grid.switchSheet('inputs');
+    expect(view.sheetId()).toBe('inputs');
+    expect(view.grid.editing()).toBe('formula');
+    expect(view.grid.editingAddress()).toBe('B4');
+    expect(view.grid.isEditingActiveSheet()).toBe(false);
+    expect(view.grid.beginReference({ row: 0, column: 0 })).toBe(true);
+    view.grid.updateReference({ row: 1, column: 0 });
+    view.grid.endReference();
+    expect(view.grid.draft()).toBe("=SUM('Owner''s budget'!A1:A2");
+    view.grid.beginEdit('formula');
+    expect(view.grid.draft()).toBe("=SUM('Owner''s budget'!A1:A2");
+    view.grid.setDraft(view.grid.draft() + ')');
+    view.grid.commit();
+    expect(view.books().summary.B4.value).toBe("=SUM('Owner''s budget'!A1:A2)");
+    expect(view.books().inputs.B4.value).toBe('leave me');
+    expect(view.sheetId()).toBe('summary');
+    expect(view.grid.activeAddress()).toBe('B4');
+  });
+
+  it('replaces a prior reference when choosing another sheet and omits the qualifier on the origin', () => {
+    const view = crossSheetSetup();
+    view.grid.beginEdit('formula', '=');
+    view.grid.switchSheet('inputs');
+    view.grid.beginReference({ row: 0, column: 0 });
+    view.grid.endReference();
+    view.grid.switchSheet('summary');
+    expect(view.grid.referenceSelection()).toBeUndefined();
+    view.grid.beginReference({ row: 0, column: 1 });
+    view.grid.endReference();
+    expect(view.grid.draft()).toBe('=B1');
+    view.grid.cancel();
+    expect(view.setSheetCells).not.toHaveBeenCalled();
+  });
+
+  it('cancels if the origin is removed, restores the origin on Escape, and rejects revoked permission', () => {
+    const view = crossSheetSetup();
+    view.grid.beginEdit('cell', '=SUM(');
+    view.grid.switchSheet('inputs');
+    view.grid.cancel();
+    expect(view.sheetId()).toBe('summary');
+    view.grid.beginEdit('cell', '=');
+    view.grid.switchSheet('inputs');
+    view.grid.beginReference({ row: 0, column: 0 });
+    view.grid.endReference();
+    view.setCanEdit(false);
+    view.grid.commit();
+    expect(view.setSheetCells).not.toHaveBeenCalled();
+    view.setCanEdit(true);
+    view.grid.beginEdit('cell', '=');
+    view.grid.switchSheet('inputs');
+    view.setSheets([{ id: 'inputs', name: 'Inputs' }]);
+    expect(view.grid.editing()).toBeUndefined();
+    view.grid.commit();
+    expect(view.setSheetCells).not.toHaveBeenCalled();
+  });
+
+  it('commits non-formulas during normal tab navigation and cancels on unrequested sheet changes', () => {
+    const view = crossSheetSetup();
+    view.grid.beginEdit('cell', 'New value');
+    view.grid.switchSheet('inputs');
+    expect(view.books().summary.A1.value).toBe('New value');
+    view.grid.beginEdit('cell', '=SUM(');
+    view.setSheetId('summary');
+    expect(view.grid.editing()).toBeUndefined();
+    expect(view.books().inputs.A1.value).toBe('10');
+  });
+});
+
+it('fills literal series immediately and keeps keyboard fill-down as a copy', async () => {
+  const view = setup({ A1: { value: '1' }, A2: { value: '2' } });
+  const source = {
+    anchor: { row: 0, column: 0 },
+    focus: { row: 1, column: 0 },
+  };
+  const target = {
+    anchor: { row: 0, column: 0 },
+    focus: { row: 3, column: 0 },
+  };
+  const done = view.grid.fill(source, target);
+  expect(view.cells().A3.value).toBe('3');
+  expect(view.cells().A4.value).toBe('4');
+  await done;
+  view.grid.selectRange({ row: 0, column: 0 }, { row: 3, column: 0 });
+  view.key('d', { ctrlKey: true });
+  expect(view.cells().A4.value).toBe('1');
+});
+
+it('interprets newly typed percentage points without rescaling unchanged stored percentages', () => {
+  const view = setup({ A1: { value: '0.05', format: 'percent' } });
+  view.grid.beginEdit('cell');
+  expect(view.grid.draft()).toBe('5%');
+  view.grid.commit();
+  expect(view.setCells).not.toHaveBeenCalled();
+  view.key('7');
+  view.grid.commit();
+  expect(view.cells().A1.value).toBe('7%');
+  view.grid.beginEdit('formula', '=5/100');
+  view.grid.commit();
+  expect(view.cells().A1.value).toBe('=5/100');
+});
+
+it('moves from the active cell after whole-row or whole-column selections, not the far edge', () => {
+  const { grid, key } = setup();
+  grid.selectRange({ row: 0, column: 2 }, { row: 199, column: 2 });
+  key('ArrowDown');
+  expect(grid.activeAddress()).toBe('C2');
+  grid.selectRange({ row: 4, column: 0 }, { row: 4, column: 25 });
+  key('ArrowRight');
+  expect(grid.activeAddress()).toBe('B5');
 });

@@ -13,6 +13,7 @@ import {
   rangeCopies,
   readCopiedRange,
 } from '../core/cell-copy';
+import { cellEditValue, normalizeCellInput } from '../core/cell-input';
 import {
   type FormulaTextSelection,
   formulaRangeReference,
@@ -29,6 +30,7 @@ import {
   selectionBounds,
   serializeTable,
 } from '../core/grid-selection';
+import { selectionToggleStyles } from '../core/selection-formatting';
 import {
   SPREADSHEET_DEFAULT_STYLE,
   SPREADSHEET_MAX_CELL_LENGTH,
@@ -41,8 +43,13 @@ import {
 type GridSource = {
   cells: Accessor<SpreadsheetCells>;
   sheetId?: Accessor<string>;
+  sheets?: Accessor<{ id: string; name: string }[]>;
+  setActiveSheet?: (id: string) => void;
+  setSheetCells?: (id: string, edits: SpreadsheetCellEdits) => void;
   canEdit: Accessor<boolean>;
   rowCount?: Accessor<number>;
+  hiddenRows?: Accessor<number[]>;
+  hiddenColumns?: Accessor<number[]>;
   copyCells?: (copies: CellCopy[]) => Promise<SpreadsheetCellEdits>;
   setCells: (edits: Record<string, Partial<SpreadsheetCell> | null>) => void;
   setSelection?: (selection: SpreadsheetSelection) => void;
@@ -60,7 +67,26 @@ export function createGridController(source: GridSource) {
   onCleanup(() => {
     operation++;
   });
-  const origin = { row: 0, column: 0 };
+  const visiblePosition = (position: CellPosition): CellPosition => {
+    const bounded = boundPosition(position);
+    const visible = (index: number, limit: number, hidden: number[]) => {
+      if (!hidden.includes(index)) return index;
+      for (let next = index + 1; next < limit; next++)
+        if (!hidden.includes(next)) return next;
+      for (let next = index - 1; next >= 0; next--)
+        if (!hidden.includes(next)) return next;
+      return 0;
+    };
+    return {
+      row: visible(bounded.row, rowCount(), source.hiddenRows?.() ?? []),
+      column: visible(
+        bounded.column,
+        GRID_COLUMNS,
+        source.hiddenColumns?.() ?? []
+      ),
+    };
+  };
+  const origin = visiblePosition({ row: 0, column: 0 });
   const [selection, setSelectionValue] = createSignal<CellSelection>({
     anchor: origin,
     focus: origin,
@@ -84,14 +110,24 @@ export function createGridController(source: GridSource) {
   const [pickingReference, setPickingReference] = createSignal(false);
   let textSelection: FormulaTextSelection = { start: 0, end: 0 };
   let referenceDraft:
-    | { prefix: string; suffix: string; anchor: CellPosition }
+    | { prefix: string; suffix: string; anchor: CellPosition; sheetId?: string }
     | undefined;
   const [notice, setNotice] = createSignal('');
   const activeAddress = () => cellAddress(selection().anchor);
   let originalValue = '';
+  let originalCell: SpreadsheetCell | undefined;
+  let editTarget: { sheetId: string; address: string } | undefined;
+  let switchingReferenceSheet: string | undefined;
+  const [referenceSheetId, setReferenceSheetId] = createSignal<string>();
+  const isEditingActiveSheet = () =>
+    !editTarget || editTarget.sheetId === source.sheetId?.();
+  const editingAddress = () => editTarget?.address ?? activeAddress();
+  const canPickReference = () =>
+    !!editing() && !!formulaReferenceSlot(draft(), textSelection);
 
   // Remote deletion and local tab changes invalidate drafts and async fills.
-  // Keep a separate selection per sheet; a draft never crosses this boundary.
+  // An explicit reference-picking tab switch keeps the origin draft. Remote
+  // changes and other navigation still invalidate it.
   const sheetSelections = new Map<string, CellSelection>();
   if (source.sheetId) {
     let previousSheetId = source.sheetId();
@@ -102,7 +138,10 @@ export function createGridController(source: GridSource) {
           sheetSelections.set(previousSheetId, selection());
           previousSheetId = id;
           operation++;
-          cancel();
+          if (switchingReferenceSheet !== id) cancel(false);
+          switchingReferenceSheet = undefined;
+          setPickingReference(false);
+          referenceDraft = undefined;
           const saved = sheetSelections.get(id);
           setSelection(
             saved
@@ -117,6 +156,30 @@ export function createGridController(source: GridSource) {
         { defer: true }
       )
     );
+  }
+
+  if (source.sheets) {
+    createEffect(
+      on(source.sheets, (sheets) => {
+        if (
+          editTarget &&
+          !sheets.some((sheet) => sheet.id === editTarget?.sheetId)
+        )
+          cancel(false);
+      })
+    );
+  }
+
+  function switchSheet(id: string) {
+    if (!source.setActiveSheet || id === source.sheetId?.()) return;
+    if (source.sheets && !source.sheets().some((sheet) => sheet.id === id))
+      return;
+    if (canPickReference() && source.setSheetCells && editTarget) {
+      switchingReferenceSheet = id;
+      // The formula bar remains available when the original cell is off-sheet.
+      setEditing('formula');
+    } else commit();
+    source.setActiveSheet(id);
   }
 
   // A local undo or remote layout operation can remove the selected empty row.
@@ -156,17 +219,27 @@ export function createGridController(source: GridSource) {
     cancelPendingCopy();
     if (!editing()) return;
     const value = draft();
+    const target = editTarget;
+    const address = editingAddress();
     setEditing(undefined);
+    editTarget = undefined;
     resetReference();
     if (source.canEdit() && value !== originalValue) {
-      source.setCells({ [activeAddress()]: { value } });
+      const edits = {
+        [address]: { value: normalizeCellInput(value, originalCell) },
+      };
+      if (target && source.setSheetCells)
+        source.setSheetCells(target.sheetId, edits);
+      else source.setCells(edits);
     }
+    if (target && target.sheetId !== source.sheetId?.())
+      source.setActiveSheet?.(target.sheetId);
   }
 
   function select(position: CellPosition, extend = false) {
     commit();
     operation++;
-    const bounded = boundPosition(position);
+    const bounded = visiblePosition(position);
     setSelection((current) => ({
       anchor: extend ? current.anchor : bounded,
       focus: bounded,
@@ -187,21 +260,38 @@ export function createGridController(source: GridSource) {
   function beginEdit(location: 'cell' | 'formula', initial?: string) {
     if (!source.canEdit()) return;
     operation++;
-    originalValue = source.cells()[activeAddress()]?.value ?? '';
+    const visible = visiblePosition(selection().anchor);
+    if (cellAddress(visible) !== activeAddress())
+      setSelection({ anchor: visible, focus: visible });
+    // Moving between in-cell and formula-bar editors must keep the same draft.
+    if (editing()) {
+      setEditing(location);
+      return;
+    }
+    originalCell = source.cells()[activeAddress()];
+    originalValue = cellEditValue(originalCell);
+    editTarget = source.sheetId
+      ? { sheetId: source.sheetId(), address: activeAddress() }
+      : undefined;
     setDraft(initial ?? originalValue);
     setEditing(location);
     setNotice('');
   }
 
-  function cancel() {
+  function cancel(returnToOrigin = true) {
+    const target = editTarget;
+    editTarget = undefined;
     setEditing(undefined);
     setDraft('');
+    if (returnToOrigin && target && target.sheetId !== source.sheetId?.())
+      source.setActiveSheet?.(target.sheetId);
   }
 
   function resetReference() {
     referenceDraft = undefined;
     setPickingReference(false);
     setReferenceSelection(undefined);
+    setReferenceSheetId(undefined);
     setEditorSelection(undefined);
   }
 
@@ -223,7 +313,9 @@ export function createGridController(source: GridSource) {
       prefix: draft().slice(0, slot.start),
       suffix: draft().slice(slot.end),
       anchor: boundPosition(position),
+      sheetId: source.sheetId?.(),
     };
+    setReferenceSheetId(source.sheetId?.());
     setPickingReference(true);
     updateReference(position);
     return true;
@@ -235,7 +327,13 @@ export function createGridController(source: GridSource) {
       anchor: referenceDraft.anchor,
       focus: boundPosition(position),
     };
-    const reference = formulaRangeReference(range);
+    const sheetName =
+      editTarget && editTarget.sheetId !== referenceDraft.sheetId
+        ? source
+            .sheets?.()
+            .find((sheet) => sheet.id === referenceDraft?.sheetId)?.name
+        : undefined;
+    const reference = formulaRangeReference(range, sheetName);
     const value = referenceDraft.prefix + reference + referenceDraft.suffix;
     if (value.length > SPREADSHEET_MAX_CELL_LENGTH) {
       setNotice('A cell can contain up to 10,000 characters.');
@@ -257,7 +355,27 @@ export function createGridController(source: GridSource) {
 
   function move(row: number, column: number, extend = false) {
     const from = extend ? selection().focus : selection().anchor;
-    select({ row: from.row + row, column: from.column + column }, extend);
+    const next = boundPosition({
+      row: from.row + row,
+      column: from.column + column,
+    });
+    while (row && source.hiddenRows?.().includes(next.row)) {
+      const candidate = next.row + Math.sign(row);
+      if (candidate < 0 || candidate >= rowCount()) {
+        next.row = from.row;
+        break;
+      }
+      next.row = candidate;
+    }
+    while (column && source.hiddenColumns?.().includes(next.column)) {
+      const candidate = next.column + Math.sign(column);
+      if (candidate < 0 || candidate >= GRID_COLUMNS) {
+        next.column = from.column;
+        break;
+      }
+      next.column = candidate;
+    }
+    select(next, extend);
   }
 
   function clear() {
@@ -305,12 +423,26 @@ export function createGridController(source: GridSource) {
   }
 
   async function applyCopies(copies: CellCopy[], target: CellSelection) {
-    if (!source.canEdit() || !source.copyCells || !copies.length) return;
+    if (!source.canEdit() || !copies.length) return;
+    const hasFormulas = copies.some(
+      ({ cell }) => cell.value.startsWith('=') && cell.format !== 'text'
+    );
+    if (hasFormulas && !source.copyCells) return;
     const current = ++operation;
     const before = source.cells();
     setNotice('Copying cells…');
     try {
-      const edits = await source.copyCells(copies);
+      // Literal/series fills are synchronous, avoiding an old-value flash while
+      // a worker starts up. Formula translation still uses IronCalc's parser.
+      const edits =
+        hasFormulas && source.copyCells
+          ? await source.copyCells(copies)
+          : Object.fromEntries(
+              copies.map(({ to, cell }) => [
+                cellAddress(to),
+                { ...SPREADSHEET_DEFAULT_STYLE, ...cell },
+              ])
+            );
       if (current !== operation) return;
       if (!source.canEdit()) {
         setNotice('Copy cancelled because this spreadsheet is view only.');
@@ -338,13 +470,20 @@ export function createGridController(source: GridSource) {
     }
   }
 
-  function fill(sourceRange: CellSelection, target: CellSelection) {
+  function fill(
+    sourceRange: CellSelection,
+    target: CellSelection,
+    mode: 'series' | 'copy' = 'series'
+  ) {
     commit();
     const bounded = {
       anchor: boundPosition(target.anchor),
       focus: boundPosition(target.focus),
     };
-    void applyCopies(fillCopies(source.cells(), sourceRange, bounded), bounded);
+    return applyCopies(
+      fillCopies(source.cells(), sourceRange, bounded, mode),
+      bounded
+    );
   }
 
   function fillDirection(direction: 'down' | 'right') {
@@ -357,7 +496,8 @@ export function createGridController(source: GridSource) {
           column: direction === 'down' ? right : left,
         },
       },
-      selection()
+      selection(),
+      'copy'
     );
   }
 
@@ -448,13 +588,20 @@ export function createGridController(source: GridSource) {
       (event.shiftKey ? redo : undo)();
     } else if (command && event.key.toLowerCase() === 'b') {
       event.preventDefault();
-      format({ bold: !source.cells()[activeAddress()]?.bold });
+      format({
+        bold: !selectionToggleStyles(source.cells(), selection()).bold,
+      });
     } else if (command && event.key.toLowerCase() === 'i') {
       event.preventDefault();
-      format({ italic: !source.cells()[activeAddress()]?.italic });
+      format({
+        italic: !selectionToggleStyles(source.cells(), selection()).italic,
+      });
     } else if (command && event.key.toLowerCase() === 'u') {
       event.preventDefault();
-      format({ underline: !source.cells()[activeAddress()]?.underline });
+      format({
+        underline: !selectionToggleStyles(source.cells(), selection())
+          .underline,
+      });
     } else if (command && ['d', 'r'].includes(event.key.toLowerCase())) {
       event.preventDefault();
       fillDirection(event.key.toLowerCase() === 'd' ? 'down' : 'right');
@@ -498,12 +645,19 @@ export function createGridController(source: GridSource) {
     fill,
     fillDirection,
     activeAddress,
+    editingAddress,
+    isEditingActiveSheet,
+    canPickReference,
+    switchSheet,
     editing,
     draft,
     setDraft,
     setTextSelection,
     editorSelection,
-    referenceSelection,
+    referenceSelection: () =>
+      referenceSheetId() === source.sheetId?.()
+        ? referenceSelection()
+        : undefined,
     pickingReference,
     beginReference,
     updateReference,

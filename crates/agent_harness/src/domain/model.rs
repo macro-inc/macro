@@ -330,13 +330,15 @@ impl DeliverAction {
         }
     }
 
-    /// A control request under a caller-visible id. Names no origin: control
-    /// is "deliver this to the session", and announcing a prompt into its
-    /// channel is the trigger pipeline's job, keyed on what it observed
-    /// rather than anything a caller claims.
-    pub fn control(id: AgentActionId, event: ControlEvent) -> Self {
+    /// A control request under a caller-visible id: the caller's own id when
+    /// it named one, so its optimistic entry is confirmed in place, and a
+    /// freshly minted id otherwise. Names no origin: control is "deliver this
+    /// to the session", and announcing a prompt into its channel is the
+    /// trigger pipeline's job, keyed on what it observed rather than anything
+    /// a caller claims.
+    pub fn control(event: ControlEvent) -> Self {
         Self {
-            id,
+            id: event.action_id.unwrap_or_else(AgentActionId::mint),
             action: event.action,
             actor: event.actor,
             announce: None,

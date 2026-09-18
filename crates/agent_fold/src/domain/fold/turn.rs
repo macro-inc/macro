@@ -47,6 +47,7 @@ impl FoldState {
             request_id: None,
             parts: NonEmpty::one(part),
             stop: None,
+            pending: self.speculative,
         });
         Some(Changed::new(message))
     }
@@ -57,16 +58,27 @@ impl FoldState {
         prompt_id: &RequestId,
         params: Option<&RawJsonRpcParams>,
         user_id: Option<MacroUserIdStr<'static>>,
-    ) -> Option<Changed> {
-        // A second prompt without an intervening response means the previous
-        // turn never got one. Its agent message is already in `messages` and
-        // already reads `stop: None`, so there is nothing left to report -
-        // which is what keeps a push to one changed message.
-        let closed = self.close_turn(None);
-        debug_assert!(
-            closed.is_none(),
-            "closing a turn without a stop reason changes nothing"
-        );
+    ) -> Vec<Changed> {
+        // A speculative prompt behind a stop is the queue head, dispatching
+        // once the cancel lands. The turn it follows can only end one way,
+        // so that end is predicted here rather than leaving the turn open
+        // under the prompt that replaces it. A confirmed prompt never does
+        // this: the runtime's own response closes its turn, in log order.
+        let closed =
+            if self.speculative && self.turn.as_ref().is_some_and(|turn| turn.stop_requested) {
+                self.close_turn(Some(StopReason::Cancelled))
+            } else {
+                // A second prompt without an intervening response means the
+                // previous turn never got one. Its agent message is already in
+                // `messages` and already reads `stop: None`, so there is nothing
+                // left to report.
+                let closed = self.close_turn(None);
+                debug_assert!(
+                    closed.is_none(),
+                    "closing a turn without a stop reason changes nothing"
+                );
+                None
+            };
 
         let id = TurnId(self.turns_opened);
         self.turns_opened += 1;
@@ -83,14 +95,19 @@ impl FoldState {
         // after the text, which is the order this side sends them in.
         let mut text = String::new();
         let mut attachments = Vec::new();
-        for block in deserialize_params::<PromptRequest>(params)
-            .map(|request| request.prompt)
-            .unwrap_or_default()
-        {
-            match user_content_part(block) {
-                Some(MessagePart::Text { text: chunk }) => text.push_str(&chunk),
-                Some(part) => attachments.push(part),
-                None => {}
+        if let Some(request) = deserialize_params::<PromptRequest>(params) {
+            // A confirmed prompt names the session the runtime answers
+            // to; a speculative one only echoes what this fold already
+            // knew, so it must not become the source of that fact.
+            if !self.speculative {
+                self.acp_session = Some(request.session_id.clone());
+            }
+            for block in request.prompt {
+                match user_content_part(block) {
+                    Some(MessagePart::Text { text: chunk }) => text.push_str(&chunk),
+                    Some(part) => attachments.push(part),
+                    None => {}
+                }
             }
         }
         let mut parts = attachments;
@@ -108,12 +125,15 @@ impl FoldState {
                 request_id: AgentActionId::from_request_id(prompt_id),
                 parts,
                 stop: None,
+                pending: self.speculative,
             });
             Changed::new(message)
         });
 
         self.turn = Some(Turn {
             id,
+            prompt_pending: self.speculative,
+            stop_requested: false,
             prompt_id: Some(prompt_id.clone()),
             agent: None,
             permission_positions: HashMap::new(),
@@ -121,7 +141,7 @@ impl FoldState {
             expects_reply: true,
         });
 
-        changed
+        closed.into_iter().chain(changed).collect()
     }
 
     /// Handle the response to `session/prompt`: close the turn.
@@ -232,6 +252,7 @@ impl FoldState {
                 text: String::new(),
             }),
             stop: None,
+            pending: self.speculative,
         });
         (message, Changed::new(message))
     }
@@ -254,6 +275,8 @@ impl FoldState {
 
         self.turn = Some(Turn {
             id,
+            prompt_pending: false,
+            stop_requested: false,
             prompt_id: None,
             agent: None,
             permission_positions: HashMap::new(),

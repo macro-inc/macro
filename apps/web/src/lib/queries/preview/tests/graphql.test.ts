@@ -656,6 +656,46 @@ describe('GraphQL item previews', () => {
     });
   });
 
+  it.each([
+    { type: 'document', nameKey: 'documentName' },
+    { type: 'chat', nameKey: 'chatName' },
+    { type: 'project', nameKey: 'projectName' },
+    { type: 'channel', nameKey: 'channelDisplayName' },
+    { type: 'call', nameKey: 'customName' },
+    { type: 'crm_company', nameKey: 'companyName' },
+    { type: 'email', nameKey: 'emailName' },
+  ] as const)(
+    'optimistic $type rename writes $nameKey, not only displayName',
+    async ({ type, nameKey }) => {
+      const writes: Parameters<CacheHost['writeQuery']>[0][] = [];
+      getGraphqlSoupCacheHostMock.mockReturnValue({
+        disabled: false,
+        writeQuery: async (write: Parameters<CacheHost['writeQuery']>[0]) => {
+          writes.push(write);
+        },
+      });
+
+      await setGraphqlPreviewName(
+        { id: 'rename-target', type },
+        'Renamed',
+        'viewer'
+      );
+
+      expect(writes).toHaveLength(1);
+      const write = writes[0];
+      const data = write.data as {
+        user: { soup: { items: Array<Record<string, unknown>> } };
+      };
+      const target = data.user.soup.items.find(
+        (item) => item.id === 'rename-target'
+      );
+      expect(target).toMatchObject({
+        displayName: 'Renamed',
+        [nameKey]: 'Renamed',
+      });
+    }
+  );
+
   it('writes optimistic patches and complete creation records to normalized cache', async () => {
     vi.useFakeTimers();
     const writeQuery = vi.fn(async () => undefined);
@@ -691,11 +731,11 @@ describe('GraphQL item previews', () => {
               id: 'user-1',
               soup: {
                 items: [
-                  {
+                  expect.objectContaining({
                     __typename: 'GraphqlSoupDocument',
                     id: 'doc-1',
                     displayName: 'Renamed',
-                  },
+                  }),
                 ],
               },
             },

@@ -1,4 +1,9 @@
+import {
+  cellPlainText,
+  cellTextParts,
+} from '@macro-inc/spreadsheet/cell-mentions';
 import type { CellCopy, SpreadsheetCalculation } from './calculation';
+import { csvCellValue } from './csv-value';
 import {
   type CellSelection,
   cellAddress,
@@ -49,10 +54,10 @@ export function sortedRangeCopies(
   cells: SpreadsheetCells,
   values: SpreadsheetCalculation,
   selection: CellSelection,
-  descending: boolean
+  descending: boolean,
+  keyColumn = selection.anchor.column
 ): CellCopy[] {
   const { top, bottom, left, right } = selectionBounds(selection);
-  const keyColumn = selection.anchor.column;
   const rows = Array.from(
     { length: bottom - top + 1 },
     (_, index) => top + index
@@ -102,7 +107,12 @@ export function trimWhitespaceEdits(
     const value = cells[address]?.value;
     if (!value || (value.startsWith('=') && cells[address]?.format !== 'text'))
       continue;
-    const trimmed = value.trim().replace(/[\t ]+/g, ' ');
+    const trimmed = cellTextParts(value)
+      .map((part) =>
+        part.mention ? part.text : part.text.replace(/[\t ]+/g, ' ')
+      )
+      .join('')
+      .trim();
     if (trimmed !== value) edits[address] = { value: trimmed };
   }
   return edits;
@@ -132,7 +142,7 @@ export function csvImportEdits(text: string, selection: CellSelection) {
         throw new Error('A cell can contain up to 10,000 characters.');
       edits[
         cellAddress({ row: start.row + index, column: start.column + column })
-      ] = { value };
+      ] = { value: csvCellValue(value) };
     }
   });
   return {
@@ -164,9 +174,11 @@ export function findCells(
   return [...new Set([...Object.keys(cells), ...Object.keys(values)])]
     .filter((address) => {
       const text = normalize(
-        options.formulas
-          ? (cells[address]?.value ?? '')
-          : (values[address]?.display ?? cells[address]?.value ?? '')
+        cellPlainText(
+          options.formulas
+            ? (cells[address]?.value ?? '')
+            : (values[address]?.display ?? cells[address]?.value ?? '')
+        )
       );
       return options.entireCell ? text === needle : text.includes(needle);
     })
@@ -186,8 +198,16 @@ export function replaceCellText(
   if (!query) return text;
   const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   const pattern = options.entireCell ? `^${escaped}$` : escaped;
-  return text.replace(
-    new RegExp(pattern, options.matchCase ? 'g' : 'gi'),
-    () => replacement
-  );
+  const parts = cellTextParts(text);
+  if (options.entireCell && parts.some((part) => part.mention)) return text;
+  return parts
+    .map((part) =>
+      part.mention
+        ? part.text
+        : part.text.replace(
+            new RegExp(pattern, options.matchCase ? 'g' : 'gi'),
+            () => replacement
+          )
+    )
+    .join('');
 }

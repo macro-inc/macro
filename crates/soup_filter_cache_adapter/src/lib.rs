@@ -719,6 +719,9 @@ fn document_sub_type(value: &serde_json::Value) -> Result<Option<DocumentSubType
                 Some("GraphqlTaskSubType") => Ok(Some(DocumentSubType::Task)),
                 Some("GraphqlSnippetSubType") => Ok(Some(DocumentSubType::Snippet)),
                 Some("GraphqlSkillSubType") => Ok(Some(DocumentSubType::Skill)),
+                Some("GraphqlInitiativeDescriptionSubType") => {
+                    Ok(Some(DocumentSubType::InitiativeDescription))
+                }
                 _ => Err(()),
             }
         }

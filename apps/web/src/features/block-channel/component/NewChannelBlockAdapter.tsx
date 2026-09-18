@@ -187,10 +187,6 @@ function NewTop(props: { channelId: string }) {
       tab.value === 'call' ? { ...tab, label: <CallTabLabel /> } : tab
     );
 
-  // The generic rename op is gated on the document block-load signals, which
-  // the channel block never sets — so the menu offers a channel-local rename
-  // built from the channels context instead. The action's own gate keeps it
-  // off DMs and channels the user does not own.
   const channelEntity = () => {
     const ch = channel();
     if (!ch) return undefined;
@@ -200,6 +196,11 @@ function NewTop(props: { channelId: string }) {
       blockName: 'channel',
       channelType: ch.channel_type,
       ownerId: ch.owner_id,
+      isParticipant: participantsQuery.isSuccess
+        ? (participantsQuery.data ?? []).some(
+            (participant) => participant.user_id === userId()
+          )
+        : undefined,
     });
   };
 

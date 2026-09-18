@@ -374,6 +374,16 @@ pub struct RenameAgentSessionRequest {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct ControlRequest {
+    /// The id the caller already speculated this action under, when it has
+    /// one. Adopted as the accepted id, so a client that renders the action
+    /// optimistically promotes that entry in place instead of retracting it
+    /// and re-speculating under a server id. Re-sending the same id is not a
+    /// second action: see [`ControlResponse`].
+    ///
+    /// Named rather than flattened so it cannot collide with the action's own
+    /// fields, which are tagged under `type`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub action_id: Option<AgentActionId>,
     /// The operation to perform.
     #[serde(flatten)]
     pub action: AgentAction,
@@ -407,7 +417,8 @@ impl From<ControlDisposition> for ControlStatusDto {
 #[serde(rename_all = "camelCase")]
 pub struct ControlResponse {
     /// Matches `requestId` on the folded message this action derives once it
-    /// dispatches, and names the queue entry until then.
+    /// dispatches, and names the queue entry until then. The caller's own
+    /// `actionId` when it supplied one; a freshly minted id otherwise.
     pub action_id: AgentActionId,
     /// Whether the action went out or waits in the queue.
     pub status: ControlStatusDto,
@@ -818,6 +829,10 @@ async fn ensure_harness_serves_session<R: AgentSessionNotificationRecipient>(
 ///
 /// Edit access suffices: whoever can prompt the bot through its thread can
 /// prompt it here.
+///
+/// A caller may name the action with `actionId`; the response echoes it.
+/// Re-posting an id the session still holds queued or in flight reports that
+/// action's status rather than accepting a duplicate.
 #[tracing::instrument(
     skip_all,
     fields(
@@ -856,6 +871,7 @@ pub async fn control_agent_session_handler<
             AgentSessionId::new_from_uuid(session_id),
             ControlEvent {
                 action: req.action,
+                action_id: req.action_id,
                 actor,
             },
         )

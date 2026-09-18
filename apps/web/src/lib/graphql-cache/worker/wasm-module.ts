@@ -192,6 +192,8 @@ export interface CacheWasmModule {
   ): Promise<CacheOpenResult>;
   destroyCache(scope: string): Promise<void>;
   schemaHash(): string;
+  /** Read-only binary metadata; optional so fixtures can diagnose stale artifacts. */
+  cacheBuildInfo?(): unknown;
 }
 
 let modulePromise: Promise<CacheWasmModule> | undefined;

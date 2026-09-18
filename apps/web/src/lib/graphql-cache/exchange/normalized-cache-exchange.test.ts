@@ -1,3 +1,7 @@
+import {
+  markGraphqlEmailThreadSeen,
+  markGraphqlEmailThreadUnread,
+} from '@service-storage/graphql-email-read-state';
 import { executeGraphqlSetFavoriteMutation } from '@service-storage/graphql-favorites';
 import {
   type Client,
@@ -365,9 +369,11 @@ function makeFakeHost(): FakeHost {
       args
     ): Promise<CommitOptimisticWriteResult> {
       host.commits.push({ transactionId, query: args.query, data: args.data });
+      const revalidations = queue[0]?.args.revalidations;
       if (queue[0]?.transactionId === transactionId) queue.shift();
       return {
         kind: 'committed',
+        revalidations,
         revision: INITIAL_CACHE_REVISION,
         revisionAdvanced: true,
         changed: [],
@@ -1623,6 +1629,77 @@ describe('normalizedCacheExchange', () => {
         await tick();
         expect(host.commits).toEqual([]);
         expect(host.rollbacks).toEqual([replay ? 'restored-1' : 'txn-1']);
+      }
+    );
+
+    it.each([markGraphqlEmailThreadSeen, markGraphqlEmailThreadUnread])(
+      'revalidates Soup membership after a queued read-state write replays on startup',
+      async (markReadState) => {
+        let submitted: Operation | undefined;
+        const capturingClient = {
+          mutation: (
+            query: Operation['query'],
+            variables: Operation['variables'],
+            context: Operation['context']
+          ) => {
+            submitted = makeOperation(
+              'mutation',
+              createRequest(query, variables),
+              {
+                ...context,
+                url: 'http://test',
+                requestPolicy: 'network-only',
+              }
+            );
+            return {
+              toPromise: async () => ({
+                extensions: {
+                  normalizedCacheMutationDisposition: {
+                    kind: 'queued',
+                    transactionId: 'tx',
+                  },
+                },
+              }),
+            };
+          },
+        } as unknown as Client;
+        const variables = [
+          { input: { initial: { limit: 2 } } },
+          { input: { continuation: { cursor: 'next' } } },
+        ];
+        await expect(
+          markReadState(
+            capturingClient,
+            'thread',
+            variables.map((variables) => ({
+              document: QUERY,
+              variables,
+            }))
+          )
+        ).resolves.toBe('queued');
+        if (!submitted) throw new Error('expected read-state submission');
+        const context = optimisticContextOf(submitted)!;
+        expect(context.revalidations).toHaveLength(2);
+        host.seedQueued({
+          uuid: context.uuid,
+          query: stringifyDocument(submitted.query),
+          variables: submitted.variables ?? undefined,
+          data: context.optimisticResponse,
+          revalidations: JSON.parse(JSON.stringify(context.revalidations)),
+        });
+
+        const { client } = harness(host, (op) =>
+          op.kind === 'mutation' ? { data: context.optimisticResponse } : {}
+        );
+        await tick();
+        expect(host.commits[0]?.transactionId).toBe('restored-1');
+        expect(vi.mocked(client.query)).toHaveBeenCalledTimes(2);
+        expect(
+          vi.mocked(client.query).mock.calls.map((call) => call[1])
+        ).toEqual(variables);
+        for (const call of vi.mocked(client.query).mock.calls) {
+          expect(call[2]).toEqual({ requestPolicy: 'network-only' });
+        }
       }
     );
 

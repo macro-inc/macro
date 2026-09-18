@@ -4,8 +4,10 @@ use std::collections::{HashMap, HashSet};
 
 use crate::domain::error::FoldError;
 use crate::domain::harness::{HarnessReader, ToolFrame};
+use agent_client_protocol::schema::v1::SessionId;
+
 use crate::domain::log::{AgentSessionId, AgentSessionLog, Message};
-use crate::domain::model::{Control, FoldedMessage, SessionMetadata, ToolUseId, TurnId};
+use crate::domain::model::{Control, FoldedMessage, SessionMetadata, ToolUseId, TurnId, TurnState};
 use agent_client_protocol::schema::v1::{
     CompleteElicitationNotification, CreateElicitationRequest, PromptRequest, RequestId,
     RequestPermissionRequest, Response, SessionNotification, SessionUpdate,
@@ -83,13 +85,21 @@ impl FoldState {
 
 /// The fold's state, advanced one log entry at a time by [`State::step`] and
 /// owned by [`FoldMachineImpl`].
-#[derive(Debug, Default)]
+#[derive(Debug, Clone, Default)]
 pub(super) struct FoldState {
     /// Every message derived so far, oldest first - including the open turn's
     /// agent message, which is appended to in place as the agent talks.
     pub(super) messages: Vec<FoldedMessage>,
     /// User notifications are authoritative only inside a staged load.
     pub(super) replaying: bool,
+    /// The frame being stepped is one this client caused but the log has not
+    /// confirmed. Every message it derives is marked pending. Set for one
+    /// step by [`FoldMachineImpl::push_speculative`].
+    pub(super) speculative: bool,
+    /// The ACP session id the runtime answers to, from the request that
+    /// opened it or any prompt addressed to it. See
+    /// [`FoldMachineImpl::acp_session_id`].
+    pub(super) acp_session: Option<SessionId>,
     /// The session the entry currently being folded belongs to, for
     /// [`State::warn`]. Set fresh from each log entry, so it is always
     /// current even though it rarely changes within one fold.
@@ -145,9 +155,15 @@ pub(super) struct ToolPath {
 /// Holds no content of its own. The turn's agent message lives in
 /// [`State::messages`] as soon as there is one, and everything here is a way
 /// back into it.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub(super) struct Turn {
     pub(super) id: TurnId,
+    /// The prompt that opened this turn is speculative: on the wire, not yet
+    /// in the log. Reads as [`TurnState::Starting`] until the agent answers.
+    pub(super) prompt_pending: bool,
+    /// A stop was issued against this turn and no stop reason has arrived.
+    /// Reads as [`TurnState::Stopping`].
+    pub(super) stop_requested: bool,
     /// The `session/prompt` request whose response will close this turn.
     ///
     /// `None` for a turn opened without one - see
@@ -224,8 +240,12 @@ impl FoldState {
                             _ => None,
                         },
                         // A stop is a notification: nothing can answer it, so
-                        // it is accepted the moment it is sent.
+                        // it is accepted the moment it is sent. The turn it
+                        // interrupts ends through the agent's own stop event.
                         AgentAction::Stop => {
+                            if let Some(turn) = &mut self.turn {
+                                turn.stop_requested = true;
+                            }
                             self.record_control(Control::Stop, None, entry.user_id.clone())
                         }
                         // `control_from_runtime` never yields these: a prompt
@@ -234,13 +254,18 @@ impl FoldState {
                         AgentAction::Prompt(_) | AgentAction::RespondElicitation(_) => None,
                     });
                 }
+                // A user's prompt opens a turn - and may close the one
+                // before it, so it reports on its own.
+                if let RawJsonRpcMessage::Request(request) = &acp.0
+                    && PromptRequest::matches_method(&request.method)
+                {
+                    return self
+                        .begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
+                        .into_iter()
+                        .map(StepChange::Message)
+                        .collect();
+                }
                 StepChange::message(match &acp.0 {
-                    // A user's prompt opens a turn.
-                    RawJsonRpcMessage::Request(request)
-                        if PromptRequest::matches_method(&request.method) =>
-                    {
-                        self.begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
-                    }
                     // The user's answer to a question or a permission
                     // request. Each map holds only the ids of its own
                     // requests, so trying the elicitations first is order,
@@ -477,6 +502,31 @@ impl FoldState {
                 Vec::new()
             }
         }
+    }
+
+    /// Recompute [`SessionMetadata::turn`] from the state, reporting whether
+    /// it moved. Called once per push, after the step, because it is a
+    /// projection of several things a step may touch at once.
+    pub(super) fn refresh_turn_state(&mut self) -> bool {
+        let turn = if self.metadata.status.as_deref() == Some(SystemEvent::Disconnected.as_str()) {
+            TurnState::Disconnected
+        } else {
+            match &self.turn {
+                None => TurnState::Idle,
+                // Before `Blocked`: a user who pressed stop while the agent
+                // was waiting on their answer is owed the stop, not the
+                // question they just walked away from.
+                Some(turn) if turn.stop_requested => TurnState::Stopping,
+                Some(_) if self.metadata.pending_elicitation.is_some() => TurnState::Blocked,
+                Some(turn) if turn.prompt_pending && turn.agent.is_none() => TurnState::Starting,
+                Some(_) => TurnState::Running,
+            }
+        };
+        if self.metadata.turn == turn {
+            return false;
+        }
+        self.metadata.turn = turn;
+        true
     }
 
     /// How to read the frames of whichever harness produced this log.

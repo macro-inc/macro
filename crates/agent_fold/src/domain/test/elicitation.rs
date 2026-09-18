@@ -94,7 +94,10 @@ fn elicitations(machine: &FoldMachineImpl) -> Vec<&MessagePart> {
 fn a_form_request_becomes_a_pending_part_and_the_live_slot() {
     let (machine, metadata_events) = drive(&lines(&[PROMPT, FORM]));
 
-    assert_eq!(metadata_events, 1, "the slot filling is a metadata change");
+    assert_eq!(
+        metadata_events, 2,
+        "the turn opening, then the slot filling, are metadata changes"
+    );
     let parts = elicitations(&machine);
     assert_eq!(parts.len(), 1);
     let MessagePart::Elicitation {
@@ -250,7 +253,7 @@ fn accept_resolves_the_part_with_its_content_and_frees_the_slot() {
         &accept(7, r#"{"zeta":"svc","port":8080}"#),
     ]));
 
-    assert_eq!(metadata_events, 2, "filled, then cleared");
+    assert_eq!(metadata_events, 3, "turn opened, slot filled, then cleared");
     let parts = elicitations(&machine);
     let MessagePart::Elicitation { outcome, .. } = parts[0] else {
         unreachable!()
@@ -388,7 +391,9 @@ fn a_second_request_gets_a_part_but_never_the_slot() {
 fn the_turn_ending_clears_the_slot_but_leaves_the_part_pending() {
     let (machine, metadata_events) = drive(&lines(&[PROMPT, FORM, END_TURN]));
 
-    assert_eq!(metadata_events, 2);
+    // Turn opened, slot filled, then the turn ending clears the slot and
+    // closes the turn in one step.
+    assert_eq!(metadata_events, 3);
     assert_eq!(machine.metadata().pending_elicitation, None);
     let parts = elicitations(&machine);
     let MessagePart::Elicitation { outcome, .. } = parts[0] else {

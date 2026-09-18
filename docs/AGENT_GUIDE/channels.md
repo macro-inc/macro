@@ -24,6 +24,18 @@ session-specific modal. Folder moves, duplication, and property/tag editing are
 not offered because those APIs do not support sessions. Runtime controls remain
 session-specific.
 
+A session transcript shows each tool call as a collapsible row (consecutive calls
+fold into a `Called N tools` group; click it to see the rows). A tool reached over
+an MCP server - Macro's own (`ReadContent · macro`) from a Cursor, Claude, or
+Codex session, or a third-party server (`ask_question · deepwiki`) - is titled by
+the tool's name with the server as its subtitle, never by the harness's dispatcher
+(`mcp`). Clicking the row expands the exchange: a `Request` section with the
+tool's own arguments and a `Response` section with what it returned, both as
+syntax-lit, pretty-printed JSON (prose results show as text), each with a copy
+button that copies the whole section; a call that failed is faded, shows the
+error as its subtitle, and adds an `Error` section. Rows for a call still running
+show whatever has arrived so far.
+
 ## Message composer
 
 Composer and conversation body text use `text-base` (15px at the default root
@@ -257,6 +269,10 @@ optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
 channels. Channel favorites open in the channel preview. Shift-clicking a
 favorite, channel, or DM opens that conversation in a new split instead.
+If a restored Chat selection is already open in another view, its preview stays
+closed but the saved selection is retained. Close the other view, then select
+the conversation again or reopen Chat to restore its preview. Verify that an
+unrelated rail preference change while blocked does not erase the saved selection.
 While reading older history or composing in the preview, incoming notifications
 (including ones for other channels) must not jump to latest, blank/refetch the
 messages, or revoke composer focus. To check this, leave an unsent draft in a
@@ -329,9 +345,10 @@ message or acknowledgement and verify that it does not pull you to latest.
 
 ## Channel pictures
 
-Channels and group chats can have a custom picture. Admins and owners (the same
-people who can rename a channel) can open the title menu. Beside `Rename`,
-choose `Set channel picture` to add or replace a picture. Select a PNG, JPG,
+Channels and group chats can have a custom picture. Any active participant can
+`Rename` a named channel from the title menu. Direct messages cannot be renamed.
+Only admins and owners also get `Set channel picture` and `Remove channel
+picture`. Choose `Set channel picture` to add or replace a picture. Select a PNG, JPG,
 WebP, or GIF up to 16 MB. The upload must finish before the picture is saved;
 the server accepts only supported images uploaded by the person setting the
 picture. An error leaves the previous picture in place. When a picture is set, the menu also offers

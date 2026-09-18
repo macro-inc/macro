@@ -26,6 +26,7 @@ input_file: crates/agent_fold/fixtures/real/subagent_opencode.jsonl
             ],
         },
         stop: None,
+        pending: false,
     },
     FoldedMessage {
         id: TurnId(
@@ -84,5 +85,6 @@ input_file: crates/agent_fold/fixtures/real/subagent_opencode.jsonl
         stop: Some(
             EndTurn,
         ),
+        pending: false,
     },
 ]

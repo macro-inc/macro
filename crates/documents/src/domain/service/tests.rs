@@ -844,6 +844,8 @@ async fn bot_document_has_no_saved_user_view_location() {
 #[tokio::test]
 async fn bot_lifecycle_event_has_no_actor_user_id() {
     let mut repo = make_mock_repo();
+    repo.expect_get_document_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .return_once(|_| Box::pin(std::future::ready(Ok(()))));
@@ -1872,6 +1874,8 @@ async fn content_uploaded_maps_an_immediate_broker_failure_to_internal() {
 #[tokio::test]
 async fn test_delete_document_publishes_document_deleted_event() {
     let mut repo = make_mock_repo();
+    repo.expect_get_document_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .returning(|_| Box::pin(std::future::ready(Ok(()))));
@@ -1910,6 +1914,8 @@ async fn test_delete_document_publishes_document_deleted_event() {
 #[tokio::test]
 async fn test_delete_document_publishes_no_event_when_repo_fails() {
     let mut repo = make_mock_repo();
+    repo.expect_get_document_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(make_test_metadata()))));
     repo.expect_soft_delete_document()
         .withf(|id| id == "doc-1")
         .returning(|_| Box::pin(std::future::ready(Err(anyhow!("db is down")))));
@@ -1919,6 +1925,22 @@ async fn test_delete_document_publishes_no_event_when_repo_fails() {
     let result = service.delete_document(owner_receipt("doc-1"), None).await;
 
     assert!(result.is_err());
+    assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn delete_document_rejects_initiative_description() {
+    let mut repo = make_mock_repo();
+    let mut metadata = make_test_metadata();
+    metadata.sub_type = Some(DocumentSubType::InitiativeDescription);
+    repo.expect_get_document_metadata()
+        .return_once(move |_| Box::pin(std::future::ready(Ok(metadata))));
+    repo.expect_soft_delete_document().times(0);
+
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+    let result = service.delete_document(owner_receipt("doc-1"), None).await;
+
+    assert!(matches!(result, Err(DocumentError::BadRequest(_))));
     assert!(event_broker.published().lock().unwrap().is_empty());
 }
 
@@ -2265,6 +2287,7 @@ fn create_document_repo_args(file_type: FileType) -> CreateDocumentRepoArgs {
         sub_type: None,
         skip_history: false,
         attribution: None,
+        initial_link_share: InitialLinkShare::EntityDefault,
     }
 }
 
@@ -2350,6 +2373,105 @@ async fn create_document_repo_receives_disabled_share_when_team_turned_link_shar
 
     create_document_with_team_default(Some(TeamLinkShareDefault(None)), FileType::Md, None, None)
         .await;
+}
+
+#[tokio::test]
+async fn exact_initial_link_share_bypasses_md_public_edit_default() {
+    use models_permissions::share_permission::access_level::AccessLevel;
+    use models_permissions::share_permission::{LinkShare, LinkShareState};
+
+    for state in [
+        LinkShareState::Off,
+        LinkShareState::On {
+            scope: LinkShare::Team,
+            level: AccessLevel::View,
+        },
+    ] {
+        let mut repo = make_mock_repo();
+        let created_metadata = make_test_metadata();
+        repo.expect_get_team_default_link_share().times(0);
+        repo.expect_create_document()
+            .withf(move |args, share_permission| {
+                args.initial_link_share == InitialLinkShare::Exact(state)
+                    && share_permission.link_share_state() == state
+                    && share_permission.team_share_access_level.is_none()
+            })
+            .times(1)
+            .returning(move |_, _| Box::pin(std::future::ready(Ok(created_metadata.clone()))));
+        repo.expect_set_document_content()
+            .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+        repo.expect_get_team_task_metadata()
+            .returning(|_| Box::pin(std::future::ready(Ok(None))));
+        let (service, _event_broker) = make_test_service_with_event_broker(repo);
+
+        let mut args = create_document_repo_args(FileType::Md);
+        args.initial_link_share = InitialLinkShare::Exact(state);
+        crate::domain::ports::DocumentService::create_document(
+            &service,
+            args.user_id.clone(),
+            args,
+            None,
+        )
+        .await
+        .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn initiative_description_rejects_entity_default_link_share() {
+    let repo = make_mock_repo();
+    let (service, event_broker) = make_test_service_with_event_broker(repo);
+    let mut args = create_document_repo_args(FileType::Md);
+    args.sub_type = Some(document_sub_type::DocumentSubType::InitiativeDescription);
+
+    let err = crate::domain::ports::DocumentService::create_document(
+        &service,
+        args.user_id.clone(),
+        args,
+        None,
+    )
+    .await
+    .unwrap_err();
+
+    assert_eq!(
+        err.to_string(),
+        "bad request: initiative descriptions must set an exact initial link share"
+    );
+    assert!(event_broker.published().lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn initiative_description_accepts_exact_link_share() {
+    use models_permissions::share_permission::LinkShareState;
+
+    let mut repo = make_mock_repo();
+    let created_metadata = make_test_metadata();
+    repo.expect_get_team_default_link_share().times(0);
+    repo.expect_create_document()
+        .withf(|args, share_permission| {
+            args.sub_type == Some(document_sub_type::DocumentSubType::InitiativeDescription)
+                && args.initial_link_share == InitialLinkShare::Exact(LinkShareState::Off)
+                && share_permission.link_share_state() == LinkShareState::Off
+        })
+        .times(1)
+        .returning(move |_, _| Box::pin(std::future::ready(Ok(created_metadata.clone()))));
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    let (service, _event_broker) = make_test_service_with_event_broker(repo);
+
+    let mut args = create_document_repo_args(FileType::Md);
+    args.sub_type = Some(document_sub_type::DocumentSubType::InitiativeDescription);
+    args.initial_link_share = InitialLinkShare::Exact(LinkShareState::Off);
+    crate::domain::ports::DocumentService::create_document(
+        &service,
+        args.user_id.clone(),
+        args,
+        None,
+    )
+    .await
+    .unwrap();
 }
 
 #[tokio::test]

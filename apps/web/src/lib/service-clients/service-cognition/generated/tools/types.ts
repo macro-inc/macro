@@ -105,6 +105,24 @@ export type SpreadsheetResponse =
       action: 'edit';
     };
 /**
+ * Excel border line style.
+ */
+export type SpreadsheetBorderStyle =
+  | ''
+  | 'thin'
+  | 'medium'
+  | 'thick'
+  | 'double'
+  | 'dotted'
+  | 'dashed'
+  | 'dashDot'
+  | 'dashDotDot'
+  | 'slantDashDot'
+  | 'hair'
+  | 'mediumDashed'
+  | 'mediumDashDot'
+  | 'mediumDashDotDot';
+/**
  * Font family.
  */
 export type SpreadsheetFont = 'sans' | 'serif' | 'mono';
@@ -221,8 +239,15 @@ export type TaggedSearchResult1 =
 /**
  * The document sub type enum represents all values of document sub types.
  * These values should match the `document_sub_type_value` table in macrodb.
+ *
+ * Wire, database, and `Display` spellings are all `snake_case` so a
+ * multi-word variant serializes identically in every system.
  */
-export type DocumentSubType = 'task' | 'snippet' | 'skill';
+export type DocumentSubType =
+  | 'task'
+  | 'snippet'
+  | 'skill'
+  | 'initiative_description';
 /**
  * Viewer-relative attendance status for a call record.
  * Serializes as `ATTENDED`, `MISSED`, or `UNATTENDED`.
@@ -566,7 +591,7 @@ export type EntityItem =
       fileType?: string | null;
       /**
        * The document's sub type: "task" for Macro tasks, "snippet" for snippets,
-       * "skill" for skills.
+       * "skill" for skills, "initiative_description" for an initiative's description.
        */
       subType?: string | null;
       /**
@@ -1271,7 +1296,10 @@ export interface SpreadsheetCellInput {
    */
   address: string;
   /**
-   * Raw text or formula, at most 10,000 characters.
+   * Raw text or formula, at most 10,000 characters. Macro links render as mention pills.
+   * For named pills, use the same inline tags as docs: <m-user-mention>{"userId":"macro|person@example.com","email":"person@example.com","displayName":"Person"}</m-user-mention>
+   * or <m-document-mention>{"documentId":"UUID","documentName":"Budget","blockName":"spreadsheet"}</m-document-mention>.
+   * Tags can be mixed with ordinary text. Use IDs from search/read results; do not invent them. Other Markdown is literal.
    */
   value: string;
 }
@@ -1377,6 +1405,46 @@ export interface SpreadsheetReadCell {
  * Sparse cell styling patch. Omitted fields remain unchanged.
  */
 export interface SpreadsheetStyle {
+  /**
+   * Exact Excel number format, up to 512 characters.
+   */
+  numberFormat?: string | null;
+  /**
+   * Exact Excel font name, up to 128 characters.
+   */
+  fontName?: string | null;
+  /**
+   * Top border style.
+   */
+  borderTopStyle?: SpreadsheetBorderStyle | null;
+  /**
+   * Top border color.
+   */
+  borderTopColor?: string | null;
+  /**
+   * Right border style.
+   */
+  borderRightStyle?: SpreadsheetBorderStyle | null;
+  /**
+   * Right border color.
+   */
+  borderRightColor?: string | null;
+  /**
+   * Bottom border style.
+   */
+  borderBottomStyle?: SpreadsheetBorderStyle | null;
+  /**
+   * Bottom border color.
+   */
+  borderBottomColor?: string | null;
+  /**
+   * Left border style.
+   */
+  borderLeftStyle?: SpreadsheetBorderStyle | null;
+  /**
+   * Left border color.
+   */
+  borderLeftColor?: string | null;
   /**
    * Bold text.
    */
@@ -5442,7 +5510,7 @@ export interface ReadSpreadsheet {
   includeStyles?: boolean | null;
 }
 /**
- * Rename an existing channel. Requires the current user to be a channel admin or owner. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
+ * Rename an existing channel. Requires the current user to be an active channel participant. Direct-message channels cannot be renamed. Use only when the user asks to rename a channel.
  */
 export interface RenameChannel {
   /**

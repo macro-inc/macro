@@ -15,7 +15,7 @@ use agent_fold::domain::model::TurnSignal;
 use agent_fold::domain::model::{AuthorKind, MessageId};
 use agent_fold::domain::service::FoldedMessageService;
 use agent_runtime_protocol::domain::{
-    action::AgentAction,
+    action::{AgentAction, AgentActionId},
     schema::v0::{AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage},
 };
 use agent_session::PROTOCOL_VERSION;
@@ -604,6 +604,7 @@ async fn claude_cloud_only_accepts_control_from_the_subscription_owner() {
                 id,
                 ControlEvent {
                     action: AgentAction::prompt("spend another user's subscription"),
+                    action_id: None,
                     actor,
                 },
             )
@@ -616,6 +617,7 @@ async fn claude_cloud_only_accepts_control_from_the_subscription_owner() {
         id,
         ControlEvent {
             action: AgentAction::prompt("owner follow-up"),
+            action_id: None,
             actor: Some(owner),
         },
     );
@@ -1296,6 +1298,7 @@ async fn changing_the_model_persists_it_and_tells_the_running_agent() {
             id,
             ControlEvent {
                 action: AgentAction::set_model("opus"),
+                action_id: None,
                 actor: Some(sender()),
             },
         )
@@ -1349,6 +1352,7 @@ async fn a_prompt_through_control_reaches_the_agent_without_announcing() {
         id,
         ControlEvent {
             action: AgentAction::prompt("and now the docs <user-content>unchanged</user-content>"),
+            action_id: None,
             actor: Some(sender()),
         },
     );
@@ -1393,6 +1397,7 @@ async fn a_non_staff_control_event_cannot_drive_a_sandboxed_coder_session() {
             id,
             ControlEvent {
                 action: AgentAction::prompt("spend daytona credits"),
+                action_id: None,
                 actor: Some(sender()),
             },
         )
@@ -1416,6 +1421,7 @@ async fn a_staff_control_event_can_drive_a_sandboxed_coder_session() {
             id,
             ControlEvent {
                 action: AgentAction::prompt("continue"),
+                action_id: None,
                 actor: Some(staff_sender()),
             },
         )
@@ -1466,6 +1472,7 @@ async fn a_prompt_during_a_running_turn_queues_and_dispatches_when_it_ends() {
             id,
             ControlEvent {
                 action: AgentAction::prompt("and then this"),
+                action_id: None,
                 actor: Some(sender()),
             },
         )
@@ -1514,6 +1521,7 @@ async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
             id,
             ControlEvent {
                 action: AgentAction::prompt("still wanted after the stop"),
+                action_id: None,
                 actor: Some(sender()),
             },
         )
@@ -1530,6 +1538,7 @@ async fn a_stop_cancels_the_turn_and_the_queue_keeps_draining() {
             id,
             ControlEvent {
                 action: AgentAction::Stop,
+                action_id: None,
                 actor: Some(sender()),
             },
         )
@@ -1584,6 +1593,7 @@ async fn a_channel_follow_up_stops_the_running_turn_announces_and_flushes() {
             id,
             ControlEvent {
                 action: AgentAction::prompt("queued earlier from the session page"),
+                action_id: None,
                 actor: Some(staff_sender()),
             },
         )
@@ -1706,6 +1716,7 @@ async fn queued_prompts_are_editable_and_removable_until_dispatch() {
 
     let prompt = |text: &str| ControlEvent {
         action: AgentAction::prompt(text),
+        action_id: None,
         actor: Some(sender()),
     };
     let second = service.control_event(id, prompt("second")).await.unwrap();
@@ -1769,6 +1780,7 @@ async fn a_model_change_bypasses_the_running_turn() {
             id,
             ControlEvent {
                 action: AgentAction::set_model("opus"),
+                action_id: None,
                 actor: Some(sender()),
             },
         )
@@ -1791,6 +1803,107 @@ async fn a_model_change_bypasses_the_running_turn() {
 }
 
 #[tokio::test]
+async fn a_control_event_is_accepted_under_the_callers_own_action_id() {
+    let ((service, _repo, containers, _announcer, _runtimes), _turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let _container = session_with_a_running_turn(&service, &containers, id).await;
+
+    let action_id = AgentActionId::mint();
+    let accepted = service
+        .control_event(
+            id,
+            ControlEvent {
+                action: AgentAction::prompt("speculated by the caller"),
+                action_id: Some(action_id),
+                actor: Some(sender()),
+            },
+        )
+        .await
+        .expect("a prompt is accepted behind the running turn");
+
+    assert_eq!(
+        accepted.action_id, action_id,
+        "the caller's id names the action it already speculated"
+    );
+    assert_eq!(
+        accepted.disposition,
+        agent_session::domain::ports::ControlDisposition::Queued
+    );
+    let queued = service.queued_controls(id).await.expect("queue lists");
+    assert_eq!(
+        queued
+            .iter()
+            .map(|entry| entry.action_id)
+            .collect::<Vec<_>>(),
+        vec![action_id],
+        "the queue entry keeps the caller's id, so the log row will too"
+    );
+}
+
+#[tokio::test]
+async fn a_control_event_without_an_action_id_is_given_a_fresh_one() {
+    let ((service, _repo, containers, _announcer, _runtimes), _turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let _container = session_with_a_running_turn(&service, &containers, id).await;
+
+    let unnamed = |text: &str| ControlEvent {
+        action: AgentAction::prompt(text),
+        action_id: None,
+        actor: Some(sender()),
+    };
+    let first = service.control_event(id, unnamed("first")).await.unwrap();
+    let second = service.control_event(id, unnamed("second")).await.unwrap();
+
+    assert_ne!(
+        first.action_id, second.action_id,
+        "each unnamed action is minted its own id"
+    );
+    assert_eq!(
+        service
+            .queued_controls(id)
+            .await
+            .expect("queue lists")
+            .iter()
+            .map(|entry| entry.action_id)
+            .collect::<Vec<_>>(),
+        vec![first.action_id, second.action_id]
+    );
+}
+
+/// A retried POST arrives under the id the caller already used. It reports
+/// what became of the first copy; it does not prompt the agent twice.
+#[tokio::test]
+async fn re_sending_a_waiting_action_id_does_not_queue_it_twice() {
+    let ((service, _repo, containers, _announcer, _runtimes), _turns) =
+        harness_with_signals(PromptContextMock::default(), PromptComposerMock::default());
+    let id = AgentSessionId::new();
+    let _container = session_with_a_running_turn(&service, &containers, id).await;
+
+    let action_id = AgentActionId::mint();
+    let retried = || ControlEvent {
+        action: AgentAction::prompt("said once"),
+        action_id: Some(action_id),
+        actor: Some(sender()),
+    };
+    let first = service.control_event(id, retried()).await.unwrap();
+    let again = service.control_event(id, retried()).await.unwrap();
+
+    assert_eq!(again.action_id, first.action_id);
+    assert_eq!(again.disposition, first.disposition);
+    assert_eq!(
+        service
+            .queued_controls(id)
+            .await
+            .expect("queue lists")
+            .len(),
+        1,
+        "the retry is the same action, not a second one"
+    );
+}
+
+#[tokio::test]
 async fn compact_through_control_reaches_opencode_as_a_slash_command() {
     let (service, _repo, containers, _announcer, _runtimes) = harness();
     let id = AgentSessionId::new();
@@ -1800,6 +1913,7 @@ async fn compact_through_control_reaches_opencode_as_a_slash_command() {
         id,
         ControlEvent {
             action: AgentAction::Compact,
+            action_id: None,
             actor: Some(sender()),
         },
     );
@@ -1829,6 +1943,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
         id,
         ControlEvent {
             action: AgentAction::prompt("wake up"),
+            action_id: None,
             actor: Some(staff_sender()),
         },
     );
@@ -1988,6 +2103,7 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
         session.id,
         ControlEvent {
             action: AgentAction::prompt("@claude fix the failing test"),
+            action_id: None,
             actor: Some(sender()),
         },
     );
@@ -2169,6 +2285,7 @@ async fn a_managed_session_resumes_its_sandbox_rather_than_a_dialed_in_runtime()
         id,
         ControlEvent {
             action: AgentAction::prompt("wake up"),
+            action_id: None,
             actor: Some(staff_sender()),
         },
     );
@@ -2675,9 +2792,7 @@ mod lifecycle_events {
         RequestId,
     };
     use agent_fold::domain::model::TurnId;
-    use agent_runtime_protocol::domain::action::{
-        AgentActionId, ElicitationAnswer, ElicitationRequestId,
-    };
+    use agent_runtime_protocol::domain::action::{ElicitationAnswer, ElicitationRequestId};
     use agent_session::domain::events::AgentSessionLifecycleEvent as Lifecycle;
 
     /// Open a session from a mention and let its first turn settle: `Opened`,
@@ -2886,6 +3001,7 @@ mod lifecycle_events {
         // `a_channel_follow_up_stops_the_running_turn_announces_and_flushes`.
         let prompt = |text: &str| ControlEvent {
             action: AgentAction::prompt(text),
+            action_id: None,
             actor: Some(staff_sender()),
         };
         service
@@ -2967,16 +3083,14 @@ mod lifecycle_events {
         service
             .execute(
                 id,
-                HarnessCommand::Deliver(DeliverAction::control(
-                    AgentActionId::mint(),
-                    ControlEvent {
-                        action: AgentAction::respond_elicitation(
-                            ElicitationRequestId::Number(7),
-                            ElicitationAnswer::Decline,
-                        ),
-                        actor: Some(staff_sender()),
-                    },
-                )),
+                HarnessCommand::Deliver(DeliverAction::control(ControlEvent {
+                    action: AgentAction::respond_elicitation(
+                        ElicitationRequestId::Number(7),
+                        ElicitationAnswer::Decline,
+                    ),
+                    action_id: None,
+                    actor: Some(staff_sender()),
+                })),
             )
             .await
             .expect("the answer is delivered");

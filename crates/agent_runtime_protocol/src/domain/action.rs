@@ -27,11 +27,12 @@ pub const MODEL_CONFIG_ID: &str = "model";
 /// frame, and read back off that frame as `request_id` on the folded message
 /// it derives.
 ///
-/// Minted only by the server at accept time, as a v7 uuid so ids sort by mint
-/// time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
-/// request id is the whole ownership test: the server is the only writer of
-/// runtime-bound frames. The machine's own handshake request ids
-/// (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+/// A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+/// or by a client that speculated the action and named it in the control
+/// request - either way the server is the only writer of runtime-bound
+/// frames, so a uuid-shaped request id remains the whole ownership test. The
+/// machine's own handshake request ids (`agent_session:{session}:{n}`) are
+/// not uuids and stay `None`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
 #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]

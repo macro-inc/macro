@@ -7,25 +7,20 @@ import {
   createElicitationController,
   type ElicitationController,
 } from '@app/features/block-agent/context/create-elicitation-controller';
+import { AgentSession } from '@core/agent-session/AgentSession';
 import {
   MAGIC_CHIP_STATUSES,
   type MagicChipData,
   type MagicChipStatus,
 } from '@macro-inc/lexical-core';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
-import {
-  acquireAgentSessionFold,
-  subscribeAgentSessionLog,
-} from '@queries/agent-session/session-fold';
 import { queryReadyGate } from '@queries/gate';
 import type {
   FoldedMessage,
+  FoldedStreamEvent,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
-import type {
-  AgentSessionLogEntryDto,
-  SessionStatusDto,
-} from '@service-agent-harness/generated/schemas';
+import type { SessionStatusDto } from '@service-agent-harness/generated/schemas';
 import { type Accessor, createMemo, createSignal, onCleanup } from 'solid-js';
 import {
   deriveMagicChipPresentation,
@@ -33,13 +28,6 @@ import {
   type MagicChipPresentation,
   type MagicChipQuestion,
 } from './presentation';
-
-function systemEvent(entry: AgentSessionLogEntryDto): string | undefined {
-  const content = entry.content;
-  return content.type === 'event' && typeof content.event === 'string'
-    ? content.event
-    : undefined;
-}
 
 function magicChipStatus(
   status: SessionStatusDto
@@ -79,6 +67,21 @@ function modelName(
   return modelDisplayName(model, metadata.supportedModels);
 }
 
+/** Replace the message under the same turn and author, or append it. */
+function upsert(
+  current: FoldedMessage[],
+  message: FoldedMessage
+): FoldedMessage[] {
+  return [
+    ...current.filter(
+      (existing) =>
+        existing.turn !== message.turn ||
+        existing.author.kind !== message.author.kind
+    ),
+    message,
+  ];
+}
+
 /**
  * Observe the session lifecycle and the chip's anchored folded turn.
  *
@@ -86,13 +89,15 @@ function modelName(
  * that turn: the session's metadata names the live question, the session
  * row names its owner, and {@link ElicitationController} sends the answer.
  * The header names the persona and model from the session row and the fold.
+ *
+ * The fold is the shared {@link AgentSession} for the id, so a chip and a
+ * block showing the same session fold it once between them.
  */
 export function createMagicChipModel(props: MagicChipData): {
   presentation: Accessor<MagicChipPresentation>;
   header: Accessor<MagicChipHeader | undefined>;
   elicitation: ElicitationController;
 } {
-  const [latestEvent, setLatestEvent] = createSignal<string>();
   const [messages, setMessages] = createSignal<FoldedMessage[]>([]);
   const sessionQuery = useAgentSessionQuery(() => props.agentSessionId);
   // Guard pending data so a cold query cannot suspend the surrounding editor.
@@ -105,53 +110,32 @@ export function createMagicChipModel(props: MagicChipData): {
   };
   const [metadata, setMetadata] = createSignal<SessionMetadata>();
   const pendingElicitation = () => metadata()?.pendingElicitation ?? undefined;
-  let active = true;
-  let release: (() => void) | undefined;
-  const unsubscribe = subscribeAgentSessionLog(
-    props.agentSessionId,
-    (event) => {
-      const name = systemEvent(event);
-      if (name) setLatestEvent(name);
-    }
-  );
+  // The last system event's wire name, which the fold carries as status.
+  const latestEvent = () => metadata()?.status ?? undefined;
 
-  void acquireAgentSessionFold({
-    agentSessionId: props.agentSessionId,
-    onReplace: setMessages,
-    onChange: (changed) => {
-      setMessages((current) =>
-        changed.reduce(
-          (next, message) => [
-            ...next.filter(
-              (existing) =>
-                existing.turn !== message.turn ||
-                existing.author.kind !== message.author.kind
-            ),
-            message,
-          ],
-          current
-        )
-      );
-    },
-    onMetadata: setMetadata,
-  })
-    .then((acquired) => {
-      if (!active) {
-        acquired.release();
-        return;
-      }
-      release = acquired.release;
-      setMessages(acquired.messages);
-      setMetadata(acquired.metadata);
+  const live = AgentSession.acquire(props.agentSessionId);
+  const applyEvents = (events: FoldedStreamEvent[]) => {
+    for (const event of events) {
+      if (event.kind === 'replace') setMessages(event.messages);
+      else if (event.kind === 'metadata') setMetadata(event.metadata);
+      else setMessages((current) => upsert(current, event.message));
+    }
+  };
+  const unsubscribe = live.subscribe(applyEvents);
+  void live
+    .load()
+    .then(() => live.snapshot())
+    .then((snapshot) => {
+      setMessages(snapshot.messages);
+      setMetadata(snapshot.metadata);
     })
     .catch((error: unknown) => {
       console.error('[magic-chip] session log could not be folded', error);
     });
 
   onCleanup(() => {
-    active = false;
     unsubscribe();
-    release?.();
+    live.release();
   });
 
   // Fold patches can arrive out of order. Follow the highest turn, including
@@ -169,9 +153,9 @@ export function createMagicChipModel(props: MagicChipData): {
     return question?.turn === turn() ? question : undefined;
   };
   const elicitation = createElicitationController({
-    sessionId: () => props.agentSessionId,
     pending: questionForTurn,
     canEdit,
+    issue: (action) => live.issue(action),
   });
   const asking = (): MagicChipQuestion | undefined => {
     const question = questionForTurn();

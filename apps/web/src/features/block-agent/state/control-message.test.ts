@@ -6,7 +6,12 @@
 
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { describe, expect, it } from 'vitest';
-import { isControlMessage, lastTurnMessage } from './control-message';
+import {
+  changingModel,
+  hasPendingStop,
+  isControlMessage,
+  lastTurnMessage,
+} from './control-message';
 
 const message = (
   id: number,
@@ -31,14 +36,23 @@ const reply = (id: number, stopped: boolean) =>
     [{ kind: 'text', text: 'hello' }],
     stopped ? ({ kind: 'end_turn' } as FoldedMessage['stop']) : null
   );
-const modelChange = (id: number) =>
-  message(id, 'user', [
+const modelChange = (
+  id: number,
+  outcome: 'pending' | 'accepted' | 'rejected' = 'accepted',
+  pending = false
+) => ({
+  ...message(id, 'user', [
     {
       kind: 'control',
       control: { kind: 'set_model', model: 'github-copilot/gpt-5.6-terra' },
-      outcome: { kind: 'accepted' },
+      outcome:
+        outcome === 'rejected'
+          ? { kind: 'rejected', message: 'no such model' }
+          : { kind: outcome },
     },
-  ]);
+  ]),
+  pending,
+});
 
 describe('isControlMessage', () => {
   it('is the whole message or nothing', () => {
@@ -71,5 +85,50 @@ describe('lastTurnMessage', () => {
 
   it('is undefined when a session has only ever had controls', () => {
     expect(lastTurnMessage([modelChange(0)])).toBeUndefined();
+  });
+});
+
+describe('changingModel', () => {
+  it('is the model of a change still on the wire or unanswered', () => {
+    expect(changingModel([prompt(0), modelChange(1, 'pending')], 'old')).toBe(
+      'github-copilot/gpt-5.6-terra'
+    );
+    expect(
+      changingModel([prompt(0), modelChange(1, 'accepted', true)], 'old')
+    ).toBe('github-copilot/gpt-5.6-terra');
+  });
+
+  it('clears once the runtime moved the model or refused the change', () => {
+    expect(
+      changingModel(
+        [modelChange(0, 'accepted')],
+        'github-copilot/gpt-5.6-terra'
+      )
+    ).toBeUndefined();
+    expect(changingModel([modelChange(0, 'rejected')], 'old')).toBeUndefined();
+    expect(changingModel([modelChange(0, 'accepted')], 'old')).toBeUndefined();
+  });
+});
+
+describe('hasPendingStop', () => {
+  const stop = (id: number, pending: boolean) => ({
+    ...message(id, 'user', [
+      {
+        kind: 'control',
+        control: { kind: 'stop' },
+        outcome: { kind: 'accepted' },
+      },
+    ]),
+    pending,
+  });
+
+  it('sees a stop the log has not confirmed', () => {
+    expect(hasPendingStop([prompt(1), stop(2, true)])).toBe(true);
+  });
+
+  it('ignores confirmed stops and other pending actions', () => {
+    expect(hasPendingStop([prompt(1), stop(2, false)])).toBe(false);
+    expect(hasPendingStop([{ ...prompt(1), pending: true }])).toBe(false);
+    expect(hasPendingStop([modelChange(1, 'pending', true)])).toBe(false);
   });
 });

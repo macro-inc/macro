@@ -273,9 +273,9 @@ describe('spreadsheet menu actions', () => {
     expect(state.appendRows).toHaveBeenCalledExactlyOnceWith(1);
     expect(state.setCells).toHaveBeenCalledOnce();
     expect(state.cells()).toEqual({
-      A200: { value: 'one,two', italic: true },
-      B200: { value: 'multi\nline' },
-      A201: { value: 'next' },
+      A200: { value: "'one,two", italic: true },
+      B200: { value: "'multi\nline" },
+      A201: { value: "'next" },
       B201: { value: '' },
     });
     expect(state.grid.selection().focus).toEqual({ row: 200, column: 1 });

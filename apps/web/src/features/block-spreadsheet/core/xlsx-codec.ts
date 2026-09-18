@@ -1,6 +1,12 @@
+import { cellPlainText } from '@macro-inc/spreadsheet/cell-mentions';
+import {
+  parseWorkbookMetadata,
+  type WorkbookSheetMetadata,
+} from '@macro-inc/spreadsheet/workbook-metadata';
 import type { Cell, CellValue, Workbook, Worksheet } from 'exceljs';
 import { strFromU8, strToU8, zipSync } from 'fflate';
 import { SaxesParser } from 'saxes';
+import type { CalculatedCell } from './calculation';
 import {
   formatCellAddress,
   isSpreadsheetCellStyle,
@@ -24,6 +30,11 @@ import {
 } from './workbook-file-types';
 import { inspectXlsxArchive, xlsxFeatureWarnings } from './xlsx-archive';
 import { readXlsxStyle, readXlsxTheme, writeXlsxStyle } from './xlsx-styles';
+import {
+  escapeXml,
+  normalizeSpreadsheetXml,
+  originalDateSerials,
+} from './xlsx-xml';
 
 async function newWorkbook(): Promise<Workbook> {
   const excel = await import('exceljs');
@@ -35,13 +46,17 @@ function boundedSheet(name: string, row: number, column: number) {
       `“${name}” exceeds the supported 1,000 rows or 26 columns. No sheets were imported.`
     );
 }
-function readCellValue(cell: Cell, warnings: Set<string>): string {
+function readCellValue(
+  cell: Cell,
+  warnings: Set<string>,
+  dateSerial?: number
+): string {
   const value = cell.value;
   if (value === null || value === undefined) return '';
   if (typeof value === 'number') return String(value);
   if (typeof value === 'boolean') return value ? 'TRUE' : 'FALSE';
   if (value instanceof Date)
-    return String(value.getTime() / 86_400_000 + 25569);
+    return String(dateSerial ?? value.getTime() / 86_400_000 + 25569);
   if (typeof value === 'string') {
     // Preserve the stored string type even if it resembles a number/formula/date.
     return cell.numFmt === '@' ? value : `'${value}`;
@@ -62,8 +77,21 @@ function readCellValue(cell: Cell, warnings: Set<string>): string {
     );
     return cell.numFmt === '@' ? value.text : `'${value.text}`;
   }
-  warnings.add('Stored error cells are imported as literal error text.');
-  return `'${value.error}`;
+  if (
+    ![
+      '#DIV/0!',
+      '#N/A',
+      '#NAME?',
+      '#NULL!',
+      '#NUM!',
+      '#REF!',
+      '#VALUE!',
+    ].includes(value.error)
+  )
+    throw new Error(
+      `Stored Excel error ${value.error} at ${cell.address} cannot be preserved yet. Resolve it in Excel before importing. No sheets were imported.`
+    );
+  return value.error;
 }
 // These functions natively return dynamic arrays. Traditional CSE formulas can
 // require implicit intersection, repetition or fixed-size truncation, none of
@@ -160,40 +188,67 @@ function stringLikeValue(value: CellValue): boolean {
 function readSheet(
   sheet: Worksheet,
   theme: (string | undefined)[],
-  warnings: Set<string>
+  warnings: Set<string>,
+  dateSerials?: { numbers: Map<string, number>; offset: number }
 ): WorkbookFileSheet {
   boundedSheet(sheet.name, sheet.rowCount, sheet.columnCount);
   const cells: SpreadsheetCells = {};
   const arrayChildren = arrayFormulaChildren(sheet, warnings);
+  const metadata: WorkbookSheetMetadata = {};
+  if (sheet.model.merges?.length) metadata.merges = [...sheet.model.merges];
+  if (sheet.state !== 'visible') metadata.hidden = true;
+  const frozen = sheet.views?.find((view) => view.state === 'frozen');
+  if (frozen?.state === 'frozen')
+    metadata.freeze = { rows: frozen.ySplit ?? 0, columns: frozen.xSplit ?? 0 };
+  if (typeof sheet.autoFilter === 'string')
+    metadata.autoFilter = sheet.autoFilter.replaceAll('$', '');
   if (sheet.state !== 'visible')
-    warnings.add('Hidden sheets are imported as visible tabs.');
+    warnings.add(
+      'Hidden sheets are shown in Macro; their visibility is retained in Excel downloads.'
+    );
   if (sheet.model.merges?.length)
     warnings.add(
-      'Merged cells are unmerged; their value stays in the top-left cell.'
+      'Merged ranges are shown as individual cells in Macro and restored on Excel export when their covered cells remain empty.'
     );
   if (
     (sheet.views ?? []).some(
       (view) => view.state === 'frozen' || view.state === 'split'
     )
   )
-    warnings.add('Frozen panes and split views are not imported.');
+    warnings.add(
+      'Frozen panes are retained for Excel export; Macro uses its own scrolling view.'
+    );
   if (sheet.autoFilter)
-    warnings.add('Excel filters are not imported; all rows remain visible.');
+    warnings.add(
+      'Excel filters are retained for export; Macro displays all rows.'
+    );
   sheet.eachRow({ includeEmpty: true }, (row) => {
-    if (row.height !== undefined)
-      warnings.add('Custom row heights are reset to the editor’s row sizes.');
-    if (row.hidden)
-      warnings.add('Hidden rows and columns are imported as visible.');
+    if (row.height !== undefined) {
+      metadata.rowHeights ??= {};
+      metadata.rowHeights[row.number - 1] = row.height;
+    }
+    if (row.hidden) {
+      metadata.hiddenRows ??= [];
+      metadata.hiddenRows.push(row.number - 1);
+    }
     row.eachCell({ includeEmpty: true }, (cell) => {
       if (cell.isMerged && cell.master.address !== cell.address) return;
+      const style = readXlsxStyle(cell, theme, warnings);
+      const serial = dateSerials?.numbers.get(cell.address);
+      const calendarDate =
+        style.format === 'date' ||
+        !/[hs]/i.test((cell.numFmt ?? '').replace(/"[^"]*"|\\./g, ''));
+      const dateValue =
+        serial === undefined
+          ? undefined
+          : serial + (calendarDate ? (dateSerials?.offset ?? 0) : 0);
       const value = arrayChildren.has(cell.address)
         ? ''
-        : readCellValue(cell, warnings);
+        : readCellValue(cell, warnings, dateValue);
       if (value.length > SPREADSHEET_MAX_CELL_LENGTH)
         throw new Error(
           `Cell ${sheet.name}!${cell.address} exceeds 10,000 characters. No sheets were imported.`
         );
-      const style = readXlsxStyle(cell, theme, warnings);
       if (
         style.format === 'text' &&
         cell.value !== null &&
@@ -214,8 +269,10 @@ function readSheet(
   const columnWidths: Record<number, number> = {};
   for (let index = 1; index <= SPREADSHEET_COLUMNS; index++) {
     const column = sheet.getColumn(index);
-    if (column.hidden)
-      warnings.add('Hidden rows and columns are imported as visible.');
+    if (column.hidden) {
+      metadata.hiddenColumns ??= [];
+      metadata.hiddenColumns.push(index - 1);
+    }
     if (column.width !== undefined) {
       const pixels = Math.round(column.width * 7 + 5);
       columnWidths[index - 1] = Math.max(
@@ -228,6 +285,7 @@ function readSheet(
   }
   return {
     name: sheet.name,
+    metadata,
     cells,
     rowCount: Math.max(SPREADSHEET_ROWS, sheet.rowCount),
     columnWidths,
@@ -353,6 +411,40 @@ function prepareWorkbookXml(name: string, text: string, worksheet: boolean) {
 export async function decodeXlsx(bytes: Uint8Array): Promise<WorkbookFileData> {
   const archive = inspectXlsxArchive(bytes);
   const warnings = new Set(xlsxFeatureWarnings(archive.files));
+  for (const [name, bytes] of Object.entries(archive.files))
+    if (name.endsWith('.xml') || name.endsWith('.rels'))
+      archive.files[name] = strToU8(
+        normalizeSpreadsheetXml(strFromU8(bytes), name)
+      );
+  const dates = originalDateSerials(archive.files);
+  const names: { name: string; formula: string; sheet?: number }[] = [];
+  const nameParser = new SaxesParser();
+  let current: (typeof names)[number] | undefined;
+  nameParser.on('opentag', (node) => {
+    if (node.name.split(':').at(-1) === 'definedName') {
+      const name = node.attributes.name;
+      if (!name || name.startsWith('_xlnm.')) return;
+      current = {
+        name,
+        formula: '',
+        ...(node.attributes.localSheetId !== undefined && {
+          sheet: Number(node.attributes.localSheetId),
+        }),
+      };
+    }
+  });
+  nameParser.on('text', (text) => {
+    if (current) current.formula += text;
+  });
+  nameParser.on('closetag', (node) => {
+    if (node.name.split(':').at(-1) === 'definedName' && current) {
+      names.push(current);
+      current = undefined;
+    }
+  });
+  nameParser.write(strFromU8(archive.files['xl/workbook.xml'])).close();
+  if (names.length > 256)
+    throw new Error('Import up to 256 Excel name definitions.');
   // ExcelJS uses an unanchored worksheet-path match. Reject aliases it would
   // parse outside the canonical entries covered by the preflight checks below.
   for (const name of Object.keys(archive.files))
@@ -385,9 +477,10 @@ export async function decodeXlsx(bytes: Uint8Array): Promise<WorkbookFileData> {
     await workbook.xlsx.load(
       zipSync(archive.files, { level: 0 }).slice().buffer
     );
-  } catch {
+  } catch (cause) {
     throw new Error(
-      'This Excel workbook could not be read. Choose an unencrypted .xlsx file.'
+      'This Excel workbook could not be read. Choose an unencrypted .xlsx file.',
+      { cause }
     );
   }
   if (
@@ -396,32 +489,78 @@ export async function decodeXlsx(bytes: Uint8Array): Promise<WorkbookFileData> {
   )
     throw new Error('Import a workbook with 1–10 sheets.');
   const theme = readXlsxTheme(archive.files);
+  const sheets = workbook.worksheets.map((sheet, index) =>
+    readSheet(sheet, theme, warnings, dates[index])
+  );
+  for (const entry of names) {
+    const target = sheets[entry.sheet ?? 0];
+    if (!target) throw new Error('An Excel name refers to a missing sheet.');
+    target.metadata ??= {};
+    target.metadata.definedNames ??= [];
+    target.metadata.definedNames.push({
+      name: entry.name,
+      formula: entry.formula,
+      ...(entry.sheet !== undefined && { local: true }),
+    });
+  }
+  for (const sheet of sheets)
+    if (!parseWorkbookMetadata(JSON.stringify(sheet.metadata)))
+      throw new Error('Unsupported Excel layout or name definitions.');
   return {
-    sheets: workbook.worksheets.map((sheet) =>
-      readSheet(sheet, theme, warnings)
-    ),
+    sheets,
     warnings: [...warnings],
   };
 }
 function exportValue(
   cell: SpreadsheetCell,
-  calculated?: { display: string; number?: number; error?: string }
+  calculated?: CalculatedCell
 ): CellValue {
+  if (cellPlainText(cell.value) !== cell.value)
+    return cellPlainText(cell.value);
   if (cell.format === 'text') return cell.value;
   if (cell.value.startsWith('='))
     return {
       formula: cell.value.slice(1),
       ...(calculated &&
         !calculated.error && {
-          result: calculated.number ?? calculated.display,
+          result:
+            calculated.type === 'boolean'
+              ? (calculated.value as boolean)
+              : (calculated.number ?? calculated.display),
         }),
     };
   if (cell.value.startsWith("'")) return cell.value.slice(1);
   if (/^(?:true|false)$/i.test(cell.value))
     return cell.value.toUpperCase() === 'TRUE';
-  if (calculated?.number !== undefined) return calculated.number;
   if (/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:e[+-]?\d+)?$/i.test(cell.value.trim()))
     return Number(cell.value);
+  if (
+    cell.value === '#DIV/0!' ||
+    cell.value === '#N/A' ||
+    cell.value === '#NAME?' ||
+    cell.value === '#NULL!' ||
+    cell.value === '#NUM!' ||
+    cell.value === '#REF!' ||
+    cell.value === '#VALUE!'
+  )
+    return { error: cell.value };
+  if (
+    [
+      '#SPILL!',
+      '#CALC!',
+      '#CIRC!',
+      '#ERROR!',
+      '#GETTING_DATA',
+      '#CONNECT!',
+      '#BLOCKED!',
+      '#FIELD!',
+      '#UNKNOWN!',
+    ].includes(cell.value)
+  )
+    throw new Error(
+      `Stored error ${cell.value} cannot be exported as an Excel value. Use a formula or literal text instead.`
+    );
+  if (calculated?.number !== undefined) return calculated.number;
   return cell.value || null;
 }
 
@@ -474,7 +613,32 @@ export async function encodeXlsx(
       warnings.add(
         'Extra blank rows beyond the used range are not preserved when importing this Excel file back into Macro.'
       );
+    if (
+      source.metadata &&
+      !parseWorkbookMetadata(JSON.stringify(source.metadata))
+    )
+      throw new Error('Invalid workbook metadata.');
     const sheet = workbook.addWorksheet(source.name);
+    const metadata = source.metadata;
+    if (metadata?.hidden) sheet.state = 'hidden';
+    if (metadata?.freeze)
+      sheet.views = [
+        {
+          state: 'frozen',
+          xSplit: metadata.freeze.columns,
+          ySplit: metadata.freeze.rows,
+        },
+      ];
+    if (metadata?.autoFilter) sheet.autoFilter = metadata.autoFilter;
+    for (const [row, height] of Object.entries(metadata?.rowHeights ?? {}))
+      sheet.getRow(Number(row) + 1).height = height;
+    for (const row of metadata?.hiddenRows ?? []) {
+      sheet.getRow(row + 1).hidden = true;
+      // ExcelJS drops completely empty rows, including their hidden flag.
+      sheet.getRow(row + 1).getCell(1);
+    }
+    for (const column of metadata?.hiddenColumns ?? [])
+      sheet.getColumn(column + 1).hidden = true;
     for (const [address, cell] of Object.entries(source.cells)) {
       if (!parseCellAddress(address))
         throw new Error(`Unsupported cell address ${source.name}!${address}.`);
@@ -484,6 +648,10 @@ export async function encodeXlsx(
         );
       const target = sheet.getCell(address);
       target.value = exportValue(cell, source.values?.[address]);
+      if (cellPlainText(cell.value) !== cell.value)
+        warnings.add(
+          'Macro mentions are exported as their display text; interactive pills remain in Macro.'
+        );
       target.style = writeXlsxStyle(cell);
     }
     for (const [column, pixels] of Object.entries(source.columnWidths)) {
@@ -497,7 +665,48 @@ export async function encodeXlsx(
         sheet.getColumn(index + 1).width = Math.max(1, (pixels - 5) / 7);
     }
   }
-  const bytes = new Uint8Array(await workbook.xlsx.writeBuffer());
+  // ExcelJS may destroy values when merging; never merge over a later user edit.
+  for (const [index, source] of input.sheets.entries()) {
+    const sheet = workbook.worksheets[index];
+    for (const range of source.metadata?.merges ?? []) {
+      const [a, b = a] = range.split(':');
+      const first = parseCellAddress(a)!;
+      const last = parseCellAddress(b)!;
+      let occupied = false;
+      for (let r = first.row; r <= last.row; r++)
+        for (let c = first.column; c <= last.column; c++) {
+          if (
+            (r !== first.row || c !== first.column) &&
+            source.cells[formatCellAddress(r, c)]?.value
+          )
+            occupied = true;
+        }
+      if (occupied)
+        warnings.add(
+          `Merge ${source.name}!${range} was omitted to preserve values entered in its covered cells.`
+        );
+      else sheet.mergeCellsWithoutStyle(range);
+    }
+  }
+  // ExcelJS expands defined names into a cell matrix. Write OOXML directly so
+  // whole-column names remain small and local scopes/formula names survive.
+  const files = inspectXlsxArchive(
+    new Uint8Array(await workbook.xlsx.writeBuffer())
+  ).files;
+  const definitions = input.sheets.flatMap((sheet, index) =>
+    (sheet.metadata?.definedNames ?? []).map(
+      (entry) =>
+        `<definedName name="${escapeXml(entry.name)}"${entry.local ? ` localSheetId="${index}"` : ''}>${escapeXml(entry.formula)}</definedName>`
+    )
+  );
+  if (definitions.length)
+    files['xl/workbook.xml'] = strToU8(
+      strFromU8(files['xl/workbook.xml']).replace(
+        '</workbook>',
+        `<definedNames>${definitions.join('')}</definedNames></workbook>`
+      )
+    );
+  const bytes = zipSync(files);
   if (bytes.length > XLSX_MAX_BYTES)
     throw new Error(
       'The exported workbook exceeds the 5 MB file limit. Export a smaller workbook.'

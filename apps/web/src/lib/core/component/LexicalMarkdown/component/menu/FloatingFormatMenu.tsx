@@ -370,7 +370,7 @@ export function FloatingFormatMenu(props: {
       <ScopedPortal scope={props.portalScope}>
         <div
           ref={setMenuRef}
-          class="fixed top-0 left-0 z-highlight-menu w-fit"
+          class="fixed top-0 left-0 z-action-menu w-fit"
           use:floatWithSelection={{
             selection: domSelection(),
             reactiveOnContainer: editor.getRootElement(),

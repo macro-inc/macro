@@ -481,8 +481,18 @@ pub(crate) type RemindersServiceType = RemindersServiceImpl<PgRemindersRepo>;
 pub(crate) type DssRemindersState =
     RemindersRouterState<RemindersServiceType, EntityAccessService, AuthorizationService>;
 
+pub(crate) type InitiativeDescriptionDocumentsType =
+    crate::outbound::initiative_description_documents::InitiativeDescriptionDocumentsAdapter<
+        Arc<DocumentService>,
+        documents_hex::outbound::markdown_init::LexicalSyncMarkdownInitializer,
+        documents_hex::outbound::document_bytes_upload::ReqwestDocumentBytesUploader,
+        documents_hex::outbound::mention_tracker::LexicalCommsMentionTracker,
+        DssEventBroker,
+    >;
+
 /// Type alias for the initiative service.
-pub(crate) type InitiativeServiceType = InitiativeServiceImpl<PgInitiativeRepo>;
+pub(crate) type InitiativeServiceType =
+    InitiativeServiceImpl<PgInitiativeRepo, InitiativeDescriptionDocumentsType>;
 
 /// Type alias for the initiative router state.
 pub(crate) type DssInitiativeState =

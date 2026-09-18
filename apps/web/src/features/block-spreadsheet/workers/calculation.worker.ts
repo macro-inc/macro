@@ -17,6 +17,11 @@ self.onmessage = async (event: MessageEvent<CalculationRequest>) => {
     } satisfies CalculationResponse);
     response = match(request)
       .returnType<CalculationResponse>()
+      .with({ type: 'change-axis' }, (operation) => ({
+        id: operation.id,
+        type: 'change-axis',
+        sheets: engine.changeAxis(operation.sheets, operation.change),
+      }))
       .with({ type: 'calculate' }, (operation) => ({
         id: operation.id,
         type: 'calculate',
@@ -25,7 +30,9 @@ self.onmessage = async (event: MessageEvent<CalculationRequest>) => {
       .with({ type: 'calculate-workbook' }, (operation) => ({
         id: operation.id,
         type: 'calculate-workbook',
-        values: engine.calculateWorkbook(operation.sheets),
+        values: engine.calculateWorkbook(operation.sheets, {
+          includeTypes: true,
+        }),
       }))
       .with({ type: 'copy' }, (operation) => ({
         id: operation.id,

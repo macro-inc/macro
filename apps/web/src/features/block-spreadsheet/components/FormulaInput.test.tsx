@@ -109,3 +109,25 @@ it.each(['readonly', 'pickingReference'] as const)(
     expect(input.hasAttribute('aria-describedby')).toBe(false);
   }
 );
+
+it('commits on blur after starting a formula without a mention adapter', () => {
+  const blur = vi.fn();
+  const view = render(() => {
+    const [value, setValue] = createSignal('');
+    return (
+      <FormulaInput
+        label="Formula"
+        value={value()}
+        class=""
+        onInput={setValue}
+        onKeyDown={() => {}}
+        onBlur={blur}
+      />
+    );
+  });
+  const input = view.getByRole('textbox', { name: 'Formula' });
+  input.focus();
+  fireEvent.input(input, { target: { value: '=' } });
+  input.blur();
+  expect(blur).toHaveBeenCalledOnce();
+});

@@ -320,6 +320,16 @@ impl EmailRepo for EmailPgRepo {
             .await
     }
 
+    async fn set_thread_read_state(
+        &self,
+        thread_id: Uuid,
+        link_id: Uuid,
+        message_ids: &[Uuid],
+        is_read: bool,
+    ) -> Result<(), Self::Err> {
+        label::set_thread_read_state(&self.pool, thread_id, link_id, message_ids, is_read).await
+    }
+
     async fn update_message_read_status_batch(
         &self,
         message_ids: &[Uuid],

@@ -1,3 +1,4 @@
+import { openAgentComposer } from '@app/features/agents-view/primitives/open-composer';
 import { startPendingSession } from '@app/features/block-agent/context/pending-session';
 import { AGENT_INPUT_TEXT_AREA_ID } from '@app/features/block-agent/ui/AgentInput';
 import { useSpreadsheetAccess } from '@app/features/block-spreadsheet/primitives/use-spreadsheet-access';
@@ -432,13 +433,8 @@ export function runCreateAction(
       return;
     case 'agent': {
       if (isFeatureEnabled(enableChatV3Agents)) {
-        createComponent({
-          componentId: 'agent-session-compose',
-          asPopover: true,
-          // The popover itself is not split-placed; the session it creates
-          // is, so the new-split intent rides along for the composer to honor.
-          params: { preferNewSplit: shouldInsert },
-        });
+        setCreateMenuOpen(false, false);
+        openAgentComposer(useSplitLayout(), shouldInsert);
         return;
       }
       // Without the composer there is nothing to ask for: a managed session's

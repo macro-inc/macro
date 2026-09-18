@@ -1,5 +1,6 @@
 import {
   createEntityDetailTarget,
+  type EntityDetailNavigationOptions,
   useEntityDetailNavigationStack,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import {
@@ -80,7 +81,11 @@ export type EmailViewContext = {
     ) => void
   ) => void;
   selectedThread: Accessor<EmailThreadTarget | undefined>;
-  openThread: (thread: EmailThreadTarget) => void;
+  /** Returns false when inline detail is unavailable so the caller opens a split instead. */
+  openThread: (
+    thread: EmailThreadTarget,
+    options?: EntityDetailNavigationOptions
+  ) => boolean;
   closeThread: () => void;
   isSidebarSectionOpen: (id: string) => boolean;
   setSidebarSectionOpen: (id: string, open: boolean) => void;
@@ -187,7 +192,17 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     };
   };
 
-  const openThread = (thread: EmailThreadTarget) => {
+  const openThread = (
+    thread: EmailThreadTarget,
+    options?: EntityDetailNavigationOptions
+  ) => {
+    const target = createEntityDetailTarget(
+      { type: 'email', id: thread.id },
+      thread.fallbackName
+    );
+    if (!navigationStack.shouldNavigate(target, options)) return false;
+    // A refused reset already alerted; there is nothing to fall back to.
+    if (!navigationStack.reset(target)) return true;
     const row = source
       .items()
       .find((item) => item.kind === 'entity' && item.entity.id === thread.id);
@@ -197,12 +212,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     }
 
     setState('openThreadId', thread.id);
-    navigationStack.reset(
-      createEntityDetailTarget(
-        { type: 'email', id: thread.id },
-        thread.fallbackName
-      )
-    );
+    return true;
   };
 
   const closeThread = () => {
@@ -210,9 +220,7 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
     navigationStack.clear();
   };
 
-  if (state.openThreadId) {
-    openThread({ id: state.openThreadId });
-  }
+  if (state.openThreadId) openThread({ id: state.openThreadId });
 
   // A tab is a fresh slice of the mailbox: filters chosen for one tab (Done
   // on Signal, say) would silently narrow the next, so they reset with it.

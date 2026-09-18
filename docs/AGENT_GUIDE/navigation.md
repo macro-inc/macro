@@ -73,6 +73,11 @@ its existing navigation controls. Block detail panels (including Calendar) have
 **Hide side panel** in their own header and a hamburger **Show side panel** beside
 the main title when hidden, with separate preferences per block type.
 
+Multiple desktop splits appear as individually bordered, medium-rounded panels with
+6px top, right, and bottom insets and 6px resizable gaps, including preview pairs.
+The leftmost panel sits flush against the app rail, whose divider is hidden while
+multiple splits are open. A single split stays edge to edge. Touch layouts keep their existing presentation.
+
 Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
 again to restore the split layout.
@@ -329,3 +334,26 @@ refreshes the session credential and restores the saved selection.
 Claude sessions expose **Open in Claude** in the header
 toolbar (or its overflow menu). With a live runtime, messages sent in Claude are
 polled into Macro about every two seconds; disconnected runtimes must resume first.
+
+Home does not bind Delete or Backspace to deleting list items. These keys remain
+available to the open editor (for example, clearing a selected spreadsheet range).
+Use the item menu to delete an item from Home.
+
+`C A` (Create → Agent) opens the Agents new-conversation page and focuses its
+message input; `C Shift+A` requests a new split. It does not open a modal or
+create a session before the user sends. Repeating it focuses the existing draft.
+
+### Content already open
+
+Entity content can be open in only one split or inline preview/detail view at a
+time. Shell components may have duplicate splits when `allowDuplicate` is enabled.
+An Agents conversation route counts as the same entity as its agent or chat block.
+Opening an entity already in a split focuses that split when activation is
+requested; the sidebar's **Open in new split** also shows a **Content already open** toast.
+Selecting an entity owned by another view from a detail view leaves the current
+detail and navigation history unchanged and shows a **Content already open**
+toast. Close or navigate away
+from the owning view before opening it elsewhere. The same rule applies to mouse
+selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
+never render inline previews or detail views: a tap opens the entity in the
+split, so the toast only appears when the content is genuinely open elsewhere.

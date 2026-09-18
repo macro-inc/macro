@@ -195,6 +195,7 @@ const FIXTURE_DIFF = {
 const FIXTURE_MESSAGE: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
+  pending: false,
   turn: 0,
   author: { kind: 'agent' },
   stop: { kind: 'end_turn' },
@@ -303,6 +304,75 @@ const FIXTURE_MESSAGE: FoldedMessage = {
         error: null,
       },
     },
+    // An MCP call the fold has no model for - a Cursor session reaching
+    // Macro's server, whose exchange is the request and response JSON.
+    {
+      kind: 'tool_use',
+      id: 'demo-mcp-macro',
+      name: { kind: 'mcp', server: 'macro', tool: 'ReadChannelThread' },
+      status: 'completed',
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        output: null,
+        input: {
+          channelId: '0195d2dd-5de9-71f2-9d59-5d9734f1adb7',
+          threadId: '01a0b102-3e01-7166-92ca-e5a4b11dace6',
+          limit: 20,
+        },
+        result: {
+          channelName: 'feature-requests',
+          messages: [
+            {
+              id: '01a0b16e-95d9-79a8-ace0-2dc075b7d49f',
+              sender: 'macro|gab@macro.com',
+              text: 'references for agents so i know where they were dispatched from',
+              sentAt: '2026-09-17T22:41:03Z',
+            },
+            {
+              id: '01a0b17a-db3f-75d1-86d9-0d8e86b5106b',
+              sender: 'macro|gab@macro.com',
+              text: 'would be nice to be able to scroll context/copy the entire thing',
+              sentAt: '2026-09-17T22:47:19Z',
+            },
+          ],
+          hasMore: false,
+        },
+        error: null,
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-mcp-deepwiki',
+      name: { kind: 'mcp', server: 'deepwiki', tool: 'ask_question' },
+      status: 'completed',
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        output: null,
+        input: {
+          repoName: 'sst/opencode',
+          question: 'How are tool calls rendered in the session UI?',
+        },
+        result:
+          'Tool calls render through `basic-tool-v2.tsx`: one collapsible row per call, with the tool-specific body mounted on expansion.',
+        error: null,
+      },
+    },
+    {
+      kind: 'tool_use',
+      id: 'demo-mcp-refused',
+      name: { kind: 'mcp', server: 'ops', tool: 'deploy' },
+      status: 'failed',
+      detail: {
+        kind: 'other',
+        acpKind: 'other',
+        output: null,
+        input: { environment: 'production', service: 'agent-fold' },
+        result: null,
+        error: 'user declined',
+      },
+    },
     {
       kind: 'tool_use',
       id: 'demo-email',
@@ -370,6 +440,7 @@ const FIXTURE_MESSAGE: FoldedMessage = {
 const FIXTURE_IN_FLIGHT: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
+  pending: false,
   turn: 1,
   author: { kind: 'agent' },
   stop: null,
@@ -412,6 +483,7 @@ const FIXTURE_IN_FLIGHT: FoldedMessage = {
 const FIXTURE_UNCLOSED: FoldedMessage = {
   agentSessionId: 'demo',
   requestId: null,
+  pending: false,
   turn: 2,
   author: { kind: 'agent' },
   stop: null,
@@ -590,7 +662,6 @@ function MagicChipAskingDemo(props: {
       presentation={presentation}
       header={GALLERY_CHIP_HEADER}
       answer={{
-        answering: false,
         respond: async (answer) => {
           console.log('[gallery] elicitation answer', answer);
           return true;

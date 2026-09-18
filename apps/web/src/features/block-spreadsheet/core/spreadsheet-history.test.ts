@@ -42,6 +42,21 @@ function pair() {
 }
 
 describe('structural spreadsheet history', () => {
+  it('blocks axis undo when a peer adds a reference at an untouched address', () => {
+    const { left, right, id, history, sync, dispose } = pair();
+    writeSpreadsheetCells(left, { A1: { value: '10' } }, id);
+    writeSpreadsheetCells(left, { A1: null, A2: { value: '10' } }, id, false);
+    left.commit({ origin: 'spreadsheet-axis-change' });
+    expect(history.undo()).toBeUndefined();
+    expect(history.redo()).toBeUndefined();
+    sync();
+    writeSpreadsheetCells(right, { B1: { value: '=A2' } }, id);
+    sync();
+    const before = left.version().toJSON();
+    expect(history.undo()).toContain('workbook changed');
+    expect(left.version().toJSON()).toEqual(before);
+    dispose();
+  });
   it('blocks undo of a rename referenced by a peer without emitting any live operation or consuming history', () => {
     const { left, right, id, history, sync, dispose } = pair();
     renameSpreadsheetSheet(left, id, 'After');

@@ -8,7 +8,10 @@ vi.mock('./block', () => ({
   ValidNestingCombinations: {},
 }));
 vi.mock('./constant/allBlocks', () => ({
-  blocks: { channel: { component: () => <div>Channel content</div> } },
+  resolveBlockAlias: (type: string) => type,
+  blocks: {
+    channel: { component: () => <div>Channel content</div> },
+  },
 }));
 vi.mock('./internal/BlockLoader', () => ({ BlockLoader: () => null }));
 vi.mock('./internal/BlockEffectRunner', () => ({
