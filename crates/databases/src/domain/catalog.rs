@@ -18,7 +18,7 @@ use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::shared::{DataType, EntityType as PropertyEntityType};
 
 use crate::domain::models::{
-    AccessGrant, Column, ColumnConfig, ColumnId, ColumnSchema, DatabaseId, ForeignKey,
+    AccessGrant, Column, ColumnConfig, ColumnId, ColumnSchema, Database, DatabaseId, ForeignKey,
     PropertyDefinitionId, SqlType, Table, TableId, TableSchema, TableSource,
 };
 
@@ -78,13 +78,14 @@ pub enum JunctionKind {
 }
 
 /// Turn a display name into a SQL identifier: lowercase, non-alphanumerics
-/// collapsed to `_`, never empty, never starting with a digit.
+/// collapsed to `_`, never empty, never starting with a digit, never in
+/// SQLite's reserved `sqlite_` namespace.
 pub fn sql_identifier(name: &str) -> String {
     let mut out = String::with_capacity(name.len());
     let mut last_underscore = false;
     for ch in name.chars() {
-        if ch.is_ascii_alphanumeric() {
-            out.push(ch.to_ascii_lowercase());
+        if ch.is_alphanumeric() {
+            out.extend(ch.to_lowercase());
             last_underscore = false;
         } else if !last_underscore && !out.is_empty() {
             out.push('_');
@@ -97,7 +98,7 @@ pub fn sql_identifier(name: &str) -> String {
     if out.is_empty() {
         return "t".to_string();
     }
-    if out.starts_with(|c: char| c.is_ascii_digit()) {
+    if out.starts_with(|c: char| c.is_ascii_digit()) || out.starts_with("sqlite_") {
         out.insert(0, '_');
     }
     out
@@ -109,6 +110,28 @@ pub fn option_display(value: &PropertyOptionValue) -> String {
         PropertyOptionValue::String(s) => s.clone(),
         PropertyOptionValue::Number(n) => format_number(*n),
     }
+}
+
+/// The SQL label of every option of a definition, in display order. Two
+/// options with the same display text are disambiguated (`Done`, `Done (2)`)
+/// so labels round-trip to exactly one option id in both directions.
+pub fn option_labels(definition: &PropertyDefinitionWithOptions) -> Vec<(uuid::Uuid, String)> {
+    let mut options: Vec<_> = definition.property_options.iter().collect();
+    options.sort_by_key(|o| (o.display_order, o.id));
+    let mut taken: HashSet<String> = HashSet::new();
+    options
+        .into_iter()
+        .map(|option| {
+            let base = option_display(&option.value);
+            let mut label = base.clone();
+            let mut n = 2;
+            while !taken.insert(label.clone()) {
+                label = format!("{base} ({n})");
+                n += 1;
+            }
+            (option.id, label)
+        })
+        .collect()
 }
 
 /// Numbers print without a trailing `.0` when integral, matching how users
@@ -184,10 +207,9 @@ fn column_schema(
     let multi = def.is_multi_select || is_link;
     let allowed_values = match def.data_type {
         DataType::SelectString | DataType::SelectNumber | DataType::Tag => Some(
-            definition
-                .property_options
-                .iter()
-                .map(|o| option_display(&o.value))
+            option_labels(definition)
+                .into_iter()
+                .map(|(_, label)| label)
                 .collect(),
         ),
         _ => None,
@@ -215,6 +237,7 @@ fn column_schema(
 
 fn junction_schema(
     table_sql: &str,
+    table_aliases: &[String],
     column_sql: &str,
     writable: bool,
     table_id: TableId,
@@ -245,22 +268,53 @@ fn junction_schema(
             references_column: ROW_ID.to_string(),
         }],
         writable,
+        aliases: table_aliases
+            .iter()
+            .map(|alias| format!("{alias}__{column_sql}"))
+            .collect(),
     }
+}
+
+/// The database-qualified, viewer-independent SQL name of a table:
+/// `<database>_<short database id>__<table>`. Always addressable.
+pub fn qualified_table_name(database: &Database, table_sql: &str) -> String {
+    format!(
+        "{}_{}__{}",
+        sql_identifier(&database.name),
+        short_id(database.id),
+        table_sql
+    )
 }
 
 /// Build catalog entries for every user table the viewer can reach.
 ///
-/// `tables` should be ordered (database, position) so SQL-name collisions
-/// resolve deterministically: the first table keeps the bare name, later ones
-/// get a short id suffix. Lookup columns are derived and not materialized in
-/// this version; columns whose definition is missing are skipped.
+/// Naming is designed so a persisted query never silently resolves to a
+/// different table depending on who runs it:
+///
+/// - Within a database, table SQL names derive from the table name and are
+///   made unique with a short id suffix (stable per table).
+/// - Every table is always addressable by its qualified name
+///   (`offsite_1a2b3c__guests`), which depends on nothing but the database and
+///   the table.
+/// - The bare name (`guests`) exists only when exactly one table across the
+///   viewer's whole catalog claims it and it collides with no `reserved` name
+///   (magic tables). When a second `guests` appears the bare name disappears
+///   and statements using it fail loudly with "no such table" rather than
+///   picking one.
+///
+/// Whichever form is not the physical table is compiled as a read-only view.
+/// Lookup columns are derived and not materialized in this version; columns
+/// whose definition is missing are skipped.
 pub fn build_user_tables(
+    databases: &[Database],
     tables: &[Table],
     columns: &[Column],
     definitions: &HashMap<PropertyDefinitionId, PropertyDefinitionWithOptions>,
     grants: &HashMap<DatabaseId, AccessGrant>,
+    reserved: &[String],
 ) -> Vec<TableEntry> {
-    let mut taken_tables: HashSet<String> = HashSet::new();
+    let databases_by_id: HashMap<DatabaseId, &Database> =
+        databases.iter().map(|d| (d.id, d)).collect();
     let mut columns_by_table: HashMap<TableId, Vec<&Column>> = HashMap::new();
     for column in columns {
         columns_by_table
@@ -269,16 +323,35 @@ pub fn build_user_tables(
             .push(column);
     }
 
+    // Pass 1: per-database table names (stable), then count bare-name claims
+    // across the whole catalog.
+    let mut per_database_taken: HashMap<DatabaseId, HashSet<String>> = HashMap::new();
+    let mut base_names: Vec<(TableId, String)> = Vec::new();
+    let mut claims: HashMap<String, usize> = HashMap::new();
+    for reserved_name in reserved {
+        claims.insert(reserved_name.clone(), 2);
+    }
+    for table in tables {
+        let taken = per_database_taken.entry(table.database_id).or_default();
+        let table_sql = unique_name(&sql_identifier(&table.name), taken, &short_id(table.id));
+        *claims.entry(table_sql.clone()).or_default() += 1;
+        base_names.push((table.id, table_sql));
+    }
+
     tables
         .iter()
         .filter_map(|table| {
             let grant = *grants.get(&table.database_id)?;
+            let database = databases_by_id.get(&table.database_id)?;
             let writable = grant.can_write();
-            let table_sql = unique_name(
-                &sql_identifier(&table.name),
-                &mut taken_tables,
-                &short_id(table.id),
-            );
+            let (_, table_sql) = base_names.iter().find(|(id, _)| *id == table.id)?;
+            let qualified = qualified_table_name(database, table_sql);
+            let bare_available = claims.get(table_sql).copied().unwrap_or(0) == 1;
+            let (physical, aliases) = if bare_available {
+                (table_sql.clone(), vec![qualified])
+            } else {
+                (qualified, Vec::new())
+            };
 
             let mut taken_columns: HashSet<String> = [ROW_ID.to_string()].into_iter().collect();
             let mut schema_columns = vec![row_id_column()];
@@ -309,7 +382,8 @@ pub fn build_user_tables(
                         column_id: column.id,
                         kind,
                         schema: junction_schema(
-                            &table_sql,
+                            &physical,
+                            &aliases,
                             &column_sql,
                             writable && kind == JunctionKind::Link,
                             table.id,
@@ -330,18 +404,29 @@ pub fn build_user_tables(
                 table: table.clone(),
                 grant,
                 schema: TableSchema {
-                    sql_name: table_sql,
+                    sql_name: physical,
                     source: TableSource::UserTable(table.id),
                     columns: schema_columns,
                     primary_key: vec![ROW_ID.to_string()],
                     foreign_keys: vec![],
                     writable,
+                    aliases,
                 },
                 columns: entries,
                 junctions,
             })
         })
         .collect()
+}
+
+/// Whether `name` addresses `entry` (its table or one of its aliases).
+pub fn entry_answers_to(entry: &TableEntry, name: &str) -> bool {
+    entry.schema.sql_name == name || entry.schema.aliases.iter().any(|a| a == name)
+}
+
+/// Whether `name` addresses `junction` (its physical name or an alias).
+pub fn junction_answers_to(junction: &JunctionEntry, name: &str) -> bool {
+    junction.schema.sql_name == name || junction.schema.aliases.iter().any(|a| a == name)
 }
 
 /// Every schema the entries contribute to the catalog, junctions included.

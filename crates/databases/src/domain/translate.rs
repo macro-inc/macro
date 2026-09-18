@@ -32,11 +32,11 @@ enum Target<'a> {
 
 fn resolve<'a>(entries: &'a [TableEntry], sql_name: &str) -> Option<Target<'a>> {
     for entry in entries {
-        if entry.schema.sql_name == sql_name {
+        if crate::domain::catalog::entry_answers_to(entry, sql_name) {
             return Some(Target::Table(entry));
         }
         for junction in &entry.junctions {
-            if junction.schema.sql_name == sql_name {
+            if crate::domain::catalog::junction_answers_to(junction, sql_name) {
                 return Some(Target::Junction {
                     column_id: junction.column_id,
                     kind: junction.kind,
@@ -51,14 +51,21 @@ fn untranslatable(msg: impl Into<String>) -> QueryError {
     QueryError::UntranslatableChange(msg.into())
 }
 
+/// Prefix of the placeholder ids SQLite assigns to inserted rows; the server
+/// mints the real id when applying the insert.
+pub const NEW_ROW_PREFIX: &str = "new:";
+
 fn parse_row_id(value: &SqlValue, what: &str) -> Result<Uuid, QueryError> {
     match value {
-        SqlValue::Text(t) => Uuid::parse_str(t).map_err(|_| {
-            untranslatable(format!(
-                "{what} `{t}` is not an existing row id (rows inserted in the same statement cannot be referenced yet)"
-            ))
-        }),
-        other => Err(untranslatable(format!("{what} must be a row id, got {other:?}"))),
+        SqlValue::Text(t) if t.starts_with(NEW_ROW_PREFIX) => Err(untranslatable(format!(
+            "{what} refers to a row inserted in the same statement; insert first, then reference its id in a second statement"
+        ))),
+        SqlValue::Text(t) => {
+            Uuid::parse_str(t).map_err(|_| untranslatable(format!("{what} `{t}` is not a row id")))
+        }
+        other => Err(untranslatable(format!(
+            "{what} must be a row id, got {other:?}"
+        ))),
     }
 }
 
@@ -136,7 +143,7 @@ pub fn cell_write(
     let def = &column.definition.definition;
     let name = &column.sql_name;
     let write = match (def.data_type, def.is_multi_select) {
-        (DataType::Boolean, _) => match value {
+        (DataType::Boolean, false) => match value {
             SqlValue::Integer(i) => SetPropertyValue::Boolean { value: *i != 0 },
             other => {
                 return Err(untranslatable(format!(
@@ -144,7 +151,7 @@ pub fn cell_write(
                 )));
             }
         },
-        (DataType::Number, _) => match value {
+        (DataType::Number, false) => match value {
             SqlValue::Integer(i) => SetPropertyValue::Number { value: *i as f64 },
             SqlValue::Real(f) => SetPropertyValue::Number { value: *f },
             other => {
@@ -153,10 +160,16 @@ pub fn cell_write(
                 )));
             }
         },
-        (DataType::String, _) => SetPropertyValue::String {
+        (DataType::String | DataType::Date | DataType::Boolean | DataType::Number, true) => {
+            return Err(untranslatable(format!(
+                "{name}: multi-valued {:?} columns cannot be written from SQL",
+                def.data_type
+            )));
+        }
+        (DataType::String, false) => SetPropertyValue::String {
             value: text_of(value, name)?,
         },
-        (DataType::Date, _) => SetPropertyValue::Date {
+        (DataType::Date, false) => SetPropertyValue::Date {
             value: parse_date(&text_of(value, name)?, name)?,
         },
         (DataType::Link, false) => SetPropertyValue::Link {
@@ -263,13 +276,23 @@ pub fn translate(
                 Target::Table(table) => {
                     let table_id = table.table.id;
                     match change.op {
-                        RawOp::Insert => Ok(RowChange::Insert {
-                            table_id,
-                            cells: cells_for(table, change.new_values.iter(), false)?
-                                .into_iter()
-                                .filter_map(|(k, v)| v.map(|v| (k, v)))
-                                .collect(),
-                        }),
+                        RawOp::Insert => {
+                            if let Some((_, SqlValue::Text(id))) =
+                                change.new_values.iter().find(|(name, _)| name == ROW_ID)
+                                && !id.starts_with(NEW_ROW_PREFIX)
+                            {
+                                return Err(untranslatable(
+                                    "row_id is assigned by the server; omit it from INSERT",
+                                ));
+                            }
+                            Ok(RowChange::Insert {
+                                table_id,
+                                cells: cells_for(table, change.new_values.iter(), false)?
+                                    .into_iter()
+                                    .filter_map(|(k, v)| v.map(|v| (k, v)))
+                                    .collect(),
+                            })
+                        }
                         RawOp::Update => Ok(RowChange::Update {
                             table_id,
                             row_id: parse_row_id(pk_value(&change, ROW_ID)?, "row_id")?,

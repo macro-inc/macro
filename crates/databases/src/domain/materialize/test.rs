@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::catalog::build_user_tables;
-use crate::domain::models::{AccessGrant, Column, ColumnConfig, Table, TableVersion};
+use crate::domain::models::{AccessGrant, Column, ColumnConfig, Database, Table, TableVersion};
 
 fn def(name: &str, data_type: DataType, multi: bool) -> PropertyDefinitionWithOptions {
     PropertyDefinitionWithOptions {
@@ -107,7 +107,21 @@ fn fixture() -> Fixture {
         .map(|d| (d.definition.id, d.clone()))
         .collect();
     let grants = HashMap::from([(db, AccessGrant::Edit)]);
-    let entry = build_user_tables(&[table], &columns, &defs, &grants).remove(0);
+    let entry = build_user_tables(
+        &[Database {
+            id: db,
+            name: "Offsite".into(),
+            owner_id: "macro|o@macro.com".into(),
+            created_at: Utc::now(),
+            trashed_at: None,
+        }],
+        &[table],
+        &columns,
+        &defs,
+        &grants,
+        &[],
+    )
+    .remove(0);
     Fixture {
         entry,
         status,
@@ -146,7 +160,7 @@ fn cells_project_to_display_values() {
     };
     let links = HashMap::from([(f.link_column, HashMap::from([(row_id, vec![target])]))]);
 
-    let table = user_table(&f.entry, &[row.clone()], &links);
+    let table = user_table(&f.entry, std::slice::from_ref(&row), &links);
     assert_eq!(table.rows.len(), 1);
     let values = &table.rows[0];
     assert_eq!(values[0], SqlValue::Text(row_id.to_string()));
@@ -172,7 +186,12 @@ fn cells_project_to_display_values() {
         .iter()
         .find(|j| j.kind == JunctionKind::MultiValue)
         .unwrap();
-    let mirror = junction(&f.entry, people_junction, &[row.clone()], &links);
+    let mirror = junction(
+        &f.entry,
+        people_junction,
+        std::slice::from_ref(&row),
+        &links,
+    );
     assert_eq!(mirror.rows.len(), 2);
     assert_eq!(
         mirror.rows[0],

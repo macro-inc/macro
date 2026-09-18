@@ -447,6 +447,7 @@ pub struct CreateColumnResponse {
 pub async fn create_column_handler<S, Eas, Auth>(
     access: DatabaseAccessLevelExtractor<EditAccessLevel, Eas, Auth>,
     State(state): State<DatabasesRouterState<S, Eas, Auth>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(ColumnPath { id, table_id }): Path<ColumnPath>,
     Json(req): Json<CreateColumnRequest>,
 ) -> Result<(StatusCode, Json<CreateColumnResponse>), DatabaseError>
@@ -477,6 +478,7 @@ where
         .service
         .create_column(
             access.entity_access_receipt,
+            viewer_of(&user),
             CreateColumn {
                 table_id,
                 binding,

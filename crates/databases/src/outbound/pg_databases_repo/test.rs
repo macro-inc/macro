@@ -67,10 +67,13 @@ async fn fixture(pool: &PgPool) -> (PgDatabasesRepo, Table, Uuid) {
     let repo = PgDatabasesRepo::new(pool.clone());
 
     let database = repo
-        .create_database(&CreateDatabase {
-            name: "Summer Offsite".to_string(),
-            owner_id: user(),
-        })
+        .create_database(
+            &CreateDatabase {
+                name: "Summer Offsite".to_string(),
+                owner_id: user(),
+            },
+            "Table 1",
+        )
         .await
         .expect("database should insert");
 
@@ -121,11 +124,14 @@ async fn database_table_and_column_round_trip(pool: PgPool) {
     assert_eq!(database.name, "Summer Offsite");
     assert_eq!(database.owner_id, USER);
     assert!(database.trashed_at.is_none());
-    assert_eq!(tables.len(), 1);
-    assert_eq!(tables[0].id, table.id);
-    // The starter table is created at version 0, then bumped once by the column.
+    // The starter table plus the one created explicitly, in position order.
+    assert_eq!(tables.len(), 2);
+    assert_eq!(tables[0].name, "Table 1");
+    assert_eq!(tables[1].id, table.id);
+    // A table is created at version 0, then bumped once by the column.
     assert_eq!(table.version, TableVersion(0));
-    assert_eq!(tables[0].version, TableVersion(1));
+    assert_eq!(tables[1].version, TableVersion(1));
+    assert_eq!(tables[0].version, TableVersion(0));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -159,9 +165,12 @@ async fn insert_then_update_merges_cells_and_bumps_version_once(pool: PgPool) {
                     cells: cells(vec![(definition_id, text("Sam"))]),
                 },
             ],
+            &HashMap::new(),
         )
         .await
-        .expect("inserts should apply");
+        .expect("inserts should apply")
+        .applied()
+        .expect("no version conflict");
 
     assert_eq!(inserted.len(), 2);
     // Two changes, one table: exactly one bump off the column's version of 1.
@@ -188,9 +197,12 @@ async fn insert_then_update_merges_cells_and_bumps_version_once(pool: PgPool) {
                     .map(|(k, v)| (k, Some(v)))
                     .collect(),
             }],
+            &HashMap::new(),
         )
         .await
-        .expect("update should apply");
+        .expect("update should apply")
+        .applied()
+        .expect("no version conflict");
 
     assert!(minted.is_empty());
     assert_eq!(versions, HashMap::from([(table.id, TableVersion(3))]));
@@ -224,6 +236,7 @@ async fn update_of_a_missing_row_is_an_error(pool: PgPool) {
                     .map(|(k, v)| (k, Some(v)))
                     .collect(),
             }],
+            &HashMap::new(),
         )
         .await;
 
@@ -273,9 +286,12 @@ async fn links_are_inserted_idempotently_and_removed(pool: PgPool) {
                     cells: cells(vec![(definition_id, text("Sam"))]),
                 },
             ],
+            &HashMap::new(),
         )
         .await
-        .expect("inserts should apply");
+        .expect("inserts should apply")
+        .applied()
+        .expect("no version conflict");
 
     let before = repo
         .table_versions(&[table.id])
@@ -298,9 +314,12 @@ async fn links_are_inserted_idempotently_and_removed(pool: PgPool) {
                     target_row_id: rows[1],
                 },
             ],
+            &HashMap::new(),
         )
         .await
-        .expect("links should apply");
+        .expect("links should apply")
+        .applied()
+        .expect("no version conflict");
 
     // A link change bumps the link column's own table, exactly once.
     assert_eq!(
@@ -321,6 +340,7 @@ async fn links_are_inserted_idempotently_and_removed(pool: PgPool) {
             source_row_id: rows[0],
             target_row_id: rows[1],
         }],
+        &HashMap::new(),
     )
     .await
     .expect("unlink should apply");
@@ -367,9 +387,12 @@ async fn deleting_a_row_cascades_its_links(pool: PgPool) {
                     cells: cells(vec![(definition_id, text("Sam"))]),
                 },
             ],
+            &HashMap::new(),
         )
         .await
-        .expect("inserts should apply");
+        .expect("inserts should apply")
+        .applied()
+        .expect("no version conflict");
 
     repo.apply_changes(
         &viewer(),
@@ -378,6 +401,7 @@ async fn deleting_a_row_cascades_its_links(pool: PgPool) {
             source_row_id: rows[0],
             target_row_id: rows[1],
         }],
+        &HashMap::new(),
     )
     .await
     .expect("link should apply");
@@ -388,6 +412,7 @@ async fn deleting_a_row_cascades_its_links(pool: PgPool) {
             table_id: table.id,
             row_id: rows[1],
         }],
+        &HashMap::new(),
     )
     .await
     .expect("delete should apply");

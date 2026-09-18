@@ -47,6 +47,7 @@ struct MockRepo {
     chat_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     project_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     thread_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
+    database_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     channel_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
     user_team: Arc<Mutex<Option<UserTeamInfo>>>,
@@ -83,6 +84,7 @@ impl MockRepo {
             chat_users: Arc::new(Mutex::new(vec![])),
             project_users: Arc::new(Mutex::new(vec![])),
             thread_users: Arc::new(Mutex::new(vec![])),
+            database_users: Arc::new(Mutex::new(vec![])),
             channel_users: Arc::new(Mutex::new(vec![])),
             call_channel: Arc::new(Mutex::new(None)),
             user_team: Arc::new(Mutex::new(None)),
@@ -194,6 +196,11 @@ impl MockRepo {
 
     fn with_document_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
         self.document_users = Arc::new(Mutex::new(users));
+        self
+    }
+
+    fn with_database_users(mut self, users: Vec<MacroUserIdStr<'static>>) -> Self {
+        self.database_users = Arc::new(Mutex::new(users));
         self
     }
 
@@ -420,6 +427,7 @@ impl AccessRepository for MockRepo {
             EntityType::Chat => Ok(self.chat_users.lock().await.clone()),
             EntityType::Project => Ok(self.project_users.lock().await.clone()),
             EntityType::EmailThread => Ok(self.thread_users.lock().await.clone()),
+            EntityType::Database => Ok(self.database_users.lock().await.clone()),
             _ => Err(AccessError::BadRequest("unsupported entity type")),
         }
     }
@@ -2093,6 +2101,50 @@ async fn test_get_users_by_entity_thread_returns_empty_when_no_users() {
         .unwrap();
 
     assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_database_returns_users() {
+    let users = vec![
+        user_id("macro|dana@test.com"),
+        user_id("macro|erin@test.com"),
+    ];
+    let repo = MockRepo::new().with_database_users(users.clone());
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("00000000-0000-0000-0000-000000000004", EntityType::Database)
+        .await
+        .unwrap();
+
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].to_string(), "macro|dana@test.com");
+    assert_eq!(result[1].to_string(), "macro|erin@test.com");
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_database_returns_empty_when_no_users() {
+    let repo = MockRepo::new();
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("00000000-0000-0000-0000-000000000004", EntityType::Database)
+        .await
+        .unwrap();
+
+    assert!(result.is_empty());
+}
+
+#[tokio::test]
+async fn test_get_users_by_entity_database_rejects_invalid_uuid() {
+    let repo = MockRepo::new().with_database_users(vec![user_id("macro|dana@test.com")]);
+    let service = EntityAccessServiceImpl::new(repo);
+
+    let result = service
+        .get_users_by_entity("not-a-uuid", EntityType::Database)
+        .await;
+
+    assert!(matches!(result, Err(AccessError::BadRequest(_))));
 }
 
 #[tokio::test]

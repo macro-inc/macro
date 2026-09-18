@@ -5,10 +5,8 @@ use std::collections::HashMap;
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 
-use macro_user_id::user_id::MacroUserIdStr;
-
 use crate::domain::models::{
-    AccessGrant, AppliedChanges, Catalog, Column, ColumnBinding, ColumnId, CreateColumn,
+    AccessGrant, ApplyOutcome, Catalog, Column, ColumnBinding, ColumnId, CreateColumn,
     CreateDatabase, CreateTable, Database, DatabaseDetail, DatabaseError, DatabaseId, ExecOutcome,
     ExecRequest, ListedDatabase, MaterializedTable, PropertyDefinitionId, QueryError, QueryResult,
     RawRowChange, Row, RowChange, RowId, SqliteSnapshot, Table, TableDeps, TableId, TableVersion,
@@ -24,10 +22,12 @@ pub trait DatabasesRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Insert a database (and nothing else — the starter table is a separate call).
+    /// Insert a database, its starter table, and the creator's owner grant in
+    /// one transaction, so a database can never exist without an owner.
     fn create_database(
         &self,
         cmd: &CreateDatabase,
+        starter_table_name: &str,
     ) -> impl Future<Output = Result<Database, Self::Err>> + Send;
 
     /// Fetch a database with its tables and column placements.
@@ -64,12 +64,15 @@ pub trait DatabasesRepo: Send + Sync + 'static {
 
     /// Apply a translated changeset atomically: inserts (returning minted row
     /// ids in changeset order), cell updates, deletes, and link edges, bumping
-    /// each written table's version exactly once.
+    /// each written table's version exactly once. When `expected_versions`
+    /// names a written table, the write is refused (nothing committed) if the
+    /// table's version differs — checked inside the transaction.
     fn apply_changes(
         &self,
         viewer: &Viewer,
         changes: &[RowChange],
-    ) -> impl Future<Output = Result<AppliedChanges, Self::Err>> + Send;
+        expected_versions: &HashMap<TableId, TableVersion>,
+    ) -> impl Future<Output = Result<ApplyOutcome, Self::Err>> + Send;
 
     /// Current versions for a set of tables (compare-and-swap support).
     fn table_versions(
@@ -103,18 +106,12 @@ pub trait AccessDirectory: Send + Sync + 'static {
     /// The error type returned by directory operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Every database the viewer holds a grant on, with the highest grant.
+    /// Every non-trashed database the viewer holds a grant on, with the
+    /// highest grant.
     fn accessible_databases(
         &self,
         viewer: &Viewer,
     ) -> impl Future<Output = Result<Vec<(DatabaseId, AccessGrant)>, Self::Err>> + Send;
-
-    /// Record the creator as owner of a new database.
-    fn grant_owner(
-        &self,
-        database_id: DatabaseId,
-        owner: &MacroUserIdStr<'_>,
-    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 }
 
 /// Column definitions live in the properties system; this port wraps creating
@@ -124,11 +121,13 @@ pub trait ColumnDefinitionStore: Send + Sync + 'static {
     /// The error type returned by definition operations.
     type Err: std::error::Error + Send + Sync + 'static;
 
-    /// Resolve a binding: create a database-scoped definition or validate an
-    /// existing one, returning the definition id.
+    /// Resolve a binding: create a database-scoped definition, or validate
+    /// that an existing one is visible to the viewer (system-owned, owned by
+    /// the viewer or one of their teams, or owned by this database).
     fn resolve_binding(
         &self,
         database_id: DatabaseId,
+        viewer: &Viewer,
         binding: &ColumnBinding,
     ) -> impl Future<Output = Result<PropertyDefinitionId, Self::Err>> + Send;
 
@@ -137,14 +136,6 @@ pub trait ColumnDefinitionStore: Send + Sync + 'static {
         &self,
         ids: &[PropertyDefinitionId],
     ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, Self::Err>> + Send;
-
-    /// Resolve a select/tag display value to an option id for the definition,
-    /// used when translating changeset cell values back to `SetPropertyValue`.
-    fn resolve_option(
-        &self,
-        definition_id: PropertyDefinitionId,
-        display_value: &str,
-    ) -> impl Future<Output = Result<Option<uuid::Uuid>, Self::Err>> + Send;
 }
 
 /// Platform data exposed to SQL, permission-scoped per viewer. One
@@ -158,13 +149,14 @@ pub trait MagicTables: Send + Sync + 'static {
     fn schemas(&self) -> Vec<crate::domain::models::TableSchema>;
 
     /// Materialize one magic table for a viewer, restricted to the referenced
-    /// columns. Never called for tables absent from [`MagicTables::schemas`].
+    /// columns, plus whether the row cap truncated it. Never called for tables
+    /// absent from [`MagicTables::schemas`].
     fn materialize(
         &self,
         viewer: &Viewer,
         sql_name: &str,
         columns: &[String],
-    ) -> impl Future<Output = Result<MaterializedTable, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<(MaterializedTable, bool), Self::Err>> + Send;
 }
 
 /// The embedded SQLite sandbox. Synchronous and CPU-bound; the service runs it
@@ -236,10 +228,12 @@ pub trait DatabasesService: Send + Sync + 'static {
         cmd: CreateTable,
     ) -> impl Future<Output = Result<Table, DatabaseError>> + Send;
 
-    /// Create a column: resolve the definition binding, insert the placement.
+    /// Create a column: validate the binding and any link target against the
+    /// viewer's world, resolve the definition, insert the placement.
     fn create_column(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
+        viewer: Viewer,
         cmd: CreateColumn,
     ) -> impl Future<Output = Result<ColumnId, DatabaseError>> + Send;
 

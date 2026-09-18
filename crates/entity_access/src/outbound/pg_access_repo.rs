@@ -224,6 +224,7 @@ impl AccessRepository for PgAccessRepository {
         .await?)
     }
 
+    #[tracing::instrument(err, skip(self, user_id))]
     async fn get_database_access(
         &self,
         database_id: &str,

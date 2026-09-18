@@ -108,10 +108,10 @@ impl EntityType {
             // owner, the channel the bot was mentioned in as editor - but
             // are not something you file into a project.
             EntityType::AgentSession => false,
-            // A database's permissions are `entity_access` rows: the creator
-            // as owner, plus whoever it is later shared with. Databases are
-            // not filed into projects.
-            EntityType::Database => true,
+            // A database's permissions are `entity_access` rows - the creator
+            // as owner, plus whoever it is later shared with - but, like agent
+            // sessions, a database is not something you file into a project.
+            EntityType::Database => false,
         }
     }
     /// provide an entity string slice to upgrade this type into an [Entity]

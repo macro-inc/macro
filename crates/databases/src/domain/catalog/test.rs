@@ -46,6 +46,16 @@ fn with_options(
     def
 }
 
+fn database(id: DatabaseId, name: &str) -> Database {
+    Database {
+        id,
+        name: name.to_string(),
+        owner_id: "macro|owner@macro.com".to_string(),
+        created_at: Utc::now(),
+        trashed_at: None,
+    }
+}
+
 fn table(db: DatabaseId, name: &str, position: &str) -> Table {
     Table {
         id: Uuid::new_v4(),
@@ -100,7 +110,14 @@ fn builds_columns_junctions_and_constraints() {
         .collect();
     let grants: HashMap<_, _> = [(db, AccessGrant::Edit)].into_iter().collect();
 
-    let entries = build_user_tables(&[guests.clone()], &columns, &definitions, &grants);
+    let entries = build_user_tables(
+        &[database(db, "Offsite")],
+        std::slice::from_ref(&guests),
+        &columns,
+        &definitions,
+        &grants,
+        &[],
+    );
     assert_eq!(entries.len(), 1);
     let entry = &entries[0];
     assert_eq!(entry.schema.sql_name, "guests");
@@ -142,10 +159,12 @@ fn view_grant_makes_everything_read_only() {
     let definitions: HashMap<_, _> = [(notes.definition.id, notes.clone())].into_iter().collect();
     let grants: HashMap<_, _> = [(db, AccessGrant::View)].into_iter().collect();
     let entries = build_user_tables(
-        &[t.clone()],
+        &[database(db, "Offsite")],
+        std::slice::from_ref(&t),
         &[placement(t.id, &notes, None)],
         &definitions,
         &grants,
+        &[],
     );
     assert!(!entries[0].schema.writable);
     assert!(!entries[0].schema.columns[1].writable);
@@ -173,10 +192,24 @@ fn colliding_names_get_suffixes_and_link_columns_get_writable_junctions() {
         .into_iter()
         .collect();
 
-    let entries = build_user_tables(&[a.clone(), b.clone()], &[link], &definitions, &grants);
-    assert_eq!(entries[0].schema.sql_name, "guests");
-    assert!(entries[1].schema.sql_name.starts_with("guests_"));
-    assert_ne!(entries[1].schema.sql_name, "guests");
+    let entries = build_user_tables(
+        &[database(db_a, "Offsite"), database(db_b, "Party")],
+        &[a.clone(), b.clone()],
+        &[link],
+        &definitions,
+        &grants,
+        &[],
+    );
+    // Two `guests` across databases: neither gets the bare name; both are
+    // addressable by their qualified, viewer-independent names.
+    assert!(
+        entries[0].schema.sql_name.starts_with("offsite_"),
+        "{}",
+        entries[0].schema.sql_name
+    );
+    assert!(entries[0].schema.sql_name.ends_with("__guests"));
+    assert!(entries[1].schema.sql_name.starts_with("party_"));
+    assert!(entries[0].schema.aliases.is_empty());
 
     let link_col = &entries[0].schema.columns[1];
     assert!(
@@ -187,7 +220,44 @@ fn colliding_names_get_suffixes_and_link_columns_get_writable_junctions() {
     let junction = &entries[0].junctions[0];
     assert_eq!(junction.kind, JunctionKind::Link);
     assert!(junction.schema.writable);
-    assert_eq!(junction.schema.sql_name, "guests__sessions");
+    assert!(junction.schema.sql_name.ends_with("__guests__sessions"));
+}
+
+#[test]
+fn bare_names_are_viewer_independent_aliases() {
+    let db = Uuid::new_v4();
+    let t = table(db, "Guests", "0");
+    let notes = definition("Notes", DataType::String, false);
+    let definitions: HashMap<_, _> = [(notes.definition.id, notes.clone())].into_iter().collect();
+    let grants: HashMap<_, _> = [(db, AccessGrant::Edit)].into_iter().collect();
+    let dbs = [database(db, "Summer Offsite")];
+    let entries = build_user_tables(
+        &dbs,
+        std::slice::from_ref(&t),
+        &[placement(t.id, &notes, None)],
+        &definitions,
+        &grants,
+        &[],
+    );
+    assert_eq!(entries[0].schema.sql_name, "guests");
+    assert_eq!(
+        entries[0].schema.aliases,
+        vec![qualified_table_name(&dbs[0], "guests")]
+    );
+    assert!(entries[0].schema.aliases[0].starts_with("summer_offsite_"));
+
+    // A reserved (magic) name is never handed out bare.
+    let people = table(db, "People", "1");
+    let entries = build_user_tables(
+        &dbs,
+        std::slice::from_ref(&people),
+        &[placement(people.id, &notes, None)],
+        &definitions,
+        &grants,
+        &["people".to_string()],
+    );
+    assert_ne!(entries[0].schema.sql_name, "people");
+    assert!(entries[0].schema.sql_name.ends_with("__people"));
 }
 
 #[test]
@@ -198,10 +268,12 @@ fn unreadable_databases_and_lookups_are_absent() {
     let definitions: HashMap<_, _> = [(notes.definition.id, notes.clone())].into_iter().collect();
     // No grant for `db` at all.
     let entries = build_user_tables(
-        &[t.clone()],
+        &[database(db, "Offsite")],
+        std::slice::from_ref(&t),
         &[placement(t.id, &notes, None)],
         &definitions,
         &HashMap::new(),
+        &[],
     );
     assert!(entries.is_empty());
 
@@ -214,6 +286,13 @@ fn unreadable_databases_and_lookups_are_absent() {
             target: "x".to_string(),
         }),
     );
-    let entries = build_user_tables(&[t], &[lookup], &definitions, &grants);
+    let entries = build_user_tables(
+        &[database(db, "Offsite")],
+        &[t],
+        &[lookup],
+        &definitions,
+        &grants,
+        &[],
+    );
     assert_eq!(entries[0].schema.columns.len(), 1, "only row_id");
 }

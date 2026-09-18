@@ -31,8 +31,7 @@ $$
     END;
 $$;
 
-DROP INDEX idx_property_definitions_database_id;
-DROP INDEX unique_property_definitions_database_display_name;
+DROP INDEX IF EXISTS idx_property_definitions_database_id;
 
 ALTER TABLE property_definitions DROP CONSTRAINT owned_by_database_or_team_or_user_or_system;
 ALTER TABLE property_definitions ADD CONSTRAINT owned_by_team_or_user_or_system CHECK (

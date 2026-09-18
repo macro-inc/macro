@@ -3,7 +3,19 @@ use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::shared::PropertyOwner;
 use sqlx::PgPool;
 
+use uuid::Uuid;
+
 use super::*;
+use crate::domain::models::Viewer;
+
+fn viewer_for_tests() -> Viewer {
+    Viewer {
+        user_id: macro_user_id::user_id::MacroUserIdStr::parse_from_str(
+            "macro|definitions-test@macro.com",
+        )
+        .expect("valid user id"),
+    }
+}
 
 const USER: &str = "macro|databases-defs@macro.com";
 
@@ -75,7 +87,11 @@ async fn new_binding_creates_a_database_owned_definition(pool: PgPool) {
     let store = PgDefinitionStore::new(pool);
 
     let definition_id = store
-        .resolve_binding(database_id, &new_definition("Headcount", DataType::Number))
+        .resolve_binding(
+            database_id,
+            &viewer_for_tests(),
+            &new_definition("Headcount", DataType::Number),
+        )
         .await
         .expect("definition should be created");
 
@@ -108,6 +124,7 @@ async fn a_column_may_reuse_a_reserved_system_property_name(pool: PgPool) {
     store
         .resolve_binding(
             database_id,
+            &viewer_for_tests(),
             &new_definition("Status", DataType::SelectString),
         )
         .await
@@ -120,12 +137,20 @@ async fn existing_binding_returns_the_definition_id(pool: PgPool) {
     let store = PgDefinitionStore::new(pool);
 
     let created = store
-        .resolve_binding(database_id, &new_definition("Owner", DataType::String))
+        .resolve_binding(
+            database_id,
+            &viewer_for_tests(),
+            &new_definition("Owner", DataType::String),
+        )
         .await
         .expect("definition should be created");
 
     let resolved = store
-        .resolve_binding(database_id, &ColumnBinding::ExistingDefinition(created))
+        .resolve_binding(
+            database_id,
+            &viewer_for_tests(),
+            &ColumnBinding::ExistingDefinition(created),
+        )
         .await
         .expect("an existing definition should resolve");
 
@@ -139,7 +164,11 @@ async fn existing_binding_rejects_an_unknown_definition(pool: PgPool) {
     let missing = macro_uuid::generate_uuid_v7();
 
     let error = store
-        .resolve_binding(database_id, &ColumnBinding::ExistingDefinition(missing))
+        .resolve_binding(
+            database_id,
+            &viewer_for_tests(),
+            &ColumnBinding::ExistingDefinition(missing),
+        )
         .await
         .expect_err("an unknown definition should not resolve");
 
@@ -157,12 +186,17 @@ async fn definitions_attaches_options_and_ignores_unknown_ids(pool: PgPool) {
     let select_id = store
         .resolve_binding(
             database_id,
+            &viewer_for_tests(),
             &new_definition("Stage", DataType::SelectString),
         )
         .await
         .expect("definition should be created");
     let plain_id = store
-        .resolve_binding(database_id, &new_definition("Notes", DataType::String))
+        .resolve_binding(
+            database_id,
+            &viewer_for_tests(),
+            &new_definition("Notes", DataType::String),
+        )
         .await
         .expect("definition should be created");
     insert_option(&pool, select_id, Some("Draft"), None).await;
@@ -204,59 +238,4 @@ async fn definitions_of_nothing_is_empty(pool: PgPool) {
     let definitions = store.definitions(&[]).await.expect("empty is not an error");
 
     assert!(definitions.is_empty());
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn resolve_option_matches_string_and_number_values(pool: PgPool) {
-    let database_id = insert_database(&pool).await;
-    let store = PgDefinitionStore::new(pool.clone());
-
-    let strings = store
-        .resolve_binding(
-            database_id,
-            &new_definition("Stage", DataType::SelectString),
-        )
-        .await
-        .expect("definition should be created");
-    let numbers = store
-        .resolve_binding(
-            database_id,
-            &new_definition("Score", DataType::SelectNumber),
-        )
-        .await
-        .expect("definition should be created");
-
-    let sent = insert_option(&pool, strings, Some("Sent"), None).await;
-    let five = insert_option(&pool, numbers, None, Some(5.0)).await;
-
-    assert_eq!(
-        store
-            .resolve_option(strings, "Sent")
-            .await
-            .expect("lookup should succeed"),
-        Some(sent)
-    );
-    // A number option arrives as display text and is matched numerically.
-    assert_eq!(
-        store
-            .resolve_option(numbers, "5")
-            .await
-            .expect("lookup should succeed"),
-        Some(five)
-    );
-    assert_eq!(
-        store
-            .resolve_option(strings, "Archived")
-            .await
-            .expect("lookup should succeed"),
-        None
-    );
-    // Options are scoped to their definition.
-    assert_eq!(
-        store
-            .resolve_option(numbers, "Sent")
-            .await
-            .expect("lookup should succeed"),
-        None
-    );
 }

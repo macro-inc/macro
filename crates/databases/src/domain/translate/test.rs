@@ -8,7 +8,7 @@ use uuid::Uuid;
 
 use super::*;
 use crate::domain::catalog::build_user_tables;
-use crate::domain::models::{AccessGrant, Column, ColumnConfig, Table, TableVersion};
+use crate::domain::models::{AccessGrant, Column, ColumnConfig, Database, Table, TableVersion};
 
 fn def(name: &str, data_type: DataType, multi: bool) -> PropertyDefinitionWithOptions {
     PropertyDefinitionWithOptions {
@@ -119,7 +119,20 @@ fn fixture(grant: AccessGrant) -> Fixture {
         .collect();
     let grants = HashMap::from([(db, grant)]);
     Fixture {
-        entries: build_user_tables(&[table], &columns, &defs, &grants),
+        entries: build_user_tables(
+            &[Database {
+                id: db,
+                name: "Offsite".into(),
+                owner_id: "macro|o@macro.com".into(),
+                created_at: Utc::now(),
+                trashed_at: None,
+            }],
+            &[table],
+            &columns,
+            &defs,
+            &grants,
+            &[],
+        ),
         status,
         notes,
         tags,
@@ -155,9 +168,9 @@ fn insert_translates_display_values_to_typed_cells() {
         vec![change(
             "guests",
             RawOp::Insert,
-            &[("row_id", t("abc"))],
+            &[("row_id", t("new:abc"))],
             &[
-                ("row_id", t("abc")),
+                ("row_id", t("new:abc")),
                 ("status", t("Going")),
                 ("notes", t("hello")),
                 ("tags", t("[\"vip\"]")),
@@ -298,7 +311,7 @@ fn links_to_freshly_inserted_rows_are_refused_clearly() {
             "guests__sessions",
             RawOp::Insert,
             &[
-                ("row_id", t("deadbeef")),
+                ("row_id", t("new:deadbeef")),
                 ("linked_id", t(&Uuid::new_v4().to_string())),
             ],
             &[],

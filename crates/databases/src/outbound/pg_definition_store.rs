@@ -16,9 +16,8 @@ use models_properties::service::property_definition_with_options::PropertyDefini
 use models_properties::{DataType, EntityType, db};
 use properties::outbound::property_option_queries::get_property_options_batch;
 use sqlx::PgPool;
-use uuid::Uuid;
 
-use crate::domain::models::{ColumnBinding, DatabaseId, PropertyDefinitionId};
+use crate::domain::models::{ColumnBinding, DatabaseId, PropertyDefinitionId, Viewer};
 use crate::domain::ports::ColumnDefinitionStore;
 
 /// Errors from the Postgres column-definition store.
@@ -92,6 +91,7 @@ impl ColumnDefinitionStore for PgDefinitionStore {
     async fn resolve_binding(
         &self,
         database_id: DatabaseId,
+        viewer: &Viewer,
         binding: &ColumnBinding,
     ) -> Result<PropertyDefinitionId, Self::Err> {
         match binding {
@@ -104,10 +104,29 @@ impl ColumnDefinitionStore for PgDefinitionStore {
                     .await
             }
             ColumnBinding::ExistingDefinition(id) => {
-                sqlx::query_scalar!("SELECT id FROM property_definitions WHERE id = $1", id)
-                    .fetch_optional(&self.pool)
-                    .await?
-                    .ok_or(PgDefinitionStoreError::NotFound(*id))
+                // Only definitions the viewer can already see may be bound:
+                // system-owned, their own, one of their teams', or this
+                // database's. Anything else is indistinguishable from missing.
+                let user_id: &str = viewer.user_id.as_ref();
+                sqlx::query_scalar!(
+                    r#"
+                    SELECT id
+                    FROM property_definitions
+                    WHERE id = $1
+                      AND (
+                        is_system
+                        OR user_id = $2
+                        OR database_id = $3
+                        OR team_id IN (SELECT team_id FROM team_user WHERE user_id = $2)
+                      )
+                    "#,
+                    id,
+                    user_id,
+                    database_id,
+                )
+                .fetch_optional(&self.pool)
+                .await?
+                .ok_or(PgDefinitionStoreError::NotFound(*id))
             }
         }
     }
@@ -177,36 +196,5 @@ impl ColumnDefinitionStore for PgDefinitionStore {
                 }
             })
             .collect())
-    }
-
-    #[tracing::instrument(skip(self), err)]
-    async fn resolve_option(
-        &self,
-        definition_id: PropertyDefinitionId,
-        display_value: &str,
-    ) -> Result<Option<Uuid>, Self::Err> {
-        // A cell arrives from SQLite as display text; a SELECT_NUMBER option
-        // stores its value numerically, so the text is matched both ways.
-        let number_value: Option<f64> = display_value.parse().ok();
-
-        sqlx::query_scalar!(
-            r#"
-            SELECT id
-            FROM property_options
-            WHERE property_definition_id = $1
-              AND (
-                string_value = $2
-                OR ($3::double precision IS NOT NULL AND number_value = $3)
-              )
-            ORDER BY display_order
-            LIMIT 1
-            "#,
-            definition_id,
-            display_value,
-            number_value,
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(Into::into)
     }
 }

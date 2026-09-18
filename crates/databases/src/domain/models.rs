@@ -29,7 +29,9 @@ pub type PropertyDefinitionId = Uuid;
 ///
 /// The cache key for query materializations and the invalidation signal for
 /// live query chips.
-#[derive(utoipa::ToSchema, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    utoipa::ToSchema, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+)]
 pub struct TableVersion(pub i64);
 
 // ===== Entities =====
@@ -208,6 +210,9 @@ pub struct TableSchema {
     /// Whether SQL may write to this table at all (Edit grant on a user table
     /// or its junctions). Magic tables and View-grant tables are read-only.
     pub writable: bool,
+    /// Additional read-only names this table answers to (compiled as views),
+    /// e.g. the database-qualified form of a table that also has a bare name.
+    pub aliases: Vec<String>,
 }
 
 /// A foreign-key constraint compiled into the scratch schema.
@@ -471,6 +476,31 @@ pub struct ExecOutcome {
     /// Dependency set of the statement, for liveness subscription.
     #[schema(value_type = Vec<Uuid>)]
     pub read_tables: Vec<TableId>,
+    /// Magic tables whose materialization hit its row cap; aggregates over
+    /// them are incomplete.
+    pub truncated_tables: Vec<String>,
+}
+
+/// Result of applying a changeset under optional compare-and-swap.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ApplyOutcome {
+    /// Every change committed.
+    Applied(AppliedChanges),
+    /// A written table had moved past its expected version; nothing committed.
+    VersionConflict {
+        /// The table that changed underneath the caller.
+        table_id: TableId,
+    },
+}
+
+impl ApplyOutcome {
+    /// The applied changes, if nothing conflicted.
+    pub fn applied(self) -> Option<AppliedChanges> {
+        match self {
+            ApplyOutcome::Applied(applied) => Some(applied),
+            ApplyOutcome::VersionConflict { .. } => None,
+        }
+    }
 }
 
 /// A serialized SQLite snapshot of one database (takeout / local analysis).
@@ -485,7 +515,9 @@ pub struct SqliteSnapshot {
 // ===== Access & rendering models =====
 
 /// The access a viewer holds on a database, from its `entity_access` rows.
-#[derive(utoipa::ToSchema, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
+#[derive(
+    utoipa::ToSchema, Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize,
+)]
 #[serde(rename_all = "snake_case")]
 pub enum AccessGrant {
     /// Read rows and run read-only SQL.

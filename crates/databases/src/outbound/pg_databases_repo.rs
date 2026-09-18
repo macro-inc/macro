@@ -15,8 +15,11 @@ use models_properties::service::property_value::PropertyValue;
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
+use entity_access_db_utils::{AccessLevel, EntityAccessSourceType};
+use model_entity::EntityType;
+
 use crate::domain::models::{
-    AppliedChanges, Column, ColumnId, CreateColumn, CreateDatabase, CreateTable, Database,
+    ApplyOutcome, Column, ColumnId, CreateColumn, CreateDatabase, CreateTable, Database,
     DatabaseId, PropertyDefinitionId, Row, RowChange, RowId, Table, TableId, TableVersion, Viewer,
 };
 use crate::domain::ports::DatabasesRepo;
@@ -27,6 +30,9 @@ pub enum PgDatabasesRepoError {
     /// Underlying database failure.
     #[error("database error")]
     Sqlx(#[from] sqlx::Error),
+    /// A written table no longer exists.
+    #[error("table {0} not found")]
+    TableNotFound(TableId),
     /// A change targeted a row that does not exist.
     #[error("row {0} not found")]
     RowNotFound(RowId),
@@ -135,15 +141,9 @@ impl PgDatabasesRepo {
         transaction: &mut Transaction<'_, Postgres>,
         viewer: &Viewer,
         table_id: TableId,
+        position: String,
         cells: serde_json::Value,
     ) -> Result<RowId, PgDatabasesRepoError> {
-        let max_position = sqlx::query_scalar!(
-            r#"SELECT MAX(position) FROM database_rows WHERE table_id = $1"#,
-            table_id
-        )
-        .fetch_one(&mut **transaction)
-        .await?;
-        let position = next_position(max_position.as_deref());
         let id = macro_uuid::generate_uuid_v7();
 
         sqlx::query!(
@@ -168,9 +168,14 @@ impl DatabasesRepo for PgDatabasesRepo {
     type Err = PgDatabasesRepoError;
 
     #[tracing::instrument(err, skip(self, cmd))]
-    async fn create_database(&self, cmd: &CreateDatabase) -> Result<Database, Self::Err> {
+    async fn create_database(
+        &self,
+        cmd: &CreateDatabase,
+        starter_table_name: &str,
+    ) -> Result<Database, Self::Err> {
         // Time-ordered v7 so ids sort by creation and are known before insert.
         let id = macro_uuid::generate_uuid_v7();
+        let mut transaction = self.pool.begin().await?;
 
         let row = sqlx::query!(
             r#"
@@ -182,8 +187,35 @@ impl DatabasesRepo for PgDatabasesRepo {
             cmd.name,
             cmd.owner_id.as_ref(),
         )
-        .fetch_one(&self.pool)
+        .fetch_one(&mut *transaction)
         .await?;
+
+        sqlx::query!(
+            r#"
+            INSERT INTO database_tables (id, database_id, name, position)
+            VALUES ($1, $2, $3, $4)
+            "#,
+            macro_uuid::generate_uuid_v7(),
+            id,
+            starter_table_name,
+            next_position(None),
+        )
+        .execute(&mut *transaction)
+        .await?;
+
+        // The creator's owner grant lives in the same transaction, so a
+        // database can never exist that nobody can open.
+        entity_access_db_utils::insert_entity_access_row(
+            &mut transaction,
+            &id,
+            EntityType::Database,
+            cmd.owner_id.as_ref(),
+            EntityAccessSourceType::User,
+            AccessLevel::Owner,
+        )
+        .await?;
+
+        transaction.commit().await?;
 
         Ok(Database {
             id: row.id,
@@ -375,26 +407,96 @@ impl DatabasesRepo for PgDatabasesRepo {
         Ok(links)
     }
 
-    #[tracing::instrument(err, skip(self, viewer, changes))]
+    #[tracing::instrument(err, skip(self, viewer, changes, expected_versions))]
     async fn apply_changes(
         &self,
         viewer: &Viewer,
         changes: &[RowChange],
-    ) -> Result<AppliedChanges, Self::Err> {
+        expected_versions: &HashMap<TableId, TableVersion>,
+    ) -> Result<ApplyOutcome, Self::Err> {
         let mut transaction = self.pool.begin().await?;
+
+        // Every table this changeset writes, resolved up front (links name a
+        // column, not a table) so the version rows can be locked in one go.
+        let mut link_tables: HashMap<ColumnId, TableId> = HashMap::new();
+        for change in changes {
+            if let RowChange::Link { column_id, .. } | RowChange::Unlink { column_id, .. } = change
+                && !link_tables.contains_key(column_id)
+            {
+                let table_id = Self::link_column_table(&mut transaction, *column_id).await?;
+                link_tables.insert(*column_id, table_id);
+            }
+        }
+        // Sorted so concurrent changesets lock version rows in the same order
+        // and cannot deadlock on each other.
+        let written_tables: BTreeSet<TableId> = changes
+            .iter()
+            .map(|change| match change {
+                RowChange::Insert { table_id, .. }
+                | RowChange::Update { table_id, .. }
+                | RowChange::Delete { table_id, .. } => *table_id,
+                RowChange::Link { column_id, .. } | RowChange::Unlink { column_id, .. } => {
+                    link_tables[column_id]
+                }
+            })
+            .collect();
+        let written: Vec<TableId> = written_tables.iter().copied().collect();
+
+        // Compare-and-swap inside the transaction: lock the version rows,
+        // then refuse if any expected version has moved.
+        let current = sqlx::query!(
+            r#"
+            SELECT id, version FROM database_tables
+            WHERE id = ANY($1)
+            ORDER BY id
+            FOR UPDATE
+            "#,
+            &written,
+        )
+        .fetch_all(&mut *transaction)
+        .await?;
+        for table_id in &written {
+            let actual = current
+                .iter()
+                .find(|r| r.id == *table_id)
+                .map(|r| r.version);
+            let Some(actual) = actual else {
+                return Err(PgDatabasesRepoError::TableNotFound(*table_id));
+            };
+            if let Some(expected) = expected_versions.get(table_id)
+                && expected.0 != actual
+            {
+                transaction.rollback().await?;
+                return Ok(ApplyOutcome::VersionConflict {
+                    table_id: *table_id,
+                });
+            }
+        }
+
+        // Row positions: one MAX per inserted-into table, then increment in
+        // memory rather than a round trip per row.
+        let mut next_positions: HashMap<TableId, String> = HashMap::new();
         let mut inserted_row_ids = Vec::new();
-        // Sorted so the version bump touches rows in a deterministic order,
-        // which keeps concurrent changesets from deadlocking on each other.
-        let mut written_tables: BTreeSet<TableId> = BTreeSet::new();
 
         for change in changes {
             match change {
                 RowChange::Insert { table_id, cells } => {
+                    if !next_positions.contains_key(table_id) {
+                        let max_position = sqlx::query_scalar!(
+                            r#"SELECT MAX(position) FROM database_rows WHERE table_id = $1"#,
+                            table_id
+                        )
+                        .fetch_one(&mut *transaction)
+                        .await?;
+                        next_positions.insert(*table_id, next_position(max_position.as_deref()));
+                    }
+                    let position = next_positions[table_id].clone();
+                    next_positions.insert(*table_id, next_position(Some(&position)));
                     let cells = cells_to_json(cells)?;
                     let row_id =
-                        Self::insert_row(&mut transaction, viewer, *table_id, cells).await?;
+                        Self::insert_row(&mut transaction, viewer, *table_id, position, cells)
+                            .await?;
                     inserted_row_ids.push(row_id);
-                    written_tables.insert(*table_id);
                 }
                 RowChange::Update {
                     table_id,
@@ -414,33 +516,38 @@ impl DatabasesRepo for PgDatabasesRepo {
                         .map(|(id, _)| id.to_string())
                         .collect();
                     let set = cells_to_json(&set)?;
-                    // Shallow merge: only the changed cells are replaced (and
-                    // NULLed cells removed), so concurrent writers to other
-                    // cells do not clobber.
+                    // Shallow merge scoped to the table: only the changed cells
+                    // are replaced (and NULLed cells removed), so concurrent
+                    // writers to other cells do not clobber.
                     let updated = sqlx::query!(
                         r#"
                         UPDATE database_rows
                         SET cells = (cells - $3::text[]) || $2::jsonb, updated_at = now()
-                        WHERE id = $1
+                        WHERE id = $1 AND table_id = $4
                         "#,
                         row_id,
                         set,
                         &cleared,
+                        table_id,
                     )
                     .execute(&mut *transaction)
                     .await?;
-
                     if updated.rows_affected() == 0 {
                         return Err(PgDatabasesRepoError::RowNotFound(*row_id));
                     }
-                    written_tables.insert(*table_id);
                 }
                 RowChange::Delete { table_id, row_id } => {
                     // Link edges cascade from the foreign keys.
-                    sqlx::query!(r#"DELETE FROM database_rows WHERE id = $1"#, row_id)
-                        .execute(&mut *transaction)
-                        .await?;
-                    written_tables.insert(*table_id);
+                    let deleted = sqlx::query!(
+                        r#"DELETE FROM database_rows WHERE id = $1 AND table_id = $2"#,
+                        row_id,
+                        table_id,
+                    )
+                    .execute(&mut *transaction)
+                    .await?;
+                    if deleted.rows_affected() == 0 {
+                        return Err(PgDatabasesRepoError::RowNotFound(*row_id));
+                    }
                 }
                 RowChange::Link {
                     column_id,
@@ -459,8 +566,6 @@ impl DatabasesRepo for PgDatabasesRepo {
                     )
                     .execute(&mut *transaction)
                     .await?;
-                    let table_id = Self::link_column_table(&mut transaction, *column_id).await?;
-                    written_tables.insert(table_id);
                 }
                 RowChange::Unlink {
                     column_id,
@@ -478,27 +583,29 @@ impl DatabasesRepo for PgDatabasesRepo {
                     )
                     .execute(&mut *transaction)
                     .await?;
-                    let table_id = Self::link_column_table(&mut transaction, *column_id).await?;
-                    written_tables.insert(table_id);
                 }
             }
         }
 
         // Exactly one bump per written table, however many changes touched it.
-        let mut new_versions = HashMap::new();
-        for table_id in written_tables {
-            let version = sqlx::query_scalar!(
-                r#"UPDATE database_tables SET version = version + 1 WHERE id = $1 RETURNING version"#,
-                table_id
-            )
-            .fetch_one(&mut *transaction)
-            .await?;
-            new_versions.insert(table_id, TableVersion(version));
-        }
+        let bumped = sqlx::query!(
+            r#"
+            UPDATE database_tables
+            SET version = version + 1
+            WHERE id = ANY($1)
+            RETURNING id, version
+            "#,
+            &written,
+        )
+        .fetch_all(&mut *transaction)
+        .await?;
+        let new_versions: HashMap<TableId, TableVersion> = bumped
+            .into_iter()
+            .map(|r| (r.id, TableVersion(r.version)))
+            .collect();
 
         transaction.commit().await?;
-
-        Ok((inserted_row_ids, new_versions))
+        Ok(ApplyOutcome::Applied((inserted_row_ids, new_versions)))
     }
 
     #[tracing::instrument(err, skip(self))]

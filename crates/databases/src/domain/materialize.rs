@@ -10,17 +10,15 @@ use std::collections::HashMap;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_value::PropertyValue;
 
-use crate::domain::catalog::{
-    ColumnEntry, JunctionEntry, JunctionKind, TableEntry, option_display,
-};
+use crate::domain::catalog::option_labels;
+use crate::domain::catalog::{ColumnEntry, JunctionEntry, JunctionKind, TableEntry};
 use crate::domain::models::{ColumnConfig, ColumnId, MaterializedTable, Row, RowId, SqlValue};
 
 fn option_label(definition: &PropertyDefinitionWithOptions, option_id: uuid::Uuid) -> String {
-    definition
-        .property_options
-        .iter()
-        .find(|o| o.id == option_id)
-        .map(|o| option_display(&o.value))
+    option_labels(definition)
+        .into_iter()
+        .find(|(id, _)| *id == option_id)
+        .map(|(_, label)| label)
         // An option deleted after being set: keep the id visible rather than
         // silently blanking the cell.
         .unwrap_or_else(|| option_id.to_string())
@@ -152,11 +150,21 @@ pub fn junction(
             };
             rows.iter()
                 .flat_map(|row| {
-                    let elements = row
+                    let mut elements = row
                         .cells
                         .get(&column.definition.definition.id)
                         .map(|v| cell_elements(v, &column.definition))
                         .unwrap_or_default();
+                    // `(row_id, linked_id)` is the junction's primary key; a
+                    // cell repeating an element must not break the load.
+                    let mut seen = Vec::with_capacity(elements.len());
+                    elements.retain(|e| {
+                        let fresh = !seen.contains(e);
+                        if fresh {
+                            seen.push(e.clone());
+                        }
+                        fresh
+                    });
                     elements
                         .into_iter()
                         .map(move |element| vec![SqlValue::Text(row.id.to_string()), element])

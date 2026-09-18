@@ -12,7 +12,7 @@
 CREATE TABLE databases (
     id UUID PRIMARY KEY,
     name TEXT NOT NULL,
-    owner_id TEXT NOT NULL REFERENCES "User"(id),
+    owner_id TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE ON UPDATE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     trashed_at TIMESTAMPTZ
@@ -29,7 +29,9 @@ CREATE TABLE database_tables (
     -- Bumped on every row/column/link mutation. Cache key for query
     -- materializations and the invalidation signal for live query chips.
     version BIGINT NOT NULL DEFAULT 0,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Tab names are the basis of SQL table names; keep them unambiguous.
+    UNIQUE (database_id, name)
 );
 
 CREATE INDEX idx_database_tables_database ON database_tables(database_id);
@@ -40,7 +42,7 @@ CREATE INDEX idx_database_tables_database ON database_tables(database_id);
 CREATE TABLE database_columns (
     id UUID PRIMARY KEY,
     table_id UUID NOT NULL REFERENCES database_tables(id) ON DELETE CASCADE,
-    property_definition_id UUID NOT NULL REFERENCES property_definitions(id),
+    property_definition_id UUID NOT NULL REFERENCES property_definitions(id) ON DELETE CASCADE,
     -- Fractional index for column ordering.
     position TEXT NOT NULL,
     -- Column-kind specific configuration: link target {database_id, table_id},
@@ -64,7 +66,7 @@ CREATE TABLE database_rows (
     -- Fractional index for manual row ordering.
     position TEXT NOT NULL,
     cells JSONB NOT NULL DEFAULT '{}'::jsonb,
-    created_by TEXT NOT NULL REFERENCES "User"(id),
+    created_by TEXT NOT NULL REFERENCES "User"(id) ON DELETE CASCADE ON UPDATE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );

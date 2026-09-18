@@ -16,12 +16,9 @@ ALTER TABLE property_definitions ADD CONSTRAINT owned_by_database_or_team_or_use
     + (database_id IS NOT NULL)::int = 1
 );
 
--- Column names are unique per database. A partial index rather than a UNIQUE
--- constraint so the rows of every other owner scope stay unconstrained.
-CREATE UNIQUE INDEX unique_property_definitions_database_display_name
-    ON property_definitions (database_id, display_name)
-    WHERE database_id IS NOT NULL;
-
+-- Column names are unique per *table* (a database may have a "Name" column on
+-- several tabs), which the databases service enforces against the table's
+-- placements; no cross-table uniqueness is imposed here.
 CREATE INDEX idx_property_definitions_database_id ON property_definitions(database_id)
     WHERE database_id IS NOT NULL;
 

@@ -5,6 +5,9 @@
 //! is nothing to inherit from - a database is not filed into a project - so
 //! the rows are the whole answer.
 
+#[cfg(test)]
+mod test;
+
 use std::marker::PhantomData;
 use std::sync::Arc;
 

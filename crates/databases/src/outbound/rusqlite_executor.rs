@@ -38,12 +38,18 @@ use crate::domain::ports::SqlExecutor;
 /// Execution budget knobs.
 #[derive(Debug, Clone)]
 pub struct ExecutorLimits {
-    /// Wall-clock budget per statement batch.
+    /// Wall-clock budget per statement batch (analysis and execution each).
     pub timeout: Duration,
     /// Maximum rows one result set may return.
     pub max_result_rows: usize,
+    /// Maximum total bytes of text across all result sets.
+    pub max_result_bytes: usize,
     /// Maximum row changes one exec may produce.
     pub max_changes: usize,
+    /// Maximum statement text length SQLite will accept.
+    pub max_sql_bytes: usize,
+    /// Maximum length of a single string or blob value.
+    pub max_value_bytes: usize,
 }
 
 impl Default for ExecutorLimits {
@@ -51,7 +57,10 @@ impl Default for ExecutorLimits {
         Self {
             timeout: Duration::from_millis(250),
             max_result_rows: 10_000,
+            max_result_bytes: 16 * 1024 * 1024,
             max_changes: 10_000,
+            max_sql_bytes: 256 * 1024,
+            max_value_bytes: 1024 * 1024,
         }
     }
 }
@@ -205,13 +214,16 @@ fn authorize(
             table_name,
             column_name,
         } => {
+            // Schema introspection (`sqlite_master`) is the viewer's own
+            // compiled catalog and stays readable; it is not a data dependency.
+            if table_name.starts_with("sqlite_") {
+                return Authorization::Allow;
+            }
             // `count(*)` and rowid reads arrive with an empty column name; the
             // table is still a dependency.
-            if !table_name.starts_with("sqlite_") {
-                let table = entry(&mut deps, table_name);
-                if !column_name.is_empty() && !table.read_columns.iter().any(|c| c == column_name) {
-                    table.read_columns.push(column_name.to_string());
-                }
+            let table = entry(&mut deps, table_name);
+            if !column_name.is_empty() && !table.read_columns.iter().any(|c| c == column_name) {
+                table.read_columns.push(column_name.to_string());
             }
             Authorization::Allow
         }
@@ -239,19 +251,12 @@ fn authorize(
         | AuthAction::Savepoint { .. } => Authorization::Allow,
         // The session extension introspects tables it records through these
         // read-only pragmas; every other pragma is banned below.
-        AuthAction::Pragma { pragma_name, .. }
-            if matches!(
-                pragma_name,
-                "table_info"
-                    | "table_xinfo"
-                    | "index_list"
-                    | "index_info"
-                    | "index_xinfo"
-                    | "foreign_key_list"
-            ) =>
-        {
-            Authorization::Allow
-        }
+        AuthAction::Pragma {
+            pragma_name:
+                "table_info" | "table_xinfo" | "index_list" | "index_info" | "index_xinfo"
+                | "foreign_key_list",
+            ..
+        } => Authorization::Allow,
         // Everything structural — DDL, pragmas, attach, vtables — is banned:
         // the scratch schema is compiled from the catalog, never by SQL.
         other => deny(
@@ -269,10 +274,12 @@ impl RusqliteExecutor {
 
     /// Compile a catalog table's schema to SQLite DDL carrying the validity
     /// model: `STRICT` typing, `CHECK (col IN (…))` from select options,
-    /// primary/foreign keys, NOT NULL. User-table primary keys default to a
-    /// random id so `INSERT` statements need not supply one; the repo mints
-    /// the real id when applying the change.
-    pub fn compile_ddl(schema: &TableSchema) -> String {
+    /// primary/foreign keys, NOT NULL — plus one read-only view per alias.
+    /// User-table primary keys default to a `new:`-prefixed placeholder so
+    /// `INSERT` statements need not supply one; the repo mints the real id
+    /// when applying the change and translation refuses references to the
+    /// placeholder.
+    pub fn compile_ddl(schema: &TableSchema) -> Vec<String> {
         let is_user_table = matches!(schema.source, TableSource::UserTable(_));
         let mut parts: Vec<String> = schema
             .columns
@@ -291,7 +298,7 @@ impl RusqliteExecutor {
                     && schema.primary_key[0] == column.sql_name
                     && column.sql_type == crate::domain::models::SqlType::Text
                 {
-                    def.push_str(" DEFAULT (lower(hex(randomblob(16))))");
+                    def.push_str(" DEFAULT ('new:' || lower(hex(randomblob(8))))");
                 }
                 if let Some(values) = column
                     .allowed_values
@@ -330,17 +337,41 @@ impl RusqliteExecutor {
                 quote_ident(&fk.references_column)
             ));
         }
-        format!(
+        let mut statements = vec![format!(
             "CREATE TABLE {} (\n  {}\n) STRICT",
             quote_ident(&schema.sql_name),
             parts.join(",\n  ")
-        )
+        )];
+        for alias in &schema.aliases {
+            statements.push(format!(
+                "CREATE VIEW {} AS SELECT * FROM {}",
+                quote_ident(alias),
+                quote_ident(&schema.sql_name)
+            ));
+        }
+        statements
     }
 
     fn open(&self) -> Result<Connection, QueryError> {
         let conn = Connection::open_in_memory().map_err(|e| QueryError::Sql(e.to_string()))?;
         conn.execute_batch("PRAGMA foreign_keys = ON;")
             .map_err(|e| QueryError::Sql(e.to_string()))?;
+        // Hard caps SQLite enforces itself: statement text, single values,
+        // expression nesting, and compound/like complexity.
+        conn.set_limit(
+            rusqlite::limits::Limit::SQLITE_LIMIT_SQL_LENGTH,
+            self.limits.max_sql_bytes as i32,
+        );
+        conn.set_limit(
+            rusqlite::limits::Limit::SQLITE_LIMIT_LENGTH,
+            self.limits.max_value_bytes as i32,
+        );
+        conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_EXPR_DEPTH, 200);
+        conn.set_limit(rusqlite::limits::Limit::SQLITE_LIMIT_COMPOUND_SELECT, 50);
+        conn.set_limit(
+            rusqlite::limits::Limit::SQLITE_LIMIT_LIKE_PATTERN_LENGTH,
+            1_000,
+        );
         Ok(conn)
     }
 
@@ -349,10 +380,11 @@ impl RusqliteExecutor {
         schemas: impl Iterator<Item = &'a TableSchema>,
     ) -> Result<(), QueryError> {
         for schema in schemas {
-            conn.execute_batch(&Self::compile_ddl(schema))
-                .map_err(|e| {
+            for statement in Self::compile_ddl(schema) {
+                conn.execute_batch(&statement).map_err(|e| {
                     QueryError::Infrastructure(rootcause::Report::new(e).into_dynamic())
                 })?;
+            }
         }
         Ok(())
     }
@@ -361,7 +393,12 @@ impl RusqliteExecutor {
         let infra = |e: rusqlite::Error| {
             QueryError::Infrastructure(rootcause::Report::new(e).into_dynamic())
         };
-        conn.execute_batch("BEGIN").map_err(infra)?;
+        // Existing data is loaded as-is: a cell whose select option was
+        // deleted materializes as the raw option id, which the CHECK compiled
+        // from the current options would reject. Constraints apply to what
+        // the statement writes, not to what Postgres already holds.
+        conn.execute_batch("PRAGMA ignore_check_constraints = ON; BEGIN")
+            .map_err(infra)?;
         for table in tables {
             if table.rows.is_empty() {
                 continue;
@@ -387,7 +424,8 @@ impl RusqliteExecutor {
                 .map_err(infra)?;
             }
         }
-        conn.execute_batch("COMMIT").map_err(infra)?;
+        conn.execute_batch("COMMIT; PRAGMA ignore_check_constraints = OFF")
+            .map_err(infra)?;
         Ok(())
     }
 
@@ -522,6 +560,7 @@ impl SqlExecutor for RusqliteExecutor {
             }));
         }
 
+        self.install_budget(&conn);
         // Preparing compiles each statement (running the authorizer) without
         // executing anything.
         let mut batch = Batch::new(&conn, sql);
@@ -534,12 +573,18 @@ impl SqlExecutor for RusqliteExecutor {
         }
         conn.authorizer::<fn(AuthContext<'_>) -> Authorization>(None);
 
-        let tables = deps
+        let mut tables = deps
             .lock()
             .map_err(|_| {
                 QueryError::Infrastructure(rootcause::Report::new(PoisonedDeps).into_dynamic())
             })?
             .clone();
+        // The authorizer also reports reads of table-valued functions
+        // (`json_each`, which `HAS` desugars to); only catalog tables are
+        // dependencies to materialize. Anything else the statement named
+        // would already have failed to prepare.
+        let known: HashSet<&str> = catalog.tables.iter().map(|t| t.sql_name.as_str()).collect();
+        tables.retain(|name, _| known.contains(name.as_str()));
         Ok(TableDeps { tables })
     }
 
@@ -582,6 +627,7 @@ impl SqlExecutor for RusqliteExecutor {
             conn.execute_batch("BEGIN")
                 .map_err(|e| sql_error(e, &denial))?;
             let mut results = Vec::new();
+            let mut result_bytes = 0usize;
             let mut batch = Batch::new(&conn, sql);
             loop {
                 let mut statement = match batch.next() {
@@ -614,9 +660,15 @@ impl SqlExecutor for RusqliteExecutor {
                     }
                     let mut values = Vec::with_capacity(width);
                     for i in 0..width {
-                        values.push(to_sql_value(
-                            row.get_ref(i).map_err(|e| sql_error(e, &denial))?,
-                        ));
+                        let value =
+                            to_sql_value(row.get_ref(i).map_err(|e| sql_error(e, &denial))?);
+                        if let SqlValue::Text(text) = &value {
+                            result_bytes += text.len();
+                            if result_bytes > self.limits.max_result_bytes {
+                                return Err(QueryError::BudgetExceeded);
+                            }
+                        }
+                        values.push(value);
                     }
                     rows_out.push(values);
                 }

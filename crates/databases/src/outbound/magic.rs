@@ -61,6 +61,7 @@ fn schema(name: &str, columns: Vec<ColumnSchema>) -> TableSchema {
         primary_key: vec!["id".to_string()],
         foreign_keys: vec![],
         writable: false,
+        aliases: vec![],
     }
 }
 
@@ -87,6 +88,9 @@ fn people_schema() -> TableSchema {
         ],
     )
 }
+
+/// Most rows a magic table contributes; callers learn when the cap bit.
+pub const MAGIC_ROW_CAP: usize = 20_000;
 
 /// Keep only the requested columns (always keeping `id`), in schema order.
 fn project(full: TableSchema, rows: Vec<Vec<SqlValue>>, requested: &[String]) -> MaterializedTable {
@@ -154,9 +158,10 @@ impl MagicTableRegistry {
             WHERE d."deletedAt" IS NULL
               AND (d.owner = $1 OR d.id::uuid IN (SELECT entity_id FROM accessible))
             ORDER BY d."updatedAt" DESC
-            LIMIT 5000
+            LIMIT $2
             "#,
             user_id,
+            (MAGIC_ROW_CAP + 1) as i64,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -188,8 +193,10 @@ impl MagicTableRegistry {
                     WHERE mine.user_id = $1
                )
             ORDER BY u.email
+            LIMIT $2
             "#,
             user_id,
+            (MAGIC_ROW_CAP + 1) as i64,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -213,19 +220,14 @@ impl MagicTables for MagicTableRegistry {
         viewer: &Viewer,
         sql_name: &str,
         columns: &[String],
-    ) -> Result<MaterializedTable, Self::Err> {
-        match sql_name {
-            DOCUMENTS => Ok(project(
-                documents_schema(),
-                self.documents(viewer).await?,
-                columns,
-            )),
-            PEOPLE => Ok(project(
-                people_schema(),
-                self.people(viewer).await?,
-                columns,
-            )),
-            other => Err(MagicTablesError::Unknown(other.to_string())),
-        }
+    ) -> Result<(MaterializedTable, bool), Self::Err> {
+        let (schema, mut rows) = match sql_name {
+            DOCUMENTS => (documents_schema(), self.documents(viewer).await?),
+            PEOPLE => (people_schema(), self.people(viewer).await?),
+            other => return Err(MagicTablesError::Unknown(other.to_string())),
+        };
+        let truncated = rows.len() > MAGIC_ROW_CAP;
+        rows.truncate(MAGIC_ROW_CAP);
+        Ok((project(schema, rows, columns), truncated))
     }
 }

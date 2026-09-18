@@ -4,7 +4,6 @@
 //! (`list_documents_with_access`): the user themself, their teams, and the
 //! channels they participate in. The highest grant wins.
 
-use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
 use crate::domain::models::{AccessGrant, DatabaseId, Viewer};
@@ -55,6 +54,7 @@ impl AccessDirectory for PgAccessDirectory {
                 ea.entity_id AS "entity_id!",
                 ea.access_level::text AS "access_level!"
             FROM entity_access ea
+            JOIN databases d ON d.id = ea.entity_id AND d.trashed_at IS NULL
             WHERE ea.entity_type = 'database'
               AND ea.source_id = ANY(SELECT source_id FROM user_source_ids)
             ORDER BY ea.entity_id,
@@ -75,25 +75,5 @@ impl AccessDirectory for PgAccessDirectory {
             .into_iter()
             .filter_map(|row| Some((row.entity_id, AccessGrant::parse(&row.access_level)?)))
             .collect())
-    }
-
-    #[tracing::instrument(skip(self, owner), err)]
-    async fn grant_owner(
-        &self,
-        database_id: DatabaseId,
-        owner: &MacroUserIdStr<'_>,
-    ) -> Result<(), Self::Err> {
-        let owner: &str = owner.as_ref();
-        sqlx::query!(
-            r#"
-            INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
-            VALUES ($1, 'database', $2, 'user', 'owner')
-            "#,
-            database_id,
-            owner,
-        )
-        .execute(&self.pool)
-        .await?;
-        Ok(())
     }
 }
