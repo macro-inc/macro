@@ -15867,7 +15867,7 @@
         "properties": {
           "allow_permission_bypass": {
             "type": "boolean",
-            "description": "Whether personas may bypass ACP permission requests on this harness."
+            "description": "Whether agents may bypass ACP permission requests on this harness."
           },
           "name": {
             "type": ["string", "null"],
@@ -19247,6 +19247,10 @@
         "description": "Request to open a pairing: the daemon asks for a code the user approves.\n\nThe daemon serializes this, so both derives are used.",
         "required": ["name"],
         "properties": {
+          "allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling. Omitted by older clients; web approval decides."
+          },
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine, e.g. `eric@macbook / darwin`."
@@ -23843,7 +23847,7 @@
         "properties": {
           "allow_permission_bypass": {
             "type": "boolean",
-            "description": "Whether personas may bypass ACP permission requests on this harness."
+            "description": "Whether agents may bypass ACP permission requests on this harness."
           },
           "connected": {
             "type": "boolean",
@@ -25165,6 +25169,10 @@
           "host": {
             "type": ["string", "null"],
             "description": "Display-only description of the machine."
+          },
+          "requested_allow_permission_bypass": {
+            "type": ["boolean", "null"],
+            "description": "Daemon operator consent ceiling; false forbids bypass at approval."
           },
           "requested_name": {
             "type": "string",

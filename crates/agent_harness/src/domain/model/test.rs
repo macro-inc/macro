@@ -36,24 +36,44 @@ fn bypass_requires_both_operator_opt_in_and_persona_choice() {
 }
 
 #[test]
-fn editable_personas_default_to_prompt_even_on_builtin_runtimes() {
+fn builtin_runtimes_always_bypass_regardless_of_saved_agent_choice() {
     for kind in [
         AgentKind::InMemory,
         AgentKind::Cursor,
         AgentKind::CodexCloud,
         AgentKind::ClaudeCloud,
         AgentKind::SandboxedCoder,
-        AgentKind::External,
     ] {
-        for harness_allows_bypass in [None, Some(false), Some(true)] {
+        for auto_accept_permissions in [None, Some(false), Some(true)] {
             assert_eq!(
                 PermissionPolicyConfig::Persona {
                     kind,
-                    harness_allows_bypass,
-                    auto_accept_permissions: None,
+                    harness_allows_bypass: None,
+                    auto_accept_permissions,
                 }
                 .resolve(),
-                PermissionPolicy::Prompt
+                PermissionPolicy::AutoAccept
+            );
+        }
+    }
+}
+
+#[test]
+fn external_runtimes_require_registered_harness_consent_and_agent_choice() {
+    for harness_allows_bypass in [None, Some(false), Some(true)] {
+        for auto_accept_permissions in [None, Some(false), Some(true)] {
+            assert_eq!(
+                PermissionPolicyConfig::Persona {
+                    kind: AgentKind::External,
+                    harness_allows_bypass,
+                    auto_accept_permissions,
+                }
+                .resolve(),
+                if harness_allows_bypass == Some(true) && auto_accept_permissions == Some(true) {
+                    PermissionPolicy::AutoAccept
+                } else {
+                    PermissionPolicy::Prompt
+                }
             );
         }
     }

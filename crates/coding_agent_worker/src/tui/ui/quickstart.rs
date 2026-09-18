@@ -19,7 +19,7 @@ pub(crate) fn render_quickstart(
     let discovered_height = (setup.agents.len() as u16 + 2).clamp(3, 9);
     let area = centered(
         84,
-        frame.area().height.saturating_sub(2).min(27),
+        frame.area().height.saturating_sub(2).min(33),
         frame.area(),
     );
     frame.render_widget(Clear, area);
@@ -33,6 +33,8 @@ pub(crate) fn render_quickstart(
         _form_spacer,
         workspace_area,
         scope_area,
+        permissions_area,
+        permission_warning_area,
         _button_spacer,
         submit_area,
         warning_area,
@@ -45,6 +47,8 @@ pub(crate) fn render_quickstart(
         Constraint::Length(1),
         Constraint::Length(1),
         Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Length(2),
         Constraint::Min(1),
         Constraint::Length(3),
         Constraint::Length(1),
@@ -120,6 +124,34 @@ pub(crate) fn render_quickstart(
             .style(Style::new().fg(WARN))
             .alignment(Alignment::Center),
             warning_area,
+        );
+    }
+
+    let permissions_focused = setup.focus == QuickstartFocus::PermissionBypass;
+    frame.render_widget(
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                format!("{}{:<14}", focus_marker(permissions_focused), "Full Access"),
+                Style::new().fg(DIM),
+            ),
+            Span::styled(
+                if setup.allow_permission_bypass {
+                    "[x] On"
+                } else {
+                    "[ ] Off (always prompt)"
+                },
+                focus_style(permissions_focused),
+            ),
+        ])),
+        permissions_area,
+    );
+    if setup.allow_permission_bypass {
+        frame.render_widget(
+            Paragraph::new(
+                "Warning: agents can run commands and edit files without approval.\nOnly enable this if you trust everyone who can create agents here.",
+            )
+            .style(Style::new().fg(WARN)),
+            permission_warning_area,
         );
     }
 

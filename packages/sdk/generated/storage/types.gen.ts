@@ -1128,7 +1128,7 @@ export type ApiThreadReply = {
  */
 export type ApprovePairingRequest = {
     /**
-     * Whether personas may bypass ACP permission requests on this harness.
+     * Whether agents may bypass ACP permission requests on this harness.
      */
     allow_permission_bypass?: boolean;
     /**
@@ -3555,6 +3555,10 @@ export type CreateMarkdownDocumentResponse = {
  * The daemon serializes this, so both derives are used.
  */
 export type CreatePairingRequest = {
+    /**
+     * Daemon operator consent ceiling. Omitted by older clients; web approval decides.
+     */
+    allow_permission_bypass?: boolean | null;
     /**
      * Display-only description of the machine, e.g. `eric@macbook / darwin`.
      */
@@ -6285,7 +6289,7 @@ export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewe
  */
 export type Harness = {
     /**
-     * Whether personas may bypass ACP permission requests on this harness.
+     * Whether agents may bypass ACP permission requests on this harness.
      */
     allow_permission_bypass?: boolean;
     /**
@@ -7126,6 +7130,10 @@ export type PairingDetails = {
      * Display-only description of the machine.
      */
     host?: string | null;
+    /**
+     * Daemon operator consent ceiling; false forbids bypass at approval.
+     */
+    requested_allow_permission_bypass?: boolean | null;
     /**
      * Harness display name the daemon asked for.
      */

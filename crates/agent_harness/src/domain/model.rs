@@ -131,8 +131,8 @@ impl AgentKind {
         !matches!(self, Self::External)
     }
 
-    /// How this kind's sessions answer permission requests when the agent's
-    /// owner has not said.
+    /// How this kind's sessions answer permission requests without a registered
+    /// local harness.
     ///
     /// Managed runtimes act inside sandboxes this deployment owns (or, for
     /// Cursor, never ask), so approving on arrival costs nothing. An external
@@ -161,13 +161,13 @@ pub enum PermissionPolicyConfig {
         kind: AgentKind,
         /// A registered harness's opt-in. `None` denotes a built-in runtime.
         harness_allows_bypass: Option<bool>,
-        /// The persona owner's explicit choice; absent means prompt.
+        /// The agent owner's choice for a local harness; absent means prompt.
         auto_accept_permissions: Option<bool>,
     },
 }
 
 impl PermissionPolicyConfig {
-    /// Apply the harness ceiling and persona choice in the domain.
+    /// Apply local harness consent and agent choice, or the built-in policy.
     #[must_use]
     pub fn resolve(self) -> PermissionPolicy {
         match self {
@@ -176,10 +176,10 @@ impl PermissionPolicyConfig {
                 kind,
                 harness_allows_bypass,
                 auto_accept_permissions,
-            } => resolve_permission_policy(
-                harness_allows_bypass.unwrap_or(kind.is_managed()),
-                auto_accept_permissions,
-            ),
+            } => match harness_allows_bypass {
+                Some(allowed) => resolve_permission_policy(allowed, auto_accept_permissions),
+                None => kind.default_permission_policy(),
+            },
         }
     }
 }

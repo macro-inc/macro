@@ -36,6 +36,7 @@ fn harness(owner: HarnessOwner) -> Harness {
 fn pending_pairing() -> PairingRow {
     PairingRow {
         details: PairingDetails {
+            requested_allow_permission_bypass: None,
             code: CODE.to_owned(),
             requested_name: "erics-macbook".to_owned(),
             host: Some("eric@macbook / darwin".to_owned()),
@@ -192,6 +193,7 @@ async fn creating_a_pairing_returns_code_and_secret_and_persists_only_hashes() {
     let repo = FakeRepo::default();
     let created = service(repo.clone())
         .create_pairing(CreatePairingRequest {
+            allow_permission_bypass: None,
             name: "  erics-macbook  ".to_owned(),
             host: Some("eric@macbook".to_owned()),
             scope: Some(RequestedHarnessScope::Team),
@@ -222,6 +224,7 @@ async fn pairing_creation_retries_code_collisions() {
     };
     let created = service(repo.clone())
         .create_pairing(CreatePairingRequest {
+            allow_permission_bypass: None,
             name: "erics-macbook".to_owned(),
             host: None,
             scope: None,
@@ -245,6 +248,7 @@ async fn pairing_creation_is_throttled_and_validates_the_name() {
     };
     let result = service(throttled)
         .create_pairing(CreatePairingRequest {
+            allow_permission_bypass: None,
             name: "erics-macbook".to_owned(),
             host: None,
             scope: None,
@@ -254,6 +258,7 @@ async fn pairing_creation_is_throttled_and_validates_the_name() {
 
     let result = service(FakeRepo::default())
         .create_pairing(CreatePairingRequest {
+            allow_permission_bypass: None,
             name: "   ".to_owned(),
             host: None,
             scope: None,
@@ -614,4 +619,60 @@ async fn approval_records_explicit_permission_bypass_consent() {
             .1
             .allow_permission_bypass
     );
+}
+
+#[tokio::test]
+async fn pairing_creation_preserves_the_daemons_permission_ceiling() {
+    for allowed in [None, Some(false), Some(true)] {
+        let repo = FakeRepo::default();
+        service(repo.clone())
+            .create_pairing(CreatePairingRequest {
+                allow_permission_bypass: allowed,
+                name: "laptop".to_owned(),
+                host: None,
+                scope: None,
+            })
+            .await
+            .unwrap();
+        assert_eq!(
+            repo.calls.lock().unwrap().inserted_pairings[0].requested_allow_permission_bypass,
+            allowed
+        );
+    }
+}
+
+#[tokio::test]
+async fn approval_requires_daemon_consent_when_the_daemon_names_a_ceiling() {
+    for requested in [None, Some(false), Some(true)] {
+        for approved in [false, true] {
+            let mut pairing = pending_pairing();
+            pairing.details.requested_allow_permission_bypass = requested;
+            let repo = FakeRepo {
+                pairing: Some(pairing),
+                approve_result: Some(harness(HarnessOwner::User {
+                    user_id: OWNER_ID.to_owned(),
+                })),
+                ..FakeRepo::default()
+            };
+            let result = service(repo.clone())
+                .approve_pairing(
+                    caller(OWNER_ID),
+                    CODE,
+                    ApprovePairingRequest {
+                        allow_permission_bypass: approved,
+                        name: None,
+                        team_id: None,
+                    },
+                )
+                .await;
+            let calls = repo.calls.lock().unwrap();
+            if requested == Some(false) && approved {
+                assert!(matches!(result, Err(HarnessError::BadRequest(_))));
+                assert!(calls.approved.is_empty());
+            } else {
+                result.unwrap();
+                assert_eq!(calls.approved[0].1.allow_permission_bypass, approved);
+            }
+        }
+    }
 }

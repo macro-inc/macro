@@ -9005,6 +9005,12 @@ it, and creation is throttled in the domain service.
  */
 export const createHarnessPairingBody = zod
   .object({
+    allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Daemon operator consent ceiling. Omitted by older clients; web approval decides.'
+      ),
     host: zod
       .string()
       .nullish()
@@ -9047,6 +9053,12 @@ export const getHarnessPairingResponse = zod
       .string()
       .nullish()
       .describe('Display-only description of the machine.'),
+    requested_allow_permission_bypass: zod
+      .boolean()
+      .nullish()
+      .describe(
+        'Daemon operator consent ceiling; false forbids bypass at approval.'
+      ),
     requested_name: zod
       .string()
       .describe('Harness display name the daemon asked for.'),
@@ -9076,7 +9088,7 @@ export const approveHarnessPairingBody = zod
       .boolean()
       .optional()
       .describe(
-        'Whether personas may bypass ACP permission requests on this harness.'
+        'Whether agents may bypass ACP permission requests on this harness.'
       ),
     name: zod
       .string()
@@ -9097,7 +9109,7 @@ export const approveHarnessPairingResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether personas may bypass ACP permission requests on this harness.'
+        'Whether agents may bypass ACP permission requests on this harness.'
       ),
     connected: zod
       .boolean()
@@ -9163,7 +9175,7 @@ export const claimHarnessPairingResponse = zod
           .boolean()
           .optional()
           .describe(
-            'Whether personas may bypass ACP permission requests on this harness.'
+            'Whether agents may bypass ACP permission requests on this harness.'
           ),
         connected: zod
           .boolean()
@@ -9217,7 +9229,7 @@ export const listHarnessesResponseItem = zod
       .boolean()
       .optional()
       .describe(
-        'Whether personas may bypass ACP permission requests on this harness.'
+        'Whether agents may bypass ACP permission requests on this harness.'
       ),
     connected: zod
       .boolean()
@@ -9265,7 +9277,7 @@ export const getSelfHarnessResponse = zod
       .boolean()
       .optional()
       .describe(
-        'Whether personas may bypass ACP permission requests on this harness.'
+        'Whether agents may bypass ACP permission requests on this harness.'
       ),
     connected: zod
       .boolean()

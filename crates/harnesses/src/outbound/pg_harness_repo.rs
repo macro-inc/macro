@@ -115,8 +115,8 @@ impl HarnessRepo for PgHarnessRepo {
             r#"
             INSERT INTO harness_pairing_requests
                 (id, code, device_secret_hash, requested_name, host_info, requested_scope,
-                 expires_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7)
+                 expires_at, requested_allow_permission_bypass)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (code) DO NOTHING
             "#,
             pairing.id,
@@ -126,6 +126,7 @@ impl HarnessRepo for PgHarnessRepo {
             pairing.host,
             pairing.requested_scope.map(RequestedHarnessScope::as_str),
             pairing.expires_at,
+            pairing.requested_allow_permission_bypass,
         )
         .execute(&self.pool)
         .await
@@ -174,8 +175,8 @@ impl HarnessRepo for PgHarnessRepo {
     async fn get_pairing(&self, code: &str) -> Result<Option<PairingRow>, Self::Err> {
         let row = sqlx::query!(
             r#"
-            SELECT code, requested_name, host_info, requested_scope, status, created_at,
-                   expires_at
+            SELECT code, requested_name, host_info, requested_scope,
+                   requested_allow_permission_bypass, status, created_at, expires_at
             FROM harness_pairing_requests
             WHERE code = $1
             "#,
@@ -198,6 +199,7 @@ impl HarnessRepo for PgHarnessRepo {
                     requested_name: row.requested_name,
                     host: row.host_info,
                     requested_scope,
+                    requested_allow_permission_bypass: row.requested_allow_permission_bypass,
                     created_at: row.created_at,
                     expires_at: row.expires_at,
                 },

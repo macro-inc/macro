@@ -17,6 +17,8 @@ use super::models::{
 /// A pairing row to persist.
 #[derive(Debug, Clone)]
 pub struct NewPairing {
+    /// Daemon operator consent ceiling for permission bypass.
+    pub requested_allow_permission_bypass: Option<bool>,
     /// Pairing id.
     pub id: Uuid,
     /// Normalized pairing code, `XXXX-XXXX`.

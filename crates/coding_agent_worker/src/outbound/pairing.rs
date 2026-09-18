@@ -61,6 +61,7 @@ impl PairingClient {
             .http
             .post(format!("{}/harness-pairings", self.base))
             .json(&CreatePairingRequest {
+                allow_permission_bypass: Some(config.identity.allow_permission_bypass),
                 name,
                 host: Some(host_info()),
                 scope: Some(scope),

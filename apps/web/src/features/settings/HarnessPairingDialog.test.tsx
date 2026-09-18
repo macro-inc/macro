@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
       code: 'KX7M-4QHD',
       requested_name: 'Dev laptop',
       requested_scope: null,
+      requested_allow_permission_bypass: null as boolean | null,
       host: 'erics-mbp.local',
       created_at: '2026-08-27T12:00:00Z',
       expires_at: new Date(Date.now() + 10 * 60_000).toISOString(),
@@ -69,6 +70,7 @@ beforeAll(() => {
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.pairing.isError = false;
+  mocks.pairing.data.requested_allow_permission_bypass = null;
   mocks.approve.mockResolvedValue({ id: 'harness-1' });
   mocks.currentTeam = { team: { id: 'team-1' } };
 });
@@ -214,6 +216,50 @@ it('warns before opting a harness into permission bypass', async () => {
   await waitFor(() =>
     expect(mocks.approve).toHaveBeenCalledWith(
       expect.objectContaining({ allowPermissionBypass: true })
+    )
+  );
+});
+
+it('preselects daemon bypass consent and lets the approving user decline it', async () => {
+  mocks.pairing.data.requested_allow_permission_bypass = true;
+  render(() => (
+    <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
+  ));
+  const checkbox = screen.getByRole('checkbox', {
+    name: 'Allow bypassing permission requests',
+  });
+  expect(checkbox).toHaveProperty('checked', true);
+  expect(screen.getByRole('alert').textContent).toContain('without approval');
+  fireEvent.click(checkbox);
+  fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+  await waitFor(() =>
+    expect(mocks.approve).toHaveBeenCalledWith(
+      expect.objectContaining({ allowPermissionBypass: false })
+    )
+  );
+});
+
+it('prevents approval from overriding the daemon prompt-only choice', async () => {
+  mocks.pairing.data.requested_allow_permission_bypass = false;
+  render(() => (
+    <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
+  ));
+  const checkbox = screen.getByRole('checkbox', {
+    name: 'Allow bypassing permission requests',
+  });
+  expect(checkbox).toHaveProperty('checked', false);
+  expect(
+    checkbox.hasAttribute('disabled') ||
+      checkbox.getAttribute('aria-disabled') === 'true'
+  ).toBe(true);
+  expect(
+    screen.getByText(/This daemon requires permission prompts/)
+  ).toBeTruthy();
+  fireEvent.click(checkbox);
+  fireEvent.click(screen.getByRole('button', { name: 'Approve' }));
+  await waitFor(() =>
+    expect(mocks.approve).toHaveBeenCalledWith(
+      expect.objectContaining({ allowPermissionBypass: false })
     )
   );
 });

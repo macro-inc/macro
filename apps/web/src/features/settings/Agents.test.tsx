@@ -715,7 +715,7 @@ describe('Agents', () => {
     await waitFor(() => {
       expect(agentMocks.update).toHaveBeenCalledWith({
         agentId: 'agent-1',
-        autoAcceptPermissions: false,
+        autoAcceptPermissions: true,
         avatarUrl: undefined,
         channelIds: ['channel-engineering'],
         channelScope: 'selected',
@@ -939,7 +939,7 @@ describe('Agents', () => {
 
     await waitFor(() => {
       expect(agentMocks.create).toHaveBeenCalledWith({
-        autoAcceptPermissions: false,
+        autoAcceptPermissions: true,
         avatarUrl: undefined,
         channelIds: [],
         channelScope: 'all',
@@ -1569,3 +1569,34 @@ it('offers bypass only after harness consent and resets the choice on harness ch
   );
   expect(within(dialog).queryByLabelText('Always bypass')).toBeNull();
 });
+
+it.each(['in-memory', 'cursor', 'claude-cloud'])(
+  'hides permission choices and saves bypass for built-in %s',
+  async (harness) => {
+    cursorMocks.status.data.registered = true;
+    modelMocks.queries[`${harness}:`] = successfulModels([
+      { id: 'provider-default', name: 'Provider default' },
+    ]);
+    agentMocks.create.mockClear();
+    render(() => <Agents />);
+    fireEvent.click(screen.getByRole('button', { name: 'Create agent' }));
+    const dialog = screen.getByRole('dialog');
+    fireEvent.input(within(dialog).getByLabelText('Name'), {
+      target: { value: 'Built-in agent' },
+    });
+    fireEvent.change(within(dialog).getByLabelText('Harness'), {
+      target: { value: harness },
+    });
+    expect(within(dialog).queryByText('Permission requests')).toBeNull();
+    expect(within(dialog).queryByLabelText('Always prompt')).toBeNull();
+    expect(within(dialog).queryByLabelText('Always bypass')).toBeNull();
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Create agent' })
+    );
+    await waitFor(() => {
+      expect(agentMocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({ harness, autoAcceptPermissions: true })
+      );
+    });
+  }
+);

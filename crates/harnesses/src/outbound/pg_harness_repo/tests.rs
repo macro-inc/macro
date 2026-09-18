@@ -43,6 +43,7 @@ async fn insert_user(pool: &PgPool, user_id: &str) {
 
 fn new_pairing(code: &str, secret: &str) -> NewPairing {
     NewPairing {
+        requested_allow_permission_bypass: None,
         id: Uuid::new_v4(),
         code: code.to_owned(),
         device_secret_hash: harness_token::hash_token(secret),
@@ -536,5 +537,21 @@ async fn permission_bypass_survives_registration_and_listing(pool: PgPool) {
                 .allow_permission_bypass,
             allowed
         );
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pairing_permission_ceiling_roundtrips(pool: PgPool) {
+    let repo = PgHarnessRepo::new(pool);
+    for (code, allowed) in [
+        ("AAAA-AAAA", None),
+        ("BBBB-BBBB", Some(false)),
+        ("CCCC-CCCC", Some(true)),
+    ] {
+        let mut pairing = new_pairing(code, "device-secret");
+        pairing.requested_allow_permission_bypass = allowed;
+        assert!(repo.insert_pairing(pairing).await.unwrap());
+        let stored = repo.get_pairing(code).await.unwrap().unwrap();
+        assert_eq!(stored.details.requested_allow_permission_bypass, allowed);
     }
 }

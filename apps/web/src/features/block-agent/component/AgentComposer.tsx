@@ -17,11 +17,11 @@ import {
   type AgentInputProps,
   AgentModelSelector,
   ComposerNotice,
-  PermissionOptions,
   type QueuedPromptItem,
   QueuedPrompts,
 } from '../ui';
 import type { AgentModelSelectorProps } from '../ui/AgentModelSelector';
+import { PermissionRequest } from './PermissionRequest';
 
 export function AgentComposer(props: {
   /**
@@ -133,24 +133,8 @@ export function AgentComposer(props: {
       </Show>
       <For each={pendingPermissions()}>
         {(permission) => (
-          <div class="mb-2 flex flex-wrap items-center gap-3 rounded-lg border border-edge-muted bg-surface px-3 py-2 text-xs">
-            <span class="text-ink">
-              {interactions.canAnswer()
-                ? 'The agent is waiting for your permission to continue.'
-                : 'The agent is waiting for an editor to grant permission.'}
-            </span>
-            <Show when={interactions.canAnswer()}>
-              <PermissionOptions
-                options={permission.options}
-                disabled={interactions.answering(permission)}
-                onSelect={(optionId) =>
-                  void interactions.respond({
-                    ...permission,
-                    answer: { kind: 'selected', optionId },
-                  })
-                }
-              />
-            </Show>
+          <div class="mb-2 min-w-0">
+            <PermissionRequest request={permission} />
           </div>
         )}
       </For>

@@ -372,7 +372,7 @@ Other participants can copy a link for people who already have access, but
 cannot grant access. Copying a link alone never changes permissions. New,
 unsaved session drafts do not offer sharing.
 
-Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and persona names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.
+Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and agent names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.
 
 ### Expanded session mentions
 
@@ -456,19 +456,29 @@ must stay hidden; subsequent live messages must still appear.
   entries, then stop.
 - **Permission prompts.** Everyone with **Edit** access to a session may approve or
   reject its ACP permission requests, even when they did not create the session.
-  A pending request shows the agent's choices in a `Permission needed` card and
-  above the composer. View access alone does not authorize an answer. Stopping a
-  turn cancels open requests; answered requests show the chosen outcome.
+  A pending request shows one `Approval needed` card above the composer, with
+  the command or affected file separate from the actions. The transcript does
+  not repeat the pending request.
+  `Allow once` and `Deny` answer immediately; `More options` contains remembered
+  choices with the agent's full rule text. Viewers see a waiting notice without
+  action buttons. Stopping a turn cancels open requests; answered requests show
+  a compact outcome such as `Allowed once` or `Denied` in the transcript.
   Permission requests and questions both put the agent in a waiting state.
   Several permissions may be pending alongside one question; answering one leaves
   the others available. Controls disappear when their turn ends, is stopped, or
   disconnects, and old transcript requests cannot answer a later turn's request.
 - **Harness bypass consent.** Settings → Harnesses → Connect a harness offers
   `Allow bypassing permission requests`, off by default. Enabling it warns that
-  personas may run commands and edit files on the machine without approval.
-- **Persona permission policy.** Settings → Agents → Runtime defaults to `Always
-  prompt`. `Always bypass` is available only on a harness that allows bypass.
-  Otherwise the persona must prompt. These limits are also enforced by the API.
+  agents may run commands and edit files on the machine without approval.
+  Macrod Quickstart and Config also offer `Full Access`, off by
+  default. The choice applies at the next pairing: off disables bypass in the
+  approval dialog; on preselects bypass with a warning, and the approving user
+  can turn it off. Older daemons leave this choice to the approval dialog.
+- **Agent permission policy.** Settings → Agents → Runtime shows `Always prompt`
+  and `Always bypass` only for local macrod harnesses. Macrod defaults to prompts;
+  bypass requires both harness consent and the agent's explicit choice. Built-in
+  Macro, in-memory, Cursor, Codex, and Claude runtimes always bypass and have no
+  permission policy selector. The backend enforces these policies.
 
 Locally sent user messages in both AI implementations enter with a short upward
 slide and fade. History and remounted messages stay

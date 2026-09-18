@@ -670,7 +670,8 @@ function AgentDialog(props: {
   const allowPermissionBypass = () =>
     selectedHarness()?.allowPermissionBypass === true;
   const autoAcceptPermissions = () =>
-    allowPermissionBypass() && autoAcceptChoice();
+    selectedHarness()?.kind === 'builtin' ||
+    (allowPermissionBypass() && autoAcceptChoice());
   let avatarInputRef: HTMLInputElement | undefined;
   let dialogContentRef: HTMLDivElement | undefined;
 
@@ -1006,36 +1007,38 @@ function AgentDialog(props: {
                   </Show>
                 </label>
               </div>
-              <fieldset class="mt-4 grid gap-2 border-t border-ink/[0.06] pt-4">
-                <legend class="text-xs font-medium text-ink">
-                  Permission requests
-                </legend>
-                <ChoiceRow
-                  name="agent-permission-policy"
-                  value="prompt"
-                  title="Always prompt"
-                  description="Session editors approve or reject each permission request."
-                  checked={!autoAcceptPermissions()}
-                  onChange={() => setAutoAcceptChoice(false)}
-                />
-                <Show
-                  when={allowPermissionBypass()}
-                  fallback={
-                    <p class="text-xs text-ink-muted">
-                      This harness requires permission prompts.
-                    </p>
-                  }
-                >
+              <Show when={selectedHarness()?.kind === 'macrod'}>
+                <fieldset class="mt-4 grid gap-2 border-t border-ink/[0.06] pt-4">
+                  <legend class="text-xs font-medium text-ink">
+                    Permission requests
+                  </legend>
                   <ChoiceRow
                     name="agent-permission-policy"
-                    value="bypass"
-                    title="Always bypass"
-                    description="Approve tool calls without asking."
-                    checked={autoAcceptPermissions()}
-                    onChange={() => setAutoAcceptChoice(true)}
+                    value="prompt"
+                    title="Always prompt"
+                    description="Session editors approve or reject each permission request."
+                    checked={!autoAcceptPermissions()}
+                    onChange={() => setAutoAcceptChoice(false)}
                   />
-                </Show>
-              </fieldset>
+                  <Show
+                    when={allowPermissionBypass()}
+                    fallback={
+                      <p class="text-xs text-ink-muted">
+                        This harness requires permission prompts.
+                      </p>
+                    }
+                  >
+                    <ChoiceRow
+                      name="agent-permission-policy"
+                      value="bypass"
+                      title="Always bypass"
+                      description="Approve tool calls without asking."
+                      checked={autoAcceptPermissions()}
+                      onChange={() => setAutoAcceptChoice(true)}
+                    />
+                  </Show>
+                </fieldset>
+              </Show>
             </AgentFormSection>
 
             <Show when={pipedreamMcp()}>
