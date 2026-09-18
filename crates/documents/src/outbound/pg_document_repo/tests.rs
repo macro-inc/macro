@@ -777,15 +777,17 @@ async fn get_document_metadata_and_basic_document_decode_bot_and_team_owners(poo
 
     sqlx::query(
         r#"
-        INSERT INTO "User" (id, email)
-        VALUES ($1, $2), ($3, $4)
+        INSERT INTO "User" (id, email, macro_user_id)
+        VALUES ($1, $2, $3), ($4, $5, $6)
         ON CONFLICT (id) DO NOTHING
         "#,
     )
     .bind(BOT_OWNER)
     .bind("bot-owner-fixture@example.com")
+    .bind(uuid::Uuid::parse_str("a1111111-1111-1111-1111-111111111111").unwrap())
     .bind(TEAM_OWNER)
     .bind("team-owner-fixture@example.com")
+    .bind(uuid::Uuid::parse_str("a2222222-2222-2222-2222-222222222222").unwrap())
     .execute(&pool)
     .await
     .unwrap();
