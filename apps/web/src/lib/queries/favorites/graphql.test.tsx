@@ -1,5 +1,5 @@
 import { type Client, CombinedError } from '@urql/core';
-import { createMemo, For, type JSX, Show } from 'solid-js';
+import { createMemo, For, type JSX, Show, Suspense } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fromValue, makeSubject } from 'wonka';
@@ -102,7 +102,7 @@ describe('GraphQL favorites queries', () => {
   it('preserves mounted favorite identities through additions, removals, and reordering', async () => {
     const subject = makeSubject<ReturnType<typeof favoritesResult>>();
     executeQuery.mockReturnValue(subject.source);
-    dispose = render(() => {
+    function FavoritesFixture() {
       const data = useFavoritesData({ entityType: ['document'] });
       const favorites = createMemo(() => data()?.favorites ?? []);
       const section = createMemo(() => ({ items: favorites() }));
@@ -117,7 +117,15 @@ describe('GraphQL favorites queries', () => {
           </For>
         </Show>
       );
-    }, document.body);
+    }
+    dispose = render(
+      () => (
+        <Suspense fallback={<span>Loading favorites</span>}>
+          <FavoritesFixture />
+        </Suspense>
+      ),
+      document.body
+    );
     await vi.waitFor(() => expect(executeQuery).toHaveBeenCalledOnce());
 
     subject.next(favoritesResult([]));
