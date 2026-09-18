@@ -9,7 +9,7 @@ note: |-
   builds query factories; `primitives/` consumes feature-owned capabilities
   to produce state and actions with Solid primitives but no JSX. Test adapters
   with fake clients and controllers with fake capabilities; neither imports
-  rendering code.
+  rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
@@ -30,7 +30,7 @@ files:
   - apps/web/src/features/email-compose/primitives/**
 rule:
   kind: string
-  regex: ^['"](solid-js/web|@ui|@components/|(\.\./)+(components|views)/)
+  regex: ^['"](solid-js/web|@ui|@components/|(\.\./)+(components|views|ui|component)(/|['"]))
   any:
     - inside:
         kind: import_statement

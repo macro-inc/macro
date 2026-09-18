@@ -6,8 +6,6 @@
  */
 
 import { toast } from '@core/component/Toast/Toast';
-import { useUserId } from '@core/context/user';
-import { idToDisplayName } from '@core/user/util';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
 import { type Component, For, Show } from 'solid-js';
 import { useAgentSession } from '../context/AgentSessionContext';
@@ -35,6 +33,8 @@ export function AgentComposer(props: {
   const Input = props.input ?? AgentInput;
   const ModelSelector = props.modelSelector ?? AgentModelSelector;
   const {
+    displayName,
+    userId,
     interactions,
     issue,
     loadFailed,
@@ -46,7 +46,6 @@ export function AgentComposer(props: {
     turn,
     registerQuoteInsert,
   } = useAgentSession();
-  const userId = useUserId();
 
   // The fold speculates the action the moment it is issued, so success is
   // observed there; only a refusal needs saying here.
@@ -99,8 +98,7 @@ export function AgentComposer(props: {
         actionId: entry.actionId,
         kind: entry.kind,
         prompt: entry.prompt ?? undefined,
-        queuedBy:
-          actor && actor !== userId() ? idToDisplayName(actor) : undefined,
+        queuedBy: actor && actor !== userId() ? displayName(actor) : undefined,
       };
     });
 
