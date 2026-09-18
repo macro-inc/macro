@@ -1,6 +1,7 @@
 -- Extend email_thread_labels with a second inbox belonging to the same user.
+-- Its distinct email_address makes the generated is_primary column false.
 UPDATE email_links
-SET macro_id = 'macro|user1@test.com', fusionauth_user_id = 'user1', is_primary = false
+SET macro_id = 'macro|user1@test.com', fusionauth_user_id = 'user1'
 WHERE id = 'aaaaaaaa-aaaa-aaaa-aaaa-bbbbbbbbbbbb';
 
 INSERT INTO email_labels (id, link_id, provider_label_id, name, message_list_visibility, label_list_visibility, type, created_at)
