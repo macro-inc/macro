@@ -11,7 +11,8 @@ pub use models::{
     AllowanceDecision, BillingError, BillingPeriod, BillingSettings, CREDIT_PACKS_CENTS,
     DenyReason, Entitlement, MIN_STRIPE_CHARGE_CENTS, OVERAGE_CHARGE_THRESHOLD_CENTS,
     OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS, OverageChargeStatus, PayerScope,
-    PeriodLedger, PlanTier, Result, TARGET_GROSS_MARGIN_BPS, UsageSnapshot, list_rate_cents,
+    PeriodAllowance, PeriodLedger, PlanTier, Result, TARGET_GROSS_MARGIN_BPS, UsageSnapshot,
+    list_rate_cents,
 };
 pub use ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,

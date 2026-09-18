@@ -1,6 +1,6 @@
 use super::*;
 use crate::domain::ledger::plan_settlement;
-use crate::domain::models::{DenyReason, PayerScope, PeriodLedger};
+use crate::domain::models::{DenyReason, PayerScope, PeriodAllowance, PeriodLedger};
 use crate::domain::ports::SettlementOutcome;
 use macro_user_id::cowlike::CowLike;
 use macro_uuid::Uuid;
@@ -19,13 +19,14 @@ struct FakeEntitlements {
 
 impl FakeEntitlements {
     fn with(self, ent: Entitlement) -> Self {
-        for u in &ent.billed_users {
-            self.by_user
-                .lock()
-                .unwrap()
-                .insert(u.to_string(), ent.clone());
-        }
+        self.set(ent);
         self
+    }
+    fn set(&self, ent: Entitlement) {
+        let mut by_user = self.by_user.lock().unwrap();
+        for u in &ent.billed_users {
+            by_user.insert(u.to_string(), ent.clone());
+        }
     }
     fn with_customer(self, u: &MacroUserIdStr<'_>, customer: &str) -> Self {
         self.customers
@@ -54,21 +55,48 @@ impl EntitlementSource for FakeEntitlements {
 #[derive(Clone, Default)]
 struct FakeUsage {
     cents: Arc<Mutex<i64>>,
+    /// Usage at a specific instant, attributed to one user.
+    entries: Arc<Mutex<Vec<UsageEntry>>>,
+}
+
+struct UsageEntry {
+    user: String,
+    at: DateTime<Utc>,
+    cents: i64,
+}
+
+impl FakeUsage {
+    fn add(&self, user: &MacroUserIdStr<'_>, at: DateTime<Utc>, cents: i64) {
+        self.entries.lock().unwrap().push(UsageEntry {
+            user: user.to_string(),
+            at,
+            cents,
+        });
+    }
 }
 
 impl UsageReader for FakeUsage {
-    /// All fake usage happened "now": only the current period sees it.
+    /// `cents` is treated as usage "now". `entries` are summed when their
+    /// timestamp falls in the requested period and their user is billed.
     async fn list_rate_usage_cents(
         &self,
-        _users: &[MacroUserIdStr<'static>],
+        users: &[MacroUserIdStr<'static>],
         period: BillingPeriod,
     ) -> Result<i64> {
         let now = Utc::now();
+        let mut total = 0;
         if period.start <= now && now < period.end {
-            Ok(*self.cents.lock().unwrap())
-        } else {
-            Ok(0)
+            total += *self.cents.lock().unwrap();
         }
+        for entry in self.entries.lock().unwrap().iter() {
+            if users.iter().any(|u| u.as_ref() == entry.user.as_str())
+                && period.start <= entry.at
+                && entry.at < period.end
+            {
+                total += entry.cents;
+            }
+        }
+        Ok(total)
     }
 }
 
@@ -91,6 +119,7 @@ struct RepoState {
     purchases: Vec<String>,
     charges: Vec<FakeCharge>,
     suspended: bool,
+    allowances: HashMap<DateTime<Utc>, PeriodAllowance>,
 }
 
 impl RepoState {
@@ -118,6 +147,21 @@ struct FakeRepo {
 impl FakeRepo {
     fn charges(&self) -> Vec<FakeCharge> {
         self.state.lock().unwrap().charges.clone()
+    }
+    fn freeze(&self, period_start: DateTime<Utc>, allowance: PeriodAllowance) {
+        self.state
+            .lock()
+            .unwrap()
+            .allowances
+            .insert(period_start, allowance);
+    }
+    fn allowance(&self, period_start: DateTime<Utc>) -> Option<PeriodAllowance> {
+        self.state
+            .lock()
+            .unwrap()
+            .allowances
+            .get(&period_start)
+            .cloned()
     }
 }
 
@@ -166,6 +210,35 @@ impl BillingRepo for FakeRepo {
         period_start: DateTime<Utc>,
     ) -> Result<PeriodLedger> {
         Ok(self.state.lock().unwrap().ledger(period_start))
+    }
+    async fn period_allowance(
+        &self,
+        _payer: &MacroUserIdStr<'_>,
+        period_start: DateTime<Utc>,
+    ) -> Result<Option<PeriodAllowance>> {
+        Ok(self
+            .state
+            .lock()
+            .unwrap()
+            .allowances
+            .get(&period_start)
+            .cloned())
+    }
+    async fn remember_period_allowance(
+        &self,
+        _payer: &MacroUserIdStr<'_>,
+        period_start: DateTime<Utc>,
+        included_cents: i64,
+        billed_users: &[MacroUserIdStr<'static>],
+    ) -> Result<()> {
+        self.state.lock().unwrap().allowances.insert(
+            period_start,
+            PeriodAllowance {
+                included_cents,
+                billed_users: billed_users.to_vec(),
+            },
+        );
+        Ok(())
     }
     async fn record_credit_purchase(
         &self,
@@ -355,6 +428,7 @@ fn premium_service(used_cents: i64) -> (Service, FakeRepo, FakePayments, FakeUsa
         .with_customer(&payer, "cus_123");
     let usage = FakeUsage {
         cents: Arc::new(Mutex::new(used_cents)),
+        entries: Default::default(),
     };
     let repo = FakeRepo::default();
     let payments = FakePayments::default();
@@ -722,4 +796,198 @@ async fn synced_period_anchors_the_snapshot() {
     // Inverted periods are ignored.
     svc.sync_period(&payer, end, start).await.unwrap();
     assert_eq!(svc.snapshot(&payer).await.unwrap().period_start, start);
+}
+
+fn anchored_premium(
+    used_cents: i64,
+) -> (
+    Service,
+    FakeRepo,
+    FakePayments,
+    FakeUsage,
+    FakeEntitlements,
+    MacroUserIdStr<'static>,
+    BillingPeriod,
+    BillingPeriod,
+) {
+    let payer = user("payer@x.com");
+    let ents = FakeEntitlements::default()
+        .with(Entitlement::personal(payer.clone(), PlanTier::Premium))
+        .with_customer(&payer, "cus_123");
+    let usage = FakeUsage {
+        cents: Arc::new(Mutex::new(used_cents)),
+        entries: Default::default(),
+    };
+    let repo = FakeRepo::default();
+    let payments = FakePayments::default();
+    let svc = BillingServiceImpl::new(ents.clone(), usage.clone(), repo.clone(), payments.clone());
+    let current_start = Utc::now() - chrono::Duration::days(3);
+    let current_end = current_start + chrono::Duration::days(30);
+    let current = BillingPeriod {
+        start: current_start,
+        end: current_end,
+    };
+    let previous = current.previous();
+    (svc, repo, payments, usage, ents, payer, previous, current)
+}
+
+#[tokio::test]
+async fn snapshot_freezes_the_open_period_allowance_and_refreshes_it() {
+    let (svc, repo, _, _, ents, payer, _, current) = anchored_premium(0);
+    svc.sync_period(&payer, current.start, current.end)
+        .await
+        .unwrap();
+    svc.snapshot(&payer).await.unwrap();
+    let frozen = repo.allowance(current.start).expect("open period frozen");
+    assert_eq!(frozen.included_cents, 4_000);
+    assert_eq!(frozen.billed_users, vec![payer.clone()]);
+
+    ents.set(Entitlement::personal(payer.clone(), PlanTier::Max));
+    svc.snapshot(&payer).await.unwrap();
+    let frozen = repo
+        .allowance(current.start)
+        .expect("open period refreshed");
+    assert_eq!(frozen.included_cents, 20_000);
+}
+
+#[tokio::test]
+async fn previous_period_overage_survives_an_upgrade() {
+    let (svc, repo, payments, usage, ents, payer, previous, current) = anchored_premium(0);
+    svc.sync_period(&payer, current.start, current.end)
+        .await
+        .unwrap();
+    repo.freeze(
+        previous.start,
+        PeriodAllowance {
+            included_cents: 4_000,
+            billed_users: vec![payer.clone()],
+        },
+    );
+    svc.update_overage(&payer, true, 10_000).await.unwrap();
+    usage.add(&payer, previous.start + chrono::Duration::days(2), 5_500);
+
+    ents.set(Entitlement::personal(payer.clone(), PlanTier::Max));
+    svc.settle(&payer).await.unwrap();
+
+    let opened = payments.opened();
+    assert_eq!(opened.len(), 1);
+    // 5_500 used against the frozen Premium 4_000, not Max's 20_000.
+    assert_eq!(opened[0].amount_cents, 1_500);
+    assert_eq!(repo.charges()[0].status, OverageChargeStatus::Paid);
+    // The open period freeze now reflects Max; the closed one does not.
+    assert_eq!(
+        repo.allowance(previous.start).unwrap().included_cents,
+        4_000
+    );
+    assert_eq!(
+        repo.allowance(current.start).unwrap().included_cents,
+        20_000
+    );
+}
+
+#[tokio::test]
+async fn previous_period_does_not_charge_included_usage_after_a_downgrade() {
+    let (svc, repo, payments, usage, ents, payer, previous, current) = anchored_premium(0);
+    svc.sync_period(&payer, current.start, current.end)
+        .await
+        .unwrap();
+    repo.freeze(
+        previous.start,
+        PeriodAllowance {
+            included_cents: 20_000,
+            billed_users: vec![payer.clone()],
+        },
+    );
+    svc.update_overage(&payer, true, 10_000).await.unwrap();
+    usage.add(&payer, previous.start + chrono::Duration::days(2), 10_000);
+
+    ents.set(Entitlement::personal(payer.clone(), PlanTier::Premium));
+    svc.settle(&payer).await.unwrap();
+
+    assert!(payments.opened().is_empty());
+    assert!(repo.charges().is_empty());
+}
+
+#[tokio::test]
+async fn previous_period_usage_uses_the_frozen_billed_users() {
+    let owner = user("owner@x.com");
+    let member_a = user("a@x.com");
+    let member_b = user("b@x.com");
+    let team_id = macro_uuid::generate_uuid_v7();
+    let old_team = Entitlement {
+        tier: PlanTier::Premium,
+        seat_tiers: vec![PlanTier::Premium, PlanTier::Premium],
+        unlimited: false,
+        payer: owner.clone(),
+        billed_users: vec![owner.clone(), member_a.clone()],
+        scope: PayerScope::TeamOwner { team_id },
+    };
+    let new_team = Entitlement {
+        billed_users: vec![owner.clone(), member_b.clone()],
+        ..old_team.clone()
+    };
+    let ents = FakeEntitlements::default()
+        .with(old_team.clone())
+        .with_customer(&owner, "cus_owner");
+    let usage = FakeUsage::default();
+    let repo = FakeRepo::default();
+    let payments = FakePayments::default();
+    let svc = BillingServiceImpl::new(ents.clone(), usage.clone(), repo.clone(), payments.clone());
+    let current_start = Utc::now() - chrono::Duration::days(3);
+    let current_end = current_start + chrono::Duration::days(30);
+    let current = BillingPeriod {
+        start: current_start,
+        end: current_end,
+    };
+    let previous = current.previous();
+    svc.sync_period(&owner, current.start, current.end)
+        .await
+        .unwrap();
+    repo.freeze(
+        previous.start,
+        PeriodAllowance {
+            included_cents: 8_000,
+            billed_users: old_team.billed_users.clone(),
+        },
+    );
+    usage.add(&member_a, previous.start + chrono::Duration::days(2), 9_200);
+    usage.add(
+        &member_b,
+        previous.start + chrono::Duration::days(2),
+        50_000,
+    );
+    ents.set(new_team);
+    svc.update_overage(&owner, true, 10_000).await.unwrap();
+    svc.settle(&owner).await.unwrap();
+
+    let opened = payments.opened();
+    assert_eq!(opened.len(), 1);
+    // Member A's 9_200 against two Premium seats (8_000). Member B's usage
+    // is ignored: they were not a billed user in that period.
+    assert_eq!(opened[0].amount_cents, 1_200);
+}
+
+#[tokio::test]
+async fn current_period_uses_the_live_allowance_after_an_upgrade() {
+    let (svc, repo, payments, usage, ents, payer, previous, current) = anchored_premium(0);
+    svc.sync_period(&payer, current.start, current.end)
+        .await
+        .unwrap();
+    repo.freeze(
+        previous.start,
+        PeriodAllowance {
+            included_cents: 4_000,
+            billed_users: vec![payer.clone()],
+        },
+    );
+    svc.update_overage(&payer, true, 10_000).await.unwrap();
+    // Current-period usage that exceeds Premium but sits inside Max.
+    *usage.cents.lock().unwrap() = 10_000;
+    ents.set(Entitlement::personal(payer.clone(), PlanTier::Max));
+    svc.settle(&payer).await.unwrap();
+    assert!(payments.opened().is_empty());
+    let snap = svc.snapshot(&payer).await.unwrap();
+    assert_eq!(snap.included_cents, 20_000);
+    assert_eq!(snap.used_cents, 10_000);
+    assert_eq!(snap.uncovered_cents, 0);
 }

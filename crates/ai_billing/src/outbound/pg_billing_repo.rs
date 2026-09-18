@@ -1,12 +1,13 @@
 //! Postgres adapter for the billing tables (`ai_billing_account`,
-//! `ai_credit_ledger`, `ai_overage_charge`).
+//! `ai_credit_ledger`, `ai_overage_charge`, `ai_billing_period_allowance`).
 
 #[cfg(test)]
 mod test;
 
 use crate::domain::{
-    BillingError, BillingRepo, BillingSettings, OverageChargeStatus, PendingCharge, PeriodLedger,
-    Result, SettlementOutcome, SettlementPolicy, SettlementState, plan_settlement,
+    BillingError, BillingRepo, BillingSettings, OverageChargeStatus, PendingCharge,
+    PeriodAllowance, PeriodLedger, Result, SettlementOutcome, SettlementPolicy, SettlementState,
+    plan_settlement,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -161,6 +162,69 @@ impl BillingRepo for PgBillingRepo {
     ) -> Result<PeriodLedger> {
         let mut conn = self.pool.acquire().await.map_err(storage)?;
         read_period_ledger(&mut conn, payer.as_ref(), period_start).await
+    }
+
+    async fn period_allowance(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period_start: DateTime<Utc>,
+    ) -> Result<Option<PeriodAllowance>> {
+        let row = sqlx::query!(
+            r#"
+            SELECT included_cents, billed_users as "billed_users!"
+            FROM ai_billing_period_allowance
+            WHERE user_id = $1 AND period_start = $2
+            "#,
+            payer.as_ref(),
+            period_start,
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .map_err(storage)?;
+        row.map(|r| {
+            Ok(PeriodAllowance {
+                included_cents: r.included_cents,
+                billed_users: parse_billed_users(r.billed_users)?,
+            })
+        })
+        .transpose()
+    }
+
+    async fn remember_period_allowance(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period_start: DateTime<Utc>,
+        included_cents: i64,
+        billed_users: &[MacroUserIdStr<'static>],
+    ) -> Result<()> {
+        let billed_users: Vec<String> = billed_users
+            .iter()
+            .map(|u| u.as_ref().to_string())
+            .collect();
+        sqlx::query!(
+            r#"
+            INSERT INTO ai_billing_period_allowance (
+                user_id, period_start, included_cents, billed_users
+            )
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (user_id, period_start) DO UPDATE
+            SET included_cents = EXCLUDED.included_cents,
+                billed_users = EXCLUDED.billed_users,
+                updated_at = NOW()
+            WHERE ai_billing_period_allowance.included_cents
+                  IS DISTINCT FROM EXCLUDED.included_cents
+               OR ai_billing_period_allowance.billed_users
+                  IS DISTINCT FROM EXCLUDED.billed_users
+            "#,
+            payer.as_ref(),
+            period_start,
+            included_cents,
+            &billed_users,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(())
     }
 
     async fn record_credit_purchase(
@@ -476,4 +540,13 @@ async fn read_period_ledger(
         credits_consumed_cents: consumed,
         overage_charged_cents: charged,
     })
+}
+
+fn parse_billed_users(raw: Vec<String>) -> Result<Vec<MacroUserIdStr<'static>>> {
+    raw.into_iter()
+        .map(|id| {
+            MacroUserIdStr::try_from(id)
+                .map_err(|e| BillingError::Storage(anyhow::anyhow!("invalid billed user id: {e}")))
+        })
+        .collect()
 }

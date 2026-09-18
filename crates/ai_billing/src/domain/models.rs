@@ -283,6 +283,19 @@ pub struct PeriodLedger {
     pub overage_charged_cents: i64,
 }
 
+/// The allowance observed for a payer while a period was still open.
+///
+/// Closed-period settlement uses this instead of the live entitlement so a
+/// later plan or seat change cannot skip last period's overage (upgrade) or
+/// charge usage that was included (downgrade).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PeriodAllowance {
+    /// Included AI for the period, in list-rate cents.
+    pub included_cents: i64,
+    /// Users whose usage pooled onto the payer during the period.
+    pub billed_users: Vec<MacroUserIdStr<'static>>,
+}
+
 /// Lifecycle of an overage charge pushed to Stripe.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,

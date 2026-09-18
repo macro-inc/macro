@@ -8,7 +8,7 @@ use super::ledger::{SettlementPolicy, build_snapshot, decide};
 use super::models::{
     AllowanceDecision, BillingError, BillingPeriod, BillingSettings, CREDIT_PACKS_CENTS,
     Entitlement, OVERAGE_CHARGE_THRESHOLD_CENTS, OVERAGE_LIMIT_MAX_CENTS, OVERAGE_LIMIT_MIN_CENTS,
-    OverageChargeStatus, PlanTier, Result, UsageSnapshot,
+    OverageChargeStatus, PeriodAllowance, PlanTier, Result, UsageSnapshot,
 };
 use super::ports::{
     BillingRepo, BillingService, CreditCheckoutRequest, EntitlementSource, OverageChargeRequest,
@@ -57,6 +57,19 @@ where
         let entitlement = self.entitlements.entitlement(user).await?;
         let settings = self.repo.settings(&entitlement.payer).await?;
         let period = BillingPeriod::current(settings.period_anchor, now);
+        // Freeze the open period's allowance so a later plan or seat change
+        // cannot rewrite it after the period closes. Mid-period changes
+        // refresh this row while the period is still current.
+        if entitlement.tier.is_paid() && !entitlement.unlimited {
+            self.repo
+                .remember_period_allowance(
+                    &entitlement.payer,
+                    period.start,
+                    entitlement.included_ai_cents(),
+                    &entitlement.billed_users,
+                )
+                .await?;
+        }
         Ok(Position {
             entitlement,
             settings,
@@ -100,6 +113,41 @@ where
         ))
     }
 
+    /// Allowance and billed users to settle `period` with.
+    ///
+    /// A closed period uses the freeze recorded while it was open. An open
+    /// period (or a closed one that was never observed) uses the live
+    /// entitlement.
+    async fn allowance_for_period(
+        &self,
+        entitlement: &Entitlement,
+        period: BillingPeriod,
+        now: DateTime<Utc>,
+    ) -> Result<(Vec<MacroUserIdStr<'static>>, i64)> {
+        if period.has_ended(now) {
+            match self
+                .repo
+                .period_allowance(&entitlement.payer, period.start)
+                .await?
+            {
+                Some(PeriodAllowance {
+                    included_cents,
+                    billed_users,
+                }) => return Ok((billed_users, included_cents)),
+                None => {
+                    tracing::warn!(
+                        period_start = %period.start,
+                        "settling a closed period with no frozen allowance; using current entitlement"
+                    );
+                }
+            }
+        }
+        Ok((
+            entitlement.billed_users.clone(),
+            entitlement.included_ai_cents(),
+        ))
+    }
+
     /// Settle one period for a payer: book uncovered usage from credits, then
     /// reserve and collect an overage chunk.
     #[tracing::instrument(skip(self, entitlement), fields(payer = %entitlement.payer), err)]
@@ -109,11 +157,12 @@ where
         period: BillingPeriod,
         now: DateTime<Utc>,
     ) -> Result<()> {
+        let (billed_users, included_cents) =
+            self.allowance_for_period(entitlement, period, now).await?;
         let used_cents = self
             .usage
-            .list_rate_usage_cents(&entitlement.billed_users, period)
+            .list_rate_usage_cents(&billed_users, period)
             .await?;
-        let included_cents = entitlement.included_ai_cents();
         if used_cents <= included_cents {
             return Ok(());
         }
@@ -302,7 +351,9 @@ where
             return Ok(());
         }
         // The previous period first, so a tail that ran past the boundary is
-        // flushed before the current one accrues.
+        // flushed before the current one accrues. Closed-period settlement
+        // uses the freeze recorded while that period was open, not the live
+        // plan or seat list.
         self.settle_period(&position.entitlement, position.period.previous(), now)
             .await?;
         self.settle_period(&position.entitlement, position.period, now)

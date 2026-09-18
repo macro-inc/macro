@@ -4,7 +4,7 @@
 use super::ledger::SettlementPolicy;
 use super::models::{
     AllowanceDecision, BillingPeriod, BillingSettings, Entitlement, OverageChargeStatus,
-    PeriodLedger, Result, UsageSnapshot,
+    PeriodAllowance, PeriodLedger, Result, UsageSnapshot,
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -104,6 +104,25 @@ pub trait BillingRepo: Send + Sync + 'static {
         payer: &MacroUserIdStr<'_>,
         period_start: DateTime<Utc>,
     ) -> impl Future<Output = Result<PeriodLedger>> + Send;
+
+    /// The allowance last observed for this payer while `period_start` was
+    /// the open period, if any.
+    fn period_allowance(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period_start: DateTime<Utc>,
+    ) -> impl Future<Output = Result<Option<PeriodAllowance>>> + Send;
+
+    /// Record the live allowance against the open period. Upserts so a
+    /// mid-period plan or seat change is reflected until the period closes;
+    /// callers must only pass the current period's start.
+    fn remember_period_allowance(
+        &self,
+        payer: &MacroUserIdStr<'_>,
+        period_start: DateTime<Utc>,
+        included_cents: i64,
+        billed_users: &[MacroUserIdStr<'static>],
+    ) -> impl Future<Output = Result<()>> + Send;
 
     /// Book a credit purchase. Returns `false` when `stripe_reference` was
     /// already booked (webhook retry).
@@ -264,7 +283,8 @@ pub trait BillingService: Send + Sync + 'static {
 
     /// Book uncovered usage for the payer of `user` (previous and current
     /// period) from credits and then overage, collecting overage via the
-    /// payment gateway.
+    /// payment gateway. The previous period is settled against the allowance
+    /// frozen while it was open, not the live plan or seat list.
     fn settle(&self, user: &MacroUserIdStr<'_>) -> impl Future<Output = Result<()>> + Send;
 
     /// Turn overage on/off with a per-period cap. Payer only. Re-enabling
