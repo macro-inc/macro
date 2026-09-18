@@ -6,6 +6,7 @@ import { PreviewPanel } from '@components/app/PreviewPanel';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
+import { ChatEmptyStateContext } from '@core/component/AI/component/message/EmptyChatState';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
@@ -150,10 +151,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
     conversationMode(conversation, (botId) =>
       kindForBot(botId, rosterSource.roster())
     );
-  const handleForBot = (botId: string | undefined) =>
-    botId
-      ? rosterSource.roster().find((agent) => agent.botId === botId)?.handle
-      : undefined;
 
   onMount(() => panel.handle.setDisplayName('Agents'));
 
@@ -195,6 +192,7 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
       prompt: start.prompt,
       modelOverride: start.modelOverride,
       repoUrl: start.repoUrl,
+      repoBranch: start.repoBranch,
     });
     openConversation(
       { id, type: 'agent_session' },
@@ -293,9 +291,9 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
           >
             <ViewShell.Root
               asidePreferenceKey="agents"
+              class="bg-panel"
               resizable
               aside={{
-                width: 280,
                 min: 224,
                 max: 380,
                 preserveDuringResize: false,
@@ -314,7 +312,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                   error={query.isLoadingError}
                   hasNextPage={Boolean(query.hasNextPage)}
                   loadingNextPage={query.isFetchingNextPage}
-                  handleForBot={handleForBot}
                   onNewConversation={showComposer}
                   onSearchChange={setSearch}
                   onOpenConversation={(conversation, event) =>
@@ -380,8 +377,6 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                           <Suspense fallback={<LoadingComposer />}>
                             <AgentSessionPane
                               id={conversation.id}
-                              mode={mode()}
-                              roster={rosterSource.roster()}
                               onSessionId={(sessionId) =>
                                 adoptSessionId(conversation.id, sessionId)
                               }
@@ -390,14 +385,26 @@ function AgentsWorkspace(props: { initialRoute?: AgentsRoute }) {
                           </Suspense>
                         </Match>
                         <Match when={true}>
-                          <Topbar title="Chat" />
                           <div class="body">
                             <Suspense fallback={<LoadingComposer />}>
-                              <PreviewPanel
-                                selectedEntity={conversation}
-                                orchestrator={orchestrator}
-                                splitPanelContext={panel}
-                              />
+                              <ChatEmptyStateContext.Provider
+                                value={() => (
+                                  <div class="px-4 py-16 text-center">
+                                    <h2 class="text-[28px] font-medium tracking-[-0.03em] text-ink">
+                                      What should we work on?
+                                    </h2>
+                                  </div>
+                                )}
+                              >
+                                <PreviewPanel
+                                  selectedEntity={conversation}
+                                  orchestrator={orchestrator}
+                                  splitPanelContext={panel}
+                                  headerLeading={
+                                    <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
+                                  }
+                                />
+                              </ChatEmptyStateContext.Provider>
                             </Suspense>
                           </div>
                         </Match>

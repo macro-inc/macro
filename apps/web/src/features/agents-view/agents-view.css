@@ -114,13 +114,6 @@
 	}
 
 	/* ---------- ViewSidebar ---------- */
-	:where(.agents-view, .agents-view-portal) .aside {
-		display: flex;
-		flex-direction: column;
-		min-height: 0;
-		border-right: var(--hair) solid var(--edge-muted);
-	}
-
 	:where(.agents-view, .agents-view-portal) .ctl {
 		display: inline-flex;
 		gap: 2px;
@@ -154,126 +147,8 @@
 		color: var(--ink-placeholder);
 	}
 
-	:where(.agents-view, .agents-view-portal) .aside .content {
-		display: flex;
-		flex-direction: column;
-		gap: 24px;
-		padding: 16px 6px 20px;
-		min-height: 0;
-		flex: 1;
-		overflow: hidden;
-	}
-
-	:where(.agents-view, .agents-view-portal) .sec-head {
-		height: 28px;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		padding: 0 4px 0 12px;
-		font-size: 12px;
-		font-weight: 500;
-		color: var(--ink-subtle);
-	}
-
-	:where(.agents-view, .agents-view-portal) .sec-head h2 {
-		margin: 0;
-		font: inherit;
-	}
-
-	:where(.agents-view, .agents-view-portal) .recent {
-		display: flex;
-		flex-direction: column;
-		gap: 4px;
-		min-height: 0;
-		flex: 1;
-	}
-
-	:where(.agents-view, .agents-view-portal) .recent .list {
-		overflow: auto;
-		min-height: 0;
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		gap: 2px;
-		scrollbar-width: thin;
-		scrollbar-color: var(--surface-4) transparent;
-		-webkit-mask-image: linear-gradient(#000 calc(100% - 24px), transparent);
-		mask-image: linear-gradient(#000 calc(100% - 24px), transparent);
-	}
-
-	:where(.agents-view, .agents-view-portal) .search {
-		height: 36px;
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		padding: 0 10px;
-		border-radius: 12px;
-		background: var(--surface-0);
-		border: var(--hair) solid var(--edge-muted);
-		color: var(--ink-placeholder);
-		flex-shrink: 0;
-	}
-
-	:where(.agents-view, .agents-view-portal) .search input {
-		flex: 1;
-		min-width: 0;
-		background: transparent;
-		border: 0;
-		outline: none;
-		color: var(--ink);
-		font: 14px var(--font-sans);
-	}
-
-	:where(.agents-view, .agents-view-portal) .search input::placeholder {
-		color: var(--ink-placeholder);
-	}
-
-	/* recent chat rows: left = PR state or status, title truncates, right = lines changed */
-	:where(.agents-view, .agents-view-portal) .row {
-		min-height: 32px;
-		display: grid;
-		grid-template-columns: 20px minmax(0, 1fr) auto;
-		column-gap: 8px;
-		align-items: center;
-		padding: 6px 10px;
-		border-radius: 12px;
-		font-size: 14px;
-		color: var(--ink-muted);
-		width: 100%;
-		text-align: left;
-		flex-shrink: 0;
-	}
-
-	:where(.agents-view, .agents-view-portal) .row:hover {
-		background: var(--hover);
-		color: var(--ink);
-	}
-
-	:where(.agents-view, .agents-view-portal) .row.active {
-		background: var(--active);
-		color: var(--ink);
-	}
-
-	:where(.agents-view, .agents-view-portal) .row .lead {
-		width: 20px;
-		height: 16px;
-		display: grid;
-		place-items: center;
-		position: relative;
-	}
-
 	:where(.agents-view, .agents-view-portal) .open {
 		color: var(--green);
-	}
-
-	/* Needs attention nests inside Active in Code mode */
-	:where(.agents-view, .agents-view-portal) .row .lead .spin {
-		width: 11px;
-		height: 11px;
-		border-radius: 50%;
-		border: 1.5px solid var(--surface-4);
-		border-top-color: var(--ink-subtle);
-		animation: spin 0.9s linear infinite;
 	}
 
 	/* Work mode: a stepped, square "cog" rather than a smooth ring */
@@ -285,17 +160,6 @@
 		animation: spin 1.2s steps(8) infinite;
 	}
 
-	:where(.agents-view, .agents-view-portal) .row .when {
-		color: var(--ink-placeholder);
-		font-size: 12px;
-		font-variant-numeric: tabular-nums;
-		white-space: nowrap;
-	}
-
-	:where(.agents-view, .agents-view-portal) .row .sub {
-		display: none;
-	}
-
 	@keyframes pulse {
 		0%,
 		100% {
@@ -305,51 +169,6 @@
 		50% {
 			opacity: 0.35;
 		}
-	}
-
-	:where(.agents-view, .agents-view-portal) .row[data-kind="code"] {
-		padding: 6px 12px;
-		row-gap: 1px;
-	}
-
-	:where(.agents-view, .agents-view-portal) .row[data-kind="code"] .lead {
-		grid-row: 1 / 3;
-		align-self: start;
-		margin-top: 3px;
-	}
-
-	:where(.agents-view, .agents-view-portal) .row[data-kind="code"] .sub {
-		display: flex;
-		gap: 6px;
-		align-items: center;
-		grid-column: 2 / 4;
-		color: var(--ink-placeholder);
-		font-size: 12px;
-		white-space: nowrap;
-		overflow: hidden;
-	}
-
-	:where(.agents-view, .agents-view-portal) .row[data-kind="code"] .sub .when {
-		font-size: 11px;
-	}
-
-	:where(.agents-view, .agents-view-portal) .row[data-kind="code"] .sub .h {
-		color: var(--ink-disabled);
-	}
-
-	:where(.agents-view, .agents-view-portal) .group-h {
-		padding: 10px 12px 4px;
-		font-size: 11px;
-		font-weight: 500;
-		color: var(--ink-placeholder);
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
-
-	:where(.agents-view, .agents-view-portal) .group-h .n {
-		color: var(--ink-disabled);
-		font-variant-numeric: tabular-nums;
 	}
 
 	:where(.agents-view, .agents-view-portal) .stdot.waiting::after {
@@ -393,28 +212,6 @@
 		min-width: 0;
 		min-height: 0;
 		overflow: hidden;
-	}
-
-	:where(.agents-view, .agents-view-portal) .topbar {
-		height: 48px;
-		flex-shrink: 0;
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 12px;
-		padding: 0 24px;
-	}
-
-	:where(.agents-view, .agents-view-portal) .topbar h1 {
-		flex: 1;
-		min-width: 0;
-	}
-
-	:where(.agents-view, .agents-view-portal) .topbar h1 {
-		margin: 0;
-		font-size: 14px;
-		font-weight: 600;
-		letter-spacing: -0.03em;
 	}
 
 	:where(.agents-view, .agents-view-portal) .seg {
@@ -475,26 +272,9 @@
 		min-width: 0;
 	}
 
-	:where(.agents-view, .agents-view-portal) .aside > .seg.side {
-		margin: 16px 6px 0;
-		width: auto;
-		flex-shrink: 0;
-	}
-
 	:where(.agents-view, .agents-view-portal) .seg.side button .ph {
 		width: 14px;
 		height: 14px;
-	}
-
-	:where(.agents-view, .agents-view-portal) .aside .content {
-		gap: 20px;
-		padding-top: 14px;
-	}
-
-	:where(.agents-view, .agents-view-portal) .topbar .right {
-		display: flex;
-		align-items: center;
-		gap: 8px;
 	}
 
 	:where(.agents-view, .agents-view-portal) .body {
@@ -568,7 +348,8 @@
 	:where(.agents-view, .agents-view-portal) .composer-drawer-content {
 		display: flex;
 		align-items: center;
-		padding: 6px 12px 10px;
+		margin-top: -32px;
+		padding: 42px 12px 10px;
 		border-radius: 0 0 20px 20px;
 		background: var(--surface-2);
 		border: var(--hair) solid var(--edge-muted);
@@ -1163,13 +944,6 @@
 	}
 
 	/* ---------- sidebar: per-mode new button, routines view ---------- */
-	:where(.agents-view, .agents-view-portal) .top-actions {
-		display: flex;
-		flex-direction: column;
-		gap: 8px;
-		flex-shrink: 0;
-	}
-
 	/* ---------- slash menu: skills from the composer ---------- */
 	:where(.agents-view, .agents-view-portal) .composer-anchor {
 		display: block;
@@ -2365,10 +2139,6 @@
 		border-radius: inherit;
 	}
 
-	:where(.agents-view, .agents-view-portal) .aside .content[hidden] {
-		display: none;
-	}
-
 	:where(.agents-view, .agents-view-portal) .list-note {
 		margin: 0;
 		padding: 8px 12px;
@@ -2385,7 +2155,6 @@
 	}
 
 	/* The view shell sizes the columns; each fills its slot. */
-	:where(.agents-view, .agents-view-portal) .aside,
 	:where(.agents-view, .agents-view-portal) .main {
 		height: 100%;
 	}

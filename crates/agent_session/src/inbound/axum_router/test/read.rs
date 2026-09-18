@@ -9,6 +9,7 @@ use crate::testing::InMemoryAgentSessionRepo;
 async fn view_router() -> Router {
     let repo = InMemoryAgentSessionRepo::new();
     repo.create(CreateAgentSessionParams {
+        repo_branch: None,
         id: AgentSessionId::TEST_A,
         owner_id: MacroUserIdStr::try_from(OWNER.to_owned()).unwrap(),
         bot_id: BotId::TEST_A,

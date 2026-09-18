@@ -6,7 +6,6 @@ import {
 } from '@app/components/view-shell';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
@@ -50,7 +49,6 @@ export function TaskViewBreadcrumbItem() {
 export function TasksTopBar() {
   return (
     <ViewShell.TopBar>
-      <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
       <h1 class="hidden min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink @max-[720px]/view-shell:block">
         Tasks
       </h1>

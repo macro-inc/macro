@@ -28,6 +28,7 @@ export interface BlockMethodRegistry {
   code: EmptySpec;
   image: EmptySpec;
   canvas: AssertSpec<CanvasSpec>;
+  spreadsheet: EmptySpec;
   project: EmptySpec;
   start: EmptySpec;
   unknown: EmptySpec;

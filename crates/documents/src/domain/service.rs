@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod tests;
 
+use crate::domain::ports::sync::DocumentSyncPort;
 use entity_access_management::domain::ports::EntityAccessManagementService;
 use model_entity::EntityType;
 use models_permissions::share_permission::team_share::{
@@ -82,13 +83,14 @@ pub struct DocumentServiceImpl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
+    S: DocumentSyncPort,
 > {
     /// Document repository
     pub repo: R,
     /// Cloudfront config
     pub cloudfront_config: CloudFrontConfig,
     /// Sync service client
-    pub sync_service_client: sync_service_client::SyncServiceClient,
+    pub sync_service_client: S,
     /// Upload service
     pub upload_url_service: U,
     /// Task properties service
@@ -103,9 +105,26 @@ pub struct DocumentServiceImpl<
     pub macro_event_broker: B,
 }
 
+/// Blank native spreadsheets have no object upload; importing workbook bytes is
+/// a separate operation and must never silently discard an uploaded workbook.
+fn validate_spreadsheet_creation(
+    file_type: Option<FileType>,
+    sha: &str,
+) -> Result<(), DocumentError> {
+    const EMPTY_SHA256: &str = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855";
+    if file_type == Some(FileType::Spreadsheet) && sha != EMPTY_SHA256 {
+        return Err(DocumentError::BadRequest(
+            "Native spreadsheet file imports are not supported; create a blank spreadsheet and paste cells instead".to_string(),
+        ));
+    }
+    Ok(())
+}
+
 fn ready_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
     match file_type {
-        Some(FileType::Md) => DocumentContent::ready(DocumentContentLocation::SyncService),
+        Some(FileType::Md | FileType::Spreadsheet) => {
+            DocumentContent::ready(DocumentContentLocation::SyncService)
+        }
         Some(FileType::Docx) => DocumentContent::ready(DocumentContentLocation::ConvertedPdf),
         _ => DocumentContent::ready(DocumentContentLocation::ObjectStorage),
     }
@@ -137,6 +156,9 @@ fn presigned_location_content(
 
 fn pending_content_for_file_type(file_type: Option<FileType>) -> DocumentContent {
     match file_type {
+        Some(FileType::Spreadsheet) => {
+            DocumentContent::pending_at(DocumentContentLocation::SyncService)
+        }
         Some(FileType::Docx) => DocumentContent::pending_at(DocumentContentLocation::ConvertedPdf),
         _ => DocumentContent::pending_at(DocumentContentLocation::ObjectStorage),
     }
@@ -175,7 +197,9 @@ fn published_document_actors(auth: &EntityAccessAuth) -> PublishedDocumentActors
                 on_behalf_of: Some(acting_user.clone()),
                 actor_user_id: None,
             },
-            BotReceiptScope::Team { .. } => PublishedDocumentActors::default(),
+            BotReceiptScope::Team { .. } | BotReceiptScope::Channel { .. } => {
+                PublishedDocumentActors::default()
+            }
         },
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => {
             PublishedDocumentActors::default()
@@ -290,14 +314,15 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 {
     /// Create a document service with its repository and external service ports.
     #[allow(clippy::too_many_arguments)]
     pub fn new(
         repo: R,
         cloudfront_config: CloudFrontConfig,
-        sync_service_client: sync_service_client::SyncServiceClient,
+        sync_service_client: S,
         upload_url_service: U,
         task_properties_service: T,
         connection_service: C,
@@ -652,7 +677,7 @@ impl<
     ) -> Result<CreateDocumentResponseData, DocumentError> {
         let document_id = document_metadata.document_id.clone();
 
-        let initial_content = pending_content_for_file_type(file_type);
+        let mut initial_content = pending_content_for_file_type(file_type);
         if let Err(e) = self
             .repo
             .set_document_content(&document_id, initial_content.clone())
@@ -681,6 +706,26 @@ impl<
         let mime_type = content_type.mime_type().to_string();
 
         let presigned_url = match file_type {
+            Some(FileType::Spreadsheet) => {
+                if let Err(error) = self
+                    .sync_service_client
+                    .initialize_spreadsheet(&document_id)
+                    .await
+                {
+                    self.cleanup_document(&document_id).await;
+                    return Err(DocumentError::Internal(error));
+                }
+                initial_content = DocumentContent::ready(DocumentContentLocation::SyncService);
+                if let Err(error) = self
+                    .repo
+                    .set_document_content(&document_id, initial_content.clone())
+                    .await
+                {
+                    self.cleanup_document(&document_id).await;
+                    return Err(DocumentError::Internal(error.into()));
+                }
+                Ok(None)
+            }
             Some(FileType::Docx) => {
                 let docx_key = build_docx_staging_bucket_document_key(
                     document_metadata.owner.as_ref(),
@@ -690,6 +735,7 @@ impl<
                 self.upload_url_service
                     .put_docx_upload_presigned_url(&docx_key, &sha, content_type)
                     .await
+                    .map(Some)
             }
             _ => {
                 let key = build_cloud_storage_bucket_document_key(
@@ -700,6 +746,7 @@ impl<
                 self.upload_url_service
                     .put_document_storage_presigned_url(&key, &sha, content_type)
                     .await
+                    .map(Some)
             }
         }
         .map_err(|e| {
@@ -760,7 +807,7 @@ impl<
                     initial_content,
                 )
                 .with_team_task_metadata(team_task_metadata),
-                presigned_url: Some(presigned_url),
+                presigned_url,
             },
             content_type: mime_type,
             file_type: file_type.map(|f| f.to_string()),
@@ -777,7 +824,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> DocumentCreationService for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 {
     async fn create_document(
         &self,
@@ -839,7 +887,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> DocumentContentEventService for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> DocumentContentEventService for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 {
     #[tracing::instrument(err, skip(self))]
     async fn publish_content_uploaded(
@@ -877,7 +926,8 @@ impl<
     Eam: EntityAccessManagementService,
     F: ForeignEntityService,
     B: MacroEventBroker,
-> DocumentService for DocumentServiceImpl<R, U, T, C, Eam, F, B>
+    S: DocumentSyncPort,
+> DocumentService for DocumentServiceImpl<R, U, T, C, Eam, F, B, S>
 {
     #[tracing::instrument(err, skip(self, team_receipt))]
     async fn get_document_by_team_slug(
@@ -989,7 +1039,7 @@ impl<
         let document_id = entity_access_receipt.entity().entity_id.clone();
         let content = self.content_for_document(&document_id, file_type).await?;
 
-        if matches!(file_type, Some(FileType::Md))
+        if matches!(file_type, Some(FileType::Md | FileType::Spreadsheet))
             && let Some(response) = self
                 .resolve_markdown_sync_service_location(
                     document_context,
@@ -1275,6 +1325,7 @@ impl<
         args: CreateDocumentRepoArgs,
         job_id: Option<String>,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
+        validate_spreadsheet_creation(args.file_type, &args.sha)?;
         if args.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
             return Err(DocumentError::NameTooLong {
                 max: MAX_DOCUMENT_NAME_GRAPHEMES,
@@ -1313,6 +1364,7 @@ impl<
         _user_id: MacroUserIdStr<'static>,
         args: ImportEmailAttachmentRepoArgs,
     ) -> Result<CreateDocumentResponseData, DocumentError> {
+        validate_spreadsheet_creation(args.create.file_type, &args.create.sha)?;
         if args.create.document_name.graphemes(true).count() > MAX_DOCUMENT_NAME_GRAPHEMES {
             return Err(DocumentError::NameTooLong {
                 max: MAX_DOCUMENT_NAME_GRAPHEMES,
@@ -1657,7 +1709,7 @@ impl<
                     .copy_object(&source_key, &dest_key)
                     .await
             }
-            Some(FileType::Md) => {
+            Some(FileType::Md | FileType::Spreadsheet) => {
                 // Copy via sync service
                 if let Err(e) = self
                     .sync_service_client
@@ -1673,32 +1725,35 @@ impl<
                     return Err(DocumentError::Internal(e));
                 }
 
-                // Also copy S3 file
-                let source_version_id = self
-                    .repo
-                    .get_latest_document_version_id(&original_metadata.document_id)
-                    .await
-                    .map_err(|e| DocumentError::Internal(e.into()))?
-                    .0;
+                // Legacy markdown has a best-effort S3 representation. Native
+                // spreadsheets are entirely stored in the collaborative room.
+                if file_type == Some(FileType::Md) {
+                    let source_version_id = self
+                        .repo
+                        .get_latest_document_version_id(&original_metadata.document_id)
+                        .await
+                        .map_err(|e| DocumentError::Internal(e.into()))?
+                        .0;
 
-                let source_key = build_cloud_storage_bucket_document_key(
-                    original_metadata.owner.as_ref(),
-                    &original_metadata.document_id,
-                    source_version_id,
-                );
-                let dest_key = build_cloud_storage_bucket_document_key(
-                    user_id.as_ref(),
-                    &new_document_id,
-                    new_metadata.document_version_id,
-                );
-                // Best effort S3 copy for live collab
-                let _ = self
-                    .upload_url_service
-                    .copy_object(&source_key, &dest_key)
-                    .await
-                    .inspect_err(|e| {
-                        tracing::error!(error=?e, "unable to copy live collab document");
-                    });
+                    let source_key = build_cloud_storage_bucket_document_key(
+                        original_metadata.owner.as_ref(),
+                        &original_metadata.document_id,
+                        source_version_id,
+                    );
+                    let dest_key = build_cloud_storage_bucket_document_key(
+                        user_id.as_ref(),
+                        &new_document_id,
+                        new_metadata.document_version_id,
+                    );
+                    // Best effort S3 copy for live collab
+                    let _ = self
+                        .upload_url_service
+                        .copy_object(&source_key, &dest_key)
+                        .await
+                        .inspect_err(|e| {
+                            tracing::error!(error=?e, "unable to copy live collab document");
+                        });
+                }
                 Ok(())
             }
             _ => {

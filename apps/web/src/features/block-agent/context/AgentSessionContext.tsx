@@ -59,6 +59,7 @@ export type AgentSessionState = {
   /** The session is still being created — everything else is empty because
    *  there is nothing to show yet, not because the load failed. */
   pending: Accessor<boolean>;
+  startupError: Accessor<string | undefined>;
   /** Session metadata, absent until the load resolves. */
   session: Accessor<AgentSessionResponse | undefined>;
   /** The bot the session runs as, absent until the fold is acquired. */
@@ -129,7 +130,9 @@ export function AgentSessionProvider(
     onSessionId?: (sessionId: string) => void;
   }
 ) {
-  const { sessionId, pending, failed } = resolveSessionId(() => props.blockId);
+  const { sessionId, pending, failed, error } = resolveSessionId(
+    () => props.blockId
+  );
 
   createEffect(() => {
     const id = sessionId();
@@ -198,6 +201,7 @@ export function AgentSessionProvider(
         value={{
           sessionId,
           pending,
+          startupError: error,
           session: feed.session,
           bot: feed.bot,
           metadata: feed.metadata,

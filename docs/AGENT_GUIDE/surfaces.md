@@ -127,7 +127,13 @@ are isolated from the input. If generation stalls for 45 seconds, the shimmer
 is replaced with a retry action; a late result still appears automatically.
 Generation status updates do not extend that deadline. Retry starts a fresh
 45-second wait. Shift+Enter adds a line. Selecting a Home row replaces
-the composer with its preview. Mobile continues to show the activity list alone.
+the composer with its preview. Home uses the shared 256px sidebar and collapses
+navigation below 720px. The hamburger or `Cmd+.` opens the full feed as a
+slide-over. Activating a row or **New chat** closes that overlay to show content;
+arrow-key browsing keeps it open. Preview headers start with **Home >**. Clicking
+**Home** clears the preview and returns to the starting pane without changing
+sidebar visibility. Use the hamburger to reopen the feed. Mobile continues to
+show the activity list alone.
 
 AI chat, agent, and channel message bodies use 15px text, including thread replies.
 Desktop AI chats, agents, and channel composers share Home's rounded composer
@@ -325,6 +331,8 @@ Macro Markdown messages retain document mentions. Ordinary HTML bodies use an
 open shadow root: Playwright text locators can reach them, but a card's ordinary
 `innerText` or `querySelector` does not traverse that root.
 
+Sending a reply from an inbox thread marks that thread done but stays on it;
+only the explicit Mark done action opens the next email.
 After a successful send, the `Email sent` notice offers `Undo`. Undo restores the
 sent envelope and editable content, including when the reply used another inbox;
 a slow background refresh must not keep the restored editor disabled. A rejected
@@ -413,6 +421,8 @@ search remains available. Right-click any Drive view, the Drive folder overview,
 or a folder at any depth for **Open in new split**, **Open in current split**, and
 **Open fullscreen** (when multiple splits are open). Folder menus also offer
 Favorite/Unfavorite, Move to folder, Copy Link, and owner-only Rename and Delete.
+A folder's Share dialog, when the owner belongs to a team, has Team access
+(None, View, Comment, or Edit) without a Link sharing card or Link tab.
 Favorites use the same open actions and **Remove from favorites** menu as Tasks.
 The **Filter** menu reuses the
 legacy **Type**, searchable **Tags**, and **Created by** submenus alongside **Files**

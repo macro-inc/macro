@@ -10,8 +10,8 @@ use crate::domain::models::{
     MessageAttachment, MessagePageDirection, MutatedAttachment, MutatedMessage,
     NewChannelAttachment, PatchChannelRequest, PatchMessageRequest, PostMessageRequest,
     PostMessageResponse, PostReactionRequest, PostTypingRequest, ReferencedShareItem,
-    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, SimpleMention, ThreadData,
-    ThreadReply, ThreadReplyRow, TopLevelMessageRow,
+    RemoveParticipantsRequest, ResolvedChannelMessage, Sender, ThreadData, ThreadReply,
+    ThreadReplyRow, TopLevelMessageRow,
 };
 #[cfg(feature = "list")]
 use crate::domain::models::{
@@ -31,6 +31,7 @@ use channel_sender::ChannelSender;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberParticipantRole};
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::SimpleMention;
 use models_pagination::{CreatedAt, Query};
 use std::collections::{HashMap, HashSet};
 use uuid::Uuid;
@@ -1204,6 +1205,47 @@ pub trait ChannelMentionExtractor: Send + Sync + 'static {
         &self,
         content: &str,
     ) -> impl Future<Output = Result<Vec<SimpleMention>, Self::Err>> + Send;
+}
+
+/// Channel message writes expressed in the existing channel request shapes.
+///
+/// Implemented over the shared message commands, so every channel writer
+/// (HTTP, tools, webhooks, built-in bots) shares one persistence and delivery
+/// path with document discussions.
+#[async_trait::async_trait]
+pub trait ChannelMessageCommands: Send + Sync + 'static {
+    /// Post through the common message policy.
+    async fn post_message(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr>;
+    /// Apply partial message changes.
+    async fn patch_message(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        message_id: Uuid,
+        req: PatchMessageRequest,
+    ) -> Result<(), ChannelMutationErr>;
+    /// Delete under common authorship rules.
+    async fn delete_message(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        message_id: Uuid,
+        query: DeleteMessageQuery,
+    ) -> Result<(), ChannelMutationErr>;
+    /// Change the verified actor's reaction.
+    async fn post_reaction(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostReactionRequest,
+    ) -> Result<(), ChannelMutationErr>;
+    /// Broadcast the verified actor's typing state.
+    async fn post_typing(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostTypingRequest,
+    ) -> Result<(), ChannelMutationErr>;
 }
 
 /// Errors that can occur while mutating channels.

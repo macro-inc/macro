@@ -59,6 +59,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 chrono = { workspace = true }
+messages = { path = "../messages" }
 serde_json = { workspace = true }
 tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util", "time"] }
 uuid = { workspace = true }

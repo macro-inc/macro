@@ -1,6 +1,7 @@
 //! Service implementation for properties.
 
 mod helpers;
+mod options;
 mod task_properties;
 
 use std::collections::{HashMap, HashSet};
@@ -71,11 +72,13 @@ fn published_event_actors(access: &EditReceipt) -> PublishedEventActors {
                 on_behalf_of: Some(acting_user.clone()),
                 actor_user_id: None,
             },
-            BotReceiptScope::Team { .. } => PublishedEventActors {
-                actor: None,
-                on_behalf_of: None,
-                actor_user_id: None,
-            },
+            BotReceiptScope::Team { .. } | BotReceiptScope::Channel { .. } => {
+                PublishedEventActors {
+                    actor: None,
+                    on_behalf_of: None,
+                    actor_user_id: None,
+                }
+            }
         },
         EntityAccessAuth::Unauthenticated | EntityAccessAuth::Internal => PublishedEventActors {
             actor: None,
@@ -1228,35 +1231,9 @@ where
         property_definition_id: Uuid,
         request: &AddPropertyOptionRequest,
     ) -> Result<PropertyOption, PropertiesErr> {
-        let definition = self
-            .owned_modifiable_definition(
-                property_definition_id,
-                user_id,
-                team_id_from_receipt(team),
-            )
+        let (display_order, option_value, color) = self
+            .prepare_property_option(user_id, team, property_definition_id, request)
             .await?;
-
-        request
-            .validate()
-            .map_err(|e| PropertiesErr::Validation(e.to_string()))?;
-        request
-            .validate_compatibility(&definition.data_type)
-            .map_err(|e| PropertiesErr::Validation(e.to_string()))?;
-
-        let (display_order, option_value, color) = match request {
-            AddPropertyOptionRequest::SelectString { option } => (
-                option.display_order,
-                PropertyOptionValue::String(option.value.clone()),
-                option.color.clone(),
-            ),
-            AddPropertyOptionRequest::SelectNumber { option } => (
-                option.display_order,
-                PropertyOptionValue::Number(option.value),
-                None,
-            ),
-        };
-
-        validate_option_color(&definition.data_type, color.as_deref(), color.as_deref())?;
 
         let option = self
             .repository
@@ -1273,6 +1250,35 @@ where
         self.publish_property_event(Self::property_option_created_event(&option, user_id));
 
         Ok(option)
+    }
+
+    async fn get_or_create_property_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        property_definition_id: Uuid,
+        request: &AddPropertyOptionRequest,
+    ) -> Result<PropertyOption, PropertiesErr> {
+        let (display_order, option_value, color) = self
+            .prepare_property_option(user_id, team, property_definition_id, request)
+            .await?;
+        let result = self
+            .repository
+            .get_or_create_property_option(
+                property_definition_id,
+                display_order,
+                option_value,
+                color,
+            )
+            .await
+            .map_err(anyhow::Error::from)?;
+        if result.created {
+            self.publish_property_event(Self::property_option_created_event(
+                &result.option,
+                user_id,
+            ));
+        }
+        Ok(result.option)
     }
 
     #[tracing::instrument(skip(self, team, request), fields(request = ?request), err)]

@@ -957,6 +957,9 @@ async fn run() -> anyhow::Result<()> {
         Arc::new(PgTaskMatchRepo::new(db.clone())),
     ));
     let channels_repo = PgChannelsRepo::new(db.clone());
+    // Built-in agents read the same committed-post stream as hosted and
+    // external agents, for channel and document posts alike, so the channel
+    // side effects no longer carry their own trigger queue.
     let (bot_trigger_sender, bot_trigger_receiver) = tokio::sync::mpsc::unbounded_channel();
 
     let channel_side_effects = ChannelSideEffectService::new(
@@ -965,7 +968,6 @@ async fn run() -> anyhow::Result<()> {
         NotificationChannelSender::new(notification_ingress_service.clone()),
         ContactsChannelDispatcher::new(contacts_ingress.clone()),
     )
-    .with_bot_trigger_sender(bot_trigger_sender)
     .with_macro_event_broker(macro_event_broker.clone());
 
     let channels_service = Arc::new(
@@ -986,6 +988,66 @@ async fn run() -> anyhow::Result<()> {
             lexical_client.clone(),
         )),
     );
+
+    // One message implementation for channels and documents. Committed changes fan
+    // out to the broker, the local agent queue, and the parent's own delivery: channel
+    // messages keep every existing channel side effect (legacy realtime payloads,
+    // notifications, activity, bot triggers, channel broker events) and gain the
+    // common `message_update` payload; document discussions get the common payload
+    // and document comment notifications.
+    let message_realtime = messages::outbound::connection_gateway::ConnectionGatewayMessages(
+        conn_gateway_client.clone(),
+    );
+    let discussion_delivery = messages::domain::delivery::DiscussionDelivery::new(
+        messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()),
+        messages::outbound::entity_access_audience::EntityAccessMessageAudience(
+            (*entity_access_service).clone(),
+        ),
+        message_realtime.clone(),
+        messages::outbound::notification_sender::MessageNotificationSender(
+            notification_ingress_service.clone(),
+        ),
+    )
+    .with_sharing(messages::outbound::pg_discussion_context::PgDiscussionContext(db.clone()));
+    let channel_delivery = channels::domain::message_delivery::ChannelMessageDelivery::new(
+        PgChannelsRepo::new(db.clone()),
+        SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
+        PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
+        message_realtime,
+    );
+    let message_service = Arc::new(
+        messages::domain::service::MessageService::new(
+            messages::outbound::pg_message_repo::PgMessageRepository::new(db.clone()),
+            messages::domain::effects::MessageEffects::new(
+                messages::outbound::broker::BrokerMessagePublisher::new(macro_event_broker.clone()),
+                channel_bots::outbound::conversation::LocalBotPublisher::new(bot_trigger_sender),
+                messages::domain::delivery::ParentMessagePublisher::new(
+                    channel_delivery,
+                    discussion_delivery,
+                ),
+            ),
+        )
+        .with_group_recipients(channels::domain::group_mentions::ChannelGroupRecipients(
+            PgChannelsRepo::new(db.clone()),
+        ))
+        .with_mention_extractor(lexical_mention_extractor::LexicalMentionExtractor::new(
+            lexical_client.clone(),
+        ))
+        .with_references(
+            messages::outbound::entity_access_audience::EntityAccessMessageReferences(
+                (*entity_access_service).clone(),
+            ),
+        ),
+    );
+    let message_commands: Arc<dyn messages::domain::api::MessageCommands> = message_service.clone();
+    let channel_messages: Arc<dyn channels::domain::ports::ChannelMessageCommands> = Arc::new(
+        channels::domain::message_commands::ChannelMessageAdapter::new(message_commands.clone()),
+    );
+    let messages_state = messages::inbound::axum_router::MessagesRouterState {
+        service: message_service.clone(),
+        access: entity_access_service.clone(),
+        authorization: authorization_state.clone(),
+    };
 
     let teammate_dms_brokers = config.kafka_brokers.as_ref().to_string();
     consumer_tracker.spawn({
@@ -1049,17 +1111,25 @@ async fn run() -> anyhow::Result<()> {
             db.clone(),
             std::sync::Arc::new(SpawnedChannelEventDispatcher::new(channel_side_effects)),
             lexical_client.clone(),
+            message_commands.clone(),
         );
     let macro_agent_tools = ai_tools::tools_for(ai_tools::AiHost::ChannelBot);
+    let conversation_access = Arc::new(
+        channel_bots::outbound::conversation::EntityAccessConversation(
+            entity_access_service.clone(),
+        ),
+    );
     let bot_trigger_router = channel_bots::inbound::BotTriggerRouter::new(
-        channels_service.clone(),
+        message_service.clone(),
+        conversation_access.clone(),
         Arc::new(channel_bots::outbound::AgentLoopResponder::new(
             macro_agent_tool_context,
             macro_agent_tools,
         )),
         Arc::new(
             channel_bots::domain::trigger_detector::MentionOrInferredDetector::new(
-                channels_service.clone(),
+                message_service.clone(),
+                conversation_access,
                 Arc::new(channel_bots::outbound::FastModelTriggerClassifier::new(
                     ai_usage::pg_recorder(db.clone()),
                 )),
@@ -1076,7 +1146,7 @@ async fn run() -> anyhow::Result<()> {
     let channel_bot_webhook_state =
         bots::inbound::channel_webhook_router::ChannelBotWebhookRouterState::new(
             bots_service.clone(),
-            channels_service.clone(),
+            message_commands.clone(),
             (*entity_access_service).clone(),
             authorization_state.clone(),
         );
@@ -1439,10 +1509,12 @@ async fn run() -> anyhow::Result<()> {
         config: Arc::new(config),
         channel_service: channels_service.clone(),
         channels_state: ChannelsRouterState::from_arc(
+            channel_messages,
             channels_service,
             (*entity_access_service).clone(),
             authorization_state.clone(),
         ),
+        messages_state,
         bots_state: bots::inbound::axum_router::BotsRouterState::new(
             bots_service.clone(),
             (*entity_access_service).clone(),

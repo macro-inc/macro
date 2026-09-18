@@ -54,6 +54,7 @@ export {
   type AnsweredQuestion,
   type FileDiff,
   isToolActive,
+  settledToolStatus,
   type TodoItem,
   type ToolStatus,
 } from './types';

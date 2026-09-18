@@ -11,6 +11,7 @@
 
 import type { JSX } from 'solid-js';
 import { match } from 'ts-pattern';
+import { settledToolStatus } from '../../ui';
 import { EditToolCall } from './EditToolCall';
 import { MacroToolCall } from './MacroToolCall';
 import { OutputToolCall } from './OutputToolCall';
@@ -32,12 +33,17 @@ export function ToolCallPart(props: {
   context?: ToolCallContext;
 }): JSX.Element {
   const failed = () => props.part.status === 'failed';
+  // A call the log still has running once its turn is over is not running
+  // (see `settledToolStatus`). Without a turn to place it in there is no
+  // live turn either, so it settles too.
+  const status = () =>
+    settledToolStatus(props.part.status, props.context?.inFlight ?? false);
   // The chat block's failed-tool treatment: the same row, faded, with a quiet
   // trailing label — not a separate error card.
   const common = (): ToolCallCommon => ({
     id: props.part.id,
     label: toolLabel(props.part.name),
-    status: props.part.status,
+    status: status(),
     muted: failed(),
     trailing: failed() ? <span class="text-ink">Failed</span> : undefined,
   });

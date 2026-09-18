@@ -209,13 +209,13 @@ function SplitCloseButton() {
     <Show when={shouldShowSplitCloseButton(layout.manager, context.handle)}>
       <Button
         square
-        size="sm"
+        size="icon-sm"
         class="rounded-lg"
         label={label()}
         hotkey={TOKENS.split.close}
         onClick={context.handle.close}
       >
-        <CloseIcon />
+        <CloseIcon class="size-4" />
       </Button>
     </Show>
   );

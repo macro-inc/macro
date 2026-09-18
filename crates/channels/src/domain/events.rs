@@ -2,11 +2,11 @@
 
 use crate::domain::models::{
     ChannelMetadata, ChannelParticipant, ChannelType, CountedReaction, EntityMention,
-    MutatedAttachment, MutatedMessage, PostMessageNotificationPolicy, Sender, SimpleMention,
-    TypingAction,
+    MutatedAttachment, MutatedMessage, Sender, TypingAction,
 };
 use channel_sender::ChannelSender;
 use macro_user_id::user_id::MacroUserIdStr;
+use messages::domain::models::{PostMessageNotificationPolicy, SimpleMention};
 use uuid::Uuid;
 
 /// Notification context for a patched message that should notify like a new post.

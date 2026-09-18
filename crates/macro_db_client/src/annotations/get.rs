@@ -180,7 +180,8 @@ pub async fn fetch_pdf_placeable_anchors(
             pa.uuid, 
             pa."documentId" as document_id, 
             pa.owner, 
-            pa."threadId" as thread_id, 
+            pa."threadId" as thread_id,
+            pa.root_id,
             pa.page, 
             pa."originalPage" as original_page, 
             pa."originalIndex" as original_index, 
@@ -194,7 +195,7 @@ pub async fn fetch_pdf_placeable_anchors(
             pa."wasDeleted" as was_deleted,
             pa."shouldLockOnSave" as should_lock_on_save
         FROM "PdfPlaceableCommentAnchor" pa
-        JOIN "Thread" t ON pa."threadId" = t.id
+        LEFT JOIN "Thread" t ON pa."threadId" = t.id
         WHERE pa."documentId" = $1
         AND t."deletedAt" IS NULL
         "#,
@@ -215,7 +216,8 @@ pub async fn fetch_pdf_highlight_anchors(
             ph.uuid, 
             ph."documentId" as document_id,
             ph.owner, 
-            ph."threadId" as thread_id, 
+            ph."threadId" as thread_id,
+            ph.root_id,
             ph.page, 
             ph.red,
             ph.green, 
@@ -235,7 +237,7 @@ pub async fn fetch_pdf_highlight_anchors(
         WHERE ph."documentId" = $1
         AND ph."deletedAt" IS NULL
         AND t."deletedAt" IS NULL
-        GROUP BY ph.uuid, ph.owner, ph."threadId", ph.page, ph.red, ph.green, ph.blue, ph.alpha, ph.type, ph.text, ph."pageViewportWidth", ph."pageViewportHeight", ph."createdAt", ph."updatedAt", ph."deletedAt"
+        GROUP BY ph.uuid, ph.owner, ph."threadId", ph.root_id, ph.page, ph.red, ph.green, ph.blue, ph.alpha, ph.type, ph.text, ph."pageViewportWidth", ph."pageViewportHeight", ph."createdAt", ph."updatedAt", ph."deletedAt"
         "#,
         document_id
     )
@@ -248,6 +250,47 @@ mod tests {
     use super::*;
     use sqlx::{Pool, Postgres, types::Uuid};
     use std::collections::HashMap;
+
+    #[sqlx::test(fixtures(
+        path = "../../fixtures",
+        scripts("document_pdf_comments_and_highlights")
+    ))]
+    async fn placeables_on_shared_discussions_are_read_without_a_legacy_thread(
+        pool: Pool<Postgres>,
+    ) -> anyhow::Result<()> {
+        let root_id = Uuid::new_v4();
+        sqlx::query!(
+            "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content) \
+             VALUES ($1, 'document', 'document-with-comments', 'macro|user@user.com', 'root')",
+            root_id
+        )
+        .execute(&pool)
+        .await?;
+        let anchor_id = Uuid::new_v4();
+        sqlx::query!(
+            r#"INSERT INTO "PdfPlaceableCommentAnchor" (
+                uuid, "documentId", owner, root_id, page, "originalPage", "originalIndex",
+                "xPct", "yPct", "widthPct", "heightPct", rotation,
+                "wasEdited", "wasDeleted", "shouldLockOnSave"
+            ) VALUES ($1, 'document-with-comments', 'macro|user@user.com', $2, 1, 1, -1, 0.1, 0.2, 0.3, 0.4, 0, false, false, false)"#,
+            anchor_id,
+            root_id
+        )
+        .execute(&pool)
+        .await?;
+
+        let anchors = get_pdf_anchors(&pool, "document-with-comments").await?;
+        let anchor = anchors
+            .iter()
+            .find_map(|anchor| match anchor {
+                PdfAnchor::Placeable(placeable) if placeable.uuid == anchor_id => Some(placeable),
+                _ => None,
+            })
+            .expect("placeable anchored to a shared discussion is listed");
+        assert_eq!(anchor.thread_id, None);
+        assert_eq!(anchor.root_id, Some(root_id));
+        Ok(())
+    }
 
     // Test fetching highlights for a document with highlights and placeables
     #[sqlx::test(fixtures(
@@ -592,7 +635,7 @@ mod tests {
         assert_eq!(anchor_1.y_pct, 0.3);
         assert_eq!(anchor_1.width_pct, 0.1);
         assert_eq!(anchor_1.height_pct, 0.05);
-        assert_eq!(anchor_1.thread_id, 1001);
+        assert_eq!(anchor_1.thread_id, Some(1001));
         assert_eq!(anchor_1.was_edited, false);
         assert_eq!(anchor_1.should_lock_on_save, true);
 

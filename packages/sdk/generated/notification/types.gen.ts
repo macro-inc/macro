@@ -19,9 +19,6 @@ export type AgentSessionMentionedMetadata = AgentSessionNotificationRef & {
 };
 
 /**
- * The session an agent-session notification is about, and where its magic
- * chip lives when it was opened from a thread.
- *
  * Flattened into each agent-session kind so the wire keeps these keys at the
  * top level of the metadata, the way [`CommonChannelMetadata`] does.
  */
@@ -42,9 +39,11 @@ export type AgentSessionNotificationRef = {
      */
     botName: string;
     /**
-     * The channel the session was opened from, when it was.
+     * The channel the session was opened from, when it was opened from a
+     * channel thread.
      */
     channelId?: string | null;
+    parent?: null | AgentSessionOriginParent;
     /**
      * The session; what a click opens.
      */
@@ -57,6 +56,25 @@ export type AgentSessionNotificationRef = {
      * The thread the session was opened from, when it was.
      */
     threadId?: string | null;
+};
+
+/**
+ * The session an agent-session notification is about, and where its magic
+ * chip lives when it was opened from a thread.
+ *
+ * The conversation an agent session was opened from: a channel or a
+ * document discussion. Spelled like the message API's parent so a client can
+ * route to either surface.
+ */
+export type AgentSessionOriginParent = {
+    /**
+     * The channel or document id.
+     */
+    id: string;
+    /**
+     * `channel` or `document`.
+     */
+    type: string;
 };
 
 /**
@@ -316,13 +334,20 @@ export type ChannelReplyMetadata = CommonChannelMetadata & {
 export type ChannelType = 'public' | 'private' | 'directMessage' | 'team';
 
 /**
+ * Identity of a document comment or its thread. Comments written before the
+ * shared message store carry the legacy numeric ids; comments in the shared
+ * store carry the message and root UUIDs.
+ */
+export type CommentRef = number | string;
+
+/**
  * Notification sent when someone comments on a document the user owns.
  */
 export type CommentedOnDocumentMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -335,6 +360,10 @@ export type CommentedOnDocumentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -344,7 +373,7 @@ export type CommentedOnDocumentMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
 
 /**
@@ -777,7 +806,7 @@ export type MentionedInDocumentCommentMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -794,6 +823,10 @@ export type MentionedInDocumentCommentMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -803,7 +836,7 @@ export type MentionedInDocumentCommentMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
 
 export type NewEmailMetadata = {
@@ -1115,7 +1148,7 @@ export type RepliedToDocumentCommentThreadMetadata = {
     /**
      * the comment id
      */
-    commentId: number;
+    commentId: CommentRef;
     /**
      * The name of the document.
      */
@@ -1128,6 +1161,10 @@ export type RepliedToDocumentCommentThreadMetadata = {
      * The owner of the document.
      */
     owner: string;
+    /**
+     * Public bot name when the author is an agent rather than a Macro user.
+     */
+    senderDisplayName?: string | null;
     senderProfilePictureUrl?: string | null;
     subType?: null | NotificationDocumentSubType;
     /**
@@ -1137,7 +1174,7 @@ export type RepliedToDocumentCommentThreadMetadata = {
     /**
      * the thread id
      */
-    threadId: number;
+    threadId: CommentRef;
 };
 
 /**

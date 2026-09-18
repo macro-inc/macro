@@ -23,6 +23,7 @@
 | `/app/component/home` | Assistant (AI-first landing) |
 | `/app/calendar/view` | Calendar |
 | `/app/md/<uuid>` | A document |
+| `/app/spreadsheet/<uuid>` | A native Macro spreadsheet |
 | `/app/chat/<uuid>` | A standalone AI chat |
 | `/app/agent/<uuid>` | An agent session (opened from `@macro-new` / `@coder` / `@cursor`) |
 | `/app/md/<doc>/chat/<chat>` | Doc + doc-scoped chat in a split |
@@ -33,13 +34,41 @@ Splits: the app is a tiling window manager. A second pane appends its own segmen
 (`/app/<left>/<right>`). Desktop panes expose Close when available and omit
 split-history back/forward buttons. Mobile content panes retain their back button.
 
+The app views are referred to as **workspaces**. Expanded workspace sidebars start
+at the shared 256px width; manual resizing and narrow layouts can change the
+displayed width. Workspace navigation uses shared 32px rows (44px on touch), 16px
+glyphs in aligned 20px icon slots, a 6px text gap, and compact sentence-case section
+headings. Tags and folders have a separate disclosure button on the **right** of
+the row: clicking the label selects the destination; clicking Expand/Collapse
+only opens or closes its children. Long destination names are single-line and
+expose the full name on hover. Section chevrons point right and stay visible when
+collapsed. Expanded chevrons point down and appear when hovering their section;
+the section heading also brightens on hover. Sections and nested branches briefly
+animate height and opacity when toggled, and respect reduced-motion preferences.
+The sidebar spacing contract uses 8px outer gutters, 24px between sections, and
+4px between a section header and its rows. Leading icons and trailing actions
+share rails 26px from either edge, including collapse, search, add, and tree
+controls. Use the shared slots described in
+[the sidebar spacing guide](../../apps/web/src/components/view-shell/README.md).
+
 Desktop app navigation panels have **Hide navigation** at the right end of their
 48px title bar. It hides only that split's navigation; **Show navigation** (the
 hamburger) appears before the main header's title/breadcrumbs, including when a
 document, email, or conversation is open. Home's filter sits beside its label.
+The split's **Close** control aligns with the navigation icons when expanded and
+appears immediately before the hamburger when collapsed. Both use 16px icons in
+24px desktop buttons. Close remains hidden when the split cannot be closed.
+The hamburger sits directly beside the item title or view breadcrumbs. Narrow
+desktop Drive headers use a plain view title; use the hamburger to navigate.
+**Cmd+.** (Ctrl+. on Windows/Linux) toggles navigation in the active split, even
+while typing. It leaves the outer app rail and other splits in place. Docked
+navigation and the adjacent content animate their width over 140ms, with a brief
+sidebar fade; reduced-motion preferences skip the animation.
+Narrow navigation overlays use the same brief width and opacity animation.
 Visibility is a sticky preference per app type (Home, Email, Chat, Tasks, Drive,
 Agents, Customers), independent of other apps and restored on reload. Narrow
-workspaces reopen navigation as an overlay; the backdrop closes it. Mobile keeps
+workspaces reopen navigation as an overlay; the backdrop or **Hide navigation**
+closes it. The overlay never contains the split's **Close** button. Mobile keeps
 its existing navigation controls. Block detail panels (including Calendar) have
 **Hide side panel** in their own header and a hamburger **Show side panel** beside
 the main title when hidden, with separate preferences per block type.
@@ -300,6 +329,10 @@ refreshes the session credential and restores the saved selection.
 Claude sessions expose **Open in Claude** in the header
 toolbar (or its overflow menu). With a live runtime, messages sent in Claude are
 polled into Macro about every two seconds; disconnected runtimes must resume first.
+
+Home does not bind Delete or Backspace to deleting list items. These keys remain
+available to the open editor (for example, clearing a selected spreadsheet range).
+Use the item menu to delete an item from Home.
 
 ### Content already open
 

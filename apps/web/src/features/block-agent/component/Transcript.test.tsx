@@ -9,6 +9,7 @@ import { Transcript } from './Transcript';
 const session = vi.hoisted(() => ({
   sessionId: () => 'session',
   messages: () => [] as FoldedMessage[],
+  working: (): boolean => false,
   quoteSelection: vi.fn(),
   touch: false,
   top: () => 40,
@@ -31,8 +32,11 @@ vi.mock('@ui', async () => ({
   ...(await import('@ui/components/Layer')),
 }));
 vi.mock('./AgentMessage', () => ({
-  Message: (props: { message: FoldedMessage }) => (
-    <span data-message={`${props.message.turn}:${props.message.author.kind}`}>
+  Message: (props: { message: FoldedMessage; inFlight: boolean }) => (
+    <span
+      data-in-flight={String(props.inFlight)}
+      data-message={`${props.message.turn}:${props.message.author.kind}`}
+    >
       {JSON.stringify(props.message.parts)}
     </span>
   ),
@@ -93,6 +97,7 @@ beforeEach(() => {
   viewport = 400;
   rowHeight = 96;
   session.touch = false;
+  session.working = () => false;
   session.bottom = () => 80;
   vi.stubGlobal(
     'ResizeObserver',
@@ -177,6 +182,45 @@ function mount(initial: FoldedMessage[]) {
   )!;
   return { ...view, scroller, setMessages };
 }
+
+describe('Transcript live turn', () => {
+  const inFlight = (view: { container: HTMLElement }) =>
+    [...view.container.querySelectorAll<HTMLElement>('[data-message]')].map(
+      (el) => `${el.dataset.message}=${el.dataset.inFlight}`
+    );
+
+  it('marks only the newest turn live, however many messages lack a stop', async () => {
+    // Every one of these reads `stop: null`; a superseded turn keeps it.
+    const [working, setWorking] = createSignal(true);
+    session.working = working;
+    const view = mount([message(0), message(1), message(2)]);
+    await settle();
+    expect(inFlight(view)).toEqual([
+      '0:agent=false',
+      '1:agent=false',
+      '2:agent=true',
+    ]);
+
+    // The runtime went away: the block stops working, and so does the tail.
+    setWorking(false);
+    await settle();
+    expect(inFlight(view)).toEqual([
+      '0:agent=false',
+      '1:agent=false',
+      '2:agent=false',
+    ]);
+  });
+
+  it('marks nothing live while the newest turn is a prompt awaiting its reply', async () => {
+    session.working = () => true;
+    const view = mount([
+      message(0),
+      { ...message(1), author: { kind: 'user', userId: 'u' } } as FoldedMessage,
+    ]);
+    await settle();
+    expect(inFlight(view)).toEqual(['0:agent=false', '1:user=false']);
+  });
+});
 
 describe('Transcript with the shared TanStack ThreadList', () => {
   it('positions a cold-link target after the initial latest layout commits', async () => {

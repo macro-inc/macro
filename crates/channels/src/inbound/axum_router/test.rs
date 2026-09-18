@@ -18,8 +18,8 @@ use axum::{
 use entity_access::domain::models::TeamRole;
 use entity_access::domain::{
     models::{
-        AccessError, AccessLevel, BotAccessScope, BotId, BotReceiptScope, Entity,
-        EntityAccessReceipt, EntityPermission, EntityType, MemberParticipantRole,
+        AccessError, AccessLevel, BotAccessScope, BotId, Entity, EntityAccessReceipt,
+        EntityPermission, EntityType, MemberParticipantRole,
         ParticipantRole as EntityParticipantRole, RequiredPermission, UserTeamInfo,
     },
     ports::EntityAccessService,
@@ -260,29 +260,6 @@ impl EntityAccessService for TestAccessService {
     ) -> Result<Option<UserTeamInfo>, AccessError> {
         unimplemented!()
     }
-}
-
-#[test]
-fn bot_actor_from_receipt_uses_canonical_principal() {
-    let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
-    let receipt = EntityAccessReceipt::<MemberParticipantRole>::try_new_bot(
-        bot_id.into_storage_id(),
-        BotReceiptScope::Team {
-            team_id: Uuid::new_v4(),
-        },
-        Entity {
-            entity_id: Uuid::new_v4().to_string(),
-            entity_type: EntityType::Channel,
-        },
-        EntityPermission::ChannelRole {
-            role: EntityParticipantRole::Member,
-        },
-    )
-    .unwrap();
-
-    let sender = actor_from_receipt(&receipt).unwrap();
-
-    assert_eq!(sender.as_ref(), bot_id.into_storage_id().as_ref());
 }
 
 // --- Mock services (business logic only, no auth concerns) ---
@@ -719,6 +696,67 @@ struct RecordingMutationService {
     pictures: Arc<Mutex<Vec<(String, Option<Uuid>)>>>,
     joins: Arc<Mutex<Vec<(Sender, Uuid)>>>,
     posts: Arc<Mutex<Vec<(Sender, Uuid, PostMessageRequest)>>>,
+    typing: Arc<Mutex<Vec<(Sender, Uuid, PostTypingRequest)>>>,
+}
+
+fn recorded_actor(
+    access: &EntityAccessReceipt<messages::domain::service::MessageWrite>,
+) -> (Sender, Uuid) {
+    let actor = match access.auth() {
+        entity_access::domain::models::EntityAccessAuth::Bot(bot) => {
+            Sender::new_from_bot(bot.bot_id())
+        }
+        _ => Sender::new_from_user(access.get_authenticated_user().unwrap().clone()),
+    };
+    (actor, access.entity().entity_id.parse().unwrap())
+}
+
+#[async_trait::async_trait]
+impl crate::domain::ports::ChannelMessageCommands for RecordingMutationService {
+    async fn post_message(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostMessageRequest,
+    ) -> Result<PostMessageResponse, ChannelMutationErr> {
+        let (actor, channel_id) = recorded_actor(&access);
+        self.posts.lock().unwrap().push((actor, channel_id, req));
+        Ok(PostMessageResponse {
+            id: Uuid::new_v4().to_string(),
+            nonce: Some("n1".to_string()),
+        })
+    }
+    async fn patch_message(
+        &self,
+        _access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _message_id: Uuid,
+        _req: PatchMessageRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+    async fn delete_message(
+        &self,
+        _access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _message_id: Uuid,
+        _query: DeleteMessageQuery,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+    async fn post_reaction(
+        &self,
+        _access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        _req: PostReactionRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        Ok(())
+    }
+    async fn post_typing(
+        &self,
+        access: EntityAccessReceipt<messages::domain::service::MessageWrite>,
+        req: PostTypingRequest,
+    ) -> Result<(), ChannelMutationErr> {
+        let (actor, channel_id) = recorded_actor(&access);
+        self.typing.lock().unwrap().push((actor, channel_id, req));
+        Ok(())
+    }
 }
 
 impl ChannelService for RecordingMutationService {
@@ -1006,6 +1044,7 @@ async fn attach_bearer(mut request: Request<Body>) -> Request<Body> {
 
 fn mock_router() -> Router {
     channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         MockService,
         TestAccessService::allow(),
         authorization_state(),
@@ -1015,6 +1054,7 @@ fn mock_router() -> Router {
 
 fn error_router() -> Router {
     channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         ErrorService,
         TestAccessService::allow(),
         authorization_state(),
@@ -1024,6 +1064,7 @@ fn error_router() -> Router {
 
 fn denied_router() -> Router {
     channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         MockService,
         TestAccessService::deny(),
         authorization_state(),
@@ -1033,6 +1074,7 @@ fn denied_router() -> Router {
 
 fn not_found_router() -> Router {
     channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         MockService,
         TestAccessService::not_found(),
         authorization_state(),
@@ -1048,6 +1090,7 @@ fn join_by_code_router(
     let joined_users = service.joined_users.clone();
     let (authorization_state, validator) = authorization_state_with_default(default_user_id);
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         service,
         TestAccessService::deny(),
         authorization_state,
@@ -1126,6 +1169,7 @@ async fn standard_internal_headers_propagate_organization_to_entity_access() {
     let channel_id = Uuid::new_v4();
     let access_service = TestAccessService::allow();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         MockService,
         access_service.clone(),
         authorization_state(),
@@ -1193,6 +1237,7 @@ async fn bearer_organization_is_propagated_to_entity_access() {
     let access_service = TestAccessService::allow();
     let (authorization_state, validator) = authorization_state_with_default(None);
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         MockService,
         access_service.clone(),
         authorization_state,
@@ -1227,6 +1272,7 @@ async fn active_participant_can_get_persisted_channel_join_code() {
     let service = JoinLinkService::new(channel_id, join_code, vec![]);
     let requested_channel_ids = service.requested_channel_ids.clone();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         service,
         TestAccessService::allow(),
         authorization_state(),
@@ -1258,6 +1304,7 @@ async fn non_participant_cannot_get_channel_join_code() {
     let service = JoinLinkService::new(channel_id, Uuid::new_v4(), vec![]);
     let requested_channel_ids = service.requested_channel_ids.clone();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         service,
         TestAccessService::deny(),
         authorization_state(),
@@ -1291,6 +1338,7 @@ async fn non_private_channels_cannot_get_join_codes() {
         non_private_channels.iter().map(|(_, id)| *id).collect(),
     );
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         service,
         TestAccessService::allow(),
         authorization_state(),
@@ -1320,6 +1368,7 @@ async fn non_private_channels_cannot_get_join_codes() {
 async fn join_channel_by_code_handles_malformed_and_unknown_codes() {
     let service = JoinLinkService::new(Uuid::new_v4(), Uuid::new_v4(), vec![]);
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         service,
         TestAccessService::deny(),
         authorization_state(),
@@ -1358,6 +1407,7 @@ async fn authenticated_user_can_join_by_code_without_channel_access() {
     let service = JoinLinkService::new(Uuid::new_v4(), join_code, vec![]);
     let joined_users = service.joined_users.clone();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         service,
         TestAccessService::deny(),
         authorization_state(),
@@ -1398,6 +1448,7 @@ async fn channel_view_only_user_can_join_channel_by_id() {
     let joins = mutation_service.joins.clone();
     let access_service = TestAccessService::channel_view_only();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         mutation_service,
         access_service.clone(),
         authorization_state(),
@@ -1435,6 +1486,7 @@ async fn user_without_channel_access_cannot_join_channel_by_id() {
     let mutation_service = RecordingMutationService::default();
     let joins = mutation_service.joins.clone();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         mutation_service,
         TestAccessService::deny(),
         authorization_state(),
@@ -1460,6 +1512,7 @@ async fn malformed_channel_id_does_not_invoke_join_service() {
     let joins = mutation_service.joins.clone();
     let access_service = TestAccessService::channel_view_only();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         mutation_service,
         access_service.clone(),
         authorization_state(),
@@ -1493,7 +1546,8 @@ async fn post_message_route_uses_entity_access_and_mutation_service() {
     let mutation_service = RecordingMutationService::default();
     let posts = mutation_service.posts.clone();
     let router = channels_router(ChannelsRouterState::new(
-        mutation_service,
+        Arc::new(mutation_service),
+        MockService,
         TestAccessService::allow(),
         authorization_state(),
     ))
@@ -1669,6 +1723,7 @@ async fn participants_returns_empty_list() {
 #[tokio::test]
 async fn participants_returns_data_with_correct_shape() {
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         ParticipantsService,
         TestAccessService::allow(),
         authorization_state(),
@@ -1923,6 +1978,7 @@ async fn messages_around_returns_empty_page() {
 #[tokio::test]
 async fn messages_around_omits_previous_cursor_when_no_newer_page() {
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         AroundHasItemsService {
             has_more_newer: false,
         },
@@ -1951,6 +2007,7 @@ async fn messages_around_omits_previous_cursor_when_no_newer_page() {
 #[tokio::test]
 async fn messages_around_returns_previous_cursor_when_newer_page_exists() {
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         AroundHasItemsService {
             has_more_newer: true,
         },
@@ -1979,6 +2036,7 @@ async fn messages_around_returns_previous_cursor_when_newer_page_exists() {
 #[tokio::test]
 async fn messages_around_returns_404_when_not_found() {
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         NotFoundService,
         TestAccessService::allow(),
         authorization_state(),
@@ -2112,6 +2170,7 @@ impl ChannelService for std::sync::Arc<CapturingService> {
 async fn post_messages_empty_body_uses_default_filters() {
     let svc = CapturingService::new();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         svc.clone(),
         TestAccessService::allow(),
         authorization_state(),
@@ -2140,6 +2199,7 @@ async fn post_messages_empty_body_uses_default_filters() {
 async fn post_messages_forwards_message_ids_filter() {
     let svc = CapturingService::new();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         svc.clone(),
         TestAccessService::allow(),
         authorization_state(),
@@ -2169,6 +2229,7 @@ async fn post_messages_forwards_message_ids_filter() {
 async fn post_messages_forwards_last_activity_filter() {
     let svc = CapturingService::new();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         svc.clone(),
         TestAccessService::allow(),
         authorization_state(),
@@ -2203,6 +2264,7 @@ async fn post_messages_forwards_last_activity_filter() {
 async fn post_messages_forwards_notification_filter_for_authenticated_user() {
     let svc = CapturingService::new();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         svc.clone(),
         TestAccessService::allow(),
         authorization_state(),
@@ -2244,6 +2306,7 @@ async fn post_messages_forwards_notification_filter_for_authenticated_user() {
 #[tokio::test]
 async fn post_messages_rejects_oversized_filter_list() {
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         MockService,
         TestAccessService::allow(),
         authorization_state(),
@@ -2290,6 +2353,7 @@ async fn thread_replies_returns_empty_list() {
 #[tokio::test]
 async fn thread_replies_returns_404_when_not_found() {
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         NotFoundService,
         TestAccessService::allow(),
         authorization_state(),
@@ -2362,6 +2426,7 @@ async fn message_context_returns_flat_context_response() {
 async fn catch_up_forwards_exclusive_after_and_older_direction() {
     let svc = CapturingService::new();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         svc.clone(),
         TestAccessService::allow(),
         authorization_state(),
@@ -2398,6 +2463,7 @@ async fn catch_up_forwards_exclusive_after_and_older_direction() {
 async fn catch_up_rejects_missing_or_invalid_after() {
     let svc = CapturingService::new();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         svc.clone(),
         TestAccessService::allow(),
         authorization_state(),
@@ -2660,6 +2726,7 @@ impl ChannelService for ActivityService {
 #[tokio::test]
 async fn get_activity_returns_user_activities() {
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         ActivityService::default(),
         TestAccessService::allow(),
         authorization_state(),
@@ -2683,6 +2750,7 @@ async fn post_activity_records_and_returns_activity() {
     let service = ActivityService::default();
     let posts = service.posts.clone();
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         service,
         TestAccessService::allow(),
         authorization_state(),
@@ -2718,6 +2786,7 @@ async fn post_activity_records_and_returns_activity() {
 #[tokio::test]
 async fn post_activity_rejects_non_members() {
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         ActivityService::default(),
         TestAccessService::deny(),
         authorization_state(),
@@ -2743,6 +2812,7 @@ async fn post_activity_rejects_non_members() {
 #[tokio::test]
 async fn post_activity_rejects_invalid_channel_id() {
     let router = channels_router(ChannelsRouterState::new(
+        Arc::new(RecordingMutationService::default()),
         ActivityService::default(),
         TestAccessService::allow(),
         authorization_state(),
@@ -2777,6 +2847,7 @@ async fn picture_endpoint_requires_channel_admin_and_passes_the_verified_channel
         let mut access = TestAccessService::allow();
         access.channel_role = role;
         let app = channels_router(ChannelsRouterState::new(
+            Arc::new(RecordingMutationService::default()),
             service,
             access,
             authorization_state(),

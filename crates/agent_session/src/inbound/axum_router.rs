@@ -459,8 +459,11 @@ pub struct AgentSessionResponse {
     pub can_edit: bool,
     /// The root message of the thread the session was created from, if any.
     pub thread_id: Option<Uuid>,
+    /// The channel or document `thread_id` lives in, when the session was
+    /// spawned from a thread.
+    pub thread_parent: Option<messages::domain::models::MessageParent>,
     /// The channel `thread_id` lives in, when the session was spawned from a
-    /// thread.
+    /// channel thread. Derived from `thread_parent`.
     pub thread_channel_id: Option<Uuid>,
     /// The exact message that invoked the bot, if any.
     pub originating_message_id: Option<Uuid>,
@@ -525,13 +528,18 @@ impl From<ExternalSession> for ExternalSessionResponse {
 impl AgentSessionResponse {
     /// Describe `session` to a caller whose edit access is `can_edit`.
     pub fn new(session: AgentSession, can_edit: bool) -> Self {
+        let thread_channel_id = match &session.thread_parent {
+            Some(messages::domain::models::MessageParent::Channel(channel_id)) => Some(*channel_id),
+            Some(messages::domain::models::MessageParent::Document(_)) | None => None,
+        };
         Self {
             id: session.id.as_uuid(),
             name: session.name,
             owner_id: session.owner_id.to_string(),
             can_edit,
             thread_id: session.thread_id,
-            thread_channel_id: session.thread_channel_id,
+            thread_parent: session.thread_parent,
+            thread_channel_id,
             originating_message_id: session.originating_message_id,
             bot_id: session.bot_id.as_uuid(),
             model: session.model,
@@ -1383,9 +1391,12 @@ pub struct CreateAgentSessionRequest {
     /// only - an external runtime sends its own first prompt through the
     /// control endpoint. Omitted, the session opens idle.
     pub prompt: Option<String>,
-    /// Repository nominally checked out at `workspace`. Informational and
-    /// optional: having it cloned there is the runtime operator's job.
+    /// Explicit GitHub repository for a managed Cursor session. Access is
+    /// checked for the session owner. For external sessions this is
+    /// informational: cloning it is the runtime operator's job.
     pub repo_url: Option<String>,
+    /// Starting branch for a managed coding session's selected repository.
+    pub repo_branch: Option<String>,
     /// The user who owns the session. Ignored for user callers, who always
     /// own their own sessions, and for harness callers, whose verified acting
     /// user (owner or confirmed team member) owns the session instead;
@@ -1413,8 +1424,13 @@ pub struct CreateAgentSessionRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct CreateSessionThread {
-    /// Channel the mentioning message was posted in.
-    pub channel_id: Uuid,
+    /// Entity the mentioning message was posted in.
+    #[serde(default)]
+    pub parent: Option<messages::domain::models::MessageParent>,
+    /// Channel the mentioning message was posted in. Runtimes built before
+    /// message parents send this instead of `parent`.
+    #[serde(default)]
+    pub channel_id: Option<Uuid>,
     /// Thread the session belongs to; defaults to the message itself, which
     /// is how a top-level mention roots its own thread.
     pub thread_id: Option<Uuid>,
@@ -1477,6 +1493,8 @@ pub enum CreateSessionApiError {
     InvalidWorkspace(&'static str),
     /// The request mixed the managed and external shapes.
     MixedSessionShape,
+    /// The thread named neither a parent nor a channel.
+    ThreadParentRequired,
     /// The thread already routes to a session; carries it for recovery.
     ThreadSessionExists {
         /// The existing session, when it could be resolved.
@@ -1528,8 +1546,12 @@ impl IntoResponse for CreateSessionApiError {
             Self::MixedSessionShape => (
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "a managed session may take a prompt, persona and instructions; naming a \
-                 workspace, repo, owner or thread asks for an external one"
+                 workspace, owner or thread asks for an external one"
                     .to_owned(),
+            ),
+            Self::ThreadParentRequired => (
+                StatusCode::UNPROCESSABLE_ENTITY,
+                "thread.parent is required".to_owned(),
             ),
             Self::ThreadSessionExists { session_id } => {
                 let body = ThreadSessionExistsResponse {
@@ -1541,6 +1563,13 @@ impl IntoResponse for CreateSessionApiError {
             Self::Domain(AgentSessionError::ThreadSessionExists) => (
                 StatusCode::CONFLICT,
                 "this bot already has a session for this thread".to_owned(),
+            ),
+            Self::Domain(AgentSessionError::InvalidRepositorySelection(reason)) => {
+                (StatusCode::UNPROCESSABLE_ENTITY, reason.to_owned())
+            }
+            Self::Domain(AgentSessionError::Forbidden) => (
+                StatusCode::FORBIDDEN,
+                "repository is not available to this user".to_owned(),
             ),
             Self::Domain(AgentSessionError::UnknownOwner) => (
                 StatusCode::UNPROCESSABLE_ENTITY,
@@ -1669,7 +1698,7 @@ pub async fn create_agent_session_handler<
     // persona; the domain resolver owns its user/team/channel authorization
     // policy. External-only fields remain invalid on this shape.
     let Some(workspace) = request.workspace else {
-        if request.repo_url.is_some() || request.thread.is_some() || request.owner.is_some() {
+        if request.thread.is_some() || request.owner.is_some() {
             return Err(CreateSessionApiError::MixedSessionShape);
         }
         let owner = resolve_owner(&caller.authorization, None)?;
@@ -1691,6 +1720,16 @@ pub async fn create_agent_session_handler<
         let session = state
             .opener
             .open_managed_session(OpenManagedSession {
+                repo_url: request.repo_url,
+                repo_branch: request
+                    .repo_branch
+                    .map(crate::domain::repository_branch::RepositoryBranch::parse)
+                    .transpose()
+                    .map_err(|reason| {
+                        CreateSessionApiError::Domain(
+                            AgentSessionError::InvalidRepositorySelection(reason),
+                        )
+                    })?,
                 owner,
                 prompt: request.prompt,
                 profile,
@@ -1707,7 +1746,7 @@ pub async fn create_agent_session_handler<
 
     // An external runtime sends its own first prompt through the control
     // endpoint, so accepting one here would silently drop it.
-    if request.prompt.is_some() {
+    if request.prompt.is_some() || request.repo_branch.is_some() {
         return Err(CreateSessionApiError::MixedSessionShape);
     }
     let bot_id = resolve_bot(&caller.authorization, request.bot_id)?;
@@ -1747,12 +1786,23 @@ pub async fn create_agent_session_handler<
     validate_workspace(&workspace)?;
     let owner = resolve_owner(&caller.authorization, request.owner)?;
 
-    let thread = request.thread.map(|thread| SessionThread {
-        channel_id: thread.channel_id,
-        thread_id: thread.thread_id.unwrap_or(thread.message_id),
-        message_id: thread.message_id,
-        content: thread.content,
-    });
+    let thread = request
+        .thread
+        .map(|thread| {
+            let parent = thread
+                .parent
+                .or(thread
+                    .channel_id
+                    .map(messages::domain::models::MessageParent::Channel))
+                .ok_or(CreateSessionApiError::ThreadParentRequired)?;
+            Ok::<_, CreateSessionApiError>(SessionThread {
+                parent,
+                thread_id: thread.thread_id.unwrap_or(thread.message_id),
+                message_id: thread.message_id,
+                content: thread.content,
+            })
+        })
+        .transpose()?;
     let session = match state
         .opener
         .open_external_session(OpenExternalAgentSession {

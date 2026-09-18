@@ -112,7 +112,6 @@ import {
   LINK_SHARE_SCOPE_OPTIONS,
   type LinkSharePayload,
   type LinkShareScope,
-  TEAM_SHARE_SCOPE_OPTIONS,
   type TeamSharePayload,
   type TeamShareScope,
   teamShareScopeOptionsForItem,
@@ -317,13 +316,65 @@ interface TeamShareControls {
   scopeOptions: ReadonlyArray<{ value: TeamShareScope; label: string }>;
 }
 
+function teamShareOnOwnCard(
+  itemType: ItemType,
+  teamShare: TeamShareControls | undefined
+): TeamShareControls | undefined {
+  return teamShare && isLinkSharingDisabledForItem(itemType)
+    ? teamShare
+    : undefined;
+}
+
+function TeamAccessSection(props: { teamShare: TeamShareControls }) {
+  const teamShareScope = () => getTeamShareScope(props.teamShare.accessLevel);
+
+  return (
+    <div class="flex flex-wrap items-center justify-between gap-3">
+      <div class="flex flex-col gap-1">
+        <span class="font-medium">Team access</span>
+        <p class="text-sm text-ink-muted">
+          Share this {props.teamShare.itemNoun} directly with the owner's team.
+        </p>
+      </div>
+      <Dropdown>
+        <Dropdown.Trigger
+          variant="outline"
+          aria-label="Team access"
+          class="min-w-16.75 py-1 pl-2 pr-1 rounded-md flex items-center gap-1"
+        >
+          {getTeamShareScopeCopy(teamShareScope())}
+          <ChevronDownIcon class="size-4 text-ink-extra-muted" />
+        </Dropdown.Trigger>
+        <Dropdown.Content portalScope="local">
+          <Dropdown.RadioGroup
+            aria-label="Team access level"
+            value={teamShareScope()}
+            onChange={(value) =>
+              props.teamShare.setAccessLevel(value as TeamShareScope)
+            }
+          >
+            <For each={props.teamShare.scopeOptions}>
+              {(option) => (
+                <Dropdown.RadioItem value={option.value}>
+                  <span class="flex-1 truncate">{option.label}</span>
+                  <Dropdown.ItemIndicator>
+                    <CheckIcon class="size-3.5 text-accent" />
+                  </Dropdown.ItemIndicator>
+                </Dropdown.RadioItem>
+              )}
+            </For>
+          </Dropdown.RadioGroup>
+        </Dropdown.Content>
+      </Dropdown>
+    </div>
+  );
+}
+
 function LinkSharingControls(props: LinkSharingControlsProps) {
   const scope = () => getLinkShareScope(props.linkShare);
   const scopeCopy = () => getLinkShareScopeCopy(scope());
   const shareStatus = () =>
     getShareStatus(props.linkShare, props.hasExplicitShares);
-  const teamShareScope = () => getTeamShareScope(props.teamShare?.accessLevel);
-  const teamShareNoun = () => props.teamShare?.itemNoun ?? 'item';
 
   return (
     <div class="flex flex-col gap-3 p-4 text-sm text-ink">
@@ -371,48 +422,11 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
         </div>
       </Show>
       <Show when={props.teamShare}>
-        <div class="flex flex-wrap items-center justify-between gap-3 border-t border-edge-muted pt-3">
-          <div class="flex flex-col gap-1">
-            <span class="font-medium">Team access</span>
-            <p class="text-sm text-ink-muted">
-              Share this {teamShareNoun()} directly with the owner's team.
-            </p>
+        {(teamShare) => (
+          <div class="border-t border-edge-muted pt-3">
+            <TeamAccessSection teamShare={teamShare()} />
           </div>
-          <Dropdown>
-            <Dropdown.Trigger
-              variant="outline"
-              aria-label="Team access"
-              class="min-w-16.75 py-1 pl-2 pr-1 rounded-md flex items-center gap-1"
-            >
-              {getTeamShareScopeCopy(teamShareScope())}
-              <ChevronDownIcon class="size-4 text-ink-extra-muted" />
-            </Dropdown.Trigger>
-            <Dropdown.Content portalScope="local">
-              <Dropdown.RadioGroup
-                aria-label="Team access level"
-                value={teamShareScope()}
-                onChange={(value) =>
-                  props.teamShare?.setAccessLevel(value as TeamShareScope)
-                }
-              >
-                <For
-                  each={
-                    props.teamShare?.scopeOptions ?? TEAM_SHARE_SCOPE_OPTIONS
-                  }
-                >
-                  {(option) => (
-                    <Dropdown.RadioItem value={option.value}>
-                      <span class="flex-1 truncate">{option.label}</span>
-                      <Dropdown.ItemIndicator>
-                        <CheckIcon class="size-3.5 text-accent" />
-                      </Dropdown.ItemIndicator>
-                    </Dropdown.RadioItem>
-                  )}
-                </For>
-              </Dropdown.RadioGroup>
-            </Dropdown.Content>
-          </Dropdown>
-        </div>
+        )}
       </Show>
     </div>
   );
@@ -433,8 +447,7 @@ interface MobileShareDrawerProps {
   formattedOwner: string;
   linkShare: LinkShare | null | undefined;
   linkShareAccessLevel: AccessLevel | null | undefined;
-  teamShareAccessLevel: AccessLevel | null | undefined;
-  setTeamShareAccessLevel?: (scope: TeamShareScope) => void;
+  teamShare?: TeamShareControls;
   refetch: () => void;
   navigateToChannel: (channelId: string) => void;
   removeChannelAccess: (channelId: string) => void;
@@ -470,6 +483,8 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
       !isLinkSharingDisabledForItem(props.itemType)
     )
       tabs.push({ value: 'link', label: 'Link' });
+    if (teamShareOnOwnCard(props.itemType, props.teamShare))
+      tabs.push({ value: 'team', label: 'Team' });
     return tabs;
   });
 
@@ -663,19 +678,21 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               setLinkShareScope={props.setLinkShareScope}
               setLinkShareAccessLevel={props.setLinkShareAccessLevel}
               copyLink={props.copyLink}
-              teamShare={
-                props.setTeamShareAccessLevel
-                  ? {
-                      accessLevel: props.teamShareAccessLevel,
-                      setAccessLevel: props.setTeamShareAccessLevel,
-                      itemNoun: getShareItemNoun(props.itemType),
-                      scopeOptions: teamShareScopeOptionsForItem(
-                        props.itemType
-                      ),
-                    }
-                  : undefined
-              }
+              teamShare={props.teamShare}
             />
+          </Show>
+          <Show
+            when={
+              effectiveActiveTab() === 'team'
+                ? teamShareOnOwnCard(props.itemType, props.teamShare)
+                : undefined
+            }
+          >
+            {(teamShare) => (
+              <div class="p-4 text-sm text-ink">
+                <TeamAccessSection teamShare={teamShare()} />
+              </div>
+            )}
           </Show>
         </MobileDrawer.Content>
       </MobileDrawer.Portal>
@@ -1005,6 +1022,11 @@ export function ShareModal(props: ShareModalProps) {
         });
       } else if (props.itemType === 'call') {
         result = await updateCallTeamShare(props.id, shared);
+      } else if (props.itemType === 'project') {
+        result = await storageServiceClient.projects.edit({
+          id: props.id,
+          sharePermission,
+        });
       } else {
         result = await storageServiceClient.editDocument({
           sharePermission,
@@ -1166,8 +1188,7 @@ export function ShareModal(props: ShareModalProps) {
           formattedOwner={formattedOwner()}
           linkShare={linkShare()}
           linkShareAccessLevel={linkShareAccessLevel()}
-          teamShareAccessLevel={teamShareAccessLevel()}
-          setTeamShareAccessLevel={teamShareControls()?.setAccessLevel}
+          teamShare={teamShareControls()}
           refetch={refetch}
           navigateToChannel={navigateToChannel}
           removeChannelAccess={removeChannelAccess}
@@ -1400,6 +1421,19 @@ export function ShareModal(props: ShareModalProps) {
                     />
                   </Panel.Body>
                 </Panel>
+              </Show>
+              <Show
+                when={teamShareOnOwnCard(props.itemType, teamShareControls())}
+              >
+                {(teamShare) => (
+                  <Panel depth={2} class="rounded-xl bg-dialog">
+                    <Panel.Body>
+                      <div class="p-4 text-sm text-ink">
+                        <TeamAccessSection teamShare={teamShare()} />
+                      </div>
+                    </Panel.Body>
+                  </Panel>
+                )}
               </Show>
             </Dialog.Content>
           </div>

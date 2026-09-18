@@ -79,8 +79,21 @@ entity_mutation = [
   "entity_access/ports",
   "ports",
 ]
-ports = ["dep:entity_access", "dep:tokio", "entity_access/ports"]
-schema = ["channel_sender/schema", "dep:utoipa", "macro_user_id/schema", "item_filters/schema"]
+ports = [
+  "dep:async-trait",
+  "dep:entity_access",
+  "dep:rootcause",
+  "dep:tokio",
+  "entity_access/ports",
+  "messages/ports",
+]
+schema = [
+  "channel_sender/schema",
+  "dep:utoipa",
+  "item_filters/schema",
+  "macro_user_id/schema",
+  "messages/schema",
+]
 
 [dependencies]
 activity = { path = "../activity", default-features = false }
@@ -110,6 +123,7 @@ macro_event_broker = { path = "../macro_event_broker", default-features = false 
 macro_event_topics = { path = "../macro_event_topics" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
+messages = { path = "../messages" }
 model-entity = { path = "../model-entity", optional = true }
 model-error-response = { path = "../model-error-response", optional = true }
 model_notifications = { path = "../model_notifications", optional = true }
@@ -140,6 +154,7 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 bot_id = { path = "../bot_id", features = ["test-utils"] }
+messages = { path = "../messages", features = ["test-utils"] }
 http-body-util = { workspace = true }
 kafka_util = { path = "../kafka_util" }
 macro_db_migrator = { path = "../macro_db_migrator" }

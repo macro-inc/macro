@@ -1468,6 +1468,28 @@ export const storageServiceClient = {
     });
   },
 
+  async createSpreadsheetDocument(request: {
+    documentName: string;
+    projectId?: string;
+    sha: string;
+  }) {
+    const result = await dssFetch<CreateDocumentResponse>('/documents', {
+      method: 'POST',
+      body: JSON.stringify({ ...request, fileType: 'spreadsheet' }),
+    });
+    return result.andThen(({ data }) => {
+      if (data.presignedUrl) {
+        return err([
+          {
+            code: 'INVALID_RESPONSE' as const,
+            message: 'The server does not support native spreadsheets yet.',
+          },
+        ]);
+      }
+      return ok({ metadata: data.documentMetadata });
+    });
+  },
+
   /**
    * Creates a markdown document and initializes its sync-service content on the backend.
    */

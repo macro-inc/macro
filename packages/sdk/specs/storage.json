@@ -10862,6 +10862,622 @@
         }
       }
     },
+    "/messages/{parent_type}/{parent_id}": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Read a bounded timeline with lazy thread previews.",
+        "operationId": "message_timeline",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "selection",
+            "in": "query",
+            "description": "Serialized MessageTimelineQuery; absent selects the latest roots.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessagePage"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Create a root message or reply.",
+        "operationId": "entity_message_create",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostMessage"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/items/{id}": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Resolve a message within its parent.",
+        "operationId": "entity_message_get_message",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Tombstone one message while preserving replies.",
+        "operationId": "entity_message_delete_message",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "nonce",
+            "in": "query",
+            "description": "Client nonce.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Edit an owned message.",
+        "operationId": "entity_message_edit",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MessagePatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/items/{id}/reactions": {
+      "post": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Change the caller's reaction.",
+        "operationId": "entity_message_react",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReactionInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/legacy/{legacy_id}": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Resolve an old link under current parent permissions.",
+        "operationId": "entity_message_legacy",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "legacy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "format": "int64"
+            }
+          },
+          {
+            "name": "thread",
+            "in": "query",
+            "description": "Resolve a thread id instead of a comment id.",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Message"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/references": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Read source channel threads mentioning this document under both parents' permissions.",
+        "operationId": "entity_message_references",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of roots.",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "created_at",
+            "in": "query",
+            "description": "Last root's creation timestamp.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "date-time"
+            }
+          },
+          {
+            "name": "cursor_id",
+            "in": "query",
+            "description": "Last root's UUID.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"],
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ReferencedThreadPage"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/threads/{id}": {
+      "get": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Open a specific discussion from a link or annotation.",
+        "operationId": "entity_message_get_thread",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MessageThread"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Explicitly remove a discussion.",
+        "operationId": "entity_message_delete_thread",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          {
+            "name": "nonce",
+            "in": "query",
+            "description": "Client nonce.",
+            "required": false,
+            "schema": {
+              "type": ["string", "null"]
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadState"
+                }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Update a discussion's lifecycle and placement.",
+        "operationId": "entity_message_patch_thread",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ThreadPatch"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadState"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/messages/{parent_type}/{parent_id}/typing": {
+      "post": {
+        "tags": ["messages::inbound::axum_router"],
+        "summary": "Broadcast typing within an authorized discussion.",
+        "operationId": "entity_message_typing",
+        "parameters": [
+          {
+            "name": "parent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "parent_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TypingInput"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/pins": {
       "get": {
         "tags": ["pins::get_pins"],
@@ -15310,6 +15926,73 @@
           }
         }
       },
+      "AttachmentChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Keep current attachments.",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["preserve"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Replace all attachments.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["replace"]
+              },
+              "value": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/NewAttachment"
+                },
+                "description": "Replace all attachments."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Remove stored attachment identities and append new references.",
+            "required": ["value", "type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["delta"]
+              },
+              "value": {
+                "type": "object",
+                "description": "Remove stored attachment identities and append new references.",
+                "required": ["remove", "add"],
+                "properties": {
+                  "add": {
+                    "type": "array",
+                    "items": {
+                      "$ref": "#/components/schemas/NewAttachment"
+                    },
+                    "description": "New attachments to append."
+                  },
+                  "remove": {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "format": "uuid"
+                    },
+                    "description": "Existing attachment UUIDs to remove."
+                  }
+                }
+              }
+            }
+          }
+        ],
+        "description": "Attachment changes interpreted by the common command boundary."
+      },
       "AttendeeResponseStatus": {
         "type": "string",
         "description": "RSVP state for an attendee.",
@@ -15605,6 +16288,21 @@
           }
         ],
         "description": "Bot owner."
+      },
+      "BotSenderProfile": {
+        "type": "object",
+        "description": "Public bot profile attached to bot-authored messages.",
+        "required": ["name"],
+        "properties": {
+          "avatar_url": {
+            "type": ["string", "null"],
+            "description": "Bot avatar URL."
+          },
+          "name": {
+            "type": "string",
+            "description": "Bot display name."
+          }
+        }
       },
       "BotToken": {
         "type": "object",
@@ -17889,6 +18587,24 @@
           }
         }
       },
+      "CountedReaction": {
+        "type": "object",
+        "description": "Reaction emoji and the users who added it.",
+        "required": ["emoji", "users"],
+        "properties": {
+          "emoji": {
+            "type": "string",
+            "description": "Emoji being reacted with."
+          },
+          "users": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "User identifiers."
+          }
+        }
+      },
       "CreateAgentRequest": {
         "type": "object",
         "description": "Request to create a persisted AI agent.",
@@ -19941,6 +20657,10 @@
           }
         }
       },
+      "DocumentId": {
+        "type": "string",
+        "description": "A validated document identifier. Historical document ids need not be UUIDs."
+      },
       "DocumentInteractionMetadata": {
         "type": "object",
         "description": "Metadata for [`DocumentTopicEvent::Interaction`].",
@@ -21604,6 +22324,7 @@
           "docx",
           "pdf",
           "md",
+          "spreadsheet",
           "canvas",
           "coffee",
           "cson",
@@ -23289,6 +24010,17 @@
         "type": "integer",
         "enum": [1, 2, 3]
       },
+      "ImportedAuthor": {
+        "type": "object",
+        "description": "Display attribution for a comment imported from an external document.",
+        "required": ["name"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Original author text; never interpreted as an authenticated principal."
+          }
+        }
+      },
       "InFlightTurnSummary": {
         "type": "object",
         "description": "A turn the runtime never answered: the session stopped underneath it.",
@@ -23667,6 +24399,576 @@
           }
         }
       },
+      "Message": {
+        "type": "object",
+        "description": "Shared message representation for channel timelines and entity discussions.",
+        "required": [
+          "id",
+          "parent",
+          "sender_id",
+          "mentions",
+          "content",
+          "created_at",
+          "updated_at",
+          "attachments",
+          "reactions"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageAttachment"
+            },
+            "description": "Attached entities."
+          },
+          "bot_profile": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/BotSenderProfile",
+                "description": "Public bot name and avatar for rendering shared message authors."
+              }
+            ]
+          },
+          "content": {
+            "type": "string",
+            "description": "Macro Markdown body."
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Message tombstone, independent of thread deletion."
+          },
+          "edited_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Last content edit, if any."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message UUID."
+          },
+          "imported_author": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ImportedAuthor",
+                "description": "Original external author, when imported."
+              }
+            ]
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            },
+            "description": "Tracked mentions, retained when a caller changes attachments only."
+          },
+          "parent": {
+            "$ref": "#/components/schemas/MessageParent",
+            "description": "Entity that owns this conversation."
+          },
+          "reactions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/CountedReaction"
+            },
+            "description": "Aggregated reactions."
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Authenticated actor or owner of imported content."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Root message UUID for replies; absent on roots."
+          },
+          "triggered_by": {
+            "type": ["string", "null"],
+            "description": "User who triggered a bot-authored message."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last persisted update."
+          }
+        }
+      },
+      "MessageAttachment": {
+        "type": "object",
+        "description": "An entity attached to a message.",
+        "required": ["id", "entity_type", "entity_id", "created_at"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the attachment was added."
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "Attached entity identifier."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Attached entity type."
+          },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Optional media height."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Attachment UUID."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Optional media width."
+          }
+        }
+      },
+      "MessageChange": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A message was posted.",
+            "required": ["notification_policy", "message", "mentions", "type"],
+            "properties": {
+              "mentions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SimpleMention"
+                },
+                "description": "Mentions included in this post."
+              },
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted message."
+              },
+              "notification_policy": {
+                "$ref": "#/components/schemas/PostMessageNotificationPolicy",
+                "description": "Trusted notification policy carried with the committed change."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["posted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Message content and references were edited.",
+            "required": [
+              "notification_policy",
+              "message",
+              "mentions",
+              "previous_attachments",
+              "type"
+            ],
+            "properties": {
+              "mentions": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/SimpleMention"
+                },
+                "description": "Complete replacement mention set."
+              },
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted replacement message."
+              },
+              "notification_policy": {
+                "$ref": "#/components/schemas/PatchMessageNotificationPolicy",
+                "description": "Trusted notification policy for the edited content."
+              },
+              "previous_attachments": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/components/schemas/MessageAttachment"
+                },
+                "description": "Attachment identities before the edit, for channel change delivery."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["edited"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "One message was tombstoned; its thread may remain live.",
+            "required": ["message", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted tombstone."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["message_deleted"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The authenticated actor added or removed a reaction.",
+            "required": ["message", "type"],
+            "properties": {
+              "message": {
+                "$ref": "#/components/schemas/Message",
+                "description": "Persisted message."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["reaction_changed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Thread resolution, placement, or deletion changed.",
+            "required": ["state", "type"],
+            "properties": {
+              "state": {
+                "$ref": "#/components/schemas/ThreadState",
+                "description": "Persisted thread state."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["thread_updated"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Transient typing indication.",
+            "required": ["active", "type"],
+            "properties": {
+              "active": {
+                "type": "boolean",
+                "description": "Whether the user is currently typing."
+              },
+              "thread_id": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "Root being replied to, or no root for the parent composer."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["typing"]
+              }
+            }
+          }
+        ],
+        "description": "Kind of message change; notification policy only runs for posted messages."
+      },
+      "MessageCursor": {
+        "type": "object",
+        "description": "Cursor for a chronological parent timeline.",
+        "required": ["created_at", "id"],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last root creation time."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Last root UUID, used to break timestamp ties."
+          }
+        }
+      },
+      "MessageDirection": {
+        "type": "string",
+        "description": "Direction through a parent timeline, retaining channel cursor semantics.",
+        "enum": ["older", "newer"]
+      },
+      "MessageEvent": {
+        "type": "object",
+        "description": "A committed message or thread change sent to delivery adapters.",
+        "required": ["parent", "actor", "change"],
+        "properties": {
+          "actor": {
+            "type": "string",
+            "description": "User or bot who initiated the operation."
+          },
+          "change": {
+            "$ref": "#/components/schemas/MessageChange",
+            "description": "Persisted change."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Mutation nonce for optimistic reconciliation."
+          },
+          "parent": {
+            "$ref": "#/components/schemas/MessageParent",
+            "description": "Changed parent, used for subscriptions and cache invalidation."
+          }
+        }
+      },
+      "MessageListItem": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Message",
+            "description": "The same canonical message returned by item reads and writes."
+          },
+          {
+            "type": "object",
+            "required": ["state", "thread"],
+            "properties": {
+              "state": {
+                "$ref": "#/components/schemas/ThreadState",
+                "description": "Thread metadata, independent of the first message's lifecycle."
+              },
+              "thread": {
+                "$ref": "#/components/schemas/MessageThreadPreview",
+                "description": "Bounded reply preview; full replies load on expansion."
+              }
+            }
+          }
+        ],
+        "description": "Root message with its small thread preview, independent of its parent type."
+      },
+      "MessagePage": {
+        "type": "object",
+        "description": "Bidirectional, bounded timeline page, ordered newest root first.",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageListItem"
+            },
+            "description": "Root messages with bounded previews."
+          },
+          "next_cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageCursor",
+                "description": "Continue to older roots."
+              }
+            ]
+          },
+          "previous_cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageCursor",
+                "description": "Continue to newer roots."
+              }
+            ]
+          }
+        }
+      },
+      "MessageParent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A channel, including direct messages.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A channel, including direct messages."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A document, including tasks and PDFs.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/DocumentId",
+                "description": "A document, including tasks and PDFs."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["document"]
+              }
+            }
+          }
+        ],
+        "description": "The entity whose permissions and lifecycle govern a message."
+      },
+      "MessagePatch": {
+        "type": "object",
+        "description": "Partial updates share the same authorship, reference, and delivery rules as edits.",
+        "properties": {
+          "attachments": {
+            "$ref": "#/components/schemas/AttachmentChange",
+            "description": "Attachment change, without adapter-side message reads."
+          },
+          "content": {
+            "type": ["string", "null"],
+            "description": "Replacement body; absent preserves current content."
+          },
+          "mentions": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            },
+            "description": "Replacement authored mentions; absent preserves current mentions."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Client mutation nonce."
+          }
+        }
+      },
+      "MessageThread": {
+        "type": "object",
+        "description": "A discussion with its root and ordered replies, including root tombstones.",
+        "required": ["state", "root", "replies"],
+        "properties": {
+          "replies": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "description": "Replies in display order."
+          },
+          "root": {
+            "$ref": "#/components/schemas/Message",
+            "description": "Root message, which may be a tombstone."
+          },
+          "state": {
+            "$ref": "#/components/schemas/ThreadState",
+            "description": "Shared thread lifecycle and anchor state."
+          }
+        }
+      },
+      "MessageThreadPreview": {
+        "type": "object",
+        "description": "Thread counts and its oldest three live replies.",
+        "required": ["reply_count", "preview"],
+        "properties": {
+          "latest_reply_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Creation time of the latest live reply."
+          },
+          "preview": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Message"
+            },
+            "description": "Bounded preview using the canonical message shape."
+          },
+          "reply_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Total live reply count."
+          }
+        }
+      },
+      "MessageTimelineQuery": {
+        "type": "object",
+        "description": "Root selection shared by channel timelines and document discussions.",
+        "properties": {
+          "activity_after": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include roots or live replies created at or after this time."
+          },
+          "activity_before": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Include roots or live replies created before this time."
+          },
+          "anchored": {
+            "type": ["boolean", "null"],
+            "description": "Select anchored or unanchored roots; absent includes both."
+          },
+          "around": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Center on the root containing this message."
+          },
+          "cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageCursor",
+                "description": "Stable creation-time and UUID cursor."
+              }
+            ]
+          },
+          "direction": {
+            "$ref": "#/components/schemas/MessageDirection",
+            "description": "Which side of the cursor to fetch."
+          },
+          "ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "Restrict roots to this set, for selected source threads."
+          },
+          "include_deleted_threads": {
+            "type": "boolean",
+            "description": "Include whole-thread tombstones when reconciling persisted document marks."
+          },
+          "limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Page size, clamped by the application to 1..=100.",
+            "minimum": 0
+          }
+        }
+      },
+      "NewAttachment": {
+        "type": "object",
+        "description": "An attachment to add to a message.",
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "Attached entity identifier."
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Attached entity type."
+          },
+          "height": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Optional media height."
+          },
+          "width": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Optional media width."
+          }
+        }
+      },
       "NewChannelAttachment": {
         "type": "object",
         "description": "New attachment to add to a channel message.",
@@ -23691,6 +24993,92 @@
             "description": "Optional rendered width."
           }
         }
+      },
+      "NewThreadAnchor": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Attach a discussion to a stable Markdown mark.",
+            "required": ["mark_id", "type"],
+            "properties": {
+              "mark_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Serialized mark identifier."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["markdown"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Attach an independently existing highlight on this document.",
+            "required": ["anchor_id", "type"],
+            "properties": {
+              "anchor_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Highlight annotation identifier."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["pdf_highlight"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Atomically create a placeable annotation with the root message.",
+            "required": [
+              "anchor_id",
+              "page",
+              "x_pct",
+              "y_pct",
+              "width_pct",
+              "height_pct",
+              "type"
+            ],
+            "properties": {
+              "anchor_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Client-generated annotation identifier used by optimistic rendering."
+              },
+              "height_pct": {
+                "type": "number",
+                "format": "double",
+                "description": "Height as a fraction of the page height."
+              },
+              "page": {
+                "type": "integer",
+                "format": "int32",
+                "description": "PDF page number."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["pdf_placeable"]
+              },
+              "width_pct": {
+                "type": "number",
+                "format": "double",
+                "description": "Width as a fraction of the page width."
+              },
+              "x_pct": {
+                "type": "number",
+                "format": "double",
+                "description": "Horizontal position as a fraction of the page width."
+              },
+              "y_pct": {
+                "type": "number",
+                "format": "double",
+                "description": "Vertical position as a fraction of the page height."
+              }
+            }
+          }
+        ],
+        "description": "Location supplied when creating a document discussion."
       },
       "NotificationFilters": {
         "type": "object",
@@ -23837,6 +25225,11 @@
             "description": "Sets whether the channel is a team channel.\n\n`true` converts a non-team channel to a team channel, while `false`\nconverts a team channel to a private channel."
           }
         }
+      },
+      "PatchMessageNotificationPolicy": {
+        "type": "string",
+        "description": "Internal notification behavior for a patched channel message.",
+        "enum": ["Default", "NotifyAsPostedMessage"]
       },
       "PatchMessageRequest": {
         "type": "object",
@@ -24158,6 +25551,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "rootId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "text": {
             "type": "string"
           },
@@ -24290,7 +25687,6 @@
           "uuid",
           "documentId",
           "owner",
-          "threadId",
           "page",
           "originalPage",
           "originalIndex",
@@ -24327,6 +25723,10 @@
             "type": "integer",
             "format": "int32"
           },
+          "rootId": {
+            "type": ["string", "null"],
+            "format": "uuid"
+          },
           "rotation": {
             "type": "number",
             "format": "double"
@@ -24335,7 +25735,7 @@
             "type": "boolean"
           },
           "threadId": {
-            "type": "integer",
+            "type": ["integer", "null"],
             "format": "int64"
           },
           "uuid": {
@@ -24549,6 +25949,56 @@
           }
         ],
         "description": "Request body for grouped soup queries with AST filters."
+      },
+      "PostMessage": {
+        "type": "object",
+        "description": "Create a root or reply. Thread state may only be supplied on a root.",
+        "required": ["content"],
+        "properties": {
+          "anchor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/NewThreadAnchor",
+                "description": "Optional document location for a new discussion."
+              }
+            ]
+          },
+          "attachments": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/NewAttachment"
+            },
+            "description": "Initial attachments."
+          },
+          "content": {
+            "type": "string",
+            "description": "Macro Markdown body."
+          },
+          "mentions": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SimpleMention"
+            },
+            "description": "Mentions tracked by the editor."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Client nonce for optimistic reconciliation."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Root to reply to, if this is a reply."
+          }
+        }
+      },
+      "PostMessageNotificationPolicy": {
+        "type": "string",
+        "description": "Internal notification behavior for a posted channel message.",
+        "enum": ["Default", "MentionsOnly", "Silent"]
       },
       "PostMessageRequest": {
         "type": "object",
@@ -25198,6 +26648,25 @@
         "description": "Reaction mutation action.",
         "enum": ["Add", "Remove"]
       },
+      "ReactionInput": {
+        "type": "object",
+        "description": "Reaction mutation for the authenticated user.",
+        "required": ["emoji", "add"],
+        "properties": {
+          "add": {
+            "type": "boolean",
+            "description": "Add when true, remove when false."
+          },
+          "emoji": {
+            "type": "string",
+            "description": "Emoji."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Client nonce."
+          }
+        }
+      },
       "RecentlyDeletedResponseData": {
         "type": "object",
         "required": ["items"],
@@ -25208,6 +26677,55 @@
               "$ref": "#/components/schemas/Item"
             },
             "description": "The items returned from the call"
+          }
+        }
+      },
+      "ReferencedThread": {
+        "type": "object",
+        "description": "A source channel thread that mentions the requested document.",
+        "required": ["parent", "root_id", "can_reply"],
+        "properties": {
+          "can_reply": {
+            "type": "boolean",
+            "description": "Whether this viewer currently has permission to reply in the source channel."
+          },
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "Source channel's current display name, returned only after access checks."
+          },
+          "parent": {
+            "$ref": "#/components/schemas/MessageParent",
+            "description": "Source parent used by the common message reader and mutations."
+          },
+          "root_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Source root identity; discovery does not copy its message content."
+          }
+        }
+      },
+      "ReferencedThreadPage": {
+        "type": "object",
+        "description": "Authorized source threads, deduplicated by root.",
+        "required": ["threads"],
+        "properties": {
+          "next_cursor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageCursor",
+                "description": "Last visible root; no private thread identifiers are exposed through cursors."
+              }
+            ]
+          },
+          "threads": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ReferencedThread"
+            },
+            "description": "Accessible channel discussions mentioning the document."
           }
         }
       },
@@ -26026,12 +27544,12 @@
       },
       "SimpleMention": {
         "type": "object",
-        "description": "Simple entity mention attached to a message.",
+        "description": "A mention tracked in a message body.",
         "required": ["entity_type", "entity_id"],
         "properties": {
           "entity_id": {
             "type": "string",
-            "description": "Mentioned entity id."
+            "description": "Mentioned entity identifier."
           },
           "entity_type": {
             "type": "string",
@@ -28016,25 +29534,100 @@
           }
         }
       },
+      "ThreadAnchor": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Stable Lexical mark identity, independent of transient node keys.",
+            "required": ["mark_id", "type"],
+            "properties": {
+              "mark_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Mark UUID serialized in the document."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["markdown"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An independently existing PDF highlight.",
+            "required": ["anchor_id", "type"],
+            "properties": {
+              "anchor_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Highlight annotation UUID."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["pdf_highlight"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A comment-only placeable PDF annotation.",
+            "required": ["anchor_id", "type"],
+            "properties": {
+              "anchor_id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Placeable annotation UUID."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["pdf_placeable"]
+              }
+            }
+          }
+        ],
+        "description": "A thread's location within its document. Geometry remains annotation-owned."
+      },
       "ThreadOrigin": {
         "type": "object",
-        "description": "The channel thread a session was opened from, when it was.",
-        "required": ["channel_id", "thread_id", "originating_message_id"],
+        "description": "The thread a session was opened from, when it was.",
+        "required": ["parent", "thread_id", "originating_message_id"],
         "properties": {
           "channel_id": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
-            "description": "Channel the thread lives in."
+            "description": "Channel the thread lives in, for channel parents only. Kept beside\n`parent` for consumers written when every origin was a channel."
           },
           "originating_message_id": {
             "type": "string",
             "format": "uuid",
             "description": "The message whose mention opened the session."
           },
+          "parent": {
+            "$ref": "#/components/schemas/MessageParent",
+            "description": "Entity owning the thread: the channel or document it was posted in."
+          },
           "thread_id": {
             "type": "string",
             "format": "uuid",
             "description": "Root message of the thread."
+          }
+        }
+      },
+      "ThreadPatch": {
+        "type": "object",
+        "description": "Partial changes to the lifecycle and placement of a document discussion.",
+        "properties": {
+          "detach_anchor": {
+            "type": "boolean",
+            "description": "Move a Markdown discussion to the document when its marked text is removed."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Client nonce for the shared thread update event."
+          },
+          "resolved": {
+            "type": ["boolean", "null"],
+            "description": "Resolve or reopen the discussion; absent preserves its state."
           }
         }
       },
@@ -28047,6 +29640,58 @@
             "items": {
               "$ref": "#/components/schemas/CommentThread"
             }
+          }
+        }
+      },
+      "ThreadState": {
+        "type": "object",
+        "description": "State belonging to a whole thread, keyed by its root message.",
+        "required": [
+          "root_id",
+          "user_id",
+          "resolved",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "anchor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ThreadAnchor",
+                "description": "No anchor means a discussion on the entire parent. Deleted Markdown\nthreads retain their mark identity so closed documents can reconcile it."
+              }
+            ]
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Creation time of the discussion."
+          },
+          "deleted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Explicit deletion of the entire thread, distinct from root deletion."
+          },
+          "resolved": {
+            "type": "boolean",
+            "description": "Whether this discussion has been resolved."
+          },
+          "root_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Root message UUID; there is no separate thread identity."
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Last state change."
+          },
+          "user_id": {
+            "type": "string",
+            "description": "User who owns this discussion, including imported discussions."
           }
         }
       },
@@ -28302,6 +29947,26 @@
         "type": "string",
         "description": "Typing indicator action.",
         "enum": ["start", "stop"]
+      },
+      "TypingInput": {
+        "type": "object",
+        "description": "Transient typing update.",
+        "required": ["active"],
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "Whether the caller is typing."
+          },
+          "nonce": {
+            "type": ["string", "null"],
+            "description": "Client mutation nonce."
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Root being replied to, absent for the parent composer."
+          }
+        }
       },
       "UnthreadedPdfUuidRequest": {
         "oneOf": [

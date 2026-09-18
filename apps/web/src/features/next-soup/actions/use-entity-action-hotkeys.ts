@@ -51,6 +51,8 @@ type UseEntityActionHotkeysOptions = {
     | EntityActionNavigationHandler
     | undefined;
   condition?: () => boolean;
+  /** Home previews reserve Delete/Backspace for the open editor. */
+  enableDeleteHotkey?: boolean;
 };
 
 export const useEntityActionHotkeys = (
@@ -291,31 +293,33 @@ export const useEntityActionHotkeys = (
     tags: [HotkeyTags.SelectionModification],
   }).withGroup(group);
 
-  // Delete - 'delete', 'backspace'
-  registerHotkey({
-    hotkey: ['delete', 'backspace'],
-    hotkeyToken: TOKENS.entity.action.delete,
-    scopeId,
-    description: () => {
-      const count = getEntitiesForAction().length;
-      return count > 1 ? 'Delete items' : 'Delete item';
-    },
-    keyDownHandler: () => {
-      const entities = getEntitiesForAction();
-      if (entities.length === 0) return false;
-      if (!entities.every(deleteAction.canExecute)) return false;
+  if (options.enableDeleteHotkey !== false) {
+    // Delete - 'delete', 'backspace'
+    registerHotkey({
+      hotkey: ['delete', 'backspace'],
+      hotkeyToken: TOKENS.entity.action.delete,
+      scopeId,
+      description: () => {
+        const count = getEntitiesForAction().length;
+        return count > 1 ? 'Delete items' : 'Delete item';
+      },
+      keyDownHandler: () => {
+        const entities = getEntitiesForAction();
+        if (entities.length === 0) return false;
+        if (!entities.every(deleteAction.canExecute)) return false;
 
-      deleteAction.executeWithSoup(entities, list);
-      return true;
-    },
-    condition: () => {
-      if (condition && !condition()) return false;
-      const entities = getEntitiesForAction();
-      return entities.length > 0 && entities.every(deleteAction.canExecute);
-    },
-    displayPriority: 10,
-    tags: [HotkeyTags.SelectionModification],
-  }).withGroup(group);
+        deleteAction.executeWithSoup(entities, list);
+        return true;
+      },
+      condition: () => {
+        if (condition && !condition()) return false;
+        const entities = getEntitiesForAction();
+        return entities.length > 0 && entities.every(deleteAction.canExecute);
+      },
+      displayPriority: 10,
+      tags: [HotkeyTags.SelectionModification],
+    }).withGroup(group);
+  }
 
   /**
    * Whether 'r' should open the reminder editor rather than rename.

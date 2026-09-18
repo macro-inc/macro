@@ -5,7 +5,7 @@
 
 use agent_session::domain::model::AgentSessionId;
 use agent_trigger::domain::broker_events::{
-    AgentTriggerEventName, AgentTriggerTopicEvent, ExistingAgentSessionEvent, NewAgentSessionEvent,
+    AgentTriggerEventName, AgentTriggerTopicEvent, OpeningMention, SessionMessage,
 };
 use bot_id::BotId;
 use macro_event_broker::Event;
@@ -32,8 +32,8 @@ pub enum TriggerWork {
         bot: BotId,
         /// Who asked; owns the session and authors the prompt.
         sender: MacroUserIdStr<'static>,
-        /// Channel the mention was posted in.
-        channel_id: Uuid,
+        /// Channel or document the mention was posted in.
+        parent: messages::domain::models::MessageParent,
         /// Thread the mention roots.
         thread_id: Uuid,
         /// The mentioning message.
@@ -69,17 +69,19 @@ pub enum Skipped {
 /// Translate one trigger event into this daemon's work, or a reason to skip.
 pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Skipped> {
     match event {
-        AgentTriggerTopicEvent::New(NewAgentSessionEvent::TopLevelMentioned(mentioned)) => {
-            let message = mentioned.message;
+        AgentTriggerTopicEvent::New(event) => {
+            let Some(OpeningMention { bot_id, message }) = event.mention() else {
+                return Err(Skipped::Unrecognized);
+            };
             let sender = message
                 .sender
                 .as_user()
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
             Ok(TriggerWork::OpenAndPrompt {
-                bot: mentioned.bot_id,
+                bot: bot_id,
                 sender,
-                channel_id: message.channel_id,
+                parent: message.parent,
                 // A top-level mention roots its own thread; a mention inside
                 // a thread answers into that thread.
                 thread_id: message.thread_id.unwrap_or(message.message_id),
@@ -87,20 +89,26 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
                 content: message.content,
             })
         }
-        AgentTriggerTopicEvent::Existing(ExistingAgentSessionEvent::Channel(metadata)) => {
-            let sender = metadata
-                .message
+        AgentTriggerTopicEvent::Existing(event) => {
+            let Some(SessionMessage {
+                session_id,
+                message,
+                ..
+            }) = event.session_message()
+            else {
+                return Err(Skipped::Unrecognized);
+            };
+            let sender = message
                 .sender
                 .as_user()
                 .cloned()
                 .ok_or(Skipped::NotFromUser)?;
             Ok(TriggerWork::PromptExisting {
-                session: metadata.session_id,
+                session: session_id,
                 sender,
-                content: metadata.message.content,
+                content: message.content,
             })
         }
-        _ => Err(Skipped::Unrecognized),
     }
 }
 

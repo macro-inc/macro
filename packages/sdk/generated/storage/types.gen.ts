@@ -1171,6 +1171,34 @@ export type AssignTasksResult = {
 };
 
 /**
+ * Attachment changes interpreted by the common command boundary.
+ */
+export type AttachmentChange = {
+    type: 'preserve';
+} | {
+    type: 'replace';
+    /**
+     * Replace all attachments.
+     */
+    value: Array<NewAttachment>;
+} | {
+    type: 'delta';
+    /**
+     * Remove stored attachment identities and append new references.
+     */
+    value: {
+        /**
+         * New attachments to append.
+         */
+        add: Array<NewAttachment>;
+        /**
+         * Existing attachment UUIDs to remove.
+         */
+        remove: Array<string>;
+    };
+};
+
+/**
  * RSVP state for an attendee.
  */
 export type AttendeeResponseStatus = 'needs_action' | 'accepted' | 'declined' | 'tentative';
@@ -1375,6 +1403,20 @@ export type BotOwner = {
      */
     team_id: string;
     type: 'team';
+};
+
+/**
+ * Public bot profile attached to bot-authored messages.
+ */
+export type BotSenderProfile = {
+    /**
+     * Bot avatar URL.
+     */
+    avatar_url?: string | null;
+    /**
+     * Bot display name.
+     */
+    name: string;
 };
 
 /**
@@ -3014,6 +3056,20 @@ export type CopyDocumentResponse = {
 };
 
 /**
+ * Reaction emoji and the users who added it.
+ */
+export type CountedReaction = {
+    /**
+     * Emoji being reacted with.
+     */
+    emoji: string;
+    /**
+     * User identifiers.
+     */
+    users: Array<string>;
+};
+
+/**
  * Request to create a persisted AI agent.
  */
 export type CreateAgentRequest = {
@@ -4465,6 +4521,11 @@ export type DocumentFilters = {
 };
 
 /**
+ * A validated document identifier. Historical document ids need not be UUIDs.
+ */
+export type DocumentId = string;
+
+/**
  * Metadata for [`DocumentTopicEvent::Interaction`].
  */
 export type DocumentInteractionMetadata = {
@@ -5476,7 +5537,7 @@ export type FileSystemNodeWithIds = {
  * - ContentType::mime_type() - Gets MIME type for ContentType
  *
  */
-export type FileType = 'docx' | 'pdf' | 'md' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'ppt' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
+export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffee' | 'cson' | 'iced' | 'c' | 'i' | 'cpp' | 'cppm' | 'cc' | 'ccm' | 'cxx' | 'cxxm' | 'cplusplus' | 'cplusplusm' | 'hpp' | 'hh' | 'hxx' | 'hplusplus' | 'h' | 'ii' | 'ino' | 'inl' | 'ipp' | 'ixx' | 'tpp' | 'txx' | 'hppin' | 'hin' | 'cu' | 'cuh' | 'cs' | 'csx' | 'cake' | 'css' | 'dart' | 'diff' | 'patch' | 'rej' | 'dockerfile' | 'containerfile' | 'go' | 'handlebars' | 'hbs' | 'hjs' | 'hlsl' | 'hlsli' | 'fx' | 'fxh' | 'vsh' | 'psh' | 'cginc' | 'compute' | 'html' | 'htm' | 'shtml' | 'xhtml' | 'xht' | 'mdoc' | 'jsp' | 'asp' | 'aspx' | 'jshtm' | 'volt' | 'ejs' | 'rhtml' | 'ini' | 'conf' | 'properties' | 'cfg' | 'directory' | 'gitattributes' | 'gitconfig' | 'gitmodules' | 'editorconfig' | 'repo' | 'java' | 'jav' | 'jsx' | 'js' | 'es6' | 'mjs' | 'cjs' | 'pac' | 'json' | 'bowerrc' | 'jscsrc' | 'webmanifest' | 'jsmap' | 'cssmap' | 'tsmap' | 'har' | 'jslintrc' | 'jsonld' | 'geojson' | 'ipynb' | 'vuerc' | 'jsonc' | 'eslintrc' | 'eslintrcjson' | 'jsfmtrc' | 'jshintrc' | 'swcrc' | 'hintrc' | 'babelrc' | 'jsonl' | 'ndjson' | 'codesnippets' | 'jl' | 'jmd' | 'sty' | 'cls' | 'bbx' | 'cbx' | 'tex' | 'ltx' | 'ctx' | 'bib' | 'less' | 'log' | 'lua' | 'mak' | 'mk' | 'mkd' | 'mdwn' | 'mdown' | 'markdown' | 'markdn' | 'mdtxt' | 'mdtext' | 'workbook' | 'm' | 'mm' | 'pl' | 'pm' | 'pod' | 't' | 'psgi' | 'raku' | 'rakumod' | 'rakutest' | 'rakudoc' | 'nqp' | 'p6' | 'pl6' | 'pm6' | 'php' | 'php4' | 'php5' | 'phtml' | 'ctp' | 'ps1' | 'psm1' | 'psd1' | 'pssc' | 'psrc' | 'py' | 'rpy' | 'pyw' | 'cpy' | 'gyp' | 'gypi' | 'pyi' | 'ipy' | 'pyt' | 'r' | 'rhistory' | 'rprofile' | 'rt' | 'cshtml' | 'razor' | 'rb' | 'rbx' | 'rjs' | 'gemspec' | 'rake' | 'ru' | 'erb' | 'podspec' | 'rbi' | 'rs' | 'scss' | 'sass' | 'shader' | 'sh' | 'bash' | 'bashrc' | 'bashaliases' | 'bashprofile' | 'bashlogin' | 'ebuild' | 'eclass' | 'profile' | 'bashlogout' | 'xprofile' | 'xsession' | 'xsessionrc' | 'zsh' | 'zshrc' | 'zprofile' | 'zlogin' | 'zlogout' | 'zshenv' | 'zshtheme' | 'fish' | 'ksh' | 'csh' | 'cshrc' | 'tcshrc' | 'yashrc' | 'yashprofile' | 'sql' | 'dsql' | 'swift' | 'ts' | 'cts' | 'mts' | 'tsx' | 'tsbuildinfo' | 'xml' | 'xsd' | 'ascx' | 'atom' | 'axml' | 'axaml' | 'bpmn' | 'cpt' | 'csl' | 'csproj' | 'csprojuser' | 'dita' | 'ditamap' | 'dtd' | 'ent' | 'mod' | 'dtml' | 'fsproj' | 'fxml' | 'iml' | 'isml' | 'jmx' | 'launch' | 'menu' | 'mxml' | 'nuspec' | 'opml' | 'owl' | 'proj' | 'props' | 'pt' | 'publishsettings' | 'pubxml' | 'pubxmluser' | 'rbxlx' | 'rbxmx' | 'rdf' | 'rng' | 'rss' | 'shproj' | 'storyboard' | 'targets' | 'tld' | 'tmx' | 'vbproj' | 'vbprojuser' | 'vcxproj' | 'vcxprojfilters' | 'wsdl' | 'wxi' | 'wxl' | 'wxs' | 'xaml' | 'xbl' | 'xib' | 'xlf' | 'xliff' | 'xpdl' | 'xul' | 'xoml' | 'xsl' | 'xslt' | 'yaml' | 'yml' | 'eyaml' | 'eyml' | 'cff' | 'yamltmlanguage' | 'yamltmpreferences' | 'yamltmtheme' | 'winget' | 'txt' | 'csv' | 'tsv' | 'jpeg' | 'jpg' | 'png' | 'gif' | 'svg' | 'webp' | 'avif' | 'bmp' | 'ico' | 'tiff' | 'tif' | 'heic' | 'heif' | 'tar' | 'targz' | 'tgz' | 'gz' | 'bz2' | 'tarbz2' | 'tbz2' | 'z' | 'tarz' | 'lz' | 'tarlz' | 'xz' | 'tarxz' | 'txz' | 'lzma' | 'tarlzma' | 'rar' | 'sevenz' | 'zst' | 'tarzst' | 'tzst' | 'zip' | 'exe' | 'msi' | 'dll' | 'bat' | 'cmd' | 'com' | 'appimage' | 'app' | 'bin' | 'deb' | 'rpm' | 'apk' | 'dmg' | 'pkg' | 'crx' | 'xpi' | 'mp3' | 'wav' | 'ogg' | 'flac' | 'aac' | 'm4a' | 'wma' | 'mid' | 'midi' | 'mp4' | 'mkv' | 'webm' | 'avi' | 'mov' | 'wmv' | 'mpg' | 'mpeg' | 'm4v' | 'flv' | 'f4v' | 'threegp' | 'ttf' | 'otf' | 'woff' | 'woff2' | 'eot' | 'rtf' | 'odt' | 'ods' | 'odp' | 'odg' | 'odf' | 'epub' | 'mobi' | 'azw' | 'azw3' | 'djvu' | 'xls' | 'ppt' | 'pptx' | 'xlsx' | 'db' | 'sqlite' | 'sqlite3' | 'mdb' | 'accdb' | 'dbf' | 'plist' | 'toml' | 'env' | 'dot' | 'gv' | 'torrent' | 'ics' | 'vcf' | 'ai' | 'eps' | 'ps' | 'dxf' | 'dwg' | 'stl' | 'obj' | 'fbx' | 'blend' | 'dae' | 'threeds' | 'gltf' | 'glb' | 'vhd' | 'vhdx' | 'vmdk' | 'ova' | 'ovf' | 'iso' | 'img' | 'swf';
 
 /**
  * Represents a file type update: either set to a specific type or clear to null.
@@ -6330,6 +6391,16 @@ export type HashMap = {
 export type HighlightType = 1 | 2 | 3;
 
 /**
+ * Display attribution for a comment imported from an external document.
+ */
+export type ImportedAuthor = {
+    /**
+     * Original author text; never interpreted as an authenticated principal.
+     */
+    name: string;
+};
+
+/**
  * A turn the runtime never answered: the session stopped underneath it.
  */
 export type InFlightTurnSummary = {
@@ -6565,6 +6636,364 @@ export type Mentions = {
 };
 
 /**
+ * Shared message representation for channel timelines and entity discussions.
+ */
+export type Message = {
+    /**
+     * Attached entities.
+     */
+    attachments: Array<MessageAttachment>;
+    bot_profile?: null | BotSenderProfile;
+    /**
+     * Macro Markdown body.
+     */
+    content: string;
+    /**
+     * Creation time.
+     */
+    created_at: string;
+    /**
+     * Message tombstone, independent of thread deletion.
+     */
+    deleted_at?: string | null;
+    /**
+     * Last content edit, if any.
+     */
+    edited_at?: string | null;
+    /**
+     * Message UUID.
+     */
+    id: string;
+    imported_author?: null | ImportedAuthor;
+    /**
+     * Tracked mentions, retained when a caller changes attachments only.
+     */
+    mentions: Array<SimpleMention>;
+    /**
+     * Entity that owns this conversation.
+     */
+    parent: MessageParent;
+    /**
+     * Aggregated reactions.
+     */
+    reactions: Array<CountedReaction>;
+    /**
+     * Authenticated actor or owner of imported content.
+     */
+    sender_id: string;
+    /**
+     * Root message UUID for replies; absent on roots.
+     */
+    thread_id?: string | null;
+    /**
+     * User who triggered a bot-authored message.
+     */
+    triggered_by?: string | null;
+    /**
+     * Last persisted update.
+     */
+    updated_at: string;
+};
+
+/**
+ * An entity attached to a message.
+ */
+export type MessageAttachment = {
+    /**
+     * When the attachment was added.
+     */
+    created_at: string;
+    /**
+     * Attached entity identifier.
+     */
+    entity_id: string;
+    /**
+     * Attached entity type.
+     */
+    entity_type: string;
+    /**
+     * Optional media height.
+     */
+    height?: number | null;
+    /**
+     * Attachment UUID.
+     */
+    id: string;
+    /**
+     * Optional media width.
+     */
+    width?: number | null;
+};
+
+/**
+ * Kind of message change; notification policy only runs for posted messages.
+ */
+export type MessageChange = {
+    /**
+     * Mentions included in this post.
+     */
+    mentions: Array<SimpleMention>;
+    /**
+     * Persisted message.
+     */
+    message: Message;
+    /**
+     * Trusted notification policy carried with the committed change.
+     */
+    notification_policy: PostMessageNotificationPolicy;
+    type: 'posted';
+} | {
+    /**
+     * Complete replacement mention set.
+     */
+    mentions: Array<SimpleMention>;
+    /**
+     * Persisted replacement message.
+     */
+    message: Message;
+    /**
+     * Trusted notification policy for the edited content.
+     */
+    notification_policy: PatchMessageNotificationPolicy;
+    /**
+     * Attachment identities before the edit, for channel change delivery.
+     */
+    previous_attachments: Array<MessageAttachment>;
+    type: 'edited';
+} | {
+    /**
+     * Persisted tombstone.
+     */
+    message: Message;
+    type: 'message_deleted';
+} | {
+    /**
+     * Persisted message.
+     */
+    message: Message;
+    type: 'reaction_changed';
+} | {
+    /**
+     * Persisted thread state.
+     */
+    state: ThreadState;
+    type: 'thread_updated';
+} | {
+    /**
+     * Whether the user is currently typing.
+     */
+    active: boolean;
+    /**
+     * Root being replied to, or no root for the parent composer.
+     */
+    thread_id?: string | null;
+    type: 'typing';
+};
+
+/**
+ * Cursor for a chronological parent timeline.
+ */
+export type MessageCursor = {
+    /**
+     * Last root creation time.
+     */
+    created_at: string;
+    /**
+     * Last root UUID, used to break timestamp ties.
+     */
+    id: string;
+};
+
+/**
+ * Direction through a parent timeline, retaining channel cursor semantics.
+ */
+export type MessageDirection = 'older' | 'newer';
+
+/**
+ * A committed message or thread change sent to delivery adapters.
+ */
+export type MessageEvent = {
+    /**
+     * User or bot who initiated the operation.
+     */
+    actor: string;
+    /**
+     * Persisted change.
+     */
+    change: MessageChange;
+    /**
+     * Mutation nonce for optimistic reconciliation.
+     */
+    nonce?: string | null;
+    /**
+     * Changed parent, used for subscriptions and cache invalidation.
+     */
+    parent: MessageParent;
+};
+
+/**
+ * Root message with its small thread preview, independent of its parent type.
+ */
+export type MessageListItem = Message & {
+    /**
+     * Thread metadata, independent of the first message's lifecycle.
+     */
+    state: ThreadState;
+    /**
+     * Bounded reply preview; full replies load on expansion.
+     */
+    thread: MessageThreadPreview;
+};
+
+/**
+ * Bidirectional, bounded timeline page, ordered newest root first.
+ */
+export type MessagePage = {
+    /**
+     * Root messages with bounded previews.
+     */
+    items: Array<MessageListItem>;
+    next_cursor?: null | MessageCursor;
+    previous_cursor?: null | MessageCursor;
+};
+
+/**
+ * The entity whose permissions and lifecycle govern a message.
+ */
+export type MessageParent = {
+    /**
+     * A channel, including direct messages.
+     */
+    id: string;
+    type: 'channel';
+} | {
+    /**
+     * A document, including tasks and PDFs.
+     */
+    id: DocumentId;
+    type: 'document';
+};
+
+/**
+ * Partial updates share the same authorship, reference, and delivery rules as edits.
+ */
+export type MessagePatch = {
+    /**
+     * Attachment change, without adapter-side message reads.
+     */
+    attachments?: AttachmentChange;
+    /**
+     * Replacement body; absent preserves current content.
+     */
+    content?: string | null;
+    /**
+     * Replacement authored mentions; absent preserves current mentions.
+     */
+    mentions?: Array<SimpleMention> | null;
+    /**
+     * Client mutation nonce.
+     */
+    nonce?: string | null;
+};
+
+/**
+ * A discussion with its root and ordered replies, including root tombstones.
+ */
+export type MessageThread = {
+    /**
+     * Replies in display order.
+     */
+    replies: Array<Message>;
+    /**
+     * Root message, which may be a tombstone.
+     */
+    root: Message;
+    /**
+     * Shared thread lifecycle and anchor state.
+     */
+    state: ThreadState;
+};
+
+/**
+ * Thread counts and its oldest three live replies.
+ */
+export type MessageThreadPreview = {
+    /**
+     * Creation time of the latest live reply.
+     */
+    latest_reply_at?: string | null;
+    /**
+     * Bounded preview using the canonical message shape.
+     */
+    preview: Array<Message>;
+    /**
+     * Total live reply count.
+     */
+    reply_count: number;
+};
+
+/**
+ * Root selection shared by channel timelines and document discussions.
+ */
+export type MessageTimelineQuery = {
+    /**
+     * Include roots or live replies created at or after this time.
+     */
+    activity_after?: string | null;
+    /**
+     * Include roots or live replies created before this time.
+     */
+    activity_before?: string | null;
+    /**
+     * Select anchored or unanchored roots; absent includes both.
+     */
+    anchored?: boolean | null;
+    /**
+     * Center on the root containing this message.
+     */
+    around?: string | null;
+    cursor?: null | MessageCursor;
+    /**
+     * Which side of the cursor to fetch.
+     */
+    direction?: MessageDirection;
+    /**
+     * Restrict roots to this set, for selected source threads.
+     */
+    ids?: Array<string>;
+    /**
+     * Include whole-thread tombstones when reconciling persisted document marks.
+     */
+    include_deleted_threads?: boolean;
+    /**
+     * Page size, clamped by the application to 1..=100.
+     */
+    limit?: number | null;
+};
+
+/**
+ * An attachment to add to a message.
+ */
+export type NewAttachment = {
+    /**
+     * Attached entity identifier.
+     */
+    entity_id: string;
+    /**
+     * Attached entity type.
+     */
+    entity_type: string;
+    /**
+     * Optional media height.
+     */
+    height?: number | null;
+    /**
+     * Optional media width.
+     */
+    width?: number | null;
+};
+
+/**
  * New attachment to add to a channel message.
  */
 export type NewChannelAttachment = {
@@ -6584,6 +7013,49 @@ export type NewChannelAttachment = {
      * Optional rendered width.
      */
     width?: number | null;
+};
+
+/**
+ * Location supplied when creating a document discussion.
+ */
+export type NewThreadAnchor = {
+    /**
+     * Serialized mark identifier.
+     */
+    mark_id: string;
+    type: 'markdown';
+} | {
+    /**
+     * Highlight annotation identifier.
+     */
+    anchor_id: string;
+    type: 'pdf_highlight';
+} | {
+    /**
+     * Client-generated annotation identifier used by optimistic rendering.
+     */
+    anchor_id: string;
+    /**
+     * Height as a fraction of the page height.
+     */
+    height_pct: number;
+    /**
+     * PDF page number.
+     */
+    page: number;
+    type: 'pdf_placeable';
+    /**
+     * Width as a fraction of the page width.
+     */
+    width_pct: number;
+    /**
+     * Horizontal position as a fraction of the page width.
+     */
+    x_pct: number;
+    /**
+     * Vertical position as a fraction of the page height.
+     */
+    y_pct: number;
 };
 
 /**
@@ -6698,6 +7170,11 @@ export type PatchChannelRequest = {
 };
 
 /**
+ * Internal notification behavior for a patched channel message.
+ */
+export type PatchMessageNotificationPolicy = 'Default' | 'NotifyAsPostedMessage';
+
+/**
  * Request to patch a channel message.
  */
 export type PatchMessageRequest = {
@@ -6797,6 +7274,7 @@ export type PdfHighlightAnchor = {
     pageViewportHeight: number;
     pageViewportWidth: number;
     red: number;
+    rootId?: string | null;
     text: string;
     threadId?: number | null;
     updatedAt?: string | null;
@@ -6840,9 +7318,10 @@ export type PdfPlaceableCommentAnchor = {
     originalPage: number;
     owner: string;
     page: number;
+    rootId?: string | null;
     rotation: number;
     shouldLockOnSave: boolean;
-    threadId: number;
+    threadId?: number | null;
     uuid: string;
     wasDeleted: boolean;
     wasEdited: boolean;
@@ -6931,6 +7410,38 @@ export type PostGroupedSoupAstRequest = (PostGroupedSoupAstInitialRequest & {
 }) | (PostGroupedSoupAstGroupPageRequest & {
     mode: 'group_page';
 });
+
+/**
+ * Create a root or reply. Thread state may only be supplied on a root.
+ */
+export type PostMessage = {
+    anchor?: null | NewThreadAnchor;
+    /**
+     * Initial attachments.
+     */
+    attachments?: Array<NewAttachment>;
+    /**
+     * Macro Markdown body.
+     */
+    content: string;
+    /**
+     * Mentions tracked by the editor.
+     */
+    mentions?: Array<SimpleMention>;
+    /**
+     * Client nonce for optimistic reconciliation.
+     */
+    nonce?: string | null;
+    /**
+     * Root to reply to, if this is a reply.
+     */
+    thread_id?: string | null;
+};
+
+/**
+ * Internal notification behavior for a posted channel message.
+ */
+export type PostMessageNotificationPolicy = 'Default' | 'MentionsOnly' | 'Silent';
 
 /**
  * Request to send a channel message.
@@ -7306,11 +7817,62 @@ export type PropertyValue = {
  */
 export type ReactionAction = 'Add' | 'Remove';
 
+/**
+ * Reaction mutation for the authenticated user.
+ */
+export type ReactionInput = {
+    /**
+     * Add when true, remove when false.
+     */
+    add: boolean;
+    /**
+     * Emoji.
+     */
+    emoji: string;
+    /**
+     * Client nonce.
+     */
+    nonce?: string | null;
+};
+
 export type RecentlyDeletedResponseData = {
     /**
      * The items returned from the call
      */
     items: Array<Item>;
+};
+
+/**
+ * A source channel thread that mentions the requested document.
+ */
+export type ReferencedThread = {
+    /**
+     * Whether this viewer currently has permission to reply in the source channel.
+     */
+    can_reply: boolean;
+    /**
+     * Source channel's current display name, returned only after access checks.
+     */
+    channel_name?: string | null;
+    /**
+     * Source parent used by the common message reader and mutations.
+     */
+    parent: MessageParent;
+    /**
+     * Source root identity; discovery does not copy its message content.
+     */
+    root_id: string;
+};
+
+/**
+ * Authorized source threads, deduplicated by root.
+ */
+export type ReferencedThreadPage = {
+    next_cursor?: null | MessageCursor;
+    /**
+     * Accessible channel discussions mentioning the document.
+     */
+    threads: Array<ReferencedThread>;
 };
 
 /**
@@ -7842,11 +8404,11 @@ export type ShortIdResponse = {
 };
 
 /**
- * Simple entity mention attached to a message.
+ * A mention tracked in a message body.
  */
 export type SimpleMention = {
     /**
-     * Mentioned entity id.
+     * Mentioned entity identifier.
      */
     entity_id: string;
     /**
@@ -9209,25 +9771,102 @@ export type Thread = {
 };
 
 /**
- * The channel thread a session was opened from, when it was.
+ * A thread's location within its document. Geometry remains annotation-owned.
+ */
+export type ThreadAnchor = {
+    /**
+     * Mark UUID serialized in the document.
+     */
+    mark_id: string;
+    type: 'markdown';
+} | {
+    /**
+     * Highlight annotation UUID.
+     */
+    anchor_id: string;
+    type: 'pdf_highlight';
+} | {
+    /**
+     * Placeable annotation UUID.
+     */
+    anchor_id: string;
+    type: 'pdf_placeable';
+};
+
+/**
+ * The thread a session was opened from, when it was.
  */
 export type ThreadOrigin = {
     /**
-     * Channel the thread lives in.
+     * Channel the thread lives in, for channel parents only. Kept beside
+     * `parent` for consumers written when every origin was a channel.
      */
-    channel_id: string;
+    channel_id?: string | null;
     /**
      * The message whose mention opened the session.
      */
     originating_message_id: string;
+    /**
+     * Entity owning the thread: the channel or document it was posted in.
+     */
+    parent: MessageParent;
     /**
      * Root message of the thread.
      */
     thread_id: string;
 };
 
+/**
+ * Partial changes to the lifecycle and placement of a document discussion.
+ */
+export type ThreadPatch = {
+    /**
+     * Move a Markdown discussion to the document when its marked text is removed.
+     */
+    detach_anchor?: boolean;
+    /**
+     * Client nonce for the shared thread update event.
+     */
+    nonce?: string | null;
+    /**
+     * Resolve or reopen the discussion; absent preserves its state.
+     */
+    resolved?: boolean | null;
+};
+
 export type ThreadResponse = {
     data: Array<CommentThread>;
+};
+
+/**
+ * State belonging to a whole thread, keyed by its root message.
+ */
+export type ThreadState = {
+    anchor?: null | ThreadAnchor;
+    /**
+     * Creation time of the discussion.
+     */
+    created_at: string;
+    /**
+     * Explicit deletion of the entire thread, distinct from root deletion.
+     */
+    deleted_at?: string | null;
+    /**
+     * Whether this discussion has been resolved.
+     */
+    resolved: boolean;
+    /**
+     * Root message UUID; there is no separate thread identity.
+     */
+    root_id: string;
+    /**
+     * Last state change.
+     */
+    updated_at: string;
+    /**
+     * User who owns this discussion, including imported discussions.
+     */
+    user_id: string;
 };
 
 /**
@@ -9408,6 +10047,24 @@ export type TypedSuccessResponseGetDocumentResponseData = {
  * Typing indicator action.
  */
 export type TypingAction = 'start' | 'stop';
+
+/**
+ * Transient typing update.
+ */
+export type TypingInput = {
+    /**
+     * Whether the caller is typing.
+     */
+    active: boolean;
+    /**
+     * Client mutation nonce.
+     */
+    nonce?: string | null;
+    /**
+     * Root being replied to, absent for the parent composer.
+     */
+    thread_id?: string | null;
+};
 
 export type UnthreadedPdfUuidRequest = {
     attachmentType: 'highlight';
@@ -14349,6 +15006,239 @@ export type PostItemsSoupAstGroupedResponses = {
 };
 
 export type PostItemsSoupAstGroupedResponse = PostItemsSoupAstGroupedResponses[keyof PostItemsSoupAstGroupedResponses];
+
+export type MessageTimelineData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+    };
+    query?: {
+        /**
+         * Serialized MessageTimelineQuery; absent selects the latest roots.
+         */
+        selection?: string | null;
+    };
+    url: '/messages/{parent_type}/{parent_id}';
+};
+
+export type MessageTimelineResponses = {
+    200: MessagePage;
+};
+
+export type MessageTimelineResponse = MessageTimelineResponses[keyof MessageTimelineResponses];
+
+export type EntityMessageCreateData = {
+    body: PostMessage;
+    path: {
+        parent_type: string;
+        parent_id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}';
+};
+
+export type EntityMessageCreateResponses = {
+    200: Message;
+};
+
+export type EntityMessageCreateResponse = EntityMessageCreateResponses[keyof EntityMessageCreateResponses];
+
+export type EntityMessageDeleteMessageData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: {
+        /**
+         * Client nonce.
+         */
+        nonce?: string | null;
+    };
+    url: '/messages/{parent_type}/{parent_id}/items/{id}';
+};
+
+export type EntityMessageDeleteMessageResponses = {
+    200: Message;
+};
+
+export type EntityMessageDeleteMessageResponse = EntityMessageDeleteMessageResponses[keyof EntityMessageDeleteMessageResponses];
+
+export type EntityMessageGetMessageData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/items/{id}';
+};
+
+export type EntityMessageGetMessageResponses = {
+    200: Message;
+};
+
+export type EntityMessageGetMessageResponse = EntityMessageGetMessageResponses[keyof EntityMessageGetMessageResponses];
+
+export type EntityMessageEditData = {
+    body: MessagePatch;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/items/{id}';
+};
+
+export type EntityMessageEditResponses = {
+    200: Message;
+};
+
+export type EntityMessageEditResponse = EntityMessageEditResponses[keyof EntityMessageEditResponses];
+
+export type EntityMessageReactData = {
+    body: ReactionInput;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/items/{id}/reactions';
+};
+
+export type EntityMessageReactResponses = {
+    200: Message;
+};
+
+export type EntityMessageReactResponse = EntityMessageReactResponses[keyof EntityMessageReactResponses];
+
+export type EntityMessageLegacyData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        legacy_id: number;
+    };
+    query?: {
+        /**
+         * Resolve a thread id instead of a comment id.
+         */
+        thread?: boolean;
+    };
+    url: '/messages/{parent_type}/{parent_id}/legacy/{legacy_id}';
+};
+
+export type EntityMessageLegacyResponses = {
+    200: Message;
+};
+
+export type EntityMessageLegacyResponse = EntityMessageLegacyResponses[keyof EntityMessageLegacyResponses];
+
+export type EntityMessageReferencesData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+    };
+    query?: {
+        /**
+         * Maximum number of roots.
+         */
+        limit?: number | null;
+        /**
+         * Last root's creation timestamp.
+         */
+        created_at?: string | null;
+        /**
+         * Last root's UUID.
+         */
+        cursor_id?: string | null;
+    };
+    url: '/messages/{parent_type}/{parent_id}/references';
+};
+
+export type EntityMessageReferencesResponses = {
+    200: ReferencedThreadPage;
+};
+
+export type EntityMessageReferencesResponse = EntityMessageReferencesResponses[keyof EntityMessageReferencesResponses];
+
+export type EntityMessageDeleteThreadData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: {
+        /**
+         * Client nonce.
+         */
+        nonce?: string | null;
+    };
+    url: '/messages/{parent_type}/{parent_id}/threads/{id}';
+};
+
+export type EntityMessageDeleteThreadResponses = {
+    200: ThreadState;
+};
+
+export type EntityMessageDeleteThreadResponse = EntityMessageDeleteThreadResponses[keyof EntityMessageDeleteThreadResponses];
+
+export type EntityMessageGetThreadData = {
+    body?: never;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/threads/{id}';
+};
+
+export type EntityMessageGetThreadResponses = {
+    200: MessageThread;
+};
+
+export type EntityMessageGetThreadResponse = EntityMessageGetThreadResponses[keyof EntityMessageGetThreadResponses];
+
+export type EntityMessagePatchThreadData = {
+    body: ThreadPatch;
+    path: {
+        parent_type: string;
+        parent_id: string;
+        id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/threads/{id}';
+};
+
+export type EntityMessagePatchThreadResponses = {
+    200: ThreadState;
+};
+
+export type EntityMessagePatchThreadResponse = EntityMessagePatchThreadResponses[keyof EntityMessagePatchThreadResponses];
+
+export type EntityMessageTypingData = {
+    body: TypingInput;
+    path: {
+        parent_type: string;
+        parent_id: string;
+    };
+    query?: never;
+    url: '/messages/{parent_type}/{parent_id}/typing';
+};
+
+export type EntityMessageTypingResponses = {
+    204: void;
+};
+
+export type EntityMessageTypingResponse = EntityMessageTypingResponses[keyof EntityMessageTypingResponses];
 
 export type GetPinsHandlerData = {
     body?: never;

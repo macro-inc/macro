@@ -1,4 +1,8 @@
-import { ViewShell } from '@app/components/view-shell';
+import {
+  useViewShell,
+  ViewBreadcrumbs,
+  ViewShell,
+} from '@app/components/view-shell';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { PreviewPanel } from '@components/app/PreviewPanel';
@@ -34,15 +38,41 @@ function HomeListPane(props: {
   onPreviewEntityChange: (entity: EntityData | undefined) => void;
   onNewChat: () => void;
 }) {
+  const shell = useViewShell();
+  const showContent = () => {
+    if (shell.aside.isOverlay()) shell.aside.collapse();
+  };
+
   return (
-    <InboxListLayout tabs={<InboxTabs />} onNewChat={props.onNewChat}>
+    <InboxListLayout
+      tabs={<InboxTabs />}
+      onNewChat={() => {
+        props.onNewChat();
+        showContent();
+      }}
+    >
       <Suspense fallback={<InboxFallback />}>
         <InboxList
           previewEntity={props.previewEntity}
           onPreviewEntityChange={props.onPreviewEntityChange}
+          onPreviewActivate={showContent}
         />
       </Suspense>
     </InboxListLayout>
+  );
+}
+
+function HomeReturnBreadcrumb(props: { onReturn: () => void }) {
+  return (
+    <nav aria-label="Home location" class="flex items-center gap-0.5">
+      <ViewBreadcrumbs.ReturnButton
+        data-allow-focus-in-preview
+        onClick={props.onReturn}
+      >
+        Home
+      </ViewBreadcrumbs.ReturnButton>
+      <ViewBreadcrumbs.Separator />
+    </nav>
   );
 }
 
@@ -83,15 +113,8 @@ function InboxViewRoot() {
                 <div class="size-full min-h-0 bg-panel">
                   <ViewShell.Root
                     asidePreferenceKey="inbox"
-                    aside={{
-                      width: 256,
-                      min: 224,
-                      max: 420,
-                      preserveDuringResize: false,
-                    }}
-                    breakpoints={{ collapsed: 0 }}
-                    layoutBreakpoint="collapsed"
-                    main={{ min: 224, preferredWidth: 640 }}
+                    aside={{ preserveDuringResize: false }}
+                    main={{ preferredWidth: 640 }}
                     resizable
                   >
                     <ViewShell.Aside class="flex flex-col bg-panel">
@@ -116,6 +139,9 @@ function InboxViewRoot() {
                               selectedEntity={entity()}
                               orchestrator={orchestrator}
                               splitPanelContext={panel}
+                              headerLeading={
+                                <HomeReturnBreadcrumb onReturn={newChat} />
+                              }
                             />
                           </Suspense>
                         )}

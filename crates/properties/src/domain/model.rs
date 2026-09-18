@@ -190,6 +190,15 @@ impl<'a> PropertyDefinitionOwner<'a> {
     }
 }
 
+/// Result of resolving an option by value without changing an existing option.
+#[derive(Debug)]
+pub struct GetOrCreatePropertyOptionResult {
+    /// The newly inserted or existing option.
+    pub option: PropertyOption,
+    /// Whether this call inserted the option.
+    pub created: bool,
+}
+
 /// Result of getting or creating an owner's tag definition.
 #[derive(Debug, Clone)]
 pub struct GetOrCreateTagDefinitionResult {

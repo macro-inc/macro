@@ -30,6 +30,7 @@ fn owner() -> MacroUserIdStr<'static> {
 
 fn params(id: AgentSessionId) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
+        repo_branch: None,
         id,
         owner_id: owner(),
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),

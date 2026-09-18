@@ -1,6 +1,6 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { Key } from '@solid-primitives/keyed';
-import { Button, cn, Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import {
   createEffect,
   createMemo,
@@ -227,11 +227,14 @@ export function MessageList(props: MessageListProps) {
                             aria-hidden="true"
                             class="border-t border-edge-muted"
                           />
-                          <Button
-                            variant="outline"
-                            size="sm"
+                          {/* Plain text, no chip: the same color as the
+                              collapsed previews around it, faded until
+                              hovered or focused. */}
+                          <button
+                            type="button"
                             class={cn(
-                              props.hiddenChipFocused && 'bg-active text-ink'
+                              'shrink-0 px-2 py-1 text-sm text-ink-extra-muted/60 outline-none transition-colors not-touch:hover:text-ink-extra-muted focus-visible:text-ink-muted',
+                              props.hiddenChipFocused && 'text-ink-muted'
                             )}
                             data-hidden-messages
                             onPointerEnter={() =>
@@ -252,7 +255,7 @@ export function MessageList(props: MessageListProps) {
                           >
                             Show {hiddenCount()} hidden{' '}
                             {hiddenCount() === 1 ? 'message' : 'messages'}
-                          </Button>
+                          </button>
                           <span
                             aria-hidden="true"
                             class="border-t border-edge-muted"

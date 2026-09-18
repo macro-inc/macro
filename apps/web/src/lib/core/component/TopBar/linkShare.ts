@@ -9,6 +9,7 @@ const TEAM_SHAREABLE_ITEM_TYPES: ReadonlySet<ItemType> = new Set<ItemType>([
   'document',
   'chat',
   'call',
+  'project',
 ]);
 
 export function isTeamShareSupportedForItem(itemType: ItemType): boolean {
@@ -22,6 +23,8 @@ export function getShareItemNoun(itemType: ItemType): string {
       return 'email thread';
     case 'agent_session':
       return 'agent session';
+    case 'project':
+      return 'folder';
     default:
       return itemType;
   }

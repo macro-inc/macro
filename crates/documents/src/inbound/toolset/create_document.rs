@@ -45,15 +45,22 @@ pub struct CreateDocumentResponse {
 
 #[derive(Debug, Deserialize, JsonSchema, Clone, Default)]
 #[serde(rename_all = "camelCase")]
-#[schemars(title = "CreateDocument", description = "Create a plaintext document.")]
+#[schemars(
+    title = "CreateDocument",
+    description = "Create a plaintext document or a native Macro spreadsheet. For a workbook use fileExtension spreadsheet, empty fileContent, and isTask false; then ReadSpreadsheet and EditSpreadsheet to populate cells, formulas and sheets. Works without an open editor."
+)]
 pub struct CreateDocument {
     #[schemars(description = "The name of the document without the file extension")]
     pub document_name: String,
 
-    #[schemars(description = "The string content of the document you are creating.")]
+    #[schemars(
+        description = "The string content of a text document. Must be empty for a native spreadsheet."
+    )]
     pub file_content: String,
 
-    #[schemars(description = "The extension of the plaintext file you are creating.")]
+    #[schemars(
+        description = "The extension of a plaintext file, or spreadsheet for a native collaborative workbook."
+    )]
     pub file_extension: String,
 
     #[schemars(description = "Whether this document is a task. Only applies to md documents.")]
@@ -134,19 +141,24 @@ where
             metadata_builder = metadata_builder.project_id(project_id);
         }
 
-        let document = NewPlainTextDocument::builder(metadata_builder.build())
-            .file_type(parsed_file_type)
-            .text(self.file_content.clone())
-            .task_flag(self.is_task, maybe_team)
-            .build()
-            .map_err(failed_to_create_document)?;
-
-        let response = service_context
-            .creator
-            .create_plain_text(user_id, document)
-            .await
-            .map(|document| document.into_response())
-            .map_err(failed_to_create_document)?;
+        let response = if parsed_file_type == FileType::Spreadsheet {
+            if !self.file_content.is_empty() || self.is_task {
+                return Err(failed_to_create_document(DocumentError::BadRequest(
+                    "Create spreadsheets with empty fileContent and isTask false, then use ReadSpreadsheet and EditSpreadsheet to populate the workbook".to_string(),
+                )));
+            }
+            service_context.creator.create_spreadsheet(user_id, metadata_builder.build()).await
+        } else {
+            let document = NewPlainTextDocument::builder(metadata_builder.build())
+                .file_type(parsed_file_type)
+                .text(self.file_content.clone())
+                .task_flag(self.is_task, maybe_team)
+                .build()
+                .map_err(failed_to_create_document)?;
+            service_context.creator.create_plain_text(user_id, document).await
+        }
+        .map(|document| document.into_response())
+        .map_err(failed_to_create_document)?;
 
         tracing::trace!("created document");
 

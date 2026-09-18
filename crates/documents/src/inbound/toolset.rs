@@ -5,6 +5,7 @@ mod edit_document;
 mod read_content;
 mod read_metadata;
 mod rename_document;
+mod spreadsheet;
 
 #[cfg(test)]
 mod test;
@@ -16,8 +17,12 @@ use crate::{
     domain::ports::editing::EditingWorkerService,
     domain::ports::mentions::NoOpDocumentMentionTracker,
     inbound::toolset::{
-        create_document::CreateDocument, edit_document::EditDocument, read_content::ReadContent,
-        read_metadata::ReadMetadata, rename_document::RenameDocument,
+        create_document::CreateDocument,
+        edit_document::EditDocument,
+        read_content::ReadContent,
+        read_metadata::ReadMetadata,
+        rename_document::RenameDocument,
+        spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
     },
     outbound::{
         document_bytes_upload::ReqwestDocumentBytesUploader,
@@ -64,6 +69,9 @@ pub struct DocumentToolContext<
     /// Editing worker service for the EditDocument tool.
     pub editing: Arc<EDSvc>,
 
+    /// Permission-scoped deterministic spreadsheet workflows.
+    pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<DSvc, EDSvc>>,
+
     /// JWT secret used to mint document permission tokens for the editing worker.
     pub document_permission_jwt_secret: String,
 
@@ -90,6 +98,7 @@ impl<
             sync_service_client: self.sync_service_client.clone(),
             creator: self.creator.clone(),
             editing: self.editing.clone(),
+            spreadsheet: self.spreadsheet.clone(),
             document_permission_jwt_secret: self.document_permission_jwt_secret.clone(),
             recorder: self.recorder.clone(),
             actor: self.actor,
@@ -124,6 +133,12 @@ impl<
             ReqwestDocumentBytesUploader::default(),
             NoOpDocumentMentionTracker,
         );
+        let editing = Arc::new(editing);
+        let spreadsheet = Arc::new(crate::domain::spreadsheet::SpreadsheetService::new(
+            service.clone(),
+            editing.clone(),
+            document_permission_jwt_secret.clone(),
+        ));
 
         Self {
             service,
@@ -131,7 +146,8 @@ impl<
             lexical_client,
             sync_service_client,
             creator,
-            editing: Arc::new(editing),
+            editing,
+            spreadsheet,
             document_permission_jwt_secret,
             recorder: Arc::new(ai_usage::NoOpUsageRecorder),
             actor: bot_id::MACRO_AI_BOT_ID,
@@ -170,4 +186,7 @@ where
         .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CalculateSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
 }

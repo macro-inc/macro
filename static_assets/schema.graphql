@@ -1401,13 +1401,15 @@ type GraphqlCommentedOnDocumentMetadata {
 	"""
 	subType: GraphqlNotificationDocumentSubType
 	"""
-	Comment identifier.
+	Comment identifier: a legacy numeric comment id, or the message id in
+	the shared message store.
 	"""
-	commentId: Int!
+	commentId: String!
 	"""
-	Comment thread identifier.
+	Comment thread identifier: a legacy numeric thread id, or the root
+	message id in the shared message store.
 	"""
-	threadId: Int!
+	threadId: String!
 	"""
 	Comment text.
 	"""
@@ -1416,6 +1418,10 @@ type GraphqlCommentedOnDocumentMetadata {
 	Sender profile-picture URL.
 	"""
 	senderProfilePictureUrl: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
 }
 
 """
@@ -3077,13 +3083,15 @@ type GraphqlMentionedInDocumentCommentMetadata {
 	"""
 	mentionId: String!
 	"""
-	Comment identifier.
+	Comment identifier: a legacy numeric comment id, or the message id in
+	the shared message store.
 	"""
-	commentId: Int!
+	commentId: String!
 	"""
-	Comment thread identifier.
+	Comment thread identifier: a legacy numeric thread id, or the root
+	message id in the shared message store.
 	"""
-	threadId: Int!
+	threadId: String!
 	"""
 	Comment text.
 	"""
@@ -3092,6 +3100,10 @@ type GraphqlMentionedInDocumentCommentMetadata {
 	Sender profile-picture URL.
 	"""
 	senderProfilePictureUrl: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
 }
 
 """
@@ -3647,13 +3659,15 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 	"""
 	subType: GraphqlNotificationDocumentSubType
 	"""
-	Comment identifier.
+	Comment identifier: a legacy numeric comment id, or the message id in
+	the shared message store.
 	"""
-	commentId: Int!
+	commentId: String!
 	"""
-	Comment thread identifier.
+	Comment thread identifier: a legacy numeric thread id, or the root
+	message id in the shared message store.
 	"""
-	threadId: Int!
+	threadId: String!
 	"""
 	Reply text.
 	"""
@@ -3662,6 +3676,10 @@ type GraphqlRepliedToDocumentCommentThreadMetadata {
 	Sender profile-picture URL.
 	"""
 	senderProfilePictureUrl: String
+	"""
+	Display name for a non-user sender.
+	"""
+	senderDisplayName: String
 }
 
 """

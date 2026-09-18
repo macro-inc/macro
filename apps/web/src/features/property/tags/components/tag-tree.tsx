@@ -1,6 +1,4 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import { Button, cn } from '@ui';
 import { For, Show } from 'solid-js';
 import type { TagTreeNode } from '../core/tag-tree';
 import { TagDot } from '../TagDot';
@@ -14,7 +12,7 @@ export function TagTree(props: {
   onSelect: (id: string) => void;
 }) {
   return (
-    <ul class="flex min-w-0 flex-col gap-0.5">
+    <ul class="flex min-w-0 flex-col gap-(--sidebar-row-gap)">
       <For each={props.nodes}>
         {(node) => {
           const open = () => props.isExpanded(node);
@@ -22,62 +20,28 @@ export function TagTree(props: {
             Boolean(node.tag && props.activeIds.includes(node.tag.id));
           return (
             <li class="min-w-0">
-              <div
-                class={cn(
-                  'flex min-w-0 items-center rounded-xl',
-                  active() ? 'bg-active' : 'hover:bg-hover'
-                )}
+              <ViewSidebar.TreeItem
+                active={active()}
+                expanded={node.children.length > 0 ? open() : undefined}
+                label={node.path}
+                onToggle={() => props.onToggle(node)}
+                onClick={() =>
+                  node.tag ? props.onSelect(node.tag.id) : props.onToggle(node)
+                }
               >
-                <Show
-                  when={node.children.length > 0}
-                  fallback={<span class="w-6 shrink-0" />}
-                >
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    class="size-6 shrink-0 rounded-lg not-disabled:hover:bg-transparent not-touch:not-disabled:hover:bg-none not-touch:not-disabled:active:bg-none"
-                    aria-label={`${open() ? 'Collapse' : 'Expand'} ${node.path}`}
-                    aria-expanded={open()}
-                    onClick={() => props.onToggle(node)}
+                <ViewSidebar.Icon>
+                  <Show
+                    when={node.children.length > 0}
+                    fallback={<TagDot color={node.tag?.color} />}
                   >
-                    <CaretRightIcon
-                      class={cn(
-                        'size-3 transition-transform',
-                        open() && 'rotate-90'
-                      )}
-                    />
-                  </Button>
-                </Show>
-                <ViewSidebar.Item
-                  class={cn(
-                    'min-w-0 flex-1 justify-start px-2 font-normal bg-transparent not-disabled:hover:bg-transparent not-touch:not-disabled:hover:bg-none not-touch:not-disabled:active:bg-none',
-                    active() && 'text-ink'
-                  )}
-                  title={node.path}
-                  aria-current={active() ? 'page' : undefined}
-                  aria-expanded={!node.tag ? open() : undefined}
-                  onClick={() =>
-                    node.tag
-                      ? props.onSelect(node.tag.id)
-                      : props.onToggle(node)
-                  }
-                >
-                  <ViewSidebar.Icon>
-                    <Show
-                      when={node.children.length > 0}
-                      fallback={<TagDot color={node.tag?.color} />}
-                    >
-                      <BranchTagIcon node={node} />
-                    </Show>
-                  </ViewSidebar.Icon>
-                  <span class="truncate">{node.name}</span>
-                </ViewSidebar.Item>
-              </div>
-              <Show when={open() && node.children.length > 0}>
-                <div class="ml-3 border-l border-edge pl-3">
-                  <TagTree {...props} nodes={node.children} />
-                </div>
-              </Show>
+                    <BranchTagIcon node={node} />
+                  </Show>
+                </ViewSidebar.Icon>
+                <span class="truncate">{node.name}</span>
+              </ViewSidebar.TreeItem>
+              <ViewSidebar.Branch open={open() && node.children.length > 0}>
+                <TagTree {...props} nodes={node.children} />
+              </ViewSidebar.Branch>
             </li>
           );
         }}

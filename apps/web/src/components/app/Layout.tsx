@@ -517,13 +517,7 @@ function LayoutInner(props: RouteSectionProps) {
                 />
               }
             >
-              <SidebarRail
-                sidebarState={sidebarState()}
-                onOpenChange={(open) =>
-                  // The rail has no slim mode, so `cmd+.` hides it outright.
-                  setSidebarState(open ? 'expanded' : 'hidden')
-                }
-              />
+              <SidebarRail />
             </Show>
           </Show>
           <Show when={sidebarCollapsed()}>

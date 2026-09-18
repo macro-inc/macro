@@ -28,6 +28,7 @@ export const FileType = {
   docx: 'docx',
   pdf: 'pdf',
   md: 'md',
+  spreadsheet: 'spreadsheet',
   canvas: 'canvas',
   coffee: 'coffee',
   cson: 'cson',

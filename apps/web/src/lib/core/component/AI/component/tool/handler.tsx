@@ -85,6 +85,11 @@ import { selfKnowledgeHandler } from './SelfKnowledge';
 import { sendChannelMessageHandler } from './SendChannelMessage';
 import { sendEmailHandler } from './SendEmail';
 import { setSenderPolicyHandler } from './SetSenderPolicy';
+import {
+  calculateSpreadsheetHandler,
+  editSpreadsheetHandler,
+  readSpreadsheetHandler,
+} from './Spreadsheet';
 import { subagentHandler } from './Subagent';
 import { textEditorCodeExecutionHandler } from './TextEditorCodeExecution';
 import {
@@ -99,6 +104,9 @@ import { webFetchHandler } from './WebFetch';
 import { webSearchHandler } from './WebSearch';
 
 const toolHandlers: ToolHandlerMap<RenderContext> = {
+  ReadSpreadsheet: readSpreadsheetHandler,
+  CalculateSpreadsheet: calculateSpreadsheetHandler,
+  EditSpreadsheet: editSpreadsheetHandler,
   ConfigureBot: configureBotHandler,
   CreateChannel: createChannelHandler,
   CreateBot: createBotHandler,

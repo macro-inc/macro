@@ -199,6 +199,15 @@ fn it_expands_other_association() {
 }
 
 #[test]
+fn native_spreadsheets_have_an_explicit_filter_and_are_not_other_files() {
+    assert_eq!(
+        document::resolve_file_types("spreadsheet"),
+        vec![FileType::Spreadsheet]
+    );
+    assert!(!document::resolve_file_types("assoc:other").contains(&FileType::Spreadsheet));
+}
+
+#[test]
 fn it_expands_email_thread_ids() {
     let thread_id = Uuid::new_v4();
     let f = EntityFilters {

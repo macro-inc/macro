@@ -114,8 +114,6 @@ function ThreadReplyInputSession(props: ThreadReplyInputProps) {
                       : undefined,
                   clear: ctx.replyRequest.clear,
                 },
-                getMarkDoneNavigationTargetId:
-                  ctx.getMarkDoneNavigationTargetId,
                 exitToThread: (target) => {
                   const id =
                     target === 'last'

@@ -84,6 +84,7 @@ fn new_session(
     originating_message_id: Option<Uuid>,
 ) -> CreateAgentSessionParams {
     CreateAgentSessionParams {
+        repo_branch: None,
         id: AgentSessionId::new(),
         owner_id: user_id(OWNER),
         bot_id,
@@ -142,7 +143,7 @@ async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) 
     .await
     .expect("create originating channel");
     sqlx::query!(
-        "INSERT INTO comms_messages (id, channel_id, sender_id, content) VALUES ($1, $2, $3, '')",
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content) VALUES ($1, 'channel', $2::uuid::text, $3, '')",
         thread_id,
         channel_id,
         owner_id,
@@ -151,7 +152,7 @@ async fn insert_originating_thread_fixture(pool: &PgPool) -> (Uuid, Uuid, Uuid) 
     .await
     .expect("create originating thread");
     sqlx::query!(
-        "INSERT INTO comms_messages (id, channel_id, thread_id, sender_id, content) VALUES ($1, $2, $3, $4, '')",
+        "INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, thread_id, sender_id, content) VALUES ($1, 'channel', $2::uuid::text, $3, $4, '')",
         originating_message_id,
         channel_id,
         thread_id,
@@ -217,7 +218,10 @@ fn acp_notification() -> AcpMessage {
 async fn create_and_get_round_trips(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_id = create_test_bot(&pool).await;
-    let params = new_session(bot_id, None, None);
+    let mut params = new_session(bot_id, None, None);
+    params.repo_branch = Some(
+        crate::domain::repository_branch::RepositoryBranch::parse("feature/home".into()).unwrap(),
+    );
     let id = params.id;
 
     let created = create_session(&repo, params).await;
@@ -229,6 +233,10 @@ async fn create_and_get_round_trips(pool: PgPool) {
     assert_eq!(created.created_at, session.created_at);
     assert_eq!(created.modified_at, session.modified_at);
     assert_eq!(session.id, id);
+    assert_eq!(
+        session.repo_branch.as_ref().map(|branch| branch.as_str()),
+        Some("feature/home")
+    );
     assert_eq!(session.name, DEFAULT_AGENT_SESSION_NAME);
     assert_eq!(session.bot_id, bot_id);
     assert_eq!(
@@ -714,7 +722,7 @@ async fn log_create_and_list_by_session_orders_chronologically(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
+async fn find_for_thread_matches_the_originating_thread_and_bot(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot_a = create_test_bot(&pool).await;
     let bot_b = create_test_bot(&pool).await;
@@ -728,32 +736,42 @@ async fn find_for_channel_matches_the_originating_thread_and_bot(pool: PgPool) {
     .await;
     // The create response must already resolve the thread's channel: linked
     // -thread navigation renders from this row without a second lookup.
-    assert_eq!(session.thread_channel_id, Some(originating_channel));
+    assert_eq!(
+        session.thread_parent,
+        Some(messages::domain::models::MessageParent::Channel(
+            originating_channel
+        ))
+    );
     // A session from some other context must not shadow the lookup.
     create_session(&repo, new_session(bot_a, None, None)).await;
 
     let found = repo
-        .find_for_channel(Some(thread), Some(bot_b))
+        .find_for_thread(Some(thread), Some(bot_b))
         .await
         .expect("find bot B's session by originating thread");
-    let ChannelSession::CreatedFromThread(matched) = found else {
+    let ThreadSession::CreatedFromThread(matched) = found else {
         panic!("expected the originating-thread session, got {found:?}");
     };
     assert_eq!(matched.id, session.id);
     assert_eq!(matched.originating_message_id, Some(originating_message));
-    assert_eq!(matched.thread_channel_id, Some(originating_channel));
+    assert_eq!(
+        matched.thread_parent,
+        Some(messages::domain::models::MessageParent::Channel(
+            originating_channel
+        ))
+    );
 
     let wrong_bot = repo
-        .find_for_channel(Some(thread), Some(bot_a))
+        .find_for_thread(Some(thread), Some(bot_a))
         .await
         .expect("look up the wrong bot");
-    assert!(matches!(wrong_bot, ChannelSession::None));
+    assert!(matches!(wrong_bot, ThreadSession::None));
 
     let wrong_thread = repo
-        .find_for_channel(Some(macro_uuid::generate_uuid_v7()), Some(bot_b))
+        .find_for_thread(Some(macro_uuid::generate_uuid_v7()), Some(bot_b))
         .await
         .expect("look up an unrelated thread");
-    assert!(matches!(wrong_thread, ChannelSession::None));
+    assert!(matches!(wrong_thread, ThreadSession::None));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -854,7 +872,7 @@ async fn recent_for_owner_returns_the_owners_newest_sessions(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn find_for_channel_requires_thread_and_bot_for_originating_match(pool: PgPool) {
+async fn find_for_thread_requires_thread_and_bot_for_originating_match(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
     let bot = create_test_bot(&pool).await;
     let (_channel, thread, originating_message) = insert_originating_thread_fixture(&pool).await;
@@ -865,16 +883,16 @@ async fn find_for_channel_requires_thread_and_bot_for_originating_match(pool: Pg
     .await;
 
     let without_bot = repo
-        .find_for_channel(Some(thread), None)
+        .find_for_thread(Some(thread), None)
         .await
         .expect("look up without a bot");
-    assert!(matches!(without_bot, ChannelSession::None));
+    assert!(matches!(without_bot, ThreadSession::None));
 
     let without_thread = repo
-        .find_for_channel(None, Some(bot))
+        .find_for_thread(None, Some(bot))
         .await
         .expect("look up without a thread");
-    assert!(matches!(without_thread, ChannelSession::None));
+    assert!(matches!(without_thread, ThreadSession::None));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1036,11 +1054,11 @@ async fn create_records_the_session_in_the_owners_history(pool: PgPool) {
     assert_eq!(history[0].item_type, "agent_session");
 }
 
-/// A preview answers every requested id one way or another: the owner sees
-/// the session's fields, a channel member sees them through the channel's
-/// grant, a stranger learns only that it exists, and an unknown id is
-/// reported as such. Duplicates in the request are the caller's problem
-/// (the service collapses them); the repo answers what it is asked.
+/// A preview reports every existing id with whether the viewer holds a grant:
+/// the owner through their own row, a channel member through the channel's,
+/// a stranger through none, and an unknown id not at all. Duplicates in the
+/// request are the caller's problem (the service collapses them); the repo
+/// answers what it is asked.
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
     let repo = PgAgentSessionRepo::new(pool.clone());
@@ -1074,67 +1092,63 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
         .preview(&user_id(OWNER), &ids)
         .await
         .expect("owner preview");
-    owner_view.sort_by_key(|preview| preview.id().as_uuid());
+    owner_view.sort_by_key(|candidate| candidate.data.id.as_uuid());
     let mut expected = vec![
-        AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
-            id: from_channel.id,
-            bot: None,
-            name: DEFAULT_AGENT_SESSION_NAME.to_string(),
-            owner_id: user_id(OWNER),
-            bot_id,
-            status: SessionStatus::NoMessages,
-            created_at: from_channel.created_at,
-            modified_at: from_channel.modified_at,
-        })),
-        AgentSessionPreview::Access(Box::new(AgentSessionPreviewData {
-            id: private.id,
-            bot: None,
-            name: DEFAULT_AGENT_SESSION_NAME.to_string(),
-            owner_id: user_id(OWNER),
-            bot_id,
-            status: SessionStatus::Event(SystemEvent::AcpReady),
-            created_at: private.created_at,
-            // Bumped by the status event, so read back rather than assumed.
-            modified_at: AgentSessionRepo::get(&repo, private.id)
-                .await
-                .expect("reload")
-                .modified_at,
-        })),
-        AgentSessionPreview::DoesNotExist(missing),
+        SessionPreviewCandidate {
+            data: AgentSessionPreviewData {
+                id: from_channel.id,
+                bot: None,
+                name: DEFAULT_AGENT_SESSION_NAME.to_string(),
+                owner_id: user_id(OWNER),
+                bot_id,
+                status: SessionStatus::NoMessages,
+                created_at: from_channel.created_at,
+                modified_at: from_channel.modified_at,
+            },
+            has_grant: true,
+            thread_parent: Some(MessageParent::Channel(channel_id)),
+        },
+        SessionPreviewCandidate {
+            data: AgentSessionPreviewData {
+                id: private.id,
+                bot: None,
+                name: DEFAULT_AGENT_SESSION_NAME.to_string(),
+                owner_id: user_id(OWNER),
+                bot_id,
+                status: SessionStatus::Event(SystemEvent::AcpReady),
+                created_at: private.created_at,
+                // Bumped by the status event, so read back rather than assumed.
+                modified_at: AgentSessionRepo::get(&repo, private.id)
+                    .await
+                    .expect("reload")
+                    .modified_at,
+            },
+            has_grant: true,
+            thread_parent: None,
+        },
     ];
-    expected.sort_by_key(|preview| preview.id().as_uuid());
+    expected.sort_by_key(|candidate| candidate.data.id.as_uuid());
     assert_eq!(owner_view, expected);
 
+    let grant = |view: &[SessionPreviewCandidate], id: AgentSessionId| {
+        view.iter()
+            .find(|candidate| candidate.data.id == id)
+            .map(|candidate| candidate.has_grant)
+    };
     let member_view = repo
         .preview(&user_id(member), &ids)
         .await
         .expect("member preview");
-    assert_eq!(member_view.len(), 3);
-    assert!(matches!(
-        member_view.iter().find(|p| p.id() == from_channel.id),
-        Some(AgentSessionPreview::Access(_))
-    ));
-    assert_eq!(
-        member_view.iter().find(|p| p.id() == private.id),
-        Some(&AgentSessionPreview::NoAccess(private.id))
-    );
-    assert_eq!(
-        member_view.iter().find(|p| p.id() == missing),
-        Some(&AgentSessionPreview::DoesNotExist(missing))
-    );
+    assert_eq!(member_view.len(), 2, "the missing id is absent");
+    assert_eq!(grant(&member_view, from_channel.id), Some(true));
+    assert_eq!(grant(&member_view, private.id), Some(false));
 
     let stranger_view = repo
         .preview(&user_id(stranger), &ids)
         .await
         .expect("stranger preview");
-    assert_eq!(
-        stranger_view.iter().find(|p| p.id() == from_channel.id),
-        Some(&AgentSessionPreview::NoAccess(from_channel.id))
-    );
-    assert_eq!(
-        stranger_view.iter().find(|p| p.id() == private.id),
-        Some(&AgentSessionPreview::NoAccess(private.id))
-    );
+    assert_eq!(grant(&stranger_view, from_channel.id), Some(false));
+    assert_eq!(grant(&stranger_view, private.id), Some(false));
 
     // A member who has left the channel loses the channel's grant with it.
     sqlx::query!(
@@ -1149,10 +1163,7 @@ async fn preview_answers_per_id_by_the_viewers_grants(pool: PgPool) {
         .preview(&user_id(member), &[from_channel.id])
         .await
         .expect("former member preview");
-    assert_eq!(
-        left_view,
-        vec![AgentSessionPreview::NoAccess(from_channel.id)]
-    );
+    assert_eq!(grant(&left_view, from_channel.id), Some(false));
 }
 
 /// `entity_access.entity_id` carries no foreign key, so deleting a session
@@ -2110,4 +2121,178 @@ async fn pull_request_waiting_on_takeover_cannot_overwrite_successor(pool: PgPoo
         .await,
         Err(AgentSessionError::FencedOut(_))
     ));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_document_session_preserves_its_origin_and_inherits_live_document_access(pool: PgPool) {
+    use entity_access::domain::ports::EntityAccessService as _;
+    use messages::domain::{
+        models::PostMessage,
+        ports::{CreateMessage, MessageRepository},
+    };
+    let bot = create_test_bot(&pool).await;
+    let document = macro_uuid::generate_uuid_v7();
+    let document_id = document.to_string();
+    sqlx::query!(r#"INSERT INTO "Document" (id, name, owner, "fileType") VALUES ($1, 'Agent document', $2, 'md')"#, document_id, OWNER)
+        .execute(&pool).await.unwrap();
+    let messages = messages::outbound::pg_message_repo::PgMessageRepository::new(pool.clone());
+    let parent = MessageParent::parse("document", &document_id).unwrap();
+    let root = messages
+        .create(CreateMessage {
+            parent: parent.clone(),
+            actor: OWNER.to_owned().try_into().unwrap(),
+            triggered_by: None,
+            input: PostMessage {
+                attribution: Default::default(),
+                notification_policy: Default::default(),
+                content: "@agent investigate".into(),
+                thread_id: None,
+                anchor: None,
+                mentions: vec![],
+                attachments: vec![],
+                nonce: None,
+            },
+        })
+        .await
+        .unwrap();
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let session = create_session(&repo, new_session(bot, Some(root.id), Some(root.id))).await;
+    assert_eq!(session.thread_parent, Some(parent.clone()));
+    assert_eq!(
+        AgentSessionRepo::get(&repo, session.id)
+            .await
+            .unwrap()
+            .thread_parent,
+        Some(parent.clone())
+    );
+    assert_eq!(
+        repo.find_all_for_thread(root.id).await.unwrap()[0].thread_parent,
+        Some(parent.clone())
+    );
+
+    let collaborator = "macro|doc-agent-collaborator@example.com";
+    insert_user(&pool, collaborator).await;
+    let mut transaction = pool.begin().await.unwrap();
+    insert_entity_access_row(
+        &mut transaction,
+        &document,
+        EntityType::Document,
+        collaborator,
+        EntityAccessSourceType::User,
+        AccessLevel::Comment,
+    )
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
+    let access = entity_access::domain::service::EntityAccessServiceImpl::new(
+        entity_access::outbound::PgAccessRepository::new(pool.clone()),
+    );
+    use crate::domain::audience::{AuthorizedSessionAudience, SessionAudience};
+    let audience = AuthorizedSessionAudience::new(
+        repo.clone(),
+        access.clone(),
+        DocumentSubscriptions {
+            document: document_id.clone(),
+            candidates: [
+                collaborator.to_string(),
+                "macro|uninvited@example.com".to_string(),
+            ]
+            .into_iter()
+            .collect(),
+        },
+    );
+    let viewers = audience.viewers(session.id).await.unwrap();
+    assert!(viewers.contains(&user_id(OWNER)));
+    assert!(viewers.contains(&user_id(collaborator)));
+    assert_eq!(viewers.len(), 2);
+    // Bind owned values across the async lookup.
+    let collaborator_id = user_id(collaborator);
+    let session_id = session.id.to_string();
+    assert_eq!(
+        access
+            .get_access_level(
+                Some(&collaborator_id),
+                &session_id,
+                EntityType::AgentSession
+            )
+            .await
+            .unwrap(),
+        Some(AccessLevel::Edit)
+    );
+    sqlx::query!(
+        "DELETE FROM entity_access WHERE entity_id = $1 AND source_id = $2",
+        document,
+        collaborator
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    assert_eq!(
+        access
+            .get_access_level(
+                Some(&collaborator_id),
+                &session_id,
+                EntityType::AgentSession
+            )
+            .await
+            .unwrap(),
+        None
+    );
+    assert_eq!(
+        audience.viewers(session.id).await.unwrap(),
+        vec![user_id(OWNER)]
+    );
+
+    // A preview never sees the inherited grant as a row: the candidate names
+    // the document so the service can ask, and the view adapter answers with
+    // the document's current permission.
+    use crate::domain::audience::EntityAccessSessionView;
+    use crate::domain::ports::SessionViewAccess as _;
+    let view = EntityAccessSessionView::new(access.clone());
+    let candidates = repo.preview(&collaborator_id, &[session.id]).await.unwrap();
+    assert_eq!(candidates.len(), 1);
+    assert!(!candidates[0].has_grant);
+    assert_eq!(candidates[0].thread_parent, Some(parent.clone()));
+    assert!(!view.can_view(&collaborator_id, session.id).await.unwrap());
+    let mut transaction = pool.begin().await.unwrap();
+    insert_entity_access_row(
+        &mut transaction,
+        &document,
+        EntityType::Document,
+        collaborator,
+        EntityAccessSourceType::User,
+        AccessLevel::View,
+    )
+    .await
+    .unwrap();
+    transaction.commit().await.unwrap();
+    assert!(view.can_view(&collaborator_id, session.id).await.unwrap());
+    assert!(
+        !repo.preview(&collaborator_id, &[session.id]).await.unwrap()[0].has_grant,
+        "inherited access is resolved at check time, never materialized"
+    );
+    assert!(
+        !view
+            .can_view(&user_id("macro|nobody@example.com"), session.id)
+            .await
+            .unwrap()
+    );
+}
+
+struct DocumentSubscriptions {
+    document: String,
+    candidates: std::collections::HashSet<String>,
+}
+impl crate::domain::audience::SessionSubscriptions for DocumentSubscriptions {
+    async fn candidates(
+        &self,
+        _: AgentSessionId,
+        parent: Option<&MessageParent>,
+    ) -> Result<std::collections::HashSet<String>, rootcause::Report> {
+        assert_eq!(
+            parent,
+            Some(&MessageParent::parse("document", &self.document).unwrap())
+        );
+        Ok(self.candidates.clone())
+    }
 }

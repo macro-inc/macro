@@ -1056,7 +1056,7 @@
       },
       "AgentSessionNotificationRef": {
         "type": "object",
-        "description": "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nFlattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.",
+        "description": "Flattened into each agent-session kind so the wire keeps these keys at the\ntop level of the metadata, the way [`CommonChannelMetadata`] does.",
         "required": ["sessionId", "sessionName", "botId", "botName"],
         "properties": {
           "announcementMessageId": {
@@ -1075,7 +1075,18 @@
           "channelId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "The channel the session was opened from, when it was."
+            "description": "The channel the session was opened from, when it was opened from a\nchannel thread."
+          },
+          "parent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AgentSessionOriginParent",
+                "description": "The channel or document the session was opened from, when it was."
+              }
+            ]
           },
           "sessionId": {
             "type": "string",
@@ -1090,6 +1101,21 @@
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The thread the session was opened from, when it was."
+          }
+        }
+      },
+      "AgentSessionOriginParent": {
+        "type": "object",
+        "description": "The session an agent-session notification is about, and where its magic\nchip lives when it was opened from a thread.\n\nThe conversation an agent session was opened from: a channel or a\ndocument discussion. Spelled like the message API's parent so a client can\nroute to either surface.",
+        "required": ["type", "id"],
+        "properties": {
+          "id": {
+            "type": "string",
+            "description": "The channel or document id."
+          },
+          "type": {
+            "type": "string",
+            "description": "`channel` or `document`."
           }
         }
       },
@@ -1437,14 +1463,28 @@
         "type": "string",
         "enum": ["public", "private", "directMessage", "team"]
       },
+      "CommentRef": {
+        "oneOf": [
+          {
+            "type": "integer",
+            "format": "int64",
+            "description": "Legacy `Comment.id` or `Thread.id`."
+          },
+          {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message or root id in the shared message store."
+          }
+        ],
+        "description": "Identity of a document comment or its thread. Comments written before the\nshared message store carry the legacy numeric ids; comments in the shared\nstore carry the message and root UUIDs."
+      },
       "CommentedOnDocumentMetadata": {
         "type": "object",
         "description": "Notification sent when someone comments on a document the user owns.",
         "required": ["documentName", "owner", "commentId", "threadId", "text"],
         "properties": {
           "commentId": {
-            "type": "integer",
-            "format": "int64",
+            "$ref": "#/components/schemas/CommentRef",
             "description": "the comment id"
           },
           "documentName": {
@@ -1458,6 +1498,10 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public bot name when the author is an agent rather than a Macro user."
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
@@ -1478,8 +1522,7 @@
             "description": "the text of the comment"
           },
           "threadId": {
-            "type": "integer",
-            "format": "int64",
+            "$ref": "#/components/schemas/CommentRef",
             "description": "the thread id"
           }
         }
@@ -2077,8 +2120,7 @@
         ],
         "properties": {
           "commentId": {
-            "type": "integer",
-            "format": "int64",
+            "$ref": "#/components/schemas/CommentRef",
             "description": "the comment id"
           },
           "documentName": {
@@ -2096,6 +2138,10 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public bot name when the author is an agent rather than a Macro user."
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
@@ -2116,8 +2162,7 @@
             "description": "the text of the comment"
           },
           "threadId": {
-            "type": "integer",
-            "format": "int64",
+            "$ref": "#/components/schemas/CommentRef",
             "description": "the thread id"
           }
         }
@@ -2710,8 +2755,7 @@
         "required": ["documentName", "owner", "commentId", "threadId", "text"],
         "properties": {
           "commentId": {
-            "type": "integer",
-            "format": "int64",
+            "$ref": "#/components/schemas/CommentRef",
             "description": "the comment id"
           },
           "documentName": {
@@ -2725,6 +2769,10 @@
           "owner": {
             "type": "string",
             "description": "The owner of the document."
+          },
+          "senderDisplayName": {
+            "type": ["string", "null"],
+            "description": "Public bot name when the author is an agent rather than a Macro user."
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"]
@@ -2745,8 +2793,7 @@
             "description": "the text of the comment"
           },
           "threadId": {
-            "type": "integer",
-            "format": "int64",
+            "$ref": "#/components/schemas/CommentRef",
             "description": "the thread id"
           }
         }

@@ -14,7 +14,10 @@ use super::{
 };
 use bot_token::HashedBotToken;
 use chrono::{DateTime, Utc};
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, MemberParticipantRole};
+use entity_access::domain::models::{
+    BotReceiptScope, Entity, EntityAccessReceipt, EntityPermission, EntityType,
+    MemberParticipantRole, ParticipantRole,
+};
 use macro_event_broker::MacroEventBroker;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
@@ -824,6 +827,26 @@ where
         } else {
             Err(BotError::Unauthorized)
         }
+    }
+
+    async fn channel_message_access(
+        &self,
+        bot_id: BotId,
+        channel_id: Uuid,
+    ) -> Result<EntityAccessReceipt<messages::domain::service::MessageWrite>, BotError> {
+        self.ensure_bot_in_channel(bot_id, channel_id).await?;
+        EntityAccessReceipt::try_new_bot(
+            bot_id.into_storage_id(),
+            BotReceiptScope::Channel { channel_id },
+            Entity {
+                entity_id: channel_id.to_string(),
+                entity_type: EntityType::Channel,
+            },
+            EntityPermission::ChannelRole {
+                role: ParticipantRole::Member,
+            },
+        )
+        .map_err(|_| BotError::Unauthorized)
     }
 
     async fn authenticate_token(&self, token: &str) -> Result<AuthenticatedBot, BotError> {

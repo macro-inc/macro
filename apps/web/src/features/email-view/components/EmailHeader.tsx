@@ -5,7 +5,6 @@ import {
   ViewShell,
 } from '@app/components/view-shell';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { SplitPanel } from '@components/app/split-panel';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { Button, Dropdown, pressHandlers } from '@ui';
@@ -51,7 +50,6 @@ export function EmailViewBreadcrumbItem() {
 export function EmailTopBar() {
   return (
     <ViewShell.TopBar>
-      <SplitPanel.CloseButton class="hidden shrink-0 @max-[720px]/view-shell:flex" />
       <ViewBreadcrumbs.Outlet class="flex-1" aria-label="Email location" />
     </ViewShell.TopBar>
   );

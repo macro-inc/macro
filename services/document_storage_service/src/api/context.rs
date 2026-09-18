@@ -322,6 +322,7 @@ pub(crate) type DocumentService = DocumentServiceImpl<
     EntityAccessManagementService,
     ForeignEntityServiceImpl<PgForeignEntityRepo>,
     DssEventBroker,
+    sync_service_client::SyncServiceClient,
 >;
 
 /// Type alias for the authorization service.
@@ -392,12 +393,12 @@ pub(crate) type DssHarnessesState =
     harnesses::inbound::axum_router::HarnessesRouterState<DssHarnessService, AuthorizationService>;
 
 /// Type alias for the channel bot webhook router state.
-pub(crate) type DssChannelBotWebhookState = ChannelBotWebhookRouterState<
-    DssBotService,
-    Arc<DssChannelService>,
-    EntityAccessService,
-    AuthorizationService,
->;
+pub(crate) type DssChannelBotWebhookState =
+    ChannelBotWebhookRouterState<DssBotService, EntityAccessService, AuthorizationService>;
+
+/// Shared messages use the same parent access and authentication services as DSS.
+pub(crate) type DssMessagesState =
+    messages::inbound::axum_router::MessagesRouterState<EntityAccessService, AuthorizationService>;
 
 /// Type alias for the call connection service.
 pub(crate) type CallConnectionService =
@@ -582,6 +583,7 @@ pub(crate) struct ApiContext {
     pub documents_state: DocumentsState,
     pub projects_state: ProjectsState,
     pub channels_state: DssChannelsState,
+    pub messages_state: DssMessagesState,
     /// Shared channel service, for calling channel domain operations outside
     /// the channels router (starter-doc seeding records mention backlinks).
     pub channel_service: Arc<DssChannelService>,

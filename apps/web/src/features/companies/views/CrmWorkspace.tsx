@@ -286,7 +286,7 @@ export function CrmWorkspace(props: {
   return (
     <ViewShell.Root
       class="touch:pt-(--safe-top) touch:pb-(--mobile-content-inset-bottom)"
-      aside={collapsed() ? false : { width: 216, min: 216, max: 216 }}
+      aside={collapsed() ? false : {}}
       main={{ min: 320 }}
     >
       <ViewShell.Aside>

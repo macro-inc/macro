@@ -16,6 +16,7 @@ export type AsideLayout = {
   preserveDuringResize?: boolean;
 };
 
+/** Shared starting size for every workspace navigation sidebar. */
 export const DEFAULT_ASIDE_LAYOUT: AsideLayout = {
   width: 256,
   min: 224,

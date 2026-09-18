@@ -16,7 +16,10 @@ async fn composition_preserves_lexical_output_without_tool_instructions() {
     ));
 
     for messages in [None, Some([].as_slice())] {
-        let prompt = composer.compose("Raw prompt", messages).await.unwrap();
+        let prompt = composer
+            .compose("Raw prompt", None, messages)
+            .await
+            .unwrap();
         assert_eq!(prompt, "Sanitized prompt and context");
         assert!(!prompt.contains("set_pull_request"));
     }

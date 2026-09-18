@@ -4,26 +4,17 @@ import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useFavoriteDisplayName } from '@app/util/favorites';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
-import { SplitPanel } from '@components/app/split-panel';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import { type ChannelEntity, Entity } from '@entity';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import CheckIcon from '@phosphor/check.svg';
-import FunnelIcon from '@phosphor/funnel-simple.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import SortIcon from '@phosphor/sort-ascending.svg';
 import XIcon from '@phosphor/x.svg';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import {
-  Button,
-  cn,
-  Dropdown,
-  EmptyStatePanel,
-  Hotkey,
-  Tabs,
-  Tooltip,
-} from '@ui';
+import { cn, Dropdown, EmptyStatePanel, Hotkey, Tabs, Tooltip } from '@ui';
 import {
   type Accessor,
   createSignal,
@@ -130,12 +121,12 @@ function ChannelSortDropdown(props: { group: ChannelsGroup; label: string }) {
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
+        as={ViewSidebar.Control}
         variant="ghost"
         size="icon-sm"
-        class="size-7 rounded-lg"
         label={`Sort ${props.label.toLowerCase()}`}
       >
-        <FunnelIcon class="size-3.5" />
+        <SortIcon class="size-3.5" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-40">
         <Dropdown.Group>
@@ -166,36 +157,29 @@ function FavoriteOption(props: { favorite: Favorite }) {
   const item = useChannelRailFavoriteItemState(() => props.favorite);
 
   return (
-    <button
+    <ViewSidebar.Item
       id={item().domId}
       type="button"
       role="treeitem"
       tabIndex={-1}
       class={cn(
-        'flex h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none transition-colors',
-        item().selected && !isTouchDevice() && 'bg-active text-ink',
-        (!item().selected || isTouchDevice()) && 'text-ink-muted',
+        'group/channel-option relative',
         !item().selected &&
           !isTouchDevice() &&
           item().focused &&
-          'bg-hover text-ink',
-        !item().selected &&
-          !isTouchDevice() &&
-          !item().focused &&
-          'hover:bg-hover hover:text-ink'
+          'bg-hover text-ink'
       )}
+      active={item().selected && !isTouchDevice()}
       aria-current={item().selected ? 'page' : undefined}
       onClick={(event) =>
         rail.activateRow(rowKeyForFavorite(props.favorite), event)
       }
     >
-      <span class="flex size-6 shrink-0 items-center justify-center">
-        <FavoriteIcon favorite={props.favorite} avatarSize="md" />
-      </span>
-      <span class="min-w-0 flex-1 truncate text-sm font-medium">
-        {displayName()}
-      </span>
-    </button>
+      <ViewSidebar.Icon>
+        <FavoriteIcon favorite={props.favorite} class="size-4" />
+      </ViewSidebar.Icon>
+      <span class="min-w-0 flex-1 truncate">{displayName()}</span>
+    </ViewSidebar.Item>
   );
 }
 
@@ -207,33 +191,29 @@ function ChannelOption(props: { channel: ChannelEntity }) {
 
   return (
     <ChannelRailItemContextMenu channel={props.channel} class="block w-full">
-      <div
+      <ViewSidebar.Item
+        as="div"
         id={item().domId}
         role="treeitem"
         tabIndex={-1}
         class={cn(
-          'group/channel-option relative flex h-8 w-full min-w-0 items-center gap-2 rounded-xl px-2 text-left outline-none',
-          item().selected && !isTouchDevice() && 'bg-active text-ink',
-          (!item().selected || isTouchDevice()) && 'text-ink-muted',
+          'group/channel-option relative',
           !item().selected &&
             !isTouchDevice() &&
             item().focused &&
-            'bg-hover text-ink',
-          !item().selected &&
-            !isTouchDevice() &&
-            !item().focused &&
-            'hover:bg-hover hover:text-ink'
+            'bg-hover text-ink'
         )}
+        active={item().selected && !isTouchDevice()}
         aria-current={item().selected ? 'page' : undefined}
         onMouseDown={(event) => {
           if (!isPrimaryMouseDown(event)) return;
           rail.activateRow(rowKeyForChannel(props.channel.id), event);
         }}
       >
-        <ChannelAvatar channel={props.channel} />
-        <span class="min-w-0 flex-1 truncate text-sm font-medium">
-          {props.channel.name}
-        </span>
+        <ViewSidebar.Icon>
+          <ChannelAvatar channel={props.channel} />
+        </ViewSidebar.Icon>
+        <span class="min-w-0 flex-1 truncate">{props.channel.name}</span>
         <span class="flex shrink-0 items-center gap-2">
           <ChannelMutedIndicator muted={item().muted} />
           <ChannelCallIndicator
@@ -277,7 +257,7 @@ function ChannelOption(props: { channel: ChannelEntity }) {
           callId={item().incomingCallId}
           channelId={props.channel.id}
         />
-      </div>
+      </ViewSidebar.Item>
     </ChannelRailItemContextMenu>
   );
 }
@@ -292,7 +272,6 @@ function ExpandedFavoritesSection() {
         <CollapsibleSection.Header
           focused={section().focused}
           focusWithin={section().containsFocus}
-          class="h-9"
         >
           <button
             id={section().domId}
@@ -310,8 +289,7 @@ function ExpandedFavoritesSection() {
             <span class="min-w-0 truncate">Favorites</span>
             <CaretDownIcon
               class={cn(
-                'size-2.5 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
-                section().focused && 'opacity-100',
+                'size-2.5 shrink-0 opacity-0 transition-[opacity,rotate] duration-200 motion-reduce:transition-none group-hover/sidebar-section:opacity-100',
                 !section().open && '-rotate-90 opacity-100'
               )}
             />
@@ -340,40 +318,37 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
   };
 
   return (
-    <div class="flex shrink-0 flex-col gap-3">
+    <div class="flex shrink-0 flex-col">
       <ViewSidebar.Header>
         <div class="flex min-w-0 items-center gap-1">
-          <SplitPanel.CloseButton />
+          <ViewSidebar.CloseButton />
           <ViewSidebar.Title>Chat</ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>
-      <div class="flex items-center justify-between gap-2 px-4">
-        <Tabs
-          aria-label="Chat sidebar views"
-          list={CHANNEL_TABS}
-          value={rail.tab()}
-          onChange={selectTab}
-        />
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          label={
-            props.search.isOpen() ? 'Close search' : 'Search conversations'
-          }
-          aria-pressed={props.search.isOpen()}
-          class={cn(
-            'size-7 rounded-lg',
-            props.search.isOpen() && 'bg-active text-ink'
-          )}
-          onClick={() =>
-            props.search.isOpen() ? props.search.close() : props.search.open()
-          }
-        >
-          <MagnifyingGlassIcon class="size-3.5" />
-        </Button>
-      </div>
+      <ViewSidebar.Primary>
+        <ViewSidebar.Toolbar>
+          <Tabs
+            aria-label="Chat sidebar views"
+            list={CHANNEL_TABS}
+            value={rail.tab()}
+            onChange={selectTab}
+          />
+          <ViewSidebar.Control
+            label={
+              props.search.isOpen() ? 'Close search' : 'Search conversations'
+            }
+            aria-pressed={props.search.isOpen()}
+            class={cn(props.search.isOpen() && 'bg-active text-ink')}
+            onClick={() =>
+              props.search.isOpen() ? props.search.close() : props.search.open()
+            }
+          >
+            <MagnifyingGlassIcon class="size-3.5" />
+          </ViewSidebar.Control>
+        </ViewSidebar.Toolbar>
+      </ViewSidebar.Primary>
       <Show when={props.search.isOpen()}>
-        <div class="px-4">
+        <div class="px-(--sidebar-content-inset) pt-(--sidebar-gutter)">
           <SearchBar
             ref={props.search.registerInput}
             label="Search channels and direct messages"
@@ -424,7 +399,7 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
             ref={pagination.registerVirtualizer}
             data={props.search.results()}
             scrollRef={scrollRoot()}
-            itemSize={rail.tab() === 'recents' ? CONVERSATION_CARD_HEIGHT : 42}
+            itemSize={rail.tab() === 'recents' ? CONVERSATION_CARD_HEIGHT : 34}
             bufferSize={360}
             keepMounted={focusedIndex() >= 0 ? [focusedIndex()] : undefined}
             onScroll={pagination.loadMoreNearEnd}
@@ -504,7 +479,6 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
       <CollapsibleSection.Header
         focused={section().focused}
         focusWithin={section().containsFocus}
-        class="h-9"
       >
         <button
           id={section().domId}
@@ -522,8 +496,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
           <span class="min-w-0 truncate">{props.config.label}</span>
           <CaretDownIcon
             class={cn(
-              'size-2.5 shrink-0 opacity-0 transition-[opacity,transform] group-hover/section-header:opacity-100 group-focus-within/section-header:opacity-100',
-              section().focused && 'opacity-100',
+              'size-2.5 shrink-0 opacity-0 transition-[opacity,rotate] duration-200 motion-reduce:transition-none group-hover/sidebar-section:opacity-100',
               !section().open && '-rotate-90 opacity-100'
             )}
           />
@@ -533,7 +506,7 @@ function ExpandedGroupSection(props: { config: GroupConfig }) {
             </span>
           </Show>
         </button>
-        <div data-section-action="" class="flex items-center gap-0.5 pr-1">
+        <div data-section-action="" class="flex items-center gap-0.5">
           <ChannelSortDropdown
             group={props.config.group}
             label={props.config.label}
@@ -621,12 +594,12 @@ function ExpandedBrowse() {
         <ChannelsEmptyState scope="channels" topAligned />
       </Match>
       <Match when={true}>
-        <div class="flex h-full min-h-0 flex-col gap-2 px-4">
+        <ViewSidebar.Content class="h-full overflow-hidden">
           <ExpandedFavoritesSection />
           <For each={GROUPS}>
             {(config) => <ExpandedGroupSection config={config} />}
           </For>
-        </div>
+        </ViewSidebar.Content>
       </Match>
     </Switch>
   );

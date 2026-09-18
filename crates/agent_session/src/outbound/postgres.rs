@@ -3,6 +3,9 @@
 //! addressed to.
 
 pub mod search;
+
+use messages::domain::models::MessageParent;
+use sqlx::types::Json;
 #[cfg(test)]
 mod test;
 
@@ -10,10 +13,10 @@ mod pull_request;
 
 use crate::domain::error::{AgentSessionError, Result};
 use crate::domain::model::{
-    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreview,
-    AgentSessionPreviewData, ChannelSession, ClaimOutcome, CreateAgentSessionParams,
-    ExternalSession, ManagerFence, Message, ReplicaAddress, ReplicaId, SandboxSize, SessionBot,
-    SessionClaim, SessionManager, SessionStatus, StoredAgentSessionLog,
+    AgentMcpServers, AgentSession, AgentSessionId, AgentSessionLog, AgentSessionPreviewData,
+    ClaimOutcome, CreateAgentSessionParams, ExternalSession, ManagerFence, Message, ReplicaAddress,
+    ReplicaId, SandboxSize, SessionBot, SessionClaim, SessionManager, SessionPreviewCandidate,
+    SessionStatus, StoredAgentSessionLog, ThreadSession,
 };
 use crate::domain::ports::{
     AgentSessionLogRepo, AgentSessionRepo, ExternalSessionRepo, REPLICA_STALE_AFTER,
@@ -187,12 +190,13 @@ struct AgentSessionRow {
     name: String,
     owner_id: String,
     thread_id: Option<Uuid>,
-    thread_channel_id: Option<Uuid>,
+    thread_parent: Option<Json<MessageParent>>,
     originating_message_id: Option<Uuid>,
     bot_id: Uuid,
     model: String,
     harness: String,
     repo_url: Option<String>,
+    repo_branch: Option<String>,
     pull_request_url: Option<String>,
     workspace: String,
     sandbox_size: String,
@@ -222,12 +226,17 @@ impl TryFrom<AgentSessionRow> for AgentSession {
             owner_id: MacroUserIdStr::try_from(row.owner_id)
                 .context("agent session has an unparseable owner")?,
             thread_id: row.thread_id,
-            thread_channel_id: row.thread_channel_id,
+            thread_parent: row.thread_parent.map(|parent| parent.0),
             originating_message_id: row.originating_message_id,
             bot_id: BotId::new_from_uuid(row.bot_id),
             model: row.model,
             harness: row.harness,
             repo_url: row.repo_url,
+            repo_branch: row
+                .repo_branch
+                .map(crate::domain::repository_branch::RepositoryBranch::parse)
+                .transpose()
+                .map_err(anyhow::Error::msg)?,
             pull_request_url: row.pull_request_url,
             workspace: row.workspace,
             sandbox_size: parse_sandbox_size(&row.sandbox_size)?,
@@ -266,6 +275,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             model,
             harness,
             repo_url,
+            repo_branch,
             workspace,
             sandbox_size,
             instructions,
@@ -292,16 +302,17 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                 id, owner_id, thread_id, originating_message_id, bot_id, model,
                 harness, repo_url, workspace, sandbox_size, instructions,
                 acp_session_id, status, status_event_name, egress_token_hash,
-                mcp_scope, mcp_servers
+                mcp_scope, mcp_servers, repo_branch
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             RETURNING
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, created_at, modified_at,
-                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
-                    AS "thread_channel_id?",
+                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
+                 FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_parent?: Json<MessageParent>",
                 -- A row being created cannot have an external identity yet.
                 NULL::TEXT AS "external_provider?", NULL::TEXT AS "external_id?",
                 NULL::TEXT AS "external_name?", NULL::TEXT AS "external_url?",
@@ -324,6 +335,7 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             egress_token_hash,
             mcp_servers.scope_str(),
             mcp_servers_json,
+            repo_branch.as_ref().map(|branch| branch.as_str()),
         )
         .fetch_one(&mut *transaction)
         .await
@@ -366,13 +378,12 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         // message - directly, rather than from a channel - is its owner's alone.
         let origin_channel_id = match originating_message_id {
             Some(message_id) => sqlx::query_scalar!(
-                "SELECT channel_id FROM comms_messages WHERE id = $1",
+                r#"SELECT parent_entity_id::uuid AS "channel_id!" FROM comms_messages WHERE parent_entity_type = 'channel' AND id = $1"#,
                 message_id,
             )
             .fetch_optional(&mut *transaction)
             .await
-            .context("failed to read the originating message's channel")?
-            .flatten(),
+            .context("failed to read the originating message's channel")?,
             None => None,
         };
 
@@ -411,11 +422,12 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
-                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
-                    AS "thread_channel_id?",
+                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
+                 FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_parent?: Json<MessageParent>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -437,11 +449,13 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         &self,
         viewer: &MacroUserIdStr<'static>,
         ids: &[AgentSessionId],
-    ) -> Result<Vec<AgentSessionPreview>> {
+    ) -> Result<Vec<SessionPreviewCandidate>> {
         let uuids: Vec<Uuid> = ids.iter().map(AgentSessionId::as_uuid).collect();
         // The viewer's grant sources - themselves, the channels they are still
         // in, their teams - are the same three the Soup leg and the access
         // extractor resolve, so a preview agrees with what a read would do.
+        // Access inherited from an originating document has no row; the
+        // thread parent is returned so the service can ask for it.
         let rows = sqlx::query!(
             r#"
             WITH viewer_source_ids AS (
@@ -467,7 +481,10 @@ impl AgentSessionRepo for PgAgentSessionRepo {
                     WHERE ea.entity_id = s.id
                       AND ea.entity_type = 'agent_session'
                       AND ea.source_id IN (SELECT source_id FROM viewer_source_ids)
-                ) AS "has_access!"
+                ) AS "has_access!",
+                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
+                 FROM comms_messages WHERE id = s.thread_id)
+                    AS "thread_parent?: Json<MessageParent>"
             FROM agent_session s
             WHERE s.id = ANY($1)
             "#,
@@ -478,35 +495,27 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .await
         .context("failed to preview agent sessions")?;
 
-        let mut found = std::collections::HashSet::with_capacity(rows.len());
-        let mut previews = Vec::with_capacity(ids.len());
-        for row in rows {
-            let id = AgentSessionId::new_from_uuid(row.id);
-            found.insert(id);
-            if !row.has_access {
-                previews.push(AgentSessionPreview::NoAccess(id));
-                continue;
-            }
-            previews.push(AgentSessionPreview::Access(Box::new(
-                AgentSessionPreviewData {
-                    bot: None,
-                    id,
-                    name: row.name,
-                    owner_id: MacroUserIdStr::try_from(row.owner_id)
-                        .context("agent session has an unparseable owner")?,
-                    bot_id: BotId::new_from_uuid(row.bot_id),
-                    status: parse_status(&row.status, row.status_event_name)?,
-                    created_at: row.created_at,
-                    modified_at: row.modified_at,
-                },
-            )));
-        }
-        previews.extend(
-            ids.iter()
-                .filter(|id| !found.contains(id))
-                .map(|id| AgentSessionPreview::DoesNotExist(*id)),
-        );
-        Ok(previews)
+        rows.into_iter()
+            .map(|row| {
+                let id = AgentSessionId::new_from_uuid(row.id);
+                Ok(SessionPreviewCandidate {
+                    data: AgentSessionPreviewData {
+                        bot: None,
+                        id,
+                        name: row.name,
+                        owner_id: MacroUserIdStr::try_from(row.owner_id)
+                            .context("agent session has an unparseable owner")?,
+                        bot_id: BotId::new_from_uuid(row.bot_id),
+                        status: parse_status(&row.status, row.status_event_name)?,
+                        created_at: row.created_at,
+                        modified_at: row.modified_at,
+                    },
+                    has_grant: row.has_access,
+                    thread_parent: row.thread_parent.map(|parent| parent.0),
+                })
+            })
+            .collect::<anyhow::Result<Vec<_>>>()
+            .map_err(Into::into)
     }
 
     async fn find_by_egress_token_hash(
@@ -521,11 +530,12 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
-                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
-                    AS "thread_channel_id?",
+                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
+                 FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_parent?: Json<MessageParent>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -545,27 +555,28 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         })
     }
 
-    async fn find_for_channel(
+    async fn find_for_thread(
         &self,
         thread_id: Option<Uuid>,
         bot_id: Option<BotId>,
-    ) -> Result<ChannelSession> {
+    ) -> Result<ThreadSession> {
         // Both are required to match: a session is only reachable from the
         // thread it was created from, by the bot that runs it. NULL params
         // match nothing rather than everything.
         let (Some(thread_id), Some(bot_id)) = (thread_id, bot_id) else {
-            return Ok(ChannelSession::None);
+            return Ok(ThreadSession::None);
         };
         let row = sqlx::query_as!(
             AgentSessionRow,
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
-                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
-                    AS "thread_channel_id?",
+                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
+                 FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_parent?: Json<MessageParent>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -583,8 +594,8 @@ impl AgentSessionRepo for PgAgentSessionRepo {
         .context("failed to find agent session for channel context")?;
 
         Ok(match row {
-            Some(row) => ChannelSession::CreatedFromThread(row.try_into()?),
-            None => ChannelSession::None,
+            Some(row) => ThreadSession::CreatedFromThread(row.try_into()?),
+            None => ThreadSession::None,
         })
     }
 
@@ -594,11 +605,12 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
-                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
-                    AS "thread_channel_id?",
+                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
+                 FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_parent?: Json<MessageParent>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
@@ -629,11 +641,12 @@ impl AgentSessionRepo for PgAgentSessionRepo {
             r#"
             SELECT
                 id, name, owner_id, thread_id, originating_message_id, bot_id,
-                model, harness, repo_url, pull_request_url, workspace, sandbox_size, instructions,
+                model, harness, repo_url, repo_branch, pull_request_url, workspace, sandbox_size, instructions,
                 mcp_scope, mcp_servers, acp_session_id, status,
                 status_event_name, agent_session.created_at, modified_at,
-                (SELECT channel_id FROM comms_messages WHERE id = agent_session.thread_id)
-                    AS "thread_channel_id?",
+                (SELECT jsonb_build_object('type', parent_entity_type, 'id', parent_entity_id)
+                 FROM comms_messages WHERE id = agent_session.thread_id)
+                    AS "thread_parent?: Json<MessageParent>",
                 ext.provider AS "external_provider?", ext.external_id AS "external_id?",
                 ext.external_name AS "external_name?", ext.external_url AS "external_url?",
                 ext.last_run_id AS "external_last_run_id?"
