@@ -57,7 +57,7 @@ async fn posts_whisper_multipart_with_server_credential_and_reads_duration() {
 }
 
 #[tokio::test]
-async fn tolerates_responses_without_duration() {
+async fn rejects_responses_without_billable_duration() {
     let server = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/v1/audio/transcriptions"))
@@ -65,10 +65,72 @@ async fn tolerates_responses_without_duration() {
         .mount(&server)
         .await;
 
-    let transcript = transcriber(&server).transcribe(recording()).await.unwrap();
+    assert_eq!(
+        transcriber(&server).transcribe(recording()).await,
+        Err(DictationError::Provider)
+    );
+}
 
-    assert_eq!(transcript.text, "Only text.");
-    assert_eq!(transcript.duration_seconds, 0.0);
+#[test]
+fn rejects_empty_credentials_at_construction() {
+    assert!(matches!(
+        WhisperTranscriber::new(&OpenaiApiKey::new_testing("  ")),
+        Err(WhisperConfigError::EmptyApiKey)
+    ));
+}
+
+#[derive(Clone, Default)]
+struct CapturedLogs(std::sync::Arc<std::sync::Mutex<Vec<u8>>>);
+
+impl std::io::Write for CapturedLogs {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        self.0.lock().unwrap().extend_from_slice(bytes);
+        Ok(bytes.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        Ok(())
+    }
+}
+
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for CapturedLogs {
+    type Writer = Self;
+    fn make_writer(&'a self) -> Self {
+        self.clone()
+    }
+}
+
+#[tokio::test]
+async fn malformed_provider_responses_never_log_transcript_content() {
+    for status in [200, 400] {
+        let server = MockServer::start().await;
+        Mock::given(method("POST"))
+            .respond_with(ResponseTemplate::new(status).set_body_json(
+                json!({"text": "PRIVATE_TRANSCRIPT_SENTINEL", "duration": "invalid"}),
+            ))
+            .expect(1)
+            .mount(&server)
+            .await;
+        let logs = CapturedLogs::default();
+        let subscriber = tracing_subscriber::fmt()
+            .without_time()
+            .with_ansi(false)
+            .with_max_level(tracing::Level::TRACE)
+            .with_writer(logs.clone())
+            .finish();
+        let result = transcriber(&server)
+            .transcribe(recording())
+            .with_subscriber(subscriber)
+            .await;
+        assert_eq!(result, Err(DictationError::Provider));
+        let output = String::from_utf8(logs.0.lock().unwrap().clone()).unwrap();
+        assert!(
+            output.contains("Whisper response unusable"),
+            "sanitized diagnostics must remain visible"
+        );
+        assert!(!output.contains("PRIVATE_TRANSCRIPT_SENTINEL"));
+        assert!(!output.contains("test-server-key"));
+    }
 }
 
 #[tokio::test]

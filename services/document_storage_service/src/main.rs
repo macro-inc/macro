@@ -930,25 +930,22 @@ async fn run() -> anyhow::Result<()> {
     let sqs_client = Arc::new(sqs_client);
     let conn_gateway_client = Arc::new(conn_gateway_client);
 
-    // The OpenAI key is injected as the required `OPENAI_API_KEY` env var
-    // (resolved from the `openai-key` secret at deploy time by the infra stack),
-    // the same way `document_cognition_service` consumes it. Fail fast if it's
-    // empty so the service never starts with a broken task-dedup embedder.
+    // MacroConfig reads the shared OPENAI_API_KEY from Doppler's APP_SECRETS_JSON
+    // or the local environment. Validate once before constructing consumers.
     let openai_api_key = config.openai_api_key.as_ref().to_owned();
     anyhow::ensure!(
         !openai_api_key.trim().is_empty(),
-        "OpenAI API key is required for task dedup embeddings",
+        "OpenAI API key is required for task dedup embeddings and dictation",
     );
     let cohere_api_key = config.cohere_api_key.as_ref().to_owned();
     anyhow::ensure!(
         !cohere_api_key.trim().is_empty(),
         "Cohere API key is required for task dedup reranking",
     );
-    // Dictation reads `OPENAI_API_KEY` through its own typed env var so the
-    // adapter fails at startup, not on the first request, when it is unset.
     let dictation_state = dictation::inbound::axum_router::DictationRouterState::new(
         dictation::domain::DictationServiceImpl::new(
-            dictation::outbound::WhisperTranscriber::try_from_env()?,
+            dictation::outbound::WhisperTranscriber::new(&config.openai_api_key)?,
+            dictation::outbound::SymphoniaRecordingInspector,
         ),
         RateLimitServiceImpl {
             repo: RedisRateLimitAdapter {

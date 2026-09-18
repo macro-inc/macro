@@ -4,6 +4,7 @@ use std::sync::{
     Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
 };
+use std::time::Duration;
 
 /// Minimal Ogg page header, as Firefox's MediaRecorder emits.
 const OGG_HEADER: &[u8] = b"OggS\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00";
@@ -29,9 +30,26 @@ impl TranscriptionProvider for Arc<FakeProvider> {
     }
 }
 
-fn service() -> (DictationServiceImpl<Arc<FakeProvider>>, Arc<FakeProvider>) {
+struct FakeInspector(Result<Duration, DictationError>);
+
+impl RecordingInspector for FakeInspector {
+    async fn duration(&self, _recording: Recording) -> Result<Duration, DictationError> {
+        match &self.0 {
+            Ok(duration) => Ok(*duration),
+            Err(_) => Err(DictationError::InvalidAudio),
+        }
+    }
+}
+
+fn service() -> (
+    DictationServiceImpl<Arc<FakeProvider>, FakeInspector>,
+    Arc<FakeProvider>,
+) {
     let provider = Arc::new(FakeProvider::default());
-    (DictationServiceImpl::new(provider.clone()), provider)
+    (
+        DictationServiceImpl::new(provider.clone(), FakeInspector(Ok(Duration::from_secs(2)))),
+        provider,
+    )
 }
 
 fn user() -> MacroUserIdStr<'static> {
@@ -107,6 +125,45 @@ async fn capacity_guard_rejects_when_saturated_and_recovers() {
             .await
             .is_ok()
     );
+}
+
+#[tokio::test]
+async fn rejects_invalid_and_long_audio_before_calling_the_provider() {
+    for (duration, expected) in [
+        (Ok(Duration::ZERO), DictationError::InvalidAudio),
+        (
+            Err(DictationError::InvalidAudio),
+            DictationError::InvalidAudio,
+        ),
+        (
+            Ok(MAX_AUDIO_DURATION + Duration::from_millis(1)),
+            DictationError::TooLong,
+        ),
+    ] {
+        let provider = Arc::new(FakeProvider::default());
+        let service = DictationServiceImpl::new(provider.clone(), FakeInspector(duration));
+        assert_eq!(
+            service
+                .transcribe(user(), Bytes::from_static(OGG_HEADER), None)
+                .await,
+            Err(expected)
+        );
+        assert_eq!(provider.calls.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[tokio::test]
+async fn accepts_the_exact_duration_limit() {
+    let provider = Arc::new(FakeProvider::default());
+    let service =
+        DictationServiceImpl::new(provider.clone(), FakeInspector(Ok(MAX_AUDIO_DURATION)));
+    assert!(
+        service
+            .transcribe(user(), Bytes::from_static(OGG_HEADER), None)
+            .await
+            .is_ok()
+    );
+    assert_eq!(provider.calls.load(Ordering::SeqCst), 1);
 }
 
 #[test]

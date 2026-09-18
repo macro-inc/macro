@@ -539,7 +539,10 @@ pub(crate) type DssSseStreamState =
 
 /// Type alias for the dictation router state; shares the webhook Redis limiter.
 pub(crate) type DssDictationState = dictation::inbound::axum_router::DictationRouterState<
-    dictation::domain::DictationServiceImpl<dictation::outbound::WhisperTranscriber>,
+    dictation::domain::DictationServiceImpl<
+        dictation::outbound::WhisperTranscriber,
+        dictation::outbound::SymphoniaRecordingInspector,
+    >,
     DssWebhookRateLimiter,
     AuthorizationService,
 >;
