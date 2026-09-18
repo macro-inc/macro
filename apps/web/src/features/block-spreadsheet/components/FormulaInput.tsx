@@ -11,12 +11,14 @@ import {
   createSignal,
   createUniqueId,
   For,
+  mergeProps,
   on,
   onCleanup,
   onMount,
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
 import {
   argumentLabel,
   formulaFunctions,
@@ -30,7 +32,8 @@ import {
 import { createTouchPress } from '../primitives/create-touch-press';
 
 /** Shared cell/formula-bar input. The popup keeps focus and editing in the textarea. */
-export function FormulaInput(props: {
+export type FormulaInputProps = {
+  mentions?: SpreadsheetMentions;
   label: string;
   value: string;
   class: string;
@@ -45,7 +48,38 @@ export function FormulaInput(props: {
   onInput: (value: string) => void;
   onKeyDown: (event: KeyboardEvent) => void;
   onBlur: () => void;
-}) {
+};
+export function FormulaInput(props: FormulaInputProps) {
+  let transferFocus = false;
+  const inputProps = mergeProps(props, {
+    get autoFocus() {
+      return props.autoFocus || transferFocus;
+    },
+    onFocus: () => {
+      transferFocus = false;
+      props.onFocus?.();
+    },
+    onBlur: () => {
+      if (!transferFocus) props.onBlur();
+    },
+    onInput: (value: string) => {
+      transferFocus =
+        !!props.mentions &&
+        value.startsWith('=') !== props.value.startsWith('=');
+      props.onInput(value);
+    },
+  });
+  return (
+    <Show
+      when={props.mentions && !props.value.startsWith('=')}
+      fallback={<FormulaTextarea {...inputProps} />}
+    >
+      {(_enabled) => props.mentions!.renderEditor(inputProps)}
+    </Show>
+  );
+}
+
+function FormulaTextarea(props: FormulaInputProps) {
   let input!: HTMLTextAreaElement;
   let popup: HTMLDivElement | undefined;
   const id = createUniqueId();

@@ -13,6 +13,7 @@ describe('Drive navigation state', () => {
         expandedFolderIds: ['unrelated'],
         favoritesOpen: false,
         rootOpen: false,
+        tagsOpen: false,
       });
       const apply = vi.fn();
       const onNavigate = vi.fn();
@@ -36,6 +37,7 @@ describe('Drive navigation state', () => {
         scope: 'default',
         rootOpen: true,
         favoritesOpen: false,
+        tagsOpen: false,
         sort: 'created_at',
       });
       expect(apply).toHaveBeenLastCalledWith(state(), true);

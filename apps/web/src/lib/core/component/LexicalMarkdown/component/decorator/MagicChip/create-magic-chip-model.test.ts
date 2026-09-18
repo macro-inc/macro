@@ -6,6 +6,7 @@ import {
 import { queryClient } from '@queries/client';
 import type {
   FoldedMessage,
+  FoldedStreamEvent,
   PendingElicitation,
   SessionMetadata,
 } from '@service-agent-fold/generated/types';
@@ -13,11 +14,21 @@ import { QueryClientProvider } from '@tanstack/solid-query';
 import { createComponent, createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-const sessionFold = vi.hoisted(() => ({
-  acquireAgentSessionFold: vi.fn(),
-  subscribeAgentSessionLog: vi.fn(),
+/**
+ * The shared session, faked: what the machine holds when a chip reads it,
+ * and the listeners it would tell about fold events.
+ */
+const live = vi.hoisted(() => ({
+  acquire: vi.fn(),
+  release: vi.fn(),
+  issue: vi.fn(),
+  snapshot: {
+    messages: [] as unknown[],
+    metadata: {} as unknown,
+  },
+  listeners: new Set<(events: unknown[]) => void>(),
 }));
-const serviceClient = vi.hoisted(() => ({ get: vi.fn(), control: vi.fn() }));
+const serviceClient = vi.hoisted(() => ({ get: vi.fn() }));
 
 vi.mock('@queries/client', async () => {
   const { QueryClient } = await import('@tanstack/solid-query');
@@ -27,7 +38,24 @@ vi.mock('@queries/client', async () => {
     }),
   };
 });
-vi.mock('@queries/agent-session/session-fold', () => sessionFold);
+vi.mock('@core/agent-session/AgentSession', () => ({
+  AgentSession: {
+    acquire: (id: string) => {
+      live.acquire(id);
+      return {
+        id,
+        load: () => Promise.resolve({ session: {}, bot: {} }),
+        snapshot: () => Promise.resolve(live.snapshot),
+        subscribe: (listener: (events: unknown[]) => void) => {
+          live.listeners.add(listener);
+          return () => live.listeners.delete(listener);
+        },
+        release: live.release,
+        issue: live.issue,
+      };
+    },
+  },
+}));
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: serviceClient,
 }));
@@ -41,6 +69,17 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 
 import { createMagicChipModel } from './create-magic-chip-model';
+
+/** Fold events, as the session would deliver them. */
+const emit = (events: FoldedStreamEvent[]) => {
+  for (const listener of live.listeners) listener(events);
+};
+const onChange = (messages: FoldedMessage[]) =>
+  emit(messages.map((message) => ({ kind: 'new' as const, message })));
+const onReplace = (messages: FoldedMessage[]) =>
+  emit([{ kind: 'replace', messages }]);
+const onMetadata = (metadata: SessionMetadata) =>
+  emit([{ kind: 'metadata', metadata }]);
 
 function createModel(props: MagicChipDecoratorProps) {
   let model!: ReturnType<typeof createMagicChipModel>;
@@ -61,6 +100,7 @@ const prompt: FoldedMessage = {
   author: { kind: 'user', userId: 'macro|wolf@macro.com' },
   parts: [{ kind: 'text', text: 'Say hi' }],
   stop: null,
+  pending: false,
 };
 
 const response: FoldedMessage = {
@@ -70,6 +110,7 @@ const response: FoldedMessage = {
   author: { kind: 'agent' },
   parts: [{ kind: 'text', text: 'Hi!' }],
   stop: { kind: 'end_turn' },
+  pending: false,
 };
 
 const openResponse: FoldedMessage = {
@@ -110,12 +151,8 @@ describe('createMagicChipModel', () => {
   beforeEach(() => {
     queryClient.clear();
     vi.clearAllMocks();
-    sessionFold.subscribeAgentSessionLog.mockReturnValue(vi.fn());
-    sessionFold.acquireAgentSessionFold.mockResolvedValue({
-      messages: [prompt, response],
-      metadata: metadata(null),
-      release: vi.fn(),
-    });
+    live.listeners.clear();
+    live.snapshot = { messages: [prompt, response], metadata: metadata(null) };
     serviceClient.get.mockResolvedValue({
       isOk: () => true,
       isErr: () => false,
@@ -125,7 +162,7 @@ describe('createMagicChipModel', () => {
         canEdit: true,
       },
     });
-    serviceClient.control.mockResolvedValue({ isErr: () => false });
+    live.issue.mockResolvedValue({ isErr: () => false });
   });
 
   it.each(['cursor', 'codex-cloud'])(
@@ -179,7 +216,7 @@ describe('createMagicChipModel', () => {
       await settle();
       expect(model.header()?.pullRequestUrl).toBe(first);
 
-      sessionFold.acquireAgentSessionFold.mock.calls[0]![0].onReplace([]);
+      onReplace([]);
       expect(model.header()?.pullRequestUrl).toBe(first);
       serviceClient.get.mockResolvedValue(snapshot(second));
       await invalidateAgentSessionMetadata();
@@ -224,22 +261,16 @@ describe('createMagicChipModel', () => {
 
   it('follows the latest turn and streaming updates without rewinding for late patches', async () => {
     let model!: ReturnType<typeof createMagicChipModel>;
-    const release = vi.fn();
-    sessionFold.acquireAgentSessionFold.mockResolvedValue({
-      messages: [prompt, response],
-      metadata: metadata(null),
-      release,
-    });
+    live.snapshot = { messages: [prompt, response], metadata: metadata(null) };
     const dispose = createRoot((dispose) => {
       model = createModel({ ...props, promptedMessage: null });
       return dispose;
     });
     await settle();
     expect(model.presentation()).toEqual({ kind: 'settled', markdown: 'Hi!' });
-    const callbacks = sessionFold.acquireAgentSessionFold.mock.calls[0]![0];
-    callbacks.onChange([{ ...prompt, turn: 3 }]);
+    onChange([{ ...prompt, turn: 3 }]);
     expect(model.presentation()).not.toMatchObject({ markdown: 'Hi!' });
-    callbacks.onChange([
+    onChange([
       {
         ...openResponse,
         turn: 3,
@@ -250,7 +281,7 @@ describe('createMagicChipModel', () => {
       kind: 'answering',
       markdown: 'Newest stream',
     });
-    callbacks.onChange([
+    onChange([
       {
         ...response,
         turn: 1,
@@ -258,7 +289,7 @@ describe('createMagicChipModel', () => {
       },
     ]);
     expect(model.presentation()).toMatchObject({ markdown: 'Newest stream' });
-    callbacks.onChange([
+    onChange([
       {
         ...response,
         turn: 3,
@@ -269,13 +300,13 @@ describe('createMagicChipModel', () => {
       kind: 'settled',
       markdown: 'Newest answer',
     });
-    callbacks.onMetadata(metadata({ ...question, turn: 4 }));
+    onMetadata(metadata({ ...question, turn: 4 }));
     expect(model.presentation()).toMatchObject({
       kind: 'asking',
       asking: { question: { turn: 4 } },
     });
     dispose();
-    expect(release).toHaveBeenCalledOnce();
+    expect(live.release).toHaveBeenCalledOnce();
   });
 
   it('keeps an explicit message lock when later turns arrive', async () => {
@@ -285,11 +316,10 @@ describe('createMagicChipModel', () => {
       return dispose;
     });
     await settle();
-    const callbacks = sessionFold.acquireAgentSessionFold.mock.calls[0]![0];
-    callbacks.onChange([
+    onChange([
       { ...response, turn: 3, parts: [{ kind: 'text', text: 'New turn' }] },
     ]);
-    callbacks.onMetadata(metadata({ ...question, turn: 3 }));
+    onMetadata(metadata({ ...question, turn: 3 }));
     expect(model.presentation()).toEqual({ kind: 'settled', markdown: 'Hi!' });
     dispose();
   });
@@ -304,12 +334,7 @@ describe('createMagicChipModel', () => {
     await settle();
 
     expect(presentation()).toEqual({ kind: 'settled', markdown: 'Hi!' });
-    expect(sessionFold.acquireAgentSessionFold).toHaveBeenCalledWith({
-      agentSessionId: 'session',
-      onChange: expect.any(Function),
-      onReplace: expect.any(Function),
-      onMetadata: expect.any(Function),
-    });
+    expect(live.acquire).toHaveBeenCalledWith('session');
 
     dispose();
   });
@@ -321,8 +346,7 @@ describe('createMagicChipModel', () => {
       return rootDispose;
     });
     await Promise.resolve();
-    const callbacks = sessionFold.acquireAgentSessionFold.mock.calls[0]![0];
-    callbacks.onReplace([
+    onReplace([
       prompt,
       { ...response, parts: [{ kind: 'text', text: 'Reconstructed answer' }] },
     ]);
@@ -330,7 +354,7 @@ describe('createMagicChipModel', () => {
       kind: 'settled',
       markdown: 'Reconstructed answer',
     });
-    callbacks.onReplace([]);
+    onReplace([]);
     expect(presentation()).not.toEqual({
       kind: 'settled',
       markdown: 'Reconstructed answer',
@@ -339,11 +363,7 @@ describe('createMagicChipModel', () => {
   });
 
   it('hydrates a disconnected status from the session', async () => {
-    sessionFold.acquireAgentSessionFold.mockResolvedValue({
-      messages: [],
-      metadata: metadata(null),
-      release: vi.fn(),
-    });
+    live.snapshot = { messages: [], metadata: metadata(null) };
     let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
     const dispose = createRoot((rootDispose) => {
       presentation = createModel(props).presentation;
@@ -361,11 +381,10 @@ describe('createMagicChipModel', () => {
   });
 
   it('offers a question asked in its turn to an editor, and answers on the request id', async () => {
-    sessionFold.acquireAgentSessionFold.mockResolvedValue({
+    live.snapshot = {
       messages: [prompt, openResponse],
       metadata: metadata(question),
-      release: vi.fn(),
-    });
+    };
     let model!: ReturnType<typeof createMagicChipModel>;
     const dispose = createRoot((rootDispose) => {
       model = createModel(props);
@@ -380,7 +399,8 @@ describe('createMagicChipModel', () => {
       asking: { question, canAnswer: true },
     });
     expect(await model.elicitation.respond({ action: 'decline' })).toBe(true);
-    expect(serviceClient.control).toHaveBeenCalledWith('session', {
+    // The answer rides the session's optimistic path, not a bare POST.
+    expect(live.issue).toHaveBeenCalledWith({
       type: 'respondElicitation',
       requestId: 9,
       action: 'decline',
@@ -390,11 +410,10 @@ describe('createMagicChipModel', () => {
   });
 
   it('shows another viewer who is being waited on, and sends nothing for them', async () => {
-    sessionFold.acquireAgentSessionFold.mockResolvedValue({
+    live.snapshot = {
       messages: [prompt, openResponse],
       metadata: metadata(question),
-      release: vi.fn(),
-    });
+    };
     serviceClient.get.mockResolvedValue({
       isOk: () => true,
       isErr: () => false,
@@ -418,23 +437,16 @@ describe('createMagicChipModel', () => {
       expect(presentation.asking.canAnswer).toBe(false);
     }
     expect(await model.elicitation.respond({ action: 'decline' })).toBe(false);
-    expect(serviceClient.control).not.toHaveBeenCalled();
+    expect(live.issue).not.toHaveBeenCalled();
 
     dispose();
   });
 
   it("a question from a later turn is not this chip's, and the live metadata moves it", async () => {
-    let onMetadata: ((metadata: SessionMetadata) => void) | undefined;
-    sessionFold.acquireAgentSessionFold.mockImplementation(
-      (args: { onMetadata?: (metadata: SessionMetadata) => void }) => {
-        onMetadata = args.onMetadata;
-        return Promise.resolve({
-          messages: [prompt, openResponse],
-          metadata: metadata({ ...question, turn: 3 }),
-          release: vi.fn(),
-        });
-      }
-    );
+    live.snapshot = {
+      messages: [prompt, openResponse],
+      metadata: metadata({ ...question, turn: 3 }),
+    };
     let presentation!: ReturnType<typeof createMagicChipModel>['presentation'];
     const dispose = createRoot((rootDispose) => {
       presentation = createModel(props).presentation;
@@ -444,10 +456,10 @@ describe('createMagicChipModel', () => {
     await settle();
     expect(presentation().kind).toBe('answering');
 
-    onMetadata?.(metadata(question));
+    onMetadata(metadata(question));
     expect(presentation().kind).toBe('asking');
 
-    onMetadata?.(metadata(null));
+    onMetadata(metadata(null));
     expect(presentation().kind).toBe('answering');
 
     dispose();

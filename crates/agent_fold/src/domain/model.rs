@@ -47,7 +47,7 @@ pub use elicitation::{
     ElicitationSchema, PendingElicitation,
 };
 pub use event::{FoldEvent, OwnedFoldEvent};
-pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata};
+pub use metadata::{AvailableCommand, Harness, ModelOption, SessionMetadata, TurnState};
 pub use part::{Control, ControlOutcome, MessagePart, StopReason};
 pub use permission::{PermissionOption, PermissionOptionKind, PermissionOutcome};
 pub use plan::{PlanEntry, PlanEntryPriority, PlanEntryStatus};
@@ -188,6 +188,10 @@ pub struct FoldedMessage {
     /// `None` while a turn is still in flight, or when the session died
     /// without a response to the prompt.
     pub stop: Option<StopReason>,
+    /// Derived from a frame this client issued that the log has not yet
+    /// confirmed: a prompt on the wire, a stop just pressed. Cleared when the
+    /// confirmed frame folds in its place. Always false on the server's fold.
+    pub pending: bool,
 }
 
 impl FoldedMessage {

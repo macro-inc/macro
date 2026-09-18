@@ -60,6 +60,87 @@ pub(crate) async fn insert_message(
     Ok(())
 }
 
+/// Revert a message that `insert_message(.., is_draft = false)` optimistically
+/// marked as outgoing back to an unsent draft, and drop its pending scheduled
+/// row.
+///
+/// The whole revert hinges on the send not having happened: a message the
+/// scheduled worker already delivered (`is_sent`), or is delivering right now
+/// (`processing` on its scheduled row), is left exactly as it is, message row
+/// and scheduled row both. `get_message_to_send` does not re-check `is_draft`,
+/// so a worker that has claimed the row sends the mail whatever this does —
+/// reverting underneath it would deliver the email *and* leave a live draft to
+/// send again.
+#[tracing::instrument(skip(pool), err)]
+pub(crate) async fn revert_sent_message_to_draft(
+    pool: &PgPool,
+    message_id: Uuid,
+    link_id: Uuid,
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+
+    // Lock the scheduled row up front rather than testing `processing` inside
+    // the UPDATE below. A worker's claim is a single committed statement, so an
+    // unlocked read only proves nothing had claimed the row at that instant: a
+    // claim landing before the DELETE would have its row deleted out from under
+    // it and still send. Holding the lock makes a concurrent claim wait — it
+    // then finds no row and skips — and makes a claim that got here first
+    // visible to the check.
+    let claimed = sqlx::query_scalar!(
+        r#"
+        SELECT processing FROM email_scheduled_messages
+        WHERE link_id = $1 AND message_id = $2
+        FOR UPDATE
+        "#,
+        link_id,
+        message_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    if claimed == Some(true) {
+        tx.commit().await?;
+        return Ok(());
+    }
+
+    let thread_db_id = sqlx::query_scalar!(
+        r#"
+        UPDATE email_messages
+        SET is_draft = true, is_sent = false, updated_at = NOW()
+        WHERE id = $1 AND link_id = $2 AND is_sent = false
+        RETURNING thread_id
+        "#,
+        message_id,
+        link_id,
+    )
+    .fetch_optional(&mut *tx)
+    .await?;
+
+    let Some(thread_db_id) = thread_db_id else {
+        tx.commit().await?;
+        return Ok(());
+    };
+
+    sqlx::query!(
+        r#"
+        DELETE FROM email_scheduled_messages
+        WHERE link_id = $1 AND message_id = $2 AND sent = false
+        "#,
+        link_id,
+        message_id,
+    )
+    .execute(&mut *tx)
+    .await?;
+
+    // Drafts count toward inbox_visible and the latest-message timestamps, so
+    // the metadata the insert computed for an outgoing message no longer
+    // describes the thread. Same recompute delete_draft_message does.
+    thread::update_thread_metadata(&mut tx, thread_db_id, link_id).await?;
+
+    tx.commit().await?;
+    Ok(())
+}
+
 /// Upsert a draft message row.
 pub(crate) async fn upsert_draft(
     tx: &mut sqlx::PgConnection,

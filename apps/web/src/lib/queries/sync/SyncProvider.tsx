@@ -1,3 +1,4 @@
+import { AgentSession } from '@core/agent-session/AgentSession';
 import {
   enableGraphqlSoup,
   isFeatureEnabled,
@@ -14,7 +15,6 @@ import {
   type AgentSessionRenamedEvent,
   type AgentSessionUpdatedEvent,
 } from '@queries/agent-session/realtime-protocol';
-import { handleAgentSessionLog } from '@queries/agent-session/session-fold';
 import {
   handleAgentSessionRenamed,
   handleAgentSessionUpdated,
@@ -114,7 +114,7 @@ export function QuerySyncProvider(props: SyncProviderProps) {
         withParsedWebsocketPayload<AgentSessionLogEvent>(
           data.type,
           data.data,
-          handleAgentSessionLog
+          (event) => AgentSession.ingest(event)
         );
       })
       .with({ type: AGENT_SESSION_UPDATED_EVENT }, () => {

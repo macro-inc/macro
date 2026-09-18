@@ -1,6 +1,7 @@
 import ArrowBendDownRight from '@phosphor/arrow-bend-down-right.svg';
 import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
 import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
+import CommentIcon from '@phosphor/chat-circle.svg';
 import Check from '@phosphor/check.svg';
 import CurrencyDollar from '@phosphor/currency-dollar.svg';
 import FunctionIcon from '@phosphor/function.svg';
@@ -15,6 +16,7 @@ import TextUnderline from '@phosphor/text-underline.svg';
 import X from '@phosphor/x.svg';
 import { Button, type ButtonProps } from '@ui/components/Button';
 import { Show } from 'solid-js';
+import type { SpreadsheetMentions } from '../context/spreadsheet-mentions';
 import type { FormulaTextSelection } from '../core/formula-reference';
 import type { SpreadsheetToolbarProps } from '../core/toolbar-types';
 import type { CompleteFormula } from '../primitives/create-formula-assistance';
@@ -261,6 +263,20 @@ export function SpreadsheetToolbar(props: SpreadsheetToolbarProps) {
         >
           <MagnifyingGlass class="size-[18px]" />
         </ToolbarButton>
+        <Show when={props.onComment}>
+          <Divider />
+          <Button
+            size="sm"
+            variant="ghost"
+            class="shrink-0 h-7 gap-1.5 px-2 text-[13px] touch:min-h-[44px]"
+            disabled={!props.canComment}
+            onClick={() => props.onComment?.()}
+            tooltip="Comment on selected cells (⌘/Ctrl Alt M)"
+          >
+            <CommentIcon class="size-[18px]" />
+            Comment
+          </Button>
+        </Show>
         <Show when={props.readonly}>
           <span class="ml-auto shrink-0 px-2 text-[10px] text-ink-muted">
             View only
@@ -272,6 +288,7 @@ export function SpreadsheetToolbar(props: SpreadsheetToolbarProps) {
 }
 
 export function FormulaBar(props: {
+  mentions?: SpreadsheetMentions;
   address: string;
   value: string;
   readonly: boolean;
@@ -330,6 +347,7 @@ export function FormulaBar(props: {
       />
       <FunctionIcon class="mx-2 size-3.5 shrink-0 text-ink-subtle" />
       <FormulaInput
+        mentions={props.mentions}
         label="Formula bar"
         complete={props.complete}
         selectionRequest={props.selectionRequest}

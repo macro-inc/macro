@@ -35,6 +35,10 @@ import {
   createEffectWorkerTransport,
   type EffectWorkerTransport,
 } from './effect-worker-transport';
+import {
+  ENGINE_ASSET_LOAD_TIMEOUT_MS,
+  ENGINE_DATABASE_OPEN_TIMEOUT_MS,
+} from './startup';
 
 export interface CoordinatorMessagePort {
   onmessage: ((event: MessageEvent<unknown>) => void) | null;
@@ -47,6 +51,7 @@ export interface CoordinatorMessagePort {
 export type CancelLivenessWatch = () => void;
 
 export interface CoordinatorRouterOptions {
+  assetLoadTimeoutMs?: number;
   activationTimeoutMs?: number;
   heartbeatIntervalMs?: number;
   heartbeatTimeoutMs?: number;
@@ -74,7 +79,6 @@ type EngineRoute = {
   transport: EffectWorkerTransport<CoordinatorToEngineEnvelope>;
 };
 
-const DEFAULT_ACTIVATION_TIMEOUT_MS = 20_000;
 const DEFAULT_HEARTBEAT_INTERVAL_MS = 2_000;
 const DEFAULT_HEARTBEAT_TIMEOUT_MS = 5_000;
 const RECOVERY_RETRY_LIMIT = 5;
@@ -117,7 +121,7 @@ type WithoutVersion<T> = T extends unknown
   ? Omit<T, 'coordinatorVersion'>
   : never;
 
-const envelope = <T extends { coordinatorVersion: 2 }>(
+const envelope = <T extends { coordinatorVersion: 3 }>(
   value: WithoutVersion<T>
 ): T =>
   ({
@@ -180,6 +184,7 @@ export class CoordinatorRouter {
     | { ownerEpoch: number; heartbeatId: number }
     | undefined;
 
+  private readonly assetLoadTimeoutMs: number;
   private readonly activationTimeoutMs: number;
   private readonly heartbeatIntervalMs: number;
   private readonly heartbeatTimeoutMs: number;
@@ -213,8 +218,10 @@ export class CoordinatorRouter {
     globalThis.performance?.now() ?? Date.now();
 
   constructor(options: CoordinatorRouterOptions = {}) {
+    this.assetLoadTimeoutMs =
+      options.assetLoadTimeoutMs ?? ENGINE_ASSET_LOAD_TIMEOUT_MS;
     this.activationTimeoutMs =
-      options.activationTimeoutMs ?? DEFAULT_ACTIVATION_TIMEOUT_MS;
+      options.activationTimeoutMs ?? ENGINE_DATABASE_OPEN_TIMEOUT_MS;
     this.heartbeatIntervalMs =
       options.heartbeatIntervalMs ?? DEFAULT_HEARTBEAT_INTERVAL_MS;
     this.heartbeatTimeoutMs =
@@ -436,7 +443,13 @@ export class CoordinatorRouter {
         tabId: message.tabId,
       })
     );
-    this.applyActions(this.coreValue.registerTab(message.tabId));
+    const actions = this.coreValue.registerTab(message.tabId);
+    this.applyActions(actions);
+    // Late joiners must use the same startup budget as the elected owner.
+    if (!actions.some((action) => action.kind === 'elect-owner')) {
+      const progress = this.startupProgress();
+      if (progress) this.postToTab(message.tabId, progress);
+    }
   }
 
   private attachEnginePort(
@@ -526,6 +539,25 @@ export class CoordinatorRouter {
     }
 
     switch (message.kind) {
+      case 'engine-assets-ready': {
+        if (!core.beginEngineOpen(message.tabId, message.ownerEpoch)) {
+          this.failOwner(
+            message.tabId,
+            message.ownerEpoch,
+            'unexpected engine asset readiness'
+          );
+          break;
+        }
+        this.armStartupWatchdog(message.tabId, message.ownerEpoch);
+        this.sendToEngine(
+          route,
+          envelope<CoordinatorToEngineEnvelope>({
+            kind: 'open-engine',
+            ownerEpoch: message.ownerEpoch,
+          })
+        );
+        break;
+      }
       case 'engine-ready': {
         const actions = core.engineReady({
           ...message,
@@ -683,6 +715,7 @@ export class CoordinatorRouter {
             );
             this.nextRecoveryResetReason = undefined;
           }
+          this.armStartupWatchdog(action.tabId, action.ownerEpoch);
           this.postToTab(
             action.tabId,
             envelope<CoordinatorToTabEnvelope>({
@@ -695,13 +728,6 @@ export class CoordinatorRouter {
               hotCapacity: this.hotCapacity,
             })
           );
-          this.activationTimer = this.setTimeoutFn(() => {
-            this.failOwner(
-              action.tabId,
-              action.ownerEpoch,
-              'engine activation watchdog timed out'
-            );
-          }, this.activationTimeoutMs);
           break;
         case 'route-request': {
           this.routeStarted.set(action.routeId, {
@@ -861,11 +887,47 @@ export class CoordinatorRouter {
             envelope<CoordinatorToTabEnvelope>({
               kind: 'terminal-error',
               error: action.error,
+              ...(action.storageUntouched ? { storageUntouched: true } : {}),
             })
           );
           break;
       }
     }
+  }
+
+  private startupProgress():
+    | Extract<CoordinatorToTabEnvelope, { kind: 'engine-startup' }>
+    | undefined {
+    const state = this.coreValue?.state;
+    if (state?.kind !== 'activating') return;
+    return envelope<
+      Extract<CoordinatorToTabEnvelope, { kind: 'engine-startup' }>
+    >({
+      kind: 'engine-startup',
+      ownerEpoch: state.ownerEpoch,
+      phase: state.phase,
+      databaseAction: state.databaseAction,
+      timeoutMs:
+        state.phase === 'loading-assets'
+          ? this.assetLoadTimeoutMs
+          : this.activationTimeoutMs,
+    });
+  }
+
+  private armStartupWatchdog(tabId: string, ownerEpoch: number): void {
+    this.clearActivationTimer();
+    const progress = this.startupProgress();
+    if (!progress) return;
+    this.broadcast(progress);
+    this.activationTimer = this.setTimeoutFn(() => {
+      this.failOwner(
+        tabId,
+        ownerEpoch,
+        progress.phase === 'loading-assets'
+          ? 'engine asset loading watchdog timed out'
+          : 'engine database opening watchdog timed out'
+      );
+    }, progress.timeoutMs);
   }
 
   private scheduleResetActivation(): void {
@@ -916,19 +978,24 @@ export class CoordinatorRouter {
     const actions = core.ownerLost(tabId, ownerEpoch, reason);
     if (actions.length === 0) return;
     this.activationStarted.delete(ownerEpoch);
-    const pendingReason = this.recordPendingResetFailure(
-      ownerEpoch,
-      reason,
-      failureCode
-    );
-    const resetReason =
-      pendingReason ??
-      (fatalCode === 'storage-reset-required'
-        ? 'storage-reset-required'
-        : 'abrupt-owner-loss');
-    this.nextRecoveryResetReason = resetReason;
-    if (pendingReason === undefined) {
-      this.recordStorageResetRequired(ownerEpoch, resetReason);
+    const next = core.state;
+    if (
+      next.kind === 'resetting-after-loss' &&
+      next.databaseAction === 'wipe-before-open'
+    ) {
+      const pendingReason = this.recordPendingResetFailure(
+        ownerEpoch,
+        reason,
+        failureCode
+      );
+      const resetReason =
+        pendingReason ??
+        (fatalCode === 'storage-reset-required'
+          ? 'storage-reset-required'
+          : 'abrupt-owner-loss');
+      this.nextRecoveryResetReason = resetReason;
+      if (pendingReason === undefined)
+        this.recordStorageResetRequired(ownerEpoch, resetReason);
     }
     this.telemetry.record({
       name: 'graphql_cache.owner',
@@ -1017,14 +1084,19 @@ export class CoordinatorRouter {
       state.tabId === tabId
     ) {
       this.activationStarted.delete(state.ownerEpoch);
-      const pendingReason = this.recordPendingResetFailure(
-        state.ownerEpoch,
-        reason
-      );
-      const resetReason = pendingReason ?? 'abrupt-owner-loss';
-      this.nextRecoveryResetReason = resetReason;
-      if (pendingReason === undefined) {
-        this.recordStorageResetRequired(state.ownerEpoch, resetReason);
+      if (
+        state.kind !== 'activating' ||
+        state.phase !== 'loading-assets' ||
+        state.databaseAction === 'wipe-before-open'
+      ) {
+        const pendingReason = this.recordPendingResetFailure(
+          state.ownerEpoch,
+          reason
+        );
+        const resetReason = pendingReason ?? 'abrupt-owner-loss';
+        this.nextRecoveryResetReason = resetReason;
+        if (pendingReason === undefined)
+          this.recordStorageResetRequired(state.ownerEpoch, resetReason);
       }
       this.telemetry.record({
         name: 'graphql_cache.owner',

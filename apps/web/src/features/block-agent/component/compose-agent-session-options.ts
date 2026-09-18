@@ -1,52 +1,3 @@
-import { buildModelCatalog } from '@core/component/AI/component/input/modelCatalog';
-
-/** A persona the composer can start a managed session as. */
-export type PersonaOption = {
-  id: string;
-  /** Persisted bot id; absent for the deployment's built-in default persona. */
-  botId?: string;
-  name: string;
-  handle: string;
-  description?: string;
-  avatarUrl?: string;
-  harness: string;
-  defaultModel?: string;
-  ownerId?: string;
-  /** Why this persona cannot be picked right now, when it cannot. */
-  unavailableReason?: string;
-  /** An unavailable agent with a setup action remains clickable. */
-  connectLabel?: string;
-};
-
-/** A model the user can pin the session to instead of the persona default. */
-export type ModelOption = {
-  id: string;
-  name: string;
-  /** The heading the harness lists this model under, when it groups them. */
-  group?: string;
-};
-
-/**
- * How many override rows the menu shows up front. Enough to compare the
- * flagship choices at a glance; the rest sits behind "More models".
- */
-export const MAX_FEATURED_MODELS = 5;
-
-/**
- * Harness slugs whose runtimes this deployment provisions itself — the only
- * personas the create composer can start. Anything else (a registered macrod
- * daemon, say) opens its own sessions and is refused by the create route.
- */
-export function isManagedHarness(harness: string): boolean {
-  return (
-    harness === 'in-memory' ||
-    harness === 'macro-inmem' ||
-    harness === 'cursor' ||
-    harness === 'codex-cloud' ||
-    harness === 'claude-cloud'
-  );
-}
-
 /** 'claude-code' → 'Claude Code'; the fallback when nothing names a harness. */
 export function harnessTitle(harness: string | undefined): string {
   if (!harness) return 'Agent session';
@@ -55,37 +6,6 @@ export function harnessTitle(harness: string | undefined): string {
     .filter(Boolean)
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(' ');
-}
-
-/** A model's display name, or its id when the runtime lists no name for it. */
-export function modelDisplayName(
-  id: string,
-  available: readonly Pick<ModelOption, 'id' | 'name'>[]
-): string {
-  return available.find((model) => model.id === id)?.name ?? id;
-}
-
-/** Explains the selected runtime below the composer, independently of its model. */
-export function agentRuntimeDescription(
-  persona: PersonaOption | undefined,
-  ownerName?: string
-): string {
-  if (!persona) return '';
-  if (persona.harness === 'in-memory' || persona.harness === 'macro-inmem') {
-    return 'Starts quickly and runs in-memory. Great for workspace tasks';
-  }
-  if (persona.harness === 'cursor') {
-    return 'Bring in Cursor for some heavier coding work';
-  }
-  if (persona.harness === 'codex-cloud')
-    return 'Runs in your selected Codex cloud environment';
-  if (persona.harness === 'claude-cloud') {
-    return 'Runs in Claude’s cloud using your subscription';
-  }
-  if (persona.harness === 'macrod') {
-    return `Do work locally using ${persona.name}${ownerName ? ` owned by ${ownerName}` : ''}`;
-  }
-  return `Runs using ${harnessDisplayName(persona.harness)}`;
 }
 
 /**
@@ -109,81 +29,10 @@ export function harnessDisplayName(harness: string): string {
   }
 }
 
-/**
- * The models offered as explicit overrides. The persona's own default is
- * already the "Agent default" choice, so listing it again would offer two
- * rows that do the same thing.
- */
-export function overrideModelOptions(
-  persona: PersonaOption | undefined,
-  available: readonly ModelOption[]
-): ModelOption[] {
-  const defaultModel = persona?.defaultModel;
-  return defaultModel
-    ? available.filter((model) => model.id !== defaultModel)
-    : [...available];
-}
-
-/** The override rows split into the featured shortlist and the overflow. */
-export type ModelShortlist = {
-  featured: ModelOption[];
-  more: ModelOption[];
-};
-
-/**
- * Cap the override list so the user compares a handful of models rather
- * than scrolling a whole catalog. Short lists show in full. Long ones lead
- * with the catalog's recommended picks (the flagship of each family the
- * harness offers) and put everything else behind "More models".
- */
-export function shortlistModelOptions(
-  persona: PersonaOption | undefined,
-  available: readonly ModelOption[],
-  max = MAX_FEATURED_MODELS
-): ModelShortlist {
-  const overrides = overrideModelOptions(persona, available);
-  if (overrides.length <= max) return { featured: overrides, more: [] };
-
-  const catalog = buildModelCatalog(
-    overrides.map((model) => ({
-      id: model.id,
-      label: model.name,
-      group: model.group,
-    }))
-  );
-  const featuredIds = new Set(
-    catalog.recommended.slice(0, max).map((option) => option.id)
-  );
-  // Fill from the harness's own order if curation found fewer than `max`.
-  for (const model of overrides) {
-    if (featuredIds.size >= max) break;
-    featuredIds.add(model.id);
-  }
-  return {
-    featured: overrides.filter((model) => featuredIds.has(model.id)),
-    more: overrides.filter((model) => !featuredIds.has(model.id)),
-  };
-}
-
-/**
- * Label for the "leave the model alone" choice. Names the persona's default
- * when it is known so the user sees what they will get without overriding.
- */
-export function personaDefaultLabel(
-  persona: PersonaOption | undefined,
-  available: readonly ModelOption[]
+/** A model's display name, or its id when the runtime lists no name for it. */
+export function modelDisplayName(
+  id: string,
+  available: readonly { id: string; name: string }[]
 ): string {
-  const defaultModel = persona?.defaultModel;
-  if (!defaultModel) return 'default';
-  return `default (${modelDisplayName(defaultModel, available)})`;
-}
-
-/** Short label for the closed model pill. */
-export function modelPillLabel(
-  override: string,
-  persona: PersonaOption | undefined,
-  available: readonly ModelOption[]
-): string {
-  if (override) return modelDisplayName(override, available);
-  return personaDefaultLabel(persona, available);
+  return available.find((model) => model.id === id)?.name ?? id;
 }

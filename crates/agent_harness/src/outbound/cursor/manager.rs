@@ -291,7 +291,12 @@ where
             // model now (the user's default, seeded below via
             // `with_default_model`, or a per-session pick), applied per run.
             model: None,
-            starting_ref: DEFAULT_STARTING_REF.to_owned(),
+            starting_ref: session
+                .repo_branch
+                .as_ref()
+                .map(|branch| branch.as_str())
+                .unwrap_or(DEFAULT_STARTING_REF)
+                .to_owned(),
             record_dir: None,
         })
         .map_err(|error| {

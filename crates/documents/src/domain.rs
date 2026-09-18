@@ -14,6 +14,9 @@ pub mod markdown_backfill;
 #[cfg(feature = "document_create")]
 pub mod create;
 
+#[cfg(feature = "document_create")]
+pub mod starter;
+
 #[cfg(feature = "ports")]
 pub mod upload_finalize;
 

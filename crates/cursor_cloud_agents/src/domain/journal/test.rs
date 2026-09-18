@@ -399,3 +399,104 @@ fn a_stream_interruption_projects_to_nothing() {
         interruption
     );
 }
+
+/// The screenshot turn of dev session 01a0b4ed-29e1-7634-9a67-b87aa0d3efe8:
+/// Cursor streamed `<img src="hello_world_browser.png" ... />` a token at a
+/// time, the file only ever existed in its sandbox, and the same image then
+/// arrived re-hosted with the run's artifacts. The reader gets the prose and
+/// the hosted image, not the tag; the answer of record keeps the stream whole.
+#[test]
+fn a_streamed_sandbox_image_tag_is_not_shown() {
+    let run = CursorRunId::new("screenshot-run");
+    let mut machine = ReplayMachine::default();
+    let deltas = [
+        "Here is the screenshot:\n\n",
+        "<img",
+        " src",
+        "=\"",
+        "hello",
+        "_",
+        "world",
+        "_",
+        "browser",
+        ".png",
+        "\"",
+        " alt",
+        "=\"",
+        "Hello World",
+        "\"",
+        " />",
+        "\n\n",
+        "Open `index.html`.",
+    ];
+    let mut shown = String::new();
+    for delta in deltas {
+        for update in machine
+            .push(
+                Some(&run),
+                &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                    text: delta.into(),
+                })),
+            )
+            .unwrap()
+        {
+            match update {
+                SessionUpdate::AgentMessageChunk(chunk) => match chunk.content {
+                    ContentBlock::Text(text) => shown.push_str(&text.text),
+                    other => panic!("unexpected content {other:?}"),
+                },
+                other => panic!("unexpected update {other:?}"),
+            }
+        }
+    }
+    assert_eq!(shown, "Here is the screenshot:\n\n\n\nOpen `index.html`.");
+    assert_eq!(machine.answer(&run), Some(deltas.concat().as_str()));
+
+    let result = JournalInput::Sse(NativeRecord {
+        event: "result".into(),
+        id: None,
+        data: serde_json::json!({
+            "runId": run.as_str(), "status": "FINISHED",
+            "text": "Here is the screenshot:\n\nOpen `index.html`.",
+        })
+        .to_string(),
+    });
+    assert!(
+        machine
+            .push(Some(&run), &result)
+            .unwrap()
+            .iter()
+            .all(|u| !matches!(u, SessionUpdate::AgentMessageChunk(_))),
+        "the restatement adds no text"
+    );
+}
+
+/// A tag still open when the run ends is prose after all, and is shown.
+#[test]
+fn an_unclosed_tag_is_released_when_the_run_ends() {
+    let run = CursorRunId::new("unclosed-run");
+    let mut machine = ReplayMachine::default();
+    let updates = machine
+        .push(
+            Some(&run),
+            &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Assistant {
+                text: "Shipped. <img src=\"proof".into(),
+            })),
+        )
+        .unwrap();
+    assert!(
+        matches!(&updates[..], [SessionUpdate::AgentMessageChunk(c)] if matches!(&c.content, ContentBlock::Text(t) if t.text == "Shipped. "))
+    );
+    let updates = machine
+        .push(
+            Some(&run),
+            &JournalInput::Sse(crate::testing::raw_record(CursorEvent::Status {
+                run_id: run.clone(),
+                status: RunStatus::Finished,
+            })),
+        )
+        .unwrap();
+    assert!(
+        matches!(&updates[..], [SessionUpdate::AgentMessageChunk(c), ..] if matches!(&c.content, ContentBlock::Text(t) if t.text == "<img src=\"proof"))
+    );
+}

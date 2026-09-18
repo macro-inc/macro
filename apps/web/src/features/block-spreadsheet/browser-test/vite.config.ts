@@ -26,7 +26,9 @@ export default defineConfig({
   },
   // Worker-only lazy dependencies otherwise trigger a page reload on the first
   // import, discarding the file chooser's pending request in a cold test run.
-  optimizeDeps: { include: ['@ironcalc/wasm', 'exceljs', 'fflate', 'saxes'] },
+  optimizeDeps: {
+    include: ['@ironcalc/wasm', 'exceljs', 'fflate', 'saxes', 'ssf'],
+  },
   server: {
     host: '127.0.0.1',
     port: 3017,

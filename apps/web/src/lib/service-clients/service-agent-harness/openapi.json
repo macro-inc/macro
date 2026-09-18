@@ -405,7 +405,7 @@
       "post": {
         "tags": ["agent-sessions"],
         "summary": "Perform a control operation on a live agent session.",
-        "description": "Edit access suffices: whoever can prompt the bot through its thread can\nprompt it here.",
+        "description": "Edit access suffices: whoever can prompt the bot through its thread can\nprompt it here.\n\nA caller may name the action with `actionId`; the response echoes it.\nRe-posting an id the session still holds queued or in flight reports that\naction's status rather than accepting a duplicate.",
         "operationId": "control_agent_session",
         "parameters": [
           {
@@ -1138,7 +1138,7 @@
       "AgentActionId": {
         "type": "string",
         "format": "uuid",
-        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nMinted only by the server at accept time, as a v7 uuid so ids sort by mint\ntime. On the wire and in JSON it is the bare uuid, and a uuid-shaped\nrequest id is the whole ownership test: the server is the only writer of\nruntime-bound frames. The machine's own handshake request ids\n(`agent_session:{session}:{n}`) are not uuids and stay `None`."
+        "description": "Identifies one accepted [`AgentAction`] end to end: returned by the\ncontrol endpoint, written as the JSON-RPC request id on the action's wire\nframe, and read back off that frame as `request_id` on the folded message\nit derives.\n\nA v7 uuid, so ids sort by mint time. Minted by the server at accept time,\nor by a client that speculated the action and named it in the control\nrequest - either way the server is the only writer of runtime-bound\nframes, so a uuid-shaped request id remains the whole ownership test. The\nmachine's own handshake request ids (`agent_session:{session}:{n}`) are\nnot uuids and stay `None`."
       },
       "AgentModelDto": {
         "type": "object",
@@ -1480,12 +1480,23 @@
           "threadChannelId": {
             "type": ["string", "null"],
             "format": "uuid",
-            "description": "The channel `thread_id` lives in, when the session was spawned from a\nthread."
+            "description": "The channel `thread_id` lives in, when the session was spawned from a\nchannel thread. Derived from `thread_parent`."
           },
           "threadId": {
             "type": ["string", "null"],
             "format": "uuid",
             "description": "The root message of the thread the session was created from, if any."
+          },
+          "threadParent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageParent",
+                "description": "The channel or document `thread_id` lives in, when the session was\nspawned from a thread."
+              }
+            ]
           },
           "workspace": {
             "type": "string",
@@ -1528,6 +1539,22 @@
           {
             "$ref": "#/components/schemas/AgentAction",
             "description": "The operation to perform."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "actionId": {
+                "oneOf": [
+                  {
+                    "type": "null"
+                  },
+                  {
+                    "$ref": "#/components/schemas/AgentActionId",
+                    "description": "The id the caller already speculated this action under, when it has\none. Adopted as the accepted id, so a client that renders the action\noptimistically promotes that entry in place instead of retracting it\nand re-speculating under a server id. Re-sending the same id is not a\nsecond action: see [`ControlResponse`].\n\nNamed rather than flattened so it cannot collide with the action's own\nfields, which are tagged under `type`."
+                  }
+                ]
+              }
+            }
           }
         ],
         "description": "Request body for a control operation on a live session.\n\nA wrapper around the operation rather than the bare enum so that fields\nwhich are about the request rather than the operation have somewhere to go.\nThe acting user is deliberately not one of them: it comes from the caller's\ncredentials, so that a caller cannot attribute an operation to someone else.\n\nClients serialize this, so both derives are used."
@@ -1539,7 +1566,7 @@
         "properties": {
           "actionId": {
             "$ref": "#/components/schemas/AgentActionId",
-            "description": "Matches `requestId` on the folded message this action derives once it\ndispatches, and names the queue entry until then."
+            "description": "Matches `requestId` on the folded message this action derives once it\ndispatches, and names the queue entry until then. The caller's own\n`actionId` when it supplied one; a freshly minted id otherwise."
           },
           "status": {
             "$ref": "#/components/schemas/ControlStatusDto",
@@ -1573,9 +1600,13 @@
             "type": ["string", "null"],
             "description": "First prompt to deliver once the session is running. Managed sessions\nonly - an external runtime sends its own first prompt through the\ncontrol endpoint. Omitted, the session opens idle."
           },
+          "repoBranch": {
+            "type": ["string", "null"],
+            "description": "Starting branch for a managed coding session's selected repository."
+          },
           "repoUrl": {
             "type": ["string", "null"],
-            "description": "Repository nominally checked out at `workspace`. Informational and\noptional: having it cloned there is the runtime operator's job."
+            "description": "Explicit GitHub repository for a managed Cursor session. Access is\nchecked for the session owner. For external sessions this is\ninformational: cloning it is the runtime operator's job."
           },
           "thread": {
             "oneOf": [
@@ -1608,12 +1639,12 @@
       "CreateSessionThread": {
         "type": "object",
         "description": "The triggering mention on a create request.\n\nClients serialize this, so both derives are used.",
-        "required": ["channelId", "messageId"],
+        "required": ["messageId"],
         "properties": {
           "channelId": {
-            "type": "string",
+            "type": ["string", "null"],
             "format": "uuid",
-            "description": "Channel the mentioning message was posted in."
+            "description": "Channel the mentioning message was posted in. Runtimes built before\nmessage parents send this instead of `parent`."
           },
           "content": {
             "type": "string",
@@ -1624,12 +1655,27 @@
             "format": "uuid",
             "description": "The mentioning message."
           },
+          "parent": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessageParent",
+                "description": "Entity the mentioning message was posted in."
+              }
+            ]
+          },
           "threadId": {
             "type": ["string", "null"],
             "format": "uuid",
             "description": "Thread the session belongs to; defaults to the message itself, which\nis how a top-level mention roots its own thread."
           }
         }
+      },
+      "DocumentId": {
+        "type": "string",
+        "description": "A validated document identifier. Historical document ids need not be UUIDs."
       },
       "EditQueuedActionRequest": {
         "type": "object",
@@ -1816,6 +1862,42 @@
             "description": "Which way the frame travelled."
           }
         }
+      },
+      "MessageParent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "A channel, including direct messages.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "A channel, including direct messages."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A document, including tasks and PDFs.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "$ref": "#/components/schemas/DocumentId",
+                "description": "A document, including tasks and PDFs."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["document"]
+              }
+            }
+          }
+        ],
+        "description": "The entity whose permissions and lifecycle govern a message."
       },
       "ModelHarnessDto": {
         "type": "string",

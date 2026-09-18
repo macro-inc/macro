@@ -216,6 +216,16 @@ pub trait PropertiesService: Send + Sync + 'static {
         request: &AddPropertyOptionRequest,
     ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
 
+    /// Get or create an option by exact value on a property owned by the caller.
+    /// Preserves existing option metadata and tolerates concurrent creation.
+    fn get_or_create_property_option(
+        &self,
+        user_id: &MacroUserIdStr<'_>,
+        team: Option<&TeamReceipt>,
+        property_definition_id: Uuid,
+        request: &AddPropertyOptionRequest,
+    ) -> impl Future<Output = Result<PropertyOption, PropertiesErr>> + Send;
+
     /// Update a property option in place (rename / recolor / reorder) on a
     /// property owned by the caller. The option id is preserved, so the change
     /// is reflected on every entity that references it.

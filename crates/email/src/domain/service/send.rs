@@ -38,10 +38,37 @@ where
 
         // FE displays "Undo" button for delay_secs. Give extra time for round trip of cancel request
         let sqs_delay = delay_secs as i32 + 2;
-        self.enqueuer
+        // The insert above already committed the message as non-draft with a
+        // pending scheduled row. The queue message is the only thing that will
+        // ever deliver it — nothing re-derives the send from the row — so an
+        // enqueue failure leaves a message that is no longer a draft, was never
+        // sent, and has no worker coming for it. Put it back to an unsent draft
+        // so the body survives and the caller can retry, and fail loudly.
+        if let Err(e) = self
+            .enqueuer
             .enqueue_scheduled_message(link.id, created.db_id, Some(sqs_delay))
             .await
-            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?;
+        {
+            let err = anyhow::Error::from(e);
+            tracing::error!(error=?err, "failed to enqueue scheduled send, reverting the message to a draft");
+            if let Err(revert_err) = self
+                .email_repo
+                .revert_sent_message_to_draft(created.db_id, link.id)
+                .await
+            {
+                // Both writes failed, so the row is still a non-draft unsent
+                // send with a pending scheduled row. That is what the
+                // email_scheduled_handler sweep re-enqueues once the row is
+                // past its grace period.
+                tracing::error!(
+                    error=?anyhow::Error::from(revert_err),
+                    link_id=%link.id,
+                    message_id=%created.db_id,
+                    "failed to revert the message after a failed enqueue; leaving it for the scheduled sweep",
+                );
+            }
+            return Err(EmailErr::EnqueueErr(err));
+        }
 
         // The undo-window send is now committed and queued; the matching
         // message_sent / message_send_cancelled event resolves it later,

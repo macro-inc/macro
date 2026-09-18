@@ -1,15 +1,26 @@
 import type { AgentInputProps } from '@app/features/block-agent/ui';
 import { buildConfig } from '@core/component/LexicalMarkdown/builder/MarkdownConfigBuilder';
 import { MarkdownShell } from '@core/component/LexicalMarkdown/builder/MarkdownShell';
+import { createComposerLayout } from '@core/component/LexicalMarkdown/utils/create-composer-layout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useTouchOutsideToDismissKeyboard } from '@core/mobile/useTouchOutsideToDismissKeyboard';
 import { $insertReferencedPaste } from '@macro-inc/lexical-core';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { Button, ComposerSurface, SendButton } from '@ui';
-import { createSignal, type JSX, onCleanup, onMount, Show } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  type JSX,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import { createChatComposerTip } from '../primitives/chat-composer-tip';
 
 /** Shared input that starts on one line and grows with the draft. */
 export function ChatComposer(props: {
+  autoFocus?: boolean;
+  registerFocus?: (focus: () => void) => void;
   draft: string;
   onDraftChange: (draft: string) => void;
   blockedReason?: string;
@@ -24,6 +35,11 @@ export function ChatComposer(props: {
     () => props.draft.trim().length === 0,
     !props.session
   );
+  const [layout, setLayout] = createSignal<HTMLDivElement>();
+  const [height, setHeight] = createSignal<number>();
+  createResizeObserver(layout, (_, element) => {
+    setHeight(element.getBoundingClientRect().height);
+  });
   let container: HTMLDivElement | undefined;
   useTouchOutsideToDismissKeyboard(() => container);
   const disabled = () => !!props.blockedReason || props.session?.disabled;
@@ -64,7 +80,18 @@ export function ChatComposer(props: {
     editor.withSkills();
   }
 
+  const { isCompact } = createComposerLayout(editor.buildHandle().lexical, {
+    container: layout,
+  });
+
+  // Apply host-supplied drafts (Home suggestions) to the existing editor.
+  createEffect(() => {
+    if (props.draft !== editor.controls.getMarkdown())
+      editor.controls.setMarkdown(props.draft);
+  });
+
   onMount(() => {
+    props.registerFocus?.(() => editor.controls.focus());
     props.session?.registerFocus?.(() => editor.controls.focus());
     props.session?.registerQuoteInsert?.((text) => {
       editor.lexical.update(() => $insertReferencedPaste(text), {
@@ -103,69 +130,79 @@ export function ChatComposer(props: {
       <ComposerSurface
         as="div"
         data-agent-composer="chat"
-        class="flex min-w-0 items-end gap-2 rounded-[32px] px-4 py-3"
+        class="relative z-10 min-w-0 rounded-[32px] transition-[height] duration-150 ease-out motion-reduce:transition-none"
+        style={{ height: height() === undefined ? undefined : `${height()}px` }}
         onPointerDown={focusEditor}
         onMouseDown={focusEditor}
       >
-        <div class="max-h-60 min-w-0 flex-1 self-center overflow-y-auto px-1">
-          <MarkdownShell
-            class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
-            config={editor}
-            initialValue={props.draft}
-            placeholder={props.placeholder ?? tip()}
-            refFn={(element) =>
-              element.setAttribute('aria-label', 'Message the agent')
-            }
-            autofocus={!isTouchDevice() && (props.session?.autofocus ?? true)}
-          />
-        </div>
         <div
-          data-composer-controls
-          class="flex min-w-0 max-w-[55%] shrink-0 items-center"
-          role="group"
-          aria-label="Composer settings"
+          ref={setLayout}
+          data-composer-compact={isCompact()}
+          class="group/composer flex min-w-0 data-[composer-compact=false]:flex-col data-[composer-compact=false]:items-stretch items-end gap-2 p-[7.5px]"
         >
-          <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
-            {props.selector}
-            <Show
-              when={
-                props.session?.busy &&
-                props.session.onStop &&
-                !props.draft.trim()
+          <div class="max-h-60 min-w-0 flex-1 self-center group-data-[composer-compact=false]/composer:flex-none group-data-[composer-compact=false]/composer:self-stretch overflow-y-auto px-[9.375px]">
+            <MarkdownShell
+              class="h-auto min-h-6 text-base leading-6 [&_[data-markdown-editable]]:min-h-6 [&_[data-markdown-editable]]:outline-none [&_[data-markdown-editable]>.md-p]:my-0 [&_[data-markdown-placeholder]]:max-w-full [&_[data-markdown-placeholder]>p]:m-0 [&_[data-markdown-placeholder]>p]:truncate"
+              config={editor}
+              initialValue={props.draft}
+              placeholder={props.placeholder ?? tip()}
+              refFn={(element) =>
+                element.setAttribute('aria-label', 'Message the agent')
               }
-              fallback={
-                <SendButton
-                  appearance="composer"
-                  aria-label="Send"
-                  title={props.blockedReason}
-                  disabled={!props.draft.trim() || disabled()}
-                  onClick={() => send()}
-                />
+              autofocus={
+                !isTouchDevice() &&
+                (props.autoFocus ?? props.session?.autofocus ?? true)
               }
-            >
+            />
+          </div>
+          <div
+            data-composer-controls
+            class="flex min-w-0 max-w-[55%] group-data-[composer-compact=false]/composer:max-w-none shrink-0 items-center"
+            role="group"
+            aria-label="Composer settings"
+          >
+            <div class="ml-auto flex min-w-0 max-w-full items-center gap-2 [&_.menu]:right-0 [&_.menu]:left-auto [&_.menu-anchor]:min-w-0 [&_.pill]:max-w-full">
+              {props.selector}
               <Show
-                when={canSendNext()}
+                when={
+                  props.session?.busy &&
+                  props.session.onStop &&
+                  !props.draft.trim()
+                }
                 fallback={
-                  <Button
-                    variant="strong"
-                    size="icon-composer"
-                    label="Stop"
-                    disabled={disabled()}
-                    onClick={() => props.session?.onStop?.()}
-                  >
-                    <div class="size-3.5 rounded-sm bg-current" />
-                  </Button>
+                  <SendButton
+                    appearance="composer"
+                    aria-label="Send"
+                    title={props.blockedReason}
+                    disabled={!props.draft.trim() || disabled()}
+                    onClick={() => send()}
+                  />
                 }
               >
-                <SendButton
-                  appearance="composer"
-                  aria-label="Send next queued message"
-                  tooltip="Send next queued message"
-                  shortcut="Enter"
-                  onClick={() => props.session?.onStop?.()}
-                />
+                <Show
+                  when={canSendNext()}
+                  fallback={
+                    <Button
+                      variant="strong"
+                      size="icon-composer"
+                      label="Stop"
+                      disabled={disabled()}
+                      onClick={() => props.session?.onStop?.()}
+                    >
+                      <div class="size-3.5 rounded-sm bg-current" />
+                    </Button>
+                  }
+                >
+                  <SendButton
+                    appearance="composer"
+                    aria-label="Send next queued message"
+                    tooltip="Send next queued message"
+                    shortcut="Enter"
+                    onClick={() => props.session?.onStop?.()}
+                  />
+                </Show>
               </Show>
-            </Show>
+            </div>
           </div>
         </div>
       </ComposerSurface>

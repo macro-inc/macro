@@ -7,24 +7,18 @@ import {
 import { SidebarCreateButton } from '@app/components/view-shell/SidebarCreateButton';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import ChatIcon from '@phosphor/chat-circle.svg';
-import CodeIcon from '@phosphor/code.svg';
 import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
 import { createSignal, Show } from 'solid-js';
-import {
-  conversationState,
-  conversationStateLabel,
-} from '../core/conversation-state';
 import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
 import {
   type AgentConversationEntity,
   type ConversationGroup,
-  conversationBotId,
   conversationTimestamp,
 } from '../core/recent-conversations';
+import { AgentSessionListItem } from '../views/AgentSessionListItem';
 
 export type AgentsSidebarProps = {
   modeForConversation: (conversation: AgentConversationEntity) => AgentsMode;
@@ -35,8 +29,6 @@ export type AgentsSidebarProps = {
   error: boolean;
   hasNextPage: boolean;
   loadingNextPage: boolean;
-  /** The bot behind a session, as `@handle`, when the roster knows it. */
-  handleForBot: (botId: string | undefined) => string | undefined;
   onNewConversation: () => void;
   onSearchChange: (search: string) => void;
   onOpenConversation: (
@@ -51,63 +43,38 @@ function Row(props: {
   conversation: AgentConversationEntity;
   mode: AgentsMode;
   active: boolean;
-  handle: string | undefined;
   onOpen: (event: MouseEvent) => void;
 }) {
   const title = () => props.conversation.name || 'Untitled chat';
-  const state = () =>
-    props.conversation.type === 'agent_session'
-      ? conversationState(props.conversation.status)
-      : undefined;
-  const age = () => compactAge(conversationTimestamp(props.conversation));
-  const stateLabel = () => {
-    const current = state();
-    return current ? conversationStateLabel(current) : undefined;
-  };
-
   return (
-    <ViewSidebar.Item
-      active={props.active}
-      class={cn(props.mode === 'code' && 'h-12 items-start py-1.5 touch:h-12')}
-      title={title()}
-      data-kind={props.mode}
-      onClick={props.onOpen}
-    >
-      <ViewSidebar.Icon>
-        <Show
-          when={state() === 'starting'}
-          fallback={
-            <Show when={props.mode === 'code'} fallback={<ChatIcon />}>
-              <CodeIcon />
-            </Show>
-          }
+    <Show
+      when={props.conversation.type === 'agent_session' && props.conversation}
+      fallback={
+        <ViewSidebar.Item
+          active={props.active}
+          title={title()}
+          data-kind="chat"
+          onClick={props.onOpen}
         >
-          <SpinnerIcon class="motion-safe:animate-spin" />
-        </Show>
-      </ViewSidebar.Icon>
-      <span class="min-w-0 flex-1">
-        <span class="block truncate">{title()}</span>
-        <Show when={props.mode === 'code'}>
-          <span class="flex min-w-0 items-center gap-1.5 text-xs leading-4 text-ink-extra-muted">
-            <Show when={props.handle}>
-              {(handle) => <span class="truncate">@{handle()}</span>}
-            </Show>
-            <Show when={props.handle && stateLabel()}>
-              <span>·</span>
-            </Show>
-            <Show when={stateLabel()}>
-              {(label) => <span class="shrink-0">{label()}</span>}
-            </Show>
-            <span class="ml-auto shrink-0 tabular-nums">{age()}</span>
+          <ViewSidebar.Icon>
+            <ChatIcon />
+          </ViewSidebar.Icon>
+          <span class="min-w-0 flex-1 truncate">{title()}</span>
+          <span class="shrink-0 text-xs text-ink-extra-muted tabular-nums">
+            {compactAge(conversationTimestamp(props.conversation))}
           </span>
-        </Show>
-      </span>
-      <Show when={props.mode !== 'code'}>
-        <span class="shrink-0 text-xs text-ink-extra-muted tabular-nums">
-          {age()}
-        </span>
-      </Show>
-    </ViewSidebar.Item>
+        </ViewSidebar.Item>
+      }
+    >
+      {(session) => (
+        <AgentSessionListItem
+          entity={session()}
+          mode={props.mode}
+          active={props.active}
+          onOpen={props.onOpen}
+        />
+      )}
+    </Show>
   );
 }
 
@@ -231,9 +198,6 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                           active={
                             props.activeConversationId === conversation().id
                           }
-                          handle={props.handleForBot(
-                            conversationBotId(conversation())
-                          )}
                           onOpen={(event) =>
                             props.onOpenConversation(conversation(), event)
                           }

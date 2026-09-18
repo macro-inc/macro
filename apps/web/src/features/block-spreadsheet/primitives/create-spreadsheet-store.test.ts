@@ -16,6 +16,85 @@ import {
 import { createSpreadsheetStore } from './create-spreadsheet-store';
 
 describe('spreadsheet store', () => {
+  it('applies structural patches as one undo step and rejects stale collaborator snapshots', async () => {
+    const doc = new LoroDoc();
+    writeSpreadsheetCells(doc, {
+      A1: { value: '10', bold: true },
+      A2: { value: '20' },
+    });
+    let dispose = () => {};
+    const store = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createSpreadsheetStore({
+        canEdit: () => true,
+        source: {
+          doc: () => doc,
+          ready: () => true,
+          error: () => undefined,
+          status: () => 'local',
+          peers: () => [],
+          setSelection: () => {},
+        },
+      });
+    });
+    await Promise.resolve();
+    const before = store.workbook();
+    const next = before.map((sheet) => ({
+      ...sheet,
+      cells: { A2: sheet.cells.A1, A3: sheet.cells.A2 },
+      metadata: { hiddenRows: [1] },
+    }));
+    store.applyStructure(before, next);
+    expect(store.cells().A1).toBeUndefined();
+    expect(store.cells().A2).toEqual({ value: '10', bold: true });
+    store.undo();
+    expect(store.cells()).toEqual(before[0].cells);
+    expect(store.activeSheet().metadata?.hiddenRows).toBeUndefined();
+    const peer = new LoroDoc();
+    peer.import(doc.export({ mode: 'snapshot' }));
+    writeSpreadsheetCells(peer, { B1: { value: 'New collaborator edit' } });
+    doc.import(peer.export({ mode: 'update' }));
+    expect(() => store.applyStructure(before, next)).toThrow(
+      'workbook changed'
+    );
+    expect(readSpreadsheetCells(doc).B1.value).toBe('New collaborator edit');
+    dispose();
+    peer.free();
+    doc.free();
+  });
+
+  it.each(['connected', 'connecting', 'offline'] as const)(
+    'rejects coordinate shifts for a %s collaborative source',
+    async (status) => {
+      const doc = new LoroDoc();
+      writeSpreadsheetCells(doc, { A1: { value: 'Keep me' } });
+      let dispose = () => {};
+      const store = createRoot((cleanup) => {
+        dispose = cleanup;
+        return createSpreadsheetStore({
+          canEdit: () => true,
+          source: {
+            doc: () => doc,
+            ready: () => true,
+            error: () => undefined,
+            status: () => status,
+            peers: () => [],
+            setSelection: () => {},
+          },
+        });
+      });
+      await Promise.resolve();
+      const before = store.workbook(),
+        version = doc.version().toJSON();
+      expect(store.canChangeStructure()).toBe(false);
+      expect(() => store.applyStructure(before, before)).toThrow(
+        'shared workbooks'
+      );
+      expect(doc.version().toJSON()).toEqual(version);
+      dispose();
+      doc.free();
+    }
+  );
   it('reports blocked structural history through its error accessor and preserves the undo step', async () => {
     const doc = new LoroDoc();
     const peer = new LoroDoc();

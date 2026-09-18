@@ -13,7 +13,7 @@ anyhow = { workspace = true }
 async-trait = { workspace = true }
 bot_id = { path = "../bot_id" }
 calendar_events = { path = "../calendar_events" }
-channels = { path = "../channels", features = ["inbound", "outbound"] }
+channel_sender = { path = "../channel_sender" }
 entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
 chrono = { workspace = true }
 chrono-tz = { workspace = true }
@@ -30,4 +30,4 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
-models_pagination = { path = "../models_pagination" }
+messages = { path = "../messages", features = ["test-utils"] }

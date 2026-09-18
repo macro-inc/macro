@@ -97,3 +97,27 @@ describe('spreadsheet draft actions', () => {
     expect(options.openDocument).not.toHaveBeenCalled();
   });
 });
+
+it('converts an upload once, waits for durable acknowledgement, and retries the same copy after failure', async () => {
+  const { actions, options } = fixture();
+  options.saveDocument.mockRejectedValueOnce(new Error('Disconnected'));
+  await actions.edit();
+  expect(options.openDocument).not.toHaveBeenCalled();
+  expect(options.onSaveFailure).toHaveBeenCalledWith('edit');
+  let acknowledge = () => {};
+  options.saveDocument.mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        acknowledge = resolve;
+      })
+  );
+  const saving = actions.edit();
+  await vi.waitFor(() => expect(options.saveDocument).toHaveBeenCalledTimes(2));
+  await actions.edit();
+  expect(options.createDocument).toHaveBeenCalledOnce();
+  expect(options.openDocument).not.toHaveBeenCalled();
+  acknowledge();
+  await saving;
+  expect(options.openDocument).toHaveBeenCalledWith('document-id', 'edit');
+  expect(options.openChat).not.toHaveBeenCalled();
+});

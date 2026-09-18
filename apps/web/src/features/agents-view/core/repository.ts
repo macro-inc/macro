@@ -49,3 +49,25 @@ export function repositoryLabel(url: string): string {
 export function repositoryShortName(url: string): string {
   return repositoryLabel(url).split('/').at(-1) ?? url;
 }
+
+/** Git branch names, excluding revision expressions and ref shorthand. */
+export function validRepositoryBranch(branch: string): boolean {
+  return (
+    !!branch &&
+    branch !== '@' &&
+    !branch.startsWith('-') &&
+    !branch.endsWith('.') &&
+    !branch.includes('..') &&
+    !branch.includes('@{') &&
+    !/[\s~^:?*\[\\]/.test(branch) &&
+    !Array.from(branch).some(
+      (character) =>
+        character.charCodeAt(0) < 32 || character.charCodeAt(0) === 127
+    ) &&
+    branch
+      .split('/')
+      .every(
+        (part) => !!part && !part.startsWith('.') && !part.endsWith('.lock')
+      )
+  );
+}

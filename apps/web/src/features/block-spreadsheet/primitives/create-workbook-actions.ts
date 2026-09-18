@@ -147,6 +147,7 @@ export function createWorkbookActions(options: {
         {
           sheets: options.store.workbook().map((sheet) => ({
             name: sheet.name,
+            metadata: sheet.metadata,
             cells: sheet.cells,
             rowCount: sheet.layout.rowCount,
             columnWidths: sheet.layout.columnWidths,

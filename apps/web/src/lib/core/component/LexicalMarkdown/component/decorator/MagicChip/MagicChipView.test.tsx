@@ -349,7 +349,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(true, 'Setting that up.')}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
@@ -393,7 +393,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(true)}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
@@ -422,7 +422,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={asking(false)}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
@@ -438,13 +438,9 @@ describe('MagicChipView reviewing a tool draft', () => {
     expect(respond).not.toHaveBeenCalled();
   });
 
-  it('holds the buttons while an answer is on the wire', () => {
+  it('a chip with no answer handler is read-only', () => {
     const view = render(() => (
-      <MagicChipView
-        agentSessionId="session"
-        presentation={asking(true)}
-        answer={{ answering: true, respond }}
-      />
+      <MagicChipView agentSessionId="session" presentation={asking(true)} />
     ));
     expect(view.getByTestId('calendar-composer').dataset.canAct).toBe('false');
     fireEvent.click(view.getByTestId('composer-execute'));
@@ -467,7 +463,7 @@ describe('MagicChipView reviewing a tool draft', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={presentation()}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
@@ -553,7 +549,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm)}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
@@ -597,7 +593,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm)}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
       />
     ));
     fireEvent.input(view.getByPlaceholderText('Type your own answer'), {
@@ -618,7 +614,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={presentation()}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
       />
     ));
     fireEvent.click(view.getByRole('radio', { name: 'Blue' }));
@@ -640,7 +636,7 @@ describe('MagicChipView asking a form', () => {
       <MagicChipView
         agentSessionId="session"
         presentation={askingQuestion(colourForm, { canAnswer: false })}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
         onOpen={onOpen}
       />
     ));
@@ -664,7 +660,7 @@ describe('MagicChipView asking a form', () => {
           elicitationId: 'gh-1',
           url: 'https://agent.example.com/connect?e=gh-1',
         })}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
       />
     ));
     expect(view.getByText('agent.example.com')).toBeTruthy();
@@ -690,7 +686,7 @@ describe('MagicChipView asking a form', () => {
           mode: 'hologram',
           raw: {},
         })}
-        answer={{ answering: false, respond }}
+        answer={{ respond }}
       />
     ));
     expect(view.getByText(/cannot display a "hologram" request/)).toBeTruthy();

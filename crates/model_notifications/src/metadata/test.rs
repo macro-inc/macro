@@ -986,6 +986,10 @@ fn agent_session_ref() -> AgentSessionNotificationRef {
         session_name: "Fix the flaky test".to_string(),
         bot_id: Uuid::parse_str("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb").unwrap(),
         bot_name: "Macro Coder".to_string(),
+        parent: Some(AgentSessionOriginParent {
+            kind: "channel".to_string(),
+            id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc".to_string(),
+        }),
         channel_id: Some(Uuid::parse_str("cccccccc-cccc-4ccc-8ccc-cccccccccccc").unwrap()),
         thread_id: Some(Uuid::parse_str("dddddddd-dddd-4ddd-8ddd-dddddddddddd").unwrap()),
         announcement_message_id: None,

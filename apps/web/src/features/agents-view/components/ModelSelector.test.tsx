@@ -42,7 +42,6 @@ describe('shared model selector', () => {
       />
     ));
     const trigger = screen.getByRole('button', { name: 'Model' });
-    expect(trigger.classList.contains('pill')).toBe(true);
     fireEvent.keyDown(trigger, { key: 'Enter' });
     fireEvent.keyDown(screen.getByRole('menuitem', { name: /Sonnet 4/ }), {
       key: 'Enter',

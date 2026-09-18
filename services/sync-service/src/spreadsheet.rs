@@ -265,9 +265,94 @@ fn choice(value: &Value, choices: &[&str]) -> bool {
     value.as_str().is_some_and(|value| choices.contains(&value))
 }
 
+fn metadata_range(value: &Value) -> bool {
+    let Some(range) = value.as_str() else {
+        return false;
+    };
+    let parts: Vec<_> = range.split(':').collect();
+    if parts.is_empty()
+        || parts.len() > 2
+        || !parts.iter().all(|part| {
+            address(part)
+                && !part.contains('!')
+                && part[1..].bytes().all(|byte| byte.is_ascii_digit())
+        })
+    {
+        return false;
+    }
+    let first = parts[0];
+    let last = parts[parts.len() - 1];
+    first.as_bytes()[0] <= last.as_bytes()[0]
+        && first[1..].parse::<u16>().unwrap_or(0) <= last[1..].parse::<u16>().unwrap_or(0)
+}
+
+fn workbook_metadata(value: &Value) -> bool {
+    let Some(encoded) = value
+        .as_str()
+        .filter(|text| text.encode_utf16().count() <= 100_000)
+    else {
+        return false;
+    };
+    let Ok(Value::Object(fields)) = serde_json::from_str::<Value>(encoded) else {
+        return false;
+    };
+    fields.iter().all(|(key, value)| match key.as_str() {
+        "merges" => value
+            .as_array()
+            .is_some_and(|items| items.len() <= 1000 && items.iter().all(metadata_range)),
+        "rowHeights" => value.as_object().is_some_and(|items| {
+            items.iter().all(|(key, value)| {
+                key.bytes().all(|byte| byte.is_ascii_digit())
+                    && key.parse::<u16>().is_ok_and(|row| row < 1000)
+                    && value
+                        .as_f64()
+                        .is_some_and(|height| (0.0..=409.5).contains(&height))
+            })
+        }),
+        "hiddenRows" | "hiddenColumns" => value.as_array().is_some_and(|items| {
+            let limit = if key == "hiddenRows" { 1000 } else { 26 };
+            items.len() <= limit && items.iter().all(|item| integer(item, 0, limit as i64 - 1))
+        }),
+        "hidden" => value.is_boolean(),
+        "freeze" => value.as_object().is_some_and(|fields| {
+            fields.len() == 2
+                && fields
+                    .get("rows")
+                    .is_some_and(|value| integer(value, 0, 1000))
+                && fields
+                    .get("columns")
+                    .is_some_and(|value| integer(value, 0, 26))
+        }),
+        "autoFilter" => metadata_range(value),
+        "definedNames" => value.as_array().is_some_and(|items| {
+            items.len() <= 256
+                && items.iter().all(|item| {
+                    item.as_object().is_some_and(|fields| {
+                        fields
+                            .keys()
+                            .all(|key| ["name", "formula", "local"].contains(&key.as_str()))
+                            && fields
+                                .get("name")
+                                .and_then(Value::as_str)
+                                .is_some_and(|name| {
+                                    !name.is_empty() && name.encode_utf16().count() <= 255
+                                })
+                            && fields
+                                .get("formula")
+                                .and_then(Value::as_str)
+                                .is_some_and(|formula| formula.encode_utf16().count() <= 10_000)
+                            && fields.get("local").is_none_or(Value::is_boolean)
+                    })
+                })
+        }),
+        _ => false,
+    })
+}
+
 fn valid_entry(root: &str, key: &str, value: &Value) -> bool {
     match root {
         "spreadsheetMeta" => key == "formatVersion" && value.as_u64() == Some(1),
+        "spreadsheetSheetMetadata" => sheet_id(key) && workbook_metadata(value),
         "spreadsheetSheetNames" => sheet_id(key) && value.as_str().is_some_and(sheet_name),
         "spreadsheetSheetOrder" => sheet_id(key) && value.as_f64().is_some_and(f64::is_finite),
         "spreadsheetDeletedSheets" => sheet_id(key) && value.is_boolean(),
@@ -319,9 +404,39 @@ fn valid_entry(root: &str, key: &str, value: &Value) -> bool {
         | "spreadsheetBorderRight"
         | "spreadsheetBorderBottom"
         | "spreadsheetBorderLeft" => value.is_boolean(),
+        "spreadsheetFontNames" => value.as_str().is_some_and(|value| {
+            value.encode_utf16().count() <= 128 && !value.chars().any(|ch| ch <= '\u{001f}')
+        }),
+        "spreadsheetBorderTopStyles"
+        | "spreadsheetBorderRightStyles"
+        | "spreadsheetBorderBottomStyles"
+        | "spreadsheetBorderLeftStyles" => choice(
+            value,
+            &[
+                "",
+                "thin",
+                "medium",
+                "thick",
+                "double",
+                "dotted",
+                "dashed",
+                "dashDot",
+                "dashDotDot",
+                "slantDashDot",
+                "hair",
+                "mediumDashed",
+                "mediumDashDot",
+                "mediumDashDotDot",
+            ],
+        ),
         "spreadsheetFontFamily" => choice(value, &["sans", "serif", "mono"]),
         "spreadsheetFontSize" => integer(value, 8, 36),
-        "spreadsheetTextColor" | "spreadsheetFillColor" => value.as_str().is_some_and(|value| {
+        "spreadsheetBorderTopColors"
+        | "spreadsheetBorderRightColors"
+        | "spreadsheetBorderBottomColors"
+        | "spreadsheetBorderLeftColors"
+        | "spreadsheetTextColor"
+        | "spreadsheetFillColor" => value.as_str().is_some_and(|value| {
             value.is_empty()
                 || (value.len() == 7
                     && value.starts_with('#')
@@ -330,6 +445,9 @@ fn valid_entry(root: &str, key: &str, value: &Value) -> bool {
         "spreadsheetHorizontalAlign" => choice(value, &["auto", "left", "center", "right"]),
         "spreadsheetVerticalAlign" => choice(value, &["top", "middle", "bottom"]),
         "spreadsheetDecimals" => integer(value, -1, 10),
+        "spreadsheetNumberFormats" => value.as_str().is_some_and(|value| {
+            value.encode_utf16().count() <= 512 && !value.chars().any(|ch| ch <= '\u{001f}')
+        }),
         "spreadsheetFormats" => choice(
             value,
             &[
@@ -352,6 +470,7 @@ fn known_root(root: &str) -> bool {
         root,
         "spreadsheetMeta"
             | "spreadsheetSheetNames"
+            | "spreadsheetSheetMetadata"
             | "spreadsheetSheetOrder"
             | "spreadsheetDeletedSheets"
             | "spreadsheetSheetRevivals"
@@ -368,6 +487,15 @@ fn known_root(root: &str) -> bool {
             | "spreadsheetBorderRight"
             | "spreadsheetBorderBottom"
             | "spreadsheetBorderLeft"
+            | "spreadsheetFontNames"
+            | "spreadsheetBorderTopStyles"
+            | "spreadsheetBorderTopColors"
+            | "spreadsheetBorderRightStyles"
+            | "spreadsheetBorderRightColors"
+            | "spreadsheetBorderBottomStyles"
+            | "spreadsheetBorderBottomColors"
+            | "spreadsheetBorderLeftStyles"
+            | "spreadsheetBorderLeftColors"
             | "spreadsheetFontFamily"
             | "spreadsheetFontSize"
             | "spreadsheetTextColor"
@@ -376,6 +504,7 @@ fn known_root(root: &str) -> bool {
             | "spreadsheetVerticalAlign"
             | "spreadsheetDecimals"
             | "spreadsheetFormats"
+            | "spreadsheetNumberFormats"
     )
 }
 

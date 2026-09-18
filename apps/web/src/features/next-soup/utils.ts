@@ -26,6 +26,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
+  enableGraphqlSoup,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -95,6 +96,7 @@ import {
   removeSoupEntities,
   removeSoupEntitiesFromDoneFilteredQueries,
 } from '@queries/soup/cache';
+import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { emailClient } from '@service-email/client';
 import { isAfter } from 'date-fns';
 import { match } from 'ts-pattern';
@@ -1269,6 +1271,9 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
         ...ids.map((id) => invalidateSoupEntity(id)),
+        ...(isFeatureEnabled(enableGraphqlSoup)
+          ? [refreshActiveGraphqlSoupQueries()]
+          : []),
       ]);
     }
   })();
@@ -1302,12 +1307,15 @@ export function trashEmails(targets: TrashEmailTarget[]): TrashEmailsHandle {
           })
         );
       } finally {
-        // Only invalidate email queries — skip soup invalidation since
-        // rollback() already restored the correct cache state.
+        // The rollback restores REST lists, but GraphQL membership must be
+        // reconciled with the server after undo (including partial failures).
         await queryClient.invalidateQueries({
           queryKey: queryKeys.all.email,
           refetchType: 'none',
         });
+        if (isFeatureEnabled(enableGraphqlSoup)) {
+          await refreshActiveGraphqlSoupQueries();
+        }
       }
     },
   };

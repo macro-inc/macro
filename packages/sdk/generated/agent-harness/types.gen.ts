@@ -25,11 +25,12 @@ export type AgentAction = (AgentPromptAction & {
  * frame, and read back off that frame as `request_id` on the folded message
  * it derives.
  *
- * Minted only by the server at accept time, as a v7 uuid so ids sort by mint
- * time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
- * request id is the whole ownership test: the server is the only writer of
- * runtime-bound frames. The machine's own handshake request ids
- * (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+ * A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+ * or by a client that speculated the action and named it in the control
+ * request - either way the server is the only writer of runtime-bound
+ * frames, so a uuid-shaped request id remains the whole ownership test. The
+ * machine's own handshake request ids (`agent_session:{session}:{n}`) are
+ * not uuids and stay `None`.
  */
 export type AgentActionId = string;
 
@@ -288,13 +289,14 @@ export type AgentSessionResponse = {
     status: SessionStatusDto;
     /**
      * The channel `thread_id` lives in, when the session was spawned from a
-     * thread.
+     * channel thread. Derived from `thread_parent`.
      */
     threadChannelId?: string | null;
     /**
      * The root message of the thread the session was created from, if any.
      */
     threadId?: string | null;
+    threadParent?: null | MessageParent;
     /**
      * The directory the session's harness runs in on its runtime.
      */
@@ -328,9 +330,18 @@ export type CompleteRequest = {
 };
 
 /**
- * The operation to perform.
+ * Request body for a control operation on a live session.
+ *
+ * A wrapper around the operation rather than the bare enum so that fields
+ * which are about the request rather than the operation have somewhere to go.
+ * The acting user is deliberately not one of them: it comes from the caller's
+ * credentials, so that a caller cannot attribute an operation to someone else.
+ *
+ * Clients serialize this, so both derives are used.
  */
-export type ControlRequest = AgentAction;
+export type ControlRequest = AgentAction & {
+    actionId?: null | AgentActionId;
+};
 
 /**
  * Response body for a control operation.
@@ -340,7 +351,8 @@ export type ControlRequest = AgentAction;
 export type ControlResponse = {
     /**
      * Matches `requestId` on the folded message this action derives once it
-     * dispatches, and names the queue entry until then.
+     * dispatches, and names the queue entry until then. The caller's own
+     * `actionId` when it supplied one; a freshly minted id otherwise.
      */
     actionId: AgentActionId;
     /**
@@ -404,8 +416,13 @@ export type CreateAgentSessionRequest = {
      */
     prompt?: string | null;
     /**
-     * Repository nominally checked out at `workspace`. Informational and
-     * optional: having it cloned there is the runtime operator's job.
+     * Starting branch for a managed coding session's selected repository.
+     */
+    repoBranch?: string | null;
+    /**
+     * Explicit GitHub repository for a managed Cursor session. Access is
+     * checked for the session owner. For external sessions this is
+     * informational: cloning it is the runtime operator's job.
      */
     repoUrl?: string | null;
     thread?: null | CreateSessionThread;
@@ -436,9 +453,10 @@ export type CreateAgentSessionResponse = {
  */
 export type CreateSessionThread = {
     /**
-     * Channel the mentioning message was posted in.
+     * Channel the mentioning message was posted in. Runtimes built before
+     * message parents send this instead of `parent`.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * The mention's text, quoted in the session's announcement.
      */
@@ -447,12 +465,18 @@ export type CreateSessionThread = {
      * The mentioning message.
      */
     messageId: string;
+    parent?: null | MessageParent;
     /**
      * Thread the session belongs to; defaults to the message itself, which
      * is how a top-level mention roots its own thread.
      */
     threadId?: string | null;
 };
+
+/**
+ * A validated document identifier. Historical document ids need not be UUIDs.
+ */
+export type DocumentId = string;
 
 /**
  * Request body for editing a queued prompt.
@@ -589,6 +613,23 @@ export type LogFrameDto = {
      * Which way the frame travelled.
      */
     direction: LogDirectionDto;
+};
+
+/**
+ * The entity whose permissions and lifecycle govern a message.
+ */
+export type MessageParent = {
+    /**
+     * A channel, including direct messages.
+     */
+    id: string;
+    type: 'channel';
+} | {
+    /**
+     * A document, including tasks and PDFs.
+     */
+    id: DocumentId;
+    type: 'document';
 };
 
 /**

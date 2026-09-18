@@ -1,5 +1,6 @@
 use crate::domain::models::{
     LabelListVisibility, LabelType, LinkLabel, MessageListVisibility, SimpleMessage,
+    label::system_labels,
 };
 use crate::outbound::email_pg_repo::db_types::{
     LabelListVisibilityDbRow, LabelTypeDbRow, MessageListVisibilityDbRow,
@@ -206,9 +207,29 @@ pub(crate) async fn get_thread_label_messages(
     Ok(rows.into_iter().map(Into::into).collect())
 }
 
-#[tracing::instrument(skip(pool), err)]
-pub(crate) async fn insert_message_labels_batch(
+/// Commit every local representation of a thread's read state together.
+#[tracing::instrument(skip(pool, message_ids), err)]
+pub(super) async fn set_thread_read_state(
     pool: &PgPool,
+    thread_id: Uuid,
+    link_id: Uuid,
+    message_ids: &[Uuid],
+    is_read: bool,
+) -> Result<(), sqlx::Error> {
+    let mut tx = pool.begin().await?;
+    if is_read {
+        delete_message_labels_batch(&mut *tx, message_ids, system_labels::UNREAD, link_id).await?;
+    } else {
+        insert_message_labels_batch(&mut *tx, message_ids, system_labels::UNREAD, link_id).await?;
+    }
+    update_message_read_status_batch(&mut *tx, message_ids, link_id, is_read).await?;
+    super::thread::update_thread_read_status(&mut *tx, thread_id, link_id, is_read).await?;
+    tx.commit().await
+}
+
+#[tracing::instrument(skip(executor), err)]
+pub(crate) async fn insert_message_labels_batch(
+    executor: impl sqlx::PgExecutor<'_>,
     message_ids: &[Uuid],
     provider_label_id: &str,
     link_id: Uuid,
@@ -235,15 +256,15 @@ pub(crate) async fn insert_message_labels_batch(
         link_id,
         provider_label_id
     )
-    .execute(pool)
+    .execute(executor)
     .await?;
 
     Ok(())
 }
 
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(executor), err)]
 pub(crate) async fn delete_message_labels_batch(
-    pool: &PgPool,
+    executor: impl sqlx::PgExecutor<'_>,
     message_ids: &[Uuid],
     provider_label_id: &str,
     link_id: Uuid,
@@ -266,15 +287,15 @@ pub(crate) async fn delete_message_labels_batch(
         link_id,
         provider_label_id
     )
-    .execute(pool)
+    .execute(executor)
     .await?;
 
     Ok(())
 }
 
-#[tracing::instrument(skip(pool), err)]
+#[tracing::instrument(skip(executor), err)]
 pub(crate) async fn update_message_read_status_batch(
-    pool: &PgPool,
+    executor: impl sqlx::PgExecutor<'_>,
     message_ids: &[Uuid],
     link_id: Uuid,
     is_read: bool,
@@ -297,7 +318,7 @@ pub(crate) async fn update_message_read_status_batch(
         message_ids,
         link_id
     )
-    .execute(pool)
+    .execute(executor)
     .await?;
 
     Ok(())

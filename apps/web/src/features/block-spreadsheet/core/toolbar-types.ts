@@ -34,6 +34,8 @@ export type SpreadsheetCommand =
 
 export type SpreadsheetToolbarProps = {
   readonly: boolean;
+  onComment?: () => void;
+  canComment?: boolean;
   canUndo: boolean;
   canRedo: boolean;
   cell: SpreadsheetCell | undefined;

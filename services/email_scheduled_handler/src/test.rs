@@ -13,15 +13,17 @@ async fn fetch_pending_returns_only_eligible_messages(pool: Pool<Postgres>) -> R
 
     let results = fetch_pending_scheduled_messages(&pool).await?;
 
-    // Should return exactly 2 messages:
+    // Should return exactly 3 messages:
     // - Message 1: Draft with past send_time, not sent
     // - Message 5: Draft with past send_time, not sent (different link)
-    assert_eq!(results.len(), 2);
+    // - Message 6: Non-draft undo-window send stranded well past its send_time
+    assert_eq!(results.len(), 3);
 
     let message_ids: Vec<Uuid> = results.iter().map(|r| r.message_id).collect();
 
     assert!(message_ids.contains(&Uuid::parse_str("00000000-0000-0000-0000-00000000f501")?));
     assert!(message_ids.contains(&Uuid::parse_str("00000000-0000-0000-0000-00000000f505")?));
+    assert!(message_ids.contains(&Uuid::parse_str("00000000-0000-0000-0000-00000000f506")?));
 
     Ok(())
 }
@@ -60,13 +62,86 @@ async fn fetch_pending_excludes_already_sent(pool: Pool<Postgres>) -> Result<()>
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "test/fixtures", scripts("fetch_pending_scheduled_messages"))
 )]
-async fn fetch_pending_excludes_non_drafts(pool: Pool<Postgres>) -> Result<()> {
+async fn fetch_pending_excludes_delivered_messages(pool: Pool<Postgres>) -> Result<()> {
     let results = fetch_pending_scheduled_messages(&pool).await?;
 
     let message_ids: Vec<Uuid> = results.iter().map(|r| r.message_id).collect();
 
-    // Message 4 has is_draft = false, should not be included
+    // Messages 4 and 9 both have is_sent = true, so the send already happened
+    // and the unsent scheduled row is stale. Re-enqueueing either would send
+    // the same mail twice.
     assert!(!message_ids.contains(&Uuid::parse_str("00000000-0000-0000-0000-00000000f504")?));
+    assert!(!message_ids.contains(&Uuid::parse_str("00000000-0000-0000-0000-00000000f509")?));
+
+    Ok(())
+}
+
+/// The bug this sweep now covers: `send_message_impl` commits the message as a
+/// non-draft with a scheduled row and only then enqueues the delivery, so a
+/// failed enqueue leaves a message that is not a draft, was never sent, and has
+/// no worker coming for it. The old `em.is_draft = TRUE` predicate could not
+/// see those rows at all.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "test/fixtures", scripts("fetch_pending_scheduled_messages"))
+)]
+async fn fetch_pending_includes_stranded_non_draft_sends(pool: Pool<Postgres>) -> Result<()> {
+    let results = fetch_pending_scheduled_messages(&pool).await?;
+
+    let rescued = results
+        .iter()
+        .find(|r| r.message_id == Uuid::parse_str("00000000-0000-0000-0000-00000000f506").unwrap());
+
+    let rescued = rescued.expect("the stranded send should be picked up");
+    assert!(
+        rescued.stranded,
+        "a rescue must be flagged so the underlying send failure is visible in the logs"
+    );
+
+    // Ordinary send-later drafts are this sweep's normal work, not rescues.
+    let draft = results
+        .iter()
+        .find(|r| r.message_id == Uuid::parse_str("00000000-0000-0000-0000-00000000f501").unwrap())
+        .expect("the send-later draft should be picked up");
+    assert!(!draft.stranded);
+
+    Ok(())
+}
+
+/// A non-draft send that is only seconds overdue still has its own queue
+/// message in flight (or in SQS redelivery), so rescuing it would double-send.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "test/fixtures", scripts("fetch_pending_scheduled_messages"))
+)]
+async fn fetch_pending_excludes_non_draft_sends_inside_grace_period(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let results = fetch_pending_scheduled_messages(&pool).await?;
+
+    let message_ids: Vec<Uuid> = results.iter().map(|r| r.message_id).collect();
+
+    // Message 7 is 30 seconds overdue, well inside the grace period
+    assert!(!message_ids.contains(&Uuid::parse_str("00000000-0000-0000-0000-00000000f507")?));
+
+    Ok(())
+}
+
+/// A worker already claimed the row, so it is being delivered rather than
+/// stranded.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "test/fixtures", scripts("fetch_pending_scheduled_messages"))
+)]
+async fn fetch_pending_excludes_non_draft_sends_being_processed(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let results = fetch_pending_scheduled_messages(&pool).await?;
+
+    let message_ids: Vec<Uuid> = results.iter().map(|r| r.message_id).collect();
+
+    // Message 8 is well overdue but has processing = true
+    assert!(!message_ids.contains(&Uuid::parse_str("00000000-0000-0000-0000-00000000f508")?));
 
     Ok(())
 }

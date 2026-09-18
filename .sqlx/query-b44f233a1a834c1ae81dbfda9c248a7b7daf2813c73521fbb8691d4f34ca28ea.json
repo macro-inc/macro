@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT count(*) AS \"count!\" FROM \"Thread\" t\n           WHERE NOT EXISTS (SELECT 1 FROM migrated_comment_thread_id m WHERE m.thread_id = t.id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "b44f233a1a834c1ae81dbfda9c248a7b7daf2813c73521fbb8691d4f34ca28ea"
+}

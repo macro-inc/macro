@@ -4,6 +4,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { toSubType } from '@entity/types/entity';
 import { cognitionApiServiceClient } from '@service-cognition/client';
 import { emailClient } from '@service-email/client';
 import type { ApiThread } from '@service-email/generated/schemas';
@@ -136,16 +137,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           fileType: doc.file_type as FileType,
           owner: doc.owner,
           updatedAt: doc.updated_at,
-          subType:
-            doc.sub_type === null || doc.sub_type === undefined
-              ? undefined
-              : {
-                  type: doc.sub_type.type,
-                  is_completed:
-                    'is_completed' in doc.sub_type
-                      ? doc.sub_type.is_completed
-                      : undefined,
-                },
+          subType: toSubType(doc.sub_type) ?? undefined,
         };
       case 'no_access':
       case 'does_not_exist':

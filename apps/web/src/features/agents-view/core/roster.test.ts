@@ -1,4 +1,5 @@
 import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
+import { MACRO_AGENT_BOT_ID } from '@core/constant/macroAgent';
 import { MACRO_CODER_BOT_ID } from '@core/constant/macroCoder';
 import { describe, expect, it } from 'vitest';
 import {
@@ -7,7 +8,7 @@ import {
   MACRO_PERSONA_ID,
   type PersistedAgentLike,
   type RosterInput,
-  rosterForComposer,
+  rosterForAgentPicker,
 } from './roster';
 
 function persisted(
@@ -111,7 +112,7 @@ describe('buildAgentRoster', () => {
   });
 });
 
-describe('rosterForComposer and kindForBot', () => {
+describe('rosterForAgentPicker and kindForBot', () => {
   const roster = buildAgentRoster({
     ...EMPTY,
     agents: [
@@ -119,17 +120,50 @@ describe('rosterForComposer and kindForBot', () => {
       persisted({ harness: 'cursor' }),
       persisted({ harness: 'macrod' }),
       persisted({ harness: 'sandbox' }),
+      persisted({ harness: 'claude-cloud' }),
+      persisted({ harness: 'codex-cloud' }),
+      persisted({ harness: 'future-runtime' }),
+      persisted({
+        harness: 'in-memory',
+        bot: { id: MACRO_AGENT_BOT_ID, name: 'Macro', handle: 'macro' },
+      }),
+      persisted({
+        harness: 'in-memory',
+        bot: {
+          id: `bot|${MACRO_AGENT_BOT_ID}`,
+          name: 'Macro',
+          handle: 'macro',
+        },
+      }),
+      persisted({
+        harness: 'in-memory',
+        bot: { id: 'saved-macro-name', name: 'Macro', handle: 'my-macro' },
+      }),
     ],
   });
 
-  it('combines supported chat and coding agents in one picker', () => {
-    expect(rosterForComposer(roster).map((a) => a.id)).toEqual([
-      MACRO_PERSONA_ID,
+  it('includes every runtime and excludes only the built-in Macro identity', () => {
+    expect(rosterForAgentPicker(roster).map((a) => a.id)).toEqual([
       CURSOR_BOT_ID,
       'bot-in-memory',
       'bot-cursor',
+      'bot-macrod',
+      'bot-sandbox',
+      'bot-claude-cloud',
+      'bot-codex-cloud',
+      'bot-future-runtime',
+      'saved-macro-name',
     ]);
   });
+
+  it.each(['claude-cloud', 'codex-cloud', 'future-runtime'])(
+    'does not block an agent just because its runtime is %s',
+    (harness) => {
+      const agent = roster.find((entry) => entry.harness === harness);
+      expect(agent?.unavailableReason).toBeUndefined();
+      expect(agent?.runtime.connected).toBe(true);
+    }
+  );
 
   it('resolves a session bot to its kind, defaulting to Chat', () => {
     expect(kindForBot('bot-cursor', roster)).toBe('coder');

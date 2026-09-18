@@ -18,7 +18,8 @@ pub use loaders::{
 };
 pub use mutation::{
     EmailMutationService, EmailThreadMutationLoadFuture, EmailThreadMutationOutput,
-    GraphqlEmailMutation, MarkEmailThreadSeenInput, UpdateEmailThreadLabelInput,
+    GraphqlEmailMutation, MarkEmailThreadSeenInput, MarkEmailThreadUnreadInput,
+    UpdateEmailThreadLabelInput,
 };
 pub use objects::{
     GraphqlMailPreviewMessage, GraphqlSoupEmailMessage,

@@ -16,7 +16,6 @@ import { downloadFile } from '@filesystem/download';
 import IconShared from '@phosphor/share.svg';
 import { Button, Dialog } from '@ui';
 import { createSignal } from 'solid-js';
-
 import { spreadsheetChatContext } from './core/chat-context';
 import type { SpreadsheetCells } from './core/spreadsheet-document';
 import { createDraftActions } from './primitives/create-draft-actions';
@@ -24,6 +23,7 @@ import { createLocalSpreadsheetSource } from './primitives/create-local-spreadsh
 import { createSpreadsheetStore } from './primitives/create-spreadsheet-store';
 import { createSpreadsheetDocument } from './queries/create-spreadsheet';
 import { saveSpreadsheetDraft } from './queries/save-spreadsheet-draft';
+import { spreadsheetMentions } from './spreadsheet-mentions';
 import { SpreadsheetDraftMenu } from './views/SpreadsheetDraftMenu';
 import { SpreadsheetEditor } from './views/SpreadsheetEditor';
 
@@ -214,6 +214,7 @@ export default function SpreadsheetDemo() {
       </Dialog>
       <div class="min-h-0 min-w-0 flex-1">
         <SpreadsheetEditor
+          mentions={spreadsheetMentions}
           store={store}
           name={name()}
           onExportXlsx={(bytes) =>

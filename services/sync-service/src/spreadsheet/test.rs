@@ -256,3 +256,42 @@ fn notification_failure_preserves_durable_update_and_allows_idempotent_retry() {
     assert!(!retried.applied);
     assert_eq!(*port.calls.borrow(), ["persist", "broadcast", "keep_alive"]);
 }
+
+#[test]
+fn imported_financial_styles_and_metadata_are_validated_before_commit() {
+    let doc = document();
+    let fork = doc.fork();
+    for (root, value) in [
+        ("spreadsheetNumberFormats", "#,##0.00;[Red](#,##0.00);\"—\""),
+        ("spreadsheetFontNames", "Calibri"),
+        ("spreadsheetBorderBottomStyles", "double"),
+        ("spreadsheetBorderBottomColors", "#123456"),
+    ] {
+        fork.get_map(root).insert("A1", value).unwrap();
+    }
+    fork.get_map("spreadsheetSheetMetadata").insert("sheet1", r#"{"merges":["A1:C1"],"rowHeights":{"0":32},"hiddenRows":[5],"hiddenColumns":[5],"freeze":{"rows":3,"columns":1},"definedNames":[{"name":"Rate","formula":"0.1","local":true}]}"#).unwrap();
+    let update = fork
+        .export(ExportMode::Updates {
+            from: Cow::Owned(doc.oplog_vv()),
+        })
+        .unwrap();
+    assert!(prepare_update(&access(), &doc, &doc.oplog_vv().encode(), &update).is_ok());
+    for invalid in [
+        r#"{"merges":["A1:AA1001"]}"#,
+        r#"{"rowHeights":{"1000":32}}"#,
+        r#"{"hiddenColumns":[26]}"#,
+        r#"{"freeze":{"rows":1001,"columns":1}}"#,
+        r#"{"definedNames":[{"name":"Rate","formula":false}]}"#,
+        r#"{"unexpected":true}"#,
+    ] {
+        assert!(
+            prepare_update(
+                &access(),
+                &doc,
+                &doc.oplog_vv().encode(),
+                &delta(&doc, "spreadsheetSheetMetadata", "sheet1", invalid)
+            )
+            .is_err()
+        );
+    }
+}

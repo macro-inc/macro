@@ -162,7 +162,10 @@ test('view options toggle display directly and return focus to the selected cell
     await expect(grid).toBeFocused();
     await expect(total).toHaveAttribute('aria-selected', 'true');
   }
-  await expect(total).toHaveCSS('border-color', 'rgba(0, 0, 0, 0)');
+  await expect(total).toHaveCSS('border-bottom-color', 'rgba(0, 0, 0, 0)');
+  await expect(total).toHaveCSS('border-right-color', 'rgba(0, 0, 0, 0)');
+  await expect(total).toHaveCSS('border-top-width', '0px');
+  await expect(total).toHaveCSS('border-left-width', '0px');
   await expect(formulaBar).toBeHidden();
   await expect(total).toHaveText('=SUM(B2:B3)');
 
@@ -512,7 +515,13 @@ test('ribbon formatting and data actions preserve the range, formulas, focus, an
   await expect(address).toHaveValue('A2:B3');
   await expect(page.locator('[data-address="A2"]')).toHaveText('Engineering');
   await expect(page.locator('[data-address="B2"]')).toHaveText('20');
-  await expect(page.locator('[data-address="A3"]')).toHaveText('Design');
+  await expect
+    .poll(
+      async () =>
+        (await page.evaluate(() => window.spreadsheetFixture.snapshot()[0]))
+          .cells
+    )
+    .toMatchObject({ A3: { value: 'Design' } });
   await expect(page.locator('[data-address="B4"]')).toHaveText('30');
   await page.getByRole('button', { name: 'Undo', exact: true }).click();
   await expect(page.locator('[data-address="A2"]')).toHaveText('Design');
@@ -580,4 +589,256 @@ test('double-click renames tabs and right-click actions target the clicked sheet
     await expect(
       page.getByRole('menuitem', { name: label, exact: true })
     ).toBeDisabled();
+});
+
+test('imports, edits and exports an independent financial workbook using real workers', async ({
+  page,
+}) => {
+  const chooser = page.waitForEvent('filechooser');
+  await menu(page, 'Import and export', 'Import…');
+  await (await chooser).setFiles(
+    fileURLToPath(
+      new URL('../core/xlsx-fixtures/financial-model.xlsx', import.meta.url)
+    )
+  );
+  await page.getByRole('button', { name: 'Import workbook' }).click();
+  await page.getByRole('tab', { name: 'DCF model', exact: true }).click();
+  await expect(page.locator('[data-address="B18"]')).toHaveText(
+    '(1,250,000.13)'
+  );
+  await expect(page.locator('[data-address="B14"]')).toHaveText('25');
+  await page.getByRole('button', { name: 'View options', exact: true }).click();
+  await page
+    .getByRole('menuitemcheckbox', { name: 'Gridlines', exact: true })
+    .click();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-address="B18"]')).toHaveCSS(
+    'border-bottom-style',
+    'double'
+  );
+  await expect(page.locator('[data-address="B18"]')).toHaveCSS(
+    'border-bottom-color',
+    'rgb(18, 52, 86)'
+  );
+  await page.locator('[data-address="B18"]').dblclick();
+  await page
+    .getByRole('textbox', { name: 'Edit B18', exact: true })
+    .fill('-2500000.125');
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-address="B18"]')).toHaveText(
+    '(2,500,000.13)'
+  );
+  const downloaded = page.waitForEvent('download');
+  await menu(page, 'Import and export', 'Download as Excel (.xlsx)');
+  const path = await (await downloaded).path();
+  if (!path) throw new Error('Workbook download missing');
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile(path);
+  const model = workbook.getWorksheet('DCF model')!;
+  expect(model.getCell('B18').value).toBe(-2500000.125);
+  expect(model.getCell('B18').numFmt).toBe('#,##0.00;[Red](#,##0.00);"—"');
+  expect(model.getCell('B18').border.bottom?.style).toBe('double');
+  expect(model.getCell('B14').value).toEqual({
+    formula: 'TaxRate*100',
+    result: 25,
+  });
+  expect(model.getCell('A1').isMerged).toBe(true);
+  expect(model.getRow(6).hidden).toBe(true);
+  expect(model.views[0]).toMatchObject({
+    state: 'frozen',
+    xSplit: 1,
+    ySplit: 3,
+  });
+});
+
+test('row context menu inserts and deletes with formula updates and supports undo', async ({
+  page,
+}) => {
+  await page
+    .getByRole('button', { name: 'Select row 2', exact: true })
+    .click({ button: 'right' });
+  await page
+    .getByRole('menuitem', { name: 'Insert 1 row above', exact: true })
+    .click();
+  await expect
+    .poll(
+      async () =>
+        (await page.evaluate(() => window.spreadsheetFixture.snapshot()[0]))
+          .cells
+    )
+    .toMatchObject({ A3: { value: 'Design' } });
+  await expect(page.locator('[data-address="B5"]')).toHaveText('30');
+  const after = await page.evaluate(
+    () => window.spreadsheetFixture.snapshot()[0]
+  );
+  expect(after.cells.B5.value).toBe('=SUM(B3:B4)');
+  await page
+    .getByRole('button', { name: 'Select row 3', exact: true })
+    .click({ button: 'right' });
+  await page
+    .getByRole('menuitem', { name: 'Delete 1 row', exact: true })
+    .click();
+  await expect(page.locator('[data-address="A3"]')).toHaveText('Engineering');
+  await expect(page.locator('[data-address="B4"]')).toHaveText('20');
+  await page.getByRole('grid').press('ControlOrMeta+z');
+  await expect(page.locator('[data-address="A3"]')).toHaveText('Design');
+  await expect(page.locator('[data-address="B5"]')).toHaveText('30');
+});
+
+test('column context menu hides, unhides and resizes without losing data', async ({
+  page,
+}) => {
+  await page
+    .getByRole('button', { name: 'Select column B', exact: true })
+    .click({ button: 'right' });
+  await page
+    .getByRole('menuitem', { name: 'Hide 1 column', exact: true })
+    .click();
+  await expect(
+    page.getByRole('button', { name: 'Select column B', exact: true })
+  ).toHaveCount(0);
+  await page.locator('[data-address="A2"]').click();
+  await page.getByRole('grid').press('ArrowRight');
+  await expect(page.locator('[data-address="C2"]')).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await page
+    .getByRole('button', { name: 'Select column A', exact: true })
+    .click({ button: 'right' });
+  await page
+    .getByRole('menuitem', { name: 'Unhide all columns', exact: true })
+    .click();
+  await expect(page.locator('[data-address="B4"]')).toHaveText('30');
+  await page
+    .getByRole('button', { name: 'Select column B', exact: true })
+    .click({ button: 'right' });
+  await page
+    .getByRole('menuitem', { name: 'Resize 1 column…', exact: true })
+    .click();
+  await page.getByRole('spinbutton', { name: 'Size in pixels' }).fill('180');
+  await page.getByRole('button', { name: 'Apply', exact: true }).click();
+  await expect(page.locator('[data-address="B2"]')).toHaveCSS('width', '180px');
+});
+
+test('header context menus respect view-only access', async ({ page }) => {
+  await page.evaluate(() => window.spreadsheetFixture.setReadonly(true));
+  await page
+    .getByRole('button', { name: 'Select row 2', exact: true })
+    .click({ button: 'right' });
+  await expect(
+    page.getByRole('menuitem', { name: 'Copy', exact: true })
+  ).not.toHaveAttribute('aria-disabled', 'true');
+  await expect(
+    page.getByRole('menuitem', { name: 'Delete 1 row', exact: true })
+  ).toHaveAttribute('aria-disabled', 'true');
+  await expect(
+    page.getByRole('menuitem', { name: 'Insert 1 row above', exact: true })
+  ).toHaveAttribute('aria-disabled', 'true');
+});
+
+test('cell mention editor retains focus, inserts atomic pills, and can switch to formulas', async ({
+  page,
+}) => {
+  await page.goto('/?mentions');
+  await expect(page.locator('[data-address="B4"]')).toHaveText('30');
+  await page.locator('[data-address="A6"]').dblclick();
+  const editor = page.getByRole('textbox', { name: 'Edit A6', exact: true });
+  await expect(editor).toBeFocused();
+  await editor.pressSequentially('Owner @tay');
+  await expect(editor).toBeFocused();
+  await expect(editor).toHaveText('Owner @tay');
+  await page.getByRole('button', { name: 'Mention Taylor' }).click();
+  await expect(editor).toBeFocused();
+  await expect(editor.locator('[data-cell-mention]')).toHaveText('@Taylor');
+  await editor.press('Enter');
+  await expect(page.locator('[data-address="A6"]')).toHaveText(
+    'Owner @Taylor '
+  );
+  await page.locator('[data-address="B6"]').dblclick();
+  await page
+    .getByRole('textbox', { name: 'Edit B6', exact: true })
+    .pressSequentially('=SUM(B2:B3)');
+  await expect(
+    page.getByRole('textbox', { name: 'Edit B6', exact: true })
+  ).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(page.locator('[data-address="B6"]')).toHaveText('30');
+});
+
+test('mention editing switches back from formulas and leaves other inputs focusable', async ({
+  page,
+}) => {
+  await page.goto('/?mentions');
+  await expect(page.locator('[data-address="B4"]')).toHaveText('30');
+  await page.locator('[data-address="A6"]').dblclick();
+  let editor = page.getByRole('textbox', { name: 'Edit A6', exact: true });
+  await editor.pressSequentially('=');
+  await editor.press('Backspace');
+  await expect(editor).toBeFocused();
+  await editor.pressSequentially('**plain** @tay');
+  await page.getByRole('button', { name: 'Mention Taylor' }).click();
+  await editor.press('Enter');
+  await expect(page.locator('[data-address="A6"]')).toHaveText(
+    '**plain** @Taylor '
+  );
+  await page.getByRole('textbox', { name: 'Formula bar', exact: true }).click();
+  await expect(
+    page.getByRole('textbox', { name: 'Formula bar', exact: true })
+  ).toBeFocused();
+});
+
+test('header menu keyboard navigation keeps the targeted row selected', async ({
+  page,
+}) => {
+  await page
+    .getByRole('button', { name: 'Select row 4', exact: true })
+    .click({ button: 'right' });
+  await expect(
+    page.getByRole('textbox', { name: 'Go to cell', includeHidden: true })
+  ).toHaveValue('A4:Z4');
+  await page.keyboard.press('ArrowDown');
+  await expect(
+    page.getByRole('textbox', { name: 'Go to cell', includeHidden: true })
+  ).toHaveValue('A4:Z4');
+  await page.keyboard.press('Escape');
+  await expect(
+    page.getByRole('textbox', { name: 'Go to cell', includeHidden: true })
+  ).toHaveValue('A4:Z4');
+});
+
+test('cell context menu preserves ranges, edits the right cells and supports keyboard dismissal', async ({
+  page,
+}) => {
+  const grid = page.getByRole('grid', { name: 'Spreadsheet' });
+  await page.locator('[data-address="B2"]').click();
+  await page.locator('[data-address="B3"]').click({ modifiers: ['Shift'] });
+  await page.locator('[data-address="B2"]').click({ button: 'right' });
+  await expect(page.getByRole('menu')).toBeVisible();
+  await expect(
+    page.getByRole('menuitem', { name: 'Fill down', exact: true })
+  ).toBeEnabled();
+  await expect(
+    page.getByRole('menuitem', { name: 'Fill right', exact: true })
+  ).toBeDisabled();
+  await page.getByRole('menuitem', { name: 'Fill down', exact: true }).click();
+  await expect(grid).toBeFocused();
+  await expect(page.locator('[data-address="B3"]')).toHaveText('10');
+  await expect(page.locator('[data-address="B4"]')).toHaveText('20');
+  await page.locator('[data-address="A2"]').click({ button: 'right' });
+  await page
+    .getByRole('menuitem', { name: 'Clear values', exact: true })
+    .click();
+  await expect(page.locator('[data-address="A2"]')).toHaveText('');
+  await expect(page.locator('[data-address="A3"]')).toHaveText('Engineering');
+  await grid.press('Shift+F10');
+  await expect(page.getByRole('menu')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(grid).toBeFocused();
+  await page.locator('[data-address="B2"]').dblclick();
+  const editor = page.getByRole('textbox', { name: 'Edit B2', exact: true });
+  await editor.click({ button: 'right' });
+  await expect(page.getByRole('menu')).toHaveCount(0);
+  await expect(editor).toHaveValue('10');
 });

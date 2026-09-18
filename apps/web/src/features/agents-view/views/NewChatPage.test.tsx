@@ -184,13 +184,16 @@ describe('agent-led new conversation', () => {
       screen.getByRole('heading', { name: 'What should we build?' })
     ).toBeTruthy();
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
-    fireEvent.click(screen.getByRole('button', { name: /Add repository/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
     fireEvent.input(screen.getByRole('textbox', { name: 'Add repository' }), {
       target: { value: 'macro-inc/macro' },
     });
-    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Add repository' }), {
-      key: 'Enter',
+    fireEvent.click(screen.getByRole('button', { name: 'Use repository' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Branch' }));
+    fireEvent.input(screen.getByRole('textbox', { name: 'Starting branch' }), {
+      target: { value: 'feature/home' },
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Use branch' }));
     await selectAgent(/^Chat default$/);
     expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(true);
     expect(
@@ -204,14 +207,13 @@ describe('agent-led new conversation', () => {
       modelOverride: 'chat-default',
     });
     await selectAgent(/Cursor/);
-    expect(
-      screen.getByRole('button', { name: /macro-inc\/macro/ })
-    ).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Repository' })).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Send' }));
     expect(send).toHaveBeenLastCalledWith({
       botId: CURSOR_BOT_ID,
       prompt: 'Shared draft',
       repoUrl: 'https://github.com/macro-inc/macro',
+      repoBranch: 'feature/home',
     });
   });
   it('uses a saved agent without sending a per-session model override', async () => {
@@ -231,6 +233,54 @@ describe('agent-led new conversation', () => {
     });
     expect(send.mock.calls[0][0]).not.toHaveProperty('modelOverride');
   });
+  it.each(['claude-cloud', 'codex-cloud', 'future-runtime'])(
+    'shows the drawer for a saved %s coding agent without forwarding unsupported repository overrides',
+    async (harness) => {
+      const send = page(true, [
+        {
+          bot: {
+            id: 'saved-cloud-agent',
+            name: 'Cloud reviewer',
+            handle: 'cloud-reviewer',
+          },
+          harness,
+          default_model: 'saved-default',
+        },
+      ]);
+      await selectAgent(/Cursor/);
+      fireEvent.click(screen.getByRole('button', { name: 'Repository' }));
+      fireEvent.input(screen.getByRole('textbox', { name: 'Add repository' }), {
+        target: { value: 'macro-inc/macro' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: 'Use repository' }));
+      await selectAgent(/Cloud reviewer/);
+      expect(screen.getByTestId('drawer').hasAttribute('hidden')).toBe(false);
+      expect(screen.getByRole('button', { name: 'Repository' })).toBeTruthy();
+      expect(screen.getByRole('button', { name: 'Branch' })).toBeTruthy();
+      fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+      expect(send).toHaveBeenCalledWith({
+        prompt: 'Prompt',
+        botId: 'saved-cloud-agent',
+        repoUrl: undefined,
+      });
+    }
+  );
+
+  it('keeps a disconnected paired agent visible with its availability reason', () => {
+    page(true, [
+      {
+        bot: { id: 'paired-agent', name: 'Laptop agent', handle: 'laptop' },
+        harness: 'macrod',
+        harness_id: 'offline-machine',
+        default_model: 'saved-default',
+      },
+    ]);
+    openAgents();
+    const row = screen.getByRole('menuitem', { name: /Laptop agent/ });
+    expect(row.getAttribute('aria-disabled')).toBe('true');
+    expect(row.textContent).toContain('Its runtime is disconnected');
+  });
+
   it('shows the model beside the agent and sends a hovered model choice only once', async () => {
     const send = page();
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(

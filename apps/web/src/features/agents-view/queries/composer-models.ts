@@ -2,6 +2,7 @@ import {
   type AgentModelTarget,
   useAgentModelsQueries,
 } from '@queries/agents/models';
+import { ModelHarnessDto } from '@service-agent-harness/generated/schemas/modelHarnessDto';
 import type { Accessor } from 'solid-js';
 import type { RosterAgent } from '../core/roster';
 
@@ -10,13 +11,18 @@ export function composerModelTarget(
   agent: Pick<RosterAgent, 'harness' | 'harnessId'> | undefined
 ): AgentModelTarget | undefined {
   if (!agent) return;
-  if (agent.harness === 'in-memory' || agent.harness === 'macro-inmem') {
-    return { harness: 'in-memory' };
+  const requested =
+    agent.harness === 'macro-inmem' ? 'in-memory' : agent.harness;
+  const harness = Object.values(ModelHarnessDto).find(
+    (value) => value === requested
+  );
+  if (!harness) return;
+  if (harness === 'macrod') {
+    return agent.harnessId
+      ? { harness, harnessId: agent.harnessId }
+      : undefined;
   }
-  if (agent.harness === 'cursor') return { harness: 'cursor' };
-  if (agent.harness === 'macrod' && agent.harnessId) {
-    return { harness: 'macrod', harnessId: agent.harnessId };
-  }
+  return { harness };
 }
 
 /** Keep discovery scoped to the selected, connected runtime. */
