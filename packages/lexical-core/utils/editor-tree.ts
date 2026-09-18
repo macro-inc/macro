@@ -82,7 +82,11 @@ export function $salvageTableCellChildren(
   for (const child of cell.getChildren()) {
     if (TABLE_CELL_ALLOWED_CHILD_TYPES.has(child.getType())) continue;
     const type = child.getType();
-    if ($isTableNode(child) || $isTableRowNode(child) || $isTableCellNode(child)) {
+    if (
+      $isTableNode(child) ||
+      $isTableRowNode(child) ||
+      $isTableCellNode(child)
+    ) {
       removedTypes.push(type);
       child.remove();
       continue;

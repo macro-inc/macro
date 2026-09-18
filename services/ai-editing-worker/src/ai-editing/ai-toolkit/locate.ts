@@ -42,7 +42,9 @@ export function $blockById(session: LexicalSession, id: string): ElementNode {
     return content;
   }
   if ($isTableNode(start) || $isTableRowNode(start)) {
-    throw new Error(`id "${id}" is a <${start.getType()}>, not a content block`);
+    throw new Error(
+      `id "${id}" is a <${start.getType()}>, not a content block`
+    );
   }
   const node = $findMatchingParent(start, $isContentBlock);
   if (!node) {
