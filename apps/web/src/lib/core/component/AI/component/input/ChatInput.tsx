@@ -180,6 +180,7 @@ export function ChatInput(props: ChatInputComponentProps) {
       (isTouchDevice() && props.variant !== 'default')
   );
   const isCollapsed = () =>
+    !dictation.active() &&
     props.collapseOnBlur &&
     isTouchDevice() &&
     !isTallVariant() &&
@@ -372,6 +373,7 @@ export function ChatInput(props: ChatInputComponentProps) {
           inert={dictation.active()}
           classList={{ invisible: dictation.active() }}
           onFocusOut={(e) => {
+            if (dictation.active()) return;
             const next = e.relatedTarget as Node | null;
             if (next && containerRef.contains(next)) return;
             setIsFocused(false);
