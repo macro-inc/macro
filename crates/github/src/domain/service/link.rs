@@ -67,7 +67,9 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService>
 
     /// Turns a "no rows returned" lookup failure into `None` so a missing link
     /// reads as an absent link rather than an error.
-    fn optional_link(result: Result<GithubLink, R::Err>) -> Result<Option<GithubLink>, GithubError> {
+    fn optional_link(
+        result: Result<GithubLink, R::Err>,
+    ) -> Result<Option<GithubLink>, GithubError> {
         match result {
             Ok(link) => Ok(Some(link)),
             Err(error) => {
@@ -325,8 +327,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
         &self,
         macro_user_id: &MacroUserId<Lowercase<'static>>,
     ) -> Result<(), GithubError> {
-        let link =
-            Self::optional_link(self.repo.get_github_link_by_user_id(macro_user_id).await)?;
+        let link = Self::optional_link(self.repo.get_github_link_by_user_id(macro_user_id).await)?;
 
         let Some(link) = link else {
             tracing::trace!("no github link found for user");
@@ -367,7 +368,8 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: ForeignEntityService> GithubLink
         let gh_id = user_info.id.to_string();
 
         // 1. Does THIS user already have a link, and to which account?
-        let this_user_link = Self::optional_link(self.repo.get_github_link_by_user_id(user_id).await)?;
+        let this_user_link =
+            Self::optional_link(self.repo.get_github_link_by_user_id(user_id).await)?;
 
         if let Some(existing) = &this_user_link
             && existing.github_user_id == gh_id

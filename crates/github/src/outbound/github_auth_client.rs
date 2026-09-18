@@ -103,7 +103,11 @@ impl GithubAuthImpl {
             },
         };
 
-        if let Err(error) = self.fusionauth_client.link_user(link_with_token(access_token)).await {
+        if let Err(error) = self
+            .fusionauth_client
+            .link_user(link_with_token(access_token))
+            .await
+        {
             tracing::error!(
                 error=?error,
                 fusionauth_user_id=%fusionauth_user_id,

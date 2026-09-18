@@ -339,11 +339,15 @@ impl Auth for StubAuth {
         _username: &str,
         access_token: &str,
     ) -> Result<(), Self::Err> {
-        self.state.lock().unwrap().link_user_calls.push(LinkUserCall {
-            fusionauth_user_id: *fusionauth_user_id,
-            github_user_id: github_user_id.to_string(),
-            access_token: access_token.to_string(),
-        });
+        self.state
+            .lock()
+            .unwrap()
+            .link_user_calls
+            .push(LinkUserCall {
+                fusionauth_user_id: *fusionauth_user_id,
+                github_user_id: github_user_id.to_string(),
+                access_token: access_token.to_string(),
+            });
         Ok(())
     }
 
