@@ -141,7 +141,7 @@ where
             action_id: id,
             transcript: published
                 .is_ok()
-                .then(|| RunTranscript::AgentSession(session_id)),
+                .then_some(RunTranscript::AgentSession(session_id)),
             start_time,
             end_time,
             is_success: published.is_ok(),
