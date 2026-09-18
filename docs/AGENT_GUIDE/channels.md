@@ -110,7 +110,7 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
-bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` open
+bot asks before scheduling a specific clock time. `@macro-new` / `@coder` / `@cursor` / `@codex` / `@claude` open
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
 A follow-up sent while that session is still working stops the current turn,
@@ -129,9 +129,13 @@ cropped at the chip's height with a fade at its foot; clicking it expands it in 
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
 
-`@codex` requires both `enable-chat-v3-agents` and `enable-codex-agents`.
-It appears when the mentioning user has connected ChatGPT and saved a
-cloud environment in Settings → Harness. New sessions use that environment on
+`@cursor`, `@codex`, and `@claude` are offered to every user before account setup.
+A mention without a connected account creates no session and replies in the thread
+with a **Connect Cursor**, **Connect Codex**, or **Connect Claude** chip. Each chip
+opens Settings → Harness, where all three connection cards are visible. The same
+chip reads **connected** after setup; mention the bot again to start a session.
+Codex also prompts for a cloud environment when ChatGPT is connected but no
+environment has been saved. New sessions use that environment on
 `main`; there is no automatic repository selection. Follow-up mentions continue the same agent session. When
 the provider URL arrives, the session header offers **Open in Codex**. Codex
 assistant text appears as complete messages while tool activity and thinking

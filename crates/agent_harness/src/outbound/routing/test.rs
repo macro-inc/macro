@@ -110,6 +110,11 @@ struct FixedBotSessions(BotId);
 
 const CLAUDE_TEST_BOT: BotId = BotId::TEST_B;
 
+#[test]
+fn first_party_claude_routes_to_the_claude_provider() {
+    assert_eq!(AgentKind::of(bot_id::CLAUDE_BOT_ID), AgentKind::ClaudeCloud);
+}
+
 impl AgentSessionRepo for FixedBotSessions {
     async fn create(&self, _params: CreateAgentSessionParams) -> SessionResult<AgentSession> {
         unimplemented!("the router never creates sessions")

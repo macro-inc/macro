@@ -85,6 +85,8 @@ impl AgentKind {
             Self::Cursor
         } else if bot == bot_id::CODEX_BOT_ID {
             Self::CodexCloud
+        } else if bot == bot_id::CLAUDE_BOT_ID {
+            Self::ClaudeCloud
         } else if bot == bot_id::MACRO_NEW_BOT_ID {
             Self::InMemory
         } else {
@@ -328,6 +330,12 @@ pub enum SessionBlocker {
     /// `@cursor` runs on the mentioner's own Cursor account, and they have
     /// not registered a key in settings yet.
     CursorNotConnected,
+    /// The mentioner has not connected their ChatGPT account for Codex.
+    CodexNotConnected,
+    /// Codex is connected, but no cloud environment has been selected.
+    CodexEnvironmentNotConfigured,
+    /// The mentioner has not connected their Claude account.
+    ClaudeNotConnected,
 }
 
 /// A mention that opened no session, and why. Posted back into the mention's

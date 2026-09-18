@@ -601,12 +601,12 @@ export const I_CONNECT_APP: TextMatchTransformer = {
       if (!isConnectAppSlug(appSlug) || typeof name !== 'string' || !name) {
         throw new Error('Invalid connect-app payload');
       }
-      if (target !== undefined && !isConnectAppTarget(target)) {
+      const resolvedTarget =
+        target === undefined ? DEFAULT_CONNECT_APP_TARGET : target;
+      if (!isConnectAppTarget(resolvedTarget)) {
         throw new Error('Invalid connect-app target');
       }
-      node.replace(
-        new ConnectAppNode(appSlug, name, target ?? DEFAULT_CONNECT_APP_TARGET)
-      );
+      node.replace(new ConnectAppNode(appSlug, name, resolvedTarget));
     } catch (e) {
       console.error('Error in I_CONNECT_APP replace:', e);
       replaceTextWithUnknownMention(node, 'Connect app');

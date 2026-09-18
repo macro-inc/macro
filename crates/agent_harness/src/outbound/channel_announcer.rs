@@ -5,10 +5,11 @@ mod test;
 
 use std::sync::Arc;
 
-use agent_egress::domain::model::CONNECT_APP_TAG;
 use entity_access::domain::{models::BotAccessScope, ports::EntityAccessService};
 use lexical_client::LexicalClient;
-use lexical_client::parse_markdown::{AgentAnnouncementChip, AgentAnnouncementReplyTarget};
+use lexical_client::parse_markdown::{
+    AgentAnnouncementChip, AgentAnnouncementReplyTarget, AgentConnectionChip, AgentConnectionPrompt,
+};
 use messages::domain::{
     api::MessageCommands,
     models::{MessageAttribution, MessageParent, PostMessage, PostMessageNotificationPolicy},
@@ -21,28 +22,42 @@ use crate::domain::model::{
 };
 use crate::domain::ports::SessionAnnouncer;
 
-/// The message a declined mention becomes: what to connect, and the chip
-/// that opens the settings page to do it.
-///
-/// The chip targets the Harness settings page rather than Integrations, and
-/// names the harness by slug — the frontend reads the reader's own Cursor
-/// key status off that, so once they have connected, the same message reads
-/// as connected instead of nagging them again.
-fn decline_markdown(blocker: SessionBlocker) -> String {
-    match blocker {
-        SessionBlocker::CursorNotConnected => {
-            let chip = serde_json::json!({
-                "appSlug": "cursor",
-                "name": "Cursor",
-                "target": "harness",
-            });
-            format!(
-                "`@cursor` runs on your own Cursor account, and yours is not connected yet. \
-                 Add your Cursor API key, then mention me again. \
-                 <{tag}>{chip}</{tag}>",
-                tag = CONNECT_APP_TAG,
-            )
-        }
+/// Describe the missing setup; Lexical owns the message and chip serialization.
+fn connection_prompt(blocker: SessionBlocker) -> AgentConnectionPrompt {
+    let (agent_tag, message, app_slug, name) = match blocker {
+        SessionBlocker::CursorNotConnected => (
+            "@cursor",
+            "runs on your own Cursor account, and yours is not connected yet. Add your Cursor API key, then mention me again.",
+            "cursor",
+            "Cursor",
+        ),
+        SessionBlocker::CodexNotConnected => (
+            "@codex",
+            "runs on your own ChatGPT account. Connect Codex and select a cloud environment, then mention me again.",
+            "codex-cloud",
+            "Codex",
+        ),
+        SessionBlocker::CodexEnvironmentNotConfigured => (
+            "@codex",
+            "needs a cloud environment to run. Select an environment in Codex settings, then mention me again.",
+            "codex-cloud",
+            "Codex",
+        ),
+        SessionBlocker::ClaudeNotConnected => (
+            "@claude",
+            "runs on your own Claude account. Connect Claude, then mention me again.",
+            "claude-cloud",
+            "Claude",
+        ),
+    };
+    AgentConnectionPrompt {
+        agent_tag: agent_tag.to_owned(),
+        message: message.to_owned(),
+        chip: AgentConnectionChip {
+            app_slug: app_slug.to_owned(),
+            name: name.to_owned(),
+            target: "harness".to_owned(),
+        },
     }
 }
 
@@ -149,13 +164,18 @@ impl<Access: EntityAccessService> SessionAnnouncer for MessageAnnouncer<Access> 
             )
             .await
             .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
+        let content = self
+            .lexical
+            .compose_agent_connection_prompt(&connection_prompt(declined.blocker))
+            .await
+            .map_err(|error| HarnessError::Announce(rootcause::report!(error).into()))?;
         self.messages
             .post(
                 access,
                 PostMessage {
                     attribution: MessageAttribution::ActingUser,
                     anchor: None,
-                    content: decline_markdown(declined.blocker),
+                    content,
                     mentions: Vec::new(),
                     thread_id: Some(declined.origin.thread_id),
                     attachments: Vec::new(),

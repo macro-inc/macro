@@ -1,24 +1,12 @@
-const codexAccess = vi.hoisted(() => ({ enabled: true }));
-vi.mock('@core/codex/flag', () => ({
-  useCodexAgentsAccess: () => () => codexAccess.enabled,
-}));
-
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { Bot } from '@service-storage/generated/schemas/bot';
 import { createRoot } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import {
   availableBotMentionUsers,
   useChannelBotMentionUsers,
 } from './use-channel-bot-mention-users';
 
-const readiness = vi.hoisted(() => ({
-  connected: true,
-  environmentId: null as string | null,
-}));
-vi.mock('@queries/auth/codex', () => ({
-  useCodexStatusQuery: () => ({ isSuccess: true, data: readiness }),
-}));
 vi.mock('@queries/channel/channel-bots', () => ({
   useChannelBotsQuery: () => ({ isSuccess: true, data: [] }),
 }));
@@ -62,48 +50,26 @@ function agent(
 }
 
 describe('availableBotMentionUsers', () => {
-  beforeEach(() => {
-    codexAccess.enabled = true;
-  });
-  it('hides connected Codex agents when the rollout is disabled', () => {
-    codexAccess.enabled = false;
-    readiness.environmentId = 'env-saved';
+  it('offers Codex from the mention query without requiring account setup', () => {
     createRoot((dispose) => {
-      expect(useChannelBotMentionUsers(() => 'channel-1')()).toEqual([]);
+      expect(
+        useChannelBotMentionUsers(() => 'channel-1')().map((user) => user.id)
+      ).toEqual(['bot|codex-agent']);
       dispose();
     });
   });
-  it.each([null, '', '   ', 'env-saved'])(
-    'gates the real mention query on saved environment %s',
-    (environmentId) => {
-      readiness.environmentId = environmentId;
-      createRoot((dispose) => {
-        const users = useChannelBotMentionUsers(() => 'channel-1');
-        expect(users().map((user) => user.id)).toEqual(
-          environmentId === 'env-saved' ? ['bot|codex-agent'] : []
-        );
-        dispose();
-      });
+  it.each(['cursor', 'codex-cloud', 'claude-cloud'])(
+    'offers global and installed %s agents before connection',
+    (harness) => {
+      const global = agent('global', 'Global', 'all', harness);
+      const installed = agent('installed', 'Installed', 'selected', harness);
+      expect(
+        availableBotMentionUsers([installed.bot], [global, installed]).map(
+          (user) => user.id
+        )
+      ).toEqual(['bot|installed', 'bot|global']);
     }
   );
-  it('hides installed Codex personas when access is disabled', () => {
-    const codex = agent('codex-agent', 'Codex', 'selected', 'codex-cloud');
-    expect(
-      availableBotMentionUsers(
-        [codex.bot, bot('other', 'Other')],
-        [codex],
-        false
-      ).map((user) => user.id)
-    ).toEqual(['bot|other']);
-    expect(availableBotMentionUsers([codex.bot], [codex], true)).toHaveLength(
-      1
-    );
-  });
-  it('only offers Codex agents after connection and environment readiness', () => {
-    const codex = agent('codex-agent', 'Codex', 'all', 'codex-cloud');
-    expect(availableBotMentionUsers([], [codex], false)).toEqual([]);
-    expect(availableBotMentionUsers([], [codex], true)).toHaveLength(1);
-  });
   it('adds all-channel agents without adding selected agents from other channels', () => {
     expect(
       availableBotMentionUsers(

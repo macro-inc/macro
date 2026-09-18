@@ -713,7 +713,8 @@ a retryable error without hiding the other harnesses. Editing preserves a saved 
 is no longer offered and labels it `saved, unavailable`. A macrod with no responding runtime
 can remain loading until the 10-second discovery timeout; use Retry after reconnecting it.
 
-`Harness` configures Cursor, Codex, and paired macrod runtimes. Cursor's default-model picker uses
+`Harness` shows Cursor, Claude, Codex, and paired macrod runtimes to every user.
+Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
 the same live model discovery and retains its existing save action.
 
 The Codex row uses the OpenAI logo and the same icon, button, and status styling

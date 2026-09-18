@@ -532,7 +532,11 @@ where
         _kind: AgentKind,
         owner: &MacroUserIdStr<'_>,
     ) -> Result<Option<SessionBlocker>> {
-        Ok((!self.keys.registered(owner).await?).then_some(SessionBlocker::CursorNotConnected))
+        match self.keys.resolve(owner).await {
+            Ok(_) => Ok(None),
+            Err(HarnessError::CursorNotConnected) => Ok(Some(SessionBlocker::CursorNotConnected)),
+            Err(error) => Err(error),
+        }
     }
 
     async fn spawn(

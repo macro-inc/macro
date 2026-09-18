@@ -1,8 +1,5 @@
-import { useCodexAgentsAccess } from '@core/codex/flag';
-import { isCodexBotId } from '@core/constant/codexAgent';
 import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
-import { useCodexStatusQuery } from '@queries/auth/codex';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
 import { queryReadyGate } from '@queries/gate';
 import type { Agent } from '@service-storage/generated/schemas/agent';
@@ -20,34 +17,19 @@ function mentionUser(bot: Bot): IUser {
 
 /**
  * Build mention entries from installed channel bots and virtual global
- * agents. Cursor-harness agents are offered whether or not the viewer has
- * connected Cursor: the harness answers a keyless mention with a connect
- * prompt in the thread.
+ * agents. Account setup does not hide a mention: the harness answers with
+ * a connection prompt in the thread when setup is needed.
  */
 export function availableBotMentionUsers(
   channelBots: readonly Bot[],
-  agents: readonly Agent[],
-  codexConnected = false
+  agents: readonly Agent[]
 ): IUser[] {
   const globalAgents = agents.filter(
-    (agent) =>
-      agent.channel_scope === 'all' &&
-      agent.bot.has_agent &&
-      (agent.harness !== 'codex-cloud' || codexConnected)
-  );
-  const codexBotIds = new Set(
-    agents
-      .filter((agent) => agent.harness === 'codex-cloud')
-      .map((agent) => agent.bot.id)
+    (agent) => agent.channel_scope === 'all' && agent.bot.has_agent
   );
   const seen = new Set<string>();
 
   return [...channelBots, ...globalAgents.map((agent) => agent.bot)]
-    .filter(
-      (bot) =>
-        codexConnected ||
-        (!isCodexBotId(`bot|${bot.id}`) && !codexBotIds.has(bot.id))
-    )
     .map(mentionUser)
     .filter((user) => {
       if (seen.has(user.id)) return false;
@@ -68,17 +50,11 @@ export function useChannelBotMentionUsers(
 ): Accessor<IUser[]> {
   const channelBots = useChannelBotsQuery(channelId);
   const agents = useAgentsQuery();
-  const canUseCodex = useCodexAgentsAccess();
-  const codexStatus = useCodexStatusQuery(canUseCodex);
 
   return createMemo(() =>
     availableBotMentionUsers(
       queryReadyGate(channelBots) ? channelBots.data : [],
-      queryReadyGate(agents) ? agents.data : [],
-      canUseCodex() &&
-        codexStatus.isSuccess &&
-        codexStatus.data.connected &&
-        !!codexStatus.data.environmentId?.trim()
+      queryReadyGate(agents) ? agents.data : []
     )
   );
 }

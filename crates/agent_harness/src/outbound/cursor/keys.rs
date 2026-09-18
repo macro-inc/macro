@@ -38,16 +38,6 @@ pub trait CursorApiKeys: Send + Sync + 'static {
         &self,
         owner: &MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<ResolvedCursorConfig>> + Send;
-
-    /// Whether `owner` has registered a key at all.
-    ///
-    /// Answered from the row alone, without decrypting: the question is
-    /// asked before a session exists, when a wrong answer costs the user a
-    /// dead session and a right one costs a KMS call they never needed.
-    ///
-    /// # Errors
-    /// [`HarnessError::Container`] when the row could not be read.
-    fn registered(&self, owner: &MacroUserIdStr<'_>) -> impl Future<Output = Result<bool>> + Send;
 }
 
 /// Reads keys from `cursor_configs`, decrypting through `cipher`.
@@ -91,14 +81,5 @@ where
             key,
             default_model_id: stored.default_model_id,
         })
-    }
-
-    async fn registered(&self, owner: &MacroUserIdStr<'_>) -> Result<bool> {
-        cursor_api_key::store::get_cursor_api_key(&self.pool, owner.as_ref())
-            .await
-            .map(|stored| stored.is_some())
-            .map_err(|error| {
-                HarnessError::Container(format!("could not read a cursor config: {error}"))
-            })
     }
 }

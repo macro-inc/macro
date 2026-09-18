@@ -12,13 +12,6 @@ use super::*;
 struct TestCursorKeys;
 
 impl CursorApiKeys for TestCursorKeys {
-    async fn registered(
-        &self,
-        _owner: &MacroUserIdStr<'_>,
-    ) -> agent_harness::domain::error::Result<bool> {
-        Ok(true)
-    }
-
     async fn resolve(
         &self,
         _owner: &MacroUserIdStr<'_>,

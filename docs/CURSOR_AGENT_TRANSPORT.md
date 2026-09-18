@@ -105,12 +105,15 @@ and never turned into a session that cannot spawn.
 
 **How the keyless mention is handled.** Before `open` creates anything, the
 domain asks `ContainerManager::preflight(kind, owner)`. The Cursor manager
-answers from the `cursor_configs` row alone (no decrypt) with
-`SessionBlocker::CursorNotConnected`; every other provider takes the default
-`Ok(None)`. On a blocker the domain calls `SessionAnnouncer::decline` with a
+resolves the owner's configuration through `CursorApiKeys::resolve`: a missing
+key yields `SessionBlocker::CursorNotConnected`, while read/decryption failures
+remain errors. A successful preflight decrypts the key, and spawn resolves it
+again. Codex and Claude perform the same account preflight; providers requiring no user connection take the default `Ok(None)`.
+On a blocker the domain calls `SessionAnnouncer::decline` with a
 `DeclinedMention` and returns without a session row, an egress token, or an
-announcement. `ChannelAnnouncer::decline` posts as the bot into the mention's
-thread: one sentence and a `<m-connect-app>` chip whose payload is
+announcement. `MessageAnnouncer::decline` posts as the bot with the sender's
+current write access into the mention's
+thread. The lexical service composes the explanation and connection chip from real Lexical nodes. The Cursor chip payload is
 `{"appSlug":"cursor","name":"Cursor","target":"harness"}`. The frontend's
 `ConnectAppNode` reads `target: "harness"` as "open Settings → Harness, and
 show connected once this reader's own key status says so".

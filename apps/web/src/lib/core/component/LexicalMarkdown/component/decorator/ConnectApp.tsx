@@ -1,11 +1,11 @@
+import { HarnessIcon } from '@core/component/HarnessIcon';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { useUserId } from '@core/context/user';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { requestConnectApp } from '@core/pipedream/pendingConnect';
-import CursorIcon from '@icon/wide-cursor-ide.svg';
 import type { ConnectAppDecoratorProps } from '@macro-inc/lexical-core';
 import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import PlugsIcon from '@phosphor/plugs.svg';
-import { useCursorApiKeyStatusQuery } from '@queries/auth/cursor-api-key';
+import { useHarnessConnectionStatus } from '@queries/harnesses/connections';
 import { usePipedreamConnectedSlugs } from '@queries/pipedream-connectors';
 import { cn } from '@ui/utils/classname';
 import { type Accessor, type JSX, Show, useContext } from 'solid-js';
@@ -14,8 +14,8 @@ import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 
 /**
  * The chip a reply renders when the reader has to connect something before
- * the agent can continue: a Pipedream app the egress proxy refused, or the
- * Cursor account `@cursor` runs on. Clicking it opens the settings surface
+ * the agent can continue: a Pipedream app or an agent harness account.
+ * Clicking it opens the settings surface
  * that connects it. Once the reader has connected it, the same chip reads as
  * connected rather than nagging.
  */
@@ -47,24 +47,15 @@ function ConnectPipedreamApp(props: ConnectAppDecoratorProps) {
 
 function ConnectHarness(props: ConnectAppDecoratorProps) {
   const { openSettings } = useSettingsState();
-  const isCursor = () => props.appSlug === 'cursor';
-  const cursorStatus = useCursorApiKeyStatusQuery();
-  // Only Cursor reports a connection today; an unknown harness slug still
-  // gets a working chip that lands on the Harness page.
-  const connected = () =>
-    isCursor() && cursorStatus.isSuccess && cursorStatus.data.registered;
+  const connected = useHarnessConnectionStatus(
+    () => props.appSlug,
+    useUserId()
+  );
   return (
     <ConnectChip
       {...props}
       connected={connected}
-      icon={
-        <Show
-          when={isCursor()}
-          fallback={<PlugsIcon class="size-3.5" aria-hidden="true" />}
-        >
-          <CursorIcon class="size-3.5" aria-hidden="true" />
-        </Show>
-      }
+      icon={<HarnessIcon harness={props.appSlug} class="size-3.5" />}
       onConnect={() => openSettings('Harness')}
     />
   );

@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import type { IUser } from '@core/user/types';
 import { render as renderBare, screen } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import userEvent from '@testing-library/user-event';
@@ -12,6 +13,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const editorMocks = vi.hoisted(() => ({
   clear: vi.fn(),
   focus: vi.fn(),
+  mentionUsers: undefined as (() => IUser[]) | undefined,
   emitChange: undefined as ((markdown: string) => void) | undefined,
 }));
 
@@ -182,7 +184,10 @@ vi.mock(
       };
       const builder: any = {
         namespace: () => builder,
-        withMentions: () => builder,
+        withMentions: (options: { users?: () => IUser[] }) => {
+          editorMocks.mentionUsers = options.users;
+          return builder;
+        },
         withEmojis: () => builder,
         withActions: () => builder,
         withLinks: () => builder,
@@ -250,12 +255,7 @@ const baseInput: InputData = {
   attachments: [],
 };
 
-/**
- * `ChannelInput` reads the Codex connection status to decide whether to
- * offer `@codex` in the mention typeahead, so it needs a query client even
- * though none of these tests care about that entry. Shadowing `render` keeps
- * every call site below unchanged.
- */
+// Provide query context for the composed input and its decorators.
 const testQueryClient = new QueryClient({
   defaultOptions: { queries: { retry: false } },
 });
@@ -271,6 +271,14 @@ describe('Input slots', () => {
     editorMocks.clear.mockClear();
     editorMocks.focus.mockClear();
     editorMocks.emitChange = undefined;
+    editorMocks.mentionUsers = undefined;
+  });
+
+  it('offers Cursor, Claude, and Codex before account setup', () => {
+    render(() => <ChannelInput input={baseInput} />);
+    expect(editorMocks.mentionUsers?.().map((user) => user.name)).toEqual(
+      expect.arrayContaining(['Cursor', 'Claude', 'Codex'])
+    );
   });
 
   it('does not start typing when the editor hydrates an empty composer', async () => {

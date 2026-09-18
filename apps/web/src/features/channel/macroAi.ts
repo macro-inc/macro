@@ -1,4 +1,8 @@
 import {
+  CLAUDE_BOT_NAME,
+  CLAUDE_BOT_PRINCIPAL_ID,
+} from '@core/constant/claudeAgent';
+import {
   CODEX_BOT_NAME,
   CODEX_BOT_PRINCIPAL_ID,
 } from '@core/constant/codexAgent';
@@ -92,5 +96,14 @@ export function codexMentionUser(): IUser {
     id: CODEX_BOT_PRINCIPAL_ID,
     name: CODEX_BOT_NAME,
     email: CODEX_BOT_NAME,
+  };
+}
+
+/** Claude as a bot mention, using the canonical principal identifier. */
+export function claudeMentionUser(): IUser {
+  return {
+    id: CLAUDE_BOT_PRINCIPAL_ID,
+    name: CLAUDE_BOT_NAME,
+    email: CLAUDE_BOT_NAME,
   };
 }

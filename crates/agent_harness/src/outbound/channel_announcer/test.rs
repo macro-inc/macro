@@ -36,16 +36,29 @@ fn chip_carries_the_announcement_identity() {
     );
 }
 
-/// The frontend parses the chip out of exactly this tag and payload; a
-/// drifted key or target falls back to an "unknown mention" chip.
 #[test]
-fn a_declined_cursor_mention_carries_a_harness_connect_chip() {
-    let markdown = decline_markdown(SessionBlocker::CursorNotConnected);
-
-    assert!(markdown.contains(
-        r#"<m-connect-app>{"appSlug":"cursor","name":"Cursor","target":"harness"}</m-connect-app>"#
-    ));
-    assert!(markdown.contains("Cursor API key"));
+fn declined_mentions_target_their_harness_settings() {
+    for (blocker, slug, name) in [
+        (SessionBlocker::CursorNotConnected, "cursor", "Cursor"),
+        (SessionBlocker::CodexNotConnected, "codex-cloud", "Codex"),
+        (
+            SessionBlocker::CodexEnvironmentNotConfigured,
+            "codex-cloud",
+            "Codex",
+        ),
+        (SessionBlocker::ClaudeNotConnected, "claude-cloud", "Claude"),
+    ] {
+        let prompt = connection_prompt(blocker);
+        assert_eq!(
+            prompt.chip,
+            AgentConnectionChip {
+                app_slug: slug.to_owned(),
+                name: name.to_owned(),
+                target: "harness".to_owned(),
+            }
+        );
+        assert!(prompt.message.contains("mention me again"));
+    }
 }
 
 #[test]
