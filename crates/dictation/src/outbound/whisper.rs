@@ -82,7 +82,16 @@ pub enum WhisperConfigError {
 }
 
 impl TranscriptionProvider for WhisperTranscriber {
-    #[tracing::instrument(skip_all, err, fields(format = ?recording.format()))]
+    #[tracing::instrument(name = "transcribe whisper-1", skip_all, err, fields(
+        otel.kind = "client",
+        gen_ai.operation.name = "transcribe",
+        gen_ai.provider.name = "openai",
+        gen_ai.request.model = MODEL,
+        audio.format = recording.format().extension(),
+        audio.bytes = recording.bytes().len(),
+        audio.duration_seconds = tracing::field::Empty,
+        error.type = tracing::field::Empty,
+    ))]
     async fn transcribe(&self, recording: Recording) -> Result<Transcript, DictationError> {
         let (bytes, format, language) = recording.into_parts();
         let request = CreateTranscriptionRequest {
@@ -105,26 +114,35 @@ impl TranscriptionProvider for WhisperTranscriber {
         )
         .await
         .map_err(|_| {
+            tracing::Span::current().record("error.type", "timeout");
             tracing::warn!(kind = "timeout", "Whisper request failed");
             DictationError::Provider
         })?
         .map_err(|error| {
-            match &error {
-                OpenAIError::ApiError(_) => {
-                    tracing::warn!(kind = "provider_rejection", "Whisper rejected the request")
-                }
-                OpenAIError::Reqwest(error) => tracing::warn!(
-                    status = ?error.status(),
-                    timeout = error.is_timeout(),
-                    "Whisper request failed"
-                ),
-                _ => tracing::warn!(kind = "invalid_response", "Whisper response unusable"),
-            }
+            let kind = match &error {
+                OpenAIError::Reqwest(error) if error.is_timeout() => "timeout",
+                OpenAIError::Reqwest(error) if error.is_connect() => "connection",
+                OpenAIError::Reqwest(_) => "http",
+                OpenAIError::ApiError(_) => "provider_rejection",
+                OpenAIError::JSONDeserialize(..) => "invalid_response",
+                _ => "client_error",
+            };
+            tracing::Span::current().record("error.type", kind);
+            // ApiError discards HTTP headers/status. Only Reqwest retains status;
+            // never recover it by logging the SDK error or its raw body.
+            let status = match &error {
+                OpenAIError::Reqwest(error) => error.status().map(|status| status.as_u16()),
+                _ => None,
+            };
+            tracing::warn!(kind, status, "Whisper request failed");
             DictationError::Provider
         })?;
         if !response.duration.is_finite() || response.duration <= 0.0 {
+            tracing::Span::current().record("error.type", "invalid_duration");
+            tracing::warn!(kind = "invalid_duration", "Whisper response unusable");
             return Err(DictationError::Provider);
         }
+        tracing::Span::current().record("audio.duration_seconds", response.duration);
         Ok(Transcript {
             text: response.text,
             duration_seconds: response.duration,
