@@ -20,11 +20,17 @@
  * resolves to the cell's paragraph, and `Doc.tx` refuses to commit a tree
  * the client would reject. These cases are the regression lock for that.
  */
+import { $createListItemNode, $createListNode } from '@lexical/list';
 import { $isTableCellNode, $isTableRowNode } from '@lexical/table';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
-import { $getRoot, $isElementNode, type ElementNode } from 'lexical';
+import {
+  $createTextNode,
+  $getRoot,
+  $isElementNode,
+  type ElementNode,
+} from 'lexical';
 import { describe, expect, it } from 'vitest';
-import { read, setup } from '../ai-toolkit/_test-helpers';
+import { edit, read, setup } from '../ai-toolkit/_test-helpers';
 import type { LexicalSession } from '../ai-toolkit/session';
 import { Doc } from './doc';
 
@@ -110,5 +116,77 @@ describe('a <td> id given to a text-level op', () => {
     doc.apply({ kind: 'prependText', node: id, text: 'dup' });
     doc.apply({ kind: 'prependText', node: id, text: 'dup' });
     expect(cellChildTypes(session, 1, 0)).toEqual(['paragraph']);
+  });
+
+  it('setText on a list-only cell id keeps the list, not list → text', () => {
+    const { session, doc } = makeTable([['H'], ['a']]);
+    edit(session, () => {
+      const table = $getRoot()
+        .getChildren()
+        .find((n) => $isElementNode(n) && n.getType() === 'table');
+      if (!table || !$isElementNode(table)) throw new Error('no table');
+      const cell = table
+        .getChildren()
+        .filter($isTableRowNode)[1]!
+        .getChildren()
+        .filter($isTableCellNode)[0]!;
+      const list = $createListNode('bullet');
+      const item = $createListItemNode();
+      item.append($createTextNode('item'));
+      list.append(item);
+      cell.clear();
+      cell.append(list);
+    });
+    const id = cellId(session, 1, 0);
+    doc.apply({ kind: 'setText', node: id, text: 'X' });
+    expect(cellChildTypes(session, 1, 0)).toEqual(['list']);
+    expect(
+      read(session, () => {
+        const table = $getRoot()
+          .getChildren()
+          .find((n) => $isElementNode(n) && n.getType() === 'table');
+        return table?.getTextContent();
+      })
+    ).toContain('X');
+  });
+
+  it('setText on a list id does not commit list → text', () => {
+    const { session } = setup('- one\n- two');
+    const doc = new Doc(session);
+    const listId = read(session, () => $getId($getRoot().getFirstChild()!));
+    expect(() =>
+      doc.apply({ kind: 'setText', node: listId!, text: 'X' })
+    ).toThrow(/invalid editor tree|list child/);
+    expect(
+      read(session, () =>
+        $getRoot()
+          .getFirstChild()!
+          .getChildren()
+          .every((child) => child.getType() === 'listitem')
+      )
+    ).toBe(true);
+  });
+
+  it('replaceText and moveNode still accept the table id', () => {
+    const { session, doc } = makeTable([['H'], ['old']]);
+    doc.apply({
+      kind: 'replaceText',
+      node: 't',
+      find: 'old',
+      to: 'new',
+      scope: { kind: 'all' },
+    });
+    expect(read(session, () => $getRoot().getTextContent())).toContain('new');
+    const introId = read(session, () => {
+      const first = $getRoot().getFirstChild();
+      return first ? ($getId(first) as string) : '';
+    });
+    doc.apply({ kind: 'moveNode', node: 't', at: { before: introId } });
+    const types = read(session, () =>
+      $getRoot()
+        .getChildren()
+        .map((child) => child.getType())
+    );
+    expect(types[0]).toBe('table');
   });
 });

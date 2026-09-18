@@ -50,6 +50,34 @@ export function $isContentBlock(node: LexicalNode): node is ElementNode {
   );
 }
 
+const CELL_TEXT_BLOCK_TYPES: ReadonlySet<string> = new Set([
+  'paragraph',
+  'heading',
+  'quote',
+  'code',
+  'custom-code',
+]);
+
+/**
+ * The node `$setText` / `$appendText` may target when the caller handed a
+ * `<td>` id. A `list` is a legal cell child but not a legal `$setText`
+ * target (that would leave `list → text`). Lock onto a paragraph/heading/
+ * quote/code, or the first list item of a list-only cell.
+ */
+export function $cellTextTarget(cell: TableCellNode): ElementNode | null {
+  for (const child of cell.getChildren()) {
+    if (!$isElementNode(child)) continue;
+    if (CELL_TEXT_BLOCK_TYPES.has(child.getType())) return child;
+    if (child.getType() === 'list') {
+      const item = child
+        .getChildren()
+        .find((node) => node.getType() === 'listitem');
+      if (item && $isElementNode(item)) return item;
+    }
+  }
+  return null;
+}
+
 /** Walk the tree and report parent/child shapes the client will not accept. */
 export function validateEditorTree(root: ElementNode): EditorTreeIssue[] {
   const issues: EditorTreeIssue[] = [];
@@ -130,6 +158,12 @@ function walk(
       TABLE_CELL_ALLOWED_CHILD_TYPES.has(child.getType())
         ? undefined
         : `tablecell child must be a content block, got ${child.getType()}`
+    );
+  } else if (type === 'list') {
+    assertChildren(children, path, issues, (child) =>
+      child.getType() === 'listitem'
+        ? undefined
+        : `list child must be listitem, got ${child.getType()}`
     );
   } else {
     assertChildren(children, path, issues, (child) => {
