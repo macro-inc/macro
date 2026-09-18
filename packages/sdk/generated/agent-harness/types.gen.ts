@@ -25,11 +25,12 @@ export type AgentAction = (AgentPromptAction & {
  * frame, and read back off that frame as `request_id` on the folded message
  * it derives.
  *
- * Minted only by the server at accept time, as a v7 uuid so ids sort by mint
- * time. On the wire and in JSON it is the bare uuid, and a uuid-shaped
- * request id is the whole ownership test: the server is the only writer of
- * runtime-bound frames. The machine's own handshake request ids
- * (`agent_session:{session}:{n}`) are not uuids and stay `None`.
+ * A v7 uuid, so ids sort by mint time. Minted by the server at accept time,
+ * or by a client that speculated the action and named it in the control
+ * request - either way the server is the only writer of runtime-bound
+ * frames, so a uuid-shaped request id remains the whole ownership test. The
+ * machine's own handshake request ids (`agent_session:{session}:{n}`) are
+ * not uuids and stay `None`.
  */
 export type AgentActionId = string;
 
@@ -329,9 +330,18 @@ export type CompleteRequest = {
 };
 
 /**
- * The operation to perform.
+ * Request body for a control operation on a live session.
+ *
+ * A wrapper around the operation rather than the bare enum so that fields
+ * which are about the request rather than the operation have somewhere to go.
+ * The acting user is deliberately not one of them: it comes from the caller's
+ * credentials, so that a caller cannot attribute an operation to someone else.
+ *
+ * Clients serialize this, so both derives are used.
  */
-export type ControlRequest = AgentAction;
+export type ControlRequest = AgentAction & {
+    actionId?: null | AgentActionId;
+};
 
 /**
  * Response body for a control operation.
@@ -341,7 +351,8 @@ export type ControlRequest = AgentAction;
 export type ControlResponse = {
     /**
      * Matches `requestId` on the folded message this action derives once it
-     * dispatches, and names the queue entry until then.
+     * dispatches, and names the queue entry until then. The caller's own
+     * `actionId` when it supplied one; a freshly minted id otherwise.
      */
     actionId: AgentActionId;
     /**

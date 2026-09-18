@@ -603,6 +603,7 @@ async fn claude_cloud_only_accepts_control_from_the_subscription_owner() {
                 id,
                 ControlEvent {
                     action: AgentAction::prompt("spend another user's subscription"),
+                    action_id: None,
                     actor,
                 },
             )
@@ -615,6 +616,7 @@ async fn claude_cloud_only_accepts_control_from_the_subscription_owner() {
         id,
         ControlEvent {
             action: AgentAction::prompt("owner follow-up"),
+            action_id: None,
             actor: Some(owner),
         },
     );
