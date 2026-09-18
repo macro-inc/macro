@@ -56,6 +56,7 @@ import {
   $setId,
   $updateAllNodeIds,
 } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import { $assertValidEditorTree } from '@macro-inc/lexical-core/utils/editor-tree';
 import {
   $createLineBreakNode,
   $createParagraphNode,
@@ -217,7 +218,13 @@ export class Doc implements DocReader, DocWriter {
   private tx(fn: () => void): void {
     const before = this.session.editor.getEditorState();
     try {
-      this.session.editor.update(fn, { discrete: true });
+      this.session.editor.update(
+        () => {
+          fn();
+          $assertValidEditorTree($getRoot());
+        },
+        { discrete: true }
+      );
     } catch (e) {
       this.session.editor.setEditorState(before);
       this.session.editor.update(() => $updateAllNodeIds(this.session.ids), {

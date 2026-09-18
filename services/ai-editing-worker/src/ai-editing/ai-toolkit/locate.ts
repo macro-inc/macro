@@ -1,8 +1,13 @@
+import {
+  $isTableCellNode,
+  $isTableNode,
+  $isTableRowNode,
+} from '@lexical/table';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
+import { $isContentBlock } from '@macro-inc/lexical-core/utils/editor-tree';
 import {
   $findMatchingParent,
   $getNodeByKey,
-  $isElementNode,
   $isTextNode,
   type ElementNode,
   type LexicalNode,
@@ -20,17 +25,27 @@ export function $byId(session: LexicalSession, id: string): LexicalNode {
 }
 
 /**
- * Lock onto a block by id. Since every node carries an id (including inline
- * text/link spans), an id that points at an inline node resolves UP to its
- * nearest block-level element (the containing paragraph, heading, list item,
- * quote, …). Throws `Error` only if nothing block-level is found.
+ * Lock onto a content block by id. Inline ids (text/link spans) resolve UP to
+ * the containing paragraph/heading/list item. Table structure is not a content
+ * block: a `<td>` id resolves DOWN to the cell's first content child, and a
+ * `<table>`/`<tr>` id is rejected. Throws if nothing content-block is found.
  */
 export function $blockById(session: LexicalSession, id: string): ElementNode {
-  const node = $findMatchingParent(
-    $byId(session, id),
-    (n) => $isElementNode(n) && !n.isInline()
-  );
-  if (!node || !$isElementNode(node)) {
+  const start = $byId(session, id);
+  if ($isTableCellNode(start)) {
+    const content = start.getChildren().find($isContentBlock);
+    if (!content) {
+      throw new Error(
+        `id "${id}" is a <td> with no content block — use setCell or the cell's paragraph id`
+      );
+    }
+    return content;
+  }
+  if ($isTableNode(start) || $isTableRowNode(start)) {
+    throw new Error(`id "${id}" is a <${start.getType()}>, not a content block`);
+  }
+  const node = $findMatchingParent(start, $isContentBlock);
+  if (!node) {
     throw new Error(`No block-level node for id "${id}"`);
   }
   return node;

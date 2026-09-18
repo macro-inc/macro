@@ -122,7 +122,9 @@ export async function runEditSession(
   const { workspace, initialDocument } = await Telemetry.span(
     'edit.hydrate',
     async (span) => {
-      const workspace = new EditingWorkspace(manager, liveSource, wal);
+      const workspace = new EditingWorkspace(manager, liveSource, wal, {
+        documentId: args.documentId,
+      });
       const initialDocument = serializeWithXml(workspace.session);
       span.setAttr('document.chars', initialDocument.length);
       return { workspace, initialDocument };
