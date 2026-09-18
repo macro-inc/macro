@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ai_usage (\n                id, feature, user_id, entity, model,\n                input_tokens, output_tokens, audio_seconds,\n                price_per_million_in, price_per_million_out, price_per_audio_minute, total\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Uuid",
+        "Text",
+        "Int8",
+        "Int8",
+        "Float8",
+        "Float4",
+        "Float4",
+        "Float4",
+        "Float4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c552084079684d8689a7330053ba60061cd45ce5071f59c394858f3fb2c8ea09"
+}

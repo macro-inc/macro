@@ -58,7 +58,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
                     },
                     validate_api_version,
                 ))
-                .layer(macro_cors::cors_layer())
+                .layer(macro_cors::cors_layer().expose_headers([axum::http::header::RETRY_AFTER]))
                 .layer(CompressionLayer::new().gzip(true)),
         )
         // The health router is attached here so we don't attach the logging middleware to it

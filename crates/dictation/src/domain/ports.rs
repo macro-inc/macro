@@ -16,6 +16,9 @@ pub trait RecordingInspector: Send + Sync + 'static {
 
 /// External speech-to-text capability, implemented by outbound adapters.
 pub trait TranscriptionProvider: Send + Sync + 'static {
+    /// Model identifier used by the shared pricing and usage recorder.
+    fn model_id(&self) -> &'static str;
+
     /// Transcribe a validated in-memory recording.
     fn transcribe(
         &self,

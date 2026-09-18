@@ -1,3 +1,4 @@
+import type { Span } from '@macro-inc/observability';
 import { VOLUME_INTERVAL_MS, type VolumeLevel } from './volume';
 
 /** Mirrors the server body limit for `/dictation/transcribe`. */
@@ -36,5 +37,6 @@ export type CreateRecorder = (
 
 export type TranscribeAudio = (
   audio: Blob,
-  signal: AbortSignal
+  signal: AbortSignal,
+  trace?: Pick<Span, 'run' | 'event'>
 ) => Promise<string>;

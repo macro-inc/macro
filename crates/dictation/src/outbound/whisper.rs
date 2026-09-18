@@ -82,6 +82,10 @@ pub enum WhisperConfigError {
 }
 
 impl TranscriptionProvider for WhisperTranscriber {
+    fn model_id(&self) -> &'static str {
+        MODEL
+    }
+
     #[tracing::instrument(name = "transcribe whisper-1", skip_all, err, fields(
         otel.kind = "client",
         gen_ai.operation.name = "transcribe",

@@ -13472,13 +13472,17 @@ export type TranscribeDictationErrors = {
      */
     415: ErrorResponse;
     /**
-     * Per-user rate limit or provider capacity exceeded
+     * Per-user hourly rate limit exceeded
      */
     429: unknown;
     /**
      * Provider failure
      */
     502: ErrorResponse;
+    /**
+     * Transcription capacity exhausted; retry after the Retry-After delay
+     */
+    503: ErrorResponse;
 };
 
 export type TranscribeDictationError = TranscribeDictationErrors[keyof TranscribeDictationErrors];
