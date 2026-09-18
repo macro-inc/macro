@@ -78,13 +78,19 @@ export function AgentModelPicker(props: {
                 <select
                   aria-label="Default model"
                   class="settings-input w-full"
-                  value={props.value}
                   onChange={(event) =>
                     props.onChange(event.currentTarget.value)
                   }
                 >
                   <For each={props.models}>
-                    {(model) => <option value={model.id}>{model.name}</option>}
+                    {(model) => (
+                      <option
+                        value={model.id}
+                        selected={model.id === props.value}
+                      >
+                        {model.name}
+                      </option>
+                    )}
                   </For>
                 </select>
               }
