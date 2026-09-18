@@ -96,18 +96,11 @@ function TaskFavorites(props: {
     fallbackName: string,
     event: MouseEvent
   ) => {
-    if (event.shiftKey) {
-      layout.openWithSplit(favoriteSplitContent(favorite), {
-        referredFrom: 'sidebar',
-        preferNewSplit: true,
-      });
+    if (openTask({ id: favorite.entityId, fallbackName }, { event })) return;
 
-      return;
-    }
-
-    openTask({
-      id: favorite.entityId,
-      fallbackName,
+    layout.openWithSplit(favoriteSplitContent(favorite), {
+      referredFrom: 'sidebar',
+      preferNewSplit: event.shiftKey,
     });
   };
 

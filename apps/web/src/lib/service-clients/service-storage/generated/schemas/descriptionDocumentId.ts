@@ -6,6 +6,6 @@
  */
 
 /**
- * Optional description.
+ * Id of the markdown document that holds an initiative's description.
  */
-export type InitiativeDetailDescription = string | null;
+export type DescriptionDocumentId = string;

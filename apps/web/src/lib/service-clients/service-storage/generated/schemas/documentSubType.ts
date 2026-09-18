@@ -8,6 +8,9 @@
 /**
  * The document sub type enum represents all values of document sub types.
 These values should match the `document_sub_type_value` table in macrodb.
+
+Wire, database, and `Display` spellings are all `snake_case` so a
+multi-word variant serializes identically in every system.
  */
 export type DocumentSubType =
   (typeof DocumentSubType)[keyof typeof DocumentSubType];
@@ -17,4 +20,5 @@ export const DocumentSubType = {
   task: 'task',
   snippet: 'snippet',
   skill: 'skill',
+  initiative_description: 'initiative_description',
 } as const;

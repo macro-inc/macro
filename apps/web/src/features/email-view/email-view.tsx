@@ -138,7 +138,6 @@ function EmailMobileLayout(props: ParentProps) {
 
 function EmailViewRoot() {
   const panel = useSplitPanelOrThrow();
-  const { selectedThread } = useEmailView();
   const [listElement, setListElement] = createSignal<HTMLDivElement>();
 
   onMount(() => panel.handle.setDisplayName('Email'));
@@ -161,14 +160,7 @@ function EmailViewRoot() {
               </EmailDesktopLayout>
             }
           >
-            <Switch>
-              <Match when={selectedThread()}>
-                {(thread) => <EmailDetailView thread={thread()} />}
-              </Match>
-              <Match when={true}>
-                <EmailMobileLayout>{list()}</EmailMobileLayout>
-              </Match>
-            </Switch>
+            <EmailMobileLayout>{list()}</EmailMobileLayout>
           </Show>
         </SplitPanel.Body>
       </SplitPanel.Root>
@@ -179,9 +171,7 @@ function EmailViewRoot() {
 /** Email shares one list across desktop sidebar and mobile pill layouts. */
 export function EmailView(props: EmailViewProps) {
   return (
-    <EntityDetailNavigationStack.Root
-      shouldNavigate={(_, options) => options?.event?.shiftKey !== true}
-    >
+    <EntityDetailNavigationStack.Root>
       <ListEntityMetadataQueryProvider>
         <EmailViewProvider initialState={props.initialState}>
           <EmailViewBreadcrumbs>

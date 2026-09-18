@@ -257,6 +257,10 @@ optional `Favorites` section above the independently paginated `Channels` and
 `DMs` sections. It appears when the user has channel favorites and only lists
 channels. Channel favorites open in the channel preview. Shift-clicking a
 favorite, channel, or DM opens that conversation in a new split instead.
+If a restored Chat selection is already open in another view, its preview stays
+closed but the saved selection is retained. Close the other view, then select
+the conversation again or reopen Chat to restore its preview. Verify that an
+unrelated rail preference change while blocked does not erase the saved selection.
 While reading older history or composing in the preview, incoming notifications
 (including ones for other channels) must not jump to latest, blank/refetch the
 messages, or revoke composer focus. To check this, leave an unsent draft in a

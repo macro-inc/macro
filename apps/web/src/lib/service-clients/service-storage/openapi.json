@@ -16120,6 +16120,17 @@
                 "enum": ["skill"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The description document of an initiative",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["initiative_description"]
+              }
+            }
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
@@ -19148,7 +19159,7 @@
         "properties": {
           "description": {
             "type": ["string", "null"],
-            "description": "Optional description."
+            "description": "Initial markdown for the description document. Not stored on the initiative; later\nedits happen in the document editor."
           },
           "memberIds": {
             "type": ["array", "null"],
@@ -20327,6 +20338,11 @@
           }
         ]
       },
+      "DescriptionDocumentId": {
+        "type": "string",
+        "format": "uuid",
+        "description": "Id of the markdown document that holds an initiative's description."
+      },
       "DocumentBasic": {
         "type": "object",
         "description": "Returns basic information of a document used for some db queries",
@@ -20984,6 +21000,17 @@
                 "enum": ["skill"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The description document of an initiative",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["initiative_description"]
+              }
+            }
           }
         ],
         "description": "The sub type of a document preview with associated properties.\nTask-related properties are encoded within the variant to ensure valid states."
@@ -21130,8 +21157,8 @@
       },
       "DocumentSubType": {
         "type": "string",
-        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
-        "enum": ["task", "snippet", "skill"]
+        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.\n\nWire, database, and `Display` spellings are all `snake_case` so a\nmulti-word variant serializes identically in every system.",
+        "enum": ["task", "snippet", "skill", "initiative_description"]
       },
       "DocumentSyncContentUpdatedMetadata": {
         "type": "object",
@@ -24060,6 +24087,7 @@
         "required": [
           "id",
           "name",
+          "descriptionDocumentId",
           "ownerId",
           "memberIds",
           "taskIds",
@@ -24074,9 +24102,9 @@
             "format": "date-time",
             "description": "When the initiative was created."
           },
-          "description": {
-            "type": ["string", "null"],
-            "description": "Optional description."
+          "descriptionDocumentId": {
+            "$ref": "#/components/schemas/DescriptionDocumentId",
+            "description": "The markdown document holding the description; open it in the editor."
           },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
@@ -24141,11 +24169,11 @@
       "InitiativeSummary": {
         "type": "object",
         "description": "List-row view of an initiative.",
-        "required": ["id", "name", "updatedAt"],
+        "required": ["id", "name", "descriptionDocumentId", "updatedAt"],
         "properties": {
-          "description": {
-            "type": ["string", "null"],
-            "description": "Optional description."
+          "descriptionDocumentId": {
+            "$ref": "#/components/schemas/DescriptionDocumentId",
+            "description": "The markdown document holding the description; open it in the editor."
           },
           "id": {
             "$ref": "#/components/schemas/InitiativeId",
@@ -28377,6 +28405,17 @@
                 "enum": ["skill"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "The description document of an initiative",
+            "required": ["type"],
+            "properties": {
+              "type": {
+                "type": "string",
+                "enum": ["initiative_description"]
+              }
+            }
           }
         ],
         "description": "Sub type of a document with associated properties encoded in each variant.\nThis ensures type-safety: task properties only exist when the document is a task."
@@ -30141,12 +30180,8 @@
       },
       "UpdateInitiativeRequest": {
         "type": "object",
-        "description": "Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace.",
+        "description": "Update-initiative HTTP body. Absent fields are left unchanged. `member_ids`\npresent is a full replace. The description is edited in its document, not here.",
         "properties": {
-          "description": {
-            "type": ["string", "null"],
-            "description": "Replacement description. `Some(\"\")` clears it after trim."
-          },
           "memberIds": {
             "type": ["array", "null"],
             "items": {

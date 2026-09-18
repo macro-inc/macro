@@ -85,15 +85,6 @@ export type DriveViewProps = {
   initialClientFilters?: SetPredicatesInput<string>;
 };
 
-function shouldOpenInline(event?: KeyboardEvent | MouseEvent) {
-  return !(
-    event?.shiftKey ||
-    event?.metaKey ||
-    event?.ctrlKey ||
-    event?.altKey
-  );
-}
-
 function favoriteDetailTarget(
   favorite: Favorite,
   fallbackName: string
@@ -383,7 +374,10 @@ function DriveViewContent(props: DriveViewProps) {
               const target = favoriteDetailTarget(item, name);
               if (item.entityType === 'project' && !event.shiftKey)
                 selectFolder(item.entityId);
-              else if (target && shouldOpenInline(event)) {
+              else if (
+                target &&
+                navigationStack.shouldNavigate(target, { event })
+              ) {
                 navigationStack.reset(target);
                 return;
               } else
@@ -601,7 +595,8 @@ function DriveViewContent(props: DriveViewProps) {
                   fallbackName: entity.name,
                 });
                 if (!entityDetailBlockType(target)) return false;
-                if (!shouldOpenInline(event)) return false;
+                if (!navigationStack.shouldNavigate(target, { event }))
+                  return false;
                 navigationStack.reset(target);
                 return true;
               }}
@@ -620,9 +615,7 @@ function DriveViewContent(props: DriveViewProps) {
 /** App composition: shared queries, inline details, and upload/create capabilities. */
 export function DriveView(props: DriveViewProps) {
   return (
-    <EntityDetailNavigationStack.Root
-      shouldNavigate={(_target, options) => shouldOpenInline(options?.event)}
-    >
+    <EntityDetailNavigationStack.Root>
       <DriveViewContent {...props} />
     </EntityDetailNavigationStack.Root>
   );

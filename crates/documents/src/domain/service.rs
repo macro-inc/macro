@@ -46,7 +46,8 @@ use s3_key::{
 use tracing;
 
 use crate::domain::models::{
-    ASSIGNEES_PROPERTY_ID, NOT_STARTED_STATUS_OPTION_ID, PropertyInput, STATUS_PROPERTY_ID,
+    ASSIGNEES_PROPERTY_ID, InitialLinkShare, NOT_STARTED_STATUS_OPTION_ID, PropertyInput,
+    STATUS_PROPERTY_ID,
 };
 
 use super::branch_name::{build_task_branch_name, user_branch_prefix};
@@ -1102,8 +1103,20 @@ impl<
         entity_access_receipt: EntityAccessReceipt<OwnerAccessLevel>,
         project_id: Option<String>,
     ) -> Result<(), DocumentError> {
+        let document_id = entity_access_receipt.entity().entity_id.clone();
+        let metadata = self
+            .repo
+            .get_document_metadata(&document_id)
+            .await
+            .map_err(|e| DocumentError::Internal(e.into()))?;
+        if metadata.sub_type == Some(DocumentSubType::InitiativeDescription) {
+            return Err(DocumentError::BadRequest(
+                "initiative description documents cannot be deleted".to_string(),
+            ));
+        }
+
         self.repo
-            .soft_delete_document(&entity_access_receipt.entity().entity_id.clone())
+            .soft_delete_document(&document_id)
             .await
             .map_err(|e| DocumentError::Internal(e.into()))?;
 
@@ -1332,18 +1345,30 @@ impl<
             });
         }
 
+        if args.sub_type == Some(DocumentSubType::InitiativeDescription)
+            && matches!(args.initial_link_share, InitialLinkShare::EntityDefault)
+        {
+            return Err(DocumentError::BadRequest(
+                "initiative descriptions must set an exact initial link share".to_string(),
+            ));
+        }
+
         let file_type = args.file_type;
         let project_id = args.project_id;
         let sha = args.sha.clone();
         let attribution = args.resolved_attribution();
 
-        let team_default = self
-            .repo
-            .get_team_default_link_share(args.user_id.as_ref())
-            .await
-            .map_err(|e| DocumentError::Internal(e.into()))?;
-        let share_permission =
-            SharePermissionV2::new_document_share_permission(file_type, team_default);
+        let share_permission = match args.initial_link_share {
+            InitialLinkShare::EntityDefault => {
+                let team_default = self
+                    .repo
+                    .get_team_default_link_share(args.user_id.as_ref())
+                    .await
+                    .map_err(|e| DocumentError::Internal(e.into()))?;
+                SharePermissionV2::new_document_share_permission(file_type, team_default)
+            }
+            InitialLinkShare::Exact(state) => SharePermissionV2::from_link_share_state(state),
+        };
 
         let document_metadata = self.repo.create_document(args, share_permission).await?;
 

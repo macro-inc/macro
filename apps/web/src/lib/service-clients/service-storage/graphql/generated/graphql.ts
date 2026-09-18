@@ -434,6 +434,8 @@ export type GraphqlDocumentLiteral =
 
 /** GraphQL input representing the document sub type. */
 export type GraphqlDocumentSubType =
+  /** The initiative description option. */
+  | 'INITIATIVE_DESCRIPTION'
   /** The skill option. */
   | 'SKILL'
   /** The snippet option. */
@@ -797,6 +799,8 @@ export type GraphqlNotificationChannelType =
 
 /** GraphQL document subtype used by notification metadata. */
 export type GraphqlNotificationDocumentSubType =
+  /** The description document of an initiative. */
+  | 'INITIATIVE_DESCRIPTION'
   /** Skill document. */
   | 'SKILL'
   /** Snippet document. */
@@ -1946,6 +1950,7 @@ type EntityMutationResultFields_GraphqlMutationSuccess_Fragment = { __typename: 
               | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
              }> }
         | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+            | { __typename: 'GraphqlInitiativeDescriptionSubType' }
             | { __typename: 'GraphqlSkillSubType' }
             | { __typename: 'GraphqlSnippetSubType' }
             | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -2359,6 +2364,7 @@ export type EntityMutationPayloadFieldsFragment = { results: Array<
                   | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
                  }> }
             | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+                | { __typename: 'GraphqlInitiativeDescriptionSubType' }
                 | { __typename: 'GraphqlSkillSubType' }
                 | { __typename: 'GraphqlSnippetSubType' }
                 | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -2773,6 +2779,7 @@ export type RenameEntitiesMutation = { renameEntities: { results: Array<
                     | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
                    }> }
               | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+                  | { __typename: 'GraphqlInitiativeDescriptionSubType' }
                   | { __typename: 'GraphqlSkillSubType' }
                   | { __typename: 'GraphqlSnippetSubType' }
                   | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -3187,6 +3194,7 @@ export type MoveEntitiesMutation = { moveEntities: { results: Array<
                     | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
                    }> }
               | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+                  | { __typename: 'GraphqlInitiativeDescriptionSubType' }
                   | { __typename: 'GraphqlSkillSubType' }
                   | { __typename: 'GraphqlSnippetSubType' }
                   | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -3601,6 +3609,7 @@ export type UpdateEntitySharePoliciesMutation = { updateEntitySharePolicies: { r
                     | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
                    }> }
               | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+                  | { __typename: 'GraphqlInitiativeDescriptionSubType' }
                   | { __typename: 'GraphqlSkillSubType' }
                   | { __typename: 'GraphqlSnippetSubType' }
                   | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -4015,6 +4024,7 @@ export type TrashEntitiesMutation = { trashEntities: { results: Array<
                     | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
                    }> }
               | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+                  | { __typename: 'GraphqlInitiativeDescriptionSubType' }
                   | { __typename: 'GraphqlSkillSubType' }
                   | { __typename: 'GraphqlSnippetSubType' }
                   | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -4429,6 +4439,7 @@ export type RestoreEntitiesMutation = { restoreEntities: { results: Array<
                     | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
                    }> }
               | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+                  | { __typename: 'GraphqlInitiativeDescriptionSubType' }
                   | { __typename: 'GraphqlSkillSubType' }
                   | { __typename: 'GraphqlSnippetSubType' }
                   | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -4843,6 +4854,7 @@ export type DeleteEntitiesPermanentlyMutation = { deleteEntitiesPermanently: { r
                     | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
                    }> }
               | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+                  | { __typename: 'GraphqlInitiativeDescriptionSubType' }
                   | { __typename: 'GraphqlSkillSubType' }
                   | { __typename: 'GraphqlSnippetSubType' }
                   | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -5257,6 +5269,7 @@ export type DuplicateEntitiesMutation = { duplicateEntities: { results: Array<
                     | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
                    }> }
               | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+                  | { __typename: 'GraphqlInitiativeDescriptionSubType' }
                   | { __typename: 'GraphqlSkillSubType' }
                   | { __typename: 'GraphqlSnippetSubType' }
                   | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -5672,6 +5685,7 @@ export type SetEntityFavoriteMutation = { setEntityFavorite:
                   | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
                  }> }
             | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+                | { __typename: 'GraphqlInitiativeDescriptionSubType' }
                 | { __typename: 'GraphqlSkillSubType' }
                 | { __typename: 'GraphqlSnippetSubType' }
                 | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -6245,6 +6259,7 @@ export type GroupSoupQuery = { user: { id: string, groupSoup: { bins: Array<{ ke
                 | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
                }> }
           | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+              | { __typename: 'GraphqlInitiativeDescriptionSubType' }
               | { __typename: 'GraphqlSkillSubType' }
               | { __typename: 'GraphqlSnippetSubType' }
               | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -6418,6 +6433,7 @@ export type GroupSoupQuery = { user: { id: string, groupSoup: { bins: Array<{ ke
         > }> } } };
 
 export type GraphqlDocumentHistoryFieldsFragment = { __typename: 'GraphqlSoupDocument', id: string, ownerId: string, fileType: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, documentName: string, subType:
+    | { __typename: 'GraphqlInitiativeDescriptionSubType' }
     | { __typename: 'GraphqlSkillSubType' }
     | { __typename: 'GraphqlSnippetSubType' }
     | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -6428,6 +6444,7 @@ export type GraphqlChatHistoryFieldsFragment = { __typename: 'GraphqlSoupChat', 
 export type GraphqlProjectHistoryFieldsFragment = { __typename: 'GraphqlSoupProject', id: string, ownerId: string, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, projectName: string };
 
 export type GraphqlDocumentQuickAccessNameFragment = { __typename: 'GraphqlSoupDocument', name: string, ownerId: string, createdAt: string, subType:
+    | { __typename: 'GraphqlInitiativeDescriptionSubType' }
     | { __typename: 'GraphqlSkillSubType' }
     | { __typename: 'GraphqlSnippetSubType' }
     | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -6554,6 +6571,7 @@ export type ItemPreviewQuery = { user: { id: string, soup: { items: Array<
         | { __typename: 'GraphqlSoupChat', id: string, displayName: string | null, chatName: string }
         | { __typename: 'GraphqlSoupCrmCompany', domains: Array<string>, id: string, displayName: string | null, companyName: string | null }
         | { __typename: 'GraphqlSoupDocument', fileType: string | null, id: string, displayName: string | null, documentName: string, subType:
+            | { __typename: 'GraphqlInitiativeDescriptionSubType' }
             | { __typename: 'GraphqlSkillSubType' }
             | { __typename: 'GraphqlSnippetSubType' }
             | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -6591,6 +6609,7 @@ export type ItemPreviewsQuery = { user: { id: string, soup: { items: Array<
             | { __typename: 'GraphqlChannelViewOnlyPermission' }
             | { __typename: 'GraphqlTeamRolePermission' }
            | null, subType:
+            | { __typename: 'GraphqlInitiativeDescriptionSubType' }
             | { __typename: 'GraphqlSkillSubType' }
             | { __typename: 'GraphqlSnippetSubType' }
             | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -6629,6 +6648,7 @@ type ItemPreviewDetailsFields_GraphqlSoupDocument_Fragment = { __typename: 'Grap
     | { __typename: 'GraphqlChannelViewOnlyPermission' }
     | { __typename: 'GraphqlTeamRolePermission' }
    | null, subType:
+    | { __typename: 'GraphqlInitiativeDescriptionSubType' }
     | { __typename: 'GraphqlSkillSubType' }
     | { __typename: 'GraphqlSnippetSubType' }
     | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -6672,6 +6692,7 @@ type ItemPreviewFields_GraphqlSoupChat_Fragment = { __typename: 'GraphqlSoupChat
 type ItemPreviewFields_GraphqlSoupCrmCompany_Fragment = { __typename: 'GraphqlSoupCrmCompany', domains: Array<string>, id: string, displayName: string | null, companyName: string | null };
 
 type ItemPreviewFields_GraphqlSoupDocument_Fragment = { __typename: 'GraphqlSoupDocument', fileType: string | null, id: string, displayName: string | null, documentName: string, subType:
+    | { __typename: 'GraphqlInitiativeDescriptionSubType' }
     | { __typename: 'GraphqlSkillSubType' }
     | { __typename: 'GraphqlSnippetSubType' }
     | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -6968,6 +6989,7 @@ type SoupPatchFields_SoupUpdated_Fragment = { __typename: 'SoupUpdated', item:
           | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
          }> }
     | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+        | { __typename: 'GraphqlInitiativeDescriptionSubType' }
         | { __typename: 'GraphqlSkillSubType' }
         | { __typename: 'GraphqlSnippetSubType' }
         | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -7381,6 +7403,7 @@ export type SoupUpdatesSubscription = { soupUpdates: Array<
               | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
              }> }
         | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+            | { __typename: 'GraphqlInitiativeDescriptionSubType' }
             | { __typename: 'GraphqlSkillSubType' }
             | { __typename: 'GraphqlSnippetSubType' }
             | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -7790,6 +7813,7 @@ export type SoupQuery = { user: { id: string, emailLinks: Array<{ id: string, em
               | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
              }> }
         | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+            | { __typename: 'GraphqlInitiativeDescriptionSubType' }
             | { __typename: 'GraphqlSkillSubType' }
             | { __typename: 'GraphqlSnippetSubType' }
             | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -8198,6 +8222,7 @@ export type SoupBackfillQuery = { user: { id: string, emailLinks: Array<{ id: st
               | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
              }> }
         | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+            | { __typename: 'GraphqlInitiativeDescriptionSubType' }
             | { __typename: 'GraphqlSkillSubType' }
             | { __typename: 'GraphqlSnippetSubType' }
             | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -8611,6 +8636,7 @@ export type SoupMailBackfillQuery = { user: { id: string, emailLinks: Array<{ id
               | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
              }> }
         | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+            | { __typename: 'GraphqlInitiativeDescriptionSubType' }
             | { __typename: 'GraphqlSkillSubType' }
             | { __typename: 'GraphqlSnippetSubType' }
             | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -9019,6 +9045,7 @@ export type SoupSharedMailBackfillQuery = { user: { id: string, emailLinks: Arra
               | { __typename: 'GraphqlTaskAssignedMetadata', taskAssignedTaskId: string, taskAssignedTaskName: string | null, taskAssignedSubType: GraphqlNotificationDocumentSubType | null, taskAssignedAssignedBy: string, taskAssignedSenderProfilePictureUrl: string | null }
              }> }
         | { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+            | { __typename: 'GraphqlInitiativeDescriptionSubType' }
             | { __typename: 'GraphqlSkillSubType' }
             | { __typename: 'GraphqlSnippetSubType' }
             | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -9448,6 +9475,7 @@ type MailItemFields_GraphqlSoupCrmCompany_Fragment = { __typename: 'GraphqlSoupC
      }> };
 
 type MailItemFields_GraphqlSoupDocument_Fragment = { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+    | { __typename: 'GraphqlInitiativeDescriptionSubType' }
     | { __typename: 'GraphqlSkillSubType' }
     | { __typename: 'GraphqlSnippetSubType' }
     | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }
@@ -9875,6 +9903,7 @@ type SoupItemFields_GraphqlSoupCrmCompany_Fragment = { __typename: 'GraphqlSoupC
      }> };
 
 type SoupItemFields_GraphqlSoupDocument_Fragment = { __typename: 'GraphqlSoupDocument', ownerId: string, fileType: string | null, projectId: string | null, createdAt: string, updatedAt: string, viewedAt: string | null, deletedAt: string | null, cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, documentName: string, subType:
+    | { __typename: 'GraphqlInitiativeDescriptionSubType' }
     | { __typename: 'GraphqlSkillSubType' }
     | { __typename: 'GraphqlSnippetSubType' }
     | { __typename: 'GraphqlTaskSubType', isCompleted: boolean }

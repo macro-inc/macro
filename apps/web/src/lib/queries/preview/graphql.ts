@@ -148,6 +148,8 @@ function documentSubType(
       return { type: 'snippet' as const };
     case 'GraphqlSkillSubType':
       return { type: 'skill' as const };
+    case 'GraphqlInitiativeDescriptionSubType':
+      return undefined;
   }
 }
 
