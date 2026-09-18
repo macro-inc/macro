@@ -285,6 +285,15 @@ async function execErrorResponseHandler(
 }
 
 export const databasesClient = {
+  /** Read-only execution, enforced by the server. Safe for live document queries. */
+  async query(request: { sql: string }) {
+    return await databasesFetch<ExecOutcome, ExecErrorCode>('/databases/query', {
+      method: 'POST',
+      body: JSON.stringify(request),
+      errorResponseHandler: execErrorResponseHandler,
+    });
+  },
+
   async list() {
     return await databasesFetch<ListedDatabase[]>('/databases');
   },

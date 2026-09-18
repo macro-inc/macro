@@ -6,8 +6,8 @@ import TerminalIcon from '@phosphor/terminal-window.svg';
 import {
   downloadDatabaseSnapshot,
   useDatabaseDetailQuery,
-  useDatabaseTableChangedSync,
 } from '@queries/storage/databases';
+import { useDatabaseTableChangedSync } from '@queries/storage/databases-sync';
 import type { DatabaseTableDetail } from '@service-storage/databases';
 import { Button } from '@ui';
 import {

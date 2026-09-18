@@ -7,7 +7,6 @@
 import { analytics } from '@app/lib/analytics';
 import type { FetchWithTokenErrorCode } from '@core/util/fetchWithToken';
 import { throwOnErr } from '@core/util/result';
-import { createConnectionWebsocketEffect } from '@service-connection/websocket';
 import { storageServiceClient } from '@service-storage/client';
 import type {
   CreateColumnRequest,
@@ -23,15 +22,6 @@ import { queryClient } from '../client';
 import { databasesKeys } from './keys';
 
 const DATABASE_STALE_TIME = 30 * 1000;
-
-/** Gateway message type published by `crates/databases` on every write. */
-const TABLE_CHANGED_MESSAGE_TYPE = 'database_table_changed';
-
-type TableChangedMessage = {
-  databaseId: string;
-  tableId: string;
-  version: number;
-};
 
 export function useDatabasesQuery() {
   return useQuery(() => ({
@@ -81,6 +71,16 @@ export async function execSql(request: ExecRequest): Promise<ExecOutcome> {
   return result.value;
 }
 
+/** Run a read-only query as the viewer. Older servers fail closed with a 404. */
+export async function querySql(sql: string): Promise<ExecOutcome> {
+  const result = await storageServiceClient.databases.query({ sql });
+  if (result.isErr()) {
+    const failure = result.error[0];
+    throw new ExecError(failure?.code ?? 'HTTP_ERROR', failure?.message ?? 'The database could not answer that question.');
+  }
+  return result.value;
+}
+
 /**
  * Re-read one database's schema.
  *
@@ -95,9 +95,15 @@ export function invalidateDatabase(databaseId: string) {
 }
 
 export function invalidateDatabaseRows(databaseId: string, tableId: string) {
-  return queryClient.invalidateQueries({
+  return Promise.all([queryClient.invalidateQueries({
     queryKey: databasesKeys.rows(databaseId, tableId).queryKey,
-  });
+  }), queryClient.invalidateQueries({
+    predicate: (query) => {
+      if (query.queryKey[0] !== 'database-query') return false;
+      const data = query.state.data as { read_versions?: Record<string, number> } | undefined;
+      return !!data?.read_versions && tableId in data.read_versions;
+    },
+  })]);
 }
 
 /**
@@ -241,34 +247,4 @@ export async function createDatabase(params: {
     queryKey: databasesKeys.list.queryKey,
   });
   return databaseId;
-}
-
-/**
- * Re-read a database whenever the gateway reports one of its tables changed.
- *
- * Results are never pushed — the message carries only the table's new version,
- * and every viewer re-executes its own queries as itself.
- */
-export function useDatabaseTableChangedSync(
-  databaseId: () => string | undefined
-) {
-  createConnectionWebsocketEffect((message) => {
-    if (message.type !== TABLE_CHANGED_MESSAGE_TYPE) return;
-
-    let data: TableChangedMessage;
-    try {
-      data =
-        typeof message.data === 'string'
-          ? JSON.parse(message.data)
-          : message.data;
-    } catch {
-      console.error('unparsable database_table_changed payload', message);
-      return;
-    }
-
-    if (!data?.databaseId || data.databaseId !== databaseId()) return;
-
-    invalidateDatabase(data.databaseId);
-    if (data.tableId) invalidateDatabaseRows(data.databaseId, data.tableId);
-  });
 }

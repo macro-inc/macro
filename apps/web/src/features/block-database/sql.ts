@@ -67,6 +67,22 @@ export function insertEmptyRowStatement(tableSqlName: string): string {
   return `INSERT INTO ${quoteIdentifier(tableSqlName)} DEFAULT VALUES`;
 }
 
+/** Insert a row with named values, including a board card's initial group. */
+export function insertRowStatement(args: {
+  tableSqlName: string;
+  values: Record<string, SqlValue>;
+}): string {
+  const entries = Object.entries(args.values);
+  if (!entries.length) return insertEmptyRowStatement(args.tableSqlName);
+  if (Object.hasOwn(args.values, ROW_ID_COLUMN))
+    throw new Error('Row ids are assigned by the server');
+  return (
+    `INSERT INTO ${quoteIdentifier(args.tableSqlName)} ` +
+    `(${entries.map(([name]) => quoteIdentifier(name)).join(', ')}) ` +
+    `VALUES (${entries.map(([, value]) => quoteLiteral(value)).join(', ')})`
+  );
+}
+
 /** Remove one row from a table (membership only — entities are untouched). */
 export function deleteRowStatement(args: {
   tableSqlName: string;
