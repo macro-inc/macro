@@ -194,7 +194,7 @@ function DriveViewContent(props: DriveViewProps) {
         ) && isCreatableEnabled(block.blockName)
     );
 
-  /** Leave any inline detail so the list reflects the chosen location or tags. */
+  /** Exit any inline detail so the list reflects the chosen location or tags. */
   const showList = () => {
     navigationStack.clear();
     panel.handle.resetPreview();
@@ -571,7 +571,10 @@ function DriveViewContent(props: DriveViewProps) {
           >
             <SoupViewList
               emptyState={
-                projectId() && state().scope === 'default'
+                // A folder emptied by a tag filter is a filter miss, not a vacant folder.
+                projectId() &&
+                state().scope === 'default' &&
+                view.tagFilter.activeIds().length === 0
                   ? () => (
                       <EmptyStatePanel
                         centered
