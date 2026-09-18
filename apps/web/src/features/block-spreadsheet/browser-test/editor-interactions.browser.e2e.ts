@@ -23,7 +23,7 @@ async function edit(page: Page, address: string, value: string) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/?hotkeys');
+  await page.goto('/?hotkeys&mentions');
   await expect(page.locator('[data-address="B4"]')).toHaveText('30');
 });
 
@@ -35,7 +35,7 @@ test('selected cells own typing and arrow keys before app capture-phase shortcut
   await page.locator('[data-address="D2"]').click();
   await grid.press('h');
   const input = page.getByRole('textbox', { name: 'Edit D2', exact: true });
-  await expect(input).toHaveValue('h');
+  await expect(input).toHaveText('h');
   await input.press('Enter');
   await expect(address).toHaveValue('D3');
   await grid.press('ArrowDown');
@@ -186,4 +186,38 @@ test('drag fill continues numbers and month-end dates and undo restores the empt
   );
   expect(cells.E3.value).toBe('2026-03-31');
   expect(cells.E4.value).toBe('2026-04-30');
+});
+
+test('types a spaced formula, picks another sheet by pointer, and returns to the source', async ({
+  page,
+}) => {
+  await page.getByRole('button', { name: 'Add sheet', exact: true }).click();
+  await edit(page, 'A1', '20');
+  await page.getByRole('tab', { name: 'Sheet1', exact: true }).click();
+  await page.locator('[data-address="C2"]').click();
+  await page.keyboard.type('= b2 + ');
+  await expect(
+    page.getByRole('textbox', { name: 'Edit C2', exact: true })
+  ).toHaveValue('= b2 + ');
+  await page.getByRole('tab', { name: 'Sheet2', exact: true }).click();
+  await page.locator('[data-address="A1"]').click();
+  const formula = page.getByRole('textbox', {
+    name: 'Formula bar',
+    exact: true,
+  });
+  await expect(formula).toHaveValue("= b2 + 'Sheet2'!A1");
+  await expect(formula).toBeFocused();
+  await page.keyboard.press('Enter');
+  await expect(
+    page.getByRole('tab', { name: 'Sheet1', exact: true })
+  ).toHaveAttribute('aria-selected', 'true');
+  await expect(page.locator('[data-address="C2"]')).toHaveText('30');
+  expect(
+    await page.evaluate(
+      () => window.spreadsheetFixture.snapshot()[0].cells.C2.value
+    )
+  ).toBe("= b2 + 'Sheet2'!A1");
+  expect(
+    await page.evaluate(() => window.spreadsheetFixture.globalShortcutCount())
+  ).toBe(0);
 });

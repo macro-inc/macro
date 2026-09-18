@@ -35,6 +35,7 @@ import {
 } from '../core/spreadsheet-document';
 import type { SpreadsheetCursor } from '../core/spreadsheet-presence';
 import type { CompleteFormula } from '../primitives/create-formula-assistance';
+import { cellBorderColor, cellForeground } from './cell-colors';
 import { FormulaInput } from './FormulaInput';
 import { type CellAction, SpreadsheetCellMenu } from './SpreadsheetCellMenu';
 import {
@@ -1216,7 +1217,7 @@ export function SpreadsheetGrid(props: {
                               : style === 'dotted'
                                 ? 'dotted'
                                 : 'solid';
-                        return `${width}px ${line} ${cell()?.[`border${edge}Color`] || 'var(--color-ink)'}`;
+                        return `${width}px ${line} ${cellBorderColor(cell()?.[`border${edge}Color`], cell()?.fillColor)}`;
                       };
                       const horizontalAlign = () => {
                         const align = cell()?.horizontalAlign;
@@ -1290,7 +1291,10 @@ export function SpreadsheetGrid(props: {
                                 : undefined),
                             'border-left': border('Left'),
                             'background-color': cell()?.fillColor || undefined,
-                            color: cell()?.textColor || undefined,
+                            color: cellForeground(
+                              cell()?.textColor,
+                              cell()?.fillColor
+                            ),
                             'font-family': fontFamily(cell()),
                             'font-size': `${fontPixels(cell()) * scale()}px`,
                             'font-style': cell()?.italic ? 'italic' : undefined,

@@ -6,7 +6,7 @@ async function choose(page: Page, label: string, choice: string) {
 }
 
 test.beforeEach(async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/?mentions&hotkeys');
   await expect(page.locator('[data-address="B4"]')).toHaveText('30');
 });
 
@@ -73,7 +73,7 @@ test('treats direct typing and formula-bar edits as percentage points while pres
     .click();
   await page.getByRole('grid', { name: 'Spreadsheet' }).press('5');
   const editor = page.getByRole('textbox', { name: 'Edit D2', exact: true });
-  await expect(editor).toHaveValue('5');
+  await expect(editor).toHaveText('5');
   await editor.press('Enter');
   await expect(cell).toHaveText('5%');
 
@@ -87,7 +87,7 @@ test('treats direct typing and formula-bar edits as percentage points while pres
   await formula.press('Enter');
   await expect(cell).toHaveText('7.5%');
   await cell.dblclick();
-  await expect(editor).toHaveValue('7.5%');
+  await expect(editor).toHaveText('7.5%');
   await editor.press('Enter');
   await expect(cell).toHaveText('7.5%');
 
@@ -135,4 +135,22 @@ test('edits formula-bar text and formulas directly with the production mention e
   await expect(formula).toHaveValue('=B2*3');
   await formula.press('Enter');
   await expect(page.locator('[data-address="C2"]')).toHaveText('30');
+});
+
+test('applies ribbon controls while the production cell editor has an uncommitted draft', async ({
+  page,
+}) => {
+  await page.locator('[data-address="D2"]').click();
+  await page.keyboard.type('Draft text');
+  await choose(page, 'Fill color', 'Fill color: Light yellow');
+  const cell = page.locator('[data-address="D2"]');
+  await expect(cell).toHaveText('Draft text');
+  await expect(cell).toHaveCSS('background-color', 'rgb(255, 242, 204)');
+  await choose(page, 'Font family', 'Serif');
+  await expect(cell).toHaveCSS('font-family', /Georgia/);
+  await choose(page, 'Borders', 'All borders');
+  await expect(cell).toHaveCSS('border-top-style', 'solid');
+  await page.getByRole('button', { name: 'Bold', exact: true }).click();
+  await expect(cell).toHaveCSS('font-weight', '600');
+  await expect(page.getByRole('grid', { name: 'Spreadsheet' })).toBeFocused();
 });

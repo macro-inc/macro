@@ -95,6 +95,9 @@ is already percentage-formatted, typing `5` means `5%`; formulas and AI/API nume
 values still use fractional values (`0.05` for 5%). Font sizes are
 points. Wrapped rows grow automatically up to 160 pixels at 100% zoom. Check
 selection and formula-reference outlines after changing wrapping, font size, or zoom.
+Excel black text and borders on unfilled cells follow the app's foreground color
+so imported sheets remain readable in dark mode. Explicit text/fill color pairs
+remain unchanged; theme changes never alter saved or exported workbook colors.
 
 **View options** directly toggles gridlines, the formula bar, and formula display;
 these settings and zoom are local to the editor. **Go to cell** accepts ranges such
