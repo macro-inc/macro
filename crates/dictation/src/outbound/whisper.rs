@@ -15,6 +15,7 @@ use async_openai::{
 use macro_env_var::env_vars;
 use serde::Deserialize;
 use std::time::Duration;
+use tracing::instrument::WithSubscriber;
 
 env_vars! {
     /// Server-side OpenAI credential, injected as `OPENAI_API_KEY`. Never
@@ -23,7 +24,7 @@ env_vars! {
 }
 
 const MODEL: &str = "whisper-1";
-/// Per-attempt HTTP timeout; recordings are capped at five minutes.
+/// Overall request deadline, including the SDK's retries.
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(90);
 /// Total budget for retrying provider 429/5xx responses before giving up.
 const RETRY_BUDGET: Duration = Duration::from_secs(10);
@@ -37,31 +38,26 @@ pub struct WhisperTranscriber {
 #[derive(Deserialize)]
 struct VerboseTranscription {
     text: String,
-    #[serde(default)]
     duration: f32,
 }
 
 impl WhisperTranscriber {
     /// Construct once at startup against the public OpenAI API.
-    pub fn new(api_key: &OpenaiApiKey) -> Result<Self, reqwest::Error> {
+    pub fn new(api_key: &OpenaiApiKey) -> Result<Self, WhisperConfigError> {
         Self::with_api_base(api_key, None)
-    }
-
-    /// Read `OPENAI_API_KEY` and construct the client; fails fast when unset.
-    pub fn try_from_env() -> Result<Self, WhisperConfigError> {
-        let api_key = OpenaiApiKey::new()?;
-        Ok(Self::new(&api_key)?)
     }
 
     /// Construct against a custom API base, e.g. a test server.
     pub fn with_api_base(
         api_key: &OpenaiApiKey,
         api_base: Option<&str>,
-    ) -> Result<Self, reqwest::Error> {
-        let mut config = OpenAIConfig::new().with_api_key(api_key.as_ref());
-        if let Some(api_base) = api_base {
-            config = config.with_api_base(api_base);
+    ) -> Result<Self, WhisperConfigError> {
+        if api_key.trim().is_empty() {
+            return Err(WhisperConfigError::EmptyApiKey);
         }
+        let config = OpenAIConfig::new()
+            .with_api_key(api_key.as_ref())
+            .with_api_base(api_base.unwrap_or("https://api.openai.com/v1"));
         let http_client = reqwest::Client::builder()
             .timeout(REQUEST_TIMEOUT)
             .build()?;
@@ -74,12 +70,12 @@ impl WhisperTranscriber {
     }
 }
 
-/// Startup failures for [`WhisperTranscriber::try_from_env`].
+/// Startup failures for [`WhisperTranscriber::new`].
 #[derive(Debug, thiserror::Error)]
 pub enum WhisperConfigError {
-    /// `OPENAI_API_KEY` is missing.
-    #[error(transparent)]
-    MissingApiKey(#[from] macro_env_var::VarNameErr),
+    /// The required credential contains no usable key.
+    #[error("OPENAI_API_KEY must not be empty")]
+    EmptyApiKey,
     /// The HTTP client could not be constructed.
     #[error(transparent)]
     HttpClient(#[from] reqwest::Error),
@@ -96,28 +92,39 @@ impl TranscriptionProvider for WhisperTranscriber {
             response_format: Some(AudioResponseFormat::VerboseJson),
             ..Default::default()
         };
-        let response: VerboseTranscription = self
-            .client
-            .audio()
-            .transcription()
-            .create_verbose_json_byot(request)
-            .await
-            .map_err(|error| {
-                match &error {
-                    OpenAIError::ApiError(api_error) => tracing::warn!(
-                        code = ?api_error.code,
-                        kind = ?api_error.r#type,
-                        "Whisper rejected the request"
-                    ),
-                    OpenAIError::Reqwest(error) => tracing::warn!(
-                        status = ?error.status(),
-                        timeout = error.is_timeout(),
-                        "Whisper request failed"
-                    ),
-                    other => tracing::warn!(error = %other, "Whisper response unusable"),
+        let audio_api = self.client.audio();
+        let transcriptions = audio_api.transcription();
+        let transcription =
+            transcriptions.create_verbose_json_byot::<_, VerboseTranscription>(request);
+        // async-openai 0.36 logs raw response bodies on parse/HTTP failures.
+        // Scope a silent subscriber to this future's polls only; our surrounding
+        // span and sanitized diagnostics remain visible, including after await.
+        let response = tokio::time::timeout(
+            REQUEST_TIMEOUT,
+            transcription.with_subscriber(tracing::Dispatch::none()),
+        )
+        .await
+        .map_err(|_| {
+            tracing::warn!(kind = "timeout", "Whisper request failed");
+            DictationError::Provider
+        })?
+        .map_err(|error| {
+            match &error {
+                OpenAIError::ApiError(_) => {
+                    tracing::warn!(kind = "provider_rejection", "Whisper rejected the request")
                 }
-                DictationError::Provider
-            })?;
+                OpenAIError::Reqwest(error) => tracing::warn!(
+                    status = ?error.status(),
+                    timeout = error.is_timeout(),
+                    "Whisper request failed"
+                ),
+                _ => tracing::warn!(kind = "invalid_response", "Whisper response unusable"),
+            }
+            DictationError::Provider
+        })?;
+        if !response.duration.is_finite() || response.duration <= 0.0 {
+            return Err(DictationError::Provider);
+        }
         Ok(Transcript {
             text: response.text,
             duration_seconds: response.duration,

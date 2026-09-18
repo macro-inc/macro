@@ -6,7 +6,8 @@ pub mod ports;
 pub mod service;
 
 pub use models::{
-    AudioFormat, DictationError, LanguageHint, MAX_AUDIO_BYTES, Recording, Transcript,
+    AudioFormat, DictationError, LanguageHint, MAX_AUDIO_BYTES, MAX_AUDIO_DURATION, Recording,
+    Transcript,
 };
-pub use ports::{DictationService, TranscriptionProvider};
+pub use ports::{DictationService, RecordingInspector, TranscriptionProvider};
 pub use service::DictationServiceImpl;

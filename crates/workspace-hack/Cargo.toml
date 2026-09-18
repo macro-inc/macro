@@ -35,6 +35,7 @@ axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
 bstr = { version = "1" }
+bytemuck = { version = "1", default-features = false, features = ["extern_crate_alloc"] }
 byteorder = { version = "1" }
 bytes = { version = "1", features = ["serde"] }
 bzip2 = { version = "0.5", features = ["libbz2-rs-sys"] }
@@ -169,6 +170,7 @@ axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
 bstr = { version = "1" }
+bytemuck = { version = "1", default-features = false, features = ["extern_crate_alloc"] }
 byteorder = { version = "1" }
 bytes = { version = "1", features = ["serde"] }
 bzip2 = { version = "0.5", features = ["libbz2-rs-sys"] }

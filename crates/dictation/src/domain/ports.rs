@@ -3,7 +3,16 @@
 use super::models::{DictationError, LanguageHint, Recording, Transcript};
 use bytes::Bytes;
 use macro_user_id::user_id::MacroUserIdStr;
-use std::future::Future;
+use std::{future::Future, time::Duration};
+
+/// Media inspection without coupling the use case to a container parser.
+pub trait RecordingInspector: Send + Sync + 'static {
+    /// Read the encoded audio timeline; malformed or empty audio is rejected.
+    fn duration(
+        &self,
+        recording: Recording,
+    ) -> impl Future<Output = Result<Duration, DictationError>> + Send;
+}
 
 /// External speech-to-text capability, implemented by outbound adapters.
 pub trait TranscriptionProvider: Send + Sync + 'static {

@@ -1,10 +1,14 @@
 //! Value objects for a transient dictation recording.
 
 use bytes::Bytes;
+use std::time::Duration;
 use std::{fmt, str::FromStr};
 
 /// Maximum encoded recording accepted by the service.
 pub const MAX_AUDIO_BYTES: usize = 8 * 1024 * 1024;
+
+/// Maximum audio duration accepted before invoking the paid provider.
+pub const MAX_AUDIO_DURATION: Duration = Duration::from_secs(5 * 60);
 
 /// Browser recording containers accepted for transcription.
 ///
@@ -142,6 +146,12 @@ pub enum DictationError {
     /// The bytes are not a supported audio container.
     #[error("Unsupported audio format")]
     UnsupportedAudio,
+    /// A recognized container contains no usable audio packets.
+    #[error("Recording is incomplete or contains no audio")]
+    InvalidAudio,
+    /// The encoded audio timeline exceeds the dictation duration limit.
+    #[error("Recording must be no longer than five minutes")]
+    TooLong,
     /// Malformed language hint.
     #[error("Language must be a two-letter ISO 639-1 code")]
     InvalidLanguage,
