@@ -11,8 +11,9 @@ import {
   $createVideoNode,
   $isVideoNode,
 } from '@macro-inc/lexical-core/nodes/VideoNode';
-import type { LexicalEditor } from 'lexical';
-import { describe, expect, it } from 'vitest';
+import { Telemetry } from '@macro-inc/observability';
+import { $createTextNode, type LexicalEditor } from 'lexical';
+import { describe, expect, it, vi } from 'vitest';
 import {
   $createTextCell,
   $getCell,
@@ -76,6 +77,38 @@ describe('table cell allowed content', () => {
       expect(video).toBeDefined();
       expect(video?.getUrl()).toBe('https://example.com/clip.mp4');
     });
+  });
+
+  it('wraps a stray text child in a paragraph and logs the document id', async () => {
+    const error = vi.spyOn(Telemetry, 'error').mockImplementation(() => {});
+    const editor = createTableTestEditor({ documentId: 'doc-019ff75a' });
+    await buildTable(editor, textGrid([['hello']]));
+
+    await new Promise<void>((resolve) => {
+      editor.update(
+        () => {
+          $getCell(0, 0).append($createTextNode('extra'));
+        },
+        { onUpdate: () => resolve() }
+      );
+    });
+
+    editor.read(() => {
+      const children = $getCell(0, 0).getChildren();
+      expect(children.map((child) => child.getType())).toEqual([
+        'paragraph',
+        'paragraph',
+      ]);
+      expect($getCell(0, 0).getTextContent()).toContain('extra');
+    });
+    expect(error).toHaveBeenCalledWith(
+      'table cell normalization salvaged stray children',
+      expect.objectContaining({
+        document_id: 'doc-019ff75a',
+        salvaged_types: ['text'],
+      })
+    );
+    error.mockRestore();
   });
 
   it('still strips nested tables from cells', async () => {
