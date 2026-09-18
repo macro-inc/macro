@@ -269,36 +269,36 @@ notified when the AI responds). Legacy Home background sends preserve the submit
 ## Composer anatomy (a11y)
 
 AI chat (including Home and doc-scoped chat) and agent session composers have
-a **Start dictation** microphone beside Send. It uses only the browser's
-on-device speech recognition in the browser's language when available. Otherwise,
-**Start dictation with OpenAI Whisper** records in memory and uploads to the
+a **Start dictation with OpenAI Whisper** microphone beside Send. It records
+in memory and uploads to the
 authenticated `/dictation/transcribe` storage endpoint only on confirmation.
 Whisper is available on all plans without consuming chat credits; its server
 credential is never exposed to the browser. Unsupported recording environments
-show a disabled microphone. If a language pack is missing, the tooltip
-offers a download. Click to download, then click again to start recording.
+show a disabled microphone. Every supported browser uses Whisper; there are
+no browser speech-recognition or language-pack installation flows.
 
 While dictating, a scrolling microphone-volume timeline and **Cancel dictation** / **Use dictation**
 replace the composer controls. Cancel (or Escape) preserves the original draft.
-Each bar records 200ms of measured volume: silence stays dotted, louder speech
+Bars sample microphone volume as recording chunks arrive (normally every 200ms): silence stays dotted, louder speech
 creates taller bars, and earlier levels move left without changing height.
 Volume analysis stays on-device and stops on confirm, cancel, error, or close.
-Use dictation stops listening, waits for final words, and appends plain text to
+Use dictation stops recording, waits for Whisper, and appends plain text to
 the draft without sending it. Existing rich text and attachments remain intact.
 If the browser stops listening on its own, **Ready** waits for confirmation.
-While **Finishing…**, selecting the checkmark again commits the words recognized
-so far, so a browser that never reports the end of speech cannot strand the user.
-Closing the composer releases the microphone. Microphone and download failures
+While **Finishing…**, the checkmark is disabled and Cancel remains available.
+Starting dictation in another composer releases the previous session without
+moving focus back to it. Closing the composer releases the microphone. Capture failures
 appear below the composer.
 
-The Whisper fallback supports WebM, MP4, and Ogg recording depending on browser.
-Recordings stop after five minutes or near 8 MB and wait for confirmation.
+Whisper dictation supports WebM, MP4, and Ogg recording depending on browser.
+Recordings stop just before five minutes or near 8 MB and wait for confirmation.
 Cancel discards the recording; cancel during transcription aborts the request and
 ignores any late result. Failed uploads keep the recording in memory for an explicit
 retry with the checkmark. No audio or transcript is persisted by the dictation
-endpoint. The server detects the audio container from the bytes, requires a
+endpoint. Provider diagnostics exclude response content. The server detects
+the audio container and inspects its duration before contacting OpenAI, requires a
 signed-in user (bots and internal callers are refused), and rate limits each
-user to 60 transcriptions per hour; a limited request shows a retry message.
+user to 60 attempts per hour (failed requests count); a limited request shows a retry message.
 The backend meters provider duration/cost without charging user credits.
 
 Desktop composer and conversation body text use 15px type. Mobile keeps its

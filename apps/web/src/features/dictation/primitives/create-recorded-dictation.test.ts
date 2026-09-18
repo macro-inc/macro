@@ -11,7 +11,7 @@ class FakeRecorder implements RecorderHandle {
   /** Overrides how the next constructed recorder acquires the microphone. */
   static nextStart: (() => Promise<void>) | undefined;
   start = vi.fn(FakeRecorder.nextStart ?? (async () => {}));
-  /** Deliver the recording synchronously, as a finished MediaRecorder would. */
+  /** The primitive receives a completed recording through its recorder contract. */
   stop = vi.fn(() => this.callbacks.onRecording?.(audio));
   cancel = vi.fn();
   constructor(readonly callbacks: AudioRecorderCallbacks) {
@@ -37,7 +37,7 @@ function setup() {
   return { ...hook, transcribe, onConfirm, onCancel };
 }
 
-describe('Whisper fallback', () => {
+describe('Whisper dictation', () => {
   it('uploads only on confirm and appends the result once', async () => {
     const test = setup();
     await test.result.start();
@@ -132,6 +132,30 @@ describe('Whisper fallback', () => {
     FakeRecorder.latest.callbacks.onError(new Error('Microphone unplugged'));
     expect(test.result.phase()).toBe('idle');
     expect(test.result.message()).toBe('Microphone unplugged');
+    expect(test.transcribe).not.toHaveBeenCalled();
+  });
+
+  it('releases its composer when another session takes the microphone', async () => {
+    const test = setup();
+    await test.result.start();
+    const previous = FakeRecorder.latest;
+    previous.callbacks.onInterrupted();
+    expect(test.result.phase()).toBe('idle');
+    expect(test.result.active()).toBe(false);
+    expect(test.onCancel).not.toHaveBeenCalled();
+    previous.callbacks.onRecording(audio);
+    expect(test.transcribe).not.toHaveBeenCalled();
+    expect(test.onConfirm).not.toHaveBeenCalled();
+  });
+
+  it('settles a pending confirmation when its recording is interrupted', async () => {
+    const test = setup();
+    await test.result.start();
+    FakeRecorder.latest.stop.mockImplementation(() => {});
+    const confirmed = test.result.confirm();
+    FakeRecorder.latest.callbacks.onInterrupted();
+    await confirmed;
+    expect(test.result.phase()).toBe('idle');
     expect(test.transcribe).not.toHaveBeenCalled();
   });
 
