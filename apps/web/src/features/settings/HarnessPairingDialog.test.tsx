@@ -52,7 +52,7 @@ vi.mock('@queries/harnesses/harnesses', () => ({
 }));
 
 vi.mock('@queries/team/teams', () => ({
-  useCurrentTeamQuery: () => ({ data: mocks.currentTeam }),
+  useCurrentTeamQuery: () => ({ isSuccess: true, data: mocks.currentTeam }),
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -82,16 +82,18 @@ describe('HarnessPairingDialog', () => {
     fireEvent.input(codeInput, { target: { value: 'kx7m-4qhd' } });
     expect(codeInput).toHaveProperty('value', 'KX7M-4QHD');
 
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Look up' }));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Continue' }));
 
     expect(within(dialog).getByText('KX7M-4QHD')).toBeTruthy();
     expect(
-      within(dialog).getByText(/Confirm this matches the code macrod printed/)
+      within(dialog).getByText(
+        /Make sure this matches the code shown on your computer/
+      )
     ).toBeTruthy();
     expect(within(dialog).getByText('Dev laptop')).toBeTruthy();
     expect(within(dialog).getByText('erics-mbp.local')).toBeTruthy();
     expect(within(dialog).getByText(/Expires in \d+ minutes/)).toBeTruthy();
-    expect(within(dialog).getByLabelText('Name')).toHaveProperty(
+    expect(within(dialog).getByLabelText('Runtime name')).toHaveProperty(
       'value',
       'Dev laptop'
     );
@@ -103,10 +105,12 @@ describe('HarnessPairingDialog', () => {
     ));
 
     const dialog = screen.getByRole('dialog');
-    fireEvent.input(within(dialog).getByLabelText('Name'), {
+    fireEvent.input(within(dialog).getByLabelText('Runtime name'), {
       target: { value: 'Home desktop' },
     });
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Pair runtime' })
+    );
 
     await waitFor(() => {
       expect(mocks.approve).toHaveBeenCalledWith({
@@ -114,7 +118,8 @@ describe('HarnessPairingDialog', () => {
         name: 'Home desktop',
         teamId: undefined,
       });
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Harness connected');
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Pairing approved');
+      expect(screen.queryByText('Runtime connected')).toBeNull();
     });
   });
 
@@ -125,7 +130,9 @@ describe('HarnessPairingDialog', () => {
 
     const dialog = screen.getByRole('dialog');
     fireEvent.click(within(dialog).getByLabelText('Team'));
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Pair runtime' })
+    );
 
     await waitFor(() => {
       expect(mocks.approve).toHaveBeenCalledWith({
@@ -149,9 +156,7 @@ describe('HarnessPairingDialog', () => {
       true
     );
     expect(
-      within(dialog).getByText(
-        'Create or join a team before sharing harnesses.'
-      )
+      within(dialog).getByText('Create or join a team to share a runtime.')
     ).toBeTruthy();
   });
 
@@ -175,6 +180,31 @@ describe('HarnessPairingDialog', () => {
     expect(within(dialog).getByLabelText('Pairing code')).toBeTruthy();
   });
 
+  it('preserves the reviewed name and scope when approval fails so it can be retried', async () => {
+    mocks.approve.mockRejectedValueOnce(new Error('network'));
+    render(() => (
+      <HarnessPairingDialog initialCode="KX7M-4QHD" onClose={() => {}} />
+    ));
+    fireEvent.input(screen.getByLabelText('Runtime name'), {
+      target: { value: 'My computer' },
+    });
+    fireEvent.click(screen.getByLabelText('Team'));
+    fireEvent.click(screen.getByRole('button', { name: 'Pair runtime' }));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeTruthy());
+    expect(screen.getByLabelText('Runtime name')).toHaveProperty(
+      'value',
+      'My computer'
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Pair runtime' }));
+    await waitFor(() =>
+      expect(mocks.approve).toHaveBeenLastCalledWith({
+        code: 'KX7M-4QHD',
+        name: 'My computer',
+        teamId: 'team-1',
+      })
+    );
+  });
+
   it('shows the success phase after approving', async () => {
     const onClose = vi.fn();
     render(() => (
@@ -182,12 +212,14 @@ describe('HarnessPairingDialog', () => {
     ));
 
     const dialog = screen.getByRole('dialog');
-    fireEvent.click(within(dialog).getByRole('button', { name: 'Approve' }));
+    fireEvent.click(
+      within(dialog).getByRole('button', { name: 'Pair runtime' })
+    );
 
     await waitFor(() => {
       expect(
         within(dialog).getByText(
-          'Harness connected. macrod will finish pairing automatically.'
+          'Keep macrod running on your computer. Your runtime will show as connected once it checks in.'
         )
       ).toBeTruthy();
     });

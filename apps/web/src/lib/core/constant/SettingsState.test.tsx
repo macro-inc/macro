@@ -8,7 +8,7 @@ import {
 } from '@core/signal/settingsTab';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useSettingsState } from './SettingsState';
+import { settingsTabFromSplitPath, useSettingsState } from './SettingsState';
 
 const mocks = vi.hoisted(() => ({
   mobile: true,
@@ -51,9 +51,12 @@ vi.mock('./settingsSplitUrl', () => ({
   stripSettingsSplitFromUrl: (url: string) => url,
   appendSettingsSplitToUrl: (url: string) => url,
 }));
-vi.mock('./settingsTabsConfig', () => ({
-  settingsTabToSlug: (tab: string) => tab.toLowerCase(),
-  settingsSlugToTab: () => undefined,
+vi.mock('@app/lib/analytics', () => ({ analytics: {} }));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: true }),
+}));
+vi.mock('../context/user', () => ({
+  useHasPermission: () => () => true,
 }));
 
 function mountSettings() {
@@ -83,6 +86,24 @@ beforeEach(() => {
   setSplitActiveTabId('Account');
 });
 afterEach(cleanup);
+
+describe('settings runtime links', () => {
+  it.each(['runtimes', 'harness'])(
+    'opens the runtimes tab from /settings/%s',
+    (slug) => {
+      expect(settingsTabFromSplitPath(`/app/settings/${slug}`)).toBe('Harness');
+      expect(
+        settingsTabFromSplitPath(`/app/component/inbox/settings/${slug}`)
+      ).toBe('Harness');
+    }
+  );
+
+  it('does not treat a document named settings as a settings split', () => {
+    expect(
+      settingsTabFromSplitPath('/app/md/settings/md/runtimes')
+    ).toBeUndefined();
+  });
+});
 
 describe('settings entry points', () => {
   it.each([true, false])(

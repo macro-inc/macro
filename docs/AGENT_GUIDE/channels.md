@@ -131,7 +131,7 @@ opens the session.
 
 `@codex` requires both `enable-chat-v3-agents` and `enable-codex-agents`.
 It appears when the mentioning user has connected ChatGPT and saved a
-cloud environment in Settings → Harness. New sessions use that environment on
+cloud environment in Settings → Runtimes. New sessions use that environment on
 `main`; there is no automatic repository selection. Follow-up mentions continue the same agent session. When
 the provider URL arrives, the session header offers **Open in Codex**. Codex
 assistant text appears as complete messages while tool activity and thinking

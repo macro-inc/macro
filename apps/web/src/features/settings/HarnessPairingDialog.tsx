@@ -6,7 +6,7 @@ import {
 } from '@queries/harnesses/harnesses';
 import { useCurrentTeamQuery } from '@queries/team/teams';
 import { Button, Dialog, Panel } from '@ui';
-import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
+import { createSignal, Match, Show, Switch } from 'solid-js';
 import { ChoiceRow } from './primitives';
 
 const PAIRING_ERROR_FALLBACK =
@@ -40,39 +40,29 @@ export function HarnessPairingDialog(props: {
   );
   const [approved, setApproved] = createSignal(false);
   const [approveError, setApproveError] = createSignal<string>();
-  const [name, setName] = createSignal('');
-  const [nameEdited, setNameEdited] = createSignal(false);
-  const [share, setShare] = createSignal<HarnessShare>('Private');
-  const [shareEdited, setShareEdited] = createSignal(false);
+  const [nameOverride, setName] = createSignal<string>();
+  const [shareOverride, setShare] = createSignal<HarnessShare>();
 
   const pairingQuery = useHarnessPairingQuery(committedCode);
   const approveMutation = useApproveHarnessPairingMutation();
   const currentTeamQuery = useCurrentTeamQuery();
-  const currentTeamId = () => currentTeamQuery.data?.team.id;
+  const currentTeamId = () =>
+    currentTeamQuery.isSuccess ? currentTeamQuery.data?.team.id : undefined;
   const canShareWithTeam = () => currentTeamId() !== undefined;
   const pairingData = () =>
     pairingQuery.isSuccess ? pairingQuery.data : undefined;
 
-  createEffect(() => {
-    const pairing = pairingData();
-    if (!pairing) return;
-    if (!nameEdited()) setName(pairing.requested_name);
-    // The daemon's config may ask for a scope; preselect it, but the person
-    // approving keeps the final say.
-    if (
-      !shareEdited() &&
-      pairing.requested_scope === 'team' &&
-      canShareWithTeam()
-    ) {
-      setShare('Team');
-    }
-  });
+  const name = () => nameOverride() ?? pairingData()?.requested_name ?? '';
+  const share = () =>
+    shareOverride() ??
+    (pairingData()?.requested_scope === 'team' && canShareWithTeam()
+      ? 'Team'
+      : 'Private');
 
   const lookupError = () =>
     committedCode() !== undefined && pairingQuery.isError
       ? failureMessage(pairingQuery.error, PAIRING_ERROR_FALLBACK)
       : undefined;
-  const errorMessage = () => approveError() ?? lookupError();
 
   const lookUp = () => {
     const code = codeInput().trim().toUpperCase();
@@ -84,10 +74,8 @@ export function HarnessPairingDialog(props: {
   const tryAnotherCode = () => {
     setCommittedCode(undefined);
     setApproveError(undefined);
-    setNameEdited(false);
-    setName('');
-    setShare('Private');
-    setShareEdited(false);
+    setName(undefined);
+    setShare(undefined);
   };
 
   const canApprove = () =>
@@ -107,9 +95,11 @@ export function HarnessPairingDialog(props: {
         teamId: share() === 'Team' ? currentTeamId() : undefined,
       });
       setApproved(true);
-      toast.success('Harness connected');
+      toast.success('Pairing approved');
     } catch (error) {
-      setApproveError(failureMessage(error, PAIRING_ERROR_FALLBACK));
+      setApproveError(
+        failureMessage(error, 'Could not pair this runtime. Please try again.')
+      );
     }
   };
 
@@ -126,21 +116,31 @@ export function HarnessPairingDialog(props: {
       <Panel depth={2} class="max-h-[88vh] rounded-xl text-ink">
         <Panel.Header class="px-5 py-3">
           <Dialog.Title class="text-sm font-semibold">
-            {approved() ? 'Harness connected' : 'Connect a harness'}
+            {approved() ? 'Pairing approved' : 'Pair a runtime'}
           </Dialog.Title>
         </Panel.Header>
         <Panel.Body class="overflow-y-auto p-5">
+          <Dialog.Description class="mb-5 text-sm leading-5 text-ink-muted">
+            {approved()
+              ? 'Your computer is approved to run agents in Macro.'
+              : pairingData()
+                ? 'Review this computer and choose who can use it.'
+                : 'Connect a computer so your agents can work with its tools and projects.'}
+          </Dialog.Description>
           <Switch>
             <Match when={approved()}>
               <p class="text-sm leading-5 text-ink-muted">
-                Harness connected. macrod will finish pairing automatically.
+                Keep macrod running on your computer. Your runtime will show as
+                connected once it checks in.
               </p>
             </Match>
 
-            <Match when={errorMessage()}>
+            <Match when={lookupError()}>
               {(message) => (
                 <div class="flex flex-col gap-3">
-                  <p class="text-sm leading-5 text-negative">{message()}</p>
+                  <p role="alert" class="text-sm leading-5 text-negative">
+                    {message()}
+                  </p>
                   <div>
                     <Button
                       type="button"
@@ -163,19 +163,19 @@ export function HarnessPairingDialog(props: {
                       {pairing().code}
                     </div>
                     <p class="text-xs text-ink-muted">
-                      Confirm this matches the code macrod printed.
+                      Make sure this matches the code shown on your computer.
                     </p>
                   </div>
 
                   <div class="flex flex-col gap-0.5 text-xs text-ink-muted">
                     <span>
-                      Requested name:{' '}
+                      Computer:{' '}
                       <span class="text-ink">{pairing().requested_name}</span>
                     </span>
                     <Show when={pairing().host}>
                       {(host) => (
                         <span>
-                          Host: <span class="text-ink">{host()}</span>
+                          Address: <span class="text-ink">{host()}</span>
                         </span>
                       )}
                     </Show>
@@ -186,27 +186,34 @@ export function HarnessPairingDialog(props: {
                   </div>
 
                   <label class="flex flex-col gap-1.5">
-                    <span class="text-xs font-medium text-ink">Name</span>
+                    <span class="text-xs font-medium text-ink">
+                      Runtime name
+                    </span>
                     <input
                       class="settings-input w-full"
                       value={name()}
                       onInput={(event) => {
-                        setNameEdited(true);
                         setName(event.currentTarget.value);
                       }}
                     />
                   </label>
 
+                  <Show when={approveError()}>
+                    <p role="alert" class="text-sm text-negative">
+                      {approveError()}
+                    </p>
+                  </Show>
                   <fieldset class="grid grid-cols-2 gap-2 mobile:grid-cols-1">
-                    <legend class="sr-only">Share</legend>
+                    <legend class="mb-2 text-xs font-medium text-ink">
+                      Who can use this runtime?
+                    </legend>
                     <ChoiceRow
                       name="harness-share"
                       value="private"
                       checked={share() === 'Private'}
                       title="Private"
-                      description="Only you can run agents on this harness."
+                      description="Only you can use this runtime."
                       onChange={() => {
-                        setShareEdited(true);
                         setShare('Private');
                       }}
                     />
@@ -217,12 +224,11 @@ export function HarnessPairingDialog(props: {
                       title="Team"
                       description={
                         canShareWithTeam()
-                          ? 'Your team can run agents on this harness.'
-                          : 'Create or join a team before sharing harnesses.'
+                          ? 'Everyone on your team can use this runtime.'
+                          : 'Create or join a team to share a runtime.'
                       }
                       disabled={!canShareWithTeam()}
                       onChange={() => {
-                        setShareEdited(true);
                         setShare('Team');
                       }}
                     />
@@ -246,7 +252,6 @@ export function HarnessPairingDialog(props: {
                 <div class="flex min-w-0 items-center gap-2 rounded-lg border border-edge-muted bg-ink/[0.025] px-3 py-2">
                   <input
                     id="harness-pairing-code"
-                    autofocus
                     autocomplete="off"
                     spellcheck={false}
                     class="min-w-0 flex-1 bg-transparent font-mono text-sm uppercase tracking-widest text-ink outline-none"
@@ -261,7 +266,8 @@ export function HarnessPairingDialog(props: {
                   />
                 </div>
                 <p class="text-xs text-ink-extra-muted">
-                  Run macrod on your computer and enter the code it prints.
+                  Enter the pairing code from macrod on the computer you want to
+                  connect.
                 </p>
               </div>
             </Match>
@@ -279,7 +285,7 @@ export function HarnessPairingDialog(props: {
                 Done
               </Button>
             </Match>
-            <Match when={errorMessage()}>
+            <Match when={lookupError()}>
               <Button
                 type="button"
                 variant="ghost"
@@ -306,7 +312,7 @@ export function HarnessPairingDialog(props: {
                 disabled={!canApprove()}
                 onClick={() => void approve()}
               >
-                {approveMutation.isPending ? 'Approving…' : 'Approve'}
+                {approveMutation.isPending ? 'Pairing…' : 'Pair runtime'}
               </Button>
             </Match>
             <Match when={committedCode()}>
@@ -335,7 +341,7 @@ export function HarnessPairingDialog(props: {
                 disabled={codeInput().trim().length === 0}
                 onClick={lookUp}
               >
-                Look up
+                Continue
               </Button>
             </Match>
           </Switch>

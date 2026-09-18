@@ -27,7 +27,7 @@ export function connectedRuntimes(
       if (target.harness === 'in-memory') {
         return {
           id: 'in-memory',
-          name: 'Macro Harness',
+          name: 'Macro',
           kind: 'builtin',
           target,
           connected: true,

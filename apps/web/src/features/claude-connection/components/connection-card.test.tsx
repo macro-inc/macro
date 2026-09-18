@@ -23,11 +23,11 @@ function props(): ConnectionCardProps {
     onRefresh: vi.fn(),
   };
 }
-it('shows Claude before connection and explains restart behavior', () => {
+it('keeps disconnected Claude compact and starts sign-in', () => {
   const value = props();
   render(() => <ConnectionCard {...value} />);
   expect(screen.getByText('Claude Cloud')).toBeTruthy();
-  expect(screen.getByText(/Reconnect after a backend restart/)).toBeTruthy();
+  expect(screen.queryByText(/Reconnect after a backend restart/)).toBeNull();
   fireEvent.click(screen.getByRole('button', { name: 'Connect Claude' }));
   expect(value.onBegin).toHaveBeenCalledOnce();
 });
@@ -69,4 +69,21 @@ it('shows disabled and failed states instead of silently disappearing', () => {
   expect(
     screen.getByRole('button', { name: 'Retry connection status' })
   ).toBeTruthy();
+});
+
+it('shows connection details and disconnect only after choosing Configure', () => {
+  const value = {
+    ...props(),
+    status: { enabled: true, connected: true, ephemeral: true },
+  };
+  render(() => <ConnectionCard {...value} />);
+  expect(
+    screen.queryByRole('button', { name: 'Disconnect Claude' })
+  ).toBeNull();
+  fireEvent.click(
+    screen.getByRole('button', { name: 'Configure Claude Cloud' })
+  );
+  expect(screen.getByText(/Reconnect after a backend restart/)).toBeTruthy();
+  fireEvent.click(screen.getByRole('button', { name: 'Disconnect Claude' }));
+  expect(value.onDisconnect).toHaveBeenCalledOnce();
 });

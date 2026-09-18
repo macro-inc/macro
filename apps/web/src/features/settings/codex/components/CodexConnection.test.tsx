@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import { CodexConnection } from './CodexConnection';
 
@@ -58,6 +58,7 @@ describe('Codex connection', () => {
         environmentsError
       />
     ));
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Codex' }));
     fireEvent.change(screen.getByLabelText('Cloud environment'), {
       target: { value: '' },
     });
@@ -189,6 +190,82 @@ describe('Codex connection', () => {
         .getByRole('button', { name: 'Connect with ChatGPT' })
         .hasAttribute('disabled')
     ).toBe(true);
+  });
+
+  it('keeps configuration collapsible after device sign-in completes', () => {
+    render(() => (
+      <CodexConnection
+        {...base()}
+        connection={{ connected: true, environmentId: 'env-1' }}
+        login={{ ...login, status: 'connected' }}
+      />
+    ));
+    expect(screen.queryByLabelText('Cloud environment')).toBeNull();
+    const configure = screen.getByRole('button', { name: 'Configure Codex' });
+    fireEvent.click(configure);
+    expect(screen.getByLabelText('Cloud environment')).toBeTruthy();
+    fireEvent.click(configure);
+    expect(screen.queryByLabelText('Cloud environment')).toBeNull();
+  });
+
+  it('continues first sign-in through required environment setup after the account remounts', () => {
+    const props = base();
+    const [connection, setConnection] = createSignal({
+      connected: false,
+      accountId: null as string | null,
+      environmentId: null as string | null,
+    });
+    const [loginStatus, setLoginStatus] = createSignal<'pending' | 'connected'>(
+      'pending'
+    );
+    render(() => (
+      <Show when={connection().accountId ?? 'disconnected'} keyed>
+        {(_account) => (
+          <CodexConnection
+            {...props}
+            connection={connection()}
+            login={{ ...login, status: loginStatus() }}
+            environments={[
+              { id: 'env-1', label: 'My project', repositories: [] },
+            ]}
+          />
+        )}
+      </Show>
+    ));
+    expect(screen.getByText('ABCD-EFGH')).toBeTruthy();
+    setLoginStatus('connected');
+    setConnection({
+      connected: true,
+      accountId: 'new-account',
+      environmentId: null,
+    });
+    expect(screen.queryByText('ABCD-EFGH')).toBeNull();
+    expect(screen.getByText('Setup required')).toBeTruthy();
+    expect(screen.queryByText('Connected')).toBeNull();
+    const environment = screen.getByLabelText('Cloud environment');
+    expect(
+      screen.getByRole('button', { name: 'Save Codex settings' })
+    ).toHaveProperty('disabled', true);
+    fireEvent.change(environment, { target: { value: 'env-1' } });
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Save Codex settings' })
+    );
+    expect(props.onSave).toHaveBeenCalledWith({ environmentId: 'env-1' });
+    expect(screen.getByText('Setup required')).toBeTruthy();
+    setConnection({
+      connected: true,
+      accountId: 'new-account',
+      environmentId: 'env-1',
+    });
+    expect(screen.queryByText('Setup required')).toBeNull();
+    expect(screen.getByText('Connected')).toBeTruthy();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Done configuring Codex' })
+    );
+    expect(screen.queryByLabelText('Cloud environment')).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Configure Codex' })
+    ).toBeTruthy();
   });
 
   it('marks selections unsaved until the server confirms them and preserves failed edits', () => {

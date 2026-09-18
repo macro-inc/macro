@@ -38,7 +38,7 @@ vi.mock('@app/lib/analytics/posthog', () => ({
 }));
 
 vi.mock('@core/context/user', () => ({
-  useUserId: () => () => 'macro|demo@example.com',
+  useUserId: () => () => 'macro|user@example.com',
 }));
 vi.mock('@queries/claude-auth/connection', () => ({
   useClaudeConnectionSource: () => {
@@ -89,6 +89,7 @@ const harnessMocks = vi.hoisted(() => ({
     isPending: false,
     data: [] as unknown[],
     isError: false,
+    refetch: vi.fn(),
   },
   deleteHarness: vi.fn(),
   approve: vi.fn(),
@@ -157,7 +158,10 @@ vi.mock('@queries/harnesses/harnesses', () => ({
 }));
 
 vi.mock('@queries/team/teams', () => ({
-  useCurrentTeamQuery: () => ({ data: { team: { id: 'team-1' } } }),
+  useCurrentTeamQuery: () => ({
+    isSuccess: true,
+    data: { team: { id: 'team-1' }, members: [] },
+  }),
 }));
 
 vi.mock('@solidjs/router', () => ({
@@ -271,6 +275,7 @@ describe('Harness', () => {
         </QueryClientProvider>
       ));
       expect(screen.queryByText('Settings suspended')).toBeNull();
+      fireEvent.click(screen.getByRole('button', { name: 'Configure Cursor' }));
       expect(screen.getByText('Loading models…')).toBeTruthy();
       expect(
         (
@@ -318,10 +323,10 @@ describe('Harness', () => {
     }
   );
 
-  it('shows Claude with the Anthropic logo above Cursor in the harness list', () => {
+  it('shows compact runtime rows with configuration collapsed', () => {
     render(() => <Harness />);
 
-    expect(screen.getByRole('heading', { name: 'In-memory' })).toBeTruthy();
+    expect(screen.getByRole('heading', { name: 'Macro' })).toBeTruthy();
     expect(screen.getByRole('heading', { name: 'Cursor' })).toBeTruthy();
     const claude = screen.getByRole('heading', { name: 'Claude Cloud' });
     const cursor = screen.getByRole('heading', { name: 'Cursor' });
@@ -330,16 +335,17 @@ describe('Harness', () => {
     ).toBeTruthy();
     expect(screen.getByLabelText('Anthropic')).toBeTruthy();
     expect(
-      screen.getByRole('heading', { name: 'Bring your own agent' })
+      screen.getByRole('heading', { name: 'Run agents on your computer' })
     ).toBeTruthy();
-    expect(screen.getByText(/This is not a coding harness/)).toBeTruthy();
+    expect(screen.queryByLabelText('API key')).toBeNull();
   });
 
   it('validates and saves a Cursor API key', async () => {
     render(() => <Harness />);
 
+    fireEvent.click(screen.getByRole('button', { name: 'Connect Cursor' }));
     const apiKeyInput = screen.getByLabelText('API key');
-    const saveButton = screen.getByRole('button', { name: 'Save' });
+    const saveButton = screen.getByRole('button', { name: 'Connect Cursor' });
 
     expect(apiKeyInput).toHaveProperty('type', 'password');
     expect(saveButton).toHaveProperty('disabled', true);
@@ -373,6 +379,8 @@ describe('Harness', () => {
 
     expect(screen.getByText('Connected')).toBeTruthy();
     expect(screen.queryByLabelText('API key')).toBeNull();
+    expect(screen.queryByLabelText('Default model')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Cursor' }));
     expect(screen.getByText(/does not revoke it in Cursor/)).toBeTruthy();
 
     fireEvent.change(screen.getByLabelText('Default model'), {
@@ -403,19 +411,23 @@ describe('Harness', () => {
   it('links the empty BYOA list to the setup documentation', () => {
     render(() => <Harness />);
 
-    expect(screen.getByText('No agents connected')).toBeTruthy();
+    expect(
+      screen.getByText(
+        'No computers paired yet. Your runtimes will appear here.'
+      )
+    ).toBeTruthy();
     expect(screen.getByRole('link', { name: /Setup guide/ })).toHaveProperty(
       'href',
       'https://docs.macro.com/AI/bring-your-own'
     );
   });
 
-  it('offers "Enter pairing code" in the header and empty state', () => {
+  it('offers pairing from the computer setup card', () => {
     render(() => <Harness />);
 
     expect(
-      screen.getAllByRole('button', { name: 'Enter pairing code' })
-    ).toHaveLength(2);
+      screen.getAllByRole('button', { name: 'Pair a runtime' })
+    ).toHaveLength(1);
   });
 
   it('renders a registered harness row', () => {
@@ -427,7 +439,7 @@ describe('Harness', () => {
     expect(screen.getByText('Team')).toBeTruthy();
     expect(screen.getByRole('img', { name: 'Connected' })).toBeTruthy();
     expect(screen.getByText(/Last connected /)).toBeTruthy();
-    expect(screen.queryByText('Never connected')).toBeNull();
+    expect(screen.queryByText('Waiting for the first connection')).toBeNull();
   });
 
   it('shows a disconnected private harness that never connected', () => {
@@ -443,34 +455,53 @@ describe('Harness', () => {
     render(() => <Harness />);
 
     expect(screen.getByText('Private')).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Disconnected' })).toBeTruthy();
-    expect(screen.getByText('Never connected')).toBeTruthy();
+    expect(screen.getByRole('img', { name: 'Offline' })).toBeTruthy();
+    expect(screen.getByText('Waiting for the first connection')).toBeTruthy();
   });
 
   it('confirms before removing a harness', async () => {
     harnessMocks.query.data = [REGISTERED_HARNESS];
 
     render(() => <Harness />);
-    fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Dev box' }));
 
     const dialog = screen.getByRole('dialog');
     expect(within(dialog).getByText('Remove Dev box?')).toBeTruthy();
     expect(
-      within(dialog).getByText(/Agents using this harness will stop running/)
+      within(dialog).getByText(
+        /Agents using this runtime will need another runtime/
+      )
     ).toBeTruthy();
     expect(harnessMocks.deleteHarness).not.toHaveBeenCalled();
 
     fireEvent.click(
-      within(dialog).getByRole('button', { name: 'Remove harness' })
+      within(dialog).getByRole('button', { name: 'Remove runtime' })
     );
 
     await waitFor(() => {
       expect(harnessMocks.deleteHarness).toHaveBeenCalledWith({
         harnessId: REGISTERED_HARNESS.id,
       });
-      expect(mocks.toastSuccess).toHaveBeenCalledWith('Harness removed');
+      expect(mocks.toastSuccess).toHaveBeenCalledWith('Runtime removed');
       expect(screen.queryByRole('dialog')).toBeNull();
     });
+  });
+
+  it('does not offer removal for a runtime registered by another team member', () => {
+    harnessMocks.query.data = [
+      { ...REGISTERED_HARNESS, created_by: 'macro|other@example.com' },
+    ];
+    render(() => <Harness />);
+    expect(screen.getByText('Dev box')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Remove Dev box' })).toBeNull();
+  });
+
+  it('keeps pairing available when the runtime list fails and offers a retry', () => {
+    harnessMocks.query.isError = true;
+    render(() => <Harness />);
+    expect(screen.getByRole('button', { name: 'Pair a runtime' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
+    expect(harnessMocks.query.refetch).toHaveBeenCalledOnce();
   });
 
   it('opens the pairing dialog prefilled from the pair search param', async () => {

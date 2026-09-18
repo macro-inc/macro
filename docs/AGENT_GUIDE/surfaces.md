@@ -692,36 +692,65 @@ with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`),
 `Connections` (email/tool OAuth), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`, `Harness`;
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Bots`; Agents → `Agents`, `Runtimes`;
 `Log out`.
-`Agents` lists team and private agents with `Create agent` / `Edit <name>` dialogs grouped
-Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio pair:
-`Use my connected apps` (default; the agent gets whatever the person running it has
-connected) or `Specific apps`, which reveals a `Search connectors` box over the whole
-Pipedream catalog (results are `option` rows; picking one adds it) and a row per picked app
-with a connected / not-connected dot for the *current viewer* plus an inline `Connect`
-that opens the Pipedream Connect flow inside the dialog. Unconnected picks never block
-saving; each teammate connects their own account. An agent session that calls a picked
-but unconnected app gets a tool result saying so, and the agent's reply renders a
-`Connect <app>` chip that opens Settings → Connections for that app.
-`Back to app` returns to the previous surface. Open via user-email button menu or `Ctrl+;`.
+`Agents` lists team and private agents with a search field, instruction previews,
+and a `Create agent` action. `Edit <name>` opens the same editor with saved values.
+The built-in Macro agent is marked `Built in` and cannot be edited or deleted.
+`Manage runtimes` opens Runtimes in the current settings panel at
+`/app/settings/runtimes`; older `/app/settings/harness`
+links still work, including pairing links with `?pair=...`.
+Open settings from the user-email menu or `Ctrl+;`. `Back to app` returns to the
+previous surface.
 
-`Agents` → `Create agent` (or edit an existing agent) opens runtime selectors.
-The model list is loaded live and independently for In-memory, connected Cursor, and every
-registered macrod harness. A harness can show `Loading models…`, an unsupported message, or
-a retryable error without hiding the other harnesses. Editing preserves a saved model that
-is no longer offered and labels it `saved, unavailable`. A macrod with no responding runtime
-can remain loading until the 10-second discovery timeout; use Retry after reconnecting it.
+The agent editor gives instructions a large writing area alongside identity,
+runtime, model, connected apps, and channel access. New agents start private on
+Macro, with all connected apps and all channels. Name fills the @handle until it
+is edited separately. Optional instruction examples provide a starting point.
+Use `Private` / `Team` under `Who can manage it`; team members can edit team agents,
+only the creator can make one private, and the creator or team owner can delete it.
+Private refers to management: people in explicitly selected channels can still
+mention the agent. Team agents cannot use a private computer; choose a runtime
+shared with that team, or keep the agent private.
 
-`Harness` configures Cursor, Codex, and paired macrod runtimes. Cursor's default-model picker uses
-the same live model discovery and retains its existing save action.
+`Connected apps` offers `All connected apps` or `Choose apps`. The latter reveals
+`Search connectors` across the Pipedream catalog, selected apps, and each viewer's
+connection status. Inline `Connect` opens sign-in inside the editor. Unconnected
+picks do not block saving; each person connects their own account. Selecting zero
+apps is valid and runs the agent without connected apps. App selections survive
+switching between modes and editing while this feature is hidden.
+If a session needs an unconnected app, its reply can show `Connect <app>`, which
+opens that app in Settings → Connections.
+
+Runtime cards show Macro, connected cloud providers, and paired computers with
+online/offline status. Model discovery runs independently per runtime. A pending
+catalog shows `Loading models…`; failures offer Retry. A runtime that chooses its
+own model says so. Saved models missing from the current catalog are retained and
+marked `saved, unavailable`. Removed runtimes require choosing another runtime or
+reconnecting before saving. A disconnected computer must come online before an
+agent can run. The existing discovery timeout is 10 seconds for macrod.
+
+Save failures keep the editor and draft open. Saving disables further changes
+and duplicate submissions. Closing an edited draft offers `Keep editing` and
+`Discard changes`. Name takes focus when the editor opens or reopens.
+`?createAgent=true` still opens creation directly.
+
+`Runtimes` shows compact cloud-provider rows and a `Your computers` section.
+Macro is built in. Cursor, Claude Cloud, and Codex expose their connection or
+configuration controls on demand; feature flags continue to gate providers.
+Cursor's default-model selector uses live model discovery and saves changes.
+`Pair a runtime` walks through code entry, review, naming, and Private/Team
+ownership. Pairing approval is distinct from the machine actually connecting;
+connection indicators update from the runtime list. Removal requires confirmation
+and is offered only to a private owner, team registrant, or team owner.
 
 The Codex row uses the OpenAI logo and the same icon, button, and status styling
 as Cursor. Under **Codex**, choose **Connect with ChatGPT**, copy the displayed device code,
 and use **Continue to ChatGPT** to finish sign-in in the provider tab. The Macro
 page displays pending, expired, failed, and retryable error states; **Cancel
 sign-in** cancels the attempt. After connecting, choose a **Cloud environment**
-and click **Save Codex settings** before using Codex. Options show their
+and click **Save Codex settings** before using Codex. Until an environment is
+saved, the row says **Setup required** and keeps configuration visible. Options show their
 repositories. New sessions always use the `main` branch; there is no branch
 picker or automatic repository selection. Changed selections display **Unsaved
 changes** until the server confirms them. The save button is disabled until an
