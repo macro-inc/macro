@@ -10,8 +10,8 @@ mutation MarkEmailThreadSeen($input: MarkEmailThreadSeenInput!) {
 	}
 }
 
-mutation UpdateEmailThreadReadLabel($input: UpdateEmailThreadLabelInput!) {
-	updateEmailThreadLabel(input: $input) {
+mutation MarkEmailThreadUnread($input: MarkEmailThreadUnreadInput!) {
+	markEmailThreadUnread(input: $input) {
 		...EmailReadStateFields
 	}
 }

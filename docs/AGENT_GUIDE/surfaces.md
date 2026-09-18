@@ -242,8 +242,11 @@ on opening, and is omitted when no tags exist. **f** opens the filter menu.
 
 With GraphQL Soup enabled, **Mark read/unread** updates the normalized email row
 optimistically. Permanent server errors roll it back; retryable transport failures
-can leave the action in the durable queue. Unread uses the UNREAD label belonging
-to the thread's inbox. Trash and its Undo refresh mounted GraphQL lists after the
+can leave the action in the durable queue. Mark unread sends only the thread ID;
+the server resolves that inbox's UNREAD label and returns the canonical thread
+(`__typename`, `id`, `isRead`) to reconcile the cache. The row should flip immediately
+even when the client labels cache is missing or stale—no label fetch precedes the
+optimistic update. Trash and its Undo refresh mounted GraphQL lists after the
 server operation finishes. The GraphQL-disabled REST path is unchanged.
 
 ### Cached Mail filtering

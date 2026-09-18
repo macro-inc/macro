@@ -75,6 +75,35 @@ where
         Ok(())
     }
 
+    #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id))]
+    pub(crate) async fn mark_thread_unread_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
+        let link = self
+            .email_repo
+            .owned_link_for_thread(thread_id, macro_id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .ok_or(EmailErr::ThreadNotFound)?;
+
+        // Resolve from the authorized thread's inbox, never the caller's primary
+        // inbox: multi-inbox users have a distinct UNREAD label for each link.
+        let unread_label = self
+            .email_repo
+            .list_labels_by_link_id(link.id)
+            .await
+            .map_err(|e| EmailErr::RepoErr(anyhow::Error::from(e)))?
+            .into_iter()
+            .find(|label| label.provider_label_id == system_labels::UNREAD)
+            .ok_or(EmailErr::LabelNotFound)?;
+
+        self.update_thread_labels_impl(&link, thread_id, unread_label.id, true)
+            .await?;
+        Ok(())
+    }
+
     #[tracing::instrument(err, skip(self), fields(user_id = %macro_id, %thread_id, %label_id, add))]
     pub(crate) async fn update_thread_labels_for_user_impl(
         &self,

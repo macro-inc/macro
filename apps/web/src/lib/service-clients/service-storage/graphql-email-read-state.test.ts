@@ -16,7 +16,7 @@ beforeEach(() => {
       data:
         document === MarkEmailThreadSeenDocument
           ? { markEmailThreadSeen: { id: 'thread', isRead: true } }
-          : { updateEmailThreadLabel: { id: 'thread', isRead: false } },
+          : { markEmailThreadUnread: { id: 'thread', isRead: false } },
     }),
   }));
 });
@@ -26,7 +26,10 @@ describe('GraphQL email read-state mutations', () => {
     await expect(markGraphqlEmailThreadSeen(client, 'thread')).resolves.toBe(
       'committed'
     );
-    await markGraphqlEmailThreadUnread(client, 'thread', 'inbox-unread');
+    await markGraphqlEmailThreadUnread(client, 'thread');
+    expect(mutation.mock.calls[1][1]).toEqual({
+      input: { threadId: 'thread' },
+    });
     const contexts = mutation.mock.calls.map(
       (call) => call[2].normalizedCacheOptimistic
     );
@@ -38,7 +41,7 @@ describe('GraphQL email read-state mutations', () => {
       id: 'thread',
       isRead: true,
     });
-    expect(contexts[1].optimisticResponse.updateEmailThreadLabel).toEqual({
+    expect(contexts[1].optimisticResponse.markEmailThreadUnread).toEqual({
       __typename: 'GraphqlSoupEmailThread',
       id: 'thread',
       isRead: false,
@@ -62,26 +65,31 @@ describe('GraphQL email read-state mutations', () => {
       await expect(
         action === 'seen'
           ? markGraphqlEmailThreadSeen(client, 'thread')
-          : markGraphqlEmailThreadUnread(client, 'thread', 'unread')
+          : markGraphqlEmailThreadUnread(client, 'thread')
       ).rejects.toBe(error);
     }
   );
 
-  it('accepts a durable queue result without claiming it committed remotely', async () => {
-    mutation.mockReturnValue({
-      toPromise: async () => ({
-        extensions: {
-          normalizedCacheMutationDisposition: {
-            kind: 'queued',
-            transactionId: 'tx',
+  it.each(['seen', 'unread'] as const)(
+    'accepts a durable queued %s result without claiming it committed remotely',
+    async (action) => {
+      mutation.mockReturnValue({
+        toPromise: async () => ({
+          extensions: {
+            normalizedCacheMutationDisposition: {
+              kind: 'queued',
+              transactionId: 'tx',
+            },
           },
-        },
-      }),
-    });
-    await expect(markGraphqlEmailThreadSeen(client, 'thread')).resolves.toBe(
-      'queued'
-    );
-  });
+        }),
+      });
+      await expect(
+        action === 'seen'
+          ? markGraphqlEmailThreadSeen(client, 'thread')
+          : markGraphqlEmailThreadUnread(client, 'thread')
+      ).resolves.toBe('queued');
+    }
+  );
 
   it('rejects an empty response payload instead of claiming the write committed', async () => {
     mutation.mockReturnValue({ toPromise: async () => ({ data: {} }) });
@@ -89,7 +97,7 @@ describe('GraphQL email read-state mutations', () => {
       'returned no data'
     );
     await expect(
-      markGraphqlEmailThreadUnread(client, 'thread', 'unread')
+      markGraphqlEmailThreadUnread(client, 'thread')
     ).rejects.toThrow('returned no data');
   });
 

@@ -373,17 +373,16 @@ export function useMarkThreadAsUnreadMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (params: MarkThreadAsUnreadParams) => {
-      const labelId = await fetchUnreadLabelId(params.linkId);
       if (isFeatureEnabled(enableGraphqlSoup)) {
         const disposition = await markGraphqlEmailThreadUnread(
           getGraphqlSoupClient(),
-          params.threadId,
-          labelId
+          params.threadId
         );
         if (disposition === 'committed')
           await refreshActiveGraphqlSoupQueries();
         return;
       }
+      const labelId = await fetchUnreadLabelId(params.linkId);
       await throwOnErr(() =>
         emailClient.updateThreadLabel({
           thread_id: params.threadId,

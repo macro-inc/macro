@@ -6,7 +6,7 @@ import type { AnyVariables, Client, OperationResult } from '@urql/core';
 import { v4 as uuidv4 } from 'uuid';
 import {
   MarkEmailThreadSeenDocument,
-  UpdateEmailThreadReadLabelDocument,
+  MarkEmailThreadUnreadDocument,
 } from './graphql/generated/graphql';
 
 export type EmailReadStateDisposition = 'committed' | 'queued';
@@ -50,18 +50,17 @@ export async function markGraphqlEmailThreadSeen(
   );
 }
 
-/** The UNREAD label id is resolved for the thread's inbox by the query layer. */
+/** Resolve the inbox's UNREAD label server-side so optimism never waits on labels. */
 export async function markGraphqlEmailThreadUnread(
   client: Client,
-  threadId: string,
-  unreadLabelId: string
+  threadId: string
 ): Promise<EmailReadStateDisposition> {
   const result = await executeOptimisticMutation(
     client,
-    UpdateEmailThreadReadLabelDocument,
-    { input: { threadId, labelId: unreadLabelId, value: true } },
+    MarkEmailThreadUnreadDocument,
+    { input: { threadId } },
     {
-      updateEmailThreadLabel: {
+      markEmailThreadUnread: {
         __typename: 'GraphqlSoupEmailThread',
         id: threadId,
         isRead: false,
@@ -71,6 +70,6 @@ export async function markGraphqlEmailThreadUnread(
   ).toPromise();
   return readStateDisposition(
     result,
-    Boolean(result.data?.updateEmailThreadLabel)
+    Boolean(result.data?.markEmailThreadUnread)
   );
 }

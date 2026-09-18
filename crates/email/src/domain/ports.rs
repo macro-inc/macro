@@ -593,6 +593,14 @@ pub trait EmailService: Send + Sync + 'static {
         async { Err(no_op_email_err()) }
     }
 
+    /// Mark a caller-accessible thread unread using its own inbox's UNREAD label.
+    /// Provider synchronization and read-state updates use the thread-label flow.
+    fn mark_thread_unread(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+    ) -> impl Future<Output = Result<(), EmailErr>> + Send;
+
     /// Add or remove a label from a caller-accessible thread.
     fn update_thread_labels_for_user(
         &self,
@@ -839,6 +847,14 @@ impl EmailService for NoOpEmailService {
         _label_id: Uuid,
         _add: bool,
     ) -> Result<UpdateThreadLabelsResult, EmailErr> {
+        Err(no_op_email_err())
+    }
+
+    async fn mark_thread_unread(
+        &self,
+        _macro_id: MacroUserIdStr<'static>,
+        _thread_id: Uuid,
+    ) -> Result<(), EmailErr> {
         Err(no_op_email_err())
     }
 
