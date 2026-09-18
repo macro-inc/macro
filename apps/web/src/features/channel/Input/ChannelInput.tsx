@@ -19,6 +19,7 @@ import {
   enableChatV3Agents,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { useCursorAgentsAccess } from '@core/cursor/flag';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { IUser } from '@core/user/types';
@@ -256,12 +257,16 @@ export function ChannelInput(props: ChannelInputProps) {
     queueMicrotask(() => focusEditorNow());
   };
 
-  // Macro AI, Cursor, Claude, Codex, and Macro Coder (flag-gated) are mentionable in every
-  // channel, and any bot added to the channel is mentionable too. All are
-  // surfaced through the same `@`-mention typeahead as participants and
-  // re-tagged as bot mentions at send time.
+  const canUseCursor = useCursorAgentsAccess();
+
+  // Global agents and channel bots share the participant mention typeahead.
+  // Cursor, Macro New, and Macro Coder follow their respective rollout flags.
+  // Mentions are re-tagged as bot mentions at send time.
   const mentionUsers: Accessor<IUser[]> = () => {
-    const base = [...(props.participants?.() ?? []), ...(props.bots?.() ?? [])];
+    const base = [
+      ...(props.participants?.() ?? []),
+      ...(props.bots?.() ?? []),
+    ].filter((user) => canUseCursor() || !isCursorBotId(user.id));
     if (
       isFeatureEnabled(enableChatV3Agents) &&
       !base.some((user) => isMacroCoderId(user.id))
@@ -274,9 +279,9 @@ export function ChannelInput(props: ChannelInputProps) {
     ) {
       base.unshift(macroNewMentionUser());
     }
-    // Provider bots remain discoverable before account setup. Their replies
-    // link to Settings → Harness when a connection is still needed.
-    if (!base.some((user) => isCursorBotId(user.id))) {
+    // Account setup does not hide bots included in the user's rollout.
+    // Their replies link to Settings → Harness when a connection is needed.
+    if (canUseCursor() && !base.some((user) => isCursorBotId(user.id))) {
       base.unshift(cursorMentionUser());
     }
     if (!base.some((user) => isCodexBotId(user.id))) {

@@ -1,11 +1,20 @@
+import { CURSOR_BOT_ID } from '@core/constant/cursorAgent';
 import type { Agent } from '@service-storage/generated/schemas/agent';
 import type { Bot } from '@service-storage/generated/schemas/bot';
-import { createRoot } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { createRoot, createSignal } from 'solid-js';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   availableBotMentionUsers,
   useChannelBotMentionUsers,
 } from './use-channel-bot-mention-users';
+
+const flags = vi.hoisted(() => ({ cursor: (): boolean => false }));
+vi.mock('@core/constant/featureFlags', () => ({
+  enableCursorAgents: { key: 'enable-cursor-agents' },
+}));
+vi.mock('@app/lib/analytics/posthog', () => ({
+  useFeatureFlag: () => () => ({ enabled: flags.cursor() }),
+}));
 
 vi.mock('@queries/channel/channel-bots', () => ({
   useChannelBotsQuery: () => ({ isSuccess: true, data: [] }),
@@ -13,7 +22,10 @@ vi.mock('@queries/channel/channel-bots', () => ({
 vi.mock('@queries/agents/agents', () => ({
   useAgentsQuery: () => ({
     isSuccess: true,
-    data: [agent('codex-agent', 'Codex', 'all', 'codex-cloud')],
+    data: [
+      agent('codex-agent', 'Codex', 'all', 'codex-cloud'),
+      agent('cursor-agent', 'Cursor', 'all', 'cursor'),
+    ],
   }),
 }));
 
@@ -50,6 +62,45 @@ function agent(
 }
 
 describe('availableBotMentionUsers', () => {
+  beforeEach(() => {
+    flags.cursor = () => false;
+  });
+
+  it('updates Cursor mention visibility when the rollout changes', () => {
+    createRoot((dispose) => {
+      const [enabled, setEnabled] = createSignal(false);
+      flags.cursor = enabled;
+      const users = useChannelBotMentionUsers(() => 'channel-1');
+      expect(users().map((user) => user.id)).toEqual(['bot|codex-agent']);
+      setEnabled(true);
+      expect(users().map((user) => user.id)).toEqual([
+        'bot|codex-agent',
+        'bot|cursor-agent',
+      ]);
+      setEnabled(false);
+      expect(users().map((user) => user.id)).toEqual(['bot|codex-agent']);
+      dispose();
+    });
+  });
+
+  it('hides built-in, global, and installed Cursor bots outside the rollout', () => {
+    const global = agent('global-cursor', 'Global Cursor', 'all', 'cursor');
+    const installed = agent(
+      'installed-cursor',
+      'Installed Cursor',
+      'selected',
+      'cursor'
+    );
+    const codex = agent('codex', 'Codex', 'all', 'codex-cloud');
+    const claude = agent('claude', 'Claude', 'all', 'claude-cloud');
+    expect(
+      availableBotMentionUsers(
+        [bot(CURSOR_BOT_ID, 'Cursor'), installed.bot],
+        [global, installed, codex, claude],
+        false
+      ).map((user) => user.id)
+    ).toEqual(['bot|codex', 'bot|claude']);
+  });
   it('offers Codex from the mention query without requiring account setup', () => {
     createRoot((dispose) => {
       expect(
@@ -64,9 +115,11 @@ describe('availableBotMentionUsers', () => {
       const global = agent('global', 'Global', 'all', harness);
       const installed = agent('installed', 'Installed', 'selected', harness);
       expect(
-        availableBotMentionUsers([installed.bot], [global, installed]).map(
-          (user) => user.id
-        )
+        availableBotMentionUsers(
+          [installed.bot],
+          [global, installed],
+          true
+        ).map((user) => user.id)
       ).toEqual(['bot|installed', 'bot|global']);
     }
   );
@@ -77,7 +130,8 @@ describe('availableBotMentionUsers', () => {
         [
           agent('global', 'Global', 'all'),
           agent('selected', 'Selected', 'selected'),
-        ]
+        ],
+        true
       ).map((user) => user.id)
     ).toEqual(['bot|installed', 'bot|global']);
   });
@@ -86,7 +140,8 @@ describe('availableBotMentionUsers', () => {
     expect(
       availableBotMentionUsers(
         [bot('global', 'Global')],
-        [agent('global', 'Global', 'all')]
+        [agent('global', 'Global', 'all')],
+        true
       )
     ).toHaveLength(1);
   });
@@ -102,7 +157,8 @@ describe('availableBotMentionUsers', () => {
             ...agent('global', 'Global', 'all'),
             bot: bot('global', 'Global', avatarUrl),
           },
-        ]
+        ],
+        true
       )
     ).toEqual([
       {
@@ -117,6 +173,6 @@ describe('availableBotMentionUsers', () => {
   it('offers a global Cursor agent before Cursor is connected', () => {
     const cursorAgent = agent('cursor-agent', 'Cursor agent', 'all', 'cursor');
 
-    expect(availableBotMentionUsers([], [cursorAgent])).toHaveLength(1);
+    expect(availableBotMentionUsers([], [cursorAgent], true)).toHaveLength(1);
   });
 });

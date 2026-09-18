@@ -99,9 +99,11 @@ Behaves exactly like Macro Coder: mention it, a session opens, the bot posts the
 magic-chip announcement into the thread, the mention text becomes the first
 prompt, follow-up mentions in the thread route to the same session.
 
-Not gated on key registration. `@cursor` is in every user's mention typeahead;
-a mention from someone with no key must be answered, never silently dropped
-and never turned into a session that cannot spawn.
+The `enable-cursor-agents` frontend rollout flag controls Cursor mention
+discovery (local override: `VITE_ENABLE_CURSOR_AGENTS`). Within the rollout,
+mentions are offered before key registration. A mention from someone with no
+key must be answered, never silently dropped or turned into a session that
+cannot spawn. The rollout flag is not a backend authorization boundary.
 
 **How the keyless mention is handled.** Before `open` creates anything, the
 domain asks `ContainerManager::preflight(kind, owner)`. The Cursor manager

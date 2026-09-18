@@ -1,3 +1,5 @@
+import { isCursorBotId } from '@core/constant/cursorAgent';
+import { useCursorAgentsAccess } from '@core/cursor/flag';
 import type { IUser } from '@core/user/types';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { useChannelBotsQuery } from '@queries/channel/channel-bots';
@@ -18,18 +20,32 @@ function mentionUser(bot: Bot): IUser {
 /**
  * Build mention entries from installed channel bots and virtual global
  * agents. Account setup does not hide a mention: the harness answers with
- * a connection prompt in the thread when setup is needed.
+ * a connection prompt in the thread when setup is needed. Cursor entries
+ * follow the Cursor rollout flag.
  */
 export function availableBotMentionUsers(
   channelBots: readonly Bot[],
-  agents: readonly Agent[]
+  agents: readonly Agent[],
+  cursorEnabled: boolean
 ): IUser[] {
   const globalAgents = agents.filter(
-    (agent) => agent.channel_scope === 'all' && agent.bot.has_agent
+    (agent) =>
+      agent.channel_scope === 'all' &&
+      agent.bot.has_agent &&
+      (cursorEnabled || agent.harness !== 'cursor')
+  );
+  const cursorBotIds = new Set(
+    agents
+      .filter((agent) => agent.harness === 'cursor')
+      .map((agent) => agent.bot.id)
   );
   const seen = new Set<string>();
 
   return [...channelBots, ...globalAgents.map((agent) => agent.bot)]
+    .filter(
+      (bot) =>
+        cursorEnabled || (!isCursorBotId(bot.id) && !cursorBotIds.has(bot.id))
+    )
     .map(mentionUser)
     .filter((user) => {
       if (seen.has(user.id)) return false;
@@ -50,11 +66,13 @@ export function useChannelBotMentionUsers(
 ): Accessor<IUser[]> {
   const channelBots = useChannelBotsQuery(channelId);
   const agents = useAgentsQuery();
+  const canUseCursor = useCursorAgentsAccess();
 
   return createMemo(() =>
     availableBotMentionUsers(
       queryReadyGate(channelBots) ? channelBots.data : [],
-      queryReadyGate(agents) ? agents.data : []
+      queryReadyGate(agents) ? agents.data : [],
+      canUseCursor()
     )
   );
 }

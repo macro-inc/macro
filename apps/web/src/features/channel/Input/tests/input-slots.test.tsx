@@ -11,6 +11,7 @@ import { Portal } from 'solid-js/web';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const editorMocks = vi.hoisted(() => ({
+  cursorEnabled: false,
   clear: vi.fn(),
   focus: vi.fn(),
   mentionUsers: undefined as (() => IUser[]) | undefined,
@@ -50,6 +51,9 @@ vi.mock('@core/util/upload', () => ({
 
 vi.mock('@core/codex/flag', () => ({
   useCodexAgentsAccess: () => () => false,
+}));
+vi.mock('@core/cursor/flag', () => ({
+  useCursorAgentsAccess: () => () => editorMocks.cursorEnabled,
 }));
 
 // Several service clients in StaticMarkdown's import graph build websocket
@@ -239,6 +243,7 @@ vi.mock('../FormatButtons', () => ({
   FormatButtons: () => <div data-testid="format-buttons" />,
 }));
 
+import { cursorMentionUser } from '../../macroAi';
 import { createInputAttachmentTracker } from '../attachment-tracker';
 import { ChannelInput } from '../ChannelInput';
 import { DropOverlay } from '../DropOverlay';
@@ -268,17 +273,32 @@ function render(ui: () => JSX.Element) {
 
 describe('Input slots', () => {
   beforeEach(() => {
+    editorMocks.cursorEnabled = false;
     editorMocks.clear.mockClear();
     editorMocks.focus.mockClear();
     editorMocks.emitChange = undefined;
     editorMocks.mentionUsers = undefined;
   });
 
-  it('offers Cursor, Claude, and Codex before account setup', () => {
+  it('offers Cursor within its rollout before account setup', () => {
+    editorMocks.cursorEnabled = true;
     render(() => <ChannelInput input={baseInput} />);
     expect(editorMocks.mentionUsers?.().map((user) => user.name)).toEqual(
       expect.arrayContaining(['Cursor', 'Claude', 'Codex'])
     );
+  });
+
+  it('hides Cursor outside its rollout, including supplied bot entries', () => {
+    render(() => (
+      <ChannelInput
+        input={baseInput}
+        participants={() => [cursorMentionUser()]}
+        bots={() => [cursorMentionUser()]}
+      />
+    ));
+    const names = editorMocks.mentionUsers?.().map((user) => user.name);
+    expect(names).not.toContain('Cursor');
+    expect(names).toEqual(expect.arrayContaining(['Claude', 'Codex']));
   });
 
   it('does not start typing when the editor hydrates an empty composer', async () => {

@@ -129,7 +129,9 @@ cropped at the chip's height with a fade at its foot; clicking it expands it in 
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
 
-`@cursor`, `@codex`, and `@claude` are offered to every user before account setup.
+`@codex` and `@claude` are offered to every user before account setup. `@cursor`
+and Cursor-backed agent mentions require the `enable-cursor-agents` rollout flag
+(local override: `VITE_ENABLE_CURSOR_AGENTS`).
 A mention without a connected account creates no session and replies in the thread
 with a **Connect Cursor**, **Connect Codex**, or **Connect Claude** chip. Each chip
 opens Settings → Harness, where all three connection cards are visible. The same
@@ -143,7 +145,7 @@ can continue updating during the turn. Mention
 eligibility is covered by component/query tests; the channel interaction requires
 a configured backend for end-to-end verification.
 
-`@cursor` is offered to every user, connected or not. A mention from someone with
+Within the Cursor rollout, `@cursor` is offered whether connected or not. A mention from someone with
 no Cursor API key opens no session: the Cursor bot replies in the thread that
 `@cursor` runs on their own account and is not connected yet, followed by a
 **Connect Cursor** chip. Clicking the chip opens Settings → Harness; once a key
