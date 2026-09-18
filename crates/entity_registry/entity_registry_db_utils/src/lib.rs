@@ -7,6 +7,8 @@
 //! `shared_entity_registry`; this crate does not depend on the read service.
 
 #[cfg(test)]
+mod backfill_entity;
+#[cfg(test)]
 mod test;
 
 use chrono::{DateTime, Utc};
