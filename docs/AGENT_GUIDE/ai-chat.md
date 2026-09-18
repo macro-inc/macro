@@ -404,7 +404,7 @@ Existing announcement chips remain locked to the turn they announced.
 Sessions with a linked GitHub pull request capture that PR's diff when each
 turn ends, regardless of the agent runtime. Unpushed workspace changes and
 branches without a PR are not included. The session header gains a **Changes**
-toggle (`aria-pressed`) with the changed-file count; it opens a resizable
+toggle (`aria-pressed`) with green additions and red deletions (`+N −M`); it opens a resizable
 **Changes** pane beside the transcript (drag the 1px divider between them).
 The URL's `diff` query parameter stores each session's pane state and diff
 layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
@@ -418,7 +418,8 @@ segmented control (`aria-label="Diff layout"`), a refresh button, the
 changes pane**. Below it is a **Collapse all / Expand all** button.
 The body is a file tree (`nav[aria-label="Changed files"]`, directories
 compressed along single-child chains, status letters A/M/D/R and +/− counts)
-next to a stack of file cards. Each card's sticky header has a disclosure
+next to a scrollable stack of file cards. Expanded cards keep their full height;
+**Collapse all / Expand all** hides or restores their bodies. Each card's header has a disclosure
 caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; hover a
 line and click the accent **+** in the gutter (drag for a range) to leave a
 review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
@@ -434,6 +435,7 @@ review** card sits above the composer with **Review changes**, **Pull request
 that a GitHub PR is required. Ask the agent to open one and register its URL
 with `set_pull_request`, then use **Refresh changes**. An unavailable or
 oversized PR is explained in the pane; there is no branch or container fallback.
+Refresh request failures show a retry banner while keeping the last diff visible.
 The pane does not create PRs or generate their descriptions.
 
 ### Transcript navigation

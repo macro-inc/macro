@@ -6,6 +6,7 @@
 import { createSignal } from 'solid-js';
 import type {
   AgentChangesContext,
+  ChangesAgent,
   ChangesHost,
   ChangesSource,
   PatchRead,
@@ -66,6 +67,7 @@ export function mockChangeset(overrides: Partial<Changeset> = {}): Changeset {
 }
 
 export type MockAgentChangesContext = AgentChangesContext & {
+  host: ChangesHost & { agent: ChangesAgent };
   setSummary: (summary: SessionChanges | undefined) => void;
   setPatch: (patch: string | undefined) => void;
   setPullRequestUrl: (url: string | undefined) => void;
@@ -106,11 +108,12 @@ export function createMockAgentChangesContext(
       refreshes += 1;
     },
   };
-  const host: ChangesHost = {
-    sessionId: () => options.sessionId ?? 'session-1',
-    sendToAgent: (markdown) => void sent.push(markdown),
-    canSend: () => options.canSend ?? true,
-    working: () => false,
+  const host: ChangesHost & { agent: ChangesAgent } = {
+    scopeKey: () => options.sessionId ?? 'session-1',
+    agent: {
+      send: (markdown) => void sent.push(markdown),
+      canSend: () => options.canSend ?? true,
+    },
     pullRequestUrl,
     openExternal: (url) => void opened.push(url),
     copyText: async () => true,

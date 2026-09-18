@@ -1,9 +1,9 @@
-import { DiffChanges } from '@app/features/block-agent/ui/DiffChanges';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import { cn } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { describeFileCount } from '../core/changeset';
 import type { FileTreeDir, FileTreeNode } from '../core/file-tree';
+import { DiffCounts } from './DiffCounts';
 import { StatusLetter } from './StatusLetter';
 
 export type FileTreeProps = {
@@ -75,7 +75,7 @@ function Rows(props: {
             <span class="min-w-0 flex-1 truncate font-mono text-[11.5px]">
               {node.name}
             </span>
-            <DiffChanges
+            <DiffCounts
               additions={node.file.additions}
               deletions={node.file.deletions}
             />

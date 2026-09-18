@@ -9,8 +9,8 @@ import { Button } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
 import { createAgentChanges } from '../primitives/create-agent-changes';
-import { createUrlDiffState } from '../primitives/create-url-diff-state';
 import { createMockAgentChangesContext } from '../tests/mock-context';
+import { createUrlDiffState } from '../url-diff-state';
 import { AgentChangesSplit } from '../views/AgentChangesSplit';
 import {
   ChangesHandoff,
@@ -25,7 +25,7 @@ export default function AgentChangesGallery() {
     patch: GALLERY_PATCH,
     sessionId: 'gallery-session',
   });
-  const urlState = createUrlDiffState(context.host.sessionId);
+  const urlState = createUrlDiffState(context.host.scopeKey);
   const [dismissed, setDismissed] = createSignal<string>();
   const controller = createAgentChanges({
     context,
@@ -35,8 +35,8 @@ export default function AgentChangesGallery() {
   });
   const [transcript, setTranscript] = createSignal<string[]>([]);
   // The mock host records prompts; surface them like a transcript would.
-  const originalSend = context.host.sendToAgent;
-  context.host.sendToAgent = (markdown) => {
+  const originalSend = context.host.agent.send;
+  context.host.agent.send = (markdown) => {
     originalSend(markdown);
     setTranscript((lines) => [...lines, markdown]);
   };

@@ -4,8 +4,8 @@ import { createSignal } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import { readDiffUrlState } from '../core/url-state';
 import { createMemoryStorage } from '../tests/memory-storage';
+import { createUrlDiffState } from '../url-diff-state';
 import { createPaneLayout } from './create-pane-layout';
-import { createUrlDiffState } from './create-url-diff-state';
 
 function setup(url: string) {
   const history = createMemoryHistory();

@@ -1,6 +1,6 @@
 /**
  * The Changes pane: header, review bar, file tree, the stack of file cards,
- * and the pull request sheet over it all. Reads the controller and hands
+ * and their inline notes. Reads the controller and hands
  * resolved values to the components.
  */
 
@@ -32,7 +32,7 @@ import { createThemeType } from '../primitives/create-theme-type';
 const FLASH_MS = 900;
 
 function DiffStack(props: { entries: FileDiffEntry[] }) {
-  const { review, diffStyle, copyPath } = useAgentChanges();
+  const { review, diffStyle, copyPath, context } = useAgentChanges();
   const themeType = createThemeType();
   const cards = new Map<string, HTMLElement>();
   const [flashing, setFlashing] = createSignal<string>();
@@ -53,7 +53,7 @@ function DiffStack(props: { entries: FileDiffEntry[] }) {
   );
 
   return (
-    <div class="flex min-w-0 flex-1 flex-col gap-3 overflow-y-auto scroll-smooth px-3.5 pt-3 pb-24 motion-reduce:scroll-auto">
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col gap-3 overflow-y-auto scroll-smooth px-3.5 pt-3 pb-24 motion-reduce:scroll-auto">
       <For each={props.entries}>
         {(entry) => {
           const path = () => entry.file.path;
@@ -82,7 +82,9 @@ function DiffStack(props: { entries: FileDiffEntry[] }) {
                       themeType={themeType()}
                       notes={notesForFile(review.notes(), path())}
                       composing={composing()}
-                      onOpenNote={review.openNote}
+                      onOpenNote={
+                        context.host.agent ? review.openNote : undefined
+                      }
                       onCancelNote={review.cancelNote}
                       onAddNote={review.addNote}
                       onRemoveNote={review.removeNote}
@@ -139,6 +141,16 @@ export function ChangesPane() {
         onSpotlight={layout.spotlight}
         onClose={layout.close}
       />
+      <Show when={model.refreshError()}>
+        {(message) => (
+          <CaptureBanner
+            tone="failure"
+            text={message()}
+            onRefresh={() => void model.refresh()}
+            refreshing={model.refreshing()}
+          />
+        )}
+      </Show>
       <Switch>
         <Match when={state().kind === 'loading'}>
           <ChangesNotice
@@ -168,7 +180,7 @@ export function ChangesPane() {
         <Match when={state().kind === 'none'}>
           <ChangesNotice
             title="No pull request changes loaded"
-            detail="Link a GitHub pull request to this session, then refresh to review its changes."
+            detail="Link a GitHub pull request, then refresh to review its changes."
             onRefresh={() => void model.refresh()}
             refreshing={model.refreshing()}
           />

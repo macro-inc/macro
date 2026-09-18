@@ -49,7 +49,7 @@ export function createAgentChanges(options: {
 }): AgentChangesController {
   const { source, host } = options.context;
   const layout = createPaneLayout({
-    sessionId: host.sessionId,
+    sessionId: host.scopeKey,
     storage: options.storage,
     layout: options.paneLayout,
   });
@@ -58,12 +58,25 @@ export function createAgentChanges(options: {
     changesVisible: layout.changesVisible,
   });
   const review = createReviewState({
-    sessionId: host.sessionId,
+    sessionId: host.scopeKey,
     changeset: model.changeset,
     storage: options.storage,
   });
   const [diffStyle, setDiffStyle] = options.diffStyle;
   const [dismissed, setDismissed] = options.dismissed;
+
+  const copyPath = async (path: string) => {
+    let copied = false;
+    try {
+      copied = await host.copyText(path);
+    } catch {
+      // Hosts may report clipboard failures by rejecting or returning false.
+    }
+    host.notify(
+      copied ? 'Path copied' : 'The path could not be copied',
+      copied ? 'success' : 'failure'
+    );
+  };
 
   return {
     context: options.context,
@@ -73,13 +86,15 @@ export function createAgentChanges(options: {
     diffStyle,
     setDiffStyle,
     sendQueuedNotes: () => {
+      const agent = host.agent;
+      if (!agent) return;
       const queued = review.queued();
       if (queued.length === 0) return;
-      if (!host.canSend()) {
+      if (!agent.canSend()) {
         host.notify('The agent cannot take a prompt right now.', 'failure');
         return;
       }
-      host.sendToAgent(formatNotesForAgent(queued));
+      agent.send(formatNotesForAgent(queued));
       review.markQueuedSent();
     },
     handoffDismissed: () => {
@@ -87,14 +102,6 @@ export function createAgentChanges(options: {
       return id !== undefined && dismissed() === id;
     },
     dismissHandoff: () => setDismissed(model.changeset()?.id),
-    copyPath: (path) => {
-      void (async () => {
-        const copied = await host.copyText(path);
-        host.notify(
-          copied ? 'Path copied' : 'The path could not be copied',
-          copied ? 'success' : 'failure'
-        );
-      })();
-    },
+    copyPath: (path) => void copyPath(path),
   };
 }

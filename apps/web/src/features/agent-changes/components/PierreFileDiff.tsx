@@ -39,7 +39,6 @@ const BASE_OPTIONS = {
   lineDiffType: 'word-alt',
   expansionLineCount: 20,
   lineHoverHighlight: 'line',
-  enableGutterUtility: true,
 } satisfies FileDiffOptions<string>;
 
 /**
@@ -67,7 +66,7 @@ export function PierreFileDiff(props: {
   themeType: 'light' | 'dark';
   notes: ReviewNote[];
   composing: NoteAnchor | undefined;
-  onOpenNote: (anchor: NoteAnchor) => void;
+  onOpenNote?: (anchor: NoteAnchor) => void;
   onCancelNote: () => void;
   onAddNote: (anchor: NoteAnchor, text: string) => void;
   onRemoveNote: (id: string) => void;
@@ -132,7 +131,7 @@ export function PierreFileDiff(props: {
   };
 
   const onGutterUtilityClick = (range: SelectedLineRange) => {
-    props.onOpenNote({
+    props.onOpenNote?.({
       path: props.path,
       side: range.side ?? 'additions',
       lineNumber: Math.min(range.start, range.end),
@@ -145,7 +144,8 @@ export function PierreFileDiff(props: {
     diffStyle: props.diffStyle,
     themeType: props.themeType,
     renderAnnotation,
-    onGutterUtilityClick,
+    enableGutterUtility: props.onOpenNote !== undefined,
+    onGutterUtilityClick: props.onOpenNote ? onGutterUtilityClick : undefined,
   });
 
   onMount(() => {

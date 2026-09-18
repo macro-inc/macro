@@ -17,7 +17,8 @@ export function ChangesToggle() {
   return (
     <ChangesToggleButton
       open={layout.changesVisible()}
-      count={model.files().length}
+      additions={model.changeset()?.additions ?? 0}
+      deletions={model.changeset()?.deletions ?? 0}
       capturing={model.state().kind === 'capturing'}
       onToggle={layout.toggle}
     />
@@ -60,10 +61,10 @@ export function ReviewNotesDock() {
   if (!controller) return null;
   const { review, context } = controller;
   return (
-    <Show when={review.queued().length > 0}>
+    <Show when={context.host.agent && review.queued().length > 0}>
       <ReviewNotesChip
         count={review.queued().length}
-        disabled={!context.host.canSend()}
+        disabled={!context.host.agent?.canSend()}
         onSend={controller.sendQueuedNotes}
       />
     </Show>

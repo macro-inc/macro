@@ -20,7 +20,7 @@ export type PatchRead = {
   retry: () => void;
 };
 
-/** How the pane reads and asks for the session's changes. */
+/** How the pane reads and refreshes a pull request snapshot. */
 export type ChangesSource = {
   /** The latest summary; undefined until the first read lands. */
   summary: Accessor<SessionChanges | undefined>;
@@ -37,16 +37,19 @@ export type ChangesSource = {
   refresh: () => Promise<void>;
 };
 
-/** What the surrounding session lends the pane. */
-export type ChangesHost = {
-  sessionId: Accessor<string | undefined>;
-  /** Post markdown to the agent as the current user. */
-  sendToAgent: (markdown: string) => void;
-  /** Whether a prompt can be posted right now. */
+/** Optional review-note handoff supplied by an agent host. */
+export type ChangesAgent = {
+  send: (markdown: string) => void;
   canSend: Accessor<boolean>;
-  /** The agent is mid-turn. */
-  working: Accessor<boolean>;
-  /** The session's linked pull request, when one exists. */
+};
+
+/** Host capabilities, independent of whether the host is a session or PR. */
+export type ChangesHost = {
+  /** Stable identity for local review state; use a namespaced id for PR entities. */
+  scopeKey: Accessor<string | undefined>;
+  /** Omit for a read-only viewer without agent note controls. */
+  agent?: ChangesAgent;
+  /** The pull request represented by the source. */
   pullRequestUrl: Accessor<string | undefined>;
   openExternal: (url: string) => void;
   copyText: (text: string) => Promise<boolean>;

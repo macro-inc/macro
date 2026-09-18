@@ -34,6 +34,7 @@ export type ChangesModel = {
   retryPatch: () => void;
   refresh: () => Promise<void>;
   refreshing: Accessor<boolean>;
+  refreshError: Accessor<string | undefined>;
 };
 
 export function createChangesModel(options: {
@@ -89,11 +90,15 @@ export function createChangesModel(options: {
   });
 
   const [refreshing, setRefreshing] = createSignal(false);
+  const [refreshError, setRefreshError] = createSignal<string>();
   const refresh = async () => {
     if (refreshing()) return;
     setRefreshing(true);
+    setRefreshError(undefined);
     try {
       await source.refresh();
+    } catch {
+      setRefreshError('The changes could not be refreshed. Try again.');
     } finally {
       setRefreshing(false);
     }
@@ -109,5 +114,6 @@ export function createChangesModel(options: {
     retryPatch: patch.retry,
     refresh,
     refreshing,
+    refreshError,
   };
 }

@@ -1,10 +1,10 @@
-import { DiffChanges } from '@app/features/block-agent/ui/DiffChanges';
 import CaretRightIcon from '@phosphor/caret-right.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import { Button, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { splitPath } from '../core/changeset';
 import type { FileDiffEntry } from '../core/patch';
+import { DiffCounts } from './DiffCounts';
 import { StatusLetter } from './StatusLetter';
 
 /** Plain note shown in place of a diff body. */
@@ -39,9 +39,8 @@ export function FileCard(props: {
     <article
       ref={props.ref}
       class={cn(
-        'scroll-mt-2 overflow-hidden rounded-lg bg-surface shadow-[inset_0_0_0_1px_var(--color-edge-muted)] transition-shadow',
-        props.flash &&
-          'shadow-[inset_0_0_0_1px_var(--color-accent),0_0_0_3px_var(--color-selected)]'
+        'scroll-mt-2 shrink-0 overflow-hidden rounded-lg border border-edge-muted bg-surface transition-shadow',
+        props.flash && 'border-accent shadow-[0_0_0_3px_var(--color-selected)]'
       )}
       data-path={file().path}
     >
@@ -82,11 +81,13 @@ export function FileCard(props: {
             <span class="min-w-0 shrink truncate text-ink-placeholder">
               {path().dir}
             </span>
-            <span class="shrink-0 font-medium text-ink">{path().base}</span>
+            <span class="max-w-full shrink-0 truncate font-medium text-ink">
+              {path().base}
+            </span>
           </span>
         </button>
         <span class="flex shrink-0 items-center gap-2 text-[11px]">
-          <DiffChanges
+          <DiffCounts
             additions={file().additions}
             deletions={file().deletions}
           />

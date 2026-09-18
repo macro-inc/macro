@@ -1,6 +1,7 @@
 import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+import type { AgentChangesContext } from '../context/agent-changes-context';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
 import {
   type AgentChangesController,
@@ -11,7 +12,6 @@ import { createMemoryStorage } from '../tests/memory-storage';
 import {
   createMockAgentChangesContext,
   MOCK_PATCH,
-  type MockAgentChangesContext,
   mockChangeset,
 } from '../tests/mock-context';
 import { ChangesPane } from './ChangesPane';
@@ -53,7 +53,7 @@ vi.mock('@service-storage/websocket', () => ({
 }));
 
 function mount(
-  context: MockAgentChangesContext,
+  context: AgentChangesContext,
   ui: () => ReturnType<typeof ChangesPane>
 ) {
   const [diffStyle, setDiffStyle] = createSignal<DiffStyle>('unified');
@@ -106,6 +106,54 @@ describe('ChangesPane', () => {
     expect(screen.queryAllByTestId('diff')).toHaveLength(0);
     fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
     expect(screen.getAllByTestId('diff')).toHaveLength(2);
+  });
+
+  it('supports a PR host with no agent capabilities', async () => {
+    const context = readyContext();
+    const { controller } = mount(
+      {
+        ...context,
+        host: {
+          ...context.host,
+          scopeKey: () => 'pr:macro-inc/macro/1482',
+          agent: undefined,
+        },
+      },
+      () => (
+        <>
+          <ChangesPane />
+          <ReviewNotesDock />
+        </>
+      )
+    );
+    controller().layout.open();
+    await waitFor(() => expect(screen.getAllByTestId('diff')).toHaveLength(2));
+    controller().sendQueuedNotes();
+    expect(context.sent).toEqual([]);
+    expect(screen.queryByRole('button', { name: 'Send to agent' })).toBeNull();
+  });
+
+  it('shows refresh failures without discarding the current diff and allows retry', async () => {
+    const context = readyContext();
+    const refresh = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('unavailable'))
+      .mockResolvedValueOnce(undefined);
+    context.source.refresh = refresh;
+    const { controller } = mount(context, () => <ChangesPane />);
+    controller().layout.open();
+    fireEvent.click(
+      screen.getByRole('button', { name: /Refresh pull request changes/ })
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('status').textContent).toContain(
+        'could not be refreshed'
+      )
+    );
+    expect(screen.getAllByTestId('diff')).toHaveLength(2);
+    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(screen.queryByRole('status')).toBeNull());
+    expect(refresh).toHaveBeenCalledTimes(2);
   });
 
   it('explains that a linked GitHub PR is required', () => {
@@ -175,11 +223,11 @@ describe('ChangesPane', () => {
 });
 
 describe('session controls', () => {
-  it('toggles the pane and shows the file count', () => {
+  it('toggles the pane and shows addition/deletion totals', () => {
     const context = readyContext();
     const { controller } = mount(context, () => <ChangesToggle />);
     const toggle = screen.getByRole('button', { name: /Changes/ });
-    expect(toggle.textContent).toContain('2');
+    expect(toggle.textContent).toContain('Changes+3−1');
     expect(toggle.getAttribute('aria-pressed')).toBe('false');
     fireEvent.click(toggle);
     expect(controller().layout.layout()).toBe('split');
