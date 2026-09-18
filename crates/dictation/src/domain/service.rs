@@ -4,28 +4,29 @@ use super::{
     models::{DictationError, LanguageHint, MAX_AUDIO_DURATION, Recording, Transcript},
     ports::{DictationService, RecordingInspector, TranscriptionProvider},
 };
+use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use bytes::Bytes;
 use macro_user_id::user_id::MacroUserIdStr;
+use std::{sync::Arc, time::Duration};
 use tokio::sync::Semaphore;
 
 /// Upper bound on in-flight inspections/provider requests per service process.
 const MAX_CONCURRENT_TRANSCRIPTIONS: usize = 16;
-/// Whisper list price, used only for an operational cost estimate in logs.
-const WHISPER_USD_PER_MINUTE: f32 = 0.006;
-
 /// Dictation for authenticated users on every plan.
 pub struct DictationServiceImpl<P, I> {
     provider: P,
     inspector: I,
+    recorder: Arc<dyn UsageRecorder>,
     capacity: Semaphore,
 }
 
 impl<P: TranscriptionProvider, I: RecordingInspector> DictationServiceImpl<P, I> {
     /// Build a service with a bounded number of concurrent provider requests.
-    pub fn new(provider: P, inspector: I) -> Self {
+    pub fn new(provider: P, inspector: I, recorder: Arc<dyn UsageRecorder>) -> Self {
         Self {
             provider,
             inspector,
+            recorder,
             capacity: Semaphore::new(MAX_CONCURRENT_TRANSCRIPTIONS),
         }
     }
@@ -79,14 +80,14 @@ impl<P: TranscriptionProvider, I: RecordingInspector> DictationService
         }
         span.record("dictation.stage", "provider");
         let transcript = self.provider.transcribe(recording).await?;
-        span.record("dictation.stage", "complete");
-        // Meter every successful provider call without charging user credits and
-        // without recording audio or transcript content.
-        tracing::info!(
-            audio_seconds = transcript.duration_seconds,
-            estimated_cost_usd = transcript.duration_seconds / 60.0 * WHISPER_USD_PER_MINUTE,
-            "dictation usage"
+        span.record("dictation.stage", "usage");
+        let duration = Duration::try_from_secs_f32(transcript.duration_seconds)
+            .map_err(|_| DictationError::Provider)?;
+        self.recorder.record(
+            UsageContext::new(AiFeature::Dictation, user)
+                .into_audio_event(self.provider.model_id().to_owned(), duration),
         );
+        span.record("dictation.stage", "complete");
         Ok(Transcript {
             text: transcript.text.trim().to_owned(),
             duration_seconds: transcript.duration_seconds,

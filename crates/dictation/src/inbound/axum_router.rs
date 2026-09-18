@@ -9,7 +9,7 @@ use axum::{
     Json, RequestPartsExt, Router,
     body::Bytes,
     extract::{DefaultBodyLimit, FromRef, FromRequestParts, Query, State},
-    http::StatusCode,
+    http::{StatusCode, header},
     response::{IntoResponse, Response},
     routing::post,
 };
@@ -222,8 +222,9 @@ pub struct EncodedAudioBody(
         (status = 403, description = "Only signed-in users may dictate", body = ErrorResponse),
         (status = 413, description = "Body exceeds 8 MiB"),
         (status = 415, description = "Unsupported audio container", body = ErrorResponse),
-        (status = 429, description = "Per-user rate limit or provider capacity exceeded"),
+        (status = 429, description = "Per-user hourly rate limit exceeded"),
         (status = 502, description = "Provider failure", body = ErrorResponse),
+        (status = 503, description = "Transcription capacity exhausted; retry after the Retry-After delay", body = ErrorResponse),
     )
 )]
 pub async fn transcribe_handler<S, R, Auth>(
@@ -257,16 +258,22 @@ impl IntoResponse for DictationError {
                 StatusCode::BAD_REQUEST
             }
             Self::UnsupportedAudio => StatusCode::UNSUPPORTED_MEDIA_TYPE,
-            Self::Busy => StatusCode::TOO_MANY_REQUESTS,
+            Self::Busy => StatusCode::SERVICE_UNAVAILABLE,
             Self::Provider => StatusCode::BAD_GATEWAY,
         };
-        (
+        let mut response = (
             status,
             Json(ErrorResponse {
                 message: self.to_string().into(),
             }),
         )
-            .into_response()
+            .into_response();
+        if matches!(self, Self::Busy) {
+            response
+                .headers_mut()
+                .insert(header::RETRY_AFTER, header::HeaderValue::from_static("1"));
+        }
+        response
     }
 }
 

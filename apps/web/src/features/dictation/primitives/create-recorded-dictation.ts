@@ -77,7 +77,7 @@ export function createRecordedDictation(options: {
       audioBytes: blob.size,
     });
     try {
-      const request = () => options.transcribe(blob, current.signal);
+      const request = () => options.transcribe(blob, current.signal, trace);
       const text = (await (trace ? trace.run(request) : request())).trim();
       if (current.signal.aborted || disposed) return;
       upload = undefined;

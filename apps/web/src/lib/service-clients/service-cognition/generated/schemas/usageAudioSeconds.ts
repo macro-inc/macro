@@ -6,6 +6,6 @@
  */
 
 /**
- * Related entity, if any.
+ * Audio duration in seconds, absent for token billing.
  */
-export type CompletionUsageEntity = string | null;
+export type UsageAudioSeconds = number | null;

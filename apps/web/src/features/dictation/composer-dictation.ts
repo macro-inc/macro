@@ -12,7 +12,8 @@ export function createComposerDictation(editor: () => LexicalEditor) {
     supported: AudioRecorder.isSupported(),
     startTrace: () => Telemetry.span('dictation.session'),
     createRecorder: (callbacks) => audioRecorder.createSession(callbacks),
-    transcribe: (audio, signal) => transcribeAudio(audio, language, signal),
+    transcribe: (audio, signal, trace) =>
+      transcribeAudio(audio, language, signal, trace),
     onConfirm: (text: string) => {
       editor().update(
         () => {

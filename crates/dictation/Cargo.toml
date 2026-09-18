@@ -28,6 +28,7 @@ outbound = [
 ]
 
 [dependencies]
+ai_usage = { path = "../ai_usage" }
 async-openai = { workspace = true, optional = true, features = ["audio"] }
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }

@@ -245,13 +245,18 @@ appear below the composer.
 Whisper dictation supports WebM, MP4, and Ogg recording depending on browser.
 Recordings stop just before five minutes or near 8 MB and wait for confirmation.
 Cancel discards the recording; cancel during transcription aborts the request and
-ignores any late result. Failed uploads keep the recording in memory for an explicit
-retry with the checkmark. No audio or transcript is persisted by the dictation
+ignores any late result. If the service is temporarily at capacity, the composer
+stays in **Finishing…** while TanStack retries up to twice with exponential backoff,
+jitter, and the server's `Retry-After` delay. Cancel also cancels these retries.
+Other failures keep the recording in memory for an explicit retry with the
+checkmark. No audio or transcript is stored in the query cache or persisted by the dictation
 endpoint. Provider diagnostics exclude response content. The server detects
 the audio container and inspects its duration before contacting OpenAI, requires a
 signed-in user (bots and internal callers are refused), and rate limits each
-user to 60 attempts per hour (failed requests count); a limited request shows a retry message.
-The backend meters provider duration/cost without charging user credits.
+user to 60 attempts per hour (failed requests and retries count). Hourly limits
+show “Dictation limit reached. Please try again later.” and are not automatically retried.
+The backend records provider-reported audio seconds in the shared AI usage system
+and uses Whisper's per-minute model pricing without charging user credits.
 
 Desktop composer and conversation body text use 15px type. Mobile keeps its
 existing text sizing.

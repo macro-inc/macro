@@ -6,6 +6,6 @@
  */
 
 /**
- * Related entity, if any.
+ * Price per minute of audio (USD), or null for token-only pricing.
  */
-export type CompletionUsageEntity = string | null;
+export type SetPricingRequestPricePerAudioMinute = number | null;

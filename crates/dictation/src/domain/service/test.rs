@@ -11,13 +11,21 @@ const OGG_HEADER: &[u8] = b"OggS\x00\x02\x00\x00\x00\x00\x00\x00\x00\x00";
 
 #[derive(Default)]
 struct FakeProvider {
+    fails: bool,
     calls: AtomicUsize,
     seen: Mutex<Vec<(AudioFormat, Option<String>)>>,
 }
 
 impl TranscriptionProvider for Arc<FakeProvider> {
+    fn model_id(&self) -> &'static str {
+        "whisper-1"
+    }
+
     async fn transcribe(&self, recording: Recording) -> Result<Transcript, DictationError> {
         self.calls.fetch_add(1, Ordering::SeqCst);
+        if self.fails {
+            return Err(DictationError::Provider);
+        }
         let (_, format, language) = recording.into_parts();
         self.seen
             .lock()
@@ -47,7 +55,11 @@ fn service() -> (
 ) {
     let provider = Arc::new(FakeProvider::default());
     (
-        DictationServiceImpl::new(provider.clone(), FakeInspector(Ok(Duration::from_secs(2)))),
+        DictationServiceImpl::new(
+            provider.clone(),
+            FakeInspector(Ok(Duration::from_secs(2))),
+            Arc::new(ai_usage::NoOpUsageRecorder),
+        ),
         provider,
     )
 }
@@ -141,7 +153,11 @@ async fn rejects_invalid_and_long_audio_before_calling_the_provider() {
         ),
     ] {
         let provider = Arc::new(FakeProvider::default());
-        let service = DictationServiceImpl::new(provider.clone(), FakeInspector(duration));
+        let service = DictationServiceImpl::new(
+            provider.clone(),
+            FakeInspector(duration),
+            Arc::new(ai_usage::NoOpUsageRecorder),
+        );
         assert_eq!(
             service
                 .transcribe(user(), Bytes::from_static(OGG_HEADER), None)
@@ -155,8 +171,11 @@ async fn rejects_invalid_and_long_audio_before_calling_the_provider() {
 #[tokio::test]
 async fn accepts_the_exact_duration_limit() {
     let provider = Arc::new(FakeProvider::default());
-    let service =
-        DictationServiceImpl::new(provider.clone(), FakeInspector(Ok(MAX_AUDIO_DURATION)));
+    let service = DictationServiceImpl::new(
+        provider.clone(),
+        FakeInspector(Ok(MAX_AUDIO_DURATION)),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    );
     assert!(
         service
             .transcribe(user(), Bytes::from_static(OGG_HEADER), None)
@@ -201,5 +220,51 @@ fn detects_browser_containers_and_names_upload_by_extension() {
         AudioFormat::detect(b"ID3\x03\x00\x00\x00"),
         Err(DictationError::UnsupportedAudio),
         "mp3 uploads are not produced by browser recorders"
+    );
+}
+
+#[derive(Default)]
+struct FakeRecorder(Mutex<Vec<ai_usage::UsageEvent>>);
+
+impl UsageRecorder for FakeRecorder {
+    fn record(&self, event: ai_usage::UsageEvent) {
+        self.0.lock().unwrap().push(event);
+    }
+}
+
+#[tokio::test]
+async fn records_provider_duration_only_for_successful_transcriptions() {
+    let recorder = Arc::new(FakeRecorder::default());
+    for fails in [false, true] {
+        let provider = Arc::new(FakeProvider {
+            fails,
+            ..FakeProvider::default()
+        });
+        let service = DictationServiceImpl::new(
+            provider,
+            FakeInspector(Ok(Duration::from_secs(3))),
+            recorder.clone(),
+        );
+        let result = service
+            .transcribe(user(), Bytes::from_static(OGG_HEADER), None)
+            .await;
+        assert_eq!(result.is_err(), fails);
+        assert!(
+            service
+                .transcribe(user(), Bytes::new(), None)
+                .await
+                .is_err()
+        );
+    }
+    let events = recorder.0.lock().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].user, user());
+    assert_eq!(events[0].feature, AiFeature::Dictation);
+    assert_eq!(events[0].model, "whisper-1");
+    assert_eq!(
+        events[0].amount,
+        ai_usage::UsageAmount::Audio {
+            duration: Duration::from_secs(2)
+        }
     );
 }

@@ -5196,6 +5196,7 @@ dependencies = [
 name = "dictation"
 version = "0.1.0"
 dependencies = [
+ "ai_usage",
  "async-openai",
  "axum",
  "axum-extra",
