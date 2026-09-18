@@ -35,6 +35,7 @@ export function AgentComposer(props: {
     metadata,
     pending,
     queue,
+    sendNext,
     turn,
     registerQuoteInsert,
   } = useAgentSession();
@@ -138,6 +139,7 @@ export function AgentComposer(props: {
           act({ type: 'prompt', prompt }, 'The message could not be sent')
         }
         onStop={() => act({ type: 'stop' }, 'The agent could not be stopped')}
+        onSendNext={sendNext}
         // Installed only while a queue row exists to land on: an installed
         // handler claims the keys (Up, and the shared plugin's other
         // leave-at-start keys), which must keep their defaults when there is

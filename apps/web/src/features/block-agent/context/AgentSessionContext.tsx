@@ -86,6 +86,13 @@ export type AgentSessionState = {
    * has no session to act on.
    */
   issue: (action: AgentAction) => Promise<IssueResult> | undefined;
+  /**
+   * Send the next queued message now: stop the running turn, and show the
+   * queue head as sent under the id the server already holds it by. The
+   * server dispatches it when the turn actually ends, and that row promotes
+   * the speculation in place. No-op with nothing queued.
+   */
+  sendNext: () => void;
   /** The live question, and the action that answers it. */
   elicitation: ElicitationController;
   /**
@@ -123,10 +130,33 @@ export function AgentSessionProvider(
   const userId = useUserId();
   const live = createAgentSession(sessionId, { userId });
   const turn = () => live.metadata()?.turn ?? 'idle';
-  const queue = createQueueController({
+  const served = createQueueController({
     sessionId,
     messages: live.messages,
   });
+  // A row the user removes may be one `sendNext` already showed as sent;
+  // the fold has to forget it too, or it stays a bubble the log never fills.
+  const queue: QueueController = {
+    ...served,
+    remove: (actionId) => {
+      live.retract(actionId);
+      return served.remove(actionId);
+    },
+  };
+  const sendNext = () => {
+    const head = queue.entries()[0];
+    if (!head) return;
+    const action: AgentAction | undefined =
+      head.kind === 'prompt' && head.prompt != null
+        ? { type: 'prompt', prompt: head.prompt }
+        : head.kind === 'compact'
+          ? { type: 'compact' }
+          : undefined;
+    void live.issue({ type: 'stop' })?.then((result) => {
+      if (result.isErr()) live.retract(head.actionId);
+    });
+    if (action) live.expect(head.actionId, action);
+  };
   // A question the connection that asked is gone cannot be answered; the
   // fold keeps the part but the slot is dead.
   const pendingElicitation = () =>
@@ -176,6 +206,7 @@ export function AgentSessionProvider(
           retryLoad: live.retry,
           turn,
           issue: live.issue,
+          sendNext,
           elicitation,
           queue,
           quoteSelection,

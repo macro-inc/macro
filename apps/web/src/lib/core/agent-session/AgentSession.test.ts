@@ -412,6 +412,39 @@ describe('AgentSession', () => {
     live.release();
   });
 
+  it('shows a queued action as dispatched without posting, and takes it back', async () => {
+    const live = AgentSession.acquire(SESSION);
+    await live.load();
+    fold.pushSession.mockClear();
+
+    live.expect(
+      'head-id',
+      { type: 'prompt', prompt: 'next' },
+      { userId: 'me' }
+    );
+    await settle();
+    expect(inputs()).toEqual([
+      {
+        kind: 'speculated',
+        actionId: 'head-id',
+        action: { type: 'prompt', prompt: 'next' },
+        userId: 'me',
+      },
+    ]);
+    expect(harness.control).not.toHaveBeenCalled();
+
+    // The head now occupies the turn, so a prompt sent meanwhile is queued
+    // and not speculated.
+    fold.pushSession.mockClear();
+    await live.issue({ type: 'prompt', prompt: 'later' });
+    expect(inputs().filter((input) => input.kind === 'speculated')).toEqual([]);
+
+    live.retract('head-id');
+    await settle();
+    expect(inputs().at(-1)).toEqual({ kind: 'retracted', actionId: 'head-id' });
+    live.release();
+  });
+
   it('re-runs a failed load on the next call only', async () => {
     harness.getLog.mockResolvedValueOnce(err([{ code: 'NOT_FOUND' }]));
     const live = AgentSession.acquire(SESSION);

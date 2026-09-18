@@ -208,6 +208,33 @@ export class AgentSession {
   }
 
   /**
+   * Show an action the server already holds as if it had dispatched. Nothing
+   * is sent: the server queued this action earlier under `actionId`, and the
+   * caller has just done the thing that makes it dispatch next - stopped the
+   * running turn. The dispatched row arrives under the same id and promotes
+   * the speculation in place; `retract` takes it back if the queue says the
+   * action is still waiting after all.
+   */
+  expect(
+    actionId: string,
+    action: AgentAction,
+    options: { userId?: string } = {}
+  ): void {
+    if (occupiesTurn(action)) this.turn = 'starting';
+    void this.enqueue({
+      kind: 'speculated',
+      actionId,
+      action,
+      userId: options.userId,
+    });
+  }
+
+  /** Take back a speculation the log will not confirm. Unknown ids are a no-op. */
+  retract(actionId: string): void {
+    void this.enqueue({ kind: 'retracted', actionId });
+  }
+
+  /**
    * Whether this action reaches the runtime now, rather than waiting in the
    * server's queue.
    *

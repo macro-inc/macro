@@ -33,9 +33,9 @@ import {
 export type QueueController = {
   /**
    * The actions still waiting, oldest first, minus any the fold already
-   * shows. An entry whose `actionId` matches a confirmed folded message's
-   * `requestId` has dispatched — the transcript renders it, so the queue
-   * must not.
+   * shows. An entry whose `actionId` matches a folded message's `requestId`
+   * has dispatched, or is shown as dispatching — the transcript renders it,
+   * so the queue must not.
    */
   entries: Accessor<QueuedActionDto[]>;
   /** Replace a queued prompt's text. A 404 means it already dispatched —
@@ -106,14 +106,14 @@ export function createQueueController(options: {
     })
   );
 
-  // Only promoted messages retire a queue row. A speculated one carries the
-  // same `requestId` before the server has done anything with it, so counting
-  // it would hide the very row that says the action is waiting.
+  // A pending message retires a row too. `sendNext` speculates the queue
+  // head under the id this list knows it by, and the whole point is that it
+  // reads as sent; a prompt the server queued after the client speculated
+  // it is retracted by the response, so its row comes back on its own.
   const dispatchedIds = createMemo(() => {
     const ids = new Set<string>();
     for (const message of options.messages()) {
-      if (message.requestId != null && !message.pending)
-        ids.add(message.requestId);
+      if (message.requestId != null) ids.add(message.requestId);
     }
     return ids;
   });

@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use super::*;
 use crate::domain::model::{
     AnsweredField, AnsweredValue, Author, Control, ControlOutcome, ElicitationOutcome,
-    ElicitationRequestId, MessagePart, TurnState,
+    ElicitationRequestId, MessagePart, StopReason, TurnId, TurnState,
 };
 use crate::testing::{TURN, parse_log, test_session};
 use agent_client_protocol::schema::v1::SessionId;
@@ -720,4 +720,88 @@ fn a_speculation_survives_the_replay_gate_across_a_disconnect() {
         user_texts(fold.messages()).pop(),
         Some(("again".to_owned(), true))
     );
+}
+
+/// Enter with a queued message: the client stops the turn and speculates the
+/// queue head under the id the server already gave it, so the head reads as
+/// sent while the runtime winds the old turn down.
+#[test]
+fn a_speculated_prompt_behind_a_stop_closes_the_stopped_turn_as_cancelled() {
+    let mut fold = mid_turn();
+    let stop_id = AgentActionId::mint();
+    fold.push(speculation(AgentAction::Stop, stop_id)).unwrap();
+    assert_eq!(fold.metadata().turn, TurnState::Stopping);
+
+    let head_id = AgentActionId::mint();
+    fold.push(speculation(AgentAction::prompt("next"), head_id))
+        .unwrap();
+    let stopped = |fold: &SpeculativeFold| {
+        fold.messages()
+            .iter()
+            .find(|message| message.id == TurnId(0) && matches!(message.author, Author::Agent))
+            .map(|message| (message.stop.clone(), message.pending))
+            .expect("the stopped turn's agent message")
+    };
+    assert_eq!(
+        stopped(&fold),
+        (Some(StopReason::Cancelled), true),
+        "the only way a stopped turn can end is predicted, and marked pending"
+    );
+    assert_eq!(
+        user_texts(fold.messages()).pop(),
+        Some(("next".to_owned(), true))
+    );
+    assert_eq!(fold.metadata().turn, TurnState::Starting);
+
+    // The log then confirms in its own order: the cancel, the cancelled
+    // response, and the head the server dispatched under the same id.
+    fold.push(FoldInput::Confirmed(
+        cursor(50),
+        logged(&AgentAction::Stop, stop_id),
+    ))
+    .unwrap();
+    assert_eq!(fold.metadata().turn, TurnState::Starting);
+    let cancelled = parse_log(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"prompt-1","result":{"stopReason":"cancelled"}}}"#,
+    )
+    .remove(0);
+    fold.push(FoldInput::Confirmed(cursor(51), cancelled))
+        .unwrap();
+    assert_eq!(stopped(&fold), (Some(StopReason::Cancelled), false));
+    assert_eq!(fold.metadata().turn, TurnState::Starting);
+    fold.push(FoldInput::Confirmed(
+        cursor(52),
+        logged(&AgentAction::prompt("next"), head_id),
+    ))
+    .unwrap();
+    assert_eq!(
+        user_texts(fold.messages()).pop(),
+        Some(("next".to_owned(), false))
+    );
+    assert_eq!(fold.metadata().turn, TurnState::Running);
+    assert_eq!(fold.pending().count(), 0);
+}
+
+/// A confirmed prompt that follows an unanswered one still leaves the old
+/// turn open-ended: only the speculative path predicts the runtime.
+#[test]
+fn a_confirmed_prompt_behind_a_stop_predicts_nothing() {
+    let mut fold = mid_turn();
+    let stop_id = AgentActionId::mint();
+    fold.push(FoldInput::Confirmed(
+        cursor(50),
+        logged(&AgentAction::Stop, stop_id),
+    ))
+    .unwrap();
+    fold.push(FoldInput::Confirmed(
+        cursor(51),
+        logged(&AgentAction::prompt("next"), AgentActionId::mint()),
+    ))
+    .unwrap();
+    let first_agent = fold
+        .messages()
+        .iter()
+        .find(|message| message.id == TurnId(0) && matches!(message.author, Author::Agent))
+        .expect("agent message");
+    assert_eq!(first_agent.stop, None);
 }

@@ -41,6 +41,12 @@ export interface AgentInputProps {
    * actually ends, so a second stop does nothing but post again.
    */
   stopPending?: boolean;
+  /**
+   * Enter or the send button with an empty input and a queued message. Falls
+   * back to `onStop`, which is the mechanism: the queue advances when the
+   * turn it waits on ends.
+   */
+  onSendNext?: () => void;
   disabled?: boolean;
   autofocus?: boolean;
   /**
@@ -118,7 +124,7 @@ export function AgentInput(props: AgentInputProps) {
     // dispatches the oldest waiting action, so the queue remains FIFO. How
     // soon that is depends on the runtime - a booting sandbox cannot be
     // interrupted until it is up.
-    props.onStop?.();
+    (props.onSendNext ?? props.onStop)?.();
   };
 
   const editor = buildConfig('chat')

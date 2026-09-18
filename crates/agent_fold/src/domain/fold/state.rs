@@ -254,13 +254,18 @@ impl FoldState {
                         AgentAction::Prompt(_) | AgentAction::RespondElicitation(_) => None,
                     });
                 }
+                // A user's prompt opens a turn - and may close the one
+                // before it, so it reports on its own.
+                if let RawJsonRpcMessage::Request(request) = &acp.0
+                    && PromptRequest::matches_method(&request.method)
+                {
+                    return self
+                        .begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
+                        .into_iter()
+                        .map(StepChange::Message)
+                        .collect();
+                }
                 StepChange::message(match &acp.0 {
-                    // A user's prompt opens a turn.
-                    RawJsonRpcMessage::Request(request)
-                        if PromptRequest::matches_method(&request.method) =>
-                    {
-                        self.begin_turn(&request.id, request.params.as_ref(), entry.user_id.clone())
-                    }
                     // The user's answer to a question or a permission
                     // request. Each map holds only the ids of its own
                     // requests, so trying the elicitations first is order,

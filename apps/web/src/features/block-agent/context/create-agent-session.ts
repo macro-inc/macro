@@ -54,6 +54,13 @@ export type AgentSessionHandle = {
    */
   issue: (action: AgentAction) => Promise<IssueResult> | undefined;
   /**
+   * Show a queued action as dispatched under the id the server holds it
+   * by. See {@link AgentSession.expect}.
+   */
+  expect: (actionId: string, action: AgentAction) => void;
+  /** Take a speculation back. See {@link AgentSession.retract}. */
+  retract: (actionId: string) => void;
+  /**
    * Adopt a newer snapshot of this session (the bounded external-url poll).
    * No-op when the payload is for a different session.
    */
@@ -253,6 +260,9 @@ export function createAgentSession(
     loadFailed: () => resource.error !== undefined,
     retry: () => void refetch(),
     issue: (action) => live()?.issue(action, { userId: options.userId() }),
+    expect: (actionId, action) =>
+      live()?.expect(actionId, action, { userId: options.userId() }),
+    retract: (actionId) => live()?.retract(actionId),
     applySnapshot: (snapshot) => {
       if (sessionId() !== snapshot.id) return;
       mutate(snapshot);
