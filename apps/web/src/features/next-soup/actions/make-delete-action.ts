@@ -17,6 +17,30 @@ type MakeDeleteOptions = {
   onDeleted?: (entities: EntityData[]) => void;
 };
 
+/** Cleanup follows confirmed outcomes, not whether the dialog eventually closes. */
+function createDeletionCleanup() {
+  const deletedIds = new Set<string>();
+  return {
+    deletedIds,
+    confirm: (entities: EntityData[]) => {
+      const newlyDeleted = entities.filter((entity) => {
+        if (deletedIds.has(entity.id)) return false;
+        deletedIds.add(entity.id);
+        return true;
+      });
+      if (newlyDeleted.length === 0) return newlyDeleted;
+      const splitManager = globalSplitManager();
+      if (splitManager) {
+        const ids = new Set(newlyDeleted.map((entity) => entity.id));
+        globalRemoveFromSplitHistory(splitManager, (entry) =>
+          ids.has(entry.id)
+        );
+      }
+      return newlyDeleted;
+    },
+  };
+}
+
 export const makeDeleteAction = (options: MakeDeleteOptions) => {
   const { userId } = options;
   const bulkDelete = createBulkDeleteDssItemsMutation();
@@ -94,21 +118,20 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
     void deleteRemindersNow(reminders);
     if (rest.length === 0) return;
 
+    const cleanup = createDeletionCleanup();
     openBulkEditModal({
       view: 'delete',
       entities: rest,
+      onPartialDelete: (deleted) => {
+        const confirmed = cleanup.confirm(deleted);
+        if (confirmed.length > 0) options.onDeleted?.(confirmed);
+      },
       onFinish: () => {
-        const splitManager = globalSplitManager();
-        if (splitManager) {
-          const entityIdSet = new Set(rest.map(({ id }) => id));
-          globalRemoveFromSplitHistory(splitManager, (entry) =>
-            entityIdSet.has(entry.id)
-          );
-        }
+        const confirmed = cleanup.confirm(rest);
         toast.success(
           rest.length > 1 ? `Deleted ${rest.length} items` : 'Deleted'
         );
-        options.onDeleted?.(rest);
+        if (confirmed.length > 0) options.onDeleted?.(confirmed);
       },
     });
   };
@@ -129,10 +152,28 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
       (e) => e.type !== 'email' && e.type !== 'reminder'
     );
 
+    const cleanup = createDeletionCleanup();
+    let remainingEntities: EntityData[] = nonEmailEntities;
+    let hadPartialDeletion = false;
+    const nextSurvivingRow = (alsoRemoved: string[] = []) => {
+      if (!hadPartialDeletion) return nextRow;
+      const removed = new Set([...cleanup.deletedIds, ...alsoRemoved]);
+      const navigationOptions = {
+        skipGroupHeaders: true,
+        skipLoadMore: true,
+        skip: (row: NonNullable<ReturnType<typeof soup.items.at>>) =>
+          removed.has(row.original.id),
+      };
+      return (
+        soup.navigate.peekOffset(1, navigationOptions)?.row ??
+        soup.navigate.peekOffset(-1, navigationOptions)?.row
+      );
+    };
     const advancePastDeleted = () => {
       soup.selection.clear();
-      if (nextRow) soup.focus.set(nextRow.id);
-      restoreSoupFocus(nextRow?.id);
+      const next = nextSurvivingRow();
+      if (next || hadPartialDeletion) soup.focus.set(next?.id);
+      restoreSoupFocus(next?.id);
     };
 
     const trashEmailEntities = () => {
@@ -149,8 +190,9 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
       }
 
       soup.selection.clear();
-      if (nextRow) {
-        soup.focus.set(nextRow.id);
+      const next = nextSurvivingRow(emailEntities.map((entity) => entity.id));
+      if (next || hadPartialDeletion) {
+        soup.focus.set(next?.id);
       }
 
       const toastId = toast.success(
@@ -180,7 +222,7 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
         toast.failure('Failed to move to Trash');
       });
 
-      restoreSoupFocus(nextRow?.id);
+      restoreSoupFocus(next?.id);
     };
 
     if (nonEmailEntities.length > 0) {
@@ -189,15 +231,14 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
       openBulkEditModal({
         view: 'delete',
         entities: nonEmailEntities,
+        onPartialDelete: (deleted, remaining) => {
+          hadPartialDeletion = true;
+          remainingEntities = remaining;
+          soup.selection.clear();
+          cleanup.confirm(deleted);
+        },
         onFinish: () => {
-          const splitManager = globalSplitManager();
-          if (splitManager) {
-            const entityIdSet = new Set(nonEmailEntities.map(({ id }) => id));
-            globalRemoveFromSplitHistory(splitManager, (entry) =>
-              entityIdSet.has(entry.id)
-            );
-          }
-
+          cleanup.confirm(nonEmailEntities);
           toast.success(
             nonEmailEntities.length > 1
               ? `Deleted ${nonEmailEntities.length} items`
@@ -211,11 +252,18 @@ export const makeDeleteAction = (options: MakeDeleteOptions) => {
           }
         },
         onCancel: () => {
-          const firstEntity = nonEmailEntities[0];
-          if (firstEntity) {
-            soup.focus.set(firstEntity.id);
-          }
-          restoreSoupFocus(firstEntity?.id);
+          const firstRemaining = hadPartialDeletion
+            ? remainingEntities.find(
+                (entity) =>
+                  !cleanup.deletedIds.has(entity.id) &&
+                  soup.items.get(entity.id)
+              )
+            : nonEmailEntities[0];
+          const target =
+            firstRemaining?.id ??
+            (hadPartialDeletion ? nextSurvivingRow()?.id : undefined);
+          if (target || hadPartialDeletion) soup.focus.set(target);
+          restoreSoupFocus(target);
         },
       });
     } else if (emailEntities.length > 0) {

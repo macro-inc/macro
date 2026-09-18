@@ -53,8 +53,12 @@ then confirm **Delete**. With GraphQL Soup enabled, selected rows disappear whil
 requests are pending, including rows loaded through grouped pagination. The
 confirmation closes when the whole batch succeeds. After a partial failure it
 reports how many items were deleted and keeps only failed items in the dialog for
-retry; successful items must not be submitted again. Failed items return to Soup
-and search immediately, while successful removals remain absent from both.
+retry; successful items must not be submitted again. Confirmed deletions are
+removed from split histories immediately, even if the dialog is then canceled.
+Cancel clears stale selection and focuses a surviving failed item or a live
+neighbor; it does not undo successful deletions or run deferred email deletions.
+Failed items return to Soup and search immediately, while successful removals
+remain absent from both.
 Successfully deleted items stay hidden until all enabled GraphQL Soup lists
 revalidate successfully, even if the first refresh fails. Refresh is attempted
 at most three times (one- and two-second retry delays); suppression expires one

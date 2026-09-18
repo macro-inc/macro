@@ -9,11 +9,18 @@ import { Button, cn } from '@ui';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import { BulkDeleteFailure } from '../queries/bulk-delete-result';
 
+/** Confirmed progress without closing a partially failed deletion dialog. */
+export type PartialDeleteHandler = (
+  deleted: EntityData[],
+  remaining: EntityData[]
+) => void;
+
 export const BulkDeleteView = (props: {
   entities: EntityData[];
   onFinish: () => void;
   onCancel: () => void;
   onError?: (error: unknown) => void;
+  onPartialDelete?: PartialDeleteHandler;
 }) => {
   const bulkDelete = createBulkDeleteDssItemsMutation();
   const [remainingEntities, setRemainingEntities] =
@@ -31,6 +38,9 @@ export const BulkDeleteView = (props: {
   onMount(focusDeleteButton);
 
   const handleDelete = async () => {
+    // Keep the completion attached to the caller that submitted this attempt,
+    // even if another modal replaces this one while the request is in flight.
+    const onPartialDelete = props.onPartialDelete;
     setPartialMessage(undefined);
     try {
       await bulkDelete.mutateAsync(entities());
@@ -42,6 +52,16 @@ export const BulkDeleteView = (props: {
       ) {
         setRemainingEntities(error.failedEntities);
         setPartialMessage(error.message);
+        try {
+          onPartialDelete?.(error.deletedEntities, error.failedEntities);
+        } catch (cleanupError) {
+          // A caller cleanup failure must not turn confirmed deletes into
+          // retry targets or suppress the partial-success feedback.
+          console.error(
+            'Failed to clean up partially deleted entities:',
+            cleanupError
+          );
+        }
         return;
       }
       console.error('Failed to delete entities:', error);

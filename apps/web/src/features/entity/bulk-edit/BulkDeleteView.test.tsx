@@ -36,6 +36,7 @@ function mount() {
   const onFinish = vi.fn();
   const onError = vi.fn();
   const onCancel = vi.fn();
+  const onPartialDelete = vi.fn();
   render(() => (
     <Dialog open modal={false}>
       <Dialog.Content>
@@ -44,11 +45,12 @@ function mount() {
           onFinish={onFinish}
           onError={onError}
           onCancel={onCancel}
+          onPartialDelete={onPartialDelete}
         />
       </Dialog.Content>
     </Dialog>
   ));
-  return { onFinish, onError, onCancel };
+  return { onFinish, onError, onCancel, onPartialDelete };
 }
 
 beforeEach(() => {
@@ -75,7 +77,7 @@ describe('BulkDeleteView partial failure', () => {
         )
       )
       .mockResolvedValueOnce([true]);
-    const { onFinish, onError } = mount();
+    const { onFinish, onError, onPartialDelete } = mount();
     fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
     await vi.waitFor(() =>
       expect(screen.getByRole('status').textContent).toContain(
@@ -90,6 +92,50 @@ describe('BulkDeleteView partial failure', () => {
     await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
     expect(mutateAsync).toHaveBeenNthCalledWith(1, [failed, deleted]);
     expect(mutateAsync).toHaveBeenNthCalledWith(2, [failed]);
+    expect(onPartialDelete).toHaveBeenCalledExactlyOnceWith(
+      [deleted],
+      [failed]
+    );
+  });
+
+  it('reports confirmed successes before cancellation without completing the whole batch', async () => {
+    mutateAsync.mockRejectedValueOnce(
+      new BulkDeleteFailure([failed, deleted], [false, true])
+    );
+    const { onFinish, onError, onCancel, onPartialDelete } = mount();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await vi.waitFor(() =>
+      expect(onPartialDelete).toHaveBeenCalledExactlyOnceWith(
+        [deleted],
+        [failed]
+      )
+    );
+    expect(onCancel).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onCancel).toHaveBeenCalledOnce();
+    expect(onPartialDelete).toHaveBeenCalledOnce();
+    expect(onFinish).not.toHaveBeenCalled();
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it('does not retry successful ids when caller cleanup throws', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    mutateAsync
+      .mockRejectedValueOnce(
+        new BulkDeleteFailure([failed, deleted], [false, true])
+      )
+      .mockResolvedValueOnce([true]);
+    const { onFinish, onError, onPartialDelete } = mount();
+    onPartialDelete.mockImplementation(() => {
+      throw new Error('cleanup failed');
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await vi.waitFor(() => expect(onPartialDelete).toHaveBeenCalledOnce());
+    expect(screen.queryByTestId('deleted')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await vi.waitFor(() => expect(onFinish).toHaveBeenCalledOnce());
+    expect(mutateAsync).toHaveBeenNthCalledWith(2, [failed]);
+    expect(onError).not.toHaveBeenCalled();
   });
 
   it('preserves the existing full-failure callback and original retry targets', async () => {
