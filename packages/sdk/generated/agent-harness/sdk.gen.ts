@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses } from './types.gen';
+import type { CompleteData, CompleteErrors, CompleteResponses, ControlAgentSessionData, ControlAgentSessionErrors, ControlAgentSessionResponses, CreateAgentSessionData, CreateAgentSessionErrors, CreateAgentSessionResponses, DeleteAgentSessionData, DeleteAgentSessionErrors, DeleteAgentSessionResponses, DisconnectData, DisconnectErrors, DisconnectResponses, EditQueuedActionData, EditQueuedActionErrors, EditQueuedActionResponses, GetAgentSandboxSizeData, GetAgentSandboxSizeErrors, GetAgentSandboxSizeResponses, GetAgentSessionChangesData, GetAgentSessionChangesErrors, GetAgentSessionChangesPatchData, GetAgentSessionChangesPatchErrors, GetAgentSessionChangesPatchResponses, GetAgentSessionChangesResponses, GetAgentSessionData, GetAgentSessionErrors, GetAgentSessionLogData, GetAgentSessionLogErrors, GetAgentSessionLogResponses, GetAgentSessionQueueData, GetAgentSessionQueueErrors, GetAgentSessionQueueResponses, GetAgentSessionResponses, ListAgentRepositoriesData, ListAgentRepositoriesErrors, ListAgentRepositoriesResponses, LoadAgentModelsHandlerData, LoadAgentModelsHandlerErrors, LoadAgentModelsHandlerResponses, PreviewAgentSessionsData, PreviewAgentSessionsErrors, PreviewAgentSessionsResponses, PutAgentSandboxSizeData, PutAgentSandboxSizeErrors, PutAgentSandboxSizeResponses, PutAgentSessionSandboxSizeData, PutAgentSessionSandboxSizeErrors, PutAgentSessionSandboxSizeResponses, RefreshAgentSessionChangesData, RefreshAgentSessionChangesErrors, RefreshAgentSessionChangesResponses, RemoveQueuedActionData, RemoveQueuedActionErrors, RemoveQueuedActionResponses, RenameAgentSessionData, RenameAgentSessionErrors, RenameAgentSessionResponses, StartData, StartErrors, StartResponses, StatusData, StatusErrors, StatusResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -155,6 +155,29 @@ export class Sdk extends HeyApiClient {
      */
     public getAgentSession<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionData, ThrowOnError>): RequestResult<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetAgentSessionResponses, GetAgentSessionErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}', ...options });
+    }
+    
+    /**
+     * The latest captured changes of an agent session: the changed files with
+     * statuses and line counts, and how the latest capture attempt went.
+     */
+    public getAgentSessionChanges<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionChangesData, ThrowOnError>): RequestResult<GetAgentSessionChangesResponses, GetAgentSessionChangesErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetAgentSessionChangesResponses, GetAgentSessionChangesErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/changes', ...options });
+    }
+    
+    /**
+     * The unified diff behind the session's latest changeset.
+     */
+    public getAgentSessionChangesPatch<ThrowOnError extends boolean = false>(options: Options<GetAgentSessionChangesPatchData, ThrowOnError>): RequestResult<GetAgentSessionChangesPatchResponses, GetAgentSessionChangesPatchErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetAgentSessionChangesPatchResponses, GetAgentSessionChangesPatchErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/changes/patch', ...options });
+    }
+    
+    /**
+     * Capture the session's changes again now. Answers at once with the state
+     * as it stands; the capture runs on and viewers are told when it lands.
+     */
+    public refreshAgentSessionChanges<ThrowOnError extends boolean = false>(options: Options<RefreshAgentSessionChangesData, ThrowOnError>): RequestResult<RefreshAgentSessionChangesResponses, RefreshAgentSessionChangesErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<RefreshAgentSessionChangesResponses, RefreshAgentSessionChangesErrors, ThrowOnError>({ url: '/agent-sessions/{session_id}/changes/refresh', ...options });
     }
     
     /**

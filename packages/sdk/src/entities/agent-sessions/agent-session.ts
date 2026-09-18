@@ -1,5 +1,6 @@
 import type {
   AgentAction,
+  AgentSessionChangesResponse,
   AgentSessionLogResponse,
   AgentSessionResponse,
   ControlResponse,
@@ -210,6 +211,33 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     );
     return entries.map((entry) =>
       QueuedAction.from(this.client, this.id, entry),
+    );
+  }
+
+  /** Read the latest captured GitHub pull request changes and capture status. */
+  async changes(): Promise<AgentSessionChangesResponse> {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionChanges({
+        path: { session_id: this.id },
+      }),
+    );
+  }
+
+  /** Read the unified diff of the latest captured changeset. */
+  async changesPatch(): Promise<string> {
+    return unwrap(
+      await this.client.agentHarness.getAgentSessionChangesPatch({
+        path: { session_id: this.id },
+      }),
+    ).patch;
+  }
+
+  /** Request a fresh capture and return the current state while it runs. */
+  async refreshChanges(): Promise<AgentSessionChangesResponse> {
+    return this.mutate((client) =>
+      client.agentHarness.refreshAgentSessionChanges({
+        path: { session_id: this.id },
+      }),
     );
   }
 

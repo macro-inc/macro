@@ -81,7 +81,7 @@ async fn a_capture_stores_the_patch_and_a_summary_read_from_it() {
     assert!(changeset.has_patch());
 
     let changes = service.changes(&view_access()).await.unwrap();
-    assert_eq!(changes.changeset, Some(changeset.clone()));
+    assert_eq!(changes.changeset.as_ref(), Some(changeset.as_ref()));
     let attempt = changes.attempt.expect("an attempt was recorded");
     assert_eq!(attempt.outcome, Some(AttemptOutcome::Captured));
     assert!(!attempt.in_flight());

@@ -247,10 +247,10 @@ impl BlockReader {
 /// the two sides read the same - the common case of an unrenamed file - and
 /// failing that the first ` b/`. Quoted paths are split on the closing quote.
 fn split_header_paths(rest: &str) -> (String, String) {
-    if rest.starts_with('"') {
-        if let Some((old, new)) = split_quoted_pair(rest) {
-            return (strip_side(&old, "a/"), strip_side(&new, "b/"));
-        }
+    if rest.starts_with('"')
+        && let Some((old, new)) = split_quoted_pair(rest)
+    {
+        return (strip_side(&old, "a/"), strip_side(&new, "b/"));
     }
     let candidates: Vec<usize> = rest.match_indices(" b/").map(|(index, _)| index).collect();
     for index in &candidates {

@@ -34,7 +34,7 @@ mod test;
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CaptureOutcome {
     /// A changeset (possibly empty) was stored.
-    Captured(Changeset),
+    Captured(Box<Changeset>),
     /// The pull request was not available; the reason was recorded.
     NotReady,
     /// The extractor or the storage failed; the reason was recorded.
@@ -286,17 +286,17 @@ where
         let (additions, deletions) = patch::totals(&budgeted.files);
         let id = ChangesetId::new();
         let key = (!budgeted.patch.is_empty()).then(|| PatchBlobKey::for_changeset(session, id));
-        if let Some(key) = &key {
-            if let Err(error) = self.inner.blobs.put_patch(key, &budgeted.patch).await {
-                let _ = self
-                    .fail(
-                        session,
-                        AttemptOutcome::Failed,
-                        "Storing the changes failed.".to_owned(),
-                    )
-                    .await;
-                return Err(ChangesError::Storage(error));
-            }
+        if let Some(key) = &key
+            && let Err(error) = self.inner.blobs.put_patch(key, &budgeted.patch).await
+        {
+            let _ = self
+                .fail(
+                    session,
+                    AttemptOutcome::Failed,
+                    "Storing the changes failed.".to_owned(),
+                )
+                .await;
+            return Err(ChangesError::Storage(error));
         }
         let changeset = Changeset {
             id,
@@ -345,7 +345,7 @@ where
             source = %changeset.source,
             "captured session changes"
         );
-        Ok(CaptureOutcome::Captured(changeset))
+        Ok(CaptureOutcome::Captured(Box::new(changeset)))
     }
 
     async fn fail(

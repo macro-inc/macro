@@ -431,6 +431,199 @@
         }
       }
     },
+    "/agent-sessions/{session_id}/changes": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "The latest captured changes of an agent session: the changed files with\nstatuses and line counts, and how the latest capture attempt went.",
+        "operationId": "get_agent_session_changes",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionChangesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/changes/patch": {
+      "get": {
+        "tags": ["agent-sessions"],
+        "summary": "The unified diff behind the session's latest changeset.",
+        "operationId": "get_agent_session_changes_patch",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionChangesPatchResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/agent-sessions/{session_id}/changes/refresh": {
+      "post": {
+        "tags": ["agent-sessions"],
+        "summary": "Capture the session's changes again now. Answers at once with the state\nas it stands; the capture runs on and viewers are told when it lands.",
+        "operationId": "refresh_agent_session_changes",
+        "parameters": [
+          {
+            "name": "session_id",
+            "in": "path",
+            "description": "ID of the agent session",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AgentSessionChangesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/agent-sessions/{session_id}/control": {
       "post": {
         "tags": ["agent-sessions"],
@@ -1264,6 +1457,50 @@
         ],
         "description": "Answer an elicitation the agent is waiting on."
       },
+      "AgentSessionChangesPatchResponse": {
+        "type": "object",
+        "description": "Response body for `GET /agent-sessions/{session_id}/changes/patch`.\n\nClients deserialize this, so both derives are used.",
+        "required": ["patch"],
+        "properties": {
+          "patch": {
+            "type": "string",
+            "description": "The git-style unified diff of the current changeset."
+          }
+        }
+      },
+      "AgentSessionChangesResponse": {
+        "type": "object",
+        "description": "Response body for `GET /agent-sessions/{session_id}/changes`.\n\nClients deserialize this, so both derives are used.",
+        "required": ["capturing"],
+        "properties": {
+          "attempt": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CaptureAttemptDto",
+                "description": "The latest attempt, if any was made."
+              }
+            ]
+          },
+          "capturing": {
+            "type": "boolean",
+            "description": "A capture is running right now."
+          },
+          "changeset": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/ChangesetDto",
+                "description": "The latest capture, if any succeeded."
+              }
+            ]
+          }
+        }
+      },
       "AgentSessionLogEntryDto": {
         "allOf": [
           {
@@ -1584,6 +1821,167 @@
       "BotId": {
         "type": "string"
       },
+      "CaptureAttemptDto": {
+        "type": "object",
+        "description": "The latest capture attempt.\n\nClients deserialize this, so both derives are used.",
+        "required": ["startedAt"],
+        "properties": {
+          "error": {
+            "type": ["string", "null"],
+            "description": "Why it did not capture, in a sentence the user can read."
+          },
+          "finishedAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "When it ended; absent while it runs."
+          },
+          "outcome": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CaptureOutcomeDto",
+                "description": "How it ended; absent while it runs."
+              }
+            ]
+          },
+          "startedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When it started."
+          }
+        }
+      },
+      "CaptureOutcomeDto": {
+        "type": "string",
+        "description": "How the latest capture attempt ended, on the wire.",
+        "enum": ["captured", "not_ready", "failed"]
+      },
+      "ChangedFileDto": {
+        "type": "object",
+        "description": "One changed file.\n\nClients deserialize this, so both derives are used.",
+        "required": [
+          "path",
+          "kind",
+          "additions",
+          "deletions",
+          "binary",
+          "patchOmitted"
+        ],
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines added.",
+            "minimum": 0
+          },
+          "binary": {
+            "type": "boolean",
+            "description": "The diff carries no text for this file."
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines removed.",
+            "minimum": 0
+          },
+          "kind": {
+            "$ref": "#/components/schemas/FileChangeKindDto",
+            "description": "What happened to the file."
+          },
+          "patchOmitted": {
+            "type": "boolean",
+            "description": "The file's hunks were left out of the patch to fit the size budget."
+          },
+          "path": {
+            "type": "string",
+            "description": "The file's path after the change, or before it for a deletion."
+          },
+          "previousPath": {
+            "type": ["string", "null"],
+            "description": "Where a renamed file came from."
+          }
+        }
+      },
+      "ChangesetDto": {
+        "type": "object",
+        "description": "One capture of a session's changes.\n\nClients deserialize this, so both derives are used.",
+        "required": [
+          "id",
+          "source",
+          "base",
+          "head",
+          "files",
+          "additions",
+          "deletions",
+          "patchBytes",
+          "truncated",
+          "capturedAt"
+        ],
+        "properties": {
+          "additions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines added across all files.",
+            "minimum": 0
+          },
+          "base": {
+            "$ref": "#/components/schemas/GitRefDto",
+            "description": "The side the work started from."
+          },
+          "capturedAt": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the diff was taken."
+          },
+          "deletions": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Lines removed across all files.",
+            "minimum": 0
+          },
+          "files": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChangedFileDto"
+            },
+            "description": "Every changed file, in patch order."
+          },
+          "head": {
+            "$ref": "#/components/schemas/GitRefDto",
+            "description": "The side carrying the work."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The capture's id; changes with every capture."
+          },
+          "patchBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size of the patch `GET .../changes/patch` serves; zero when nothing\nchanged.",
+            "minimum": 0
+          },
+          "repository": {
+            "type": ["string", "null"],
+            "description": "`https://github.com/owner/name`, when known."
+          },
+          "source": {
+            "$ref": "#/components/schemas/ChangesetSourceDto",
+            "description": "Where the diff was read from."
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "Some files' hunks were left out of the patch."
+          }
+        }
+      },
+      "ChangesetSourceDto": {
+        "type": "string",
+        "description": "The source of the captured diff, on the wire.",
+        "enum": ["github_pull_request"]
+      },
       "CompleteRequest": {
         "type": "object",
         "description": "One-time manual code. Deliberately does not implement Debug.",
@@ -1868,6 +2266,25 @@
           "url": {
             "type": ["string", "null"],
             "description": "The agent's page on the provider's site, for a client to link out to."
+          }
+        }
+      },
+      "FileChangeKindDto": {
+        "type": "string",
+        "description": "What happened to a file, on the wire.",
+        "enum": ["added", "modified", "deleted", "renamed"]
+      },
+      "GitRefDto": {
+        "type": "object",
+        "description": "One end of the compared range.",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The branch name, when known."
+          },
+          "sha": {
+            "type": ["string", "null"],
+            "description": "The commit, when known."
           }
         }
       },
