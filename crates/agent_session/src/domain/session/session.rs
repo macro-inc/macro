@@ -8,11 +8,13 @@ use agent_client_protocol::schema::v1::{
     ElicitationUrlCapabilities, InitializeRequest, InitializeResponse, LoadSessionRequest,
     LoadSessionResponse, McpServer, NewSessionRequest, NewSessionResponse, PermissionOptionId,
     PermissionOptionKind, RequestId, RequestPermissionOutcome, RequestPermissionRequest, Response,
-    ResumeSessionRequest, ResumeSessionResponse, SelectedPermissionOutcome, SessionId,
+    ResumeSessionRequest, ResumeSessionResponse, SelectedPermissionOutcome, SessionConfigKind,
+    SessionId, SetSessionConfigOptionResponse,
 };
 use agent_client_protocol::{JsonRpcMessage, RawJsonRpcMessage};
 use agent_runtime_protocol::domain::action::{
-    AgentAction, AgentActionId, AgentPermissionAction, PermissionAnswer, permission_response,
+    AgentAction, AgentActionId, AgentPermissionAction, MODEL_CONFIG_ID, PermissionAnswer,
+    permission_response,
 };
 use agent_runtime_protocol::domain::schema::v0::{
     AcpMessage, SystemEvent, ToRuntimeMessage, ToServerMessage,
@@ -61,6 +63,8 @@ pub struct SessionMachine<Token> {
     /// behind a reconnect is fresh and holds no server from before.
     mcp_servers: Vec<McpServer>,
     permission_policy: PermissionPolicy,
+    /// Only for a newly created ACP session; restored sessions retain their model.
+    initial_model: Option<String>,
     /// Permission requests the agent is waiting on, keyed by the agent's own
     /// request id - the id an answer has to echo. Only ever populated under
     /// [`PermissionPolicy::Prompt`]; auto-accept answers on arrival.
@@ -88,6 +92,7 @@ impl<Token> SessionMachine<Token> {
             workspace,
             mcp_servers,
             permission_policy,
+            initial_model: None,
             outstanding_permissions: HashMap::new(),
         }
     }
@@ -113,8 +118,16 @@ impl<Token> SessionMachine<Token> {
             workspace,
             mcp_servers,
             permission_policy,
+            initial_model: None,
             outstanding_permissions: HashMap::new(),
         }
+    }
+
+    /// Select this model before releasing prompts on a newly created ACP session.
+    #[must_use]
+    pub fn with_initial_model(mut self, model: Option<String>) -> Self {
+        self.initial_model = model;
+        self
     }
 
     /// The session this connection belongs to.
@@ -139,9 +152,9 @@ impl<Token> SessionMachine<Token> {
     pub fn status(&self) -> RuntimeStatus {
         match &self.phase {
             SessionPhase::Booting => RuntimeStatus::Booting,
-            SessionPhase::Initializing { .. } | SessionPhase::Opening { .. } => {
-                RuntimeStatus::Handshaking
-            }
+            SessionPhase::Initializing { .. }
+            | SessionPhase::Opening { .. }
+            | SessionPhase::ConfiguringModel { .. } => RuntimeStatus::Handshaking,
             SessionPhase::Live { session_id, .. } => RuntimeStatus::Live {
                 session_id: session_id.clone(),
             },
@@ -228,7 +241,8 @@ impl<Token> SessionMachine<Token> {
         let session_id = match &self.phase {
             SessionPhase::Booting
             | SessionPhase::Initializing { .. }
-            | SessionPhase::Opening { .. } => {
+            | SessionPhase::Opening { .. }
+            | SessionPhase::ConfiguringModel { .. } => {
                 // An answer cannot be queued: it names a request id that only
                 // a live connection could have received, and any connection
                 // that opens from here is a fresh one.
@@ -399,6 +413,11 @@ impl<Token> SessionMachine<Token> {
             SessionPhase::Opening { request_id, .. } if frame.response_id() == Some(request_id) => {
                 self.on_session_opened(&frame, effects);
             }
+            SessionPhase::ConfiguringModel { request_id, .. }
+                if frame.response_id() == Some(request_id) =>
+            {
+                self.on_model_selected(&frame, effects);
+            }
             _ => {}
         }
     }
@@ -521,15 +540,72 @@ impl<Token> SessionMachine<Token> {
             }
         };
 
-        self.phase = SessionPhase::Live {
-            session_id: session_id.clone(),
-            elicitation: None,
-        };
         if persist {
+            if let Some(model) = self.initial_model.take() {
+                let request_id = self.next_id();
+                match AgentAction::set_model(&model).to_runtime(&session_id, request_id.clone()) {
+                    Ok(message) => {
+                        self.phase = SessionPhase::ConfiguringModel {
+                            request_id,
+                            session_id,
+                            model,
+                        };
+                        effects.push(Effect::Send {
+                            from: None,
+                            message,
+                        });
+                    }
+                    Err(error) => self.die(
+                        StopReason::HandshakeNotBuildable(error.to_string()),
+                        effects,
+                    ),
+                }
+                return;
+            }
             effects.push(Effect::PersistAcpSession {
                 session_id: session_id.clone(),
             });
         }
+        self.finish_opening(session_id, effects);
+    }
+
+    fn on_model_selected(&mut self, frame: &RawJsonRpcMessage, effects: &mut Vec<Effect<Token>>) {
+        let SessionPhase::ConfiguringModel {
+            session_id, model, ..
+        } = &self.phase
+        else {
+            return;
+        };
+        let selected = match frame {
+            RawJsonRpcMessage::Response(Response::Result { result, .. }) => {
+                serde_json::from_value::<SetSessionConfigOptionResponse>(result.clone())
+                    .ok()
+                    .is_some_and(|response| {
+                        response.config_options.iter().any(|option| {
+                            option.id.to_string() == MODEL_CONFIG_ID
+                                && matches!(&option.kind, SessionConfigKind::Select(select)
+                                if select.current_value.to_string() == *model)
+                        })
+                    })
+            }
+            _ => false,
+        };
+        if !selected {
+            self.die(StopReason::ModelNotSelected(model.clone()), effects);
+            return;
+        }
+        let session_id = session_id.clone();
+        effects.push(Effect::PersistAcpSession {
+            session_id: session_id.clone(),
+        });
+        self.finish_opening(session_id, effects);
+    }
+
+    fn finish_opening(&mut self, session_id: SessionId, effects: &mut Vec<Effect<Token>>) {
+        self.phase = SessionPhase::Live {
+            session_id: session_id.clone(),
+            elicitation: None,
+        };
         if self.reload_required {
             self.begin_reload(effects);
             return;

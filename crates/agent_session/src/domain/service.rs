@@ -27,12 +27,14 @@ mod test;
 
 use std::sync::Arc;
 
-use agent_client_protocol::schema::v1::SessionId;
+use agent_client_protocol::RawJsonRpcMessage;
+use agent_client_protocol::schema::v1::{Response, SessionId, SetSessionConfigOptionResponse};
 use agent_fold::domain::lifecycle::LifecycleFold;
 use agent_fold::domain::model::TurnSignal;
+use agent_fold::domain::model_selection::model_selection;
 use agent_fold::domain::ports::FoldedMessageRepo;
 use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
-use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToServerMessage};
+use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent, ToServerMessage};
 use dashmap::DashMap;
 use dashmap::mapref::entry::Entry;
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
@@ -464,7 +466,11 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
         // something. Fenced under the claim taken above: if another replica
         // supersedes this one, the store rejects the next append and the
         // actor tears down through its ordinary log-failure path.
-        let logs = LiveSessionLogWriter::fenced(self.repo.clone(), self.realtime.clone(), claim);
+        let initial_model = attachment
+            .initial_model
+            .filter(|_| session.acp_session_id.is_none());
+        let logs = LiveSessionLogWriter::fenced(self.repo.clone(), self.realtime.clone(), claim)
+            .with_initial_model(initial_model.clone());
         let actor = SessionActor::new(
             id,
             session.acp_session_id,
@@ -477,7 +483,8 @@ impl<R, Folds, Rt, Namer> AgentSessionServiceImpl<R, Folds, Rt, Namer> {
             attachment.handshake,
             Arc::clone(&self.turn_observer),
             Arc::clone(&self.tool_catalog),
-        );
+        )
+        .with_initial_model(initial_model);
         self.tasks.spawn(
             run_session(
                 actor,
@@ -1101,6 +1108,9 @@ pub struct LiveSessionLogWriter<R, Rt> {
     /// replaying a recording, and `mark_disconnected` recording that a
     /// runtime dropped before anything attached.
     claim: Option<SessionClaim>,
+    /// Keep the saved selection until the runtime confirms it. Otherwise the
+    /// default reported by session/new replaces it even when selection fails.
+    initial_model: Option<String>,
 }
 
 impl<R, Rt> LiveSessionLogWriter<R, Rt> {
@@ -1116,6 +1126,7 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             realtime,
             fold: None,
             claim: None,
+            initial_model: None,
         }
     }
 
@@ -1127,7 +1138,13 @@ impl<R, Rt> LiveSessionLogWriter<R, Rt> {
             realtime,
             fold: None,
             claim: Some(claim),
+            initial_model: None,
         }
+    }
+
+    fn with_initial_model(mut self, model: Option<String>) -> Self {
+        self.initial_model = model;
+        self
     }
 }
 
@@ -1192,10 +1209,25 @@ where
         // Projected on every frame - idempotent, rebuildable from the log,
         // and best-effort like the stream below, so a failed write must not
         // fail the append. Batch if the write rate ever matters.
-        if let Some(model) = self
+        let model = self
             .fold
             .as_ref()
-            .and_then(|fold| fold.inner().metadata().model.clone())
+            .and_then(|fold| fold.inner().metadata().model.clone());
+        // Only a fresh config response can confirm startup. Catching up the
+        // fold may report the same model from a previous, failed connection.
+        if let Some(expected) = &self.initial_model
+            && let Message::ToServer(ToServerMessage::Acp(AcpMessage(RawJsonRpcMessage::Response(
+                Response::Result { result, .. },
+            )))) = &log.content
+            && let Ok(response) =
+                serde_json::from_value::<SetSessionConfigOptionResponse>(result.clone())
+            && model_selection(&response.config_options)
+                .is_some_and(|selection| selection.current == *expected)
+        {
+            self.initial_model = None;
+        }
+        if self.initial_model.is_none()
+            && let Some(model) = model
             && let Err(error) = self.repo.set_model(session, &model).await
         {
             tracing::error!(

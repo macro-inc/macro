@@ -178,6 +178,12 @@ where
         }
     }
 
+    /// Apply an explicit starting model before a new session becomes live.
+    pub(crate) fn with_initial_model(mut self, model: Option<String>) -> Self {
+        self.machine = self.machine.with_initial_model(model);
+        self
+    }
+
     /// The session this actor's connection belongs to.
     pub(crate) fn id(&self) -> AgentSessionId {
         self.machine.id()

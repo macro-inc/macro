@@ -95,7 +95,7 @@ where
                     // yet. That is the ordinary case: sessions bind when they
                     // are prompted, not when the runtime dials, so the first
                     // prompt after a reconnect is what restores the session.
-                    let Some(attachment) = self.runtimes.bind(session.bot_id, session_id).await
+                    let Some(mut attachment) = self.runtimes.bind(session.bot_id, session_id).await
                     else {
                         // Kept in the session vocabulary so transports report
                         // it as a disconnect, not an internal error.
@@ -103,6 +103,9 @@ where
                             session_id,
                         )));
                     };
+                    if session.harness == harness_id::MACROD_HARNESS_SLUG {
+                        attachment = attachment.initial_model(session.model.clone());
+                    }
                     let egress = self
                         .egress
                         .provision(

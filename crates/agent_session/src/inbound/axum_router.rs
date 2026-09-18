@@ -1782,6 +1782,7 @@ pub async fn create_agent_session_handler<
         is_managed,
         owner_user_id,
         harness_id,
+        managed_profile,
         ..
     } = state
         .bots
@@ -1833,6 +1834,7 @@ pub async fn create_agent_session_handler<
         .opener
         .open_external_session(OpenExternalAgentSession {
             bot_id,
+            profile: managed_profile,
             workspace,
             repo_url: request.repo_url,
             owner,

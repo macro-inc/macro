@@ -2274,6 +2274,7 @@ async fn a_prompt_through_control_resumes_a_disconnected_session() {
 
 fn open_external_request(workspace: &str) -> OpenExternalAgentSession {
     OpenExternalAgentSession {
+        profile: None,
         instructions: None,
         bot_id: BotId::new_from_uuid(macro_uuid::generate_uuid_v7()),
         workspace: workspace.to_owned(),
@@ -2435,6 +2436,92 @@ async fn an_external_open_provisions_nothing_and_prompts_nobody() {
     // negotiated ACP session id has been persisted by now.
     let row = repo.get(session.id).await.expect("the session row exists");
     assert_eq!(row.acp_session_id, Some(SessionId::new("acp-test")));
+}
+
+#[tokio::test]
+async fn a_macrod_session_selects_its_saved_model_before_the_first_prompt() {
+    for accepted in [true, false] {
+        let (service, repo, _, _, runtimes) = harness();
+        let mut request = open_external_request("/home/operator/code");
+        request.profile = Some(agent_session::domain::ports::ManagedAgentProfile {
+            model: "gpt-5.6-luna".into(),
+            harness: harness_id::MACROD_HARNESS_SLUG.into(),
+            instructions: String::new(),
+            mcp_servers: AgentMcpServers::OwnerConnections,
+        });
+        let session = service.open_external_session(request).await.unwrap();
+        assert_eq!(session.model, "gpt-5.6-luna");
+        assert_eq!(session.harness, harness_id::MACROD_HARNESS_SLUG);
+        let runtime = ContainerMock::default();
+        runtimes.attach(harness_for_bot(session.bot_id), runtime.clone());
+
+        let drive = async {
+            let agent = runtime.agent();
+            while agent.received_requests().is_empty() {
+                runtime.sends_ready();
+                tokio::task::yield_now().await;
+            }
+            agent.completes_initialize(InitializeResponse::new(PROTOCOL_VERSION));
+            agent.wait_for_requests(2).await;
+            let config = |model| {
+                serde_json::json!([{
+                    "id": "model", "name": "Model", "type": "select",
+                    "currentValue": model, "options": []
+                }])
+            };
+            agent.opens_session(
+                serde_json::from_value(serde_json::json!({
+                    "sessionId": "acp-test", "configOptions": config("gpt-6-astra")
+                }))
+                .unwrap(),
+            );
+            agent.wait_for_requests(3).await;
+            assert!(prompts(&agent).is_empty());
+            let row = repo.get(session.id).await.unwrap();
+            assert_eq!(
+                row.model, "gpt-5.6-luna",
+                "session/new must not overwrite the saved selection"
+            );
+            assert!(row.acp_session_id.is_none());
+            let frames = agent.received_frames();
+            let RawJsonRpcMessage::Request(change) = frames.last().unwrap() else {
+                panic!("expected model selection");
+            };
+            assert_eq!(change.method.as_ref(), "session/set_config_option");
+            assert_eq!(
+                serde_json::to_value(&change.params).unwrap()["value"],
+                "gpt-5.6-luna"
+            );
+            if accepted {
+                agent.sends_raw(RawJsonRpcMessage::response(
+                    change.id.clone(),
+                    Ok(serde_json::json!({
+                        "configOptions": config("gpt-5.6-luna")
+                    })),
+                ));
+                agent.completes_prompt().await;
+            } else {
+                agent.sends_error(
+                    change.id.clone(),
+                    agent_client_protocol::Error::invalid_params(),
+                );
+            }
+        };
+        let (result, ()) = tokio::join!(prompt(&service, session.id, "hello"), drive);
+        if accepted {
+            result.unwrap();
+            assert_eq!(prompts(&runtime.agent()).len(), 1);
+        } else {
+            assert!(result.is_err());
+            assert!(prompts(&runtime.agent()).is_empty());
+        }
+        let row = repo.get(session.id).await.unwrap();
+        assert_eq!(
+            row.model, "gpt-5.6-luna",
+            "a retry must retain the requested model"
+        );
+        assert_eq!(row.acp_session_id.is_some(), accepted);
+    }
 }
 
 #[tokio::test]

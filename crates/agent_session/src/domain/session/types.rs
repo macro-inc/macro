@@ -54,6 +54,12 @@ pub(super) enum SessionPhase {
         /// How this connection is establishing its ACP session.
         kind: SessionOpening,
     },
+    /// The ACP session exists, but its configured model must be acknowledged first.
+    ConfiguringModel {
+        request_id: RequestId,
+        session_id: SessionId,
+        model: String,
+    },
     Live {
         session_id: SessionId,
         /// The one `elicitation/create` this connection is holding for the
@@ -290,6 +296,8 @@ pub enum StopReason {
     /// The agent answered `session/new` with something unintelligible; the
     /// detail is the parser's.
     SessionUnintelligible(String),
+    /// The runtime refused or did not confirm the configured starting model.
+    ModelNotSelected(String),
 }
 
 impl StopReason {
@@ -332,6 +340,12 @@ impl std::fmt::Display for StopReason {
                 write!(
                     formatter,
                     "the agent answered session/new unintelligibly: {detail}"
+                )
+            }
+            Self::ModelNotSelected(model) => {
+                write!(
+                    formatter,
+                    "the agent did not select the configured model {model}"
                 )
             }
         }

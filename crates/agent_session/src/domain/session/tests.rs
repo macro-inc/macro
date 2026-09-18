@@ -357,6 +357,79 @@ fn session_new_success_flushes_the_queue() {
 }
 
 #[test]
+fn initial_model_selection_holds_prompts_until_the_runtime_confirms_it() {
+    let mut machine = machine().with_initial_model(Some("gpt-5.6-luna".into()));
+    machine.handle(command("hello", 1));
+    begin_opening(&mut machine);
+    let effects = machine.handle(session_opened("acp-42"));
+    assert_eq!(sent_methods(&effects), ["session/set_config_option"]);
+    let Effect::Send { message, .. } = &effects[1] else {
+        panic!("expected the initial model change");
+    };
+    let request = serde_json::to_value(message).unwrap();
+    assert_eq!(request["params"]["configId"], "model");
+    assert_eq!(request["params"]["value"], "gpt-5.6-luna");
+    assert_eq!(machine.status(), RuntimeStatus::Handshaking);
+    assert_eq!(machine.pending_count(), 1);
+
+    // An unrelated reply cannot release the prompt.
+    let response = serde_json::json!({"configOptions": [{
+        "id": "model", "name": "Model", "type": "select",
+        "currentValue": "gpt-5.6-luna", "options": []
+    }]});
+    assert!(
+        sent_methods(&machine.handle(frame(RawJsonRpcMessage::response(
+            request_id(99),
+            Ok(response.clone()),
+        ))))
+        .is_empty()
+    );
+    let effects = machine.handle(frame(RawJsonRpcMessage::response(
+        request_id(2),
+        Ok(response),
+    )));
+    assert_eq!(sent_methods(&effects), ["session/prompt"]);
+    assert!(matches!(machine.status(), RuntimeStatus::Live { .. }));
+    assert!(
+        effects
+            .iter()
+            .any(|effect| matches!(effect, Effect::PersistAcpSession { .. }))
+    );
+}
+
+#[test]
+fn an_unconfirmed_initial_model_never_prompts_the_runtime_default() {
+    for response in [
+        Err(agent_client_protocol::Error::invalid_params()),
+        Ok(serde_json::json!({})),
+        Ok(serde_json::json!({"configOptions": [{
+            "id": "model", "name": "Model", "type": "select",
+            "currentValue": "gpt-6-astra", "options": []
+        }]})),
+    ] {
+        let mut machine = machine().with_initial_model(Some("gpt-5.6-luna".into()));
+        machine.handle(command("hello", 1));
+        begin_opening(&mut machine);
+        machine.handle(session_opened("acp-42"));
+        let effects = machine.handle(frame(RawJsonRpcMessage::response(request_id(2), response)));
+        assert_eq!(machine.status(), RuntimeStatus::Dead);
+        assert!(sent_methods(&effects).is_empty());
+        assert!(
+            !effects
+                .iter()
+                .any(|effect| matches!(effect, Effect::PersistAcpSession { .. }))
+        );
+        assert!(effects.iter().any(|effect| matches!(
+            effect,
+            Effect::Complete {
+                token: 1,
+                result: Err(_)
+            }
+        )));
+    }
+}
+
+#[test]
 fn reconnect_uses_session_resume_when_the_agent_supports_it() {
     let mut machine = SessionMachine::resume(
         AgentSessionId::TEST_A,
@@ -364,7 +437,8 @@ fn reconnect_uses_session_resume_when_the_agent_supports_it() {
         "/workspace".to_owned(),
         Vec::new(),
         PermissionPolicy::AutoAccept,
-    );
+    )
+    .with_initial_model(Some("a-different-default".into()));
     machine.handle(command("continue", 1));
     machine.handle(acp_ready());
     let initialized = InitializeResponse::new(PROTOCOL_VERSION).agent_capabilities(

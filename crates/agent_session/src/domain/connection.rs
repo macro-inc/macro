@@ -160,6 +160,8 @@ pub struct RuntimeAttachment<Connector> {
     /// attachment for the same reason as `mcp_servers`: it follows what the
     /// agent's owner has configured *now*.
     pub(crate) permission_policy: PermissionPolicy,
+    /// Model to select after creating a fresh ACP session, before any prompt.
+    pub(crate) initial_model: Option<String>,
 }
 
 /// Activate attachment-owned resources with the exact acquired ownership claim.
@@ -180,6 +182,7 @@ impl<Connector> RuntimeAttachment<Connector> {
             mcp_servers: Vec::new(),
             closed: None,
             permission_policy: PermissionPolicy::default(),
+            initial_model: None,
         }
     }
 
@@ -210,6 +213,7 @@ impl<Connector> RuntimeAttachment<Connector> {
             activation: self.activation,
             closed: self.closed,
             permission_policy: self.permission_policy,
+            initial_model: self.initial_model,
         }
     }
 
@@ -218,6 +222,14 @@ impl<Connector> RuntimeAttachment<Connector> {
     #[must_use]
     pub fn mcp_servers(mut self, mcp_servers: Vec<McpServer>) -> Self {
         self.mcp_servers = mcp_servers;
+        self
+    }
+
+    /// Select this model before the first prompt of a newly created ACP session.
+    /// Empty values and the provider-default sentinel keep the runtime's default.
+    #[must_use]
+    pub fn initial_model(mut self, model: String) -> Self {
+        self.initial_model = (!model.trim().is_empty() && model != "default").then_some(model);
         self
     }
 
@@ -398,6 +410,7 @@ where
             closed: Some(self.closed.clone()),
             // The caller knows whose agent this is; the connection does not.
             permission_policy: PermissionPolicy::default(),
+            initial_model: None,
         }
     }
 

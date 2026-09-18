@@ -51,7 +51,7 @@ pub struct BotFacts {
     pub selected_channels: bool,
 }
 
-/// Runtime settings snapshotted when a managed persona opens a session.
+/// Runtime settings snapshotted when a persisted agent opens a session.
 #[derive(Debug, Clone)]
 pub struct ManagedAgentProfile {
     /// Model configured as this persona's default.
@@ -194,6 +194,8 @@ pub struct SessionThread {
 pub struct OpenExternalAgentSession {
     /// The bot the session runs for.
     pub bot_id: BotId,
+    /// Persisted agent settings resolved by the authenticated entry point.
+    pub profile: Option<ManagedAgentProfile>,
     /// Absolute directory the bot's harness runs in on its runtime.
     pub workspace: String,
     /// Repository nominally checked out at `workspace`, when stated.

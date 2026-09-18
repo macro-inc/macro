@@ -79,6 +79,10 @@ where
                 })?;
         }
         let defaults = self.inner.defaults.for_bot(request.bot_id);
+        let (model, harness) = match request.profile {
+            Some(profile) => (profile.model, profile.harness),
+            None => (defaults.model.clone(), defaults.harness.clone()),
+        };
         let session = self
             .inner
             .sessions
@@ -89,8 +93,8 @@ where
                 bot_id: request.bot_id,
                 thread_id: request.thread.as_ref().map(|thread| thread.thread_id),
                 originating_message_id: request.thread.as_ref().map(|thread| thread.message_id),
-                model: defaults.model.clone(),
-                harness: defaults.harness.clone(),
+                model,
+                harness,
                 repo_url: request.repo_url,
                 workspace: request.workspace,
                 sandbox_size: SandboxSize::Default,

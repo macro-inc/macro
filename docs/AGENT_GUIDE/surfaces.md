@@ -730,6 +730,9 @@ A harness can show `Loading models…`, an unsupported message, or
 a retryable error without hiding the other harnesses. Editing preserves a saved model that
 is no longer offered and labels it `saved, unavailable`. A macrod with no responding runtime
 can remain loading until the 10-second discovery timeout; use Retry after reconnecting it.
+New macrod sessions use the agent's saved model before sending the first prompt.
+Changing that default applies to new sessions; existing sessions keep their selected model.
+If the runtime rejects the saved model, the prompt fails instead of using a different model.
 
 `Harness` shows Cursor, Claude, Codex, and paired macrod runtimes to every user.
 Connection chips in agent replies open this page, including before any account is connected. Cursor's default-model picker uses
