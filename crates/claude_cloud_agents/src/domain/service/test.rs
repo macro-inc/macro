@@ -10,7 +10,7 @@ struct ReconnectingCloud {
     history: Arc<Mutex<Vec<Event>>>,
 }
 impl Cloud for ReconnectingCloud {
-    async fn recent_sessions(&self) -> Result<Vec<crate::domain::models::RecentSession>> {
+    async fn models(&self) -> Result<Vec<crate::domain::models::ModelOption>> {
         Ok(Vec::new())
     }
     async fn send_batch(
@@ -171,15 +171,13 @@ struct ModelCloud {
     sends: Arc<Mutex<Vec<serde_json::Value>>>,
     reject: Arc<std::sync::atomic::AtomicBool>,
     reject_model: Arc<std::sync::atomic::AtomicBool>,
-    account_history: Arc<Mutex<Vec<Event>>>,
+    account_models: Arc<Mutex<Vec<crate::domain::models::ModelOption>>>,
 }
 impl Cloud for ModelCloud {
-    async fn recent_sessions(&self) -> Result<Vec<crate::domain::models::RecentSession>> {
-        Ok(vec![crate::domain::models::RecentSession {
-            id: SessionId::parse("cse_account").unwrap(),
-            model: Some(Model::parse("claude-fable-5-1").unwrap()),
-        }])
+    async fn models(&self) -> Result<Vec<crate::domain::models::ModelOption>> {
+        Ok(self.account_models.lock().await.clone())
     }
+
     async fn send(&self, _: &SessionId, payload: serde_json::Value) -> Result<()> {
         if self.reject.load(Ordering::SeqCst) {
             return Err(Error::Network);
@@ -194,10 +192,7 @@ impl Cloud for ModelCloud {
         self.sends.lock().await.extend(payloads);
         Ok(())
     }
-    async fn history(&self, id: &SessionId) -> Result<Vec<Event>> {
-        if id.as_str() == "cse_account" {
-            return Ok(self.account_history.lock().await.clone());
-        }
+    async fn history(&self, _: &SessionId) -> Result<Vec<Event>> {
         Ok(vec![Event {
             kind: "client_event".into(),
             sequence: Some(0),
@@ -230,12 +225,10 @@ impl Cloud for ModelCloud {
 #[tokio::test]
 async fn account_fable_choice_survives_selection_load_poll_and_prompt() {
     let cloud = ModelCloud::default();
-    *cloud.account_history.lock().await = vec![Event {
-        kind: "client_event".into(),
-        sequence: Some(0),
-        data: json!({"payload":{"type":"control_response","response":{"subtype":"success","response":{"models":[
-            {"value":"claude-fable-5-1","displayName":"Fable 5.1"}
-        ]}}}}),
+    *cloud.account_models.lock().await = vec![crate::domain::models::ModelOption {
+        model: Model::parse("claude-fable-5-1").unwrap(),
+        name: "Fable 5.1".into(),
+        description: None,
     }];
     let fable = Model::parse("claude-fable-5-1").unwrap();
     let id = SessionId::parse("cse_test").unwrap();

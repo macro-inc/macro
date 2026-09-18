@@ -53,7 +53,7 @@ impl<C: Cloud> Session<C> {
         self.model.lock().await.clone()
     }
 
-    /// Current session choices supplemented by catalogs from the same account.
+    /// Current session aliases supplemented by the direct account catalog.
     pub async fn catalog(&self) -> Catalog {
         self.catalog
             .lock()
@@ -65,7 +65,7 @@ impl<C: Cloud> Session<C> {
     /// Read-only discovery; never starts a cloud worker merely to populate a picker.
     pub async fn refresh_catalog(&self) -> Result<()> {
         let history = self.cloud.history(&self.id).await?;
-        let account = super::models::discover_excluding(&self.cloud, Some(&self.id)).await?;
+        let account = super::models::discover(&self.cloud).await?;
         *self.catalog.lock().await = Catalog::from_history(&history);
         *self.account_catalog.lock().await = account;
         Ok(())
@@ -140,8 +140,7 @@ impl<C: Cloud> Session<C> {
         }
         *self.cursor.lock().await = cursor;
         *self.translator.lock().await = translator;
-        *self.account_catalog.lock().await =
-            super::models::discover_excluding(&self.cloud, Some(&self.id)).await?;
+        *self.account_catalog.lock().await = super::models::discover(&self.cloud).await?;
         Ok(updates)
     }
 

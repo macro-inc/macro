@@ -82,10 +82,10 @@ impl CloudLifecycle for Client {
     }
 }
 impl Cloud for Client {
-    async fn recent_sessions(
+    async fn models(
         &self,
     ) -> claude_cloud_agents::domain::model::Result<
-        Vec<claude_cloud_agents::domain::models::RecentSession>,
+        Vec<claude_cloud_agents::domain::models::ModelOption>,
     > {
         Ok(vec![])
     }

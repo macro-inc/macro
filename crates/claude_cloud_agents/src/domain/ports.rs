@@ -1,6 +1,6 @@
 //! Capabilities needed by the Claude session adapter.
 use super::model::{Event, Result, SessionId};
-use super::models::{Model, RecentSession};
+use super::models::{Model, ModelOption};
 use futures::Stream;
 use std::{future::Future, pin::Pin};
 
@@ -51,9 +51,9 @@ impl ToolPermissions for DenyToolPermissions {
 
 /// Account-scoped provider operations. Implementors must never choose another user's credential.
 pub trait Cloud: Clone + Send + Sync + 'static {
-    /// Recent session metadata visible through this account's credential, bounded
-    /// by `models::RECENT_SESSION_LIMIT` and ordered most recently updated first.
-    fn recent_sessions(&self) -> impl Future<Output = Result<Vec<RecentSession>>> + Send;
+    /// Complete model catalog fetched directly with this account's credential.
+    /// Discovery must not read transcripts, create sessions, or spend inference.
+    fn models(&self) -> impl Future<Output = Result<Vec<ModelOption>>> + Send;
     /// Submit one event. Mutations are not automatically retried.
     fn send(
         &self,
