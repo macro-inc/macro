@@ -4340,14 +4340,14 @@
             "description": "Price per minute of audio (USD), or null for token-only pricing."
           },
           "price_per_mil_in": {
-            "type": "number",
+            "type": ["number", "null"],
             "format": "float",
-            "description": "New price per million input tokens (USD)."
+            "description": "New price per million input tokens (USD). Required for token pricing."
           },
           "price_per_mil_out": {
-            "type": "number",
+            "type": ["number", "null"],
             "format": "float",
-            "description": "New price per million output tokens (USD)."
+            "description": "New price per million output tokens (USD). Required for token pricing."
           }
         }
       },

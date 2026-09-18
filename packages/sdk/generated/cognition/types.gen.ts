@@ -1270,13 +1270,13 @@ export type SetPricingRequest = {
      */
     price_per_audio_minute?: number | null;
     /**
-     * New price per million input tokens (USD).
+     * New price per million input tokens (USD). Required for token pricing.
      */
-    price_per_mil_in?: number;
+    price_per_mil_in?: number | null;
     /**
-     * New price per million output tokens (USD).
+     * New price per million output tokens (USD). Required for token pricing.
      */
-    price_per_mil_out?: number;
+    price_per_mil_out?: number | null;
 };
 
 export type SharePermissionV2 = {
