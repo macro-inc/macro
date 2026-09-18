@@ -10,8 +10,10 @@ import {
   createMemo,
   createSignal,
   type JSX,
+  Match,
   onCleanup,
   Show,
+  Switch,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { styled } from 'solid-styled-components';
@@ -240,16 +242,19 @@ export function DefinitionLookup(props: IProps) {
               </TabButton>
             </div>
           </div>
-          {activeTab() === 'DEFINITION_TAB' ? (
-            <DefinitionsAccordion
-              term={props.term}
-              truncated={sizing()?.truncated ?? false}
-              getTerm={pdf.definitions.getTerm}
-              onClick={onClick}
-            />
-          ) : activeTab() === 'REFERENCE_TAB' ? (
-            <ReferencesAccordion term={props.term} />
-          ) : null}
+          <Switch>
+            <Match when={activeTab() === 'DEFINITION_TAB'}>
+              <DefinitionsAccordion
+                term={props.term}
+                truncated={sizing()?.truncated ?? false}
+                getTerm={pdf.definitions.getTerm}
+                onClick={onClick}
+              />
+            </Match>
+            <Match when={activeTab() === 'REFERENCE_TAB'}>
+              <ReferencesAccordion term={props.term} />
+            </Match>
+          </Switch>
         </Card>
       </div>
       <Show when={!props.isPinsWindow && nextTerm()}>

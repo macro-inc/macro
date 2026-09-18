@@ -1,7 +1,7 @@
 import { useIsActiveThreadSelector } from '@block-pdf/store/comments/commentStore';
 import type { IThreadPlaceable } from '@block-pdf/type/placeables';
 import { cn } from '@ui';
-import type { Component } from 'solid-js';
+import { type Component, Show } from 'solid-js';
 import { usePdfComments } from '../../context/pdf-comments-context';
 
 export const FreeCommentPlaceable: Component<{
@@ -48,11 +48,11 @@ function CommentIndicator(props: {
         comments.restoreScrolling();
       }}
     >
-      {props.numComments > 1 && !props.isActive && (
+      <Show when={props.numComments > 1 && !props.isActive}>
         <div class="size-2.5 absolute top-[-3.5px] right-[-3.5px] bg-[oklch(0.785_0.115_274.713)] text-[oklch(0.457_0.24_277.023)] flex items-center justify-center rounded-full text-[6px]">
           {props.numComments}
         </div>
-      )}
+      </Show>
       <svg
         xmlns="http://www.w3.org/2000/svg"
         fill="none"

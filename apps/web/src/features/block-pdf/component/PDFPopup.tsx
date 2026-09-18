@@ -135,12 +135,18 @@ export function PDFPopup(props: PDFPopupProps) {
                 shareLinkProps().share();
               }}
             >
-              {locationCopied() ? (
+              <Show
+                when={locationCopied()}
+                fallback={
+                  <>
+                    <LinkIcon />
+                    Share
+                  </>
+                }
+              >
                 <CheckIcon class="text-success" />
-              ) : (
-                <LinkIcon />
-              )}
-              {locationCopied() ? 'Copied' : 'Share'}
+                Copied
+              </Show>
             </Button>
           )}
         </Show>

@@ -447,7 +447,9 @@ export function PageOverlay(props: IPageOverlayProps) {
         }}
         class="bg-transparent top-0 left-0 absolute"
       >
-        {terms().length > 0 && <AbsoluteDefinitionLookups terms={terms()} />}
+        <Show when={terms().length > 0}>
+          <AbsoluteDefinitionLookups terms={terms()} />
+        </Show>
       </div>
       <div
         style={{

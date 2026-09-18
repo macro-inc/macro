@@ -1,8 +1,9 @@
 import { Accordion } from '@kobalte/core/accordion';
 import { cn } from '@ui';
 import Scrollbars from 'solid-custom-scrollbars';
-import { createMemo, createSignal, For, type JSX } from 'solid-js';
+import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import { styled } from 'solid-styled-components';
+import { usePdfDocument } from '../../context/pdf-document-context';
 import {
   Color,
   determineFormat,
@@ -12,6 +13,7 @@ import {
 import type Term from '../../model/Term';
 import { CoParseClassName } from '../../type/coParse';
 import { decodeDefinitionText } from '../../util/definitionText';
+import TocUtils from '../../util/TocUtils';
 import { OpenRefInNewTabIcon } from './OpenRefInNewTabIcon';
 import {
   AccordionText,
@@ -32,6 +34,7 @@ const htmlSpecialEntities = [
   ['&lt;', '<'],
   ['&gt;', '>'],
 ];
+const SECTION_MAX_CHARS = 80;
 
 const BootstrapCard = styled.div`
   width: 100%;
@@ -77,6 +80,11 @@ function filterUniqueTerms(terms: (Term | null)[]): Term[] {
   return uniqueTerms;
 }
 
+function truncateSectionDescriptor(descriptor: string): string {
+  if (descriptor.length <= SECTION_MAX_CHARS) return descriptor;
+  return `${descriptor.substring(0, SECTION_MAX_CHARS)}...`;
+}
+
 function computeRelatedTerms(
   term: Term,
   getTerm: (id: string) => Term | null
@@ -94,6 +102,7 @@ interface IProps {
 }
 
 export function DefinitionsAccordion(props: IProps) {
+  const idToSectionMap = usePdfDocument().outline.sectionReferenceMap;
   const terms = createMemo(() =>
     computeRelatedTerms(props.term, props.getTerm)
   );
@@ -230,6 +239,12 @@ export function DefinitionsAccordion(props: IProps) {
               n.nodeName.includes('span')
             );
             const spans = constructSpans(elArr);
+            const nearestSection = () =>
+              TocUtils.getNearestSection({
+                page: t.pageNum,
+                yPos: t.yPos,
+                idToSectionMap: idToSectionMap(),
+              });
 
             return (
               <Accordion.Item value={'definitionCard' + idx()}>
@@ -243,7 +258,22 @@ export function DefinitionsAccordion(props: IProps) {
                         setExpandedItem(['definitionCard' + idx()]);
                       }}
                     >
-                      <AccordionText>On page {t.pageNum + 1}</AccordionText>
+                      <AccordionText>
+                        <Show
+                          when={nearestSection()}
+                          fallback={<>On page {t.pageNum + 1}</>}
+                        >
+                          {(section) => (
+                            <>
+                              In{' '}
+                              {truncateSectionDescriptor(
+                                section().fullDescriptor
+                              )}{' '}
+                              on page {t.pageNum + 1}
+                            </>
+                          )}
+                        </Show>
+                      </AccordionText>
                       <OpenRefInNewTabIcon reference={t} term={props.term} />
                     </button>
                   </Accordion.Header>

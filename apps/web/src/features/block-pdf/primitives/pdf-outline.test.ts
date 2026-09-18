@@ -5,6 +5,7 @@ import { createRoot } from 'solid-js';
 import { describe, expect, it } from 'vitest';
 import type Section from '../model/Section';
 import type { ICoParse } from '../type/coParse';
+import TocUtils from '../util/TocUtils';
 import { createPdfOutline, type PdfOutline } from './pdf-outline';
 
 function setup(): { outline: PdfOutline; dispose: () => void } {
@@ -121,6 +122,28 @@ describe('createPdfOutline', () => {
       showBookmark: true,
       bookmarkTitle: ' 1 Root section: Root Section',
     });
+
+    expect(
+      TocUtils.getNearestSection({
+        page: 1,
+        yPos: 30,
+        idToSectionMap: outline.sectionReferenceMap(),
+      })?.id
+    ).toBe(10);
+    expect(
+      TocUtils.getNearestSection({
+        page: 1,
+        yPos: 34,
+        idToSectionMap: outline.sectionReferenceMap(),
+      })?.id
+    ).toBe(11);
+    expect(
+      TocUtils.getNearestSection({
+        page: 0,
+        yPos: 10,
+        idToSectionMap: outline.sectionReferenceMap(),
+      })
+    ).toBeNull();
     dispose();
   });
 
