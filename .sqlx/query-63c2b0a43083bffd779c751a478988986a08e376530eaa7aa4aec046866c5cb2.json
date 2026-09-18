@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT EXISTS (\n                SELECT 1 FROM team_user u JOIN team_privacy p ON p.team_id = u.team_id\n                WHERE u.user_id = $1 AND p.hipaa_enabled\n            ) OR (\n                NOT EXISTS (SELECT 1 FROM team_user WHERE user_id = $1)\n                AND EXISTS (SELECT 1 FROM team_privacy WHERE hipaa_enabled)\n            ) AS \"restricted!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "restricted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "63c2b0a43083bffd779c751a478988986a08e376530eaa7aa4aec046866c5cb2"
+}

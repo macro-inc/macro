@@ -408,7 +408,10 @@ pub(crate) type CallConnectionService =
 pub(crate) type DssVoipPushSender = Option<
     notification::domain::service::VoipPushServiceImpl<
         notification::outbound::repository::DbNotificationRepository<sqlx::PgPool>,
-        notification::outbound::mobile::MobilePushAdapter<aws_sdk_sns::Client>,
+        notification::domain::service::privacy::PrivatePushSender<
+            notification::outbound::mobile::MobilePushAdapter<aws_sdk_sns::Client>,
+            workspace_privacy::outbound::PgPrivacyRepository,
+        >,
     >,
 >;
 

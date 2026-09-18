@@ -7,10 +7,8 @@
 //!
 //! - **Capture** — [`ContentPolicy::capture`], read once from the
 //!   OpenTelemetry-standard `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT`
-//!   variable. It defaults to **on** here (the spec's default is off): the point
-//!   of the instrumentation is evaluation, which is impossible without content,
-//!   and traces already reach the same backend as the service logs. Set it to
-//!   `false` to export structure (spans, names, usage, ids) only.
+//!   variable. Defaults to **off**. Content capture must not be enabled on shared
+//!   production services that can handle protected workspace data.
 //! - **Size** — [`Limits`]. Every string leaf is cut to `max_part_chars`, and
 //!   a whole attribute to `max_attribute_bytes`; message lists shed their
 //!   oldest entries first so the most recent turn survives. Unbounded content
@@ -59,9 +57,9 @@ pub struct ContentPolicy {
 }
 
 impl Default for ContentPolicy {
-    /// Capture on, default [`Limits`] — the same as an unset environment.
+    /// Capture off, default [`Limits`] — the same as an unset environment.
     fn default() -> Self {
-        Self::enabled()
+        Self::disabled()
     }
 }
 
@@ -87,7 +85,7 @@ impl ContentPolicy {
 
     /// The process-wide policy, read from
     /// `OTEL_INSTRUMENTATION_GENAI_CAPTURE_MESSAGE_CONTENT` once and cached.
-    /// Unset means capture is on; see [`Self::parse`].
+    /// Unset means capture is off; see [`Self::parse`].
     pub fn from_env() -> Self {
         static POLICY: OnceLock<ContentPolicy> = OnceLock::new();
         *POLICY.get_or_init(|| {
@@ -95,20 +93,18 @@ impl ContentPolicy {
         })
     }
 
-    /// Interpret the capture switch: `false`, `0`, `no` and `off`
-    /// (case-insensitive) disable capture; anything else, including unset,
-    /// enables it.
+    /// Only an explicit true/1/yes/on enables content capture. Invalid values fail closed.
     pub fn parse(value: Option<&str>) -> Self {
-        let off = value.is_some_and(|value| {
+        let on = value.is_some_and(|value| {
             matches!(
                 value.trim().to_ascii_lowercase().as_str(),
-                "false" | "0" | "no" | "off"
+                "true" | "1" | "yes" | "on"
             )
         });
-        if off {
-            Self::disabled()
-        } else {
+        if on {
             Self::enabled()
+        } else {
+            Self::disabled()
         }
     }
 }

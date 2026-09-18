@@ -580,15 +580,18 @@ async fn run() -> anyhow::Result<()> {
         .get_maybe_secret_value(env, CalEventTypeContentNamesKey::new()?)
         .await?;
 
-    let analytics_client = Arc::new(AnalyticsClient::new(AnalyticsClientConfig {
-        google_analytics: None,
-        meta: Some(MetaConfig {
-            pixel_id: MetaPixelId::new()?.as_ref().to_string(),
-            access_token: MetaAccessToken::new()?.as_ref().to_string(),
-            test_event_code: MetaTestEventCode::new().map(|v| v.as_ref().to_string()),
-        }),
-        posthog: None,
-    }));
+    let analytics_client = Arc::new(AnalyticsClient::new(
+        AnalyticsClientConfig {
+            google_analytics: None,
+            meta: Some(MetaConfig {
+                pixel_id: MetaPixelId::new()?.as_ref().to_string(),
+                access_token: MetaAccessToken::new()?.as_ref().to_string(),
+                test_event_code: MetaTestEventCode::new().map(|v| v.as_ref().to_string()),
+            }),
+            posthog: None,
+        },
+        Arc::new(workspace_privacy::outbound::PgPrivacyRepository(db.clone())),
+    ));
 
     let cal_event_type_meta: std::collections::HashMap<u64, CalEventMeta> =
         serde_json::from_str(cal_event_type_content_names_secret.as_ref())
@@ -699,10 +702,13 @@ async fn run() -> anyhow::Result<()> {
         } else {
             let voip_repo =
                 notification::outbound::repository::DbNotificationRepository::new(db.clone());
-            let voip_mobile = notification::outbound::mobile::MobilePushAdapter {
-                push_service: aws_sdk_sns::Client::new(&aws_config),
-                apns_bundle_id: bundle_id.to_string(),
-                voip_bundle_id: Some(format!("{}.voip", bundle_id.as_ref())),
+            let voip_mobile = notification::domain::service::privacy::PrivatePushSender {
+                policy: workspace_privacy::outbound::PgPrivacyRepository(db.clone()),
+                inner: notification::outbound::mobile::MobilePushAdapter {
+                    push_service: aws_sdk_sns::Client::new(&aws_config),
+                    apns_bundle_id: bundle_id.to_string(),
+                    voip_bundle_id: Some(format!("{}.voip", bundle_id.as_ref())),
+                },
             };
             tracing::info!(
                 bundle_id = bundle_id.as_ref(),

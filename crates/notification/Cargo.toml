@@ -21,6 +21,7 @@ redis-tests = []
 schema = ["dep:utoipa", "macro_user_id/schema", "notification_state/schema"]
 
 [dependencies]
+workspace_privacy = { path = "../workspace_privacy", default-features = false }
 ai_toolset = { path = "../ai_toolset", optional = true }
 anyhow = { workspace = true, optional = true }
 aquamarine = { version = "0.6", optional = true }
@@ -79,6 +80,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+async-trait = { workspace = true }
 http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 rate_limit = { path = "../rate_limit", features = ["testing"] }

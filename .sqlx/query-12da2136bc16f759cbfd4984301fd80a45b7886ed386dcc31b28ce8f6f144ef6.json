@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE team_privacy SET hipaa_enabled = $2, revision = revision + 1, updated_at = now()\n            WHERE team_id = $1 AND revision = $3\n              AND (NOT $2 OR hipaa_enabled OR ($4 AND hipaa_approved_at IS NOT NULL))\n            RETURNING revision\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "revision",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Int8",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "12da2136bc16f759cbfd4984301fd80a45b7886ed386dcc31b28ce8f6f144ef6"
+}

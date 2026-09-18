@@ -31,6 +31,7 @@ rate_limit = []
 return_passwordless_code = []
 
 [dependencies]
+workspace_privacy = { path = "../../crates/workspace_privacy", features = ["inbound"] }
 codex_connection = { path = "../../crates/codex_connection" }
 codex_cloud_agents = { path = "../../crates/codex_cloud_agents" }
 cursor_api_key = { path = "../../crates/cursor_api_key" }

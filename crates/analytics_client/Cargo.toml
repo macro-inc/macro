@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+workspace_privacy = { path = "../workspace_privacy", default-features = false }
 chrono = { workspace = true }
 hex = { workspace = true }
 reqwest = { workspace = true }

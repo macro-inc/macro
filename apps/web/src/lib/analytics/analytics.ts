@@ -11,6 +11,7 @@ import { DEV_MODE_ENV, PROD_MODE_ENV } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform } from '@core/util/platform';
 import { type CaptureOptions, PostHog } from 'posthog-js';
+import { createSignal } from 'solid-js';
 import { match } from 'ts-pattern';
 import { getPlanAnalyticsProperties } from './planProperties';
 
@@ -116,7 +117,7 @@ const IGNORABLE_ERRORS = [
 const POSTHOG_RECORDER_SCRIPT_NAME = 'posthog-recorder.js';
 const POSTHOG_RECORDER_PROXY_SCRIPT_NAME = 'runtime.js';
 
-const initializePosthog = (instance: PostHog) => {
+const initializePosthog = (instance: PostHog, allowed: () => boolean) => {
   const key = import.meta.env.VITE_POSTHOG_API_KEY;
   if (!key) return;
 
@@ -135,6 +136,7 @@ const initializePosthog = (instance: PostHog) => {
       return script;
     },
     before_send: (cr) => {
+      if (!allowed()) return null;
       if (cr) {
         cr.properties.env = DEV_MODE_ENV
           ? 'DEV'
@@ -169,17 +171,54 @@ const tryInitialize = (callback: VoidFunction) => {
 const createAnalytics = () => {
   const posthog = new PostHog();
 
-  const disabled = import.meta.env.DEV === true;
+  const [privacyResolved, setPrivacyResolved] = createSignal(false);
+  const [privacyAllowed, setPrivacyAllowed] = createSignal(false);
+  let grantPermission: (() => void) | undefined;
+  const permissionGranted = new Promise<void>((resolve) => {
+    grantPermission = resolve;
+  });
+  let initialized = false;
+  let revoked = false;
+  const isAllowed = () =>
+    import.meta.env.DEV !== true && privacyAllowed() && !revoked;
 
   const initializeProviders = () => {
-    if (disabled) return;
+    if (!isAllowed()) return;
 
+    if (initialized) return;
+    initialized = true;
     tryInitialize(initializeGoogleAnalytics);
     tryInitialize(initializeMetaPixel);
-    tryInitialize(() => initializePosthog(posthog));
+    tryInitialize(() => initializePosthog(posthog, isAllowed));
   };
 
-  initializeProviders();
+  // Never initialize at module load: even the SDK bootstrap transmits URL/IP information.
+  const setPrivacyPermission = (allowed: boolean | undefined) => {
+    if (!allowed && initialized) {
+      revoked = true;
+      posthog.stopSessionRecording();
+      posthog.opt_out_capturing();
+      posthog.set_config({
+        autocapture: false,
+        disable_session_recording: true,
+        advanced_disable_feature_flags: true,
+      });
+      if (typeof gtag === 'function')
+        gtag('consent', 'update', {
+          analytics_storage: 'denied',
+          ad_storage: 'denied',
+          ad_user_data: 'denied',
+          ad_personalization: 'denied',
+        });
+      if (typeof fbq === 'function') fbq('consent', 'revoke');
+    }
+    setPrivacyAllowed(allowed === true && !revoked);
+    setPrivacyResolved(allowed !== undefined);
+    if (allowed && !revoked) {
+      initializeProviders();
+      grantPermission?.();
+    }
+  };
 
   const sendEvent = (
     provider: AnalyticsProvider,
@@ -187,7 +226,7 @@ const createAnalytics = () => {
     data?: Record<string, unknown>,
     options?: TrackOptions & { eventID?: string }
   ) => {
-    if (disabled) return;
+    if (!isAllowed()) return;
 
     const enriched = {
       ...data,
@@ -279,7 +318,7 @@ const createAnalytics = () => {
     action: GoogleConversionAction,
     data?: { value?: number; currency?: string; transaction_id?: string }
   ) => {
-    if (disabled) return;
+    if (!isAllowed()) return;
 
     try {
       gtag('event', 'conversion', {
@@ -292,7 +331,7 @@ const createAnalytics = () => {
   };
 
   const identify = (userID: string, info: Partial<UserIdentifyInfo>) => {
-    if (disabled) return;
+    if (!isAllowed()) return;
 
     try {
       gtag('config', GA_ID, {
@@ -313,7 +352,7 @@ const createAnalytics = () => {
   };
 
   const setPlanProperties = (licenseStatus: string | undefined) => {
-    if (disabled) return;
+    if (!isAllowed()) return;
 
     try {
       const properties = getPlanAnalyticsProperties(licenseStatus);
@@ -326,7 +365,7 @@ const createAnalytics = () => {
   };
 
   const reset = () => {
-    if (disabled) return;
+    if (!isAllowed()) return;
 
     try {
       gtag('config', GA_ID, { user_id: undefined });
@@ -340,7 +379,7 @@ const createAnalytics = () => {
   };
 
   const pageView = (pageTitle: string, opts?: PageViewOptions) => {
-    if (disabled) return;
+    if (!isAllowed()) return;
 
     const pagePath = opts?.path ?? window.location.pathname;
     const pageLocation = opts?.location ?? window.location.href;
@@ -376,6 +415,11 @@ const createAnalytics = () => {
 
   return {
     posthog,
+    privacyResolved,
+    permissionGranted,
+    isAllowed,
+    allowsNotificationContent: () => privacyAllowed() && !revoked,
+    setPrivacyPermission,
     initializeProviders,
     track,
     trackMeta,
@@ -389,6 +433,9 @@ const createAnalytics = () => {
 
 export type AnalyticsInterface = {
   posthog: PostHog;
+  privacyResolved: () => boolean;
+  isAllowed: () => boolean;
+  setPrivacyPermission: (allowed: boolean | undefined) => void;
   track: TrackFn;
   trackMeta: (
     event: MetaStandardEvent,

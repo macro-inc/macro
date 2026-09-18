@@ -20,3 +20,10 @@ verified live against a local stack (`just run_local`).
 Local stack conventions used in examples: frontend `http://localhost:<fe>/app`, backend proxy
 `http://localhost:<be>`, Mailpit `http://localhost:<mp>` (ports come from the `--instance`;
 e.g. the `lgtm` instance uses 27910 / 27909 / 27908).
+# Workspace privacy settings
+
+Team settings includes **HIPAA safeguards**. Only workspace admins/owners may
+change it. Free admins can open Billing with **Upgrade for HIPAA**; paid access
+also requires a completed BAA/readiness review before activation is available.
+Disabling requires confirmation and reloads the app. Never enable this on a real
+workspace as part of an agent smoke test. See [release review](../HIPAA_SAFEGUARDS.md).

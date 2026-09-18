@@ -852,6 +852,7 @@ dependencies = [
  "sha2 0.10.9",
  "tracing",
  "workspace-hack",
+ "workspace_privacy",
 ]
 
 [[package]]
@@ -1712,6 +1713,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "workspace-hack",
+ "workspace_privacy",
  "zeroize",
 ]
 
@@ -5527,6 +5529,7 @@ dependencies = [
  "uuid",
  "webhook",
  "workspace-hack",
+ "workspace_privacy",
  "zip 2.4.2",
 ]
 
@@ -11560,6 +11563,7 @@ dependencies = [
  "utoipa",
  "uuid",
  "workspace-hack",
+ "workspace_privacy",
 ]
 
 [[package]]
@@ -11677,6 +11681,7 @@ dependencies = [
  "utoipa-swagger-ui",
  "uuid",
  "workspace-hack",
+ "workspace_privacy",
 ]
 
 [[package]]
@@ -19317,6 +19322,21 @@ dependencies = [
  "uuid",
  "zerocopy",
  "zeroize",
+]
+
+[[package]]
+name = "workspace_privacy"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "macro_authorization",
+ "serde",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "utoipa",
+ "uuid",
 ]
 
 [[package]]

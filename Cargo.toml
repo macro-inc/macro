@@ -2,6 +2,7 @@
 resolver = "2"
 
 members = [
+  "crates/workspace_privacy",
   "crates/activity",
   "crates/agent", "crates/agent_egress", "crates/agent_fold",
   "crates/agent_harness",

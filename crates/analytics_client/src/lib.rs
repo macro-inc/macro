@@ -8,6 +8,7 @@ pub use providers::{MetaActionSource, MetaUserData};
 use providers::{GoogleAnalyticsProvider, MetaProvider, PostHogProvider};
 use serde::Serialize;
 use std::sync::Arc;
+use workspace_privacy::domain::DisclosurePolicy;
 
 /// Configuration for Google Analytics.
 #[derive(Clone)]
@@ -52,6 +53,7 @@ pub struct AnalyticsClientConfig {
 /// Analytics client for tracking events to GA, Meta, and PostHog.
 #[derive(Clone)]
 pub struct AnalyticsClient {
+    policy: Option<Arc<dyn DisclosurePolicy>>,
     google: Option<Arc<GoogleAnalyticsProvider>>,
     meta: Option<Arc<MetaProvider>>,
     posthog: Option<Arc<PostHogProvider>>,
@@ -59,7 +61,7 @@ pub struct AnalyticsClient {
 
 impl AnalyticsClient {
     /// Creates a new analytics client with the given configuration.
-    pub fn new(config: AnalyticsClientConfig) -> Self {
+    pub fn new(config: AnalyticsClientConfig, policy: Arc<dyn DisclosurePolicy>) -> Self {
         let google = config
             .google_analytics
             .map(|c| Arc::new(GoogleAnalyticsProvider::new(c.measurement_id, c.api_secret)));
@@ -77,6 +79,7 @@ impl AnalyticsClient {
             .map(|c| Arc::new(PostHogProvider::new(c.api_key, c.host)));
 
         Self {
+            policy: Some(policy),
             google,
             meta,
             posthog,
@@ -86,6 +89,7 @@ impl AnalyticsClient {
     /// Creates a no-op analytics client (no providers configured).
     pub fn noop() -> Self {
         Self {
+            policy: None,
             google: None,
             meta: None,
             posthog: None,
@@ -95,13 +99,17 @@ impl AnalyticsClient {
     /// Tracks an event to Google Analytics.
     ///
     /// Returns `Ok(())` if GA is not configured (no-op).
-    #[tracing::instrument(skip(self, params), err)]
+    #[tracing::instrument(skip_all)]
     pub async fn track_ga(
         &self,
         client_id: &str,
         event_name: &str,
         params: impl Serialize,
     ) -> Result<(), reqwest::Error> {
+        // GA's client id does not establish a workspace. Fail closed for this legacy path.
+        if self.unscoped_tracking_restricted().await {
+            return Ok(());
+        }
         if let Some(ref provider) = self.google {
             provider.track(client_id, event_name, params).await?;
         } else {
@@ -120,7 +128,7 @@ impl AnalyticsClient {
     /// - `action_source`: Where the conversion originated
     /// - `event_id`: Optional deduplication ID (recommended for server events)
     /// - `custom_data`: Additional event data
-    #[tracing::instrument(skip(self, user_data, custom_data), err)]
+    #[tracing::instrument(skip_all)]
     pub async fn track_meta(
         &self,
         event_name: &str,
@@ -129,6 +137,13 @@ impl AnalyticsClient {
         event_id: Option<&str>,
         custom_data: impl Serialize,
     ) -> Result<(), reqwest::Error> {
+        let restricted = match (&self.policy, user_data.email.as_deref()) {
+            (Some(policy), Some(email)) => policy.restricted_user(email).await.unwrap_or(true),
+            _ => self.unscoped_tracking_restricted().await,
+        };
+        if restricted {
+            return Ok(());
+        }
         if let Some(ref provider) = self.meta {
             provider
                 .track(event_name, user_data, action_source, event_id, custom_data)
@@ -147,13 +162,30 @@ impl AnalyticsClient {
     /// - `distinct_id`: Unique identifier for the user (e.g., email or user ID)
     /// - `event_name`: Name of the event (e.g., "subscription_created")
     /// - `properties`: Additional event properties
-    #[tracing::instrument(skip(self, properties), err)]
+    #[tracing::instrument(skip_all)]
     pub async fn track_posthog(
         &self,
         distinct_id: &str,
         event_name: &str,
         properties: impl Serialize,
     ) -> Result<(), reqwest::Error> {
+        let Some(policy) = &self.policy else {
+            return Ok(());
+        };
+        if policy.restricted_user(distinct_id).await.unwrap_or(true) {
+            return Ok(());
+        }
+        let Ok(properties) = serde_json::to_value(properties) else {
+            return Ok(());
+        };
+        if let Some(team_id) = properties.get("team_id") {
+            let Some(team_id) = team_id.as_str().and_then(|id| id.parse().ok()) else {
+                return Ok(());
+            };
+            if policy.restricted_team(team_id).await.unwrap_or(true) {
+                return Ok(());
+            }
+        }
         if let Some(ref provider) = self.posthog {
             provider
                 .capture(distinct_id, event_name, properties)
@@ -163,5 +195,12 @@ impl AnalyticsClient {
         }
 
         Ok(())
+    }
+
+    async fn unscoped_tracking_restricted(&self) -> bool {
+        match &self.policy {
+            Some(policy) => policy.any_restricted_workspace().await.unwrap_or(true),
+            None => true,
+        }
     }
 }

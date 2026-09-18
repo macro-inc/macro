@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO team_privacy_audit (id, team_id, actor_user_id, enabled)\n            VALUES ($1, $2, $3, $4)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "93bfc4ee551a806ad993559f45f4f71dfab6efe52a18dd95e49c6fd7331b3b79"
+}

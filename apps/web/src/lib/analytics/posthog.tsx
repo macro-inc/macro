@@ -35,7 +35,13 @@ export const [PosthogProvider, usePosthog] = createAssertedContextProvider(
 
     onCleanup(unsub);
 
-    return { instance: analytics.posthog, featureFlags, flagsLoaded };
+    return {
+      instance: analytics.posthog,
+      featureFlags,
+      flagsLoaded: () =>
+        flagsLoaded() ||
+        (analytics.privacyResolved() && !analytics.isAllowed()),
+    };
   }
 );
 

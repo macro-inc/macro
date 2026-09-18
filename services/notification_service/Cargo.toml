@@ -23,6 +23,7 @@ local_queue = []
 push_notification_event_handler = []
 
 [dependencies]
+workspace_privacy = { path = "../../crates/workspace_privacy" }
 anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }

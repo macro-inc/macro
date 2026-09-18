@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT EXISTS (SELECT 1 FROM team_privacy WHERE hipaa_enabled) AS \"restricted!\"",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "restricted!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "80951a666d31520c37544fec7055e104d8d82e21ca7f181148cdf062ed60b93c"
+}
