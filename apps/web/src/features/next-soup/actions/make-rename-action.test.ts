@@ -1,8 +1,6 @@
 import type { EntityData } from '@entity';
 import { describe, expect, it, vi } from 'vitest';
 
-// The action pulls in the bulk-edit modal and toast at module scope; only
-// `canExecute` is under test, and it touches none of them.
 vi.mock('@app/features/entity/bulk-edit/BulkEditEntityModal', () => ({
   openBulkEditModal: vi.fn(),
 }));
