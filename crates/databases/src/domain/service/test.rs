@@ -935,6 +935,65 @@ async fn schema_operations_respect_receipts() {
 }
 
 #[tokio::test]
+async fn schema_reads_name_tables_against_the_whole_catalog() {
+    let world: Shared = Arc::default();
+    let svc = service(&world);
+    let mut ids = Vec::new();
+    for name in ["First", "Second"] {
+        let db = svc
+            .create_database(CreateDatabase {
+                name: name.into(),
+                owner_id: user(OWNER),
+            })
+            .await
+            .unwrap();
+        ids.push(db.id);
+    }
+
+    // Both starter tables are "Table 1"; the bare name is ambiguous, so the
+    // detail must hand out the same qualified names exec resolves.
+    let mut sql_names = Vec::new();
+    for id in &ids {
+        let detail = svc
+            .get_database(
+                receipt::<ViewAccessLevel>(*id, OWNER, AccessLevel::Owner),
+                viewer(OWNER),
+            )
+            .await
+            .unwrap();
+        assert_eq!(detail.tables.len(), 1);
+        let sql_name = detail.tables[0].sql_name.clone();
+        assert_ne!(
+            sql_name, "table_1",
+            "bare name must not be handed out while ambiguous"
+        );
+        let outcome = exec(&svc, OWNER, &format!("SELECT count(*) FROM \"{sql_name}\""))
+            .await
+            .unwrap();
+        assert_eq!(outcome.results.len(), 1);
+        sql_names.push(sql_name);
+    }
+    assert_ne!(sql_names[0], sql_names[1]);
+    assert!(
+        exec(&svc, OWNER, "SELECT count(*) FROM table_1")
+            .await
+            .is_err(),
+        "the ambiguous bare name resolves nowhere"
+    );
+
+    // The snapshot is scoped to one database even though it was named
+    // against the whole catalog.
+    let snapshot = svc
+        .sqlite_snapshot(
+            receipt::<ViewAccessLevel>(ids[0], OWNER, AccessLevel::Owner),
+            viewer(OWNER),
+        )
+        .await
+        .unwrap();
+    assert_eq!(snapshot.versions.len(), 1);
+}
+
+#[tokio::test]
 async fn snapshot_contains_the_database() {
     let (_world, svc, db, _table) = seeded().await;
     let snapshot = svc

@@ -208,6 +208,34 @@ where
         ))
     }
 
+    /// Every grant the viewer holds, with `grant` on `database_id` (the one a
+    /// receipt just proved) taking precedence. SQL names are only meaningful
+    /// against the same set of tables `exec_sql` sees, so schema reads must
+    /// name tables against the whole catalog, not one database in isolation.
+    async fn viewer_grants(
+        &self,
+        viewer: &Viewer,
+        database_id: DatabaseId,
+        grant: AccessGrant,
+    ) -> Result<HashMap<DatabaseId, AccessGrant>, Access::Err> {
+        let mut grants: HashMap<DatabaseId, AccessGrant> = self
+            .access
+            .accessible_databases(viewer)
+            .await?
+            .into_iter()
+            .collect();
+        grants.insert(database_id, grant);
+        Ok(grants)
+    }
+
+    /// The catalog entries that belong to one database, catalog names intact.
+    fn entries_of(entries: Vec<TableEntry>, database_id: DatabaseId) -> Vec<TableEntry> {
+        entries
+            .into_iter()
+            .filter(|entry| entry.table.database_id == database_id)
+            .collect()
+    }
+
     /// The viewer's whole queryable world — the authorization boundary for SQL.
     async fn build_catalog(&self, viewer: &Viewer) -> Result<ViewerCatalog, QueryError> {
         let grants: HashMap<DatabaseId, AccessGrant> = self
@@ -630,7 +658,7 @@ where
     async fn get_database(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-        _viewer: Viewer,
+        viewer: Viewer,
     ) -> Result<DatabaseDetail, DatabaseError> {
         let database_id = receipt_database_id(&receipt)?;
         let grant = receipt_grant(&receipt, AccessGrant::View);
@@ -643,12 +671,19 @@ where
         if database.trashed_at.is_some() {
             return Err(DatabaseError::NotFound);
         }
-        let grants = HashMap::from([(database_id, grant)]);
+        let grants = self
+            .viewer_grants(&viewer, database_id, grant)
+            .await
+            .map_err(repo_err)?;
         let entries = self
             .entries_for(&grants)
             .await
             .map_err(|e| DatabaseError::Repo(rootcause::Report::new(e).into_dynamic()))?;
-        Ok(Self::detail(database, grant, entries))
+        Ok(Self::detail(
+            database,
+            grant,
+            Self::entries_of(entries, database_id),
+        ))
     }
 
     #[tracing::instrument(skip(self, receipt), err)]
@@ -895,12 +930,19 @@ where
     async fn sqlite_snapshot(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
-        _viewer: Viewer,
+        viewer: Viewer,
     ) -> Result<SqliteSnapshot, QueryError> {
         let database_id = receipt_database_id(&receipt)
             .map_err(|_| QueryError::Sql("database not found".to_string()))?;
-        let grants = HashMap::from([(database_id, receipt_grant(&receipt, AccessGrant::View))]);
-        let entries = self.entries_for(&grants).await?;
+        let grants = self
+            .viewer_grants(
+                &viewer,
+                database_id,
+                receipt_grant(&receipt, AccessGrant::View),
+            )
+            .await
+            .map_err(infra)?;
+        let entries = Self::entries_of(self.entries_for(&grants).await?, database_id);
         let versions = entries
             .iter()
             .map(|e| (e.table.id, e.table.version))
