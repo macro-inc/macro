@@ -20446,7 +20446,7 @@
             "description": "File type of the uploaded object (may differ from the document's own\ntype, e.g. `pdf` for the converted rendition of a docx)."
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
+            "type": "string",
             "description": "The owner of the document (used by the extractor to resolve S3 keys)."
           }
         }
@@ -20481,7 +20481,7 @@
             ]
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
+            "type": "string",
             "description": "The owner of the new copy (the copier)."
           },
           "project_id": {
@@ -20555,7 +20555,7 @@
             ]
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
+            "type": "string",
             "description": "The owner (creator) of the document."
           },
           "project_id": {
@@ -21386,7 +21386,7 @@
             ]
           },
           "owner": {
-            "$ref": "#/components/schemas/MacroUserIdStr",
+            "type": "string",
             "description": "The owner of the document."
           },
           "previous_project_id": {
