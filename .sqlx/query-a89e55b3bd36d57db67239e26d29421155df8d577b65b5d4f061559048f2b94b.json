@@ -1,0 +1,47 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH user_source_ids AS (\n                SELECT cp.channel_id::text AS source_id FROM comms_channel_participants cp\n                    WHERE cp.user_id = $1 AND cp.left_at IS NULL\n                UNION ALL\n                SELECT t.team_id::text FROM team_user t\n                    WHERE t.user_id = $1\n                UNION ALL\n                SELECT $1\n            ),\n            accessible AS (\n                SELECT DISTINCT entity_id\n                FROM entity_access\n                WHERE entity_type = 'document'\n                  AND source_id = ANY(SELECT source_id FROM user_source_ids)\n            )\n            SELECT\n                d.id AS \"id!\",\n                d.name AS \"title!\",\n                d.owner AS \"owner_id!\",\n                d.\"createdAt\"::timestamptz AS \"created_at!\",\n                d.\"updatedAt\"::timestamptz AS \"updated_at!\"\n            FROM \"Document\" d\n            WHERE d.\"deletedAt\" IS NULL\n              AND (d.owner = $1 OR d.id::uuid IN (SELECT entity_id FROM accessible))\n            ORDER BY d.\"updatedAt\" DESC\n            LIMIT $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "title!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "owner_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "a89e55b3bd36d57db67239e26d29421155df8d577b65b5d4f061559048f2b94b"
+}
