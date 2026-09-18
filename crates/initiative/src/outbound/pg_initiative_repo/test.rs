@@ -886,11 +886,12 @@ async fn description_document_cannot_be_nulled_or_deleted_while_the_initiative_e
         .execute(&pool)
         .await
         .expect_err("FK is ON DELETE RESTRICT");
-    assert!(
-        delete_error
-            .as_database_error()
-            .unwrap()
-            .is_foreign_key_violation()
+    let delete_db = delete_error.as_database_error().expect("database error");
+    // Postgres uses 23001 (restrict_violation) for ON DELETE RESTRICT, not 23503.
+    assert_eq!(delete_db.code().as_deref(), Some("23001"));
+    assert_eq!(
+        delete_db.constraint(),
+        Some("initiative_description_document_id_fkey")
     );
 
     let detail = repo.get_detail(created.id).await?.expect("still readable");
