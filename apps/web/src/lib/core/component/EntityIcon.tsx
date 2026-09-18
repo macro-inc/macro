@@ -118,6 +118,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-canvas/20',
     prettyName: 'Canvas',
   },
+  database: {
+    icon: WideCsv,
+    foreground: 'text-code',
+    background: 'bg-code/20',
+    prettyName: 'Table',
+  },
   html: {
     icon: FileHtml,
     foreground: 'text-html',
@@ -362,6 +368,7 @@ const WIDE_ICONS: Record<
   call: PhoneCall,
   calendar: WideCalendar,
   canvas: WideDiagram,
+  database: WideCsv,
   html: WideFileCode,
   channel: WideChannel,
   public: WideGlobe,

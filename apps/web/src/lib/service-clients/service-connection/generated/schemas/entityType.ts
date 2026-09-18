@@ -29,4 +29,5 @@ export const EntityType = {
   reminder: 'reminder',
   skill: 'skill',
   agent_session: 'agent_session',
+  database: 'database',
 } as const;

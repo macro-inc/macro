@@ -93,6 +93,17 @@ export const teamTaskKeys = createQueryKeys('teamTask', {
   }),
 });
 
+export const databasesKeys = createQueryKeys('databases', {
+  list: null,
+  detail: (databaseId: string) => ({
+    queryKey: [databaseId],
+  }),
+  /** Rows of one table, re-fetched whenever the table's version moves. */
+  rows: (databaseId: string, tableId: string) => ({
+    queryKey: [databaseId, tableId, 'rows'],
+  }),
+});
+
 export const instructionsMdKeys = createQueryKeys('instructionsMd', {
   id: null,
   text: (id: string) => ({

@@ -1,0 +1,286 @@
+/**
+ * Macro Databases client.
+ *
+ * Hand-written mirror of the Rust DTOs in `crates/databases`
+ * (`src/inbound/axum_router.rs` for the request/response bodies,
+ * `src/domain/models.rs` for the entities). The document storage service
+ * mounts the router under `/databases`.
+ *
+ * These types are hand-maintained until the storage-service OpenAPI
+ * generation covers the databases routes; once `bun gen-api cloud-storage`
+ * emits them, replace the declarations below with the generated schemas.
+ */
+import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
+import { SERVER_HOSTS } from '@core/constant/servers';
+import {
+  type FetchWithTokenErrorCode,
+  fetchToken,
+  fetchWithToken,
+} from '@core/util/fetchWithToken';
+import type { ObjectLike, ResultError } from '@core/util/result';
+import type { SafeFetchInit } from '@core/util/safeFetch';
+import { getMacroApiToken } from '@service-auth/fetch';
+import type { DataType } from '@service-properties/generated/schemas/dataType';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { PropertyOption } from '@service-properties/generated/schemas/propertyOption';
+import type { PropertyOwner } from '@service-properties/generated/schemas/propertyOwner';
+import type { Result } from 'neverthrow';
+
+/** What a viewer may do with a database (`AccessGrant`). */
+export type DatabaseGrant = 'view' | 'comment' | 'edit' | 'owner';
+
+/** A database: a named collection of tables, shared as one entity. */
+export interface DatabaseSummary {
+  id: string;
+  name: string;
+  owner_id: string;
+  created_at: string;
+  trashed_at: string | null;
+}
+
+/** A database as listed for a viewer (`ListedDatabase`). */
+export interface ListedDatabase {
+  database: DatabaseSummary;
+  grant: DatabaseGrant;
+}
+
+/** One table (tab) of a database. */
+export interface DatabaseTable {
+  id: string;
+  database_id: string;
+  name: string;
+  position: string;
+  /** Monotonic version, bumped on every row/column/link mutation. */
+  version: number;
+}
+
+/** Column-kind specific configuration stored on a column placement. */
+export type ColumnConfig =
+  | { kind: 'link'; database_id: string; table_id: string }
+  | { kind: 'lookup'; via_column_id: string; target: string };
+
+/** The placement of a property definition on a table. */
+export interface DatabaseColumn {
+  id: string;
+  table_id: string;
+  property_definition_id: string;
+  position: string;
+  config: ColumnConfig | null;
+}
+
+/**
+ * Who owns a column's definition.
+ *
+ * A superset of the generated `PropertyOwner`: a database column's definition
+ * is scoped to the database, which the properties-service schema does not
+ * describe yet.
+ */
+export type DatabasePropertyOwner =
+  | PropertyOwner
+  | { scope: 'database'; database_id: string };
+
+/** The property definition behind a column. */
+export interface DatabasePropertyDefinition {
+  id: string;
+  owner: DatabasePropertyOwner;
+  display_name: string;
+  data_type: DataType;
+  is_multi_select: boolean;
+  specific_entity_type: EntityType | null;
+  created_at: string;
+  updated_at: string;
+  is_system: boolean;
+  is_metadata: boolean;
+}
+
+/** A definition together with its select options. */
+export interface DatabasePropertyDefinitionWithOptions {
+  definition: DatabasePropertyDefinition;
+  property_options: PropertyOption[];
+}
+
+/** One column placement with the definition behind it (`ColumnDetail`). */
+export interface DatabaseColumnDetail {
+  column: DatabaseColumn;
+  /** Name to use in SQL. */
+  sql_name: string;
+  definition: DatabasePropertyDefinitionWithOptions;
+  /** Whether SQL may write this column. */
+  writable: boolean;
+}
+
+/** One table with its columns and SQL name (`TableDetail`). */
+export interface DatabaseTableDetail {
+  table: DatabaseTable;
+  /** Name to use in SQL (`FROM guests`). */
+  sql_name: string;
+  columns: DatabaseColumnDetail[];
+}
+
+/** Everything a client needs to render and edit one database. */
+export interface DatabaseDetail {
+  database: DatabaseSummary;
+  grant: DatabaseGrant;
+  tables: DatabaseTableDetail[];
+}
+
+/** A cell value as the SQLite materialization produced it. */
+export type SqlValue = string | number | null;
+
+/** One result column with its origin. */
+export interface ResultColumn {
+  name: string;
+  /** Entity type of id values, when known — drives chip rendering. */
+  entity_type: string | null;
+  /** Origin `[table, column]` when the column traces to one base column. */
+  origin: [string, string] | null;
+}
+
+/** One SELECT's result set. */
+export interface QueryResult {
+  columns: ResultColumn[];
+  rows: SqlValue[][];
+}
+
+/** Outcome of `POST /databases/exec`. */
+export interface ExecOutcome {
+  /** Result sets of the SELECT statements, in order. */
+  results: QueryResult[];
+  /** How many row changes were applied. */
+  changes_applied: number;
+  /** Server-minted ids for inserted rows. */
+  inserted_row_ids: string[];
+  /** New versions of every written table, keyed by table id. */
+  new_versions: Record<string, number>;
+  /** Tables the statement read, for liveness subscription. */
+  read_tables: string[];
+  /** Magic tables whose materialization hit its row cap. */
+  truncated_tables: string[];
+}
+
+/** Body of `POST /databases/exec`. */
+export interface ExecRequest {
+  sql: string;
+  /**
+   * Compare-and-swap: reject writes if any listed table has moved past the
+   * given version. Omitted → cell-level last-write-wins.
+   */
+  baseVersions?: Record<string, number>;
+}
+
+/** How a new column obtains its property definition. */
+export type ColumnBindingRequest =
+  | {
+      kind: 'new';
+      name: string;
+      // The enum carries `rename_all = "camelCase"` (variant names only), so
+      // the variant's own fields stay snake_case on the wire.
+      data_type: DataType;
+      is_multi_select: boolean;
+    }
+  | { kind: 'existing'; property_definition_id: string };
+
+/** Body of `POST /databases/{id}/tables/{tableId}/columns`. */
+export interface CreateColumnRequest {
+  binding: ColumnBindingRequest;
+  linkToTableId?: string;
+  linkToDatabaseId?: string;
+}
+
+/** Response of the column route. */
+export interface CreateColumnResponse {
+  columnId: string;
+}
+
+const dssHost = SERVER_HOSTS['document-storage-service'];
+
+/**
+ * Local twin of `dssFetch`. Declared here rather than imported from
+ * `./client` so the databases module stays a leaf — `client.ts` re-exports
+ * this namespace, and importing back out of it would close an import cycle.
+ */
+function databasesFetch<T extends ObjectLike>(
+  path: string,
+  init?: SafeFetchInit
+): Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>> {
+  return fetchWithToken<T>(`${dssHost}${path}`, init);
+}
+
+export const databasesClient = {
+  async list() {
+    return await databasesFetch<ListedDatabase[]>('/databases');
+  },
+
+  async get({ id }: { id: string }) {
+    return await databasesFetch<DatabaseDetail>(`/databases/${id}`);
+  },
+
+  async create({ name }: { name: string }) {
+    return await databasesFetch<DatabaseSummary>('/databases', {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  async createTable({ id, name }: { id: string; name: string }) {
+    return await databasesFetch<DatabaseTable>(`/databases/${id}/tables`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    });
+  },
+
+  async createColumn({
+    id,
+    tableId,
+    request,
+  }: {
+    id: string;
+    tableId: string;
+    request: CreateColumnRequest;
+  }) {
+    return await databasesFetch<CreateColumnResponse>(
+      `/databases/${id}/tables/${tableId}/columns`,
+      { method: 'POST', body: JSON.stringify(request) }
+    );
+  },
+
+  /**
+   * Run SQL as the caller. Reads and writes both go through here — there are
+   * no row CRUD endpoints.
+   */
+  async exec(request: ExecRequest) {
+    return await databasesFetch<ExecOutcome>('/databases/exec', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  /**
+   * Fetch the SQLite snapshot of a database.
+   *
+   * Not routed through `dssFetch`: `safeFetch` parses every non-text,
+   * non-octet-stream response as JSON, and the snapshot comes back as
+   * `application/vnd.sqlite3`.
+   */
+  async downloadSqlite({ id }: { id: string }): Promise<Blob> {
+    const url = `${dssHost}/databases/${id}/sqlite`;
+    if (ENABLE_BEARER_TOKEN_AUTH) {
+      const apiToken = await getMacroApiToken();
+      if (!apiToken) throw new Error('No Macro API token');
+      const response = await fetch(url, {
+        headers: { Authorization: `Bearer ${apiToken}` },
+      });
+      if (!response.ok) {
+        throw new Error(`Snapshot download failed (${response.status})`);
+      }
+      return await response.blob();
+    }
+
+    await fetchToken();
+    const response = await fetch(url, { credentials: 'include' });
+    if (!response.ok) {
+      throw new Error(`Snapshot download failed (${response.status})`);
+    }
+    return await response.blob();
+  },
+};

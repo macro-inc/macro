@@ -21,6 +21,8 @@ function toItemType(type: EntityRef['type']): ItemType | undefined {
       'reminder',
       'skill',
       'agent_session',
+      // A database is its own entity kind, not a cloud-storage item.
+      'database',
       () => undefined
     )
     .otherwise((itemType) => itemType);

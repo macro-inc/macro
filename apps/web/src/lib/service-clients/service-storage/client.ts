@@ -171,6 +171,7 @@ export {
   stringToItemType,
 } from './itemType';
 
+import { databasesClient } from './databases';
 import type {
   CollabSurfaceResponse,
   CollabSurfaceTokenResponse,
@@ -351,6 +352,9 @@ const { showPaywall } = usePaywallState();
 export const DOCUMENT_NAME_TOO_LONG_CODE = 'DOCUMENT_NAME_TOO_LONG' as const;
 
 export const storageServiceClient = {
+  /** Macro Databases — see `./databases.ts`. */
+  databases: databasesClient,
+
   async ping() {
     return (await dssFetch<SuccessResponse>(`/ping`)).map(
       (result) => result.data
