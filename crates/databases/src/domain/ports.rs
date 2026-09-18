@@ -2,7 +2,10 @@
 
 use std::collections::HashMap;
 
-use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
+use chrono::{DateTime, Utc};
+use entity_access::domain::models::{
+    EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
+};
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 
 use crate::domain::models::{
@@ -35,6 +38,35 @@ pub trait DatabasesRepo: Send + Sync + 'static {
         &self,
         id: DatabaseId,
     ) -> impl Future<Output = Result<Option<(Database, Vec<Table>)>, Self::Err>> + Send;
+
+    /// Set a database's display name.
+    ///
+    /// The caller has already checked that the database exists and is not
+    /// trashed; a missing id writes nothing and is not an error here.
+    fn rename_database(
+        &self,
+        id: DatabaseId,
+        name: &str,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Mark a database trashed (reversible; nothing else is touched).
+    fn trash_database(
+        &self,
+        id: DatabaseId,
+        trashed_at: DateTime<Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Clear a database's trashed marker.
+    fn restore_database(
+        &self,
+        id: DatabaseId,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
+    /// Irreversibly delete a database, its tables/columns/rows/links (by
+    /// cascade), and every `entity_access` row pointing at it, in one
+    /// transaction.
+    fn delete_database(&self, id: DatabaseId)
+    -> impl Future<Output = Result<(), Self::Err>> + Send;
 
     /// Insert a table.
     fn create_table(
@@ -220,6 +252,33 @@ pub trait DatabasesService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         viewer: Viewer,
     ) -> impl Future<Output = Result<DatabaseDetail, DatabaseError>> + Send;
+
+    /// Rename a database. A trashed database is indistinguishable from a
+    /// missing one.
+    fn rename_database(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        name: String,
+    ) -> impl Future<Output = Result<Database, DatabaseError>> + Send;
+
+    /// Move a database to the trash. Idempotent: trashing an already-trashed
+    /// database succeeds without changing when it was trashed.
+    fn trash_database(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
+
+    /// Restore a trashed database. Idempotent for a live database.
+    fn restore_database(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
+
+    /// Irreversibly delete a database and everything under it.
+    fn delete_database_permanently(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> impl Future<Output = Result<(), DatabaseError>> + Send;
 
     /// Create a table.
     fn create_table(

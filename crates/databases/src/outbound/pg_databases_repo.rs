@@ -275,6 +275,69 @@ impl DatabasesRepo for PgDatabasesRepo {
         Ok(Some((database, tables)))
     }
 
+    #[tracing::instrument(err, skip(self))]
+    async fn rename_database(&self, id: DatabaseId, name: &str) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"UPDATE databases SET name = $2, updated_at = now() WHERE id = $1"#,
+            id,
+            name,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn trash_database(
+        &self,
+        id: DatabaseId,
+        trashed_at: chrono::DateTime<chrono::Utc>,
+    ) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"UPDATE databases SET trashed_at = $2, updated_at = now() WHERE id = $1"#,
+            id,
+            trashed_at,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn restore_database(&self, id: DatabaseId) -> Result<(), Self::Err> {
+        sqlx::query!(
+            r#"UPDATE databases SET trashed_at = NULL, updated_at = now() WHERE id = $1"#,
+            id,
+        )
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    /// Tables, columns, rows, link edges, and database-owned property
+    /// definitions go with the database through the `ON DELETE CASCADE` chain
+    /// declared in the migrations that added them; `entity_access`
+    /// rows are a generic side table with no foreign key to `databases`, so
+    /// they are purged explicitly in the same transaction.
+    #[tracing::instrument(err, skip(self))]
+    async fn delete_database(&self, id: DatabaseId) -> Result<(), Self::Err> {
+        let mut transaction = self.pool.begin().await?;
+
+        entity_access_db_utils::delete_entity_access_rows(
+            &mut transaction,
+            &id,
+            EntityType::Database,
+        )
+        .await?;
+
+        sqlx::query!(r#"DELETE FROM databases WHERE id = $1"#, id)
+            .execute(&mut *transaction)
+            .await?;
+
+        transaction.commit().await?;
+        Ok(())
+    }
+
     #[tracing::instrument(err, skip(self, cmd))]
     async fn create_table(&self, cmd: &CreateTable) -> Result<Table, Self::Err> {
         let mut transaction = self.pool.begin().await?;

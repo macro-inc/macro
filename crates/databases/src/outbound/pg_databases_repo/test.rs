@@ -135,6 +135,132 @@ async fn database_table_and_column_round_trip(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn rename_trash_and_restore_round_trip(pool: PgPool) {
+    let (repo, table, _) = fixture(&pool).await;
+    let database_id = table.database_id;
+
+    repo.rename_database(database_id, "Winter Offsite")
+        .await
+        .expect("rename should succeed");
+    let (database, _) = repo
+        .get_database(database_id)
+        .await
+        .expect("get should succeed")
+        .expect("database should exist");
+    assert_eq!(database.name, "Winter Offsite");
+    assert!(database.trashed_at.is_none());
+
+    let trashed_at = chrono::Utc::now();
+    repo.trash_database(database_id, trashed_at)
+        .await
+        .expect("trash should succeed");
+    let (database, _) = repo
+        .get_database(database_id)
+        .await
+        .expect("get should succeed")
+        .expect("a trashed database is still readable");
+    // Postgres stores microseconds, so the round-tripped instant is the
+    // written one truncated, not bit-identical.
+    let stored = database.trashed_at.expect("trashed_at should be set");
+    assert!((stored - trashed_at).num_milliseconds().abs() < 1);
+
+    repo.restore_database(database_id)
+        .await
+        .expect("restore should succeed");
+    let (database, tables) = repo
+        .get_database(database_id)
+        .await
+        .expect("get should succeed")
+        .expect("database should exist");
+    assert!(database.trashed_at.is_none());
+    // Trashing and restoring never touches the contents.
+    assert_eq!(tables.len(), 2);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn delete_database_cascades_and_purges_access_rows(pool: PgPool) {
+    let (repo, table, definition_id) = fixture(&pool).await;
+    let database_id = table.database_id;
+
+    let access_rows = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND entity_type = $2"#,
+        database_id,
+        EntityType::Database.as_ref(),
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count should succeed");
+    assert_eq!(access_rows, Some(1), "creation writes the owner grant");
+
+    repo.delete_database(database_id)
+        .await
+        .expect("delete should succeed");
+
+    assert!(
+        repo.get_database(database_id)
+            .await
+            .expect("get should succeed")
+            .is_none()
+    );
+    for (label, count) in [
+        (
+            "tables",
+            sqlx::query_scalar!(
+                r#"SELECT COUNT(*) FROM database_tables WHERE database_id = $1"#,
+                database_id
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("count should succeed"),
+        ),
+        (
+            "columns",
+            sqlx::query_scalar!(
+                r#"SELECT COUNT(*) FROM database_columns WHERE table_id = $1"#,
+                table.id
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("count should succeed"),
+        ),
+        (
+            "rows",
+            sqlx::query_scalar!(
+                r#"SELECT COUNT(*) FROM database_rows WHERE table_id = $1"#,
+                table.id
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("count should succeed"),
+        ),
+        (
+            "entity access",
+            sqlx::query_scalar!(
+                r#"SELECT COUNT(*) FROM entity_access WHERE entity_id = $1 AND entity_type = $2"#,
+                database_id,
+                EntityType::Database.as_ref(),
+            )
+            .fetch_one(&pool)
+            .await
+            .expect("count should succeed"),
+        ),
+    ] {
+        assert_eq!(count, Some(0), "{label} should be gone");
+    }
+
+    // The bound definition is owned by the test user, not the database, so it
+    // survives; only database-owned definitions cascade.
+    let definitions = sqlx::query_scalar!(
+        r#"SELECT COUNT(*) FROM property_definitions WHERE id = $1"#,
+        definition_id
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("count should succeed");
+    assert_eq!(definitions, Some(1));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn get_database_is_none_when_missing(pool: PgPool) {
     insert_user(&pool).await;
     let repo = PgDatabasesRepo::new(pool);

@@ -94,6 +94,7 @@ entity_access = { path = "../../crates/entity_access", features = [
   "schema",
 ] }
 databases = { path = "../../crates/databases", features = [
+  "entity_mutation",
   "gateway",
   "inbound",
   "postgres",

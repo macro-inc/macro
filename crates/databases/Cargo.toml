@@ -23,6 +23,10 @@ inbound = [
   "entity_access/inbound",
   "ports",
 ]
+# Capability impls for the unified entity-mutation router (rename, trash,
+# restore, permanent delete). `rootcause` is already an unconditional
+# dependency, so only the trait crate is pulled in here.
+entity_mutation = ["dep:entity_mutation", "ports"]
 # Liveness fan-out through the connection gateway.
 gateway = ["dep:connection_gateway_client", "outbound"]
 # Driven adapters share the port contracts.
@@ -42,6 +46,7 @@ chrono = { workspace = true, features = ["serde"] }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 entity_access = { path = "../entity_access", optional = true, default-features = false, features = ["ports"] }
 entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+entity_mutation = { path = "../entity_mutation", optional = true }
 fallible-streaming-iterator = { version = "0.1", optional = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }

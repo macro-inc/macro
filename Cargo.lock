@@ -4617,6 +4617,7 @@ dependencies = [
  "connection_gateway_client",
  "entity_access",
  "entity_access_db_utils",
+ "entity_mutation",
  "fallible-streaming-iterator",
  "macro_authorization",
  "macro_db_migrator",

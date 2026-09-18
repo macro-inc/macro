@@ -49,6 +49,8 @@ fn favoritable_kinds_are_an_explicit_allowlist() {
         EntityType::ChannelMessage,
         EntityType::StaticFile,
         EntityType::CrmContact,
+        // Databases are mutable through the router but not favoritable.
+        EntityType::Database,
     ] {
         assert!(
             !favoritable(entity_type),

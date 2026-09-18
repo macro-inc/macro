@@ -114,6 +114,50 @@ impl DatabasesRepo for FakeRepo {
             )
         }))
     }
+    async fn rename_database(&self, id: DatabaseId, name: &str) -> Result<(), FakeError> {
+        let mut w = self.0.lock().unwrap();
+        if let Some(database) = w.databases.iter_mut().find(|d| d.id == id) {
+            database.name = name.to_string();
+        }
+        Ok(())
+    }
+    async fn trash_database(
+        &self,
+        id: DatabaseId,
+        trashed_at: chrono::DateTime<Utc>,
+    ) -> Result<(), FakeError> {
+        let mut w = self.0.lock().unwrap();
+        if let Some(database) = w.databases.iter_mut().find(|d| d.id == id) {
+            database.trashed_at = Some(trashed_at);
+        }
+        Ok(())
+    }
+    async fn restore_database(&self, id: DatabaseId) -> Result<(), FakeError> {
+        let mut w = self.0.lock().unwrap();
+        if let Some(database) = w.databases.iter_mut().find(|d| d.id == id) {
+            database.trashed_at = None;
+        }
+        Ok(())
+    }
+    async fn delete_database(&self, id: DatabaseId) -> Result<(), FakeError> {
+        let mut w = self.0.lock().unwrap();
+        w.databases.retain(|d| d.id != id);
+        let table_ids: Vec<TableId> = w
+            .tables
+            .iter()
+            .filter(|t| t.database_id == id)
+            .map(|t| t.id)
+            .collect();
+        w.tables.retain(|t| t.database_id != id);
+        w.columns.retain(|c| !table_ids.contains(&c.table_id));
+        w.rows.retain(|table_id, _| !table_ids.contains(table_id));
+        // The Postgres adapter purges `entity_access` rows in the same
+        // transaction; the fake's grant map stands in for that table.
+        for grants in w.grants.values_mut() {
+            grants.retain(|(database_id, _)| *database_id != id);
+        }
+        Ok(())
+    }
     async fn create_table(&self, cmd: &CreateTable) -> Result<Table, FakeError> {
         let mut w = self.0.lock().unwrap();
         let table = Table {
@@ -902,6 +946,121 @@ async fn snapshot_contains_the_database() {
         .unwrap();
     assert!(snapshot.bytes.starts_with(b"SQLite format 3\0"));
     assert_eq!(snapshot.versions.len(), 1);
+}
+
+#[tokio::test]
+async fn rename_validates_the_name_and_writes_it() {
+    let (world, svc, db, _table) = seeded().await;
+
+    svc.rename_database(
+        receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
+        "  Winter Offsite  ".into(),
+    )
+    .await
+    .unwrap();
+    assert_eq!(world.lock().unwrap().databases[0].name, "Winter Offsite");
+
+    let err = svc
+        .rename_database(
+            receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
+            "   ".into(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(err, DatabaseError::InvalidSchemaOperation(_)));
+
+    let err = svc
+        .rename_database(
+            receipt::<EditAccessLevel>(Uuid::new_v4(), OWNER, AccessLevel::Owner),
+            "Elsewhere".into(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(err, DatabaseError::NotFound));
+}
+
+#[tokio::test]
+async fn trash_hides_the_database_and_restore_brings_it_back() {
+    let (world, svc, db, _table) = seeded().await;
+
+    svc.trash_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    let trashed_at = world.lock().unwrap().databases[0].trashed_at;
+    assert!(trashed_at.is_some());
+
+    // A trashed database is invisible to listing, reads, and renames.
+    assert!(svc.list_databases(viewer(OWNER)).await.unwrap().is_empty());
+    let err = svc
+        .get_database(
+            receipt::<ViewAccessLevel>(db, OWNER, AccessLevel::Owner),
+            viewer(OWNER),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(err, DatabaseError::NotFound));
+    let err = svc
+        .rename_database(
+            receipt::<EditAccessLevel>(db, OWNER, AccessLevel::Owner),
+            "Renamed".into(),
+        )
+        .await
+        .unwrap_err();
+    assert!(matches!(err, DatabaseError::NotFound));
+
+    // Trashing again keeps the original timestamp.
+    svc.trash_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    assert_eq!(world.lock().unwrap().databases[0].trashed_at, trashed_at);
+
+    svc.restore_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+    assert!(world.lock().unwrap().databases[0].trashed_at.is_none());
+    assert_eq!(svc.list_databases(viewer(OWNER)).await.unwrap().len(), 1);
+
+    // Restoring a live database is a no-op, not an error.
+    svc.restore_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn permanent_delete_removes_the_database_and_its_grants() {
+    let (world, svc, db, _table) = seeded().await;
+
+    svc.delete_database_permanently(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+
+    {
+        let w = world.lock().unwrap();
+        assert!(w.databases.is_empty());
+        assert!(w.tables.is_empty());
+        assert!(w.grants.values().all(|grants| grants.is_empty()));
+    }
+    assert!(svc.list_databases(viewer(VIEWER)).await.unwrap().is_empty());
+
+    let err = svc
+        .delete_database_permanently(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap_err();
+    assert!(matches!(err, DatabaseError::NotFound));
+}
+
+#[tokio::test]
+async fn lifecycle_operations_act_on_trashed_databases() {
+    let (world, svc, db, _table) = seeded().await;
+    svc.trash_database(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+
+    svc.delete_database_permanently(receipt::<OwnerAccessLevel>(db, OWNER, AccessLevel::Owner))
+        .await
+        .unwrap();
+
+    assert!(world.lock().unwrap().databases.is_empty());
 }
 
 // ===== Integration: grants across databases, links, HAS, snapshots, versions =====

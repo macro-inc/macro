@@ -12,9 +12,10 @@ mod test;
 use std::collections::{HashMap, HashSet};
 use std::sync::Arc;
 
+use chrono::Utc;
 use entity_access::domain::models::{
-    AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, RequiredPermission,
-    ViewAccessLevel,
+    AccessLevel, EditAccessLevel, EntityAccessReceipt, EntityPermission, OwnerAccessLevel,
+    RequiredPermission, ViewAccessLevel,
 };
 use uuid::Uuid;
 
@@ -502,6 +503,22 @@ where
         }
         Ok((database, tables))
     }
+
+    /// The receipted database regardless of its trash state — the lifecycle
+    /// operations (trash, restore, permanent delete) act on trashed rows too.
+    async fn database_by_receipt<T: RequiredPermission>(
+        &self,
+        receipt: &EntityAccessReceipt<T>,
+    ) -> Result<Database, DatabaseError> {
+        let database_id = receipt_database_id(receipt)?;
+        let (database, _tables) = self
+            .repo
+            .get_database(database_id)
+            .await
+            .map_err(repo_err)?
+            .ok_or(DatabaseError::NotFound)?;
+        Ok(database)
+    }
 }
 
 impl<Repo, Defs, Magic, Exec, Events, Access> DatabasesService
@@ -522,6 +539,67 @@ where
         };
         self.repo
             .create_database(&cmd, STARTER_TABLE_NAME)
+            .await
+            .map_err(repo_err)
+    }
+
+    #[tracing::instrument(skip(self, receipt), err)]
+    async fn rename_database(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        name: String,
+    ) -> Result<Database, DatabaseError> {
+        // Renaming a trashed database is refused the same way a missing one
+        // is: restore it first.
+        let (database, _tables) = self.database_for_edit(&receipt).await?;
+        let name = validate_name(&name)?;
+        self.repo
+            .rename_database(database.id, &name)
+            .await
+            .map_err(repo_err)?;
+        Ok(Database { name, ..database })
+    }
+
+    #[tracing::instrument(skip(self, receipt), err)]
+    async fn trash_database(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), DatabaseError> {
+        let database = self.database_by_receipt(&receipt).await?;
+        if database.trashed_at.is_some() {
+            return Ok(());
+        }
+        self.repo
+            .trash_database(database.id, Utc::now())
+            .await
+            .map_err(repo_err)
+    }
+
+    #[tracing::instrument(skip(self, receipt), err)]
+    async fn restore_database(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), DatabaseError> {
+        let database = self.database_by_receipt(&receipt).await?;
+        if database.trashed_at.is_none() {
+            return Ok(());
+        }
+        self.repo
+            .restore_database(database.id)
+            .await
+            .map_err(repo_err)
+    }
+
+    #[tracing::instrument(skip(self, receipt), err)]
+    async fn delete_database_permanently(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+    ) -> Result<(), DatabaseError> {
+        // Permanent deletion does not require the database to be trashed
+        // first; the receipt already proves ownership.
+        let database = self.database_by_receipt(&receipt).await?;
+        self.repo
+            .delete_database(database.id)
             .await
             .map_err(repo_err)
     }

@@ -438,6 +438,7 @@ pub(crate) type DssEntityMutationService =
         DssCallService,
         DssEmailService,
         ProjectService,
+        DatabasesServiceType,
         EntityAccessService,
         FavoritesServiceType,
         crate::outbound::entity_mutation::DssEntityLifecycleAdapter<DssEventBroker>,
