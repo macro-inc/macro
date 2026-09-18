@@ -647,6 +647,24 @@ function sameIdentity(a: SplitContent, b: SplitContent): boolean {
   return a.id === b.id;
 }
 
+function contentIdentity(content: SplitContent) {
+  const route =
+    content.type === 'component' ? parseAgentsRoute(content.id) : undefined;
+  return route
+    ? {
+        type:
+          route.conversation.type === 'agent_session'
+            ? ('agent' as const)
+            : ('chat' as const),
+        id: route.conversation.id,
+      }
+    : content;
+}
+
+function sameEntityContent(a: SplitContent, b: SplitContent): boolean {
+  return sameContentIdentity(contentIdentity(a), contentIdentity(b));
+}
+
 function isDuplicateSplit(
   splits: SplitState[],
   content: SplitContent,
@@ -654,7 +672,7 @@ function isDuplicateSplit(
 ): boolean {
   return splits
     .filter((s) => !isExcluded(s))
-    .some((split) => sameContentIdentity(split.content, content));
+    .some((split) => sameEntityContent(split.content, content));
 }
 
 export function createSplitLayout(
@@ -696,19 +714,6 @@ export function createSplitLayout(
     popovers: new Map(),
   });
 
-  const contentIdentity = (content: SplitContent) => {
-    const route =
-      content.type === 'component' ? parseAgentsRoute(content.id) : undefined;
-    return route
-      ? {
-          type:
-            route.conversation.type === 'agent_session'
-              ? ('agent' as const)
-              : ('chat' as const),
-          id: route.conversation.id,
-        }
-      : content;
-  };
   const contentInstances = orchestrator.contentInstances;
   const unregisterContentInstances = contentInstances.register(() => [
     ...state.splits.map((split) => ({
@@ -1379,11 +1384,14 @@ export function createSplitLayout(
     const isDefault = sameContent(initialContent, DEFAULT_SPLIT_CONTENT);
 
     if (isDuplicateSplit(state.splits, initialContent, isExcluded)) {
-      const existingSplit = state.splits.find((s) =>
-        sameContentIdentity(s.content, initialContent)
+      const existingSplit = state.splits.find(
+        (s) => !isExcluded(s) && sameEntityContent(s.content, initialContent)
       );
 
-      return getSplit(existingSplit!.id)!;
+      const handle = getSplit(existingSplit!.id)!;
+      if (activate) handle.activate();
+      toast.alert('Content already open');
+      return handle;
     }
 
     if (!canOpenContent(initialContent)) return;
@@ -1807,7 +1815,7 @@ export function createSplitLayout(
   ): SplitHandle | undefined {
     const match = state.splits.find(
       (s) =>
-        (sameContentIdentity(s.content, { type, id }) ||
+        (sameEntityContent(s.content, { type, id }) ||
           (s.content.type === type && s.content.id === id)) &&
         !isExcluded(s)
     );
@@ -2082,10 +2090,7 @@ export function createSplitLayout(
     // Include the mobile background split: its navigation interceptor promotes
     // an existing mount instead of opening another instance.
     const current = state.splits.find((split) =>
-      sameContentIdentity(
-        contentIdentity(split.content),
-        contentIdentity(content)
-      )
+      sameEntityContent(split.content, content)
     );
     if (!canOpenContent(content, current?.id)) return;
 
@@ -2167,7 +2172,7 @@ export function createSplitLayout(
     if (
       existingSplit &&
       !promotedPreviewPair &&
-      (content.type !== 'component' || !options.allowDuplicate)
+      (contentIdentity(content).type !== 'component' || !options.allowDuplicate)
     ) {
       // A controller selection can resolve to content already mounted in its
       // own viewer (notably two rows from one channel). Refresh the viewer's

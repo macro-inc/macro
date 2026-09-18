@@ -34,8 +34,14 @@ export type ChannelsViewProps = {
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
-  const { state, mobileLayout, setAsideWidth, setMobileTab, setRailMode } =
-    useChannelsView();
+  const {
+    state,
+    mobileLayout,
+    previewChannelId,
+    setAsideWidth,
+    setMobileTab,
+    setRailMode,
+  } = useChannelsView();
   const [workspace, setWorkspace] = createSignal<HTMLDivElement>();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
   const workspaceSize = createElementSize(workspace);
@@ -65,7 +71,8 @@ function ChannelsViewRoot() {
 
   const sources = useChannelsSources(
     (scope) => {
-      if (mobileLayout()) return scope !== 'search' && state.mobileTab === scope;
+      if (mobileLayout())
+        return scope !== 'search' && state.mobileTab === scope;
       if (railSearchOpen()) return scope === 'search';
       if (scope === 'search') return false;
       if (scope === 'recents') return state.tab === 'recents';
@@ -85,13 +92,13 @@ function ChannelsViewRoot() {
     ])
   );
   const loadedSelectedChannel = createMemo(() =>
-    resolveSelectedChannel(state.selectedChannelId, loadedChannels())
+    resolveSelectedChannel(previewChannelId(), loadedChannels())
   );
   const selectedChannelQuery = useChannelByIdQuery(
-    () => state.selectedChannelId,
+    previewChannelId,
     () =>
       !mobileLayout() &&
-      state.selectedChannelId !== undefined &&
+      previewChannelId() !== undefined &&
       loadedSelectedChannel() === undefined
   );
   const selectedChannel = createMemo(() => {
@@ -102,7 +109,7 @@ function ChannelsViewRoot() {
     }
 
     return resolveSelectedChannel(
-      state.selectedChannelId,
+      previewChannelId(),
       loadedChannels(),
       selectedChannelQuery.data?.entities
     );

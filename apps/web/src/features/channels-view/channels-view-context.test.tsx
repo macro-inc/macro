@@ -5,6 +5,7 @@ import {
   ChannelsViewProvider,
   useChannelsView,
 } from './channels-view-context';
+import type { ChannelsViewStateOptions } from './types';
 
 const entry = vi.hoisted(() => ({
   state: {} as Record<string, unknown>,
@@ -38,14 +39,14 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   }),
 }));
 
-function mountProvider() {
+function mountProvider(initialState?: ChannelsViewStateOptions) {
   let context!: ChannelsViewContext;
   function ReadContext() {
     context = useChannelsView();
     return null;
   }
   const view = render(() => (
-    <ChannelsViewProvider>
+    <ChannelsViewProvider initialState={initialState}>
       <ReadContext />
     </ChannelsViewProvider>
   ));
@@ -63,6 +64,56 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('ChannelsViewProvider preview selection', () => {
+  it.each(['entry', 'local', 'explicit'] as const)(
+    'preserves a conflicting %s selection through persistence and remount',
+    (source) => {
+      const saved = { selectedChannelId: 'c1' };
+      const storageKey = 'macro:channels:view-state:v1:alice';
+      if (source === 'entry') entry.state = { 'channels.view': saved };
+      if (source === 'local') {
+        localStorage.setItem(storageKey, JSON.stringify(saved));
+      }
+      guard.allow = false;
+      const first = mountProvider(source === 'explicit' ? saved : undefined);
+
+      expect(first.context.state.selectedChannelId).toBe('c1');
+      expect(first.context.previewChannelId()).toBeUndefined();
+      // Unrelated preference writes must retain the blocked selection too.
+      first.context.setGroupOpen('channels', false);
+      expect(JSON.parse(localStorage.getItem(storageKey)!)).toMatchObject(
+        saved
+      );
+      const captured = entry.captors.get('channels.view')?.();
+      expect(captured).toMatchObject(saved);
+      first.unmount();
+
+      guard.allow = true;
+      entry.state = source === 'local' ? {} : { 'channels.view': captured };
+      const second = mountProvider();
+      expect(second.context.state.selectedChannelId).toBe('c1');
+      expect(second.context.previewChannelId()).toBe('c1');
+    }
+  );
+
+  it('can retry a restored selection after the other view closes', () => {
+    entry.state = { 'channels.view': { selectedChannelId: 'c1' } };
+    guard.allow = false;
+    const { context } = mountProvider();
+
+    guard.allow = true;
+    context.setSelectedChannelId('c1');
+    expect(context.previewChannelId()).toBe('c1');
+
+    guard.allow = false;
+    context.setSelectedChannelId('c2');
+    expect(context.state.selectedChannelId).toBe('c1');
+    expect(context.previewChannelId()).toBe('c1');
+
+    context.setSelectedChannelId(undefined);
+    expect(context.state.selectedChannelId).toBeUndefined();
+    expect(context.previewChannelId()).toBeUndefined();
+  });
+
   it('claims the selected channel as an inline preview on desktop', () => {
     guard.allow = false;
     const { context } = mountProvider();
@@ -71,6 +122,7 @@ describe('ChannelsViewProvider preview selection', () => {
 
     expect(guard.selections.at(-1)).toEqual({ type: 'channel', id: 'c1' });
     expect(context.state.selectedChannelId).toBeUndefined();
+    expect(context.previewChannelId()).toBeUndefined();
   });
 
   it('keeps touch selections out of the preview registry', () => {
@@ -83,5 +135,6 @@ describe('ChannelsViewProvider preview selection', () => {
     expect(context.mobileLayout()).toBe(true);
     expect(guard.selections.at(-1)).toBeUndefined();
     expect(context.state.selectedChannelId).toBe('c1');
+    expect(context.previewChannelId()).toBeUndefined();
   });
 });

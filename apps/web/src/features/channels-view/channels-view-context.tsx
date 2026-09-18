@@ -5,6 +5,7 @@ import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { ContextProviderProps } from '@solid-primitives/context';
+import { createSignal } from 'solid-js';
 import { createStore, type Store } from 'solid-js/store';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
@@ -32,6 +33,8 @@ export type ChannelsViewContext = {
   state: Store<ChannelsViewState>;
   /** The mobile list opens channels in the split; only desktop renders the inline preview. */
   mobileLayout: () => boolean;
+  /** Only admitted selections may render an inline preview. */
+  previewChannelId: () => string | undefined;
   setTab: (tab: ChannelsTab) => void;
   setMobileTab: (tab: ChannelsQueryScope) => void;
   setSelectedChannelId: (channelId: string | undefined) => void;
@@ -104,21 +107,24 @@ export const [ChannelsViewProvider, useChannelsView] =
 
       const mobileLayout = () => isTouchDevice();
       const selectPreview = createPreviewSelectionGuard();
+      const [previewChannelId, setPreviewChannelId] = createSignal<string>();
       const setSelectedChannelId = (id: string | undefined) => {
         // The mobile layout keeps the selection for row highlighting only, so
         // there is no preview to claim.
         const preview =
           id && !mobileLayout() ? { type: 'channel' as const, id } : undefined;
         if (!selectPreview(preview)) return;
+        setPreviewChannelId(preview?.id);
         setState('selectedChannelId', id);
       };
-      const initialChannelId = state.selectedChannelId;
-      setState('selectedChannelId', undefined);
-      setSelectedChannelId(initialChannelId);
+      // Keep restored selection in persistence even if another view currently
+      // owns its preview. It can be retried on selection or the next mount.
+      setSelectedChannelId(state.selectedChannelId);
 
       return {
         state,
         mobileLayout,
+        previewChannelId,
         setTab: (tab) => setState('tab', tab),
         setMobileTab: (tab) => setState('mobileTab', tab),
         setSelectedChannelId,

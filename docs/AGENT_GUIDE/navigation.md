@@ -303,9 +303,14 @@ polled into Macro about every two seconds; disconnected runtimes must resume fir
 
 ### Content already open
 
-Content can be open in only one split or inline preview/detail view at a time.
-Selecting it elsewhere leaves the current detail and navigation history
-unchanged and shows a **Content already open** toast. Close or navigate away
+Entity content can be open in only one split or inline preview/detail view at a
+time. Shell components may have duplicate splits when `allowDuplicate` is enabled.
+An Agents conversation route counts as the same entity as its agent or chat block.
+Opening an entity already in a split focuses that split when activation is
+requested; the sidebar's **Open in new split** also shows a **Content already open** toast.
+Selecting an entity owned by another view from a detail view leaves the current
+detail and navigation history unchanged and shows a **Content already open**
+toast. Close or navigate away
 from the owning view before opening it elsewhere. The same rule applies to mouse
 selection, keyboard preview navigation, and detail breadcrumbs. Touch layouts
 never render inline previews or detail views: a tap opens the entity in the
