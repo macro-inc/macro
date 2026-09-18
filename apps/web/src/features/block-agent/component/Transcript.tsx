@@ -1,4 +1,8 @@
-/** Agent messages on the channel's end-anchored TanStack scroll surface. */
+/**
+ * Agent messages on the channel's end-anchored TanStack scroll surface. Unlike
+ * a channel, a conversation reads top-down: the first turn opens at the top
+ * and the live turn is followed once the transcript outgrows the viewport.
+ */
 import { ScrollToBottomOverlay } from '@channel/Channel/ScrollToBottomOverlay';
 import {
   ThreadList,
@@ -101,6 +105,7 @@ export function Transcript(props: { searchTarget?: AgentMessageTarget }) {
             : { type: 'latest' }
         }
         insets={insets()}
+        shortListAlign="start"
         targetId={highlightedId()}
         onUserNavigation={() => setHighlightedId(undefined)}
         onReady={(handle) => {

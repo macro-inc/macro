@@ -96,6 +96,13 @@ type ThreadListProps = {
    * scrolls behind the floating chrome. Included in virtual measurements and navigation.
    */
   insets?: ScrollInsets;
+  /**
+   * Where a list shorter than its viewport sits. A channel reads like a chat
+   * log and hugs the composer (`end`); a conversation reads like a document
+   * and starts at the top (`start`). Growth past the viewport scrolls the same
+   * either way.
+   */
+  shortListAlign?: 'start' | 'end';
 };
 
 const NEAR_TOP_THRESHOLD = 800;
@@ -365,7 +372,9 @@ export function ThreadList(props: ThreadListProps) {
   }
 
   const shortListOffset = () =>
-    Math.max(0, viewportSize() - virtualizer.getTotalSize());
+    props.shortListAlign === 'start'
+      ? 0
+      : Math.max(0, viewportSize() - virtualizer.getTotalSize());
   // The adapter mutates its store by index. Snapshot those values and let Key
   // own each row's accessor by message ID, including while a row is removed.
   // A lookup into a shared map can disappear before queued row effects run.
