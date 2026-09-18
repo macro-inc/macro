@@ -70,7 +70,10 @@ describe('availableBotMentionUsers', () => {
     createRoot((dispose) => {
       const [enabled, setEnabled] = createSignal(false);
       flags.cursor = enabled;
-      const users = useMessageBotMentionUsers(() => ({ type: 'channel' as const, id: 'channel-1' }));
+      const users = useMessageBotMentionUsers(() => ({
+        type: 'channel' as const,
+        id: 'channel-1',
+      }));
       expect(users().map((user) => user.id)).toEqual(['bot|codex-agent']);
       setEnabled(true);
       expect(users().map((user) => user.id)).toEqual([
@@ -118,7 +121,10 @@ describe('availableBotMentionUsers', () => {
   it('offers Codex from the mention query without requiring account setup', () => {
     createRoot((dispose) => {
       expect(
-        useMessageBotMentionUsers(() => ({ type: 'channel' as const, id: 'channel-1' }))().map((user) => user.id)
+        useMessageBotMentionUsers(() => ({
+          type: 'channel' as const,
+          id: 'channel-1',
+        }))().map((user) => user.id)
       ).toEqual(['bot|codex-agent']);
       dispose();
     });
@@ -196,7 +202,9 @@ describe('availableBotMentionUsers', () => {
       availableBotMentionUsers([], [selected], true, 'channel').map((u) => u.id)
     ).toEqual([]);
     expect(
-      availableBotMentionUsers([], [selected], true, 'document').map((u) => u.id)
+      availableBotMentionUsers([], [selected], true, 'document').map(
+        (u) => u.id
+      )
     ).toEqual(['bot|doc-only']);
   });
 });
