@@ -18,6 +18,7 @@ const mocks = vi.hoisted(() => ({
   edit: vi.fn(),
   editor: vi.fn(),
   remove: vi.fn(),
+  removeThread: vi.fn(),
   clipboard: vi.fn().mockResolvedValue(undefined),
   subscribe: vi.fn(),
   byIds: vi.fn(),
@@ -42,6 +43,7 @@ vi.mock('@channel/Channel/create-message-editor', () => ({
 vi.mock('@channel/Channel/create-delete-message-confirmation', () => ({
   createDeleteMessageConfirmation: () => ({
     requestDelete: mocks.remove,
+    requestDeleteThread: mocks.removeThread,
     ConfirmationDialog: () => null,
   }),
 }));
@@ -56,7 +58,6 @@ vi.mock('@queries/messages/mutations', () => ({
   useDeleteMessageMutation: () => ({}),
   useDeleteThreadMutation: () => ({}),
   usePatchMessageMutation: () => ({}),
-  usePatchThreadMutation: () => ({}),
 }));
 vi.mock('@queries/messages/reactions', () => ({
   useAddReactionMutation: () => ({}),
@@ -184,6 +185,30 @@ describe('document message touch actions', () => {
   });
 });
 
+describe('document discussion controls', () => {
+  it('confirms a discussion delete and offers no resolve action', () => {
+    const view = render(() => <MessageThread data={message} canWrite />);
+    expect(view.queryByRole('button', { name: 'Resolve' })).toBeNull();
+    fireEvent.click(view.getByRole('button', { name: 'Delete discussion' }));
+    expect(mocks.removeThread).toHaveBeenCalledWith({
+      parent: message.parent,
+      rootId: 'root',
+    });
+  });
+
+  it('hides the delete control from a viewer who neither owns nor manages it', () => {
+    const view = render(() => (
+      <MessageThread
+        data={{ ...message, state: { ...message.state, user_id: 'other' } }}
+        canWrite
+      />
+    ));
+    expect(
+      view.queryByRole('button', { name: 'Delete discussion' })
+    ).toBeNull();
+  });
+});
+
 describe('threadListItem', () => {
   const reply = (id: string, createdAt: string) =>
     ({
@@ -267,7 +292,6 @@ describe('source channel threads in a document', () => {
     expect(mocks.clipboard).toHaveBeenCalledWith(
       'https://macro.test/app/channel/launch?channel_message_id=root'
     );
-    expect(view.queryByRole('button', { name: 'Resolve' })).toBeNull();
     expect(
       view.queryByRole('button', { name: 'Delete discussion' })
     ).toBeNull();
@@ -281,7 +305,6 @@ describe('source channel threads in a document', () => {
     expect(view.queryByRole('button', { name: 'Edit' })).toBeNull();
     expect(view.queryByRole('button', { name: 'Delete' })).toBeNull();
     expect(view.getByRole('button', { name: 'Copy link' })).toBeTruthy();
-    expect(view.queryByRole('button', { name: 'Resolve' })).toBeNull();
     expect(
       view.queryByRole('button', { name: 'Delete discussion' })
     ).toBeNull();
