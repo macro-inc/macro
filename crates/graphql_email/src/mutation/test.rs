@@ -155,7 +155,7 @@ async fn mark_seen_calls_the_email_service_and_returns_the_reloaded_thread() {
 #[tokio::test]
 async fn mark_unread_calls_the_service_and_returns_authoritative_state_not_a_hardcoded_flag() {
     let service = Arc::new(CapturingEmailMutationService::default());
-    let thread_id = Uuid::new_v7();
+    let thread_id = Uuid::from_u128(42);
     let response = schema(service.clone())
         .execute(format!(
             r#"mutation {{ markEmailThreadUnread(input: {{ threadId: "{thread_id}" }}) {{ id isRead }} }}"#
@@ -191,7 +191,7 @@ async fn mark_unread_requires_authentication() {
     let response = schema
         .execute(format!(
             r#"mutation {{ markEmailThreadUnread(input: {{ threadId: "{}" }}) {{ id }} }}"#,
-            Uuid::new_v7()
+            Uuid::from_u128(42)
         ))
         .await;
 
@@ -219,7 +219,7 @@ async fn mark_unread_propagates_service_failure_instead_of_returning_a_thread() 
     let response = schema(service)
         .execute(format!(
             r#"mutation {{ markEmailThreadUnread(input: {{ threadId: "{}" }}) {{ id }} }}"#,
-            Uuid::new_v7()
+            Uuid::from_u128(42)
         ))
         .await;
 

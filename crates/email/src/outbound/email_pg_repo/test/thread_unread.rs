@@ -112,7 +112,7 @@ async fn mark_unread_rejects_missing_and_empty_threads(pool: Pool<Postgres>) -> 
     let owner = MacroUserIdStr::try_from_email("user1@test.com")?;
     assert!(matches!(
         service
-            .mark_thread_unread_impl(owner.clone(), Uuid::new_v7())
+            .mark_thread_unread_impl(owner.clone(), Uuid::from_u128(99))
             .await,
         Err(EmailErr::ThreadNotFound)
     ));
