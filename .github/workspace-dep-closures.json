@@ -828,6 +828,7 @@
       "crates/macro_user_id",
       "crates/macro_uuid",
       "crates/mention_utils",
+      "crates/messages",
       "crates/model",
       "crates/model-entity",
       "crates/model-error-response",
