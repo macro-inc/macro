@@ -6341,7 +6341,7 @@ dependencies = [
 [[package]]
 name = "tao"
 version = "0.37.0"
-source = "git+https://github.com/seanaye/tao?rev=6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8#6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8"
+source = "git+https://github.com/macro-inc/tao?rev=6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8#6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8"
 dependencies = [
  "bitflags 2.11.1",
  "block2",
@@ -6369,7 +6369,7 @@ dependencies = [
  "parking_lot",
  "percent-encoding",
  "raw-window-handle",
- "tao-macros 0.1.4 (git+https://github.com/seanaye/tao?rev=6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8)",
+ "tao-macros 0.1.4 (git+https://github.com/macro-inc/tao?rev=6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8)",
  "unicode-segmentation",
  "url",
  "windows 0.62.2",
@@ -6392,7 +6392,7 @@ dependencies = [
 [[package]]
 name = "tao-macros"
 version = "0.1.4"
-source = "git+https://github.com/seanaye/tao?rev=6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8#6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8"
+source = "git+https://github.com/macro-inc/tao?rev=6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8#6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -6414,7 +6414,7 @@ checksum = "61c41af27dd6d1e27b1b16b489db798443478cef1f06a660c96db617ba5de3b1"
 [[package]]
 name = "tauri"
 version = "2.11.5"
-source = "git+https://github.com/seanaye/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
+source = "git+https://github.com/macro-inc/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
 dependencies = [
  "anyhow",
  "bytes",
@@ -6465,7 +6465,7 @@ dependencies = [
 [[package]]
 name = "tauri-build"
 version = "2.6.3"
-source = "git+https://github.com/seanaye/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
+source = "git+https://github.com/macro-inc/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
 dependencies = [
  "anyhow",
  "cargo_toml",
@@ -6485,7 +6485,7 @@ dependencies = [
 [[package]]
 name = "tauri-codegen"
 version = "2.6.3"
-source = "git+https://github.com/seanaye/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
+source = "git+https://github.com/macro-inc/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
 dependencies = [
  "base64 0.22.1",
  "brotli",
@@ -6511,7 +6511,7 @@ dependencies = [
 [[package]]
 name = "tauri-macros"
 version = "2.6.3"
-source = "git+https://github.com/seanaye/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
+source = "git+https://github.com/macro-inc/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
 dependencies = [
  "heck 0.5.0",
  "proc-macro2",
@@ -6858,7 +6858,7 @@ dependencies = [
 [[package]]
 name = "tauri-runtime"
 version = "2.11.3"
-source = "git+https://github.com/seanaye/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
+source = "git+https://github.com/macro-inc/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
 dependencies = [
  "cookie",
  "dpi",
@@ -6882,7 +6882,7 @@ dependencies = [
 [[package]]
 name = "tauri-runtime-wry"
 version = "2.11.4"
-source = "git+https://github.com/seanaye/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
+source = "git+https://github.com/macro-inc/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
 dependencies = [
  "gtk",
  "http",
@@ -6907,7 +6907,7 @@ dependencies = [
 [[package]]
 name = "tauri-utils"
 version = "2.9.3"
-source = "git+https://github.com/seanaye/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
+source = "git+https://github.com/macro-inc/tauri?rev=957785f5#957785f52fa5c79c53db520eb9d6f2477666752b"
 dependencies = [
  "anyhow",
  "brotli",

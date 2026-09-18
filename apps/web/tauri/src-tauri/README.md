@@ -42,7 +42,7 @@ Apps built with the iOS 27 SDK must use the scene lifecycle. Keep the
   This preserves bundle-update retries on resume without triggering them for
   ordinary focus changes. The event variant and handler are gated to mobile.
 
-The Tao patch in `../Cargo.toml` pins `seanaye/tao` at `6cbc7628`. It backports
+The Tao patch in `../Cargo.toml` pins `macro-inc/tao` at `6cbc7628`. It backports
 [tao#1257](https://github.com/tauri-apps/tao/pull/1257), including the review's
 nullable-accessor fix: cold-start URL contexts and browsing-web activities
 are forwarded through the same `Opened` event path as warm links. Nil launch
@@ -53,19 +53,25 @@ Normal startup and cold/warm custom-scheme links were exercised on iOS 27;
 logs showed one event per tested link. Universal-link extraction/filtering is
 covered by simulator-executed Tao tests. Signed associated-domain delivery,
 physical devices, iOS 26, and share-sheet flows still need end-to-end testing.
-See the fork's [FORK.md](https://github.com/seanaye/tao/blob/6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8/FORK.md)
+See the fork's [FORK.md](https://github.com/macro-inc/tao/blob/6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8/FORK.md)
 for provenance and verification. Remove the patch once a compatible Tao release
 includes both the cold-start fix and nil handling.
 
-Xcode 27 also changes the local build tooling: its SDK requires a deployment
-build setting of at least iOS 15. The resolved `swift-rs` 1.0.8 supports Xcode
-27's SwiftPM; the previous `--build-system native` workaround is no longer
-needed. Tauri CLI 2.11.4 still mistakes simulators returned by `devicectl` for
-physical devices. For now use
-`cargo tauri ios dev --open` and build the simulator destination with Xcode,
-with `IPHONEOS_DEPLOYMENT_TARGET=15.0`. Use Xcode's tools rather than Nix's
-Apple SDK/linker for native builds. These are build-time workarounds, not
-changes to the app's declared minimum OS version.
+The app and both extensions now require **iOS 15 or later**, matching Xcode
+27's minimum supported deployment target. This drops iOS 14 support. The Tauri
+configuration, XcodeGen source, and generated debug/release build settings all
+use 15.0; no command-line deployment-target override is needed.
+
+The resolved `swift-rs` 1.0.8 supports Xcode 27's SwiftPM; the previous
+`--build-system native` workaround is no longer needed. Tauri CLI 2.11.4 still
+mistakes simulators returned by `devicectl` for physical devices. Use
+`cargo tauri ios dev --open` and build the simulator destination with Xcode.
+Use Xcode's tools rather than Nix's Apple SDK/linker for native builds.
+
+Checked-in configuration tests and the normal/cold/warm/resume simulator smoke
+runner are documented in [iOS verification](../../tests/native/ios/README.md).
+That guide also records the remaining release checks and a separate legacy
+document-rendering finding; passing the smoke test is not full iOS 26/27 parity.
 
 ## Building bundles
 

@@ -27,12 +27,15 @@ iPad. The iPad welcome screen can show an `Optimized for iPhone` notice.
 Mobile resume is delivered per window, independently of ordinary focus changes.
 A custom-scheme link to `macro://app/login` now opens the login form both
 while Macro is running and when it cold-starts the app. Verify both cases
-separately; an ordinary launch with no URL should still show the welcome screen.
+separately. When signed out, an ordinary launch with no URL should show the
+welcome screen. When signed in, the session should survive restart and the app
+should open its authenticated landing view without replaying an old deep link.
 For simulator checks, `xcrun devicectl device process launch --device <udid>
 --payload-url 'macro://app/login' com.macro.app.prod` delivers the link without
 `simctl openurl`'s confirmation dialog. Terminate Macro first for the cold case.
 Signed universal links and share-sheet flows still need end-to-end verification;
-see the [Tauri guide](../../apps/web/tauri/src-tauri/README.md#ios-27-scene-lifecycle).
+see the [Tauri guide](../../apps/web/tauri/src-tauri/README.md#ios-27-scene-lifecycle)
+and [repeatable iOS smoke test](../../apps/web/tests/native/ios/README.md).
 
 ## Mailpit (local email)
 

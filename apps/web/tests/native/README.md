@@ -1,5 +1,8 @@
 # Native offline E2E (Linux)
 
+For Apple scene lifecycle and deep-link coverage, see the
+[iOS simulator smoke tests](ios/README.md).
+
 Automates the **real desktop Tauri application** using WebdriverIO →
 `tauri-driver` → WebKitWebDriver. No Chromium, mock IPC, WASM cache substitute,
 or production test hooks.
