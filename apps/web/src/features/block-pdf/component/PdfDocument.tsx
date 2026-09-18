@@ -97,7 +97,7 @@ export function PdfDocumentContent() {
   useSyncActivePlaceableWithCommentThread();
 
   return (
-    <div class="flex size-full relative justify-end overflow-visible z-main-view-layout">
+    <div class="flex size-full relative justify-end overflow-visible">
       <Document />
     </div>
   );

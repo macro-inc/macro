@@ -29,7 +29,7 @@ const rightMarginStyle = {
 export function RightMarginLayout(props: { pageIndex: number }) {
   return (
     <div
-      class="rightMargin absolute [transition: width 0.05s linear, right 0.05s linear]"
+      class="rightMargin absolute z-pdf-comments pointer-events-auto [transition: width 0.05s linear, right 0.05s linear]"
       style={rightMarginStyle}
     >
       <CommentsAndSuggestions pageIndex={props.pageIndex} />
