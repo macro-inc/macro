@@ -20,8 +20,8 @@ function mentionUser(bot: Bot): IUser {
 /**
  * Build mention entries from installed channel bots and virtual global
  * agents. Account setup does not hide a mention: the harness answers with
- * a connection prompt in the thread when setup is needed. Cursor entries
- * follow the Cursor rollout flag.
+ * a connection prompt in the thread when setup is needed. The built-in
+ * Cursor entry follows the Cursor rollout flag.
  */
 export function availableBotMentionUsers(
   channelBots: readonly Bot[],
@@ -29,23 +29,12 @@ export function availableBotMentionUsers(
   cursorEnabled: boolean
 ): IUser[] {
   const globalAgents = agents.filter(
-    (agent) =>
-      agent.channel_scope === 'all' &&
-      agent.bot.has_agent &&
-      (cursorEnabled || agent.harness !== 'cursor')
-  );
-  const cursorBotIds = new Set(
-    agents
-      .filter((agent) => agent.harness === 'cursor')
-      .map((agent) => agent.bot.id)
+    (agent) => agent.channel_scope === 'all' && agent.bot.has_agent
   );
   const seen = new Set<string>();
 
   return [...channelBots, ...globalAgents.map((agent) => agent.bot)]
-    .filter(
-      (bot) =>
-        cursorEnabled || (!isCursorBotId(bot.id) && !cursorBotIds.has(bot.id))
-    )
+    .filter((bot) => cursorEnabled || !isCursorBotId(bot.id))
     .map(mentionUser)
     .filter((user) => {
       if (seen.has(user.id)) return false;

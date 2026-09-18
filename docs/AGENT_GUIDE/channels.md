@@ -129,9 +129,10 @@ cropped at the chip's height with a fade at its foot; clicking it expands it in 
 clicking again collapses it. Before anything is there to expand, clicking the area also
 opens the session.
 
-`@codex` and `@claude` are offered to every user before account setup. `@cursor`
-and Cursor-backed agent mentions require the `enable-cursor-agents` rollout flag
-(local override: `VITE_ENABLE_CURSOR_AGENTS`).
+`@codex` and `@claude` are offered to every user before account setup. The built-in
+`@cursor` entry requires the `enable-cursor-agents` rollout flag (local override:
+`VITE_ENABLE_CURSOR_AGENTS`). Custom agents keep their channel visibility rules
+regardless of which harness they use.
 A mention without a connected account creates no session and replies in the thread
 with a **Connect Cursor**, **Connect Codex**, or **Connect Claude** chip. Each chip
 opens Settings → Harness, where all three connection cards are visible. The same

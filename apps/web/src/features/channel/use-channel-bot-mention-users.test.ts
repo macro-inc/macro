@@ -24,7 +24,7 @@ vi.mock('@queries/agents/agents', () => ({
     isSuccess: true,
     data: [
       agent('codex-agent', 'Codex', 'all', 'codex-cloud'),
-      agent('cursor-agent', 'Cursor', 'all', 'cursor'),
+      agent(CURSOR_BOT_ID, 'Cursor', 'all', 'cursor'),
     ],
   }),
 }));
@@ -75,7 +75,7 @@ describe('availableBotMentionUsers', () => {
       setEnabled(true);
       expect(users().map((user) => user.id)).toEqual([
         'bot|codex-agent',
-        'bot|cursor-agent',
+        `bot|${CURSOR_BOT_ID}`,
       ]);
       setEnabled(false);
       expect(users().map((user) => user.id)).toEqual(['bot|codex-agent']);
@@ -83,7 +83,7 @@ describe('availableBotMentionUsers', () => {
     });
   });
 
-  it('hides built-in, global, and installed Cursor bots outside the rollout', () => {
+  it('gates built-in Cursor while preserving custom agents regardless of harness', () => {
     const global = agent('global-cursor', 'Global Cursor', 'all', 'cursor');
     const installed = agent(
       'installed-cursor',
@@ -99,7 +99,21 @@ describe('availableBotMentionUsers', () => {
         [global, installed, codex, claude],
         false
       ).map((user) => user.id)
-    ).toEqual(['bot|codex', 'bot|claude']);
+    ).toEqual([
+      'bot|installed-cursor',
+      'bot|global-cursor',
+      'bot|codex',
+      'bot|claude',
+    ]);
+  });
+  it('hides the built-in Cursor bot before agent metadata is available', () => {
+    expect(
+      availableBotMentionUsers(
+        [bot(CURSOR_BOT_ID, 'Cursor'), bot('custom', 'Custom agent')],
+        [],
+        false
+      ).map((user) => user.id)
+    ).toEqual(['bot|custom']);
   });
   it('offers Codex from the mention query without requiring account setup', () => {
     createRoot((dispose) => {

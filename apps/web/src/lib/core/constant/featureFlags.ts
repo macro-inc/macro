@@ -658,7 +658,7 @@ export const enableChatV3Agents = defineFlag({
   default: onInDev,
 });
 
-// Cursor agent mentions, using the mentioning user's own Cursor account.
+// The built-in @cursor mention, using the mentioning user's own Cursor account.
 // Account setup is checked after the mention; this flag controls discovery.
 // Override with VITE_ENABLE_CURSOR_AGENTS.
 export const enableCursorAgents = defineFlag({
