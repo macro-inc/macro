@@ -41,14 +41,32 @@ pub struct UsageRequest {
 pub struct SetPricingRequest {
     /// The model api id to (re)price.
     pub model: String,
-    /// New price per million input tokens (USD).
-    #[serde(default)]
-    pub price_per_mil_in: f32,
-    /// New price per million output tokens (USD).
-    #[serde(default)]
-    pub price_per_mil_out: f32,
+    /// New price per million input tokens (USD). Required for token pricing.
+    pub price_per_mil_in: Option<f32>,
+    /// New price per million output tokens (USD). Required for token pricing.
+    pub price_per_mil_out: Option<f32>,
     /// Price per minute of audio (USD), or null for token-only pricing.
     pub price_per_audio_minute: Option<f32>,
+}
+
+impl SetPricingRequest {
+    fn pricing(&self) -> Result<ModelPricing, &'static str> {
+        match (
+            self.price_per_mil_in,
+            self.price_per_mil_out,
+            self.price_per_audio_minute,
+        ) {
+            (input, output, Some(per_minute))
+                if input.is_none_or(|price| price == 0.0)
+                    && output.is_none_or(|price| price == 0.0) =>
+            {
+                Ok(ModelPricing::Audio { per_minute })
+            }
+            (Some(input), Some(output), None) => Ok(ModelPricing::Tokens { input, output }),
+            (_, _, Some(_)) => Err("choose token pricing or audio pricing"),
+            _ => Err("provide both token prices or an audio price"),
+        }
+    }
 }
 
 /// Error response body.
@@ -201,23 +219,17 @@ pub async fn set_pricing_handler<T: UsageService, Auth: MacroAuthorizationServic
     user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
     Json(req): Json<SetPricingRequest>,
 ) -> Response {
-    let pricing = match req.price_per_audio_minute {
-        Some(per_minute) if req.price_per_mil_in == 0.0 && req.price_per_mil_out == 0.0 => {
-            ModelPricing::Audio { per_minute }
-        }
-        Some(_) => {
+    let pricing = match req.pricing() {
+        Ok(pricing) => pricing,
+        Err(error) => {
             return (
                 StatusCode::BAD_REQUEST,
                 Json(ErrorBody {
-                    error: "choose token pricing or audio pricing".into(),
+                    error: error.into(),
                 }),
             )
                 .into_response();
         }
-        None => ModelPricing::Tokens {
-            input: req.price_per_mil_in,
-            output: req.price_per_mil_out,
-        },
     };
     match service
         .set_pricing(user.authorization.user.macro_user_id, req.model, pricing)
@@ -227,3 +239,6 @@ pub async fn set_pricing_handler<T: UsageService, Auth: MacroAuthorizationServic
         Err(error) => error_response(error, "failed to set pricing"),
     }
 }
+
+#[cfg(test)]
+mod test;
