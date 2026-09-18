@@ -42,8 +42,20 @@ Apps built with the iOS 27 SDK must use the scene lifecycle. Keep the
   This preserves bundle-update retries on resume without triggering them for
   ordinary focus changes. The event variant and handler are gated to mobile.
 
-Cold-start deep links still need follow-up: Tao's first-scene connection does
-not forward its connection options as an opened-URL event. Warm links work.
+The Tao patch in `../Cargo.toml` pins `seanaye/tao` at `6cbc7628`. It backports
+[tao#1257](https://github.com/tauri-apps/tao/pull/1257), including the review's
+nullable-accessor fix: cold-start URL contexts and browsing-web activities
+are forwarded through the same `Opened` event path as warm links. Nil launch
+options are treated as an ordinary launch, not a panic. Macro's existing
+frontend-ready buffer handles early delivery; no extra navigation path is needed.
+
+Normal startup and cold/warm custom-scheme links were exercised on iOS 27;
+logs showed one event per tested link. Universal-link extraction/filtering is
+covered by simulator-executed Tao tests. Signed associated-domain delivery,
+physical devices, iOS 26, and share-sheet flows still need end-to-end testing.
+See the fork's [FORK.md](https://github.com/seanaye/tao/blob/6cbc7628f91db2c5ce588719bf8ba6f2dd6fc1c8/FORK.md)
+for provenance and verification. Remove the patch once a compatible Tao release
+includes both the cold-start fix and nil handling.
 
 Xcode 27 also changes the local build tooling: its SDK requires a deployment
 build setting of at least iOS 15. The resolved `swift-rs` 1.0.8 supports Xcode

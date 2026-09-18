@@ -25,12 +25,14 @@ account` before the login form. Startup and background/foreground resume work
 with the scene lifecycle enabled; Macro remains single-window on iPhone and
 iPad. The iPad welcome screen can show an `Optimized for iPhone` notice.
 Mobile resume is delivered per window, independently of ordinary focus changes.
-A custom-scheme link to `macro://app/login`
-works while Macro is running, but a link that cold-starts the app currently
-lands on the welcome screen instead. Open Macro first when testing deep links;
-do not treat cold-start link delivery as verified. See the
-[Tauri guide](../../apps/web/tauri/src-tauri/README.md#ios-27-scene-lifecycle)
-for the remaining compatibility gaps.
+A custom-scheme link to `macro://app/login` now opens the login form both
+while Macro is running and when it cold-starts the app. Verify both cases
+separately; an ordinary launch with no URL should still show the welcome screen.
+For simulator checks, `xcrun devicectl device process launch --device <udid>
+--payload-url 'macro://app/login' com.macro.app.prod` delivers the link without
+`simctl openurl`'s confirmation dialog. Terminate Macro first for the cold case.
+Signed universal links and share-sheet flows still need end-to-end verification;
+see the [Tauri guide](../../apps/web/tauri/src-tauri/README.md#ios-27-scene-lifecycle).
 
 ## Mailpit (local email)
 
