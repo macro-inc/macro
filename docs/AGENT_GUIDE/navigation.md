@@ -73,6 +73,11 @@ its existing navigation controls. Block detail panels (including Calendar) have
 **Hide side panel** in their own header and a hamburger **Show side panel** beside
 the main title when hidden, with separate preferences per block type.
 
+Multiple desktop splits appear as individually bordered, medium-rounded panels with
+6px top, right, and bottom insets and 6px resizable gaps, including preview pairs.
+The leftmost panel sits flush against the app rail, whose divider is hidden while
+multiple splits are open. A single split stays edge to edge. Touch layouts keep their existing presentation.
+
 Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
 again to restore the split layout.
