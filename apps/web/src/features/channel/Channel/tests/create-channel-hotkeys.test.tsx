@@ -42,8 +42,8 @@ function TestMessageEditor(props: { onSave: () => void }) {
 }
 
 function ChannelEditHarness(props: {
-  onSave: ReturnType<typeof vi.fn>;
-  onReply: ReturnType<typeof vi.fn>;
+  onSave: () => void;
+  onReply: () => void;
 }) {
   useHotKeyRoot();
 
