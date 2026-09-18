@@ -35,6 +35,8 @@ interface CreateTableTestEditorOptions {
   hasCellBackgroundColor?: boolean;
   /** Forwarded to {@link tablePlugin}; defaults to `true`. */
   hasTabHandler?: boolean;
+  /** Forwarded to {@link tablePlugin} for salvage logging. */
+  documentId?: string;
 }
 
 /**
@@ -52,6 +54,7 @@ export function createTableTestEditor(
     hasCellMerge = true,
     hasCellBackgroundColor = true,
     hasTabHandler = true,
+    documentId,
   } = opts;
 
   const editor = createEditor({
@@ -61,7 +64,12 @@ export function createTableTestEditor(
       throw error;
     },
   });
-  tablePlugin({ hasCellMerge, hasCellBackgroundColor, hasTabHandler })(editor);
+  tablePlugin({
+    hasCellMerge,
+    hasCellBackgroundColor,
+    hasTabHandler,
+    documentId,
+  })(editor);
   if (touchSelection) tableTouchSelectionPlugin()(editor);
   registerRichText(editor);
   if (tabIndentation) tabIndentationPlugin()(editor);
