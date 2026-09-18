@@ -1002,7 +1002,7 @@ export function MarkdownEditor(props: {
             });
           }}
           contentEditable={isContentEditable()}
-          class="ph-no-capture w-full max-w-full min-h-52"
+          class="ph-no-capture w-full max-w-full min-h-52 [&[contenteditable=true]_h1]:before:content-['#_'] [&[contenteditable=true]_h2]:before:content-['##_'] [&[contenteditable=true]_h3]:before:content-['###_'] [&[contenteditable=true]_h4]:before:content-['####_'] [&[contenteditable=true]_h5]:before:content-['#####_'] [&[contenteditable=true]_h6]:before:content-['######_'] [&_:is(h1,h2,h3,h4,h5,h6)]:before:select-none [&_:is(h1,h2,h3,h4,h5,h6)]:before:font-normal [&_:is(h1,h2,h3,h4,h5,h6)]:before:text-ink-muted print:[&_:is(h1,h2,h3,h4,h5,h6)]:before:content-none"
           classList={{
             'select-auto': !canEdit(),
             'md-no-comments': !ENABLE_MARKDOWN_COMMENTS,

@@ -44,12 +44,20 @@ at the caret (for example, type `=SUM(`, then drag B4 through B7). The draft upd
 to `=SUM(B4:B7` without committing or moving the active cell. A dashed outline shows
 the referenced range. Release, type `)`, and press Enter to calculate. This works
 in both the cell editor and formula bar, including reverse drags, replacement of
-an existing reference, and subsequent arguments after a comma or operator.
+an existing reference, and subsequent arguments after a comma or operator. To reference another sheet,
+click its tab while the formula is awaiting a reference, then click or drag the
+source cells. The draft stays in the formula bar; Enter commits it to the original
+sheet and cell. Names with spaces are quoted automatically. Escape cancels and
+returns to the original sheet.
 On touch screens, tap a cell while editing a formula, then drag **Move reference
 start** or **Move reference end** to extend its reference. Tapping a suggestion or
 adjusting a reference should keep the input focused and the software keyboard open.
 
 Drag across cells, Shift-click, or use Shift + arrow keys to select a range.
+Drag across row/column headers or Shift-click a second header to select multiple
+whole rows/columns. Arrow keys then move from the selection's active cell. The
+focused grid owns typing and navigation; app navigation shortcuts do not run while
+it has focus.
 The active cell keeps a complete border while editing; a range has a shaded
 fill and an outer border. Verify selection in both drag directions and after
 scrolling, including near the last row and column.
@@ -60,10 +68,15 @@ Copy within Macro and paste elsewhere to translate relative references: copying
 `=B4-C4` down becomes `=B5-C5`, while `$B$4` stays fixed. Drag the small handle
 at the selection's bottom-right corner to fill down/up or right/left. Select a
 range and use **Format and data → Fill down / Fill right** or **Cmd/Ctrl+D** /
-**Cmd/Ctrl+R**. Fill repeats values/formulas and formatting; it does not infer
-number sequences. Plain-text paste from other apps keeps formulas as supplied.
+**Cmd/Ctrl+R**. Drag fill continues arithmetic number sequences and daily,
+weekly, monthly, or quarterly date sequences (including month ends). Text and
+irregular patterns repeat; relative formula references translate. Keyboard/menu
+Fill down/right explicitly copies the starting row/column. Plain-text paste from
+other apps keeps formulas as supplied.
 
-Drag a column header's right boundary to resize; double-click it to auto-fit.
+Drag a column header's right boundary or row header's bottom boundary to resize;
+double-click the boundary to auto-fit. Row separators support Up/Down arrows and
+Enter to restore automatic height. Explicit row heights take precedence over wrap.
 At 100% zoom, default columns are 100 pixels wide and rows are 21 pixels high;
 larger text and wrapping expand the row. Saved custom column widths take precedence.
 The resize separator also supports Left/Right arrows and Enter for auto-fit.
@@ -75,7 +88,11 @@ undo/redo, paste, zoom and view options, currency/percent/decimals/number format
 font and size, text styles, text/fill color, borders, alignment, wrapping,
 functions, format/data actions, and find. Icon controls expose accessible button
 names and tooltips. **Paste special** offers **Paste** and **Paste values only**.
-Select a range first; formatting applies to all selected cells. Font sizes are
+Select a range first; formatting applies to all selected cells. Toggling bold,
+italic, underline, or strikethrough on a mixed selection first enables it for the
+entire selection. Whole-column formatting preserves the viewport. In a cell that
+is already percentage-formatted, typing `5` means `5%`; formulas and AI/API numeric
+values still use fractional values (`0.05` for 5%). Font sizes are
 points. Wrapped rows grow automatically up to 160 pixels at 100% zoom. Check
 selection and formula-reference outlines after changing wrapping, font size, or zoom.
 
@@ -260,6 +277,10 @@ read. These tool calls require the updated AI backend, AI editing worker, and sy
 service; the frontend alone cannot test their hosted path.
 
 ## Create and type
+
+Editable document headings show their Markdown level (`#` through `######`) beside
+the heading text. These visual markers are omitted from stored content, clipboard
+text, read-only views, and print output.
 
 1. `Create` → `Document D`. The app navigates to `/app/md/<uuid>` with the **title field
    focused**.

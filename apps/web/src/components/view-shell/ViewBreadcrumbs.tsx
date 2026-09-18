@@ -2,10 +2,11 @@ import CaretRightIcon from '@phosphor/caret-right.svg';
 import { cn, Tooltip } from '@ui';
 import {
   type Accessor,
-  children,
   createContext,
   createMemo,
+  createRoot,
   For,
+  getOwner,
   type JSX,
   onCleanup,
   onMount,
@@ -183,10 +184,19 @@ function Item<TMetadata = unknown>(props: ViewBreadcrumbsItemProps<TMetadata>) {
     isActive: () => context.value() === props.value,
     onSelect: () => context.onChange(props.value),
   };
-  const resolvedChildren = children(() => {
-    const child = props.children;
-    return <>{typeof child === 'function' ? child(state) : child}</>;
-  });
+  const owner = getOwner();
+  const render = () => {
+    let dispose!: () => void;
+    // Outlets can overlap during navigation. Each needs its own DOM, while
+    // retaining the item's provider context and the outlet's cleanup lifetime.
+    const content = createRoot((cleanup) => {
+      dispose = cleanup;
+      const child = props.children;
+      return <>{typeof child === 'function' ? child(state) : child}</>;
+    }, owner);
+    onCleanup(dispose);
+    return content;
+  };
   let unregister: (() => void) | undefined;
 
   onMount(() => {
@@ -194,7 +204,7 @@ function Item<TMetadata = unknown>(props: ViewBreadcrumbsItemProps<TMetadata>) {
       value: () => props.value,
       metadata: () => props.metadata,
       order: () => props.order,
-      render: resolvedChildren,
+      render,
     });
   });
   onCleanup(() => unregister?.());
