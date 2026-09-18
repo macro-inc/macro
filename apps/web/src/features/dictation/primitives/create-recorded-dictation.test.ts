@@ -1,7 +1,6 @@
 import { renderHook } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
 import type { AudioRecorderCallbacks, RecorderHandle } from '../core/recording';
-import type { DictationTrace } from '../core/telemetry';
 import { createRecordedDictation } from './create-recorded-dictation';
 
 const audio = new Blob(['audio'], { type: 'audio/webm' });
@@ -26,9 +25,11 @@ function setup() {
   );
   const onConfirm = vi.fn();
   const onCancel = vi.fn();
-  const trace: DictationTrace = {
+  const trace = {
     event: vi.fn(),
-    run: (operation) => operation(),
+    run: <T>(operation: () => T) => operation(),
+    setAttr: vi.fn(),
+    error: vi.fn(),
     end: vi.fn(),
   };
   const hook = renderHook(() =>
@@ -60,7 +61,11 @@ describe('Whisper dictation', () => {
     );
     expect(test.result.phase()).toBe('idle');
     expect(test.result.message()).toBe('');
-    expect(test.trace.end).toHaveBeenCalledExactlyOnceWith('success');
+    expect(test.trace.setAttr).toHaveBeenCalledWith(
+      'dictation.outcome',
+      'success'
+    );
+    expect(test.trace.end).toHaveBeenCalledOnce();
   });
 
   it('keeps a bounded, listening-only volume timeline', async () => {
@@ -85,7 +90,11 @@ describe('Whisper dictation', () => {
     expect(test.onConfirm).not.toHaveBeenCalled();
     expect(test.onCancel).toHaveBeenCalledOnce();
     expect(test.result.phase()).toBe('idle');
-    expect(test.trace.end).toHaveBeenCalledExactlyOnceWith('cancelled');
+    expect(test.trace.setAttr).toHaveBeenCalledWith(
+      'dictation.outcome',
+      'cancelled'
+    );
+    expect(test.trace.end).toHaveBeenCalledOnce();
   });
 
   it('aborts an upload and ignores a late transcription', async () => {
@@ -107,7 +116,11 @@ describe('Whisper dictation', () => {
     await confirmed;
     expect(test.onConfirm).not.toHaveBeenCalled();
     expect(test.result.phase()).toBe('idle');
-    expect(test.trace.end).toHaveBeenCalledExactlyOnceWith('cancelled');
+    expect(test.trace.setAttr).toHaveBeenCalledWith(
+      'dictation.outcome',
+      'cancelled'
+    );
+    expect(test.trace.end).toHaveBeenCalledOnce();
   });
 
   it('keeps audio for explicit retry after a provider failure', async () => {
@@ -118,18 +131,22 @@ describe('Whisper dictation', () => {
     expect(test.result.phase()).toBe('review');
     expect(test.result.message()).toBe('Try again');
     expect(test.onConfirm).not.toHaveBeenCalled();
-    expect(test.trace.event).toHaveBeenCalledWith('upload_failed', {
+    expect(test.trace.event).toHaveBeenCalledWith('dictation.upload_failed', {
       attempt: 1,
     });
     expect(test.trace.end).not.toHaveBeenCalled();
     await test.result.confirm();
     expect(test.onConfirm).toHaveBeenCalledExactlyOnceWith('recognized words');
     expect(FakeRecorder.latest.stop).toHaveBeenCalledOnce();
-    expect(test.trace.event).toHaveBeenCalledWith('upload_started', {
+    expect(test.trace.event).toHaveBeenCalledWith('dictation.upload_started', {
       attempt: 2,
       audioBytes: audio.size,
     });
-    expect(test.trace.end).toHaveBeenCalledExactlyOnceWith('success');
+    expect(test.trace.setAttr).toHaveBeenCalledWith(
+      'dictation.outcome',
+      'success'
+    );
+    expect(test.trace.end).toHaveBeenCalledOnce();
   });
 
   it('waits for confirmation after the recorder stops at its limit', async () => {
