@@ -1592,6 +1592,7 @@ async fn a_channel_follow_up_stops_the_running_turn_announces_and_flushes() {
             id,
             ControlEvent {
                 action: AgentAction::prompt("queued earlier from the session page"),
+                action_id: None,
                 actor: Some(staff_sender()),
             },
         )
@@ -2995,6 +2996,7 @@ mod lifecycle_events {
         // `a_channel_follow_up_stops_the_running_turn_announces_and_flushes`.
         let prompt = |text: &str| ControlEvent {
             action: AgentAction::prompt(text),
+            action_id: None,
             actor: Some(staff_sender()),
         };
         service
