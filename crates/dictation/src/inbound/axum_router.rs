@@ -21,14 +21,13 @@ use model_error_response::ErrorResponse;
 use rate_limit::{
     RateLimitConfig, RateLimitKey, RateLimitResult, RateLimitService,
     domain::models::RateLimitOk,
-    inbound::{RateLimitExtractable, rate_limit_middleware},
+    inbound::{RateLimitExtractable, RateLimitExtractor},
 };
 use rootcause::Report;
 use serde::{Deserialize, Serialize};
 use std::{sync::Arc, time::Duration};
 
-/// Transcriptions one user may start per hour. Recordings are capped at five
-/// minutes, so this bounds provider spend per user at well under $2/hour.
+/// Authenticated attempts per hour, including provider failures and retries.
 const PER_USER_TRANSCRIPTIONS_PER_HOUR: u64 = 60;
 
 /// State for the dictation router.
@@ -147,15 +146,7 @@ where
     T: Send + Sync + 'static,
 {
     Router::new()
-        .route("/transcribe", post(transcribe_handler::<S, Auth>))
-        .layer(axum::middleware::from_fn_with_state(
-            state.clone(),
-            rate_limit_middleware::<
-                DictationRouterState<S, R, Auth>,
-                PerUserDictationRateLimit<Auth>,
-                DictationRouterState<S, R, Auth>,
-            >,
-        ))
+        .route("/transcribe", post(transcribe_handler::<S, R, Auth>))
         .layer(DefaultBodyLimit::max(MAX_AUDIO_BYTES))
         .with_state(state)
 }
@@ -182,6 +173,14 @@ impl From<Transcript> for TranscribeResponse {
     }
 }
 
+/// OpenAPI representation of the raw encoded audio body extracted as `Bytes`.
+#[derive(utoipa::ToSchema)]
+#[schema(value_type = String, format = Binary)]
+pub struct EncodedAudioBody(
+    /// Browser-encoded audio bytes.
+    pub Vec<u8>,
+);
+
 /// Transcribe a transient recording with OpenAI Whisper.
 ///
 /// Available to every signed-in user on every plan; does not consume chat
@@ -192,7 +191,7 @@ impl From<Transcript> for TranscribeResponse {
     operation_id = "transcribe_dictation",
     path = "/dictation/transcribe",
     params(("language" = Option<String>, Query, description = "ISO 639-1 language hint")),
-    request_body(content = Vec<u8>, content_type = "audio/webm", description = "Encoded WebM, MP4, Ogg, or WAV audio up to 8 MiB"),
+    request_body(content = inline(EncodedAudioBody), content_type = "audio/webm", description = "Encoded WebM, MP4, Ogg, or WAV audio up to 8 MiB and five minutes"),
     responses(
         (status = 200, body = TranscribeResponse),
         (status = 400, description = "Empty, oversized, or malformed request", body = ErrorResponse),
@@ -204,14 +203,16 @@ impl From<Transcript> for TranscribeResponse {
         (status = 502, description = "Provider failure", body = ErrorResponse),
     )
 )]
-pub async fn transcribe_handler<S, Auth>(
+pub async fn transcribe_handler<S, R, Auth>(
     Cached(user): Cached<MacroAuthorizationExtractor<Auth, UserOnly>>,
+    _limit: RateLimitExtractor<PerUserDictationRateLimit<Auth>, DictationRouterState<S, R, Auth>>,
     State(service): State<Arc<S>>,
     Query(query): Query<TranscribeQuery>,
     audio: Bytes,
 ) -> Result<Json<TranscribeResponse>, DictationError>
 where
     S: DictationService,
+    R: RateLimitService + Clone,
     Auth: MacroAuthorizationService,
 {
     let language = query
@@ -228,7 +229,9 @@ where
 impl IntoResponse for DictationError {
     fn into_response(self) -> Response {
         let status = match self {
-            Self::InvalidSize | Self::InvalidLanguage => StatusCode::BAD_REQUEST,
+            Self::InvalidSize | Self::InvalidLanguage | Self::InvalidAudio | Self::TooLong => {
+                StatusCode::BAD_REQUEST
+            }
             Self::UnsupportedAudio => StatusCode::UNSUPPORTED_MEDIA_TYPE,
             Self::Busy => StatusCode::TOO_MANY_REQUESTS,
             Self::Provider => StatusCode::BAD_GATEWAY,

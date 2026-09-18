@@ -247,7 +247,7 @@ async fn enforces_the_per_user_rate_limit() {
 }
 
 #[tokio::test]
-async fn rolls_back_the_rate_limit_ticket_when_the_service_fails() {
+async fn failed_provider_attempts_still_consume_the_rate_limit() {
     let harness = Harness::new();
     harness.service.respond(Err(DictationError::Provider));
     let response = harness
@@ -259,13 +259,16 @@ async fn rolls_back_the_rate_limit_ticket_when_the_service_fails() {
         .await;
 
     assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
-    assert_eq!(harness.limiter.rollbacks.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.limiter.checks.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.limiter.rollbacks.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
 async fn maps_domain_errors_to_status_codes_without_leaking_content() {
     let cases = [
         (DictationError::InvalidSize, StatusCode::BAD_REQUEST),
+        (DictationError::InvalidAudio, StatusCode::BAD_REQUEST),
+        (DictationError::TooLong, StatusCode::BAD_REQUEST),
         (
             DictationError::UnsupportedAudio,
             StatusCode::UNSUPPORTED_MEDIA_TYPE,

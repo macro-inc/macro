@@ -244,6 +244,7 @@ lol_html = "2.4.0"
 lru = "0.16"
 mockall = "0.13"
 nom = "8"
+opus-pure = "0.2.1"
 opentelemetry = { version = "0.31.0", default-features = false }
 opentelemetry-appender-tracing = { version = "0.31.1", default-features = false }
 opentelemetry-http = { version = "0.31.0", default-features = false }
@@ -312,6 +313,12 @@ sqlx = { version = "0.8.6", features = [
 sqlx-core = { version = "0.8.6" }
 sse-core = { version = "0.2.3", default-features = false, features = ["std"] }
 strum = { version = "0.27.1", features = ["derive"] }
+symphonia = { version = "0.6.1", default-features = false, features = [
+  "isomp4",
+  "mkv",
+  "ogg",
+  "wav",
+] }
 tempfile = "3"
 thiserror = "2.0.0"
 time = "0.3.37"
