@@ -413,18 +413,19 @@ function RegisteredAgentsView(params: ComponentParams) {
   usePageViewTracking('agents');
   const panel = useSplitPanelOrThrow();
   const agentsFlag = useFeatureFlag(enableChatV3Agents);
+  const useAgentsWorkspace = () => agentsFlag().enabled && !isTouchDevice();
 
   createRenderEffect(() => {
     if (agentsFlag().loading) return;
     panel.handle.updateMeta?.({
-      splitPanelLayout: agentsFlag().enabled ? 'composable' : 'legacy',
+      splitPanelLayout: useAgentsWorkspace() ? 'composable' : 'legacy',
     });
   });
 
   return (
     <Show when={!agentsFlag().loading} fallback={<LoadingBlock />}>
       <Show
-        when={agentsFlag().enabled}
+        when={useAgentsWorkspace()}
         fallback={
           route ? (
             <RedirectSplit

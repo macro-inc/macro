@@ -24,15 +24,10 @@ import {
   handleChannelPictureChanged,
   invalidateChannelPictures,
 } from '@queries/channel/picture';
-import {
-  handleCommsAttachment,
-  handleCommsMessage,
-  handleCommsReaction,
-} from '@queries/channel/sync';
-import { handleCommsTyping } from '@queries/channel/typing';
 import { invalidateContacts } from '@queries/contacts/contacts';
 import { handleRefreshEmail } from '@queries/email/sync';
 import { invalidateFavorites } from '@queries/favorites/favorites';
+import { handleMessageEvent } from '@queries/messages/sync';
 import {
   applyNotificationStatusUpdate,
   notificationStatusUpdatePayloadSchema,
@@ -97,8 +92,12 @@ export function QuerySyncProvider(props: SyncProviderProps) {
       .with({ type: 'contacts_invalidation' }, () => {
         invalidateContacts();
       })
-      .with({ type: 'comms_message' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsMessage);
+      .with({ type: 'message_update' }, () => {
+        withParsedWebsocketPayload<Parameters<typeof handleMessageEvent>[0]>(
+          data.type,
+          data.data,
+          (event) => handleMessageEvent(event, props.userId())
+        );
       })
       .with({ type: 'comms_channel_picture' }, () => {
         withParsedWebsocketPayload(
@@ -139,23 +138,6 @@ export function QuerySyncProvider(props: SyncProviderProps) {
           data.type,
           data.data,
           handleAgentSessionQueue
-        );
-      })
-      .with({ type: 'comms_reaction' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsReaction);
-      })
-      .with({ type: 'comms_attachment' }, () => {
-        withParsedWebsocketPayload(data.type, data.data, handleCommsAttachment);
-      })
-      .with({ type: 'comms_typing' }, () => {
-        const userId = props.userId();
-        if (!userId) return;
-        withParsedWebsocketPayload<Parameters<typeof handleCommsTyping>[0]>(
-          data.type,
-          data.data,
-          (payload) => {
-            handleCommsTyping(payload, userId);
-          }
         );
       })
       .with({ type: 'notification_status_updated' }, () => {

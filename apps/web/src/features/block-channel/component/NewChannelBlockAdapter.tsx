@@ -21,8 +21,8 @@ import { useCall } from '@channel/Call/use-call';
 import { isNativeIosCallKitEnabled } from '@channel/Call/use-callkit';
 import {
   type ChannelHandle,
-  type ChannelMessagesStateSnapshot,
   type ChannelProps,
+  type MessageTimelineStateSnapshot,
   Channel as NewChannel,
 } from '@channel/Channel/Channel';
 import {
@@ -69,12 +69,12 @@ import PictureIcon from '@phosphor/image.svg';
 import RenameIcon from '@phosphor/pencil-line.svg';
 import TrashIcon from '@phosphor/trash.svg';
 import { useActiveCallQuery } from '@queries/call/call';
+import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
 import {
   fetchResolvedChannelMessage,
-  findThreadIdInChannelMessages,
-  findTopLevelMessageInChannelMessages,
-} from '@queries/channel/channel-messages';
-import { useChannelParticipantsQuery } from '@queries/channel/channel-participants';
+  findThreadIdInMessageTimeline,
+  findTopLevelMessageInMessageTimeline,
+} from '@queries/messages/timeline';
 import { ChannelType } from '@service-storage/generated/schemas/channelType';
 import { useSearchParams } from '@solidjs/router';
 import { cn } from '@ui';
@@ -103,7 +103,7 @@ export type BlockChannelProps = ChannelTargetMessageParams;
 
 type ChannelEntryStateSnapshot = {
   activeTab?: ChannelTabId;
-  messages?: ChannelMessagesStateSnapshot;
+  messages?: MessageTimelineStateSnapshot;
 };
 
 type ChannelPropsTargetMessage = Pick<
@@ -485,10 +485,18 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     // plain send (the common inbox-row click) or a reply in a loaded thread
     // preview resolves synchronously with no roundtrip. Only a genuinely
     // unknown id — an old mention/link opening a cold channel — pays a resolve.
-    if (findTopLevelMessageInChannelMessages(channelId, messageId)) {
+    if (
+      findTopLevelMessageInMessageTimeline(
+        { type: 'channel', id: channelId },
+        messageId
+      )
+    ) {
       return { targetMessageId: messageId, targetMessageReplyId: undefined };
     }
-    const cachedThreadId = findThreadIdInChannelMessages(channelId, messageId);
+    const cachedThreadId = findThreadIdInMessageTimeline(
+      { type: 'channel', id: channelId },
+      messageId
+    );
     if (cachedThreadId) {
       return {
         targetMessageId: cachedThreadId,
@@ -497,10 +505,10 @@ export function NewChannelBlockAdapter(props: BlockChannelProps) {
     }
 
     const resolved = await fetchResolvedChannelMessage(
-      channelId,
+      { type: 'channel', id: channelId },
       messageId
     ).catch(() => undefined);
-    if (resolved?.kind === 'threadReply') {
+    if (resolved?.kind === 'thread_reply') {
       return {
         targetMessageId: resolved.thread_id,
         targetMessageReplyId: messageId,

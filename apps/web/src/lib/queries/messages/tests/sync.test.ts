@@ -1,0 +1,612 @@
+vi.mock('@queries/messages/subscription', () => ({
+  useMessageSubscription: () => {},
+}));
+
+/** @vitest-environment jsdom */
+import type {
+  Message,
+  MessageListItem,
+  MessageParent,
+  MessageThread,
+} from '@service-storage/messages';
+import { QueryObserver } from '@tanstack/query-core';
+import { QueryClient } from '@tanstack/solid-query';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+let testQueryClient: QueryClient;
+vi.mock('../../client', () => ({
+  get queryClient() {
+    return testQueryClient;
+  },
+}));
+const mocks = vi.hoisted(() => ({ thread: vi.fn() }));
+vi.mock('@service-storage/messages', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  entityMessagesClient: { thread: mocks.thread },
+}));
+
+import { registerNonce } from '../../nonce';
+import { MessageNonceKeys, messageKeys } from '../keys';
+import { replaceTargetMessageId } from '../reconcile';
+import { applyMessage, applyThreadState, handleMessageEvent } from '../sync';
+import {
+  getThreadRepliesQueryKey,
+  threadRepliesQueryOptions,
+} from '../thread-replies';
+import {
+  getMessageTimelineQueryKey,
+  type MessageTimelineData,
+} from '../timeline';
+import { clearTypingIndicators, getTypingUsers } from '../typing';
+
+const time = '2026-09-09T00:00:00Z';
+const message = (
+  parent: MessageParent,
+  id: string,
+  thread_id?: string
+): Message => ({
+  id,
+  parent,
+  thread_id,
+  sender_id: 'macro|a@example.com',
+  content: id,
+  created_at: time,
+  updated_at: time,
+  mentions: [],
+  attachments: [],
+  reactions: [],
+});
+const state = {
+  root_id: 'root',
+  user_id: 'macro|a@example.com',
+  created_at: time,
+  updated_at: time,
+  resolved: false,
+};
+const item = (parent: MessageParent): MessageListItem => ({
+  ...message(parent, 'root'),
+  state,
+  thread: { reply_count: 0, latest_reply_at: null, preview: [] },
+});
+beforeEach(() => {
+  testQueryClient = new QueryClient({
+    defaultOptions: { queries: { retry: false } },
+  });
+});
+afterEach(() => {
+  testQueryClient.clear();
+  clearTypingIndicators();
+});
+describe.each(['channel', 'document'] as const)(
+  '%s uses the shared live cache',
+  (type) => {
+    const parent: MessageParent = { type, id: 'source' };
+    const other: MessageParent = {
+      type: type === 'channel' ? 'document' : 'channel',
+      id: 'source',
+    };
+    const timelineKey = () => getMessageTimelineQueryKey(parent);
+    const threadKey = () => getThreadRepliesQueryKey(parent, 'root');
+    function seed() {
+      testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
+        pageParams: [null],
+        pages: [
+          { items: [item(parent)], next_cursor: null, previous_cursor: null },
+        ],
+      });
+      testQueryClient.setQueryData<MessageListItem[]>(
+        messageKeys.messagesByIds(parent, ['root']).queryKey,
+        [item(parent)]
+      );
+      testQueryClient.setQueryData<MessageThread>(threadKey(), {
+        state,
+        root: message(parent, 'root'),
+        replies: [],
+      });
+      testQueryClient.setQueryData<MessageThread>(
+        getThreadRepliesQueryKey(other, 'root'),
+        { state, root: message(other, 'root'), replies: [] }
+      );
+    }
+    it('reconciles replies, attachments, mentions, reactions, and edits across timeline and linked drawer', () => {
+      seed();
+      const reply = {
+        ...message(parent, 'reply', 'root'),
+        attachments: [
+          {
+            id: 'attachment',
+            entity_id: 'doc',
+            entity_type: 'document',
+            created_at: time,
+          },
+        ],
+      };
+      applyMessage(reply, 'posted');
+      const edit = {
+        ...reply,
+        content: 'edited',
+        mentions: [{ entity_type: 'document', entity_id: 'doc' }],
+        reactions: [{ emoji: '👍', users: ['macro|a@example.com'] }],
+      };
+      applyMessage(edit, 'edited');
+      const root = testQueryClient.getQueryData<MessageTimelineData>(
+        timelineKey()
+      )!.pages[0].items[0];
+      expect(root.thread.reply_count).toBe(1);
+      expect(root.thread.preview).toEqual([expect.objectContaining(edit)]);
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+      ).toEqual([expect.objectContaining(edit)]);
+      expect(
+        testQueryClient.getQueryData<MessageListItem[]>(
+          messageKeys.messagesByIds(parent, ['root']).queryKey
+        )![0].thread.preview
+      ).toEqual([expect.objectContaining(edit)]);
+      expect(
+        testQueryClient.getQueryData<MessageThread>(
+          getThreadRepliesQueryKey(other, 'root')
+        )!.replies
+      ).toEqual([]);
+    });
+    it('preserves imported reply order when an older reply is edited', () => {
+      seed();
+      const first = {
+        ...message(parent, 'first', 'root'),
+        created_at: '2026-01-03T00:00:00Z',
+      };
+      const second = {
+        ...message(parent, 'second', 'root'),
+        created_at: '2026-01-01T00:00:00Z',
+      };
+      testQueryClient.setQueryData<MessageThread>(threadKey(), {
+        state,
+        root: message(parent, 'root'),
+        replies: [first, second],
+      });
+      applyMessage({ ...first, content: 'edited historical reply' }, 'edited');
+      expect(
+        testQueryClient
+          .getQueryData<MessageThread>(threadKey())!
+          .replies.map((reply) => reply.id)
+      ).toEqual(['first', 'second']);
+    });
+    it('does not count a reaction to an unseen preview reply as a new post', () => {
+      seed();
+      testQueryClient.removeQueries({ queryKey: threadKey() });
+      const root = {
+        ...item(parent),
+        thread: {
+          reply_count: 4,
+          latest_reply_at: time,
+          preview: ['first', 'second', 'third'].map((id) =>
+            message(parent, id, 'root')
+          ),
+        },
+      };
+      testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
+        pageParams: [null],
+        pages: [{ items: [root], next_cursor: null, previous_cursor: null }],
+      });
+      testQueryClient.setQueryData<MessageListItem[]>(
+        messageKeys.messagesByIds(parent, ['root']).queryKey,
+        [root]
+      );
+
+      handleMessageEvent({
+        parent,
+        actor: 'macro|b@example.com',
+        change: {
+          type: 'reaction_changed',
+          message: {
+            ...message(parent, 'fourth', 'root'),
+            reactions: [{ emoji: '👍', users: ['macro|b@example.com'] }],
+          },
+        },
+      });
+
+      expect(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].items[0].thread
+      ).toEqual(root.thread);
+      expect(
+        testQueryClient.getQueryData<MessageListItem[]>(
+          messageKeys.messagesByIds(parent, ['root']).queryKey
+        )![0].thread
+      ).toEqual(root.thread);
+      expect(testQueryClient.getQueryData(threadKey())).toBeUndefined();
+    });
+    it('does not insert an unseen edit or let a reaction snapshot overwrite content', () => {
+      seed();
+      applyMessage(message(parent, 'unseen', 'root'), 'edited');
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+      ).toEqual([]);
+
+      const reply = message(parent, 'reply', 'root');
+      applyMessage(reply, 'posted');
+      applyMessage({ ...reply, content: 'new content' }, 'edited');
+      applyMessage(
+        {
+          ...reply,
+          reactions: [{ emoji: '👍', users: ['macro|b@example.com'] }],
+        },
+        'reaction_changed'
+      );
+
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+      ).toEqual([
+        expect.objectContaining({
+          content: 'new content',
+          reactions: [{ emoji: '👍', users: ['macro|b@example.com'] }],
+        }),
+      ]);
+      expect(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].items[0].thread.reply_count
+      ).toBe(1);
+    });
+    it('updates the canonical root when only a linked thread is cached', () => {
+      testQueryClient.setQueryData<MessageThread>(threadKey(), {
+        state,
+        root: message(parent, 'root'),
+        replies: [message(parent, 'reply', 'root')],
+      });
+      applyMessage(
+        { ...message(parent, 'root'), content: 'edited root' },
+        'edited'
+      );
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.root.content
+      ).toBe('edited root');
+      applyMessage(
+        { ...message(parent, 'root'), content: '', deleted_at: time },
+        'message_deleted'
+      );
+      const thread = testQueryClient.getQueryData<MessageThread>(threadKey())!;
+      expect(thread.root.deleted_at).toBe(time);
+      expect(thread.replies).toHaveLength(1);
+      expect(testQueryClient.getQueryData(timelineKey())).toBeUndefined();
+    });
+    it('keeps root tombstones with replies and propagates resolution and whole-thread deletion', () => {
+      seed();
+      applyMessage(message(parent, 'reply', 'root'), 'posted');
+      applyMessage(
+        {
+          ...message(parent, 'root'),
+          content: '',
+          deleted_at: time,
+        },
+        'message_deleted'
+      );
+      expect(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].items[0].deleted_at
+      ).toBe(time);
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+      ).toHaveLength(1);
+      applyThreadState(parent, { ...state, resolved: true });
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.state.resolved
+      ).toBe(true);
+      applyThreadState(parent, { ...state, deleted_at: time });
+      expect(
+        testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].items
+      ).toEqual(
+        parent.type === 'document'
+          ? [expect.objectContaining({ state: { ...state, deleted_at: time } })]
+          : []
+      );
+    });
+    it('inserts an external root post at the bottom of the conversation only', () => {
+      seed();
+      handleMessageEvent({
+        parent,
+        actor: 'macro|b@example.com',
+        nonce: null,
+        change: {
+          type: 'posted',
+          message: message(parent, 'newer-root'),
+          mentions: [],
+          notification_policy: 'Default',
+        },
+      });
+      expect(
+        testQueryClient
+          .getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].items.map((root) => root.id)
+      ).toEqual(['newer-root', 'root']);
+
+      testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
+        pageParams: [null],
+        pages: [
+          {
+            items: [item(parent)],
+            next_cursor: null,
+            previous_cursor: { created_at: time, id: 'root' },
+          },
+        ],
+      });
+      applyMessage(message(parent, 'mid-conversation'), 'posted');
+      expect(
+        testQueryClient
+          .getQueryData<MessageTimelineData>(timelineKey())!
+          .pages[0].items.map((root) => root.id)
+      ).toEqual(['root']);
+    });
+    it(
+      type === 'document'
+        ? "loads a live root's thread state instead of refetching the timeline"
+        : 'applies a live root without a metadata refetch',
+      async () => {
+        seed();
+        mocks.thread.mockReset();
+        const rootState = {
+          ...state,
+          root_id: 'newer-root',
+          anchor: { type: 'markdown', mark_id: 'mark' } as const,
+        };
+        mocks.thread.mockResolvedValue({
+          root: message(parent, 'newer-root'),
+          state: rootState,
+          replies: [],
+        });
+        const invalidate = vi.spyOn(testQueryClient, 'invalidateQueries');
+        handleMessageEvent({
+          parent,
+          actor: 'macro|b@example.com',
+          nonce: null,
+          change: {
+            type: 'posted',
+            message: message(parent, 'newer-root'),
+            mentions: [],
+            notification_policy: 'Default',
+          },
+        });
+        const newestRoot = () =>
+          testQueryClient.getQueryData<MessageTimelineData>(timelineKey())!
+            .pages[0].items[0];
+        if (type === 'document') {
+          expect(mocks.thread).toHaveBeenCalledWith(parent, 'newer-root');
+          await vi.waitFor(() =>
+            expect(newestRoot().state.anchor).toEqual(rootState.anchor)
+          );
+          expect(
+            testQueryClient.getQueryData<MessageThread>(
+              getThreadRepliesQueryKey(parent, 'newer-root')
+            )?.state
+          ).toEqual(rootState);
+        } else {
+          expect(mocks.thread).not.toHaveBeenCalled();
+          expect(newestRoot().id).toBe('newer-root');
+        }
+        // Only the soft invalidation that leaves mounted timelines alone may run.
+        for (const [filters] of invalidate.mock.calls) {
+          expect(filters?.refetchType).toBe('inactive');
+        }
+      }
+    );
+    it('refetches a bottom page that is still loading when a root arrives', async () => {
+      mocks.thread.mockReset();
+      let resolveFetch: (data: MessageTimelineData) => void = () => {};
+      const fetching = testQueryClient.fetchQuery({
+        queryKey: timelineKey(),
+        queryFn: () =>
+          new Promise<MessageTimelineData>((resolve) => {
+            resolveFetch = resolve;
+          }),
+      });
+      const invalidate = vi.spyOn(testQueryClient, 'invalidateQueries');
+      handleMessageEvent({
+        parent,
+        actor: 'macro|b@example.com',
+        nonce: null,
+        change: {
+          type: 'posted',
+          message: message(parent, 'racing-root'),
+          mentions: [],
+          notification_policy: 'Default',
+        },
+      });
+      // The refetch waits for the in-flight page to settle rather than
+      // deduping into it, so nothing is invalidated yet.
+      expect(invalidate).not.toHaveBeenCalled();
+      expect(mocks.thread).not.toHaveBeenCalled();
+      resolveFetch({
+        pageParams: [null],
+        pages: [
+          { items: [item(parent)], next_cursor: null, previous_cursor: null },
+        ],
+      });
+      await fetching.catch(() => undefined);
+      await vi.waitFor(() =>
+        expect(invalidate).toHaveBeenCalledWith({
+          queryKey: timelineKey(),
+          exact: true,
+        })
+      );
+    });
+    it("recovers the sender's own root posted before the bottom page loads", async () => {
+      let resolveFetch: (data: MessageTimelineData) => void = () => {};
+      const fetching = testQueryClient.fetchQuery({
+        queryKey: timelineKey(),
+        queryFn: () =>
+          new Promise<MessageTimelineData>((resolve) => {
+            resolveFetch = resolve;
+          }),
+      });
+      registerNonce(MessageNonceKeys.MESSAGE, 'own-send');
+      const invalidate = vi.spyOn(testQueryClient, 'invalidateQueries');
+      handleMessageEvent({
+        parent,
+        actor: 'macro|a@example.com',
+        nonce: 'own-send',
+        change: {
+          type: 'posted',
+          message: message(parent, 'own-root'),
+          mentions: [],
+          notification_policy: 'Default',
+        },
+      });
+      // The sender's own optimistic insert no-oped while the page was loading,
+      // and the echo alone would be consumed by the nonce; the recovery fetch
+      // still runs once the page settles.
+      resolveFetch({
+        pageParams: [null],
+        pages: [{ items: [], next_cursor: null, previous_cursor: null }],
+      });
+      await fetching.catch(() => undefined);
+      await vi.waitFor(() =>
+        expect(invalidate).toHaveBeenCalledWith({
+          queryKey: timelineKey(),
+          exact: true,
+        })
+      );
+    });
+    // An expanded thread whose first replies fetch is still in flight: the root
+    // is in the timeline, but the thread's own query has not resolved yet.
+    async function expandThreadWithPendingFetch() {
+      testQueryClient.setQueryData<MessageTimelineData>(timelineKey(), {
+        pageParams: [null],
+        pages: [
+          { items: [item(parent)], next_cursor: null, previous_cursor: null },
+        ],
+      });
+      mocks.thread.mockReset();
+      let resolveFirst: (thread: MessageThread) => void = () => {};
+      mocks.thread.mockImplementationOnce(
+        () =>
+          new Promise<MessageThread>((resolve) => {
+            resolveFirst = resolve;
+          })
+      );
+      const observer = new QueryObserver(
+        testQueryClient,
+        threadRepliesQueryOptions(parent, 'root')
+      );
+      const unsubscribe = observer.subscribe(() => {});
+      await vi.waitFor(() => expect(mocks.thread).toHaveBeenCalledTimes(1));
+      const threadReplies = () =>
+        testQueryClient.getQueryData<MessageThread>(threadKey())?.replies;
+      // The fetch settles predating whatever arrived while it was in flight.
+      const settleEmpty = async () => {
+        resolveFirst({ state, root: message(parent, 'root'), replies: [] });
+        await vi.waitFor(() => expect(threadReplies()).toBeDefined());
+        await Promise.resolve();
+      };
+      return { settleEmpty, threadReplies, unsubscribe };
+    }
+
+    it('keeps a live reply that arrives while its first replies fetch is in flight', async () => {
+      const { settleEmpty, threadReplies, unsubscribe } =
+        await expandThreadWithPendingFetch();
+
+      // The preview-only insert drops the reply from the not-yet-cached thread;
+      // it must be re-applied once the fetch settles rather than lost.
+      applyMessage(message(parent, 'reply', 'root'), 'posted');
+      await settleEmpty();
+
+      expect(threadReplies()).toEqual([
+        expect.objectContaining({ id: 'reply' }),
+      ]);
+      // Convergence needs no extra network round trip.
+      expect(mocks.thread).toHaveBeenCalledTimes(1);
+
+      // The timeline preview mirrors the reply while the thread settles.
+      const root = testQueryClient.getQueryData<MessageTimelineData>(
+        timelineKey()
+      )!.pages[0].items[0];
+      expect(root.thread.reply_count).toBe(1);
+      expect(root.thread.preview).toEqual([
+        expect.objectContaining({ id: 'reply' }),
+      ]);
+      unsubscribe();
+    });
+
+    it('applies the latest edit of a reply that arrives while the fetch is in flight', async () => {
+      const { settleEmpty, threadReplies, unsubscribe } =
+        await expandThreadWithPendingFetch();
+      const reply = message(parent, 'reply', 'root');
+
+      applyMessage(reply, 'posted');
+      applyMessage({ ...reply, content: 'edited' }, 'edited');
+      await settleEmpty();
+
+      // The deferred re-apply reads the current preview state, not the stale
+      // posted payload, so the edit wins.
+      expect(threadReplies()).toEqual([
+        expect.objectContaining({ id: 'reply', content: 'edited' }),
+      ]);
+      unsubscribe();
+    });
+
+    it('does not resurrect a reply deleted while the fetch is in flight', async () => {
+      const { settleEmpty, threadReplies, unsubscribe } =
+        await expandThreadWithPendingFetch();
+      const reply = message(parent, 'reply', 'root');
+
+      applyMessage(reply, 'posted');
+      applyMessage(
+        { ...reply, content: '', deleted_at: time },
+        'message_deleted'
+      );
+      await settleEmpty();
+
+      // The reply left the preview on delete, so the deferred re-apply skips it.
+      expect(threadReplies()).toEqual([]);
+      unsubscribe();
+    });
+    it('keeps an own reply whose id is remapped while the fetch is in flight', async () => {
+      const { settleEmpty, threadReplies, unsubscribe } =
+        await expandThreadWithPendingFetch();
+
+      // An own reply is inserted optimistically, then its id is remapped to the
+      // server id (as the send mutation does) before the fetch settles.
+      applyMessage(message(parent, 'optimistic', 'root'), 'posted');
+      replaceTargetMessageId(
+        parent,
+        { kind: 'thread_reply', messageId: 'optimistic', threadId: 'root' },
+        'server-id'
+      );
+      await settleEmpty();
+
+      // The deferred re-apply matches the reply by its current preview id, so it
+      // lands under the server id rather than being lost to the remap.
+      expect(threadReplies()).toEqual([
+        expect.objectContaining({ id: 'server-id' }),
+      ]);
+      unsubscribe();
+    });
+    it('skips the sender nonce and scopes ephemeral typing to the parent and root', () => {
+      seed();
+      registerNonce(MessageNonceKeys.MESSAGE, 'own-send');
+      handleMessageEvent({
+        parent,
+        actor: 'macro|a@example.com',
+        nonce: 'own-send',
+        change: {
+          type: 'posted',
+          message: message(parent, 'reply', 'root'),
+          mentions: [],
+          notification_policy: 'Default',
+        },
+      });
+      expect(
+        testQueryClient.getQueryData<MessageThread>(threadKey())!.replies
+      ).toEqual([]);
+      handleMessageEvent(
+        {
+          parent,
+          actor: 'macro|b@example.com',
+          nonce: null,
+          change: { type: 'typing', active: true, thread_id: null },
+        },
+        'macro|a@example.com'
+      );
+      expect([...getTypingUsers(parent)]).toEqual(['macro|b@example.com']);
+      expect([...getTypingUsers(other)]).toEqual([]);
+    });
+  }
+);

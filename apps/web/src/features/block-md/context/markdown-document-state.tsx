@@ -1,3 +1,4 @@
+import type { CommentId, ThreadId } from '@core/comments/commentType';
 import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type {
   Completion,
@@ -66,12 +67,12 @@ const initialFindAndReplaceState: FindAndReplaceState = {
 type MarkdownCommentsState = {
   marks: MarkStore;
   activeMarkIds: string[];
-  activeCommentThread: number | null;
-  highlightedCommentId: number | null;
+  activeCommentThread: ThreadId | null;
+  highlightedCommentId: CommentId | null;
   comments: CommentStore;
   threads: ThreadStore;
   commentMarksInitialized: boolean;
-  highlightedCommentThreads: number[];
+  highlightedCommentThreads: ThreadId[];
 };
 
 export function createMarkdownDocumentState() {

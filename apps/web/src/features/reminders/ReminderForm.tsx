@@ -9,10 +9,11 @@ import {
 } from '@core/util/cron';
 import { TZDateMini } from '@date-fns/tz';
 import type { ReminderSchedule } from '@service-storage/generated/schemas/reminderSchedule';
-import { Button, cn } from '@ui';
+import { ActionDialogShell, Button, Input, Tabs } from '@ui';
 import {
   createEffect,
   createSignal,
+  createUniqueId,
   For,
   type JSX,
   Match,
@@ -20,6 +21,7 @@ import {
   Show,
   Switch,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import {
   isRecurring,
   onceSchedule,
@@ -67,6 +69,9 @@ export interface ReminderFormProps {
   reference?: JSX.Element;
   submitLabel: string;
   pending?: boolean;
+  /** Dialog hosts provide their heading and use a padded body with a fixed footer. */
+  header?: JSX.Element;
+  layout?: 'dialog' | 'inline';
   autofocus?: boolean;
   /**
    * Cancel reverts the fields to what they were seeded with rather than only
@@ -244,6 +249,7 @@ export function ReminderForm(props: ReminderFormProps) {
   const initialParts = seed.parts;
   const initialTimezone = seed.recurringTimezone ?? localZone;
 
+  const formId = createUniqueId();
   let titleRef: HTMLInputElement | undefined;
   onMount(() => {
     if (props.autofocus) titleRef?.focus();
@@ -383,183 +389,188 @@ export function ReminderForm(props: ReminderFormProps) {
   };
 
   return (
-    <div class="flex flex-col gap-4 text-sm">
-      {/* Outside the <form> on purpose: the reference card carries its own
+    <div class="flex min-h-0 flex-col text-sm">
+      <Dynamic
+        component={props.layout === 'dialog' ? ActionDialogShell.Body : 'div'}
+        class={
+          props.layout === 'dialog'
+            ? undefined
+            : 'min-h-0 space-y-5 overflow-y-auto'
+        }
+      >
+        {props.header}
+        {/* Outside the <form> on purpose: the reference card carries its own
           buttons (Copy Link, etc.), and a button inside a form submits it —
           which here would save-and-close the panel on a stray click. */}
-      <Show when={props.reference}>{(node) => node()}</Show>
+        <Show when={props.reference}>{(node) => node()}</Show>
 
-      <form
-        class="flex flex-col gap-4"
-        onSubmit={(event) => {
-          event.preventDefault();
-          submit();
-        }}
-      >
-        <input
-          ref={titleRef}
-          type="text"
-          value={description()}
-          onInput={(event) => setDescription(event.currentTarget.value)}
-          placeholder={props.placeholder}
-          aria-label="Reminder description"
-          // Counts UTF-16 code units where the service counts characters, so this
-          // only ever stops short of the real limit, never past it. The
-          // description resolvers apply the exact cap.
-          maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
-          class="w-full rounded-md border border-edge-muted bg-surface px-2 py-2 text-sm text-ink outline-none placeholder:text-ink-placeholder focus:border-accent"
-        />
+        <form
+          id={formId}
+          class="flex flex-col gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            submit();
+          }}
+        >
+          <fieldset class="flex min-w-0 flex-col gap-4">
+            <Input
+              ref={titleRef}
+              type="text"
+              value={description()}
+              onInput={(event) => setDescription(event.currentTarget.value)}
+              placeholder={props.placeholder}
+              aria-label="Reminder description"
+              // Counts UTF-16 code units where the service counts characters, so this
+              // only ever stops short of the real limit, never past it. The
+              // description resolvers apply the exact cap.
+              maxLength={REMINDER_DESCRIPTION_MAX_LENGTH}
+              size="lg"
+            />
 
-        <div class="flex flex-col gap-2">
-          <span class="text-xs font-medium text-ink-muted">Repeat</span>
-          <div class="flex gap-1">
-            <For
-              each={
-                [
+            <div class="flex flex-col gap-2">
+              <span class="text-xs font-medium text-ink-muted">Repeat</span>
+              <Tabs
+                aria-label="Repeat"
+                labelClass="whitespace-nowrap px-2"
+                value={repeat()}
+                fullWidth
+                onChange={(value) => {
+                  if (value === 'once' || value === 'week' || value === 'month')
+                    setRepeatKind(value);
+                }}
+                list={[
                   { value: 'once', label: 'Does not repeat' },
                   { value: 'week', label: 'Weekly' },
                   { value: 'month', label: 'Monthly' },
-                ] as const
-              }
-            >
-              {(option) => (
-                <button
-                  type="button"
-                  class={cn(
-                    'flex-1 rounded border px-2 py-1.5 text-xs',
-                    repeat() === option.value
-                      ? 'border-edge bg-active text-ink'
-                      : 'border-edge-muted text-ink-muted hover:text-ink'
-                  )}
-                  onClick={() => setRepeatKind(option.value)}
-                >
-                  {option.label}
-                </button>
-              )}
-            </For>
-          </div>
-        </div>
+                ]}
+              />
+            </div>
 
-        <Switch>
-          <Match when={repeat() === 'once'}>
-            <div class="flex flex-col gap-2">
-              <div class="flex items-center gap-2">
-                <input
-                  type="date"
-                  aria-label="Date"
-                  value={onceDate()}
-                  onInput={(event) => setOnceDate(event.currentTarget.value)}
-                  class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                />
-                <input
-                  type="time"
-                  aria-label="Time"
-                  value={onceTime()}
-                  onInput={(event) => setOnceTime(event.currentTarget.value)}
-                  class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                />
-              </div>
-              <span class="text-xs text-ink-muted">
-                {localZone.replace(/_/g, ' ')} ({shortZone(localZone)})
-              </span>
-            </div>
-          </Match>
-          <Match when={repeat() === 'week'}>
-            <div class="flex flex-col gap-3">
-              <div class="flex gap-1">
-                <For each={WEEKDAY_OPTIONS}>
-                  {(day) => (
-                    <button
-                      type="button"
-                      class={cn(
-                        'flex-1 rounded border px-1 py-1.5 text-xs',
-                        repeatParts().daysOfWeek.includes(day.value)
-                          ? 'border-edge bg-active text-ink'
-                          : 'border-edge-muted text-ink-muted hover:text-ink'
+            <Switch>
+              <Match when={repeat() === 'once'}>
+                <div class="flex flex-col gap-2">
+                  <div class="flex items-center gap-2">
+                    <Input
+                      type="date"
+                      aria-label="Date"
+                      value={onceDate()}
+                      onInput={(event) =>
+                        setOnceDate(event.currentTarget.value)
+                      }
+                      class="min-w-0 flex-1 text-sm"
+                    />
+                    <Input
+                      type="time"
+                      aria-label="Time"
+                      value={onceTime()}
+                      onInput={(event) =>
+                        setOnceTime(event.currentTarget.value)
+                      }
+                      class="min-w-0 flex-1 text-sm"
+                    />
+                  </div>
+                  <span class="text-xs text-ink-muted">
+                    {localZone.replace(/_/g, ' ')} ({shortZone(localZone)})
+                  </span>
+                </div>
+              </Match>
+              <Match when={repeat() === 'week'}>
+                <div class="flex flex-col gap-3">
+                  <div class="flex gap-1">
+                    <For each={WEEKDAY_OPTIONS}>
+                      {(day) => (
+                        <Button
+                          type="button"
+                          size="sm"
+                          class="min-w-0 flex-1 px-1"
+                          variant={
+                            repeatParts().daysOfWeek.includes(day.value)
+                              ? 'accent'
+                              : 'outline'
+                          }
+                          aria-pressed={repeatParts().daysOfWeek.includes(
+                            day.value
+                          )}
+                          onClick={() => toggleDay(day.value)}
+                        >
+                          {day.label}
+                        </Button>
                       )}
-                      aria-pressed={repeatParts().daysOfWeek.includes(
-                        day.value
-                      )}
-                      onClick={() => toggleDay(day.value)}
-                    >
-                      {day.label}
-                    </button>
-                  )}
-                </For>
-              </div>
-              <TimeField
-                value={repeatParts().time}
-                onChange={(time) => updateParts({ time })}
-              />
-            </div>
-          </Match>
-          <Match when={repeat() === 'month'}>
-            <div class="flex items-center gap-3">
-              <label class="flex items-center gap-2 text-sm text-ink-muted">
-                Day
-                <input
-                  type="number"
-                  min="1"
-                  max="31"
-                  value={repeatParts().dayOfMonth}
-                  onInput={(event) =>
-                    updateParts({ dayOfMonth: event.currentTarget.value })
-                  }
-                  class="w-16 rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
-                />
-              </label>
-              <TimeField
-                value={repeatParts().time}
-                onChange={(time) => updateParts({ time })}
-              />
-            </div>
-          </Match>
-        </Switch>
+                    </For>
+                  </div>
+                  <TimeField
+                    value={repeatParts().time}
+                    onChange={(time) => updateParts({ time })}
+                  />
+                </div>
+              </Match>
+              <Match when={repeat() === 'month'}>
+                <div class="flex items-center gap-3">
+                  <label class="flex items-center gap-2 text-sm text-ink-muted">
+                    Day
+                    <Input
+                      type="number"
+                      min="1"
+                      max="31"
+                      value={repeatParts().dayOfMonth}
+                      onInput={(event) =>
+                        updateParts({ dayOfMonth: event.currentTarget.value })
+                      }
+                      class="w-16 text-sm"
+                    />
+                  </label>
+                  <TimeField
+                    value={repeatParts().time}
+                    onChange={(time) => updateParts({ time })}
+                  />
+                </div>
+              </Match>
+            </Switch>
 
-        <Show when={repeat() !== 'once'}>
-          <div class="flex flex-col gap-2">
-            <label class="flex items-center gap-2 text-xs text-ink-muted">
-              <span class="font-medium">Timezone</span>
-              <TimezoneSelect
-                value={timezone()}
-                onChange={setTimezone}
-                options={TIMEZONE_OPTIONS}
-              />
-            </label>
-            <span class="truncate text-xs text-ink-muted">
-              {describeCron(repeatParts())} · {shortZone(timezone())}
-            </span>
-          </div>
+            <Show when={repeat() !== 'once'}>
+              <div class="flex flex-col gap-2">
+                <label class="flex items-center gap-2 text-xs text-ink-muted">
+                  <span class="font-medium">Timezone</span>
+                  <TimezoneSelect
+                    value={timezone()}
+                    onChange={setTimezone}
+                    options={TIMEZONE_OPTIONS}
+                  />
+                </label>
+                <span class="truncate text-xs text-ink-muted">
+                  {describeCron(repeatParts())} · {shortZone(timezone())}
+                </span>
+              </div>
+            </Show>
+          </fieldset>
+        </form>
+      </Dynamic>
+      <Dynamic
+        component={props.layout === 'dialog' ? ActionDialogShell.Footer : 'div'}
+        class={
+          props.layout === 'dialog'
+            ? undefined
+            : 'mt-4 flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-edge-muted pt-3'
+        }
+      >
+        <Show when={isEdit && isDirty()}>
+          <span class="flex items-center gap-1.5 text-xs text-ink-muted">
+            <span class="size-1.5 rounded-full bg-warning" />
+            Unsaved changes
+          </span>
         </Show>
-
-        <div class="flex items-center gap-3 pt-2">
-          <Show when={isEdit && isDirty()}>
-            <span class="flex items-center gap-1.5 text-xs text-ink-muted">
-              <span class="size-1.5 rounded-full bg-warning" />
-              Unsaved changes
-            </span>
-          </Show>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            class="ml-auto rounded-lg"
-            onClick={cancel}
-          >
-            Cancel
-          </Button>
-          <Button
-            type="submit"
-            variant="accent"
-            size="sm"
-            depth={3}
-            class="rounded-lg border-0"
-            disabled={!canSubmit() || (isEdit && !isDirty())}
-          >
-            {props.submitLabel}
-          </Button>
-        </div>
-      </form>
+        <Button type="button" variant="ghost" class="ml-auto" onClick={cancel}>
+          Cancel
+        </Button>
+        <Button
+          type="submit"
+          form={formId}
+          variant="strong"
+          disabled={!canSubmit() || (isEdit && !isDirty())}
+        >
+          {props.submitLabel}
+        </Button>
+      </Dynamic>
     </div>
   );
 }
@@ -572,11 +583,11 @@ function TimeField(props: {
   return (
     <label class="flex items-center gap-2 text-sm text-ink-muted">
       At
-      <input
+      <Input
         type="time"
         value={props.value}
         onInput={(event) => props.onChange(event.currentTarget.value)}
-        class="rounded-sm border border-edge-muted bg-surface px-2 py-1.5 text-sm text-ink outline-none focus:border-accent"
+        class="min-w-0 flex-1 text-sm"
       />
     </label>
   );

@@ -8,9 +8,9 @@ import {
   isChannelMessageEntity,
   type WithSearch,
 } from '@entity';
-import { channelMessagesQueryOptions } from '@queries/channel/channel-messages';
-import { threadRepliesQueryOptions } from '@queries/channel/thread-replies';
 import { queryClient } from '@queries/client';
+import { threadRepliesQueryOptions } from '@queries/messages/thread-replies';
+import { messageTimelineQueryOptions } from '@queries/messages/timeline';
 import {
   useSearchChannelQuery,
   validateSearchServiceText,
@@ -144,7 +144,10 @@ export function createChannelFindBar(
           const threadId = rs[i].threadId;
           if (!threadId) continue;
           queryClient.prefetchQuery(
-            threadRepliesQueryOptions(channelId, threadId)
+            threadRepliesQueryOptions(
+              { type: 'channel', id: channelId },
+              threadId
+            )
           );
         }
       });
@@ -174,7 +177,10 @@ export function createChannelFindBar(
           seen.add(aroundId);
           if (options.isMessageLoaded(aroundId)) continue;
           queryClient.prefetchInfiniteQuery(
-            channelMessagesQueryOptions(channelId, aroundId)
+            messageTimelineQueryOptions(
+              { type: 'channel', id: channelId },
+              aroundId
+            )
           );
         }
       });

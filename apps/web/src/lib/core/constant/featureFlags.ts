@@ -699,3 +699,14 @@ export const enableSpreadsheets = defineFlag({
   key: 'enable-spreadsheets',
   env: 'ENABLE_SPREADSHEETS',
 });
+
+/**
+ * Document comments read and write through the shared message API and render
+ * with the channel message components; the legacy annotation comment stores
+ * stay in place while this is off. Channels are not gated. Override locally with
+ * VITE_ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS.
+ */
+export const enableUnifiedDocumentDiscussions = defineFlag({
+  key: 'enable-unified-document-discussions',
+  env: 'ENABLE_UNIFIED_DOCUMENT_DISCUSSIONS',
+});
