@@ -27,13 +27,8 @@ export type ChannelsViewProps = {
 function ChannelsViewRoot() {
   const panel = useSplitPanelOrThrow();
   const orchestrator = useGlobalBlockOrchestrator();
-  const {
-    state,
-    mobileLayout,
-    previewChannelId,
-  setAsideWidth,
-  setMobileTab,
-  } = useChannelsView();
+  const { state, mobileLayout, previewChannelId, setAsideWidth, setMobileTab } =
+    useChannelsView();
   const [railSearchOpen, setRailSearchOpen] = createSignal(false);
 
   const sources = useChannelsSources(
