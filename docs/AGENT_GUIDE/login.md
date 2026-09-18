@@ -1,5 +1,21 @@
 # Login
 
+## Remote local-stack URL
+
+For a stack configured with `--public-origin`, use its exact HTTPS app URL,
+for example `https://forge.tail66c63e.ts.net:3000/app` through private Tailscale
+Serve. Do not substitute plain HTTP, localhost, or a persona subdomain: secure
+cookies and browser cryptography require the trusted HTTPS origin. Passwordless
+links and logout return to that origin. See
+[trusted HTTPS setup](../RUNNING_LOCALLY.md#access-a-local-stack-over-trusted-https)
+for configuration, non-destructive activation, and provider callback limits.
+
+Mailpit and seed/admin endpoints remain on the stack host's loopback ports.
+Use a separate browser profile for each remote persona instead of the printed
+`*.localhost` seed links. Never reset or rerun `run_local` just to change a URL:
+that command deletes the stack's volumes. Remote browser login, uploads, and
+sync must be exercised after the operator activates the HTTPS configuration.
+
 ## Flow
 
 1. Navigate to `/app`. Unauthenticated sessions land on `/app/welcome`.

@@ -20,13 +20,13 @@ fn app_dir() -> std::path::PathBuf {
 
 /// Host-facing frontend URL.
 pub fn url(instance: &Instance) -> String {
-    format!("http://localhost:{}/app", instance.port(Port::Frontend))
+    format!("{}/app", instance.app_origin(false))
 }
 
 /// Frontend URL when the proxy serves the static bundle (headless stacks): the
 /// app lives on the single proxy origin, not a dev-server port.
 pub fn static_url(instance: &Instance) -> String {
-    format!("{}/app/", proxy::url(instance))
+    format!("{}/app/", instance.app_origin(true))
 }
 
 /// Where the instance's static frontend build is staged. Mounted read-only into
@@ -107,27 +107,40 @@ fn dev_env(
     traces_enabled: bool,
     enable_onboarding: bool,
 ) -> Vec<(String, String)> {
+    let backend_origin = if instance.public_origin().is_some() {
+        "same-origin".to_string()
+    } else {
+        proxy::url(instance)
+    };
     let mut env = vec![
         (
             "PORT".to_string(),
             instance.port(Port::Frontend).to_string(),
         ),
         ("VITE_LOCAL_SERVERS".to_string(), "ALL".to_string()),
-        (
-            "VITE_LOCAL_BACKEND_ORIGIN".to_string(),
-            proxy::url(instance),
-        ),
+        ("VITE_LOCAL_BACKEND_ORIGIN".to_string(), backend_origin),
     ];
+    if let Some(origin) = instance.public_origin() {
+        env.push(("LOCAL_PUBLIC_ORIGIN".into(), origin.as_str().into()));
+        env.push((
+            "LOCAL_BACKEND_PROXY_TARGET".into(),
+            format!("http://127.0.0.1:{}", instance.port(Port::Proxy)),
+        ));
+    }
+    let browser_backend = instance.public_origin().map_or_else(
+        || proxy::url(instance),
+        |origin| origin.as_str().to_string(),
+    );
     if mode.spec().runs_local_infra {
         env.push((
             "VITE_AI_EDITING_WORKER_URL".to_string(),
-            format!("{}/ai-editing", proxy::url(instance)),
+            format!("{browser_backend}/ai-editing"),
         ));
     }
     if traces_enabled {
         env.push((
             "VITE_OTEL_EXPORTER_URL".to_string(),
-            format!("{}/i/otlp/v1/traces", proxy::url(instance)),
+            format!("{browser_backend}/i/otlp/v1/traces"),
         ));
         // Tag frontend telemetry with the same env the Datadog agent uses
         // (DD_ENV, default `local`), so the summary's traces/logs links —

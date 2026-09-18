@@ -92,7 +92,7 @@ function proxyServers(): Servers | undefined {
   if (!proxyOrigin || !wsProxyOrigin) return undefined;
   return {
     'auth-service': `${proxyOrigin}/auth`,
-    'auth-logout': serverHostLocal['auth-logout'],
+    'auth-logout': `${globalThis.location?.origin ?? proxyOrigin}/app`,
     'pdf-service': serverHostLocal['pdf-service'], // no local container
     'document-storage-service': `${proxyOrigin}/dss`,
     'websocket-service': `${wsProxyOrigin}/websocket`,

@@ -131,10 +131,10 @@ pub(super) fn clear_state(instance: &Instance) -> Result<()> {
 /// Docker containers running.
 pub fn up(mode: Mode, args: &UpArgs) -> Result<Instance> {
     let stage = Stage::from_env_cli(args.run.verbose);
-    let instance = Instance::derive(
-        args.run.instance.instance.as_deref(),
-        args.run.instance.port_base,
-    )?;
+    let instance = Instance::from_args(&args.run.instance)?;
+    if mode != Mode::Local && instance.public_origin().is_some() {
+        bail!("--public-origin is only supported for a fully local stack");
+    }
     stage.section(&format!(
         "macro {} stack (headless) — instance {}",
         mode.label(),
@@ -339,7 +339,15 @@ fn bootstrap_from_update(args: &UpdateArgs) -> Result<()> {
 
 fn update_running(args: &UpdateArgs) -> Result<()> {
     let stage = Stage::from_env_cli(args.verbose);
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?
+        .restore_public_origin()?;
+    if let Some(requested) = &args.instance.public_origin
+        && instance.public_origin() != Some(requested)
+    {
+        bail!(
+            "stack update preserves the recorded public origin; changing it requires an explicit in-place proxy/env/FusionAuth reconfiguration (see docs/RUNNING_LOCALLY.md)"
+        );
+    }
     let state = read_state(&instance).expect("update_running requires stack state");
     let mode = mode_from_label(&state.mode)?;
     stage.section(&format!(
@@ -480,7 +488,7 @@ fn reload_static_frontend(
 /// `cargo x stack status` — container states + health through the proxy, as a
 /// human summary or `--json` for machines.
 pub fn status(args: &StatusArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let instance = Instance::from_args(&args.instance)?.restore_public_origin()?;
     let state = read_state(&instance);
     let services = compose_ps(&instance)?;
     let running = services.iter().any(|s| s.state == "running");

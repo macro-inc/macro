@@ -77,6 +77,9 @@ pub struct InstanceArgs {
     /// Override the derived port base.
     #[arg(long)]
     pub port_base: Option<u16>,
+    /// Browser-facing HTTPS origin served by a trusted TLS proxy (local only).
+    #[arg(long)]
+    pub public_origin: Option<super::public_origin::PublicOrigin>,
 }
 
 #[derive(Args, Clone, Default)]
@@ -251,14 +254,11 @@ fn run(cli: Cli) -> Result<()> {
         Cmd::RuntimeImage(a) => super::runtime_image_only(a.force),
         Cmd::GenCompose(a) => super::gen_compose_only(&a),
         Cmd::ValidateLocalCompose(a) => {
-            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            let instance = super::instance::Instance::from_args(&a)?;
             super::validate::local_compose(&instance, Mode::Local)
         }
         Cmd::ValidateLocalEnv(a) => {
-            let instance = super::instance::Instance::derive(
-                a.instance.instance.as_deref(),
-                a.instance.port_base,
-            )?;
+            let instance = super::instance::Instance::from_args(&a.instance)?;
             let mode = if a.dev { Mode::Dev } else { Mode::Local };
             super::validate::local_env(&instance, mode, a.env.no_doppler, a.env.env_file.as_deref())
         }
@@ -269,7 +269,7 @@ fn run(cli: Cli) -> Result<()> {
         }
         Cmd::DoctorLocal(a) => super::doctor::run(&a),
         Cmd::StatusLocal(a) => {
-            let instance = super::instance::Instance::derive(a.instance.as_deref(), a.port_base)?;
+            let instance = super::instance::Instance::from_args(&a)?.restore_public_origin()?;
             super::status::run(&instance)
         }
         Cmd::SeedEnv(a) => {

@@ -120,6 +120,106 @@ on demand. Register with any email address. FusionAuth sends you a one-time code
 by email. That email lands in **Mailpit** at http://localhost:8025, not in a real
 inbox.
 
+### Access a local stack over trusted HTTPS
+
+`--public-origin https://host[:port]` configures browser-facing URLs for a fully
+local stack. Without it, the existing localhost URLs are unchanged. Only an
+HTTPS origin is accepted: no credentials, path, query, fragment, or wildcard
+hostname. `run_dev` does not support this option.
+
+For example, with an **existing** Tailscale node named `forge`:
+
+```bash
+# On the stack host; private tailnet access, not a public Funnel.
+tailscale serve --bg --https=3000 http://127.0.0.1:3000
+```
+
+With `--public-origin`, the attached Vite server binds HTTP on `127.0.0.1:3000`,
+not `0.0.0.0:3000`, so it does not conflict with Serve's listener on the tailnet
+address at the same port. Serve supplies a browser-trusted certificate for `https://forge.tail66c63e.ts.net:3000`; open
+`https://forge.tail66c63e.ts.net:3000/app`. Use the actual tailnet DNS name from
+`tailscale status` and inspect `tailscale serve status` before changing existing
+Serve listeners. Do not create another Tailscale node or enable Funnel. Tailnet
+ACLs should limit this development stack to trusted users: its credentials and
+local passwordless-code behavior are not suitable for public Internet exposure.
+
+For a **new, disposable** stack, select the same origin when starting it:
+
+```bash
+just run_local --public-origin https://forge.tail66c63e.ts.net:3000 --build-aux-services
+```
+
+Use `--build-aux-services` on the first start after this change so a cached sync
+worker image is rebuilt with public-origin support. Later starts can omit it.
+
+**Do not rerun `run_local` or `stack up` to reconfigure a stack whose data you
+want to retain. Both delete and recreate its volumes.** `stack update` is only a
+safe update path for an already recorded headless stack; without `stack.json`,
+it bootstraps through destructive `stack up`. Headless stacks serve `/app` from
+Caddy instead of Vite: point Serve at that instance's loopback proxy port, and
+keep the same configured public origin. Status and headless updates retain the
+origin recorded in `infra/local/generated/<instance>/public-origin.json`.
+
+For an existing attached stack, an operator must apply configuration in place:
+
+1. Preserve its generated artifacts and identify its instance, binary mounts,
+   env overlays, and actual frontend/proxy ports. Do not run a lifecycle command.
+2. `cargo run -p xtask_local -- validate-local-env --public-origin <origin>`
+   (with the same `--instance`, `--port-base`, Doppler/`--env-file` options)
+   generates the browser URL env overrides without touching containers or data.
+   `cargo run -p xtask_local -- gen-compose --public-origin <origin>` generates
+   the attached Caddy/Compose configuration and records the origin. Review its
+   binary mounts against the running stack before applying it.
+3. Build changed Rust binaries and the sync worker image, then recreate only
+   affected application containers with the generated env and the proxy with
+   its updated configuration/network membership. Do not recreate databases,
+   delete volumes, or assume `docker restart` reloads a container's environment.
+4. Start/reload the attached Vite process with `VITE_LOCAL_SERVERS=ALL`,
+   `VITE_LOCAL_BACKEND_ORIGIN=same-origin`, `LOCAL_PUBLIC_ORIGIN=<origin>`,
+   `LOCAL_BACKEND_PROXY_TARGET=http://127.0.0.1:<proxy-port>`, and
+   `VITE_AI_EDITING_WORKER_URL=<origin>/ai-editing`. If browser telemetry is
+   enabled, set `VITE_OTEL_EXPORTER_URL=<origin>/i/otlp/v1/traces` too.
+5. For FusionAuth SSO, update the existing application's authorized redirects
+   through its **loopback admin API**, adding exact `<origin>/app`,
+   `<origin>/auth/oauth/redirect`, and `<origin>/cognition/oauth/redirect` entries.
+   Generated kickstart changes only take effect on a newly initialized database;
+   never reset an existing FusionAuth database just to change callback URLs.
+
+The public origin changes app links, auth callbacks, browser API/WS/sync routes,
+static permalinks, and S3 upload/download URLs. Vite forwards only known backend
+prefixes to loopback Caddy, including websocket upgrades; it retains `/app`,
+`/@vite`, and source-module handling. HMR derives `wss`, host, and port from the
+browser. S3 uses `/s3/<bucket>/<key>`; Caddy strips `/s3` and restores the signed
+`Host: localstack:4566`, retaining the encoded key and signature query. Docker
+service URLs, database URLs, seed endpoints, health checks, and Mailpit/FusionAuth
+administration remain internal or loopback. Cookies keep `Secure` and existing
+deployed SameSite/domain policies.
+
+The explicit local-only settings `LOCAL_AWS_PUBLIC_URL` (AWS URL translation),
+`LOCAL_PUBLIC_ORIGIN` (sync Worker binding and Vite host admission), and
+`LOCAL_BACKEND_PROXY_TARGET` (Vite loopback upstream) are generated by local
+tooling, not new deployed configuration. `LOCAL_AWS_PUBLIC_URL` is read via
+`macro_env_var`; Workers read bindings through `worker::Env`. Doppler registration
+of these local-only names requires a maintainer; no hosted configuration is
+modified by this workflow.
+
+**Integration limits:** provider consoles must allow the exact callback URL
+(for direct OAuth, `<origin>/auth/oauth2/<provider>/callback`; for FusionAuth,
+its canonical `<origin>/oauth2/callback`). The proxy exposes only FusionAuth's
+`/oauth2/*`, not `/api` or its admin console. Provider-hosted UI assets outside
+that prefix may need individually reviewed routes; full hosted SSO UI support
+must be verified with the configured providers. Tailnet-only reachability does
+not make provider webhooks or cloud agents able to reach your machine. Separate
+public ingress, when explicitly required, is not supplied by this option.
+
+Verify login/refresh/logout, sync websocket connections, and a document upload
+and download in the HTTPS browser before relying on the configuration. Look for
+mixed-content errors and localhost/container URLs in responses. Mailpit stays
+on the stack host; read codes there if automatic local login is unavailable.
+Persona `*.localhost` seed links are host-local: use the public `/app/login`
+route and separate browser profiles for remote personas rather than inventing
+unregistered tailnet subdomains.
+
 ### Seeding sample data (recommended)
 
 A bare stack has no content to click through. The seed CLI creates a realistic

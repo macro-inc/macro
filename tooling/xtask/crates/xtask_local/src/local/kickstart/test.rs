@@ -1,5 +1,47 @@
 use super::*;
 
+#[test]
+fn public_callbacks_are_exact_and_internal_webhooks_stay_internal() {
+    let mut doc = build(
+        3000,
+        8080,
+        8085,
+        "function populate() {}",
+        "function reconcile() {}",
+        None,
+        None,
+    );
+    let before = doc.clone();
+    let origin = "https://forge.tail66c63e.ts.net:3000".parse().unwrap();
+    configure_public_origin(&mut doc, &origin);
+    let config = doc["requests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find_map(|request| request.pointer("/body/application/oauthConfiguration"))
+        .unwrap();
+    assert_eq!(config["authorizedURLValidationPolicy"], "ExactMatch");
+    let redirects = config["authorizedRedirectURLs"].as_array().unwrap();
+    assert!(redirects.contains(&json!(
+        "https://forge.tail66c63e.ts.net:3000/auth/oauth/redirect"
+    )));
+    assert!(redirects.contains(&json!("https://forge.tail66c63e.ts.net:3000/app")));
+    assert!(redirects.contains(&json!("http://authentication-service:8080/oauth/redirect")));
+    for (previous, current) in before["requests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .zip(doc["requests"].as_array().unwrap())
+    {
+        if previous
+            .pointer("/body/application/oauthConfiguration")
+            .is_none()
+        {
+            assert_eq!(previous, current);
+        }
+    }
+}
+
 fn env(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
     pairs
         .iter()

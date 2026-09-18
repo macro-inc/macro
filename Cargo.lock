@@ -19454,6 +19454,7 @@ dependencies = [
  "sha2 0.10.9",
  "strum 0.27.2",
  "tokio",
+ "url",
  "xtask_paths",
 ]
 

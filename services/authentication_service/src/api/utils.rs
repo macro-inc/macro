@@ -9,6 +9,22 @@ use url::Url;
 
 maybe_env_vars! {
     struct FrontendPort;
+    struct OverrideAppServiceUrl;
+}
+
+/// The explicit local app URL, not a deployed override or a default that would
+/// mask legacy FRONTEND_PORT configuration.
+pub(crate) fn local_app_url() -> Option<Url> {
+    if !matches!(Environment::new_or_prod(), Environment::Local) {
+        return None;
+    }
+    let configured = OverrideAppServiceUrl::new()?;
+    let url = Url::parse(configured.as_ref()).ok()?;
+    (matches!(url.scheme(), "http" | "https")
+        && url.host_str().is_some()
+        && url.username().is_empty()
+        && url.password().is_none())
+    .then_some(url)
 }
 
 /// Generates a random 25 character session code
@@ -48,17 +64,34 @@ pub fn generate_session_code() -> String {
 
 /// Returns the default redirect url based on the environment
 pub fn default_redirect_url() -> Url {
-    match Environment::new_or_prod() {
+    let frontend_port = FrontendPort::new();
+    default_redirect_for_environment(
+        Environment::new_or_prod(),
+        local_app_url(),
+        frontend_port.as_ref().map(|port| port.as_ref()),
+    )
+}
+
+fn default_redirect_for_environment(
+    environment: Environment,
+    local_app_url: Option<Url>,
+    frontend_port: Option<&str>,
+) -> Url {
+    match environment {
         Environment::Local => {
-            let port = FrontendPort::new()
-                .map(|port| port.to_string())
-                .unwrap_or_else(|| "3000".to_string());
+            if let Some(url) = local_app_url {
+                return url.join("/app").expect("local app URL is a base URL");
+            }
+            let port = frontend_port.unwrap_or("3000");
             format!("http://localhost:{port}").parse().unwrap()
         }
         Environment::Develop => "https://dev.macro.com/app".parse().unwrap(),
         Environment::Production => "https://macro.com/app".parse().unwrap(),
     }
 }
+
+#[cfg(test)]
+mod test;
 
 fn domain<'a>() -> Option<&'a str> {
     match Environment::new_or_prod() {

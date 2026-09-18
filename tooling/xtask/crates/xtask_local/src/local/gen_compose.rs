@@ -285,6 +285,10 @@ fn add_proxy_service(
             super::frontend::static_dir(instance).display()
         )));
     }
+    let mut networks = vec!["services".to_string(), "databases".to_string()];
+    if instance.public_origin().is_some() {
+        networks.push("auth".to_string());
+    }
     services.insert(
         "proxy".to_string(),
         Some(dct::Service {
@@ -292,7 +296,7 @@ fn add_proxy_service(
             environment: kv(&[("PROXY_PORT", &proxy_port.to_string())]),
             ports: dct::Ports::Short(vec![format!("{proxy_port}:{proxy_port}")]),
             volumes,
-            networks: dct::Networks::Simple(vec!["services".to_string(), "databases".to_string()]),
+            networks: dct::Networks::Simple(networks),
             ..Default::default()
         }),
     );

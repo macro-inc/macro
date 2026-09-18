@@ -36,6 +36,7 @@ pub mod mailpit;
 pub mod opensearch;
 pub mod portmap;
 pub mod proxy;
+pub mod public_origin;
 pub mod resources;
 pub mod sandbox_image;
 pub mod sdk_webhook;
@@ -199,7 +200,10 @@ pub fn run_stack(mode: Mode, args: &cli::RunArgs) -> Result<()> {
         kafka::ensure_available(&format!("run-{}", mode.label()))?;
     }
     let stage = Stage::from_env_cli(args.verbose);
-    let instance = Instance::derive(args.instance.instance.as_deref(), args.instance.port_base)?;
+    let instance = Instance::from_args(&args.instance)?;
+    if mode != Mode::Local && instance.public_origin().is_some() {
+        anyhow::bail!("--public-origin is only supported for a fully local stack");
+    }
     stage.section(&format!(
         "macro {} stack — instance {}",
         mode.label(),
@@ -648,6 +652,7 @@ fn prepare(
     infra_only: bool,
     egress_public_url: Option<&str>,
 ) -> Result<(env_layer::ResolvedEnv, arch::Target)> {
+    instance.save_public_origin()?;
     let env = env_layer::resolve(
         mode,
         instance,
@@ -1226,7 +1231,9 @@ pub fn runtime_image_only(force: bool) -> Result<()> {
 
 /// `cargo x gen-compose`.
 pub fn gen_compose_only(args: &cli::InstanceArgs) -> Result<()> {
-    let instance = Instance::derive(args.instance.as_deref(), args.port_base)?;
+    let instance = Instance::from_args(args)?;
+    instance.save_public_origin()?;
+    proxy::write_caddyfile(&instance, Mode::Local, false)?;
     let target = arch::detect()?;
     let binaries = build::BinariesDir::TargetDir(workspace_root().join(target.debug_dir()));
     let path = gen_compose::generate(Mode::Local, &instance, &binaries, false, false)?;

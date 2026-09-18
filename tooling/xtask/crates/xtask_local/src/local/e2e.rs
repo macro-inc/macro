@@ -118,6 +118,7 @@ pub fn run(args: &LocalE2eArgs) -> Result<()> {
             instance: InstanceArgs {
                 instance: Some(instance_name),
                 port_base: args.port_base,
+                public_origin: None,
             },
             env: EnvArgs::default(),
             build: BuildArgs::default(),

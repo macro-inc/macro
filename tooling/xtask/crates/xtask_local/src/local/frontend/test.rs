@@ -1,4 +1,6 @@
 use super::*;
+use crate::local::cli::InstanceArgs;
+use std::collections::BTreeMap;
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 
@@ -83,4 +85,44 @@ fn failed_restart_reports_output_and_releases_the_port() {
     let error = frontend.restart(&stage).unwrap_err();
     assert!(error.to_string().contains("vite-startup-failed"));
     assert!(TcpStream::connect(("127.0.0.1", frontend.port)).is_err());
+}
+
+#[test]
+fn public_frontend_uses_same_origin_and_loopback_proxy() {
+    let instance = Instance::from_args(&InstanceArgs {
+        public_origin: Some("https://forge.tail66c63e.ts.net:3000".parse().unwrap()),
+        ..Default::default()
+    })
+    .unwrap();
+    let env: BTreeMap<_, _> = dev_env(&instance, Mode::Local, true, false)
+        .into_iter()
+        .collect();
+    assert_eq!(env["VITE_LOCAL_BACKEND_ORIGIN"], "same-origin");
+    assert_eq!(env["LOCAL_BACKEND_PROXY_TARGET"], "http://127.0.0.1:8090");
+    assert_eq!(
+        env["LOCAL_PUBLIC_ORIGIN"],
+        "https://forge.tail66c63e.ts.net:3000"
+    );
+    assert_eq!(
+        env["VITE_AI_EDITING_WORKER_URL"],
+        "https://forge.tail66c63e.ts.net:3000/ai-editing"
+    );
+    assert_eq!(url(&instance), "https://forge.tail66c63e.ts.net:3000/app");
+    assert_eq!(
+        static_url(&instance),
+        "https://forge.tail66c63e.ts.net:3000/app/"
+    );
+    assert_eq!(proxy::url(&instance), "http://localhost:8090");
+}
+
+#[test]
+fn default_frontend_preserves_localhost_endpoints() {
+    let instance = Instance::derive(None, None).unwrap();
+    let env: BTreeMap<_, _> = dev_env(&instance, Mode::Local, false, false)
+        .into_iter()
+        .collect();
+    assert_eq!(env["VITE_LOCAL_BACKEND_ORIGIN"], "http://localhost:8090");
+    assert!(!env.contains_key("LOCAL_PUBLIC_ORIGIN"));
+    assert_eq!(url(&instance), "http://localhost:3000/app");
+    assert_eq!(static_url(&instance), "http://localhost:8090/app/");
 }

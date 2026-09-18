@@ -10,6 +10,12 @@ maybe_env_var! {
     pub struct LocalAwsUrl;
 }
 
+maybe_env_var! {
+    /// Browser-facing local S3 base, generated only by xtask --public-origin.
+    /// Ignored unless LOCAL_AWS_URL is configured; never set in deployed stacks.
+    pub struct LocalAwsPublicUrl;
+}
+
 /// Creates an S3 client
 #[cfg(feature = "s3")]
 pub async fn s3_client() -> aws_sdk_s3::Client {
@@ -31,6 +37,9 @@ pub async fn sqs_client() -> aws_sdk_sqs::Client {
 /// Otherwise we load normally.
 pub async fn get_macro_aws_config() -> aws_config::SdkConfig {
     if let Some(local_aws_url) = LocalAwsUrl::new() {
+        // Validate generated browser configuration when clients initialize,
+        // rather than first discovering a bad URL during an upload request.
+        let _ = local_public_base();
         local_aws_config(local_aws_url.as_ref()).await
     } else {
         aws_config::defaults(aws_config::BehaviorVersion::latest())
@@ -57,6 +66,10 @@ pub fn is_local_aws() -> bool {
 
 /// internal method to transform the local aws url
 fn transform_local_url(url: &str) -> String {
+    transform_local_url_with_public_base(url, None)
+}
+
+fn transform_local_url_with_public_base(url: &str, public_base: Option<&url::Url>) -> String {
     // NOTE: it is ok to use expect as this is only run locally
     let parsed = url::Url::parse(url).expect("valid url");
     let host = parsed.host_str().unwrap();
@@ -67,17 +80,24 @@ fn transform_local_url(url: &str) -> String {
     // Path-style LocalStack URLs generated inside Docker use `localstack` as
     // the host, which the browser on the host machine cannot resolve. Keep the
     // existing path (`/{bucket}/{key}`) and only swap the host to localhost.
+    let base = public_base.map_or_else(
+        || format!("http://localhost:{port}"),
+        |base| base.as_str().trim_end_matches('/').to_string(),
+    );
     if host == "localstack" || host == "localhost" {
-        return format!("http://localhost:{port}{path}{query}");
+        return format!("{base}{path}{query}");
     }
 
-    // hostname should be in the form {asset}.localstack or {asset}.localhost
-    let asset = host
+    // Legacy virtual-host URLs; current local S3 clients force path style so
+    // Caddy can restore the signed Host and path without changing the signature.
+    let Some(asset) = host
         .strip_suffix(".localstack")
         .or_else(|| host.strip_suffix(".localhost"))
-        .unwrap();
+    else {
+        return url.to_string();
+    };
 
-    format!("http://localhost:{port}/{asset}{path}{query}")
+    format!("{base}/{asset}{path}{query}")
 }
 
 /// Transforms a localstack url into one that will work within the app
@@ -85,7 +105,10 @@ fn transform_local_url(url: &str) -> String {
 /// but we need them to be formulated as `http://localhost:{PORT}/bucket-name`.
 pub fn transform_aws_url(url: &str) -> String {
     if is_local_aws() {
-        return transform_local_url(url);
+        return match local_public_base() {
+            Some(base) => transform_local_url_with_public_base(url, Some(&base)),
+            None => transform_local_url(url),
+        };
     }
     url.to_string()
 }
@@ -120,10 +143,62 @@ fn transform_internal_url(url: &str) -> String {
 /// Docker network must use the `localstack` service hostname instead. No-op
 /// outside local AWS.
 pub fn transform_aws_url_for_internal_fetch(url: &str) -> String {
-    if is_local_aws() {
+    if let Some(internal) = LocalAwsUrl::new() {
+        if let Some(base) = local_public_base() {
+            return transform_public_url_for_internal_fetch(url, &base, internal.as_ref());
+        }
         return transform_internal_url(url);
     }
     url.to_string()
+}
+
+fn local_public_base() -> Option<url::Url> {
+    let configured = LocalAwsPublicUrl::new()?;
+    Some(
+        parse_public_base(configured.as_ref())
+            .expect("LOCAL_AWS_PUBLIC_URL must be an HTTPS origin with /s3 prefix"),
+    )
+}
+
+fn parse_public_base(raw: &str) -> Option<url::Url> {
+    let parsed = url::Url::parse(raw).ok()?;
+    (parsed.scheme() == "https"
+        && parsed.host_str().is_some()
+        && parsed.username().is_empty()
+        && parsed.password().is_none()
+        && parsed.path() == "/s3"
+        && parsed.query().is_none()
+        && parsed.fragment().is_none()
+        && parsed.as_str() == raw)
+        .then_some(parsed)
+}
+
+fn transform_public_url_for_internal_fetch(
+    raw: &str,
+    public_base: &url::Url,
+    internal: &str,
+) -> String {
+    let Ok(parsed) = url::Url::parse(raw) else {
+        return raw.to_string();
+    };
+    if parsed.origin() != public_base.origin()
+        || !parsed.username().is_empty()
+        || parsed.password().is_some()
+    {
+        // Existing documents may retain localhost URLs from before the public
+        // origin was configured. Keep their legacy internal-fetch mapping.
+        return transform_internal_url(raw);
+    }
+    let Some(path) = parsed.path().strip_prefix("/s3/") else {
+        return raw.to_string();
+    };
+    // Do not decode/re-encode the key or query: SigV4 signs the encoded path
+    // and query. Restore the configured Docker endpoint, not a public host.
+    let query = parsed
+        .query()
+        .map(|query| format!("?{query}"))
+        .unwrap_or_default();
+    format!("{}/{path}{query}", internal.trim_end_matches('/'))
 }
 
 #[cfg(test)]

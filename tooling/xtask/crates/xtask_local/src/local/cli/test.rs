@@ -2,6 +2,37 @@ use super::*;
 use crate::local::e2e::LocalE2eSuite;
 
 #[test]
+fn public_origin_cli_is_optional_and_validated() {
+    let cli = Cli::try_parse_from(["cargo-x", "run-local"]).unwrap();
+    let Cmd::RunLocal(args) = cli.command else {
+        panic!("run-local");
+    };
+    assert!(args.instance.public_origin.is_none());
+    let cli = Cli::try_parse_from([
+        "cargo-x",
+        "run-local",
+        "--public-origin",
+        "https://forge:3000/",
+    ])
+    .unwrap();
+    let Cmd::RunLocal(args) = cli.command else {
+        panic!("run-local");
+    };
+    assert_eq!(
+        args.instance.public_origin.unwrap().as_str(),
+        "https://forge:3000"
+    );
+    for origin in [
+        "http://forge:3000",
+        "https://forge/app",
+        "https://user@forge",
+        "https://.example.com",
+    ] {
+        assert!(Cli::try_parse_from(["cargo-x", "run-local", "--public-origin", origin]).is_err());
+    }
+}
+
+#[test]
 fn local_e2e_accepts_suite_and_trailing_test_arguments() {
     let cli = Cli::try_parse_from([
         "cargo-x",

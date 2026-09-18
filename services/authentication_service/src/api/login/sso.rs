@@ -36,6 +36,30 @@ pub(crate) struct LoginQueryParams {
 }
 
 pub(crate) fn is_allowed_original_url(url: &Url) -> bool {
+    is_allowed_original_url_for_environment(
+        url,
+        macro_env::Environment::new_or_prod(),
+        crate::api::utils::local_app_url().as_ref(),
+    )
+}
+
+fn is_allowed_original_url_for_environment(
+    url: &Url,
+    environment: macro_env::Environment,
+    local_app_url: Option<&Url>,
+) -> bool {
+    if !url.username().is_empty() || url.password().is_some() {
+        return false;
+    }
+    if matches!(environment, macro_env::Environment::Local)
+        && let Some(app) = local_app_url
+        && matches!(app.scheme(), "http" | "https")
+        && app.username().is_empty()
+        && app.password().is_none()
+        && app.origin() == url.origin()
+    {
+        return true;
+    }
     match url.scheme() {
         // The app owns the custom scheme and handles all macro URI routes itself.
         "macro" => true,

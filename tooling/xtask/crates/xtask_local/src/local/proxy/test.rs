@@ -1,6 +1,37 @@
 use super::*;
 use crate::local::{inventory, repo_root};
 
+fn caddyfile(mode: Mode, static_frontend: bool) -> String {
+    render_caddyfile(mode, static_frontend, false)
+}
+
+#[test]
+fn public_routes_restore_s3_signing_authority_and_exclude_admin() {
+    let rendered = render_caddyfile(Mode::Local, false, true);
+    assert!(rendered.contains("handle_path /s3/*"));
+    assert!(rendered.contains("header_up Host localstack:4566"));
+    assert!(rendered.contains("handle /oauth2/*"));
+    assert!(!rendered.contains("handle /api/*"));
+    assert!(!rendered.contains("header_up Origin"));
+    assert!(!rendered.contains("/srv/frontend"));
+    assert!(!render_caddyfile(Mode::Dev, false, true).contains("handle_path /s3/*"));
+    assert!(render_caddyfile(Mode::Local, true, true).contains("/srv/frontend"));
+}
+
+#[test]
+fn vite_proxies_every_inventory_prefix() {
+    let src = std::fs::read_to_string(repo_root().join("apps/web/scripts/local-public-origin.ts"))
+        .unwrap();
+    for svc in inventory::RUST_SERVICES {
+        if let Some(prefix) = svc.path_prefix {
+            assert!(
+                src.contains(&format!("'{}'", &prefix[1..])),
+                "missing {prefix}"
+            );
+        }
+    }
+}
+
 /// Every inventoried service that declares a path prefix must get a route in the
 /// generated Caddyfile, targeting its canonical compose service name. This is
 /// the guarantee that replaces the old hand-maintained route list.

@@ -2,6 +2,47 @@ use super::*;
 use crate::local::Mode;
 use crate::local::instance::{Instance, Port};
 
+#[test]
+fn public_urls_do_not_replace_internal_endpoints() {
+    let instance = Instance::from_args(&crate::local::cli::InstanceArgs {
+        public_origin: Some("https://forge.tail66c63e.ts.net:3000".parse().unwrap()),
+        ..Default::default()
+    })
+    .unwrap();
+    for static_frontend in [false, true] {
+        let env = LocalEnv::for_instance(Mode::Local, &instance, static_frontend, None).to_env();
+        assert_eq!(env["BASE_URL"], "https://forge.tail66c63e.ts.net:3000/auth");
+        assert_eq!(
+            env["LOCAL_AWS_PUBLIC_URL"],
+            "https://forge.tail66c63e.ts.net:3000/s3"
+        );
+        assert_eq!(
+            env["FUSIONAUTH_OAUTH_REDIRECT_URI"],
+            "https://forge.tail66c63e.ts.net:3000/auth/oauth/redirect"
+        );
+        assert_eq!(
+            env["DOCUMENT_STORAGE_SERVICE_CLOUDFRONT_DISTRIBUTION_URL"],
+            "https://forge.tail66c63e.ts.net:3000/s3/doc-storage"
+        );
+        assert_eq!(env["FUSIONAUTH_BASE_URL"], "http://fusionauth:9011");
+        assert_eq!(env["LOCAL_AWS_URL"], "http://localstack:4566");
+        assert_eq!(
+            env["OVERRIDE_AUTH_SERVICE_URL"],
+            "http://authentication-service:8080"
+        );
+        assert_eq!(
+            env["DATABASE_URL"],
+            "postgres://user:password@postgres:5432/macrodb"
+        );
+        assert_eq!(
+            env["OVERRIDE_DOCUMENT_STORAGE_SERVICE_URL"],
+            "http://document-storage-service:8080"
+        );
+    }
+    assert!(!local_env().contains_key("LOCAL_AWS_PUBLIC_URL"));
+    assert!(!local_env().contains_key("LOCAL_PUBLIC_ORIGIN"));
+}
+
 /// The merged env a `--no-doppler` stack sees: boot stubs below, the
 /// authoritative local env on top (mirrors `env_layer::resolve`).
 fn local_env() -> BTreeMap<String, String> {

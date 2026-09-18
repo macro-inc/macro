@@ -1120,12 +1120,27 @@ impl DurableObject for DocumentSyncSession {
     /// Fetch the durable object
     /// Upgrades the request to a websocket request connected to the document session
     async fn fetch(&self, req: Request) -> Result<Response> {
+        // Worker bindings are the runtime configuration boundary (not process
+        // env). Never honor a local binding in deployed environments.
+        let environment = self
+            .env
+            .var("ENVIRONMENT")
+            .ok()
+            .map(|value| value.to_string())
+            .unwrap_or_default();
+        let local_origin = self
+            .env
+            .var("LOCAL_PUBLIC_ORIGIN")
+            .ok()
+            .map(|value| value.to_string());
         let set_allow_origin = if let Some(origin) = req
             .headers()
             .get("Origin")
             .context("No `Origin` header found in header")?
         {
-            if is_origin_allowed(&origin) {
+            if is_origin_allowed(&origin)
+                || local_origin::is_allowed(&origin, &environment, local_origin.as_deref())
+            {
                 Some(origin)
             } else {
                 return Ok(response(status_codes::FORBIDDEN));
@@ -1137,7 +1152,11 @@ impl DurableObject for DocumentSyncSession {
         if req.method() == Method::Options {
             return Ok(Response::builder()
                 .with_status(status_codes::OK)
-                .with_cors(&cors(set_allow_origin.as_deref()))?
+                .with_cors(&cors(
+                    set_allow_origin.as_deref(),
+                    &environment,
+                    local_origin.as_deref(),
+                ))?
                 .empty());
         }
         let traceparent = worker_rs_otel::traceparent_from_request(&req);
@@ -1158,8 +1177,11 @@ impl DurableObject for DocumentSyncSession {
             self.inner_fetch(req).instrument(span),
         )
         .await;
-        res.context("DurableObject::fetch error")?
-            .with_cors(&cors(set_allow_origin.as_deref()))
+        res.context("DurableObject::fetch error")?.with_cors(&cors(
+            set_allow_origin.as_deref(),
+            &environment,
+            local_origin.as_deref(),
+        ))
     }
 
     async fn websocket_message(&self, ws: WebSocket, msg: WebSocketIncomingMessage) -> Result<()> {
@@ -1415,6 +1437,8 @@ pub struct PeerResponse {
     pub user_id: String,
 }
 
+mod local_origin;
+
 pub static ALLOWED_ORIGINS: &[&str] = &[
     "http://localhost:5173",
     "http://localhost:3000",
@@ -1450,11 +1474,16 @@ pub fn is_origin_allowed(origin: &str) -> bool {
 }
 
 /// Workaround for this bug: <https://github.com/cloudflare/workers-rs/issues/554>
-pub fn cors(request_origin: Option<&str>) -> Cors {
+pub fn cors(
+    request_origin: Option<&str>,
+    environment: &str,
+    local_public_origin: Option<&str>,
+) -> Cors {
     use worker::Method;
     let cors_origins = request_origin
         .map(|o| {
-            if is_origin_allowed(o) {
+            if is_origin_allowed(o) || local_origin::is_allowed(o, environment, local_public_origin)
+            {
                 vec![o.to_string()]
             } else {
                 vec![]

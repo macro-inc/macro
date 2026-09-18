@@ -32,15 +32,18 @@ pub fn write_caddyfile(instance: &Instance, mode: Mode, static_frontend: bool) -
         std::fs::create_dir_all(dir)
             .with_context(|| format!("creating proxy dir {}", dir.display()))?;
     }
-    std::fs::write(&path, caddyfile(mode, static_frontend))
-        .with_context(|| format!("writing {}", path.display()))?;
+    std::fs::write(
+        &path,
+        render_caddyfile(mode, static_frontend, instance.public_origin().is_some()),
+    )
+    .with_context(|| format!("writing {}", path.display()))?;
     Ok(path)
 }
 
 /// Assemble the Caddyfile: the listener head, the generated per-service routes
 /// (from the inventory), the special non-inventory routes, the mode's
 /// static-file block, the optional static-frontend block, then the tail.
-fn caddyfile(mode: Mode, static_frontend: bool) -> String {
+fn render_caddyfile(mode: Mode, static_frontend: bool, public_origin: bool) -> String {
     let static_block = if mode.spec().static_files_via_localstack {
         STATIC_FILE_LOCAL
     } else {
@@ -52,8 +55,13 @@ fn caddyfile(mode: Mode, static_frontend: bool) -> String {
         ""
     };
     let frontend_block = if static_frontend { FRONTEND_STATIC } else { "" };
+    let public_routes = if mode == Mode::Local && public_origin {
+        PUBLIC_ROUTES
+    } else {
+        ""
+    };
     format!(
-        "{CADDY_HEAD}{routes}{SPECIAL_ROUTES}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}",
+        "{CADDY_HEAD}{routes}{SPECIAL_ROUTES}{public_routes}{mailpit_block}{static_block}{frontend_block}{CADDY_TAIL}",
         routes = service_routes(mode)
     )
 }
@@ -169,6 +177,22 @@ const SPECIAL_ROUTES: &str = r#"    @websocket path /websocket /websocket/*
     }
     handle_path /ai-editing/* {
         reverse_proxy ai-editing-worker:8933
+    }
+"#;
+
+/// Preserve the original S3 signing authority and path: presigners use
+/// path-style http://localstack:4566/{bucket}/{key}. Only the browser URL gets
+/// /s3; strip it before forwarding and restore Host for SigV4 verification.
+/// FusionAuth keeps its canonical OAuth prefix (not its admin/API routes).
+const PUBLIC_ROUTES: &str = r#"    handle_path /s3/* {
+        reverse_proxy localstack:4566 {
+            header_up Host localstack:4566
+        }
+    }
+    handle /oauth2/* {
+        reverse_proxy fusionauth:9011 {
+            header_up X-Forwarded-Proto https
+        }
     }
 "#;
 

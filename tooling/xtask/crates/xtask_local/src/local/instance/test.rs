@@ -1,6 +1,35 @@
 use super::*;
 
 #[test]
+fn saved_public_origin_is_restored_without_changing_internal_ports() {
+    let name = format!("origin-test-{}", std::process::id());
+    let instance = Instance::from_args(&crate::local::cli::InstanceArgs {
+        instance: Some(name.clone()),
+        public_origin: Some("https://forge:3000".parse().unwrap()),
+        ..Default::default()
+    })
+    .unwrap();
+    instance.save_public_origin().unwrap();
+    let restored = Instance::derive(Some(&name), None)
+        .unwrap()
+        .restore_public_origin()
+        .unwrap();
+    assert_eq!(restored.app_origin(false), "https://forge:3000");
+    assert_eq!(restored.app_origin(true), "https://forge:3000");
+    assert_eq!(restored.port(Port::Proxy), instance.port(Port::Proxy));
+    let default = Instance::derive(Some(&name), None).unwrap();
+    default.save_public_origin().unwrap();
+    assert!(
+        default
+            .restore_public_origin()
+            .unwrap()
+            .public_origin()
+            .is_none()
+    );
+    std::fs::remove_dir_all(instance.artifact_dir()).unwrap();
+}
+
+#[test]
 fn rejects_invalid_names() {
     for bad in ["", "Agent-A", "-foo", "a b", "x".repeat(41).as_str()] {
         assert!(

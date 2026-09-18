@@ -384,7 +384,7 @@ services:
       # dials it as `mcp-service`.
       - MCP_PUBLIC_URL=http://mcp-service:8080
       # Links in tool responses open the local app.
-      - APP_BASE_URL=http://localhost:${FRONTEND_PORT:-3000}
+      - APP_BASE_URL=${OVERRIDE_APP_SERVICE_URL:-http://localhost:${FRONTEND_PORT:-3000}}
       - REDIS_URL=redis://redis:6379
     depends_on:
       - postgres
