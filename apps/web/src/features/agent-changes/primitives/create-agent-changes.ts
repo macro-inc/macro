@@ -5,6 +5,7 @@
 
 import type { Accessor } from 'solid-js';
 import type { AgentChangesContext } from '../context/agent-changes-context';
+import type { DiffStyle, PaneLayout } from '../core/layout';
 import { formatNotesForAgent } from '../core/review-notes';
 import { type ChangesModel, createChangesModel } from './create-changes-model';
 import {
@@ -16,7 +17,7 @@ import {
   type ReviewController,
 } from './create-review-state';
 
-export type DiffStyle = 'unified' | 'split';
+export type { DiffStyle } from '../core/layout';
 
 export type AgentChangesController = {
   context: AgentChangesContext;
@@ -36,6 +37,8 @@ export type AgentChangesController = {
 export function createAgentChanges(options: {
   context: AgentChangesContext;
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
+  /** Optional controlled pane layout, such as the URL state. */
+  paneLayout?: [get: Accessor<PaneLayout>, set: (layout: PaneLayout) => void];
   /** Read and write the reviewer's diff layout preference. */
   diffStyle: [get: Accessor<DiffStyle>, set: (style: DiffStyle) => void];
   /** Per-session "dismissed for changeset id" memory. */
@@ -48,6 +51,7 @@ export function createAgentChanges(options: {
   const layout = createPaneLayout({
     sessionId: host.sessionId,
     storage: options.storage,
+    layout: options.paneLayout,
   });
   const model = createChangesModel({
     source,

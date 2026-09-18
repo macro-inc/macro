@@ -51,30 +51,14 @@ function setup() {
 }
 
 describe('createReviewState', () => {
-  it('folds a viewed file and tracks progress', () => {
+  it('collapses and reopens an individual file', () => {
     createRoot((dispose) => {
       const { review } = setup();
-      expect(review.progress()).toEqual({ viewed: 0, total: 2 });
-      review.toggleViewed('a.ts');
-      expect(review.isViewed('a.ts')).toBe(true);
-      expect(review.isCollapsed('a.ts')).toBe(true);
-      expect(review.progress()).toEqual({ viewed: 1, total: 2 });
-      review.toggleViewed('a.ts');
-      expect(review.isViewed('a.ts')).toBe(false);
       expect(review.isCollapsed('a.ts')).toBe(false);
-      dispose();
-    });
-  });
-
-  it('marks all, then clears all', () => {
-    createRoot((dispose) => {
-      const { review } = setup();
-      review.toggleAllViewed();
-      expect(review.allViewed()).toBe(true);
-      expect(review.anyExpanded()).toBe(false);
-      review.toggleAllViewed();
-      expect(review.progress().viewed).toBe(0);
-      expect(review.anyExpanded()).toBe(true);
+      review.toggleCollapsed('a.ts');
+      expect(review.isCollapsed('a.ts')).toBe(true);
+      review.toggleCollapsed('a.ts');
+      expect(review.isCollapsed('a.ts')).toBe(false);
       dispose();
     });
   });
@@ -90,20 +74,20 @@ describe('createReviewState', () => {
     });
   });
 
-  it('starts marks over for a new capture but keeps notes', () => {
+  it('expands files for a new capture but keeps notes', () => {
     createRoot((dispose) => {
       const { review, setCurrent } = setup();
-      review.toggleViewed('a.ts');
+      review.toggleCollapsed('a.ts');
       review.addNote(
         { path: 'a.ts', side: 'additions', lineNumber: 3, endLineNumber: 3 },
         'Rename'
       );
       setCurrent(changeset('cs2', ['a.ts', 'b.ts', 'c.ts']));
-      expect(review.isViewed('a.ts')).toBe(false);
-      expect(review.progress()).toEqual({ viewed: 0, total: 3 });
+      expect(review.isCollapsed('a.ts')).toBe(false);
+      expect(review.anyExpanded()).toBe(true);
       expect(review.notes()).toHaveLength(1);
-      review.toggleViewed('c.ts');
-      expect(review.isViewed('c.ts')).toBe(true);
+      review.toggleCollapsed('c.ts');
+      expect(review.isCollapsed('c.ts')).toBe(true);
       dispose();
     });
   });

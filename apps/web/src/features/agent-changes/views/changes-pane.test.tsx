@@ -83,7 +83,7 @@ function readyContext() {
 }
 
 describe('ChangesPane', () => {
-  it('lists the files, tracks viewed progress, and folds viewed files', async () => {
+  it('lists files and collapses individual or all diffs without viewed controls', async () => {
     const context = readyContext();
     const { controller } = mount(context, () => <ChangesPane />);
     controller().layout.open();
@@ -91,23 +91,21 @@ describe('ChangesPane', () => {
     expect(
       screen.getByText('agent/unread-archived-sessions → main')
     ).toBeTruthy();
-    expect(screen.getByText('0', { selector: 'b' })).toBeTruthy();
     await waitFor(() => expect(screen.getAllByTestId('diff')).toHaveLength(2));
+    expect(screen.queryByRole('button', { name: /^Viewed$/ })).toBeNull();
+    expect(screen.queryByRole('progressbar')).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Mark all viewed' })
+    ).toBeNull();
 
-    const viewedButtons = screen.getAllByRole('button', { name: /^Viewed$/ });
-    fireEvent.click(viewedButtons[0]!);
-    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe(
-      '1'
-    );
+    fireEvent.click(screen.getAllByRole('button', { name: /^Hide / })[0]!);
     expect(screen.getAllByTestId('diff')).toHaveLength(1);
     expect(screen.getByText('Show diff')).toBeTruthy();
 
-    fireEvent.click(screen.getByRole('button', { name: 'Mark all viewed' }));
-    expect(screen.getByRole('progressbar').getAttribute('aria-valuenow')).toBe(
-      '2'
-    );
-    expect(screen.getByRole('button', { name: 'Clear viewed' })).toBeTruthy();
-    expect(screen.getByRole('button', { name: 'Expand all' })).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Collapse all' }));
+    expect(screen.queryAllByTestId('diff')).toHaveLength(0);
+    fireEvent.click(screen.getByRole('button', { name: 'Expand all' }));
+    expect(screen.getAllByTestId('diff')).toHaveLength(2);
   });
 
   it('explains that a linked GitHub PR is required', () => {

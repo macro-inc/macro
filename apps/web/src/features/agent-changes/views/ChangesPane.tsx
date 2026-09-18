@@ -65,10 +65,8 @@ function DiffStack(props: { entries: FileDiffEntry[] }) {
             <FileCard
               entry={entry}
               collapsed={review.isCollapsed(path())}
-              viewed={review.isViewed(path())}
               flash={flashing() === path()}
               onToggleCollapsed={() => review.toggleCollapsed(path())}
-              onToggleViewed={() => review.toggleViewed(path())}
               onCopyPath={() => copyPath(path())}
               ref={(element) => {
                 cards.set(path(), element);
@@ -226,12 +224,8 @@ export function ChangesPane() {
             }
           >
             <ReviewBar
-              viewed={review.progress().viewed}
-              total={review.progress().total}
               anyExpanded={review.anyExpanded()}
-              allViewed={review.allViewed()}
               onToggleCollapsed={review.toggleAllCollapsed}
-              onToggleViewed={review.toggleAllViewed}
             />
             <Show when={changeset()?.truncated}>
               <CaptureBanner
@@ -243,7 +237,6 @@ export function ChangesPane() {
               <FileTree
                 nodes={model.tree()}
                 fileCount={model.files().length}
-                viewed={review.viewed()}
                 active={review.active()}
                 onSelect={review.activate}
               />

@@ -1,6 +1,6 @@
 /**
- * Which panes are on screen and how the width splits, remembered per
- * session so reopening a reviewed session lands where the reviewer left it.
+ * Pane visibility can be controlled by the host URL; the split width stays
+ * local to the reviewer and session.
  */
 
 import type { Accessor } from 'solid-js';
@@ -46,6 +46,7 @@ function parseStored(raw: unknown): StoredLayout | undefined {
 
 export function createPaneLayout(options: {
   sessionId: Accessor<string | undefined>;
+  layout?: [get: Accessor<PaneLayout>, set: (layout: PaneLayout) => void];
   storage?: Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
 }): PaneLayoutController {
   const [stored, setStored] = createPersistedSessionState<StoredLayout>({
@@ -55,13 +56,17 @@ export function createPaneLayout(options: {
     parse: parseStored,
     storage: options.storage,
   });
-  const setLayout = (next: (layout: PaneLayout) => PaneLayout) =>
-    setStored((previous) => ({ ...previous, layout: next(previous.layout) }));
+  const layout = () => (options.layout ? options.layout[0]() : stored().layout);
+  const setLayout = (next: (layout: PaneLayout) => PaneLayout) => {
+    if (options.layout) options.layout[1](next(layout()));
+    else
+      setStored((previous) => ({ ...previous, layout: next(previous.layout) }));
+  };
 
   return {
-    layout: () => stored().layout,
-    changesVisible: () => isChangesVisible(stored().layout),
-    sessionVisible: () => isSessionVisible(stored().layout),
+    layout,
+    changesVisible: () => isChangesVisible(layout()),
+    sessionVisible: () => isSessionVisible(layout()),
     changesShare: () => stored().share,
     setChangesShare: (share) =>
       setStored((previous) => ({

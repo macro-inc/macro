@@ -8,10 +8,8 @@
 import { Button } from '@ui';
 import { createSignal, For } from 'solid-js';
 import { AgentChangesControllerProvider } from '../context/agent-changes-controller';
-import {
-  createAgentChanges,
-  type DiffStyle,
-} from '../primitives/create-agent-changes';
+import { createAgentChanges } from '../primitives/create-agent-changes';
+import { createUrlDiffState } from '../primitives/create-url-diff-state';
 import { createMockAgentChangesContext } from '../tests/mock-context';
 import { AgentChangesSplit } from '../views/AgentChangesSplit';
 import {
@@ -27,11 +25,12 @@ export default function AgentChangesGallery() {
     patch: GALLERY_PATCH,
     sessionId: 'gallery-session',
   });
-  const [diffStyle, setDiffStyle] = createSignal<DiffStyle>('unified');
+  const urlState = createUrlDiffState(context.host.sessionId);
   const [dismissed, setDismissed] = createSignal<string>();
   const controller = createAgentChanges({
     context,
-    diffStyle: [diffStyle, setDiffStyle],
+    paneLayout: [urlState.layout, urlState.setLayout],
+    diffStyle: [urlState.diffStyle, urlState.setDiffStyle],
     dismissed: [dismissed, setDismissed],
   });
   const [transcript, setTranscript] = createSignal<string[]>([]);

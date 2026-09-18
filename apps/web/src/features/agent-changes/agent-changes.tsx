@@ -10,15 +10,12 @@
 
 import { toast } from '@core/component/Toast/Toast';
 import { openExternalUrl } from '@core/util/url';
-import { makePersisted } from '@solid-primitives/storage';
 import { createSignal, type ParentProps } from 'solid-js';
 import { useAgentSession } from '../block-agent/context/AgentSessionContext';
 import type { ChangesHost } from './context/agent-changes-context';
 import { AgentChangesControllerProvider } from './context/agent-changes-controller';
-import {
-  createAgentChanges,
-  type DiffStyle,
-} from './primitives/create-agent-changes';
+import { createAgentChanges } from './primitives/create-agent-changes';
+import { createUrlDiffState } from './primitives/create-url-diff-state';
 import { createSessionChangesSource } from './queries/session-changes';
 
 export { AgentChangesSplit } from './views/AgentChangesSplit';
@@ -56,15 +53,12 @@ export function AgentChangesProvider(props: ParentProps) {
       else toast.failure(message);
     },
   };
-  // The layout preference is the reviewer's, not the session's.
-  const [diffStyle, setDiffStyle] = makePersisted(
-    createSignal<DiffStyle>('unified'),
-    { name: 'agent-changes:diff-style' }
-  );
+  const urlState = createUrlDiffState(session.sessionId);
   const [dismissed, setDismissed] = createSignal<string>();
   const controller = createAgentChanges({
     context: { source, host },
-    diffStyle: [diffStyle, (style) => setDiffStyle(style)],
+    paneLayout: [urlState.layout, urlState.setLayout],
+    diffStyle: [urlState.diffStyle, urlState.setDiffStyle],
     dismissed: [dismissed, (id) => setDismissed(id)],
   });
   return (

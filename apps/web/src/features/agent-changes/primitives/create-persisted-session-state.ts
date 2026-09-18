@@ -1,6 +1,6 @@
 /**
  * A signal scoped to one session and mirrored into `localStorage`, so a
- * reload keeps the reviewer's place: which files they marked viewed, the
+ * reload keeps the reviewer's place: which diffs they collapsed, the
  * notes they have not sent yet, how the panes were laid out.
  *
  * The value re-loads whenever the session id changes; a missing id keeps

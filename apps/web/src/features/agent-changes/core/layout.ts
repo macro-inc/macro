@@ -5,6 +5,8 @@
  * the width back to the transcript; `changes-only` spotlights the review.
  */
 
+export type DiffStyle = 'unified' | 'split';
+
 export type PaneLayout = 'split' | 'agent-only' | 'changes-only';
 
 /** Share of the width the changes pane takes when it first opens. */

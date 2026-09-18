@@ -406,25 +406,27 @@ turn ends, regardless of the agent runtime. Unpushed workspace changes and
 branches without a PR are not included. The session header gains a **Changes**
 toggle (`aria-pressed`) with the changed-file count; it opens a resizable
 **Changes** pane beside the transcript (drag the 1px divider between them).
+The URL's `diff` query parameter stores each session's pane state and diff
+layout (`session-id:split:unified`, or `changes-only` / `agent-only` and
+`split` for side-by-side diffs). Copying the URL preserves that view; reload
+and Back/Forward restore it. A plain session URL starts with Changes closed.
+Divider width, collapsed files, and review notes stay local.
 The pane header shows a `head → base` branch pill, a **Unified / Split**
 segmented control (`aria-label="Diff layout"`), a refresh button, the
 **View pull request** button (opens GitHub), and **Expand changes to the full width**
 (spotlight; **Bring the session back** returns to the split) and **Close the
-changes pane**. Below it a review bar reads `N of M files viewed` with a
-progress bar (`role="progressbar"`, `aria-label="Files viewed"`) and
-**Collapse all / Expand all** and **Mark all viewed / Clear viewed** buttons.
+changes pane**. Below it is a **Collapse all / Expand all** button.
 The body is a file tree (`nav[aria-label="Changed files"]`, directories
 compressed along single-child chains, status letters A/M/D/R and +/− counts)
 next to a stack of file cards. Each card's sticky header has a disclosure
-caret, the path, `+adds −dels`, a **Viewed** toggle (`aria-pressed`; marking a
-file viewed collapses it) and **Copy path**. Diffs render with Pierre; hover a
+caret, the path, `+adds −dels`, and **Copy path**. Diffs render with Pierre; hover a
 line and click the accent **+** in the gutter (drag for a range) to leave a
 review note for the agent (`aria-label="Review note"`; `Cmd/Ctrl+Enter` adds,
 `Escape` cancels). Notes hang under their line as "queued for the agent" and a
 **N review notes queued · Send to agent** chip appears above the composer;
 sending posts one prompt listing every note by file and line and marks them
-"sent to agent". Notes never go to GitHub. Viewed marks and unsent notes
-persist per session in localStorage; a new capture resets viewed marks.
+"sent to agent". Notes never go to GitHub. Collapsed files and unsent notes
+persist per session in localStorage; a new capture expands all files.
 
 While the pane is closed and a capture has files, a **Changes ready to
 review** card sits above the composer with **Review changes**, **Pull request

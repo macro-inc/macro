@@ -1,6 +1,5 @@
 import { DiffChanges } from '@app/features/block-agent/ui/DiffChanges';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
 import CopyIcon from '@phosphor/copy.svg';
 import { Button, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
@@ -24,11 +23,9 @@ export function DiffNote(props: { children: JSX.Element }) {
 export function FileCard(props: {
   entry: FileDiffEntry;
   collapsed: boolean;
-  viewed: boolean;
   /** Briefly highlighted after the tree jumped here. */
   flash: boolean;
   onToggleCollapsed: () => void;
-  onToggleViewed: () => void;
   onCopyPath: () => void;
   /** The diff body, supplied by the view so this card stays presentational. */
   body: JSX.Element;
@@ -48,12 +45,7 @@ export function FileCard(props: {
       )}
       data-path={file().path}
     >
-      <header
-        class={cn(
-          'sticky top-0 z-5 flex min-h-8.5 items-center gap-2 border-b border-edge-muted bg-surface-1 pr-2',
-          props.viewed && 'opacity-55'
-        )}
-      >
+      <header class="sticky top-0 z-5 flex min-h-8.5 items-center gap-2 border-b border-edge-muted bg-surface-1 pr-2">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -99,34 +91,6 @@ export function FileCard(props: {
             deletions={file().deletions}
           />
         </span>
-        <button
-          type="button"
-          class={cn(
-            'inline-flex h-6 shrink-0 items-center gap-1.5 rounded-full border py-0 pr-2 pl-1 text-[11px] font-medium whitespace-nowrap',
-            props.viewed
-              ? 'border-success/45 bg-success/15 text-success'
-              : 'border-edge text-ink-placeholder hover:bg-hover hover:text-ink-muted'
-          )}
-          aria-pressed={props.viewed}
-          title={
-            props.viewed
-              ? 'Mark as not viewed. Reopens the diff.'
-              : 'Mark as viewed. Collapses the diff.'
-          }
-          onClick={() => props.onToggleViewed()}
-        >
-          <span
-            class={cn(
-              'grid size-3.5 place-items-center rounded border',
-              props.viewed
-                ? 'border-transparent bg-success text-accent-contrast'
-                : 'border-edge text-transparent'
-            )}
-          >
-            <CheckIcon class="size-2.5" />
-          </span>
-          Viewed
-        </button>
         <Button
           variant="ghost"
           size="icon-sm"
