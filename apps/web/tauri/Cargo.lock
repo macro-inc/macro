@@ -6060,7 +6060,6 @@ dependencies = [
  "chrono",
  "document_sub_type",
  "item-filter-index",
- "model_file_type",
  "postcard",
  "predicate-index",
  "serde",
