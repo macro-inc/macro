@@ -14,6 +14,7 @@ mod share;
 use document_sub_type::DocumentSubType;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model::document::{DocumentBasic, DocumentMetadata};
+use model_owner::Owner;
 use models_permissions::share_permission::{SharePermissionV2, TeamLinkShareDefault};
 use sqlx::PgPool;
 
@@ -209,9 +210,8 @@ impl DocumentRepo for PgDocumentRepo {
             Ok(DocumentMetadata {
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
-                owner: MacroUserIdStr::parse_from_str(&row.owner)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                    .into_owned(),
+                owner: Owner::from_principal_str(&row.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_name: row.document_name,
                 file_type: row.file_type,
                 sha: row.sha,
@@ -281,9 +281,8 @@ impl DocumentRepo for PgDocumentRepo {
             Ok(DocumentBasic {
                 document_id: row.document_id,
                 document_name: row.document_name,
-                owner: MacroUserIdStr::parse_from_str(&row.owner)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                    .into_owned(),
+                owner: Owner::from_principal_str(&row.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 file_type: row.file_type,
                 sub_type: row.sub_type,
                 branched_from_id: row.branched_from_id,
@@ -607,7 +606,11 @@ impl DocumentRepo for PgDocumentRepo {
         }
 
         if args.revoke_non_owner_user_access {
-            let owner = edit::get_document_owner(&mut transaction, &args.document_id).await?;
+            let owner = Owner::from_principal_str(
+                &edit::get_document_owner(&mut transaction, &args.document_id).await?,
+            )
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))?;
+            let owner_principal = owner.principal_id();
 
             // SAFETY: document IDs are UUID strings.
             let entity_id = macro_uuid::string_to_uuid(&args.document_id).unwrap();
@@ -616,7 +619,7 @@ impl DocumentRepo for PgDocumentRepo {
                 &mut transaction,
                 &entity_id,
                 EntityType::Document,
-                &owner,
+                &owner_principal,
             )
             .await?;
         }
@@ -998,9 +1001,8 @@ impl DocumentRepo for PgDocumentRepo {
             Ok(DocumentMetadata {
                 document_id: row.document_id,
                 document_version_id: row.document_version_id,
-                owner: MacroUserIdStr::parse_from_str(&row.owner)
-                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?
-                    .into_owned(),
+                owner: Owner::from_principal_str(&row.owner)
+                    .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
                 document_name: row.document_name,
                 file_type: row.file_type,
                 sha: row.sha,

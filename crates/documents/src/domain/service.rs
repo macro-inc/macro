@@ -39,6 +39,7 @@ use model::document::{
     ContentType, DocumentBasic, DocumentMetadata, FileAssociation, FileType, FileTypeExt,
 };
 use model::response::PresignedUrl;
+use model_owner::Owner;
 use s3_key::{
     build_cloud_storage_bucket_document_key, build_docx_staging_bucket_document_key,
     build_docx_to_pdf_converted_document_key,
@@ -728,8 +729,9 @@ impl<
                 Ok(None)
             }
             Some(FileType::Docx) => {
+                let owner = document_metadata.owner.principal_id();
                 let docx_key = build_docx_staging_bucket_document_key(
-                    document_metadata.owner.as_ref(),
+                    &owner,
                     &document_id,
                     document_metadata.document_version_id,
                 );
@@ -739,8 +741,9 @@ impl<
                     .map(Some)
             }
             _ => {
+                let owner = document_metadata.owner.principal_id();
                 let key = build_cloud_storage_bucket_document_key(
-                    document_metadata.owner.as_ref(),
+                    &owner,
                     &document_id,
                     document_metadata.document_version_id,
                 );
@@ -959,7 +962,7 @@ impl<
 
         let is_owner = matches!(
             team_receipt.auth(),
-            EntityAccessAuth::Authenticated(user_id) if document.owner == *user_id
+            EntityAccessAuth::Authenticated(user_id) if document.owner.is_user(user_id)
         );
         if document.deleted_at.is_some() && !is_owner {
             return Err(DocumentError::Unauthorized);
@@ -1052,11 +1055,11 @@ impl<
             return Ok(response);
         }
 
-        let owner = document_context.owner.as_ref();
+        let owner = document_context.owner.principal_id();
         let get_converted_docx_url = params.get_converted_docx_url.unwrap_or(false);
         let response_data = self
             .get_presigned_url_by_type(
-                owner,
+                &owner,
                 &document_id,
                 file_type,
                 params.document_version_id,
@@ -1723,7 +1726,8 @@ impl<
         let copy_result = match file_type {
             Some(FileType::Docx) => {
                 // Copy the converted PDF version
-                let url_encoded_owner = urlencoding::encode(original_metadata.owner.as_ref());
+                let owner = original_metadata.owner.principal_id();
+                let url_encoded_owner = urlencoding::encode(&owner);
                 let source_key = build_docx_to_pdf_converted_document_key(
                     &url_encoded_owner,
                     &original_metadata.document_id,
@@ -1761,7 +1765,7 @@ impl<
                         .0;
 
                     let source_key = build_cloud_storage_bucket_document_key(
-                        original_metadata.owner.as_ref(),
+                        &original_metadata.owner.principal_id(),
                         &original_metadata.document_id,
                         source_version_id,
                     );
@@ -1810,7 +1814,7 @@ impl<
                 };
 
                 let source_key = build_cloud_storage_bucket_document_key(
-                    original_metadata.owner.as_ref(),
+                    &original_metadata.owner.principal_id(),
                     &original_metadata.document_id,
                     source_version_id,
                 );
@@ -1876,7 +1880,7 @@ impl<
                 document_id: new_document_id.clone(),
                 source_document_id: original_metadata.document_id.clone(),
                 source_version_id: query_version_id,
-                owner: user_id.clone(),
+                owner: Owner::User(user_id.clone()),
                 document_name: new_metadata.document_name.clone(),
                 file_type,
                 project_id: new_metadata.project_id.clone(),

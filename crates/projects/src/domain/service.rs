@@ -872,7 +872,7 @@ where
 fn owns(item: &Item, actor: &str) -> bool {
     match item {
         Item::Project(project) => project.user_id == actor,
-        Item::Document(document) => document.owner.as_ref() == actor,
+        Item::Document(document) => document.owner.principal_id() == actor,
         Item::Chat(chat) => chat.user_id == actor,
     }
 }

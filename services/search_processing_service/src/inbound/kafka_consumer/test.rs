@@ -48,6 +48,7 @@ use macro_event_topics::{
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::FileType;
+use model_owner::Owner;
 use models_properties::{
     DataType, EntityType, PropertyOwner, service::property_option::PropertyOptionValue,
 };
@@ -825,7 +826,8 @@ fn channel_event_cases() -> Vec<(ChannelTopicEvent, ChannelEventDescription)> {
 }
 
 fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)> {
-    let owner = user_id();
+    let user = user_id();
+    let owner = Owner::User(user.clone());
 
     vec![
         (
@@ -850,7 +852,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
             DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
-                actor_user_id: Some(owner.clone()),
+                actor_user_id: Some(user.clone()),
                 actor: None,
                 on_behalf_of: None,
                 document_name: Some("Renamed document".to_string()),
@@ -869,7 +871,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
             DocumentTopicEvent::Updated(DocumentUpdatedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
                 owner: owner.clone(),
-                actor_user_id: Some(owner.clone()),
+                actor_user_id: Some(user.clone()),
                 actor: None,
                 on_behalf_of: None,
                 document_name: None,
@@ -887,7 +889,7 @@ fn document_event_cases() -> Vec<(DocumentTopicEvent, DocumentEventDescription)>
         (
             DocumentTopicEvent::Deleted(DocumentDeletedMetadata {
                 document_id: DOCUMENT_ID.to_string(),
-                actor_user_id: Some(owner.clone()),
+                actor_user_id: Some(user.clone()),
                 actor: None,
                 on_behalf_of: None,
                 project_id: Some(PROJECT_ID.to_string()),
@@ -1406,7 +1408,7 @@ fn maps_all_document_lifecycle_events_to_index_actions() {
 fn document_extraction_actions_preserve_optional_versions() {
     let content_uploaded = DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
         document_id: DOCUMENT_ID.to_string(),
-        owner: user_id(),
+        owner: Owner::User(user_id()),
         file_type: FileType::Pdf,
         document_version_id: None,
     });
@@ -1722,7 +1724,7 @@ fn exact_macro_documents_envelopes_decode_into_document_events() {
                 Uuid::from_u128(1),
                 DocumentTopicEvent::ContentUploaded(DocumentContentUploadedMetadata {
                     document_id: DOCUMENT_ID.to_string(),
-                    owner: user_id(),
+                    owner: Owner::User(user_id()),
                     file_type: FileType::Pdf,
                     document_version_id: Some("convert".to_string()),
                 }),
