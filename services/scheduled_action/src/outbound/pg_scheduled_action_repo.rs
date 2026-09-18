@@ -95,8 +95,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
                 Owner::User(created.owner.clone()),
             ),
         )
-        .await
-        .map_err(|report| anyhow::anyhow!("{report}"))?
+        .await?
         {
             InsertOutcome::Inserted | InsertOutcome::AlreadyRegistered => {}
         }
@@ -241,10 +240,7 @@ impl ScheduledActionRepo for PgScheduledActionRepo {
         .execute(&mut *tx)
         .await?;
 
-        match delete_entity(&mut tx, *id)
-            .await
-            .map_err(|report| anyhow::anyhow!("{report}"))?
-        {
+        match delete_entity(&mut tx, *id).await? {
             WriteOutcome::Applied | WriteOutcome::NotFound => {}
         }
         tx.commit().await?;
