@@ -27,26 +27,57 @@ describe('agent announcements', () => {
         '`@claude` Connect Claude, then mention me again. <m-connect-app>{"appSlug":"claude-cloud","name":"Claude","target":"harness"}</m-connect-app>',
     });
   });
-  it('still accepts existing session announcements', async () => {
-    const chip = {
-      agentSessionId: 'session',
-      promptedMessage: { turn: 0, author: 'user' },
-      status: 'booting',
-    };
+  const chip = {
+    agentSessionId: 'session',
+    promptedMessage: { turn: 0, author: 'user' },
+    status: 'booting',
+  };
+  const chipMarkdown = `<m-magic-chip>${JSON.stringify(chip)}</m-magic-chip>`;
+  const target = {
+    targetMessageId: 'message',
+    targetThreadId: 'thread',
+    displayText: 'hello',
+    senderId: 'user',
+  };
+  const replyTargetMarkdown = (parent: { type: string; id: string }) =>
+    `<m-reply-target>${JSON.stringify({ parent, ...target })}</m-reply-target>`;
+
+  it('replies to the channel message the harness names as parent', async () => {
+    const parent = { type: 'channel', id: 'channel' };
     const response = await request({
-      replyTarget: {
-        parent: { type: 'document', id: 'doc' },
-        targetMessageId: 'message',
-        targetThreadId: 'thread',
-        displayText: 'hello',
-        senderId: 'user',
-      },
+      replyTarget: { parent, channelId: 'channel', ...target },
       chip,
     });
     expect(response.status).toBe(200);
     expect(await response.json<{ markdown: string }>()).toEqual({
-      markdown: `<m-magic-chip>${JSON.stringify(chip)}</m-magic-chip>`,
+      markdown: `${replyTargetMarkdown(parent)}\n\n${chipMarkdown}`,
     });
+  });
+  it('reads a channelId-only reply target as a channel parent', async () => {
+    const response = await request({
+      replyTarget: { channelId: 'channel', ...target },
+      chip,
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json<{ markdown: string }>()).toEqual({
+      markdown: `${replyTargetMarkdown({ type: 'channel', id: 'channel' })}\n\n${chipMarkdown}`,
+    });
+  });
+  it('replies to a document comment', async () => {
+    const parent = { type: 'document', id: 'doc' };
+    const response = await request({
+      replyTarget: { parent, ...target },
+      chip,
+    });
+    expect(response.status).toBe(200);
+    expect(await response.json<{ markdown: string }>()).toEqual({
+      markdown: `${replyTargetMarkdown(parent)}\n\n${chipMarkdown}`,
+    });
+  });
+  it('rejects a reply target without a parent or channel', async () => {
+    const response = await request({ replyTarget: target, chip });
+    expect(response.status).toBeGreaterThanOrEqual(400);
+    expect(response.status).toBeLessThan(500);
   });
   it('rejects an unknown connection destination', async () => {
     const response = await request({
