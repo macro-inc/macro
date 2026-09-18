@@ -1,13 +1,14 @@
-<<<<<<< HEAD
 use chrono::{DateTime, Utc};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
-use macro_uuid::Uuid;
+use macro_uuid::{Uuid, generate_uuid_v7};
 use serde_json::json;
 use sqlx::{PgPool, Row};
 
 use super::*;
-use crate::domain::models::{ActionKind, AlreadyRunningError, Schedule, ScheduledAction};
+use crate::domain::models::{
+    ActionKind, AlreadyRunningError, RunTranscript, Schedule, ScheduledAction,
+};
 use crate::domain::ports::ScheduledActionRepo;
 
 const USER_A: &str = "macro|sched-a@macro.com";
@@ -269,11 +270,6 @@ async fn delete_action_succeeds_when_entity_row_is_missing(pool: PgPool) {
     assert_eq!(entity_row_count(&pool, id).await, 0);
     assert_eq!(scheduled_action_row_count(&pool, id).await, 0);
 }
-=======
-use macro_uuid::{Uuid, generate_uuid_v7};
-
-use super::{transcript_from_columns, transcript_to_columns};
-use crate::domain::models::RunTranscript;
 
 fn columns(resource_id: Option<&str>, kind: Option<&str>) -> (Option<String>, Option<String>) {
     (resource_id.map(str::to_owned), kind.map(str::to_owned))
@@ -371,4 +367,3 @@ fn columns_round_trip() {
         assert_eq!(read, transcript);
     }
 }
->>>>>>> 9a1ae7514 (feat(routines): tag run transcripts as chat or agent session)
