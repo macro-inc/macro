@@ -16,9 +16,9 @@
  *   - `appendText`/`prependText` on a cell id add ANOTHER bare text node
  *     without removing the existing one, duplicating the cell's content.
  *
- * The three broken cases are `it.fails` — they assert the shape we want and
- * record that we do not produce it yet. Fixing `$blockById` turns them green,
- * which makes `it.fails` throw; drop the `.fails` at that point.
+ * `$blockById` now treats table structure as non-content: a `<td>` id
+ * resolves to the cell's paragraph, and `Doc.tx` refuses to commit a tree
+ * the client would reject. These cases are the regression lock for that.
  */
 import { $isTableCellNode, $isTableRowNode } from '@lexical/table';
 import { $getId } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
@@ -81,31 +81,34 @@ describe('a <td> id given to a text-level op', () => {
     expect(cellChildTypes(session, 1, 0)).toEqual(['paragraph']);
   });
 
-  it.fails('setText on a cell id destroys the paragraph wrapper', () => {
+  it('setText on a cell id keeps the paragraph wrapper', () => {
     const { session, doc } = makeTable([['H'], ['a']]);
     const id = cellId(session, 1, 0);
     doc.apply({ kind: 'setText', node: id, text: 'X' });
-    // Regression target: should stay ['paragraph'].
     expect(cellChildTypes(session, 1, 0)).toEqual(['paragraph']);
+    expect(
+      read(session, () => {
+        const table = $getRoot()
+          .getChildren()
+          .find((n) => $isElementNode(n) && n.getType() === 'table');
+        return table?.getTextContent();
+      })
+    ).toContain('X');
   });
 
-  it.fails('appendText on a cell id duplicates instead of replacing', () => {
+  it('appendText on a cell id does not add a sibling text node', () => {
     const { session, doc } = makeTable([['H'], ['a']]);
     const id = cellId(session, 1, 0);
     doc.apply({ kind: 'appendText', node: id, text: 'X' });
-    // Regression target: one paragraph, never a sibling text node.
     expect(cellChildTypes(session, 1, 0)).toEqual(['paragraph']);
   });
 
-  it.fails('repeated writes to a cell id accumulate children', () => {
+  it('repeated writes to a cell id stay on one paragraph', () => {
     const { session, doc } = makeTable([['H'], ['a']]);
     const id = cellId(session, 1, 0);
     doc.apply({ kind: 'setText', node: id, text: 'dup' });
     doc.apply({ kind: 'prependText', node: id, text: 'dup' });
     doc.apply({ kind: 'prependText', node: id, text: 'dup' });
-    // Within one session these collapse onto one text node ($prependText
-    // extends a plain-text first child), so the shape is ['text'] rather than
-    // the prod document's three siblings — separate AI passes produced those.
     expect(cellChildTypes(session, 1, 0)).toEqual(['paragraph']);
   });
 });

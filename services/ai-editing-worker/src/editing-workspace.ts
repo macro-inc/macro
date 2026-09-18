@@ -9,7 +9,9 @@ import type {
   MarkdownLoroSchemaType,
 } from '@macro-inc/lexical-core/markdown-loro-schema';
 import { $updateAllNodeIds } from '@macro-inc/lexical-core/plugins/nodeIdPlugin';
-import type { SerializedEditorState } from 'lexical';
+import { $assertValidEditorTree } from '@macro-inc/lexical-core/utils/editor-tree';
+import { Telemetry } from '@macro-inc/observability';
+import { $getRoot, type SerializedEditorState } from 'lexical';
 import {
   createEditingSession,
   type LexicalSession,
@@ -29,6 +31,7 @@ import { createWorkerAwareness } from './sources';
 
 export type EditingWorkspaceOptions = {
   pool?: PeerPool;
+  documentId?: string;
 };
 
 export class EditingWorkspace {
@@ -37,6 +40,7 @@ export class EditingWorkspace {
   private chain: Promise<void> = Promise.resolve();
   private readonly outstanding = new Map<Peer, AwarenessSource>();
   private readonly pool: PeerPool;
+  private readonly documentId?: string;
 
   constructor(
     private readonly manager: LoroManager<typeof MARKDOWN_LORO_SCHEMA>,
@@ -45,6 +49,7 @@ export class EditingWorkspace {
     opts: EditingWorkspaceOptions = {}
   ) {
     this.pool = opts.pool ?? new PeerPool();
+    this.documentId = opts.documentId;
     // Seed the editing surface from the merged state.
     this.session = createEditingSession();
     loadSnapshot(
@@ -124,6 +129,18 @@ export class EditingWorkspace {
       this.session.editor.update(() => $updateAllNodeIds(this.session.ids), {
         discrete: true,
       });
+
+      try {
+        this.session.editor.getEditorState().read(() => {
+          $assertValidEditorTree($getRoot());
+        });
+      } catch (error) {
+        Telemetry.error(error, {
+          document_id: this.documentId ?? 'unknown',
+          reason: 'invalid_editor_tree_before_commit',
+        });
+        throw error;
+      }
 
       const snapshot = toSnapshot(this.session);
       await this.engine.syncStateToLoro(
