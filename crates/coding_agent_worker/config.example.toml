@@ -6,7 +6,7 @@
 
 [macro]
 # Base URL of the agent-harness service. Its ws(s) twin hosts the runtime
-# gateway the daemon dials per session.
+# gateway the daemon connects to on startup.
 api_url = "http://localhost:50009/agent-harness"
 # Base URL of the storage service (harness pairing + live event stream).
 storage_url = "http://localhost:50009/dss"

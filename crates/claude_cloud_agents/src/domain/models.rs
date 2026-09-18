@@ -38,7 +38,7 @@ impl Model {
     }
 }
 
-/// One choice reported by the cloud worker.
+/// One choice reported by the account catalog or cloud worker.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ModelOption {
     /// Provider model ID, normalized only for default.
@@ -55,7 +55,7 @@ pub enum Catalog {
     /// Bootstrap without claiming account-entitled models.
     #[default]
     Unknown,
-    /// Complete, ordered catalog from a successful initialization response.
+    /// Ordered choices from the account catalog or successful initialization.
     Reported(Vec<ModelOption>),
 }
 impl Catalog {
@@ -111,28 +111,42 @@ impl Catalog {
             }],
         }
     }
-    /// Reject choices absent from the latest provider catalog.
+    /// Add account choices, preserving this session catalog's labels
+    /// and order for duplicate IDs. Unknown catalogs do not manufacture defaults.
+    pub fn supplemented_by(self, other: Self) -> Self {
+        match (self, other) {
+            (Self::Unknown, catalog) | (catalog, Self::Unknown) => catalog,
+            (Self::Reported(mut options), Self::Reported(other)) => {
+                let mut seen: std::collections::BTreeSet<_> = options
+                    .iter()
+                    .map(|option| option.model.id().to_owned())
+                    .collect();
+                options.extend(
+                    other
+                        .into_iter()
+                        .filter(|option| seen.insert(option.model.id().to_owned())),
+                );
+                Self::Reported(options)
+            }
+        }
+    }
+
+    /// Reject choices absent from the provider-reported choices.
     pub fn contains(&self, model: &Model) -> bool {
         self.options().iter().any(|option| &option.model == model)
     }
 }
 
-/// Discover without creating sessions or inference. The source is account-scoped;
-/// catalogs are never cached across owners. This is a last-reported catalog,
-/// not a fresh entitlement guarantee.
+/// Discover from the account catalog without reading transcripts or starting a
+/// worker. The provider still validates the selected model when a turn runs.
 pub async fn discover<C: Cloud>(cloud: &C) -> Result<Catalog> {
-    for id in cloud.recent_sessions().await?.into_iter().take(5) {
-        let history = match cloud.history(&id).await {
-            Ok(history) => history,
-            Err(Error::Http(404 | 410)) => continue,
-            Err(error) => return Err(error),
-        };
-        let catalog = Catalog::from_history(&history);
-        if matches!(catalog, Catalog::Reported(_)) {
-            return Ok(catalog);
-        }
-    }
-    Ok(Catalog::Unknown)
+    let models = cloud.models().await?;
+    let default = ModelOption {
+        model: Model::default(),
+        name: "Claude · subscription default".into(),
+        description: Some("Let Claude choose the subscription's default model.".into()),
+    };
+    Ok(Catalog::Reported(vec![default]).supplemented_by(Catalog::Reported(models)))
 }
 
 #[cfg(test)]

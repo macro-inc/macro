@@ -4,8 +4,10 @@ import { useUserId } from '@core/context/user';
 import { createMemo, createSignal } from 'solid-js';
 import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
+import { defaultBranchFor } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import { createRecentRepositories } from '../primitives/recent-repositories';
+import { createReachableRepositories } from '../queries/reachable-repositories';
 import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
 
@@ -38,6 +40,7 @@ export function NewChatPage(props: {
   const options = () => props.roster;
   const [agentId, setAgentId] = createSignal<string>();
   const [modelOverride, setModelOverride] = createSignal<string>();
+  // The last repository handed to a coder is where the next one starts.
   const [repoUrl, setRepoUrl] = createSignal<string | undefined>(
     repositories.urls()[0]
   );
@@ -45,7 +48,7 @@ export function NewChatPage(props: {
   const draft = () => props.draft ?? localDraft();
   const setDraft = (text: string) =>
     props.onDraftChange ? props.onDraftChange(text) : setLocalDraft(text);
-  const [repoBranch, setRepoBranch] = createSignal('main');
+  const [branchOverride, setBranchOverride] = createSignal<string>();
   const selected = createMemo(() => {
     const wanted =
       agentId() ??
@@ -63,6 +66,17 @@ export function NewChatPage(props: {
   const blocked = () => {
     const agent = selected();
     return agent ? agent.unavailableReason : 'Choose an agent to start';
+  };
+  // Listed only while the drawer can show them: chat agents never ask.
+  const reachable = createReachableRepositories(coding);
+  // A chosen branch, or where the selected repository's own clones start.
+  const repoBranch = () =>
+    branchOverride() ?? defaultBranchFor(reachable.repositories(), repoUrl());
+  const selectRepository = (url: string | undefined) => {
+    // Another repository starts on its own default branch, not the last one's.
+    if (url !== repoUrl()) setBranchOverride(undefined);
+    setRepoUrl(url);
+    if (url) repositories.remember(url);
   };
 
   const connect = (agent: RosterAgent) => {
@@ -119,12 +133,14 @@ export function NewChatPage(props: {
             <RepositoryPicker
               repoUrl={repoUrl()}
               branch={repoBranch()}
+              repositories={reachable.repositories()}
+              repositoriesLoading={reachable.loading()}
+              repositoriesError={reachable.error()}
               recentRepositories={repositories.urls()}
-              onSelect={(url, branch) => {
-                setRepoUrl(url);
-                setRepoBranch(branch);
-                if (url) repositories.remember(url);
-              }}
+              onRetryRepositories={reachable.retry}
+              onConnectGitHub={() => openSettings('Connected')}
+              onSelectRepository={selectRepository}
+              onSelectBranch={setBranchOverride}
             />
           }
           drawerOpen={coding()}

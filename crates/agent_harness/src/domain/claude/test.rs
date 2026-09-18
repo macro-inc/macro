@@ -14,6 +14,7 @@ use std::sync::Mutex;
 #[derive(Default)]
 struct Provider {
     calls: Arc<Mutex<Vec<(String, String)>>>,
+    models: Arc<Mutex<Vec<String>>>,
     uncertain: bool,
     preparations: Arc<Mutex<Vec<(String, String)>>>,
     preparation_fails: bool,
@@ -22,6 +23,7 @@ struct Provider {
 struct Client {
     owner: String,
     calls: Arc<Mutex<Vec<(String, String)>>>,
+    models: Arc<Mutex<Vec<String>>>,
     uncertain: bool,
     preparations: Arc<Mutex<Vec<(String, String)>>>,
     preparation_fails: bool,
@@ -32,6 +34,7 @@ impl CloudProvider for Provider {
         Ok(Client {
             owner: owner.into(),
             calls: self.calls.clone(),
+            models: self.models.clone(),
             uncertain: self.uncertain,
             preparations: self.preparations.clone(),
             preparation_fails: self.preparation_fails,
@@ -55,7 +58,9 @@ impl CloudLifecycle for Client {
     async fn create(
         &self,
         instructions: &str,
+        model: &claude_cloud_agents::domain::models::Model,
     ) -> claude_cloud_agents::domain::model::Result<SessionId> {
+        self.models.lock().unwrap().push(model.id().to_owned());
         assert!(
             self.preparations
                 .lock()
@@ -77,7 +82,11 @@ impl CloudLifecycle for Client {
     }
 }
 impl Cloud for Client {
-    async fn recent_sessions(&self) -> claude_cloud_agents::domain::model::Result<Vec<SessionId>> {
+    async fn models(
+        &self,
+    ) -> claude_cloud_agents::domain::model::Result<
+        Vec<claude_cloud_agents::domain::models::ModelOption>,
+    > {
         Ok(vec![])
     }
     async fn history(
@@ -174,6 +183,7 @@ async fn distinct_agents_keep_their_owner_instructions_model_and_remote_session(
         "Fix tests",
     )
     .await;
+    repo.set_model(first, "claude-fable-5-1").await.unwrap();
     let provider = Arc::new(Provider::default());
     let sessions = ClaudeSessions::new(
         provider.clone(),
@@ -184,7 +194,11 @@ async fn distinct_agents_keep_their_owner_instructions_model_and_remote_session(
     let one = sessions.attach(first).await.unwrap();
     let two = sessions.attach(second).await.unwrap();
     assert_ne!(one.id(), two.id());
-    assert_eq!(one.model().await.id(), "claude-default");
+    assert_eq!(one.model().await.id(), "claude-fable-5-1");
+    assert_eq!(
+        *provider.models.lock().unwrap(),
+        vec!["claude-fable-5-1", "claude-default"]
+    );
     assert_eq!(sessions.attach(first).await.unwrap().id(), one.id());
     assert_eq!(provider.preparations.lock().unwrap().len(), 2);
     assert_eq!(
