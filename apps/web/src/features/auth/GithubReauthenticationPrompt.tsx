@@ -14,9 +14,7 @@ async function checkGithubReauthenticationStatus(): Promise<boolean> {
 
 /** Kick off the OAuth flow; on success the browser navigates away. */
 async function startGithubReauthentication(): Promise<void> {
-  const result = await authServiceClient.reauthenticateGithub(
-    window.location.href
-  );
+  const result = await authServiceClient.initGithubLink(window.location.href);
 
   if (result.isErr()) {
     toast.failure('Failed to start GitHub reconnect flow');

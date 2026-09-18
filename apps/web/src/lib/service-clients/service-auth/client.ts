@@ -745,6 +745,16 @@ export const authServiceClient = {
    * Initializes the github account link for the user.
    * Returns the url you need to redirect user to to start the link.
    */
+  /**
+   * Starts the GitHub OAuth flow for the already-authenticated user.
+   * Returns the authorization URL to redirect the browser to.
+   *
+   * Also serves as the reconnect: re-running the flow for the account the user
+   * is already linked to replaces the stored access token, so an expired grant
+   * is repaired without deleting the link first. Deleting first would leave the
+   * user unlinked whenever the OAuth round trip is abandoned, silently ending
+   * their GitHub pull request notifications.
+   */
   async initGithubLink(originalUrl?: string) {
     const url = originalUrl
       ? `${authHost}/link/github?original_url=${encodeURIComponent(originalUrl)}`
@@ -821,15 +831,6 @@ export const authServiceClient = {
         method: 'DELETE',
       })
     ).map((_result) => {});
-  },
-
-  async reauthenticateGithub(originalUrl?: string) {
-    const deleteResult = await authServiceClient.deleteGithubLink();
-    if (deleteResult.isErr()) {
-      return err(deleteResult.error);
-    }
-
-    return authServiceClient.initGithubLink(originalUrl);
   },
 
   async sendMobileWelcomeEmail(email: string) {

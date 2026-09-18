@@ -8,7 +8,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   checkGithubLinkStatus: vi.fn(),
-  reauthenticateGithub: vi.fn(),
+  deleteGithubLink: vi.fn(),
+  initGithubLink: vi.fn(),
   toastCustom: vi.fn(),
   toastDismiss: vi.fn(),
   toastFailure: vi.fn(),
@@ -25,7 +26,8 @@ vi.mock('@core/component/Toast/Toast', () => ({
 vi.mock('@service-auth/client', () => ({
   authServiceClient: {
     checkGithubLinkStatus: mocks.checkGithubLinkStatus,
-    reauthenticateGithub: mocks.reauthenticateGithub,
+    deleteGithubLink: mocks.deleteGithubLink,
+    initGithubLink: mocks.initGithubLink,
   },
 }));
 
@@ -81,7 +83,8 @@ beforeEach(() => {
   window.history.replaceState(null, '', '/tasks');
 
   mocks.checkGithubLinkStatus.mockReset();
-  mocks.reauthenticateGithub.mockReset();
+  mocks.deleteGithubLink.mockReset();
+  mocks.initGithubLink.mockReset();
   mocks.toastCustom.mockReset();
   mocks.toastDismiss.mockReset();
   mocks.toastFailure.mockReset();
@@ -106,7 +109,7 @@ describe('GithubReauthenticationPrompt', () => {
     );
     const originalUrl = window.location.href;
     const authorizationUrl = `${originalUrl}#github-reauth`;
-    mocks.reauthenticateGithub.mockResolvedValue(resultOk(authorizationUrl));
+    mocks.initGithubLink.mockResolvedValue(resultOk(authorizationUrl));
 
     const cleanup = renderPrompt();
     await flushPromises();
@@ -123,8 +126,12 @@ describe('GithubReauthenticationPrompt', () => {
     expect(options.duration).toBeUndefined();
     expect(options.onDismiss).toEqual(expect.any(Function));
     expect(mocks.toastDismiss).toHaveBeenCalledWith(101);
-    expect(mocks.reauthenticateGithub).toHaveBeenCalledWith(originalUrl);
+    expect(mocks.initGithubLink).toHaveBeenCalledWith(originalUrl);
     expect(window.location.href).toBe(authorizationUrl);
+    // Reconnecting re-authorizes in place. Deleting the link first would leave
+    // the user unlinked if they abandoned the OAuth round trip, silently
+    // ending their GitHub pull request notifications.
+    expect(mocks.deleteGithubLink).not.toHaveBeenCalled();
 
     cleanup();
   });

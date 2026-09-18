@@ -11,7 +11,6 @@ export {
   useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,
   useInitGithubLinkMutation,
-  useReauthenticateGithubMutation,
 } from './github-link';
 export { useInitGmailLink } from './gmail-link';
 export { authKeys } from './keys';

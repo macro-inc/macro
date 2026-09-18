@@ -6,7 +6,6 @@ import {
   useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,
   useInitGithubLinkMutation,
-  useReauthenticateGithubMutation,
 } from '@queries/auth';
 import { Match, Show, Switch } from 'solid-js';
 import {
@@ -21,7 +20,6 @@ export function GitHubCard() {
   const githubLink = useGithubLinkStatusQuery();
   const initGithubLink = useInitGithubLinkMutation();
   const deleteGithubLink = useDeleteGithubLinkMutation();
-  const reauthenticateGithub = useReauthenticateGithubMutation();
 
   const status = () => githubLink.data?.status;
   const username = () => githubLink.data?.username;
@@ -54,9 +52,11 @@ export function GitHubCard() {
     }
   };
 
+  // Reconnecting is the same OAuth flow: re-authorizing the linked account
+  // replaces its stored token, so the link is never torn down first.
   const handleGithubReconnect = async () => {
     try {
-      window.location.href = await reauthenticateGithub.mutateAsync(
+      window.location.href = await initGithubLink.mutateAsync(
         window.location.href
       );
     } catch {
@@ -117,7 +117,7 @@ export function GitHubCard() {
               <ConnectAction
                 label="Reconnect"
                 onClick={handleGithubReconnect}
-                disabled={reauthenticateGithub.isPending}
+                disabled={initGithubLink.isPending}
               />
             </Match>
           </Switch>

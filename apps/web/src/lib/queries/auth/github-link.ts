@@ -90,15 +90,6 @@ export function useInitGithubLinkMutation() {
   }));
 }
 
-export function useReauthenticateGithubMutation() {
-  return useMutation(() => ({
-    mutationFn: async (originalUrl?: string) =>
-      await throwOnErr(() =>
-        authServiceClient.reauthenticateGithub(originalUrl)
-      ),
-  }));
-}
-
 export function useDeleteGithubLinkMutation() {
   return useMutation(() => ({
     mutationFn: async () =>
