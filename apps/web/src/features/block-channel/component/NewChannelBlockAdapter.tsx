@@ -200,6 +200,9 @@ function NewTop(props: { channelId: string }) {
       blockName: 'channel',
       channelType: ch.channel_type,
       ownerId: ch.owner_id,
+      isParticipant: (participants() ?? []).some(
+        (participant) => participant.user_id === userId()
+      ),
     });
   };
 
