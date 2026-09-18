@@ -315,4 +315,23 @@ describe('source channel threads in a document', () => {
     ));
     expect(view.queryByText('thread of channel launch')).toBeNull();
   });
+
+  it('offers a retry when the source root request fails with nothing cached', () => {
+    const refetch = vi.fn();
+    mocks.byIds.mockReturnValue({
+      isPending: false,
+      isSuccess: false,
+      isError: true,
+      data: undefined,
+      refetch,
+    });
+    const view = render(() => (
+      <MessageThreadFromSource parent={channel} rootId="root" canWrite />
+    ));
+    expect(view.queryByText('thread of channel launch')).toBeNull();
+    fireEvent.click(
+      view.getByRole('button', { name: 'Could not load thread. Retry' })
+    );
+    expect(refetch).toHaveBeenCalled();
+  });
 });

@@ -238,7 +238,16 @@ export function MessageThreadFromSource(
       ? undefined
       : query.data?.find((item) => item.id === props.rootId);
   return (
-    <Show when={root()}>
+    <Show
+      when={root()}
+      fallback={
+        <Show when={query.isError}>
+          <button onClick={() => void query.refetch()}>
+            Could not load thread. Retry
+          </button>
+        </Show>
+      }
+    >
       {(data) => <MessageThread {...props} data={data()} />}
     </Show>
   );
