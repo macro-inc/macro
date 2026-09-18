@@ -10,6 +10,9 @@
 #[cfg(test)]
 mod test;
 
+/// Meeting invitation HTTP endpoints.
+pub mod meetings;
+
 use std::borrow::Cow;
 use std::sync::Arc;
 
@@ -114,6 +117,27 @@ where
 {
     Router::new()
         .route(
+            "/meetings",
+            get(meetings::list::<S, Svc, Auth>).post(meetings::create::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/{meeting_id}",
+            axum::routing::delete(meetings::cancel::<S, Svc, Auth>)
+                .patch(meetings::update::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/join/{token}",
+            post(meetings::join::<S, Svc, Auth>),
+        )
+        .route(
+            "/meetings/invite/{token}",
+            post(meetings::invite::<S, Svc, Auth>),
+        )
+        .route(
+            "/record/{call_id}/link",
+            post(meetings::share::<S, Svc, Auth>),
+        )
+        .route(
             "/{channel_id}",
             get(get_or_create_call_handler::<S, Svc, Auth>)
                 .delete(leave_or_end_call_handler::<S, Svc, Auth>),
@@ -181,6 +205,11 @@ where
     T: Send + Sync,
 {
     Router::new()
+        .route(
+            "/join/{token}",
+            get(meetings::lookup::<S>).post(meetings::guest_join::<S>),
+        )
+        .route("/join/{token}/leave", post(meetings::leave::<S>))
         .route("/webhook", post(webhook_handler::<S>))
         .route("/ring-status/{call_id}", get(ring_status_handler::<S>))
         .with_state(state)

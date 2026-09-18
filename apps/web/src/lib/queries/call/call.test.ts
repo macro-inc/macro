@@ -126,6 +126,30 @@ describe('call team sharing helpers', () => {
     callClient.editCallRecord.mockReset();
   });
 
+  it('never represents standalone calls as team shared, including stale record and cache values', () => {
+    const standalone = record({
+      channelId: null,
+      shareWithTeam: true,
+      teamShareAccessLevel: 'view',
+    });
+    expect(isCallSharedWithTeam(standalone)).toBe(false);
+    expect(
+      sharePermissionFromCallRecord(standalone).teamShareAccessLevel
+    ).toBeNull();
+
+    queryClient.setQueryData(
+      callKeys.record(standalone.callId).queryKey,
+      standalone
+    );
+    setCallRecordTeamShareCache(standalone.callId, true);
+    expect(
+      queryClient.getQueryData(callKeys.record(standalone.callId).queryKey)
+    ).toMatchObject({
+      shareWithTeam: false,
+      teamShareAccessLevel: null,
+    });
+  });
+
   it('buildCallTeamSharePayload maps the checkbox to view or an explicit clear', () => {
     // Calls only ever share at `view`; `null` (not an omitted field) revokes.
     expect(buildCallTeamSharePayload(true)).toEqual({

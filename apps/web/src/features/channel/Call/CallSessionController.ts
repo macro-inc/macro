@@ -9,13 +9,20 @@ import {
 
 type CallSessionControllerOptions = {
   nativeCall: NativeCallState | undefined;
-  jsConnect: (tokenResponse: CallTokenResponse) => Promise<void>;
+  jsConnect: (
+    tokenResponse: CallTokenResponse,
+    metadata?: CallSessionConnectMetadata
+  ) => Promise<void>;
   jsDisconnect: () => Promise<void>;
   clearOptimisticJoin: () => void;
 };
 
 export type CallSessionConnectMetadata = {
   channelTitle?: string | null;
+  microphoneEnabled?: boolean;
+  cameraEnabled?: boolean;
+  /** Public meeting pages use the browser media controls on every platform. */
+  useBrowserSession?: boolean;
 };
 
 export type CallSessionDisconnectOptions = {
@@ -34,32 +41,46 @@ export type CallSessionController = {
 export function createCallSessionController(
   options: CallSessionControllerOptions
 ): CallSessionController {
+  const browser = createJsLivekitSessionController(options);
   if (isNativeIosCallKitEnabled()) {
     if (!options.nativeCall) {
       throw new Error(
         'Native call state is required for iOS CallKit call sessions'
       );
     }
-    return createNativeCallKitSessionController({
+    const native = createNativeCallKitSessionController({
       nativeCall: options.nativeCall,
       jsDisconnect: options.jsDisconnect,
       clearOptimisticJoin: options.clearOptimisticJoin,
     });
+    let active = native;
+    return {
+      shouldRequestToken: native.shouldRequestToken,
+      connectWithToken: (token, metadata) => {
+        active =
+          token.channelId === null || metadata?.useBrowserSession
+            ? browser
+            : native;
+        return active.connectWithToken(token, metadata);
+      },
+      disconnect: (disconnectOptions) => active.disconnect(disconnectOptions),
+    };
   }
 
-  return createJsLivekitSessionController({
-    jsConnect: options.jsConnect,
-    jsDisconnect: options.jsDisconnect,
-  });
+  return browser;
 }
 
 function createJsLivekitSessionController(options: {
-  jsConnect: (tokenResponse: CallTokenResponse) => Promise<void>;
+  jsConnect: (
+    tokenResponse: CallTokenResponse,
+    metadata?: CallSessionConnectMetadata
+  ) => Promise<void>;
   jsDisconnect: () => Promise<void>;
 }): CallSessionController {
   return {
     shouldRequestToken: () => true,
-    connectWithToken: (tokenResponse) => options.jsConnect(tokenResponse),
+    connectWithToken: (tokenResponse, metadata) =>
+      options.jsConnect(tokenResponse, metadata),
     disconnect: () => options.jsDisconnect(),
   };
 }
@@ -92,6 +113,9 @@ function createNativeCallKitSessionController(options: {
       return !shouldSkip;
     },
     connectWithToken: async (tokenResponse, metadata) => {
+      if (!tokenResponse.channelId) {
+        throw new Error('Native channel calls require a channel');
+      }
       const channelTitle = metadata?.channelTitle ?? null;
       await startNativeCallKitOutgoingCall(
         {

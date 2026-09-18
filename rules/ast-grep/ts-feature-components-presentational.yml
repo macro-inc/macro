@@ -14,6 +14,8 @@ note: |-
   the presentation layer and `component/` is the composition layer.
 files:
   - apps/web/src/features/block-agent/ui/**
+  - apps/web/src/features/calendar-home/components/**
+  - apps/web/src/features/meetings/components/**
   - apps/web/src/features/block-spreadsheet/components/**
   - apps/web/src/features/property/tags/components/**
   - apps/web/src/features/claude-connection/components/**

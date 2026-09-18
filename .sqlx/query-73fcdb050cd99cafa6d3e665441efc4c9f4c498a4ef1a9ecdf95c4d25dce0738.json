@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE email_link_google_scopes SET calendar_disabled_at = now() WHERE link_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "73fcdb050cd99cafa6d3e665441efc4c9f4c498a4ef1a9ecdf95c4d25dce0738"
+}

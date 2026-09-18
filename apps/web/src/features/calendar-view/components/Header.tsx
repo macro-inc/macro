@@ -22,7 +22,8 @@ import { isMobile } from '@core/mobile/isMobile';
 import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CaretLeftIcon from '@phosphor/caret-left.svg';
 import CaretRightIcon from '@phosphor/caret-right.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import ListIcon from '@phosphor/list-bullets.svg';
+import VideoIcon from '@phosphor/video-camera.svg';
 import { Button } from '@ui';
 import { usePager } from '@ui/components/Pager';
 import { createMemo, createSignal, onCleanup, Show } from 'solid-js';
@@ -61,19 +62,54 @@ function createLocalToday() {
   return today;
 }
 
-export function Header() {
+export function Header(props: {
+  calls: boolean;
+  list: boolean;
+  onListChange: (list: boolean) => void;
+}) {
+  const today = createLocalToday();
+  return (
+    <Show
+      when={!props.calls}
+      fallback={
+        <SplitHeaderLeft>
+          <HeaderIsland>
+            <VideoIcon class="size-4 text-ink-muted" />
+            <span class="text-base font-semibold text-ink">Calls</span>
+            <span class="ml-2 text-xs text-ink-extra-muted">
+              {today().toLocaleDateString([], {
+                weekday: 'short',
+                month: 'short',
+                day: 'numeric',
+              })}
+            </span>
+          </HeaderIsland>
+        </SplitHeaderLeft>
+      }
+    >
+      <EventsHeader list={props.list} onListChange={props.onListChange} />
+    </Show>
+  );
+}
+
+function EventsHeader(props: {
+  list: boolean;
+  onListChange: (list: boolean) => void;
+}) {
   const panel = useSplitPanelOrThrow();
   const sidePanel = useSidePanel();
   const calendarPager = useCalendarPager();
   const pager = usePager<CalendarPageId>();
   const calendarView = useCalendarView();
-  const openEventComposer = useOpenEventComposer();
   const initialDate = new Date();
   const today = createLocalToday();
 
   useCalendarHotkeys({
     scopeId: panel.splitHotkeyScope,
-    changeView: calendarPager.changeView,
+    changeView: (view) => {
+      props.onListChange(false);
+      calendarPager.changeView(view);
+    },
     previousPeriod: pager.previous,
     nextPeriod: pager.next,
     navigateToToday: calendarPager.navigateToToday,
@@ -124,19 +160,17 @@ export function Header() {
             <Show
               when={isMobile()}
               fallback={
-                <Show when={!isTodayVisible()}>
-                  <Button
-                    variant="accent"
-                    size="sm"
-                    class="rounded-lg px-3"
-                    depth={2}
-                    label="Go to today"
-                    hotkey={TOKENS.calendar.period.today}
-                    onClick={calendarPager.navigateToToday}
-                  >
-                    Today
-                  </Button>
-                </Show>
+                <Button
+                  variant={isTodayVisible() ? 'ghost' : 'accent'}
+                  size="sm"
+                  class="rounded-lg px-3"
+                  depth={2}
+                  label="Go to today"
+                  hotkey={TOKENS.calendar.period.today}
+                  onClick={calendarPager.navigateToToday}
+                >
+                  Today
+                </Button>
               }
             >
               <Button
@@ -157,15 +191,6 @@ export function Header() {
               </Button>
             </Show>
             <Show when={!isMobile()}>
-              <Button
-                variant="ghost"
-                size="sm"
-                class="rounded-lg px-2"
-                onClick={() => openEventComposer()}
-              >
-                <PlusIcon class="size-3.5" />
-                New event
-              </Button>
               <PeriodSelector isNarrow={sidePanel?.isNarrow()} />
               <div class="flex shrink-0 items-center gap-1">
                 <Button
@@ -190,6 +215,16 @@ export function Header() {
                 </Button>
               </div>
             </Show>
+            <Button
+              variant={props.list ? 'accent' : 'ghost'}
+              size="icon-sm"
+              class="rounded-lg"
+              label={props.list ? 'Show calendar grid' : 'Show event list'}
+              aria-pressed={props.list}
+              onClick={() => props.onListChange(!props.list)}
+            >
+              <ListIcon class="size-4" />
+            </Button>
             <CalendarSearch />
             <CalendarSettingsDropdown isNarrow={sidePanel?.isNarrow()} />
           </div>

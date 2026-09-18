@@ -49,13 +49,24 @@ export const InCallStripAvatarImage: Component<{
         when={props.image.stripLocalPending}
         fallback={
           <div class={stackedAvatarInnerClass(IN_CALL_STRIP_IMAGE_SIZE)}>
-            <UserIcon
-              id={props.image.userId}
-              isDeleted={false}
-              size="fill"
-              showTooltip={false}
-              suppressClick
-            />
+            <Show
+              when={tryMacroId(props.image.userId)}
+              fallback={
+                <div class="flex size-full items-center justify-center rounded-full bg-ink-extra-muted text-sm text-surface">
+                  {nameLabel().charAt(0).toUpperCase()}
+                </div>
+              }
+            >
+              {(id) => (
+                <UserIcon
+                  id={id()}
+                  isDeleted={false}
+                  size="fill"
+                  showTooltip={false}
+                  suppressClick
+                />
+              )}
+            </Show>
           </div>
         }
       >

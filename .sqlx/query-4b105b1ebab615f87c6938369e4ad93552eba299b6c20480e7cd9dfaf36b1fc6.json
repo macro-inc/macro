@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO calendar_events (\n            id, owner_id, source_link_id, ical_uid, title,\n            starts_at, ends_at, canonical_source_kind\n        )\n        VALUES (\n            $1, $2, $3, 'calendar-frecency@example.com', 'Frecency event',\n            now(), now() + interval '1 hour', 'google'\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4b105b1ebab615f87c6938369e4ad93552eba299b6c20480e7cd9dfaf36b1fc6"
+}

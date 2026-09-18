@@ -622,6 +622,19 @@ impl ConnectionService for NoOpConnectionService {
 pub struct NoOpCallRtcClient;
 
 impl CallRtcClient for NoOpCallRtcClient {
+    async fn generate_guest_token(
+        &self,
+        _room_name: &str,
+        _identity: &str,
+        _display_name: &str,
+    ) -> anyhow::Result<String> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
+    async fn remove_guest(&self, _room_name: &str, _identity: &str) -> anyhow::Result<()> {
+        anyhow::bail!("call RTC client not configured")
+    }
+
     async fn create_room(&self, _room_name: &str) -> anyhow::Result<()> {
         Ok(())
     }

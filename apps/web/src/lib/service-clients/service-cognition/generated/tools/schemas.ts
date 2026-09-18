@@ -1128,7 +1128,7 @@ export const SearchToolResponse = z.object({
                 name: z.union([z.string(), z.null()]).optional(),
                 owner_id: z.string(),
                 call_id: z.string().uuid(),
-                channel_id: z.string().uuid(),
+                channel_id: z.union([z.string().uuid(), z.null()]).optional(),
                 participant_ids: z.array(z.string()),
                 call_search_results: z.array(
                   z.object({

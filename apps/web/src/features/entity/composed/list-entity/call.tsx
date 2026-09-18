@@ -1,4 +1,5 @@
 import { formatCallDuration } from '@block-call/utils';
+import { isCallGuest } from '@channel/Call/call-identity';
 import { UserIcon } from '@core/component/UserIcon';
 import { matches } from '@core/util/match';
 import UserCircleIcon from '@phosphor/user-circle.svg';
@@ -33,7 +34,10 @@ function ParticipantItem(props: { userId: string }) {
   );
 }
 
-function ParticipantsTooltip(props: { participantIds: string[] }) {
+function ParticipantsTooltip(props: {
+  participantIds: string[];
+  participantNames?: Record<string, string>;
+}) {
   return (
     <div class="min-w-48 max-w-72">
       <div class="flex items-center gap-2 text-ink-muted border-b border-edge-muted/50 pb-1.5 mb-1.5">
@@ -42,25 +46,59 @@ function ParticipantsTooltip(props: { participantIds: string[] }) {
       </div>
       <div class="flex flex-col gap-1.5 max-h-64 overflow-y-auto">
         <For each={props.participantIds}>
-          {(userId) => <ParticipantItem userId={userId} />}
+          {(userId) => (
+            <Show
+              when={!isCallGuest(userId)}
+              fallback={
+                <div class="inline-flex items-center gap-1.5 px-2 py-1 text-xs text-ink-muted">
+                  <UserCircleIcon class="size-4" />
+                  <span>{props.participantNames?.[userId] || 'Guest'}</span>
+                  <span class="text-ink-extra-muted">Guest</span>
+                </div>
+              }
+            >
+              <ParticipantItem userId={userId} />
+            </Show>
+          )}
         </For>
       </div>
     </div>
   );
 }
 
-export function CallParticipants(props: { participantIds: string[] }) {
+export function CallParticipants(props: {
+  participantIds: string[];
+  participantNames?: Record<string, string>;
+}) {
   const entities = (): EntityReference[] =>
-    props.participantIds.map((id) => ({
-      entity_id: id,
-      entity_type: EntityType.USER,
-    }));
+    props.participantIds
+      .filter((id) => !isCallGuest(id))
+      .map((id) => ({
+        entity_id: id,
+        entity_type: EntityType.USER,
+      }));
   return (
     <Show when={props.participantIds.length > 0}>
       <HoverCard
-        content={<ParticipantsTooltip participantIds={props.participantIds} />}
+        content={
+          <ParticipantsTooltip
+            participantIds={props.participantIds}
+            participantNames={props.participantNames}
+          />
+        }
       >
-        <UserGroup entities={entities()} maxUsers={2} />
+        <div class="flex items-center gap-1.5">
+          <Show when={entities().length > 0}>
+            <UserGroup entities={entities()} maxUsers={2} />
+          </Show>
+          <Show when={props.participantIds.filter(isCallGuest).length}>
+            {(count) => (
+              <span class="text-xs text-ink-muted">
+                {count()} {count() === 1 ? 'guest' : 'guests'}
+              </span>
+            )}
+          </Show>
+        </div>
       </HoverCard>
     </Show>
   );
@@ -88,7 +126,16 @@ export function CallNarrowBody(props: {
             <Show when={matches(h(), isCallRecordHit)}>
               {(callHit) => (
                 <Show when={callHit().senderId}>
-                  {(id) => <UserIcon id={id()} size="sm" />}
+                  {(id) => (
+                    <Show
+                      when={!isCallGuest(id())}
+                      fallback={
+                        <UserCircleIcon class="size-4 text-ink-muted" />
+                      }
+                    >
+                      <UserIcon id={id()} size="sm" />
+                    </Show>
+                  )}
                 </Show>
               )}
             </Show>
@@ -159,7 +206,16 @@ export function CallWideContent(props: {
               <Show when={matches(h(), isCallRecordHit)}>
                 {(callHit) => (
                   <Show when={callHit().senderId}>
-                    {(id) => <UserIcon id={id()} size="sm" />}
+                    {(id) => (
+                      <Show
+                        when={!isCallGuest(id())}
+                        fallback={
+                          <UserCircleIcon class="size-4 text-ink-muted" />
+                        }
+                      >
+                        <UserIcon id={id()} size="sm" />
+                      </Show>
+                    )}
                   </Show>
                 )}
               </Show>

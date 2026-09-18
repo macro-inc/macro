@@ -13,6 +13,10 @@ note: |-
 files:
   - apps/web/src/features/block-agent/queries/**
   - apps/web/src/features/block-agent/primitives/**
+  - apps/web/src/features/calendar-home/queries/**
+  - apps/web/src/features/meetings/queries/**
+  - apps/web/src/features/calendar-home/primitives/**
+  - apps/web/src/features/meetings/primitives/**
   - apps/web/src/features/block-spreadsheet/queries/**
   - apps/web/src/features/block-spreadsheet/primitives/**
   - apps/web/src/features/property/tags/queries/**

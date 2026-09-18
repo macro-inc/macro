@@ -11,6 +11,7 @@ import { InviteWelcome } from '@app/features/gtm-invite/InviteWelcome';
 import { usePendingInviteRedemption } from '@app/features/gtm-invite/usePendingInviteRedemption';
 import { HomePreferencesProvider } from '@app/features/home/home-prefs';
 import { GlobalShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
+import { MeetingRoute } from '@app/features/meetings/meeting-route';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { InteractiveOnboardingModal } from '@app/features/onboarding/InteractiveOnboardingModal';
 import MobileWebSignup from '@app/features/onboarding/MobileWebSignup';
@@ -31,6 +32,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { IncomingCallEvents } from '@block-call/sidebar/incoming-calls';
 import { CallProvider } from '@channel/Call/CallContext';
 import { CallStartedNotifier } from '@channel/Call/CallStartedNotifier';
+import { isMeetingPath } from '@channel/Call/call-link';
 import { CallKitSync } from '@channel/Call/use-callkit';
 import { GlobalAppStateProvider } from '@components/app/GlobalAppState';
 import { Layout } from '@components/app/Layout';
@@ -96,6 +98,7 @@ import {
   type RoutePreloadFunc,
   Router,
   type RouterProps,
+  type RouteSectionProps,
   useLocation,
 } from '@solidjs/router';
 import {
@@ -227,6 +230,7 @@ function OnboardingRoute() {
 }
 
 const ROUTES: RouteDefinition[] = [
+  { path: '/meet/:shareToken', component: MeetingRoute },
   {
     path: '/task-slug/:taskSlug',
     component: TaskRoute,
@@ -518,6 +522,17 @@ function InitialInteractiveOnboardingModal() {
   );
 }
 
+/** Meeting links have a focused shell and never enter app onboarding. */
+function AppRouteLayout(props: RouteSectionProps) {
+  const location = useLocation();
+  return (
+    <Show when={!isMeetingPath(location.pathname)} fallback={props.children}>
+      <Layout {...props} />
+      <InitialInteractiveOnboardingModal />
+    </Show>
+  );
+}
+
 export function Root() {
   setHotkeyRoot(useHotKeyRoot());
 
@@ -566,43 +581,3 @@ export function Root() {
                                 <ChatAttachmentsInit />
                                 <ReactiveFavicon />
                                 <Title>{tabTitle()}</Title>
-                                {/* Loading boundaries belong inside Layout so
-                                    a pending resource cannot detach the app shell. */}
-                                <IsomorphicRouter
-                                  transformUrl={transformShortIdInUrlPathname}
-                                  root={Layout}
-                                  rootPreload={rootPreload}
-                                  base={ROUTER_BASE}
-                                >
-                                  {{
-                                    path: '/',
-                                    component: TauriRouteListener,
-                                    children: ROUTES,
-                                  }}
-                                </IsomorphicRouter>
-                                <InitialInteractiveOnboardingModal />
-                                <ToastRegion />
-                              </SearchProvider>
-                            </QuickAccessProvider>
-                          </CallProvider>
-                        </ChannelsContextProvider>
-                      </MutationUndoProvider>
-                    </ConfiguredGlobalAppStateProvider>
-                  </TeamContextProvider>
-                </EmailLinksContextProvider>
-              </UserContextProvider>
-            </EntityProvider>
-          </PosthogProvider>
-        </AnalyticsContextProvider>
-      </MetaProvider>
-    </MaybeTauriProvider>
-  );
-}
-
-// A router component that correctly handles both the web and tauri routing
-function IsomorphicRouter(props: RouterProps): JSX.Element {
-  if (isTauri()) {
-    return <HashRouter {...props} />;
-  }
-  return <Router {...props} />;
-}

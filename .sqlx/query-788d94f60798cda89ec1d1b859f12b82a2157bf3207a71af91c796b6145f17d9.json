@@ -1,0 +1,12 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO claude_oauth_grants (user_id, grant_ciphertext, kms_key_id, encryption_version) SELECT 'bob', grant_ciphertext, kms_key_id, encryption_version FROM claude_oauth_grants WHERE user_id = 'alice'",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": []
+  },
+  "hash": "788d94f60798cda89ec1d1b859f12b82a2157bf3207a71af91c796b6145f17d9"
+}

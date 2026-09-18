@@ -2,9 +2,15 @@
  * @vitest-environment jsdom
  */
 
-import { fireEvent, render, screen, waitFor } from '@solidjs/testing-library';
-import type { JSX } from 'solid-js';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
+import { type JSX, Show } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { NewCallButton } from './NewCallButton';
 
 const mocks = vi.hoisted(() => ({
@@ -13,6 +19,14 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('@channel/Call/join-channel-call', () => ({
   joinChannelCall: mocks.joinChannelCall,
+}));
+
+vi.mock('@channel/Call/NewMeetingButton', () => ({
+  NewMeetingButton: (props: { onChannelCall: () => void }) => (
+    <button type="button" onClick={props.onChannelCall}>
+      New channel call
+    </button>
+  ),
 }));
 
 vi.mock('@core/component/RecipientSelector', () => ({
@@ -60,7 +74,9 @@ vi.mock('@ui', () => {
       {props.children}
     </button>
   );
-  const Dialog = (props: ChildrenProps) => <>{props.children}</>;
+  const Dialog = (props: ChildrenProps & { open: boolean }) => (
+    <Show when={props.open}>{props.children}</Show>
+  );
   Dialog.CloseButton = Button;
   Dialog.Title = (props: ChildrenProps) => <span>{props.children}</span>;
 
@@ -75,11 +91,12 @@ beforeEach(() => {
   mocks.joinChannelCall.mockReset();
   mocks.joinChannelCall.mockResolvedValue();
 });
+afterEach(cleanup);
 
 describe('NewCallButton', () => {
   it('starts the selected channel through the mounted-channel call flow', async () => {
     render(() => <NewCallButton />);
-
+    fireEvent.click(screen.getByRole('button', { name: 'New channel call' }));
     fireEvent.click(screen.getByRole('button', { name: 'Choose channel' }));
     fireEvent.click(screen.getByRole('button', { name: 'Start Call' }));
 
@@ -87,5 +104,21 @@ describe('NewCallButton', () => {
       expect(mocks.joinChannelCall).toHaveBeenCalledOnce();
       expect(mocks.joinChannelCall).toHaveBeenCalledWith('channel-123');
     });
+  });
+
+  it('starts a selected channel from the inline calendar picker', async () => {
+    render(() => <NewCallButton inline />);
+    expect(
+      (screen.getByRole('button', { name: 'Call' }) as HTMLButtonElement)
+        .disabled
+    ).toBe(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Choose channel' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Call' }));
+    await waitFor(() =>
+      expect(mocks.joinChannelCall).toHaveBeenCalledWith('channel-123')
+    );
+    expect(
+      screen.queryByRole('button', { name: 'New channel call' })
+    ).toBeNull();
   });
 });

@@ -79,6 +79,20 @@ describe('SourceControls', () => {
     expect(queryByText('Holidays in United States')).toBeNull();
   });
 
+  it('expands a single connected account by default', () => {
+    const { getByRole, getByText } = render(() => (
+      <SourceControls
+        sources={SOURCES.slice(0, 2)}
+        isVisible={() => true}
+        onVisibilityChange={vi.fn()}
+      />
+    ));
+    expect(
+      getByRole('button', { name: 'Collapse gab@macro.com' })
+    ).toBeTruthy();
+    expect(getByText('Holidays in United States')).toBeTruthy();
+  });
+
   it('reveals an account calendars once expanded', () => {
     const { expandAccount, getByText } = renderControls();
     expandAccount('gab@macro.com');

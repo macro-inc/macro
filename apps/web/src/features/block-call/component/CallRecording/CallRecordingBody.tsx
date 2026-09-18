@@ -3,7 +3,7 @@ import { SidePanel } from '@components/app/side-panel';
 import { useBlockId } from '@core/block';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import type { CallRecord } from '@service-call/client';
 import { format } from 'date-fns';
 import type { Accessor } from 'solid-js';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
@@ -29,6 +29,16 @@ export function CallRecordingBody(props: {
   transcriptTarget?: Accessor<CallTranscriptTarget | undefined>;
 }) {
   const record = props.data;
+  const speakerNames = createMemo(
+    () =>
+      new Map(
+        record().participants.flatMap((participant) =>
+          participant.displayName
+            ? [[participant.userId, participant.displayName] as const]
+            : []
+        )
+      )
+  );
   const blockId = useBlockId();
   const hasTranscripts = createMemo(() => record().transcript.length > 0);
   const [playbackSeconds, setPlaybackSeconds] = createSignal(0);
@@ -214,6 +224,7 @@ export function CallRecordingBody(props: {
                     <CallTranscript
                       transcript={record().transcript}
                       channelId={record().channelId}
+                      speakerNames={speakerNames()}
                       timelineStartMs={timelineStartMs()}
                       activeSequenceNum={activeSequenceNum()}
                       videoSeekGeneration={videoSeekGeneration()}

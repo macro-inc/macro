@@ -7,6 +7,7 @@
 
 import type { CallStatus } from './callStatus';
 import type { SoupCallRecordParticipant } from './soupCallRecordParticipant';
+import type { SoupCallRecordSoupPropertiesFieldAllOfTwoChannelId } from './soupCallRecordSoupPropertiesFieldAllOfTwoChannelId';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoChannelName } from './soupCallRecordSoupPropertiesFieldAllOfTwoChannelName';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoCustomName } from './soupCallRecordSoupPropertiesFieldAllOfTwoCustomName';
 import type { SoupCallRecordSoupPropertiesFieldAllOfTwoDurationMs } from './soupCallRecordSoupPropertiesFieldAllOfTwoDurationMs';
@@ -20,7 +21,7 @@ and derived from `status == ATTENDED`. */
   /** The call identifier. */
   callId: string;
   /** The channel this call belongs to. */
-  channelId: string;
+  channelId?: SoupCallRecordSoupPropertiesFieldAllOfTwoChannelId;
   /** Resolved display name for the channel. */
   channelName?: SoupCallRecordSoupPropertiesFieldAllOfTwoChannelName;
   /** User who created the call. */

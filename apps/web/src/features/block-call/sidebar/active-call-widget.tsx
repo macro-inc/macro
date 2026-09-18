@@ -2,6 +2,7 @@ import { joinChannelCall } from '@channel/Call/join-channel-call';
 import { openChannelCallTab } from '@channel/Call/open-channel-call-tab';
 import type { SidebarState } from '@components/app/app-sidebar/sidebar';
 import { ContextMenuContent, MenuItem } from '@core/component/ContextMenu';
+import { UserIcon } from '@core/component/UserIcon';
 import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -31,11 +32,29 @@ function ChannelCallBadge(props: {
   letters: string;
   slim: boolean;
 }) {
+  const userId = useUserId();
+  const peer = () =>
+    props.channel?.channel_type === ChannelTypeEnum.DirectMessage
+      ? props.channel.participants.find((person) => person.user_id !== userId())
+          ?.user_id
+      : undefined;
   return (
     <div class="relative flex items-center justify-center shrink-0 size-[22px]">
-      <Avatar size="fill" class="bg-ink-extra-muted/15 text-ink-muted">
-        <Avatar.Fallback class="font-semibold">{props.letters}</Avatar.Fallback>
-      </Avatar>
+      <Show
+        when={peer()}
+        keyed
+        fallback={
+          <Avatar size="fill" class="bg-ink-extra-muted/15 text-ink-muted">
+            <Avatar.Fallback class="font-semibold">
+              {props.letters}
+            </Avatar.Fallback>
+          </Avatar>
+        }
+      >
+        {(id) => (
+          <UserIcon id={id} size="fill" suppressClick showTooltip={false} />
+        )}
+      </Show>
       <Show when={props.slim}>
         <span class="absolute -top-0.5 -right-0.5 size-1.5 bg-success rounded-full ring-surface ring-2" />
       </Show>

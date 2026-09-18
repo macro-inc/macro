@@ -1086,3 +1086,39 @@ async fn owner_grant_maps_user_bot_and_team_to_their_access_source(pool: Pool<Po
         assert!(rows[0].granted_from_project_id.is_none());
     }
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn ensuring_view_access_is_idempotent_and_preserves_stronger_grants(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let entity = Uuid::now_v7();
+    for (email, existing) in [
+        ("owner@test.com", Some(AccessLevel::Owner)),
+        ("editor@test.com", Some(AccessLevel::Edit)),
+        ("viewer@test.com", None),
+    ] {
+        let user = MacroUserIdStr::try_from_email(email)?;
+        if let Some(level) = existing {
+            let mut tx = pool.begin().await?;
+            insert_entity_access_row(
+                &mut tx,
+                &entity,
+                EntityType::Call,
+                user.as_ref(),
+                EntityAccessSourceType::User,
+                level,
+            )
+            .await?;
+            tx.commit().await?;
+        }
+        for _ in 0..2 {
+            ensure_user_view_access(&pool, &entity, EntityType::Call, user.clone()).await?;
+        }
+        let level = sqlx::query_scalar!(
+            r#"SELECT access_level AS "access_level!: AccessLevel" FROM entity_access WHERE entity_id = $1 AND entity_type = 'call' AND source_id = $2 AND source_type = 'user' AND granted_from_project_id IS NULL"#,
+            entity, user.as_ref(),
+        ).fetch_one(&pool).await?;
+        assert_eq!(level, existing.unwrap_or(AccessLevel::View));
+    }
+    Ok(())
+}

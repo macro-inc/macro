@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT source_entity_type, source_entity_id, entity_type, entity_id, user_id\n        FROM comms_entity_mentions\n        ORDER BY entity_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_entity_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_entity_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "entity_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "entity_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "user_id",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "3bf359196bb2a5a3c327a837dbaf9398d2fc13726f7aa9da3bd3b858ab6bb1c7"
+}

@@ -20,6 +20,10 @@ use crate::domain::models::{
     EditCallRecordRequest, EditCallTranscriptRequest,
 };
 
+use super::meetings::{
+    CreateMeetingRequest, GuestJoinRequest, Meeting, MeetingToken, UpdateMeetingRequest,
+};
+
 use super::models::{
     ActiveCallSummary, ActiveCallsResponse, AddParticipantError, ArchivedCall, Call,
     CallActiveResponse, CallError, CallParticipant, CallRecord, CallRecordPreview,
@@ -35,6 +39,61 @@ pub trait CallRepository: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + Debug;
 
+    /// Persist a standalone invitation or reuse an invitation pinned to a channel call.
+    fn create_meeting(
+        &self,
+        meeting: Meeting,
+    ) -> impl Future<Output = Result<Meeting, CallError>> + Send;
+    /// Find an invitation for a currently active call, including cancelled invitations for leaving.
+    fn get_meeting_for_call(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Meeting>, CallError>> + Send;
+    /// Resolve a live invitation capability.
+    fn get_meeting(
+        &self,
+        token: &MeetingToken,
+    ) -> impl Future<Output = Result<Option<Meeting>, CallError>> + Send;
+    /// List an owner's most recent uncancelled invitations.
+    fn list_meetings(
+        &self,
+        user_id: &str,
+    ) -> impl Future<Output = Result<Vec<Meeting>, CallError>> + Send;
+    /// Update metadata when the supplied actor owns the uncancelled invitation.
+    fn update_meeting(
+        &self,
+        meeting_id: &Uuid,
+        user_id: &str,
+        request: UpdateMeetingRequest,
+    ) -> impl Future<Output = Result<Option<Meeting>, CallError>> + Send;
+    /// Cancel an invitation when the supplied actor owns it.
+    fn cancel_meeting(
+        &self,
+        meeting_id: &Uuid,
+        user_id: &str,
+    ) -> impl Future<Output = Result<bool, CallError>> + Send;
+    /// Lock the invitation and allocate or reuse its active call, returning whether it was created.
+    /// New standalone sessions must have no team grant or pending team-share intent.
+    fn get_or_create_meeting_call(
+        &self,
+        meeting_id: &Uuid,
+        candidate_call_id: &Uuid,
+    ) -> impl Future<Output = Result<(Call, bool), CallError>> + Send;
+    /// Persist a validated guest's participation and name.
+    fn add_guest(
+        &self,
+        call_id: &Uuid,
+        identity: &str,
+        name: &str,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+    /// Reconcile a known guest join or leave without trusting webhook names.
+    fn reconcile_guest(
+        &self,
+        call_id: &Uuid,
+        identity: &str,
+        joined: bool,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
     /// Create a new call record, or return `None` if one already exists for
     /// this channel (unique-constraint conflict).
     ///
@@ -47,6 +106,12 @@ pub trait CallRepository: Send + Sync + 'static {
         room_name: &str,
         created_by: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Option<Call>, CallError>> + Send;
+
+    /// Read the persisted RTC room for a particular active call session.
+    fn get_call_by_id(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<Call>, Self::Err>> + Send;
 
     /// Get an active call by channel ID.
     fn get_call_by_channel_id(
@@ -85,13 +150,20 @@ pub trait CallRepository: Send + Sync + 'static {
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<CallParticipant, AddParticipantError>> + Send;
 
+    /// Commit authenticated link participation and grant view access to this call only.
+    fn add_meeting_participant<'a>(
+        &self,
+        call_id: &Uuid,
+        user_id: MacroUserIdStr<'a>,
+    ) -> impl Future<Output = Result<CallParticipant, AddParticipantError>> + Send;
+
     /// Find the call the user is currently an active participant of, if any.
     /// Scans globally across all channels and returns `(call_id, channel_id)`
     /// for the first active participation row (`left_at IS NULL`).
     fn find_active_call_for_user<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
-    ) -> impl Future<Output = Result<Option<(Uuid, Uuid)>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<(Uuid, Option<Uuid>)>, Self::Err>> + Send;
 
     /// Remove a participant from a call.
     fn remove_participant<'a>(
@@ -154,17 +226,24 @@ pub trait CallRepository: Send + Sync + 'static {
     fn toggle_share_with_team(
         &self,
         call_id: &Uuid,
-    ) -> impl Future<Output = Result<(bool, Uuid), CallError>> + Send;
+    ) -> impl Future<Output = Result<(bool, Option<Uuid>), CallError>> + Send;
 
     /// Archive an active call to the permanent `call_records` and
     /// `call_record_participants` tables, then delete the ephemeral rows.
-    /// The live `share_with_team` intent is translated into canonical team
-    /// sharing (View for the creator's current team) in the same transaction.
+    /// For channel calls, the live `share_with_team` intent is translated into
+    /// canonical team sharing (View for the creator's current team) in the same
+    /// transaction. Calls without a channel must archive with team sharing off.
     /// Returns facts committed by the archive transaction.
     fn archive_call(
         &self,
         call_id: &Uuid,
     ) -> impl Future<Output = Result<ArchivedCall, CallError>> + Send;
+
+    /// Archive only if there are still no participants while holding the call lock.
+    fn archive_call_if_empty(
+        &self,
+        call_id: &Uuid,
+    ) -> impl Future<Output = Result<Option<ArchivedCall>, CallError>> + Send;
 
     /// Set the recording key on an archived call record.
     fn set_recording_key(
@@ -179,7 +258,7 @@ pub trait CallRepository: Send + Sync + 'static {
     fn get_call_record_by_egress_id(
         &self,
         egress_id: &str,
-    ) -> impl Future<Output = Result<Option<(Uuid, Uuid)>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<(Uuid, Option<Uuid>)>, Self::Err>> + Send;
 
     /// Set the recording key on an active call (by egress ID).
     ///
@@ -265,6 +344,8 @@ pub trait CallRepository: Send + Sync + 'static {
     /// both active (`calls`) and archived (`call_records`) tables. Each record
     /// includes viewer-specific status derived from call participation and
     /// current channel membership. Transcript data is intentionally omitted.
+    /// Calls without a channel are discoverable only through individual user
+    /// grants (creator, attendees, or explicitly shared people), never group grants.
     /// Results are ordered by start time descending and capped at `limit`.
     /// An optional filter tree can narrow results (e.g. by channel_id or status).
     fn get_call_records_by_user<'a>(
@@ -526,6 +607,20 @@ pub trait CallRtcClient: Send + Sync + 'static {
         participant_identity: MacroUserIdStr<'a>,
     ) -> impl Future<Output = anyhow::Result<String>> + Send;
 
+    /// Mint a room-scoped token for a validated non-account guest.
+    fn generate_guest_token(
+        &self,
+        room_name: &str,
+        identity: &str,
+        display_name: &str,
+    ) -> impl Future<Output = anyhow::Result<String>> + Send;
+    /// Remove a validated non-account guest from a room.
+    fn remove_guest(
+        &self,
+        room_name: &str,
+        identity: &str,
+    ) -> impl Future<Output = anyhow::Result<()>> + Send;
+
     /// Build VoIP payloads for native incoming-call delivery.
     fn build_voip_push_payloads<'a>(
         &self,
@@ -569,6 +664,67 @@ pub trait CallRtcClient: Send + Sync + 'static {
 
 /// Service interface for call operations.
 pub trait CallService: Send + Sync + 'static {
+    /// Create an invitation without starting media.
+    fn create_meeting(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        request: CreateMeetingRequest,
+    ) -> impl Future<Output = Result<Meeting, CallError>> + Send;
+    /// Send a direct call invitation, restricted to the meeting owner.
+    fn invite_to_meeting(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        token: MeetingToken,
+        email: String,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+
+    /// List the actor's uncancelled meetings.
+    fn list_meetings(
+        &self,
+        actor: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Vec<Meeting>, CallError>> + Send;
+    /// Update a meeting owned by the actor.
+    fn update_meeting(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        meeting_id: &Uuid,
+        request: UpdateMeetingRequest,
+    ) -> impl Future<Output = Result<Meeting, CallError>> + Send;
+    /// Cancel an invitation owned by the actor.
+    fn cancel_meeting(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        meeting_id: &Uuid,
+    ) -> impl Future<Output = Result<(), CallError>> + Send;
+    /// Create or retrieve a live call's invitation from an authorized receipt.
+    fn share_call(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Meeting, CallError>> + Send;
+    /// Resolve public meeting metadata from a validated capability.
+    fn get_meeting(
+        &self,
+        token: MeetingToken,
+    ) -> impl Future<Output = Result<Meeting, CallError>> + Send;
+    /// Join using an authenticated Macro identity.
+    fn join_meeting(
+        &self,
+        token: MeetingToken,
+        actor: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
+    /// Join as a non-account guest with a server-generated identity.
+    fn join_meeting_guest(
+        &self,
+        token: MeetingToken,
+        request: GuestJoinRequest,
+    ) -> impl Future<Output = Result<CallTokenResponse, CallError>> + Send;
+    /// Leave exactly the room/identity authorized by the RTC token and invitation.
+    fn leave_meeting(
+        &self,
+        token: MeetingToken,
+        bearer: &str,
+    ) -> impl Future<Output = Result<LeaveCallResponse, CallError>> + Send;
+
     /// Validate an internal call token (e.g. from the `x-macro-internal-call` header).
     fn validate_internal_call(&self, token: &str) -> bool;
 
@@ -653,7 +809,9 @@ pub trait CallService: Send + Sync + 'static {
     /// `shareWithTeam` alias) only accepts `view`. While the call is live it
     /// sets the pending intent any Edit-level caller may toggle; once archived
     /// it is authorized against the persisted creator, not the receipt's
-    /// effective access. Other fields keep requiring the receipt's Edit access.
+    /// effective access. Calls without a channel cannot enable team sharing;
+    /// clearing an existing intent or grant remains allowed. Other fields keep
+    /// requiring the receipt's Edit access.
     fn edit_call_record(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -666,6 +824,7 @@ pub trait CallService: Send + Sync + 'static {
     /// `EntityType::Call` and its `entity_id` must be the call's UUID. The
     /// intent becomes canonical team sharing when the call is archived.
     /// Returns the new value; archived calls answer [`CallError::Conflict`].
+    /// Calls without a channel may only clear an existing enabled intent.
     fn toggle_share_with_team(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
@@ -729,7 +888,8 @@ pub trait CallService: Send + Sync + 'static {
 pub trait CallRecordQueryService: Send + Sync + 'static {
     /// Fetch the most recent call records visible to the user, ordered by
     /// `started_at` descending. Transcript data is excluded, and status is
-    /// computed relative to the requesting user.
+    /// computed relative to the requesting user. Calls without a channel require
+    /// an individual user grant; group grants do not make them discoverable.
     fn get_user_call_records(
         &self,
         req: GetCallRecordsRequest,

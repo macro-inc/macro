@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO call_participants (call_id, user_id, display_name)\n               VALUES ($1, $2, $3) ON CONFLICT (call_id, user_id) DO UPDATE SET left_at = NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3fc3a50a9fae8f5b03057e1b6cb4868734d5ce02a784063a9a898935bf933c25"
+}

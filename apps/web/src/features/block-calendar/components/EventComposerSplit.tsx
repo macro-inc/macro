@@ -7,6 +7,7 @@ import {
 import { useEventEditor } from '@app/features/calendar/hooks/use-event-editor';
 import type { CalendarEvent } from '@app/features/calendar/types';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
+import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { onMount } from 'solid-js';
 
@@ -14,6 +15,7 @@ import { onMount } from 'solid-js';
 export function EventComposerSplit(props: {
   event?: CalendarEvent;
   initialValues?: EventEditorInitialValues;
+  addMacroCall?: boolean;
   onCalendarChange?: (calendarId: string, color: string) => void;
   onDirtyChange?: (dirty: boolean) => void;
   onSaveSuccess?: () => void;
@@ -39,6 +41,7 @@ export function EventComposerSplit(props: {
     calendarOptions: editor.calendarOptions,
     guestOptions: editor.guestOptions,
   });
+  if (props.addMacroCall) controller.setField('conference', 'macro_call');
 
   onMount(() =>
     panel.handle.setDisplayName(isEdit() ? 'Edit event' : 'New event')
@@ -51,7 +54,10 @@ export function EventComposerSplit(props: {
     >
       <EventForm
         controller={controller}
-        isEdit={isEdit()}
+        isEdit={isEdit() || editor.eventCreated()}
+        allowMacroCall={ENABLE_CALLS}
+        macroCallUrl={editor.macroCallUrl()}
+        saveError={editor.saveError()}
         disabledFields={editor.disabledFields()}
         showRecurringEditNotice={editor.showRecurringEditNotice()}
         pending={editor.pending()}

@@ -166,6 +166,35 @@ impl CallRtcClient for LivekitRtcClient {
         Ok(token)
     }
 
+    async fn generate_guest_token(
+        &self,
+        room_name: &str,
+        identity: &str,
+        display_name: &str,
+    ) -> anyhow::Result<String> {
+        Ok(AccessToken::with_api_key(&self.api_key, &self.api_secret)
+            .with_identity(identity)
+            .with_name(display_name)
+            .with_ttl(std::time::Duration::from_secs(6 * 3600))
+            .with_grants(VideoGrants {
+                room_join: true,
+                room: room_name.to_string(),
+                can_publish: true,
+                can_subscribe: true,
+                can_publish_data: true,
+                ..Default::default()
+            })
+            .to_jwt()?)
+    }
+
+    async fn remove_guest(&self, room_name: &str, identity: &str) -> anyhow::Result<()> {
+        interpret_remove_participant_result(
+            self.room_client
+                .remove_participant(room_name, identity)
+                .await,
+        )
+    }
+
     #[tracing::instrument(
         skip(self, request),
         fields(
@@ -311,7 +340,14 @@ impl CallRtcClient for LivekitRtcClient {
             None => (None, None),
         };
 
+        let guest_identity = event
+            .participant
+            .as_ref()
+            .filter(|p| crate::domain::meetings::is_guest_identity(&p.identity))
+            .map(|p| p.identity.clone());
+
         Ok(CallWebhookEvent {
+            guest_identity,
             event: event.event,
             id: event.id,
             room_name: event.room.map(|r| r.name),

@@ -1832,6 +1832,299 @@ export const getActiveCallsResponse = zod
   );
 
 /**
+ * @summary Handle `GET /call/join/{token}` through the call domain service.
+ */
+export const meetingLookupParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingLookupResponse = zod
+  .object({
+    callId: zod
+      .uuid()
+      .nullish()
+      .describe('Currently active call session, if any.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Associated channel, for links to existing channel calls only.'
+      ),
+    id: zod.uuid().describe('Persistent meeting identifier.'),
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled end, or none for an instant meeting.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled start, or none for an instant meeting.'),
+    shareToken: zod
+      .string()
+      .describe(
+        "A bearer capability that grants access only to a meeting's RTC room."
+      ),
+    title: zod.string().describe('Human-readable meeting title.'),
+  })
+  .describe(
+    'Persistent meeting metadata. No channel contents or archived media are exposed.'
+  );
+
+/**
+ * @summary Handle `POST /call/join/{token}` through the call domain service.
+ */
+export const meetingGuestJoinParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingGuestJoinBody = zod
+  .object({
+    displayName: zod
+      .string()
+      .describe("Guest's name, displayed to everyone in the room."),
+  })
+  .describe(
+    'Public guest join inputs. The server generates the participant identity.'
+  );
+
+export const meetingGuestJoinResponse = zod
+  .object({
+    callId: zod.uuid().describe('The call identifier.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call is associated with.'),
+    participantId: zod.string().describe('RTC participant identity.'),
+    roomName: zod.string().describe('The RTC room name.'),
+    serverUrl: zod
+      .string()
+      .describe('The RTC server URL for the frontend SDK to connect to.'),
+    shareToken: zod
+      .string()
+      .nullish()
+      .describe('Meeting link capability, when joined using a link.'),
+    token: zod.string().describe('The RTC token for connecting to the room.'),
+  })
+  .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Handle `POST /call/join/{token}/leave` through the call domain service.
+ */
+export const meetingLeaveParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingLeaveResponse = zod
+  .object({
+    callEnded: zod
+      .boolean()
+      .describe('Whether the entire call was ended (room deleted).'),
+  })
+  .describe('Response for the leave\/end call operation.');
+
+/**
+ * @summary Handle `GET /call/meetings` through the call domain service.
+ */
+export const meetingListResponse = zod
+  .object({
+    meetings: zod
+      .array(
+        zod
+          .object({
+            callId: zod
+              .uuid()
+              .nullish()
+              .describe('Currently active call session, if any.'),
+            channelId: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Associated channel, for links to existing channel calls only.'
+              ),
+            id: zod.uuid().describe('Persistent meeting identifier.'),
+            scheduledEnd: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Scheduled end, or none for an instant meeting.'),
+            scheduledStart: zod.iso
+              .datetime({})
+              .nullish()
+              .describe('Scheduled start, or none for an instant meeting.'),
+            shareToken: zod
+              .string()
+              .describe(
+                "A bearer capability that grants access only to a meeting's RTC room."
+              ),
+            title: zod.string().describe('Human-readable meeting title.'),
+          })
+          .describe(
+            'Persistent meeting metadata. No channel contents or archived media are exposed.'
+          )
+      )
+      .describe('Persistent meeting invitations, most recently created first.'),
+  })
+  .describe("The actor's most recent uncancelled standalone meetings.");
+
+/**
+ * @summary Handle `POST /call/meetings` through the call domain service.
+ */
+export const meetingCreateBody = zod
+  .object({
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Optional scheduled end.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Optional scheduled start.'),
+    title: zod.string().nullish().describe('Optional display title.'),
+  })
+  .describe('Inputs for creating a meeting without starting its RTC room.');
+
+export const meetingCreateResponse = zod
+  .object({
+    callId: zod
+      .uuid()
+      .nullish()
+      .describe('Currently active call session, if any.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Associated channel, for links to existing channel calls only.'
+      ),
+    id: zod.uuid().describe('Persistent meeting identifier.'),
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled end, or none for an instant meeting.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled start, or none for an instant meeting.'),
+    shareToken: zod
+      .string()
+      .describe(
+        "A bearer capability that grants access only to a meeting's RTC room."
+      ),
+    title: zod.string().describe('Human-readable meeting title.'),
+  })
+  .describe(
+    'Persistent meeting metadata. No channel contents or archived media are exposed.'
+  );
+
+/**
+ * @summary Queue an owner-authorized guest invitation email.
+ */
+export const meetingInviteParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingInviteBody = zod
+  .object({
+    email: zod
+      .string()
+      .describe('Recipient email; no Macro account is required.'),
+  })
+  .describe('A single email recipient for a call invitation.');
+
+/**
+ * @summary Handle `POST /call/meetings/join/{token}` through the call domain service.
+ */
+export const meetingJoinParams = zod.object({
+  token: zod.string(),
+});
+
+export const meetingJoinResponse = zod
+  .object({
+    callId: zod.uuid().describe('The call identifier.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call is associated with.'),
+    participantId: zod.string().describe('RTC participant identity.'),
+    roomName: zod.string().describe('The RTC room name.'),
+    serverUrl: zod
+      .string()
+      .describe('The RTC server URL for the frontend SDK to connect to.'),
+    shareToken: zod
+      .string()
+      .nullish()
+      .describe('Meeting link capability, when joined using a link.'),
+    token: zod.string().describe('The RTC token for connecting to the room.'),
+  })
+  .describe('Response returned when creating or joining a call.');
+
+/**
+ * @summary Handle `DELETE /call/meetings/{meeting_id}` through the call domain service.
+ */
+export const meetingCancelParams = zod.object({
+  meeting_id: zod.uuid(),
+});
+
+/**
+ * @summary Handle owner-authorized meeting title and schedule edits.
+ */
+export const meetingUpdateParams = zod.object({
+  meeting_id: zod.uuid(),
+});
+
+export const meetingUpdateBody = zod
+  .object({
+    clearSchedule: zod
+      .boolean()
+      .optional()
+      .describe(
+        'Remove timed scheduling, for example when the calendar event becomes all-day.'
+      ),
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Replacement scheduled end; requires a matching start.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Replacement scheduled start; requires a matching end.'),
+    title: zod.string().nullish().describe('Replacement title, when supplied.'),
+  })
+  .describe(
+    "Changes to a meeting's title or scheduled time; omitted values stay unchanged."
+  );
+
+export const meetingUpdateResponse = zod
+  .object({
+    callId: zod
+      .uuid()
+      .nullish()
+      .describe('Currently active call session, if any.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Associated channel, for links to existing channel calls only.'
+      ),
+    id: zod.uuid().describe('Persistent meeting identifier.'),
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled end, or none for an instant meeting.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled start, or none for an instant meeting.'),
+    shareToken: zod
+      .string()
+      .describe(
+        "A bearer capability that grants access only to a meeting's RTC room."
+      ),
+    title: zod.string().describe('Human-readable meeting title.'),
+  })
+  .describe(
+    'Persistent meeting metadata. No channel contents or archived media are exposed.'
+  );
+
+/**
  * Batch-fetches lightweight previews for a list of call ids. Mirrors the
 `POST /documents/preview` endpoint: no per-id access checks, duplicate
 ids are deduplicated server-side, and missing ids come back as
@@ -1861,6 +2154,7 @@ export const getBatchCallRecordPreviewResponse = zod
                 callId: zod.uuid().describe('The call identifier.'),
                 channelId: zod
                   .uuid()
+                  .nullish()
                   .describe('The channel this call belongs to.'),
                 channelName: zod
                   .string()
@@ -1928,7 +2222,10 @@ export const getCallRecordParams = zod.object({
 export const getCallRecordResponse = zod
   .object({
     callId: zod.uuid().describe('The call identifier.'),
-    channelId: zod.uuid().describe('The channel this call belongs to.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call belongs to.'),
     channelName: zod
       .string()
       .nullish()
@@ -1956,6 +2253,12 @@ export const getCallRecordResponse = zod
       .array(
         zod
           .object({
+            displayName: zod
+              .string()
+              .nullish()
+              .describe(
+                'Guest-provided display name, retained after archival.'
+              ),
             joinedAt: zod.iso
               .datetime({})
               .describe('When the user joined the call.'),
@@ -2160,6 +2463,45 @@ export const editCallRecordBody = zod
   .describe('Edit call request, as supplied by inbound callers.');
 
 /**
+ * @summary Handle `POST /call/record/{call_id}/link` through the call domain service.
+ */
+export const meetingShareParams = zod.object({
+  call_id: zod.uuid(),
+});
+
+export const meetingShareResponse = zod
+  .object({
+    callId: zod
+      .uuid()
+      .nullish()
+      .describe('Currently active call session, if any.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe(
+        'Associated channel, for links to existing channel calls only.'
+      ),
+    id: zod.uuid().describe('Persistent meeting identifier.'),
+    scheduledEnd: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled end, or none for an instant meeting.'),
+    scheduledStart: zod.iso
+      .datetime({})
+      .nullish()
+      .describe('Scheduled start, or none for an instant meeting.'),
+    shareToken: zod
+      .string()
+      .describe(
+        "A bearer capability that grants access only to a meeting's RTC room."
+      ),
+    title: zod.string().describe('Human-readable meeting title.'),
+  })
+  .describe(
+    'Persistent meeting metadata. No channel contents or archived media are exposed.'
+  );
+
+/**
  * Flips the live call's share-with-team toggle and returns the new value as
 the JSON body. The toggle is applied as canonical team sharing (View for
 the creator's team) when the call is archived; archived calls answer 409
@@ -2245,11 +2587,19 @@ export const getOrCreateCallParams = zod.object({
 export const getOrCreateCallResponse = zod
   .object({
     callId: zod.uuid().describe('The call identifier.'),
-    channelId: zod.uuid().describe('The channel this call is associated with.'),
+    channelId: zod
+      .uuid()
+      .nullish()
+      .describe('The channel this call is associated with.'),
+    participantId: zod.string().describe('RTC participant identity.'),
     roomName: zod.string().describe('The RTC room name.'),
     serverUrl: zod
       .string()
       .describe('The RTC server URL for the frontend SDK to connect to.'),
+    shareToken: zod
+      .string()
+      .nullish()
+      .describe('Meeting link capability, when joined using a link.'),
     token: zod.string().describe('The RTC token for connecting to the room.'),
   })
   .describe('Response returned when creating or joining a call.');
@@ -12235,6 +12585,7 @@ export const getItemsSoupResponse = zod
                     callId: zod.uuid().describe('The call identifier.'),
                     channelId: zod
                       .uuid()
+                      .nullish()
                       .describe('The channel this call belongs to.'),
                     channelName: zod
                       .string()
@@ -12266,6 +12617,12 @@ export const getItemsSoupResponse = zod
                       .array(
                         zod
                           .object({
+                            displayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Guest display name, when the participant has no Macro profile.'
+                              ),
                             joinedAt: zod.iso
                               .datetime({})
                               .describe('When the user joined the call.'),
@@ -16260,6 +16617,7 @@ export const postItemsSoupResponse = zod
                     callId: zod.uuid().describe('The call identifier.'),
                     channelId: zod
                       .uuid()
+                      .nullish()
                       .describe('The channel this call belongs to.'),
                     channelName: zod
                       .string()
@@ -16291,6 +16649,12 @@ export const postItemsSoupResponse = zod
                       .array(
                         zod
                           .object({
+                            displayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Guest display name, when the participant has no Macro profile.'
+                              ),
                             joinedAt: zod.iso
                               .datetime({})
                               .describe('When the user joined the call.'),
@@ -19728,6 +20092,7 @@ export const postItemsSoupAstResponse = zod
                     callId: zod.uuid().describe('The call identifier.'),
                     channelId: zod
                       .uuid()
+                      .nullish()
                       .describe('The channel this call belongs to.'),
                     channelName: zod
                       .string()
@@ -19759,6 +20124,12 @@ export const postItemsSoupAstResponse = zod
                       .array(
                         zod
                           .object({
+                            displayName: zod
+                              .string()
+                              .nullish()
+                              .describe(
+                                'Guest display name, when the participant has no Macro profile.'
+                              ),
                             joinedAt: zod.iso
                               .datetime({})
                               .describe('When the user joined the call.'),
@@ -23528,6 +23899,7 @@ export const postItemsSoupAstGroupedResponse = zod
                           callId: zod.uuid().describe('The call identifier.'),
                           channelId: zod
                             .uuid()
+                            .nullish()
                             .describe('The channel this call belongs to.'),
                           channelName: zod
                             .string()
@@ -23561,6 +23933,12 @@ export const postItemsSoupAstGroupedResponse = zod
                             .array(
                               zod
                                 .object({
+                                  displayName: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Guest display name, when the participant has no Macro profile.'
+                                    ),
                                   joinedAt: zod.iso
                                     .datetime({})
                                     .describe('When the user joined the call.'),
@@ -26996,6 +27374,7 @@ export const postItemsSoupAstGroupedResponse = zod
                           callId: zod.uuid().describe('The call identifier.'),
                           channelId: zod
                             .uuid()
+                            .nullish()
                             .describe('The channel this call belongs to.'),
                           channelName: zod
                             .string()
@@ -27029,6 +27408,12 @@ export const postItemsSoupAstGroupedResponse = zod
                             .array(
                               zod
                                 .object({
+                                  displayName: zod
+                                    .string()
+                                    .nullish()
+                                    .describe(
+                                      'Guest display name, when the participant has no Macro profile.'
+                                    ),
                                   joinedAt: zod.iso
                                     .datetime({})
                                     .describe('When the user joined the call.'),

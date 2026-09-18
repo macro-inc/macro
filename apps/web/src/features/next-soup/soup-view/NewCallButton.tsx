@@ -1,20 +1,22 @@
 import { joinChannelCall } from '@channel/Call/join-channel-call';
+import { NewMeetingButton } from '@channel/Call/NewMeetingButton';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
 import { getDestinationFromOptions } from '@core/util/destination';
 import PhoneCallIcon from '@phosphor/phone-call.svg';
-import PlusCircleIcon from '@phosphor/plus-circle.svg';
+import UserPlusIcon from '@phosphor/user-plus.svg';
+import VideoCameraIcon from '@phosphor/video-camera.svg';
 import XIcon from '@phosphor/x.svg';
 import {
   useGetOrCreateDirectMessageMutation,
   useGetOrCreatePrivateChannelMutation,
 } from '@queries/channel/get-or-create-dm';
 import { Button, Dialog, Surface } from '@ui';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 
-export function NewCallButton() {
+export function NewCallButton(props: { inline?: boolean } = {}) {
   const [isOpen, setIsOpen] = createSignal(false);
   const { all: destinationOptions } = useCombinedRecipients();
   const [selectedOptions, setSelectedOptions] = createSignal<
@@ -33,6 +35,7 @@ export function NewCallButton() {
   }
 
   async function handleStartCall() {
+    if (isSubmitting()) return;
     const options = selectedOptions();
     if (!options || options.length === 0) {
       setTriedToSubmit(true);
@@ -43,6 +46,10 @@ export function NewCallButton() {
 
     try {
       const destination = getDestinationFromOptions(options);
+      if (destination.type === 'users' && destination.users.length === 0) {
+        setTriedToSubmit(true);
+        return;
+      }
       let channelId: string;
 
       if (destination.type === 'channel') {
@@ -65,28 +72,52 @@ export function NewCallButton() {
         }
       }
 
+      await joinChannelCall(channelId);
       setIsOpen(false);
       reset();
-
-      await joinChannelCall(channelId);
     } catch (err) {
       console.error('Failed to start call', err);
       toast.failure('Failed to start call');
+      setIsSubmitting(false);
+    } finally {
       setIsSubmitting(false);
     }
   }
 
   return (
     <>
-      <Button
-        variant="accent"
-        class="border-0 rounded-full px-3 py-2 pl-1 font-semibold"
-        size="sm"
-        onClick={() => setIsOpen(true)}
+      <Show
+        when={props.inline}
+        fallback={<NewMeetingButton onChannelCall={() => setIsOpen(true)} />}
       >
-        <PlusCircleIcon class="size-3.5 text-accent" />
-        <span>Call</span>
-      </Button>
+        <div class="flex min-w-0 items-center gap-2 rounded-xl border border-edge-muted bg-panel p-2 pl-3">
+          <UserPlusIcon class="size-5 shrink-0 text-ink-muted" />
+          <div class="min-w-0 flex-1">
+            <RecipientSelector<'user' | 'contact' | 'channel'>
+              options={destinationOptions}
+              selectedOptions={selectedOptions()}
+              setSelectedOptions={setSelectedOptions}
+              placeholder="Start a call: add people by name or email…"
+              triedToSubmit={triedToSubmit}
+              triggerMode="input"
+              hideBorder
+              noPadding
+              disabled={isSubmitting()}
+              class="bg-transparent text-sm"
+            />
+          </div>
+          <Button
+            variant="outline"
+            size="sm"
+            class="shrink-0 rounded-lg"
+            disabled={isSubmitting() || selectedOptions().length === 0}
+            onClick={() => void handleStartCall()}
+          >
+            <VideoCameraIcon class="size-4" />
+            {isSubmitting() ? 'Calling…' : 'Call'}
+          </Button>
+        </div>
+      </Show>
       <Dialog
         open={isOpen()}
         onOpenChange={(open) => {

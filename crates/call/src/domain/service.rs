@@ -3,6 +3,8 @@
 #[cfg(test)]
 mod test;
 
+mod meetings;
+
 use connection::domain::ports::ConnectionService;
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
@@ -41,6 +43,9 @@ use crate::domain::models::{
     VoipPushPayloadRequest,
 };
 
+use super::meetings::{
+    CreateMeetingRequest, GuestJoinRequest, Meeting, MeetingToken, UpdateMeetingRequest,
+};
 use super::models::{
     ActiveCallsResponse, AddParticipantError, ArchivedCall, Call, CallActiveResponse, CallError,
     CallRecord, CallRecordTranscriptSegment, CallTokenResponse, CallTranscriptCustomSpeakerResult,
@@ -304,11 +309,14 @@ impl<
     /// Send a call event to all channel members (best-effort).
     async fn send_call_event(
         &self,
-        channel_id: &Uuid,
+        channel_id: &Option<Uuid>,
         message_type: &str,
         message: &serde_json::Value,
         triggered_by_user_id: Option<MacroUserIdStr<'_>>,
     ) {
+        let Some(channel_id) = channel_id else {
+            return;
+        };
         let channel_id_str = channel_id.to_string();
         let users = match self
             .entity_access_service
@@ -386,7 +394,7 @@ impl<
     /// elsewhere (e.g. stop the desktop ring after an iPhone pickup).
     async fn send_call_answered_event(
         &self,
-        channel_id: &Uuid,
+        channel_id: &Option<Uuid>,
         call_id: &Uuid,
         user_id: MacroUserIdStr<'_>,
     ) {
@@ -562,6 +570,79 @@ impl<
     B: MacroEventBroker + Clone,
 > CallService for CallServiceImpl<R, C, Cn, E, N, S, Sm, V, Vr, B>
 {
+    async fn create_meeting(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        request: CreateMeetingRequest,
+    ) -> Result<Meeting, CallError> {
+        self.create_invitation(actor, request).await
+    }
+    async fn list_meetings(&self, actor: MacroUserIdStr<'_>) -> Result<Vec<Meeting>, CallError> {
+        self.repo.list_meetings(actor.as_ref()).await
+    }
+    async fn invite_to_meeting(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        token: MeetingToken,
+        email: String,
+    ) -> Result<(), CallError> {
+        self.email_invitation(actor, token, email).await
+    }
+    async fn update_meeting(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        meeting_id: &Uuid,
+        request: UpdateMeetingRequest,
+    ) -> Result<Meeting, CallError> {
+        self.repo
+            .update_meeting(meeting_id, actor.as_ref(), request.validate()?)
+            .await?
+            .ok_or_else(|| CallError::Forbidden("Only the meeting owner can update it".to_string()))
+    }
+    async fn cancel_meeting(
+        &self,
+        actor: MacroUserIdStr<'_>,
+        meeting_id: &Uuid,
+    ) -> Result<(), CallError> {
+        if self.repo.cancel_meeting(meeting_id, actor.as_ref()).await? {
+            Ok(())
+        } else {
+            Err(CallError::Forbidden(
+                "Only the meeting owner can cancel it".to_string(),
+            ))
+        }
+    }
+    async fn share_call(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Meeting, CallError> {
+        self.share_invitation(receipt).await
+    }
+    async fn get_meeting(&self, token: MeetingToken) -> Result<Meeting, CallError> {
+        self.resolve_invitation(&token).await
+    }
+    async fn join_meeting(
+        &self,
+        token: MeetingToken,
+        actor: MacroUserIdStr<'_>,
+    ) -> Result<CallTokenResponse, CallError> {
+        self.join_invitation(token, actor).await
+    }
+    async fn join_meeting_guest(
+        &self,
+        token: MeetingToken,
+        request: GuestJoinRequest,
+    ) -> Result<CallTokenResponse, CallError> {
+        self.join_guest_invitation(token, request).await
+    }
+    async fn leave_meeting(
+        &self,
+        token: MeetingToken,
+        bearer: &str,
+    ) -> Result<LeaveCallResponse, CallError> {
+        self.leave_invitation(token, bearer).await
+    }
+
     fn validate_internal_call(&self, token: &str) -> bool {
         self.internal_call_secret
             .as_deref()
@@ -579,11 +660,13 @@ impl<
             .await
             .map_err(|e| CallError::Internal(e.into()))?;
 
-        Ok(call.map(|c| CallActiveResponse {
-            call_id: c.id,
-            channel_id: c.channel_id,
-            created_by: c.created_by,
-            created_at: c.created_at,
+        Ok(call.and_then(|c| {
+            Some(CallActiveResponse {
+                call_id: c.id,
+                channel_id: c.channel_id?,
+                created_by: c.created_by,
+                created_at: c.created_at,
+            })
         }))
     }
 
@@ -616,7 +699,8 @@ impl<
             Some(existing) => existing,
             None => {
                 let call_id = Uuid::now_v7();
-                let room_name = channel_id.to_string();
+                // Room grants must expire with this session, even in a channel.
+                let room_name = call_id.to_string();
 
                 // Create RTC room (idempotent in LiveKit).
                 self.rtc_client
@@ -683,7 +767,7 @@ impl<
 
                         // Notify channel members about the new call (best-effort).
                         self.send_call_event(
-                            channel_id,
+                            &Some(*channel_id),
                             "call_started",
                             &serde_json::json!({
                                 "channel_id": channel_id,
@@ -860,6 +944,10 @@ impl<
                         call
                     }
                     None => {
+                        // A concurrent request owns the active session. Our empty
+                        // candidate room carries no participants or recording.
+                        self.rtc_client.delete_room(&room_name).await
+                            .inspect_err(|error| tracing::error!(error=?error, "failed to remove unused channel call room")).ok();
                         // Another request created the call — read the existing one.
                         self.repo
                             .get_call_by_channel_id(channel_id)
@@ -881,7 +969,9 @@ impl<
             .map_err(|e| CallError::Internal(e.into()))?
             && other_call_id != call.id
         {
-            return Err(CallError::AlreadyInCall(other_channel_id.to_string()));
+            return Err(CallError::AlreadyInCall(
+                other_channel_id.unwrap_or(other_call_id).to_string(),
+            ));
         }
 
         // Idempotent upsert — handles concurrent joins and rejoin after leave.
@@ -897,7 +987,7 @@ impl<
                     .find_active_call_for_user(user_id.copied())
                     .await
                     .map_err(|e| CallError::Internal(e.into()))?
-                    .map(|(_, ch)| ch.to_string())
+                    .map(|(id, ch)| ch.unwrap_or(id).to_string())
                     .unwrap_or_else(|| "unknown".to_string());
                 return Err(CallError::AlreadyInCall(channel));
             }
@@ -908,19 +998,21 @@ impl<
 
         // Tell the user's other devices the call was answered here so they
         // can stop showing the incoming-call UI (best-effort).
-        self.send_call_answered_event(channel_id, &call.id, user_id.copied())
+        self.send_call_answered_event(&Some(*channel_id), &call.id, user_id.copied())
             .await;
 
         // Always generate a fresh token (supports reconnection from different devices).
         let token = self
             .rtc_client
-            .generate_token(&call.room_name, user_id)
+            .generate_token(&call.room_name, user_id.copied())
             .await
             .map_err(CallError::Internal)?;
 
         Ok(CallTokenResponse {
             call_id: call.id,
-            channel_id: *channel_id,
+            channel_id: Some(*channel_id),
+            participant_id: user_id.to_string(),
+            share_token: None,
             token,
             room_name: call.room_name,
             server_url: self.server_url.clone(),
@@ -1049,6 +1141,18 @@ impl<
                 }
             }
             "participant_joined" => {
+                if let (Some(room), Some(identity)) = (&event.room_name, &event.guest_identity) {
+                    if let Some(call) = self
+                        .repo
+                        .get_call_by_room_name(room)
+                        .await
+                        .map_err(|e| CallError::Internal(e.into()))?
+                    {
+                        self.repo.reconcile_guest(&call.id, identity, true).await?;
+                    }
+                    return Ok(());
+                }
+
                 let (Some(room_name), Some(participant_identity)) =
                     (&event.room_name, &event.participant_identity)
                 else {
@@ -1106,14 +1210,12 @@ impl<
                 }
             }
             "participant_left" => {
-                let (Some(room_name), Some(participant_identity)) =
-                    (&event.room_name, &event.participant_identity)
-                else {
-                    tracing::warn!(
-                        "participant_left webhook missing room_name or participant_identity"
-                    );
+                let Some(room_name) = &event.room_name else {
                     return Ok(());
                 };
+                if event.participant_identity.is_none() && event.guest_identity.is_none() {
+                    return Ok(());
+                }
 
                 let Some(call) = self
                     .repo
@@ -1125,64 +1227,16 @@ impl<
                     return Ok(());
                 };
 
-                // Remove participant from DB (idempotent — no-op if already left).
-                self.repo
-                    .remove_participant(&call.id, participant_identity.copied())
-                    .await
-                    .map_err(|e| CallError::Internal(e.into()))?;
-
-                // If no participants remain, archive the call and delete the room.
-                let remaining = self
-                    .repo
-                    .get_participant_count(&call.id)
-                    .await
-                    .map_err(|e| CallError::Internal(e.into()))?;
-
-                if remaining == 0 {
-                    tracing::info!(call_id = %call.id, room_name, "last participant left, archiving call");
-                    let egress_id = call.egress_id.clone();
-                    let archived = self.repo.archive_call(&call.id).await?;
-                    self.publish_archived_call_event(
-                        &archived,
-                        CallArchiveReason::LastParticipantLeft,
-                    );
-
-                    // Fire-and-forget summarization now that the
-                    // `call_records` row is persisted.
-                    self.spawn_summarize_call(archived.call_id);
-                    self.spawn_process_voices_for_call(archived.call_id);
-
-                    // Stop egress explicitly before deleting the room. DeleteRoom
-                    // is expected to cascade-stop egress, but a failed or slow
-                    // DeleteRoom can leave egress running and billing. Doing it
-                    // first makes the runaway-billing case impossible.
-                    if let Some(egress_id) = egress_id {
-                        self.rtc_client
-                            .stop_egress(&egress_id)
-                            .await
-                            .inspect_err(
-                                |e| tracing::error!(error=?e, egress_id, "failed to stop egress"),
-                            )
-                            .ok();
-                    }
-
-                    self.rtc_client
-                        .delete_room(room_name)
+                if let Some(participant_identity) = &event.participant_identity {
+                    self.repo
+                        .remove_participant(&call.id, participant_identity.copied())
                         .await
-                        .inspect_err(|e| tracing::error!(error=?e, "failed to delete RTC room"))
-                        .ok();
-
-                    self.send_call_event(
-                        &archived.channel_id,
-                        "call_ended",
-                        &serde_json::json!({
-                            "channel_id": archived.channel_id,
-                            "call_id": archived.call_id,
-                        }),
-                        None,
-                    )
-                    .await;
+                        .map_err(|e| CallError::Internal(e.into()))?;
+                } else if let Some(identity) = &event.guest_identity {
+                    self.repo.reconcile_guest(&call.id, identity, false).await?;
                 }
+
+                self.finish_empty_call(&call).await?;
             }
             "egress_started" | "egress_updated" => {
                 tracing::info!(
@@ -1318,11 +1372,14 @@ impl<
                 .ok();
         }
 
-        record.channel_name = self
-            .repo
-            .resolve_channel_name(&record.channel_id, user_id.copied())
-            .await
-            .map_err(|e| CallError::Internal(e.into()))?;
+        record.channel_name = match record.channel_id {
+            Some(channel_id) => self
+                .repo
+                .resolve_channel_name(&channel_id, user_id.copied())
+                .await
+                .map_err(|e| CallError::Internal(e.into()))?,
+            None => None,
+        };
 
         Ok(record)
     }
@@ -1413,7 +1470,7 @@ impl<
 
         let call = self
             .repo
-            .get_call_by_channel_id(channel_id)
+            .get_call_by_room_name(&channel_id.to_string())
             .await
             .map_err(|e| CallError::Internal(e.into()))?
             .ok_or_else(|| CallError::NotFound(channel_id.to_string()))?;
@@ -1493,6 +1550,14 @@ impl<
                 .and_then(|p| p.team_share_access_level),
             legacy_enabled: request.share_with_team,
         };
+        if let Some(record) = &record
+            && !super::models::permitted_team_memory_intent(record.channel_id, true)
+            && live_share_intent(team_share_request)? == Some(true)
+        {
+            return Err(CallError::Forbidden(
+                "Calls without a channel cannot be included in team memory".to_string(),
+            ));
+        }
         let custom_name = request.custom_name.clone();
         let mut share_permission = request.share_permission;
 
@@ -1583,7 +1648,40 @@ impl<
             .map_err(|_| CallError::Internal(anyhow::anyhow!("invalid call entity receipt")))?;
         let actor_user_id = event_actor_user_id(receipt.auth());
 
-        let (new_value, channel_id) = self.repo.toggle_share_with_team(&call_id).await?;
+        let record = self
+            .repo
+            .get_call_record_by_call_id(&call_id)
+            .await
+            .map_err(|error| CallError::Internal(error.into()))?
+            .ok_or_else(|| CallError::NotFound(call_id.to_string()))?;
+        if !record.is_active {
+            return Err(CallError::Conflict(
+                "Only active calls have a team memory toggle".to_string(),
+            ));
+        }
+        let (new_value, channel_id) = if record.channel_id.is_none() {
+            if !record.share_with_team {
+                return Err(CallError::Forbidden(
+                    "Calls without a channel cannot be included in team memory".to_string(),
+                ));
+            }
+            // Permit clearing an old standalone intent without a read/flip race
+            // that could accidentally re-enable it in another request.
+            self.repo
+                .patch_call_record(
+                    &call_id,
+                    &EditCallRecordRepoArgs {
+                        share_permission: None,
+                        custom_name: None,
+                        team_share: None,
+                        live_share_with_team: Some(false),
+                    },
+                )
+                .await?;
+            (false, None)
+        } else {
+            self.repo.toggle_share_with_team(&call_id).await?
+        };
 
         self.publish_call_event(&CallMacroEvent::record_updated(CallRecordUpdatedMetadata {
             call_id,
@@ -1678,7 +1776,10 @@ impl<
         }
 
         let Some(summary) = summarizer
-            .summarize_call(call_id, record.transcript)
+            .summarize_call(
+                call_id,
+                summary_transcript(record.transcript, &record.participants),
+            )
             .await
             .inspect_err(|e| tracing::error!(error=?e, %call_id, "call summarizer failed"))
             .map_err(|e| CallError::Internal(e.into()))?
@@ -1795,7 +1896,13 @@ impl<
                 return;
             }
 
-            let summary = match summarizer.summarize_call(&call_id, record.transcript).await {
+            let summary = match summarizer
+                .summarize_call(
+                    &call_id,
+                    summary_transcript(record.transcript, &record.participants),
+                )
+                .await
+            {
                 Ok(Some(summary)) => summary,
                 Ok(None) => {
                     tracing::info!(
@@ -1862,6 +1969,28 @@ fn publish_call_event<B: MacroEventBroker>(event_broker: &B, event: &CallMacroEv
     }));
 }
 
+fn summary_transcript(
+    mut transcript: Vec<CallRecordTranscriptSegment>,
+    participants: &[super::models::CallRecordParticipant],
+) -> Vec<CallRecordTranscriptSegment> {
+    let names: HashMap<&str, &str> = participants
+        .iter()
+        .filter(|participant| super::meetings::is_guest_identity(&participant.user_id))
+        .filter_map(|participant| {
+            participant
+                .display_name
+                .as_deref()
+                .map(|name| (participant.user_id.as_str(), name))
+        })
+        .collect();
+    for segment in &mut transcript {
+        if let Some(name) = names.get(segment.speaker_id.as_str()) {
+            segment.speaker_id = format!("{name} (guest)");
+        }
+    }
+    transcript
+}
+
 async fn generate_and_persist_call_name<R, Sm>(
     repo: &R,
     summarizer: &Sm,
@@ -1914,10 +2043,12 @@ where
     R: CallRepository,
     Sm: CallSummarizer,
 {
-    let transcripts = repo
+    let mut transcripts = repo
         .get_enhanced_call_record_transcripts(call_record_id)
         .await
         .map_err(Into::into)?;
+    // External speakers are never relabeled as account holders by inference.
+    transcripts.retain(|segment| !super::meetings::is_guest_identity(&segment.speaker_id));
     if transcripts.is_empty() {
         tracing::info!(%call_record_id, "call has empty archived transcript; skipping custom speaker generation");
         return Ok(());

@@ -326,6 +326,10 @@ export const storageExcluded = [
   'jobProcessingResultHandler',
   'joinChannelByCode',
   'leaveOrEndCall',
+  // Joining and leaving live meetings are app session flows.
+  'meetingGuestJoin',
+  'meetingJoin',
+  'meetingLeave',
   'mentionPreviews',
   'patchViewHandler',
   'postChannelMessages',
@@ -397,6 +401,15 @@ export const storageBacklog = [
   'listTeamOutOfOffice',
   'listUserApiKeys',
   'messageTimeline',
+  // Durable meeting management is available through the generated client;
+  // a hand-written meeting entity remains to be added.
+  'meetingCancel',
+  'meetingCreate',
+  'meetingInvite',
+  'meetingList',
+  'meetingLookup',
+  'meetingShare',
+  'meetingUpdate',
   'postActivity',
   'presaveDocumentHandler',
   'saveDocumentHandler',

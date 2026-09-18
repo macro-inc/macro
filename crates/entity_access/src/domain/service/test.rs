@@ -51,6 +51,7 @@ struct MockRepo {
     agent_session_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     channel_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     call_channel: Arc<Mutex<Option<CallChannelInfo>>>,
+    call_users: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
     user_team: Arc<Mutex<Option<UserTeamInfo>>>,
 }
 
@@ -89,6 +90,7 @@ impl MockRepo {
             agent_session_users: Arc::new(Mutex::new(Vec::new())),
             channel_users: Arc::new(Mutex::new(vec![])),
             call_channel: Arc::new(Mutex::new(None)),
+            call_users: Arc::default(),
             user_team: Arc::new(Mutex::new(None)),
         }
     }
@@ -429,6 +431,7 @@ impl AccessRepository for MockRepo {
             EntityType::Project => Ok(self.project_users.lock().await.clone()),
             EntityType::EmailThread => Ok(self.thread_users.lock().await.clone()),
             EntityType::AgentSession => Ok(self.agent_session_users.lock().await.clone()),
+            EntityType::Call => Ok(self.call_users.lock().await.clone()),
             EntityType::Initiative => Ok(vec![]),
             _ => Err(AccessError::BadRequest("unsupported entity type")),
         }
@@ -2186,4 +2189,47 @@ async fn document_session_access_tracks_current_document_permission() {
             .unwrap(),
         Some(AccessLevel::Owner)
     );
+}
+
+#[tokio::test]
+async fn standalone_call_recipients_use_explicit_entity_grants() {
+    let repo = MockRepo::new();
+    let granted = MacroUserIdStr::parse_from_str("macro|participant@example.com")
+        .unwrap()
+        .into_owned();
+    *repo.call_channel.lock().await = Some(CallChannelInfo {
+        channel_id: None,
+        share_permission_id: "share".into(),
+    });
+    *repo.call_users.lock().await = vec![granted.clone()];
+    *repo.channel_users.lock().await = vec![
+        MacroUserIdStr::parse_from_str("macro|unrelated@example.com")
+            .unwrap()
+            .into_owned(),
+    ];
+    let service = EntityAccessServiceImpl::new(repo);
+    let users = service
+        .get_users_by_entity(&Uuid::now_v7().to_string(), EntityType::Call)
+        .await
+        .unwrap();
+    assert_eq!(users, vec![granted]);
+}
+
+#[tokio::test]
+async fn channel_call_recipients_still_use_channel_membership() {
+    let repo = MockRepo::new();
+    let member = MacroUserIdStr::parse_from_str("macro|member@example.com")
+        .unwrap()
+        .into_owned();
+    *repo.call_channel.lock().await = Some(CallChannelInfo {
+        channel_id: Some(Uuid::now_v7()),
+        share_permission_id: "share".into(),
+    });
+    *repo.channel_users.lock().await = vec![member.clone()];
+    let service = EntityAccessServiceImpl::new(repo);
+    let users = service
+        .get_users_by_entity(&Uuid::now_v7().to_string(), EntityType::Call)
+        .await
+        .unwrap();
+    assert_eq!(users, vec![member]);
 }

@@ -4283,7 +4283,7 @@ type GraphqlSoupCall implements GraphqlSoupEntity {
 	"""
 	The identifier of the channel.
 	"""
-	channelId: ID!
+	channelId: ID
 	"""
 	The channel name.
 	"""
@@ -4376,6 +4376,10 @@ type GraphqlSoupCallParticipant {
 	The identifier of the user.
 	"""
 	userId: String!
+	"""
+	Guest display name when no Macro profile exists.
+	"""
+	displayName: String
 	"""
 	The joined timestamp in RFC 3339 format.
 	"""

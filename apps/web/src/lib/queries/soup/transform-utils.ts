@@ -839,6 +839,13 @@ export const mapApiSoupItemToEntity = (
         attended: status === 'ATTENDED',
         durationMs: item.data.durationMs ?? undefined,
         participantIds: item.data.participants.map((p) => p.userId),
+        participantNames: Object.fromEntries(
+          item.data.participants.flatMap((participant) =>
+            participant.displayName
+              ? [[participant.userId, participant.displayName]]
+              : []
+          )
+        ),
         summary: item.data.summary ?? undefined,
         properties: item.data.properties,
       } satisfies CallEntity;

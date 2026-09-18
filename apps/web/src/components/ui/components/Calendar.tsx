@@ -57,6 +57,8 @@ export type CalendarProps = Omit<
   class?: string;
   /** Optional end-exclusive date range to highlight. */
   highlightedRange?: HighlightedRange;
+  /** Whether the month label opens a picker or is changed only by arrows. */
+  monthSelection?: 'menu' | 'arrows';
 };
 
 /** An accessible, single-date calendar styled with the app's semantic tokens. */
@@ -64,6 +66,7 @@ export function Calendar(props: CalendarProps) {
   const [local, calendarProps] = splitProps(props, [
     'class',
     'highlightedRange',
+    'monthSelection',
   ]);
   const initialFallbackDate = calendarProps.value ?? new Date();
 
@@ -78,10 +81,19 @@ export function Calendar(props: CalendarProps) {
         <div class={cn('w-full min-w-0 text-ink', local.class)}>
           <div class="flex items-center gap-2">
             <CorvuCalendar.Label class="min-w-0 flex-1">
-              <CalendarMonthDropdown
-                month={calendar.month}
-                onChange={calendar.setMonth}
-              />
+              <Show
+                when={local.monthSelection !== 'arrows'}
+                fallback={
+                  <span class="block min-w-0 truncate px-1 text-xs font-medium text-ink">
+                    {formatCalendarMonth(calendar.month)}
+                  </span>
+                }
+              >
+                <CalendarMonthDropdown
+                  month={calendar.month}
+                  onChange={calendar.setMonth}
+                />
+              </Show>
             </CorvuCalendar.Label>
             <div class="ml-auto flex shrink-0 items-center gap-0.5">
               <CorvuCalendar.Nav

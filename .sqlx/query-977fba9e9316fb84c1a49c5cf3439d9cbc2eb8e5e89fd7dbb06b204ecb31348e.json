@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_contacts (id, link_id, email_address, sfs_photo_url)\n        VALUES ($1, $2, 'USER1@test.com', 'https://example.com/inbox.png')\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "977fba9e9316fb84c1a49c5cf3439d9cbc2eb8e5e89fd7dbb06b204ecb31348e"
+}

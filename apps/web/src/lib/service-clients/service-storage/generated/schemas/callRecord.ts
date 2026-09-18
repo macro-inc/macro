@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CallRecordChannelId } from './callRecordChannelId';
 import type { CallRecordChannelName } from './callRecordChannelName';
 import type { CallRecordCustomName } from './callRecordCustomName';
 import type { CallRecordDurationMs } from './callRecordDurationMs';
@@ -27,7 +28,7 @@ export interface CallRecord {
   /** The call identifier. */
   callId: string;
   /** The channel this call belongs to. */
-  channelId: string;
+  channelId?: CallRecordChannelId;
   /** Resolved display name for the channel. */
   channelName?: CallRecordChannelName;
   /** User who created the call. */

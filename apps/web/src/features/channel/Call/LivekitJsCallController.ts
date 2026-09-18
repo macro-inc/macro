@@ -9,6 +9,7 @@ import {
   Track,
 } from 'livekit-client';
 import { batch } from 'solid-js';
+import type { CallSessionConnectMetadata } from './CallSessionController';
 import { startReceiverStatsSampling } from './call-audio-receiver-stats';
 
 type LivekitJsCallControllerState = {
@@ -29,9 +30,9 @@ type LivekitJsCallControllerOptions = {
   destroyProcessors: () => void;
   resetState: () => void;
   setConnectionState: (state: ConnectionState) => void;
-  setActiveCall: (channelId: string, callId: string) => void;
+  setActiveCall: (channelId: string | null, callId: string) => void;
   setDuplicateConnectCallId: (callId: string) => void;
-  setInitialMediaState: () => void;
+  setInitialMediaState: (preferences?: CallSessionConnectMetadata) => void;
   setRemoteParticipants: (participants: Map<string, RemoteParticipant>) => void;
   clearOptimisticJoin: () => void;
   bumpTrackVersion: () => void;
@@ -133,7 +134,10 @@ export function createLivekitJsCallController(
     options.resetState();
   }
 
-  async function connect(tokenResponse: CallTokenResponse) {
+  async function connect(
+    tokenResponse: CallTokenResponse,
+    preferences?: CallSessionConnectMetadata
+  ) {
     if (disposed) return;
     const existingRoom = options.room();
     const state = options.state();
@@ -204,12 +208,12 @@ export function createLivekitJsCallController(
     // flushes one summary analytics event when stopped at teardown.
     stopReceiverStats();
     stopReceiverStatsSampling = startReceiverStatsSampling(targetRoom, {
-      channelId: tokenResponse.channelId,
+      channelId: tokenResponse.channelId ?? '',
       callId: tokenResponse.callId,
     });
 
     // Default to microphone on, video off as soon as the room is connected.
-    options.setInitialMediaState();
+    options.setInitialMediaState(preferences);
 
     // Treat the LiveKit connection itself as the join success boundary. Local
     // media/device setup can be interrupted by OS-level flows (e.g. macOS

@@ -1,11 +1,12 @@
+import { isCallGuest } from '@channel/Call/call-identity';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
 
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import type { CallRecord } from '@service-call/client';
 import type { Accessor } from 'solid-js';
-import { createMemo, For } from 'solid-js';
+import { createMemo, For, Show } from 'solid-js';
 import { dedupeCallRecordingParticipants } from './call-recording-utils';
 
 export function CallRecordingParticipantsSection(props: {
@@ -48,13 +49,31 @@ export function CallRecordingParticipantsSection(props: {
             <button
               type="button"
               role="listitem"
+              disabled={isCallGuest(participant.userId)}
               class="inline-flex items-center gap-1.5 rounded-full border border-edge-muted/50 py-1 pr-2.5 pl-1 text-sm text-ink transition-colors hover:bg-hover"
               onClick={(event) => openDirectMessage(participant.userId, event)}
             >
-              <UserIcon id={participant.userId} size="sm" isDeleted={false} />
+              <Show
+                when={!isCallGuest(participant.userId)}
+                fallback={
+                  <span class="flex size-6 items-center justify-center rounded-full bg-hover text-xs">
+                    {(participant.displayName?.trim() || 'Guest')
+                      .charAt(0)
+                      .toUpperCase()}
+                  </span>
+                }
+              >
+                <UserIcon id={participant.userId} size="sm" isDeleted={false} />
+              </Show>
               <span class="truncate max-w-48">
-                {idToEmail(participant.userId)}
+                {participant.displayName?.trim() ||
+                  (isCallGuest(participant.userId)
+                    ? 'Guest'
+                    : idToEmail(participant.userId))}
               </span>
+              <Show when={isCallGuest(participant.userId)}>
+                <span class="text-xs text-ink-extra-muted">Guest</span>
+              </Show>
             </button>
           )}
         </For>

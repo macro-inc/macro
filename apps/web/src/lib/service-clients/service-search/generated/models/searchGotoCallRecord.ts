@@ -4,10 +4,11 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SearchGotoCallRecordChannelId } from './searchGotoCallRecordChannelId';
 import type { SearchGotoCallRecordEndedAt } from './searchGotoCallRecordEndedAt';
 
 export interface SearchGotoCallRecord {
-  channel_id: string;
+  channel_id?: SearchGotoCallRecordChannelId;
   ended_at?: SearchGotoCallRecordEndedAt;
   participant_ids: string[];
   sequence_num: number;

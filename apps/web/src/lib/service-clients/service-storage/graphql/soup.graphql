@@ -258,7 +258,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		replyCount
 	}
 	... on GraphqlSoupCall {
-		channelId
+		callChannelId: channelId
 		channelName
 		createdBy
 		customName
@@ -271,6 +271,7 @@ fragment SoupItemPreviewFields on GraphqlSoupEntity {
 		attended
 		participants {
 			userId
+			displayName
 			joinedAt
 			leftAt
 		}

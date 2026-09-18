@@ -1,19 +1,108 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchWithToken } from '@core/util/fetchWithToken';
+import { safeFetch } from '@core/util/safeFetch';
 
 import type { ActiveCallsResponse } from '@service-storage/generated/schemas/activeCallsResponse';
 import type { CallActiveResponse } from '@service-storage/generated/schemas/callActiveResponse';
 import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
-import type { CallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
+import type { CallTokenResponse as ApiCallTokenResponse } from '@service-storage/generated/schemas/callTokenResponse';
+import type { CreateMeetingRequest } from '@service-storage/generated/schemas/createMeetingRequest';
 import type { EditCallRecordRequest } from '@service-storage/generated/schemas/editCallRecordRequest';
+import type { InviteMeetingRequest } from '@service-storage/generated/schemas/inviteMeetingRequest';
 import type { LeaveCallResponse } from '@service-storage/generated/schemas/leaveCallResponse';
+import type { Meeting as ApiMeeting } from '@service-storage/generated/schemas/meeting';
+import type { UpdateMeetingRequest } from '@service-storage/generated/schemas/updateMeetingRequest';
 import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 
-export type { CallRecord, CallTokenResponse };
+export type { CallRecord, CreateMeetingRequest, UpdateMeetingRequest };
+
+// Rust serializes these nullable fields explicitly; Orval marks Option<T> optional.
+export type CallTokenResponse = Required<ApiCallTokenResponse>;
+export type Meeting = Required<ApiMeeting>;
 
 const host: string = SERVER_HOSTS['document-storage-service'];
 
 export const callServiceClient = {
+  inviteToMeeting(shareToken: string, email: string) {
+    const body: InviteMeetingRequest = { email };
+    return fetchWithToken<Record<string, never>>(
+      `${host}/call/meetings/invite/${encodeURIComponent(shareToken)}`,
+      {
+        method: 'POST',
+        body: JSON.stringify(body),
+      }
+    );
+  },
+  createMeeting(body: CreateMeetingRequest) {
+    return fetchWithToken<Meeting>(`${host}/call/meetings`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+
+  updateMeeting(meetingId: string, body: UpdateMeetingRequest) {
+    return fetchWithToken<Meeting>(
+      `${host}/call/meetings/${encodeURIComponent(meetingId)}`,
+      { method: 'PATCH', body: JSON.stringify(body) }
+    );
+  },
+
+  async getMeetings() {
+    return (
+      await fetchWithToken<{ meetings: Meeting[] }>(`${host}/call/meetings`)
+    ).map((result) => result.meetings);
+  },
+
+  cancelMeeting(meetingId: string) {
+    return fetchWithToken<Record<string, never>>(
+      `${host}/call/meetings/${encodeURIComponent(meetingId)}`,
+      { method: 'DELETE' }
+    );
+  },
+
+  getCallLink(callId: string) {
+    return fetchWithToken<Meeting>(
+      `${host}/call/record/${encodeURIComponent(callId)}/link`,
+      { method: 'POST' }
+    );
+  },
+
+  getMeeting(shareToken: string) {
+    return safeFetch<Meeting>(
+      `${host}/call/join/${encodeURIComponent(shareToken)}`,
+      { credentials: 'omit' }
+    );
+  },
+
+  joinMeeting(shareToken: string) {
+    return fetchWithToken<CallTokenResponse>(
+      `${host}/call/meetings/join/${encodeURIComponent(shareToken)}`,
+      { method: 'POST' }
+    );
+  },
+
+  joinMeetingAsGuest(shareToken: string, displayName: string) {
+    return safeFetch<CallTokenResponse>(
+      `${host}/call/join/${encodeURIComponent(shareToken)}`,
+      {
+        method: 'POST',
+        credentials: 'omit',
+        body: JSON.stringify({ displayName }),
+      }
+    );
+  },
+
+  leaveMeeting(shareToken: string, token: string) {
+    return safeFetch<LeaveCallResponse>(
+      `${host}/call/join/${encodeURIComponent(shareToken)}/leave`,
+      {
+        method: 'POST',
+        credentials: 'omit',
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
+  },
+
   async getOrCreateCall(channelId: string) {
     return (
       await fetchWithToken<CallTokenResponse>(`${host}/call/${channelId}`, {

@@ -19,16 +19,17 @@ interface SourceControlsProps {
  */
 export function SourceControls(props: SourceControlsProps) {
   const groups = () => groupCalendarSourcesByAccount(props.sources);
-  // Accounts start folded; expanding one only reveals its calendars, which
-  // stay visible on the grid whether or not the group is expanded.
-  const [expandedKeys, setExpandedKeys] = createSignal<ReadonlySet<string>>(
-    new Set()
-  );
+  // A single connected account starts open. Explicit toggles continue to win
+  // if the source query refreshes or its calendars change.
+  const [expandedOverrides, setExpandedOverrides] = createSignal<
+    ReadonlyMap<string, boolean>
+  >(new Map());
+  const isExpanded = (key: string) =>
+    expandedOverrides().get(key) ?? groups().length === 1;
   const toggleExpanded = (key: string) =>
-    setExpandedKeys((current) => {
-      const next = new Set(current);
-      if (next.has(key)) next.delete(key);
-      else next.add(key);
+    setExpandedOverrides((current) => {
+      const next = new Map(current);
+      next.set(key, !isExpanded(key));
       return next;
     });
 
@@ -41,7 +42,7 @@ export function SourceControls(props: SourceControlsProps) {
               .length;
           const allVisible = () => visibleCount() === group.calendars.length;
           const someVisible = () => visibleCount() > 0 && !allVisible();
-          const expanded = () => expandedKeys().has(group.key);
+          const expanded = () => isExpanded(group.key);
           const setGroupVisible = (visible: boolean) => {
             for (const calendar of group.calendars) {
               props.onVisibilityChange(calendar.id, visible);

@@ -21,8 +21,8 @@ pub struct Call {
     /// Unique call identifier.
     pub id: Uuid,
     /// The channel this call belongs to.
-    pub channel_id: Uuid,
-    /// Name of the RTC room (typically the channel_id as a string).
+    pub channel_id: Option<Uuid>,
+    /// Name of the RTC room, unique per call session.
     pub room_name: String,
     /// User who created the call.
     pub created_by: String,
@@ -38,7 +38,7 @@ pub struct ArchivedCall {
     /// The archived call record identifier.
     pub call_id: Uuid,
     /// The channel the call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who created the call.
     pub created_by: String,
     /// When the call started.
@@ -69,10 +69,14 @@ pub struct CallParticipant {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CallTokenResponse {
+    /// RTC participant identity.
+    pub participant_id: String,
+    /// Meeting link capability, when joined using a link.
+    pub share_token: Option<String>,
     /// The call identifier.
     pub call_id: Uuid,
     /// The channel this call is associated with.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// The RTC token for connecting to the room.
     pub token: String,
     /// The RTC room name.
@@ -221,6 +225,8 @@ pub struct CallWebhookEvent {
     pub room_name: Option<String>,
     /// Participant identity associated with the event, if any.
     pub participant_identity: Option<MacroUserIdStr<'static>>,
+    /// Non-account guest identity, validated separately from Macro users.
+    pub guest_identity: Option<String>,
     /// Egress ID associated with the event, if any.
     pub egress_id: Option<String>,
     /// File download URL from a completed egress, if any.
@@ -419,6 +425,8 @@ pub struct CallRecordTranscriptSegment {
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct CallRecordParticipant {
+    /// Guest-provided display name, retained after archival.
+    pub display_name: Option<String>,
     /// The user id.
     pub user_id: String,
     /// When the user joined the call.
@@ -436,7 +444,7 @@ pub struct CallRecord {
     /// The call identifier.
     pub call_id: Uuid,
     /// The channel this call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// The RTC room name.
     pub room_name: String,
     /// User who created the call.
@@ -538,7 +546,7 @@ pub struct CallRecordPreviewData {
     /// The call identifier.
     pub call_id: Uuid,
     /// The channel this call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// Resolved display name for the channel.
     pub channel_name: Option<String>,
     /// User-supplied or AI-generated display name for the call. Only set on
@@ -650,4 +658,10 @@ impl From<TeamSharePolicyError> for CallError {
             | TeamSharePolicyError::ContradictoryInputs => Self::InvalidRequest(error.to_string()),
         }
     }
+}
+
+/// Team memory may only include calls associated with a channel.
+/// Standalone invitations and their records always keep team sharing disabled.
+pub(crate) fn permitted_team_memory_intent(channel_id: Option<Uuid>, enabled: bool) -> bool {
+    channel_id.is_some() && enabled
 }

@@ -53,6 +53,8 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import type { CalendarEventFilter } from '../../calendar-home/core/calendar-home';
+import { matchesEventFilter } from '../calendar-event-filter';
 import {
   calendarFocusTargetId,
   useCalendarFocus,
@@ -129,7 +131,9 @@ function CalendarScrollIndicators(props: {
   );
 }
 
-function CalendarPageDataStatus(props: { data: CalendarOccurrenceData }) {
+export function CalendarPageDataStatus(props: {
+  data: CalendarOccurrenceData;
+}) {
   const isRangeUnavailable = createMemo(() => {
     const range = props.data.range();
     return range !== undefined && !isCalendarRangeSupported(range);
@@ -214,6 +218,9 @@ export function Page(props: {
   id: CalendarPageId;
   initialDate: Date;
   useNarrowDayHeaders: boolean;
+  eventFilter?: CalendarEventFilter;
+  viewerEmail?: string;
+  interactive?: boolean;
 }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
@@ -229,6 +236,7 @@ export function Page(props: {
     firstWritableCalendar()?.color ??
     DEFAULT_CALENDAR_SOURCE.color;
   const isActive = () => pager.isActive(props.id);
+  const isInteractive = () => isActive() && props.interactive !== false;
   const useNarrowWeekdayHeaders = () =>
     props.useNarrowDayHeaders && !isMobile();
   const data = useCalendarOccurrenceData({
@@ -245,10 +253,11 @@ export function Page(props: {
     isSourceVisible: calendarView.isSourceVisible,
     refetchOnWindowFocus: isActive,
   });
-  const visibleEvents = createMemo(() => [
-    ...data.visibleEvents(),
-    ...teamOoo.visibleEvents(),
-  ]);
+  const visibleEvents = createMemo(() =>
+    [...data.visibleEvents(), ...teamOoo.visibleEvents()].filter((event) =>
+      matchesEventFilter(event, props.eventFilter ?? 'all', props.viewerEmail)
+    )
+  );
   const eventsById = createMemo(() =>
     teamOoo.eventsById().size === 0
       ? data.eventsById()
@@ -335,10 +344,10 @@ export function Page(props: {
       }}
       selection={{
         color: effectiveSelectionColor(),
-        eventId: isActive() ? calendarView.selectedEvent()?.id : undefined,
+        eventId: isInteractive() ? calendarView.selectedEvent()?.id : undefined,
         onDateSelect: isMobile() ? undefined : handleSelect,
         onEventSelect: (event, element) => {
-          if (isActive()) calendarView.selectEvent(event, element);
+          if (isInteractive()) calendarView.selectEvent(event, element);
         },
       }}
       eventTimeChangePending={updateEventTime.isPending}
@@ -352,6 +361,7 @@ export function Page(props: {
           teamEvents={teamOoo.visibleEvents}
           eventsById={eventsById}
           grid={grid}
+          interactive={props.interactive !== false}
         />
       )}
     </CalendarGrid>
@@ -366,6 +376,7 @@ function CalendarPageHost(props: {
   /** Occurrence events merged with the team out-of-office overlay. */
   eventsById: Accessor<Map<string, CalendarEvent>>;
   grid: CalendarGridHandle;
+  interactive: boolean;
 }) {
   const pager = useCalendarPager();
   const calendarView = useCalendarView();
@@ -378,7 +389,7 @@ function CalendarPageHost(props: {
   createEffect(() => {
     props.grid.chipMounts();
     const target = calendarFocus.pendingTarget();
-    if (!target || !isActive()) return;
+    if (!target || !isActive() || !props.interactive) return;
     const dateInfo = props.grid.dateInfo();
     if (!dateInfo) return;
     if (target.date < dateInfo.start || target.date >= dateInfo.end) {
@@ -400,7 +411,7 @@ function CalendarPageHost(props: {
   });
 
   useCalendarTimeGridHoverIndicator(() =>
-    isActive() ? props.grid.element() : undefined
+    isActive() && props.interactive ? props.grid.element() : undefined
   );
 
   onMount(() => {

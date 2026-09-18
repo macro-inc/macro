@@ -195,6 +195,34 @@ pub async fn delete_entity_access_rows(
     Ok(())
 }
 
+/// Ensure a user has a direct view grant without replacing existing stronger access.
+///
+/// This does not authorize the grant and does not commit the caller's transaction.
+/// The owning domain must decide whether the user is entitled to access.
+pub async fn ensure_user_view_access<'e, E>(
+    executor: E,
+    entity_id: &macro_uuid::Uuid,
+    entity_type: EntityType,
+    user_id: MacroUserIdStr<'_>,
+) -> Result<(), sqlx::Error>
+where
+    E: Executor<'e, Database = Postgres>,
+{
+    sqlx::query!(
+        r#"INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+           VALUES ($1, $2, $3, 'user', 'view')
+           ON CONFLICT (entity_id, entity_type, source_id, source_type)
+           WHERE granted_from_project_id IS NULL
+           DO NOTHING"#,
+        entity_id,
+        entity_type.as_ref(),
+        user_id.as_ref(),
+    )
+    .execute(executor)
+    .await?;
+    Ok(())
+}
+
 /// Bulk upserts entity access for users.
 ///
 /// An owner row is never rewritten: the guard sits on the `DO UPDATE`, where

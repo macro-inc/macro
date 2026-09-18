@@ -1,5 +1,21 @@
 use super::*;
 
+#[test]
+fn call_invitation_links_directly_to_guest_join_and_escapes_titles() {
+    let invitation = CallInvite {
+        title: "Review <script>alert(1)</script>".to_string(),
+        share_token: "server-issued-test-token".to_string(),
+        invited_by: MacroUserIdStr::try_from_email("host@example.com").unwrap(),
+        recipient_email: "guest@outside.example".to_string(),
+    };
+    let email = invitation.format_email();
+    assert!(email.body.contains("/app/meet/server-issued-test-token"));
+    assert!(email.body.contains("No Macro account needed"));
+    assert!(!email.body.contains("/signup"));
+    assert!(!email.body.contains("<script>"));
+    assert!(email.subject.contains("host@example.com"));
+}
+
 fn make_invite() -> InviteToMacro {
     InviteToMacro {
         recipient_email: EmailStr::try_from("recipient@example.com".to_string()).unwrap(),

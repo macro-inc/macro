@@ -16,6 +16,8 @@ note: |-
   Block-agent names its rendering layers `ui/` and `component/`.
 files:
   - apps/web/src/features/block-agent/core/**
+  - apps/web/src/features/calendar-home/core/**
+  - apps/web/src/features/meetings/core/**
   - apps/web/src/features/block-spreadsheet/core/**
   - apps/web/src/features/property/tags/core/**
   - apps/web/src/features/claude-connection/core/**

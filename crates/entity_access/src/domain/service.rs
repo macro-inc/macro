@@ -145,7 +145,7 @@ where
     /// Looks up both the active `calls` table and the archived `call_records`
     /// table. Returns `NotFound` if neither has a matching row, or
     /// `BadRequest` if the id is not a valid UUID.
-    async fn resolve_call_channel_id(&self, call_id: &str) -> Result<Uuid, AccessError> {
+    async fn resolve_call_channel_id(&self, call_id: &str) -> Result<Option<Uuid>, AccessError> {
         let call_uuid = Uuid::from_str(call_id)
             .map_err(|_| AccessError::BadRequest("Invalid call ID format"))?;
         let info = self
@@ -638,11 +638,15 @@ where
                 })?;
                 self.repo.get_channel_users(&channel_id).await
             }
-            EntityType::Call => {
-                // Participants of a call are the members of its channel.
-                let channel_id = self.resolve_call_channel_id(entity_id).await?;
-                self.repo.get_channel_users(&channel_id).await
-            }
+            EntityType::Call => match self.resolve_call_channel_id(entity_id).await? {
+                Some(channel_id) => self.repo.get_channel_users(&channel_id).await,
+                None => {
+                    let call_id = Uuid::parse_str(entity_id).map_err(|_| {
+                        AccessError::BadRequest("invalid call_id for get_users_by_entity")
+                    })?;
+                    self.repo.get_entity_users(&call_id, EntityType::Call).await
+                }
+            },
             _ => Err(AccessError::BadRequest(
                 "get_users_by_entity does not support this entity type",
             )),

@@ -3331,6 +3331,7 @@ dependencies = [
  "entity_mutation",
  "filter_ast",
  "futures",
+ "invite_email",
  "item_filters",
  "livekit-api",
  "livekit-protocol",

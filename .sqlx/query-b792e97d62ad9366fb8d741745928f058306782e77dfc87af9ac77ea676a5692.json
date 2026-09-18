@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO \"Document\" (id, name, owner, \"createdAt\", \"updatedAt\")\n        SELECT id, 'explain task', 'macro|user-1@test.com', '2026-01-01', '2026-01-02'\n        FROM unnest($1::text[]) id ON CONFLICT DO NOTHING",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b792e97d62ad9366fb8d741745928f058306782e77dfc87af9ac77ea676a5692"
+}

@@ -1,4 +1,4 @@
-import type { CallRecord } from '@service-storage/generated/schemas/callRecord';
+import type { CallRecord } from '@service-call/client';
 
 /** Matches `@container` / grid breakpoint in `CallBlockAdapter`. */
 export const CALL_RECORDING_STACKED_BREAKPOINT_PX = 860;
@@ -11,6 +11,7 @@ export type CallRecordingParticipantRow = {
   userId: string;
   joinedAt: string;
   role: 'organizer' | 'participant';
+  displayName?: string | null;
 };
 
 /**
@@ -29,6 +30,7 @@ export function dedupeCallRecordingParticipants(
         userId: participant.userId,
         joinedAt: participant.joinedAt,
         role: participant.userId === createdBy ? 'organizer' : 'participant',
+        displayName: participant.displayName,
       });
     }
   }

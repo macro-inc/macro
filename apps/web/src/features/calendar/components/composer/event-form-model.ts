@@ -23,6 +23,10 @@ import { type Accessor, batch, createMemo, createSignal } from 'solid-js';
 import type { CalendarEvent } from '../../types';
 import { parseLocalDate } from '../../utils/calendar-date';
 import {
+  calendarMacroCallUrl,
+  removeCalendarMacroCall,
+} from '../../utils/macro-call-link';
+import {
   buildRecurrenceLines,
   defaultCustomConfig,
   formatRecurrenceDescription,
@@ -62,7 +66,11 @@ function defaultEditorTimes(reference: Date) {
 }
 
 /** Conferencing displayed by the editor before it is submitted. */
-export type EventEditorConferenceChoice = 'none' | 'google_meet' | 'existing';
+export type EventEditorConferenceChoice =
+  | 'none'
+  | 'google_meet'
+  | 'macro_call'
+  | 'existing';
 
 /** Values used to initialize the shared event editor form. */
 export interface EventEditorInitialValues {
@@ -135,6 +143,8 @@ export interface EventEditorSubmitValues {
   description: string;
   /** Present only when conferencing should be attached, replaced, or removed. */
   conference?: ConferenceChange;
+  /** Attach or retain a shareable Macro call in the calendar invitation. */
+  macroCall?: boolean;
   /** Present only when the user changed the event's reminder configuration. */
   reminders?: EventReminders;
   /**
@@ -192,6 +202,7 @@ export function calendarSelectionToEditorInitialValues(selection: {
 function initialConferenceChoice(
   event: CalendarEvent
 ): EventEditorConferenceChoice {
+  if (calendarMacroCallUrl(event)) return 'macro_call';
   if (!event.conferenceUrl) return 'none';
   return event.conferenceProvider === 'google_meet'
     ? 'google_meet'
@@ -215,6 +226,7 @@ export function calendarEventToEditorInitialValues(
   event: CalendarEvent
 ): EventEditorInitialValues {
   const guests = eventGuestEmails(event).join(', ');
+  const content = removeCalendarMacroCall(event, calendarMacroCallUrl(event));
 
   if (event.allDay) {
     const start = isDateOnly(event.start)
@@ -231,8 +243,8 @@ export function calendarEventToEditorInitialValues(
       recurrenceLines: [...event.recurrenceLines],
       calendarId: event.calendarId ?? event.calendar.id,
       guests,
-      location: event.location ?? '',
-      description: event.description ?? '',
+      location: content.location,
+      description: content.description,
       conference: initialConferenceChoice(event),
       reminders: event.reminders,
       eventType: event.eventType,
@@ -248,8 +260,8 @@ export function calendarEventToEditorInitialValues(
     recurrenceLines: [...event.recurrenceLines],
     calendarId: event.calendarId ?? event.calendar.id,
     guests,
-    location: event.location ?? '',
-    description: event.description ?? '',
+    location: content.location,
+    description: content.description,
     conference: initialConferenceChoice(event),
     reminders: event.reminders,
     eventType: event.eventType,

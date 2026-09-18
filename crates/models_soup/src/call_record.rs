@@ -11,6 +11,8 @@ use uuid::Uuid;
 pub struct SoupCallRecordParticipant {
     /// The user id.
     pub user_id: String,
+    /// Guest display name, when the participant has no Macro profile.
+    pub display_name: Option<String>,
     /// When the user joined the call.
     pub joined_at: DateTime<Utc>,
     /// When the user left (None if still in an active call).
@@ -26,7 +28,7 @@ pub struct SoupCallRecord<T = ()> {
     /// The call identifier.
     pub call_id: Uuid,
     /// The channel this call belongs to.
-    pub channel_id: Uuid,
+    pub channel_id: Option<Uuid>,
     /// User who created the call.
     pub created_by: String,
     /// When the call started.
@@ -92,6 +94,7 @@ impl SoupCallRecord<()> {
                 .into_iter()
                 .map(|p| SoupCallRecordParticipant {
                     user_id: p.user_id,
+                    display_name: p.display_name,
                     joined_at: p.joined_at,
                     left_at: p.left_at,
                 })

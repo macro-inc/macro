@@ -1969,7 +1969,7 @@ export type CallRecord = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -2051,6 +2051,10 @@ export type CallRecord = {
  */
 export type CallRecordParticipant = {
     /**
+     * Guest-provided display name, retained after archival.
+     */
+    displayName?: string | null;
+    /**
      * When the user joined the call.
      */
     joinedAt: string;
@@ -2088,7 +2092,7 @@ export type CallRecordPreviewData = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -2165,7 +2169,11 @@ export type CallTokenResponse = {
     /**
      * The channel this call is associated with.
      */
-    channelId: string;
+    channelId?: string | null;
+    /**
+     * RTC participant identity.
+     */
+    participantId: string;
     /**
      * The RTC room name.
      */
@@ -2174,6 +2182,10 @@ export type CallTokenResponse = {
      * The RTC server URL for the frontend SDK to connect to.
      */
     serverUrl: string;
+    /**
+     * Meeting link capability, when joined using a link.
+     */
+    shareToken?: string | null;
     /**
      * The RTC token for connecting to the room.
      */
@@ -3660,6 +3672,24 @@ export type CreateMarkdownDocumentResponse = {
      * A pre-generated permission token that you can use for SS
      */
     token: string;
+};
+
+/**
+ * Inputs for creating a meeting without starting its RTC room.
+ */
+export type CreateMeetingRequest = {
+    /**
+     * Optional scheduled end.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Optional scheduled start.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Optional display title.
+     */
+    title?: string | null;
 };
 
 /**
@@ -6414,6 +6444,16 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
 
 /**
+ * Public guest join inputs. The server generates the participant identity.
+ */
+export type GuestJoinRequest = {
+    /**
+     * Guest's name, displayed to everyone in the room.
+     */
+    displayName: string;
+};
+
+/**
  * A registered user-run harness.
  *
  * Clients deserialize this, so both derives are used.
@@ -6692,6 +6732,16 @@ export type InputReceivedMetadata = {
  */
 export type InteractionReason = 'edited' | 'first_join' | 'last_leave';
 
+/**
+ * A single email recipient for a call invitation.
+ */
+export type InviteMeetingRequest = {
+    /**
+     * Recipient email; no Macro account is required.
+     */
+    email: string;
+};
+
 export type Item = ({
     type: 'document';
 } & BasicDocument) | ({
@@ -6796,6 +6846,55 @@ export type LocationResponseV3 = {
 };
 
 export type MacroUserIdStr = string;
+
+/**
+ * Persistent meeting metadata. No channel contents or archived media are exposed.
+ */
+export type Meeting = {
+    /**
+     * Currently active call session, if any.
+     */
+    callId?: string | null;
+    /**
+     * Associated channel, for links to existing channel calls only.
+     */
+    channelId?: string | null;
+    /**
+     * Persistent meeting identifier.
+     */
+    id: string;
+    /**
+     * Scheduled end, or none for an instant meeting.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Scheduled start, or none for an instant meeting.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Bearer capability embedded in the invitation URL.
+     */
+    shareToken: MeetingToken;
+    /**
+     * Human-readable meeting title.
+     */
+    title: string;
+};
+
+/**
+ * A bearer capability that grants access only to a meeting's RTC room.
+ */
+export type MeetingToken = string;
+
+/**
+ * The actor's most recent uncancelled standalone meetings.
+ */
+export type MeetingsResponse = {
+    /**
+     * Persistent meeting invitations, most recently created first.
+     */
+    meetings: Array<Meeting>;
+};
 
 export type Mentions = {
     mentionId: string;
@@ -8897,6 +8996,10 @@ export type SoupCalendarEventSoupPropertiesField = {
  */
 export type SoupCallRecordParticipant = {
     /**
+     * Guest display name, when the participant has no Macro profile.
+     */
+    displayName?: string | null;
+    /**
      * When the user joined the call.
      */
     joinedAt: string;
@@ -8932,7 +9035,7 @@ export type SoupCallRecordSoupPropertiesField = {
     /**
      * The channel this call belongs to.
      */
-    channelId: string;
+    channelId?: string | null;
     /**
      * Resolved display name for the channel.
      */
@@ -10440,6 +10543,28 @@ export type UpdateInitiativeRequest = {
     sharePermission?: null | UpdateSharePermissionRequestV2;
 };
 
+/**
+ * Changes to a meeting's title or scheduled time; omitted values stay unchanged.
+ */
+export type UpdateMeetingRequest = {
+    /**
+     * Remove timed scheduling, for example when the calendar event becomes all-day.
+     */
+    clearSchedule?: boolean;
+    /**
+     * Replacement scheduled end; requires a matching start.
+     */
+    scheduledEnd?: string | null;
+    /**
+     * Replacement scheduled start; requires a matching end.
+     */
+    scheduledStart?: string | null;
+    /**
+     * Replacement title, when supplied.
+     */
+    title?: string | null;
+};
+
 export type UpdateOperation = 'add' | 'remove' | 'replace';
 
 /**
@@ -11327,6 +11452,214 @@ export type GetActiveCallsResponses = {
 
 export type GetActiveCallsResponse = GetActiveCallsResponses[keyof GetActiveCallsResponses];
 
+export type MeetingLookupData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}';
+};
+
+export type MeetingLookupErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingLookupError = MeetingLookupErrors[keyof MeetingLookupErrors];
+
+export type MeetingLookupResponses = {
+    200: Meeting;
+};
+
+export type MeetingLookupResponse = MeetingLookupResponses[keyof MeetingLookupResponses];
+
+export type MeetingGuestJoinData = {
+    body: GuestJoinRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}';
+};
+
+export type MeetingGuestJoinErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingGuestJoinError = MeetingGuestJoinErrors[keyof MeetingGuestJoinErrors];
+
+export type MeetingGuestJoinResponses = {
+    200: CallTokenResponse;
+};
+
+export type MeetingGuestJoinResponse = MeetingGuestJoinResponses[keyof MeetingGuestJoinResponses];
+
+export type MeetingLeaveData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/join/{token}/leave';
+};
+
+export type MeetingLeaveErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingLeaveError = MeetingLeaveErrors[keyof MeetingLeaveErrors];
+
+export type MeetingLeaveResponses = {
+    200: LeaveCallResponse;
+};
+
+export type MeetingLeaveResponse = MeetingLeaveResponses[keyof MeetingLeaveResponses];
+
+export type MeetingListData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/call/meetings';
+};
+
+export type MeetingListErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingListError = MeetingListErrors[keyof MeetingListErrors];
+
+export type MeetingListResponses = {
+    200: MeetingsResponse;
+};
+
+export type MeetingListResponse = MeetingListResponses[keyof MeetingListResponses];
+
+export type MeetingCreateData = {
+    body: CreateMeetingRequest;
+    path?: never;
+    query?: never;
+    url: '/call/meetings';
+};
+
+export type MeetingCreateErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingCreateError = MeetingCreateErrors[keyof MeetingCreateErrors];
+
+export type MeetingCreateResponses = {
+    200: Meeting;
+};
+
+export type MeetingCreateResponse = MeetingCreateResponses[keyof MeetingCreateResponses];
+
+export type MeetingInviteData = {
+    body: InviteMeetingRequest;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/invite/{token}';
+};
+
+export type MeetingInviteErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type MeetingInviteError = MeetingInviteErrors[keyof MeetingInviteErrors];
+
+export type MeetingInviteResponses = {
+    204: void;
+};
+
+export type MeetingInviteResponse = MeetingInviteResponses[keyof MeetingInviteResponses];
+
+export type MeetingJoinData = {
+    body?: never;
+    path: {
+        token: string;
+    };
+    query?: never;
+    url: '/call/meetings/join/{token}';
+};
+
+export type MeetingJoinErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingJoinError = MeetingJoinErrors[keyof MeetingJoinErrors];
+
+export type MeetingJoinResponses = {
+    200: CallTokenResponse;
+};
+
+export type MeetingJoinResponse = MeetingJoinResponses[keyof MeetingJoinResponses];
+
+export type MeetingCancelData = {
+    body?: never;
+    path: {
+        meeting_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/{meeting_id}';
+};
+
+export type MeetingCancelErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingCancelError = MeetingCancelErrors[keyof MeetingCancelErrors];
+
+export type MeetingCancelResponses = {
+    204: void;
+};
+
+export type MeetingCancelResponse = MeetingCancelResponses[keyof MeetingCancelResponses];
+
+export type MeetingUpdateData = {
+    body: UpdateMeetingRequest;
+    path: {
+        meeting_id: string;
+    };
+    query?: never;
+    url: '/call/meetings/{meeting_id}';
+};
+
+export type MeetingUpdateErrors = {
+    400: ErrorResponse;
+    403: ErrorResponse;
+};
+
+export type MeetingUpdateError = MeetingUpdateErrors[keyof MeetingUpdateErrors];
+
+export type MeetingUpdateResponses = {
+    200: Meeting;
+};
+
+export type MeetingUpdateResponse = MeetingUpdateResponses[keyof MeetingUpdateResponses];
+
 export type GetBatchCallRecordPreviewData = {
     body: GetBatchCallRecordPreviewRequest;
     path?: never;
@@ -11446,6 +11779,30 @@ export type EditCallRecordResponses = {
 };
 
 export type EditCallRecordResponse = EditCallRecordResponses[keyof EditCallRecordResponses];
+
+export type MeetingShareData = {
+    body?: never;
+    path: {
+        call_id: string;
+    };
+    query?: never;
+    url: '/call/record/{call_id}/link';
+};
+
+export type MeetingShareErrors = {
+    400: ErrorResponse;
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+};
+
+export type MeetingShareError = MeetingShareErrors[keyof MeetingShareErrors];
+
+export type MeetingShareResponses = {
+    200: Meeting;
+};
+
+export type MeetingShareResponse = MeetingShareResponses[keyof MeetingShareResponses];
 
 export type ToggleShareWithTeamData = {
     body?: never;

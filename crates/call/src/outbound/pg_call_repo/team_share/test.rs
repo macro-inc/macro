@@ -391,7 +391,10 @@ async fn toggle_share_with_team_flips_live_call_and_conflicts_once_archived(
 ) -> anyhow::Result<()> {
     let repo = repo(pool.clone());
 
-    assert_eq!(repo.toggle_share_with_team(&CALL1).await?, (false, CH1));
+    assert_eq!(
+        repo.toggle_share_with_team(&CALL1).await?,
+        (false, Some(CH1))
+    );
     assert!(!live_toggle(&pool, CALL1).await);
     assert!(
         !repo
@@ -401,7 +404,10 @@ async fn toggle_share_with_team_flips_live_call_and_conflicts_once_archived(
             .share_with_team
     );
 
-    assert_eq!(repo.toggle_share_with_team(&CALL1).await?, (true, CH1));
+    assert_eq!(
+        repo.toggle_share_with_team(&CALL1).await?,
+        (true, Some(CH1))
+    );
     assert!(live_toggle(&pool, CALL1).await);
     // Flipping the toggle never touches canonical state or grants.
     assert_eq!(stored_team_share(&pool, CALL1).await, unshared());

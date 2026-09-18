@@ -1,7 +1,10 @@
+import { isCallGuest } from '@channel/Call/call-identity';
 import { Message } from '@channel/Message';
 import { Thread } from '@channel/Thread/Thread';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
+import { UserIcon } from '@core/component/UserIcon';
 import type { MessageData } from '@core/messages/types';
+import { idToEmail } from '@core/user';
 import { formatVideoTimestamp } from '@core/util/duration';
 import Subtitles from '@phosphor/subtitles.svg';
 import { senderFromStorageId } from '@queries/messages/message-sender';
@@ -157,9 +160,71 @@ function GroupedTranscriptSegmentRow(props: {
   );
 }
 
+/** Standalone calls and external speakers have no channel sender entity. */
+function MeetingTranscriptSegmentRow(props: {
+  segment: CallRecordTranscriptSegment;
+  speakerName?: string;
+  grouped: boolean;
+  isActive: boolean;
+  timelineStartMs: number | null;
+  onSeekToSeconds?: (seconds: number) => void;
+}) {
+  const guest = () => isCallGuest(props.segment.speakerId);
+  const name = () =>
+    props.speakerName?.trim() ||
+    (guest() ? 'Guest' : idToEmail(props.segment.speakerId));
+  const videoTimestamp = () =>
+    getSegmentVideoSeconds(props.segment, props.timelineStartMs);
+  return (
+    <button
+      type="button"
+      class="grid w-full grid-cols-[2rem_minmax(0,1fr)] gap-x-2 rounded-lg px-2 py-1 text-left hover:bg-hover"
+      classList={{ 'bg-hover': props.isActive, 'pt-4': !props.grouped }}
+      onClick={() => {
+        const seconds = videoTimestamp();
+        if (seconds !== null) props.onSeekToSeconds?.(seconds);
+      }}
+    >
+      <Show when={!props.grouped}>
+        <span class="row-span-2">
+          <Show
+            when={!guest()}
+            fallback={
+              <span class="flex size-7 items-center justify-center rounded-full bg-hover text-xs text-ink-muted">
+                {name().charAt(0).toUpperCase()}
+              </span>
+            }
+          >
+            <UserIcon
+              id={props.segment.speakerId}
+              size="sm"
+              isDeleted={false}
+            />
+          </Show>
+        </span>
+        <span class="flex min-w-0 items-center gap-2 text-xs">
+          <span class="truncate font-medium text-ink">{name()}</span>
+          <Show when={guest()}>
+            <span class="text-ink-extra-muted">Guest</span>
+          </Show>
+          <Show when={videoTimestamp() !== null}>
+            <span class="ml-auto text-ink-muted tabular-nums">
+              {formatVideoTimestamp(videoTimestamp() ?? 0)}
+            </span>
+          </Show>
+        </span>
+      </Show>
+      <span class="col-start-2 whitespace-pre-wrap wrap-break-word text-sm text-ink">
+        {props.segment.content}
+      </span>
+    </button>
+  );
+}
+
 export function CallTranscript(props: {
   transcript: CallRecordTranscriptSegment[];
-  channelId: string;
+  channelId?: string | null;
+  speakerNames?: ReadonlyMap<string, string>;
   timelineStartMs: number | null;
   activeSequenceNum?: number | null;
   /** Bumps when the user seeks via the native video controls (deduped in CallBlockAdapter). */
@@ -347,36 +412,55 @@ export function CallTranscript(props: {
           <div class="flex flex-col p-4 pt-0">
             <For each={transcriptMeta().items}>
               {(item) => (
-                <Show
-                  when={item.groupedWithPrevious}
-                  fallback={
-                    <div
-                      ref={(el) => rowRefs.set(item.segment.sequenceNum, el)}
-                    >
-                      <TranscriptSegmentRow
+                <div ref={(el) => rowRefs.set(item.segment.sequenceNum, el)}>
+                  <Show
+                    when={
+                      !isCallGuest(item.segment.speakerId) && props.channelId
+                    }
+                    fallback={
+                      <MeetingTranscriptSegmentRow
                         segment={item.segment}
-                        channelId={props.channelId}
+                        speakerName={props.speakerNames?.get(
+                          item.segment.speakerId
+                        )}
+                        grouped={item.groupedWithPrevious}
                         isActive={
                           item.segment.sequenceNum === props.activeSequenceNum
                         }
                         timelineStartMs={props.timelineStartMs}
                         onSeekToSeconds={props.onSeekToSeconds}
                       />
-                    </div>
-                  }
-                >
-                  <div ref={(el) => rowRefs.set(item.segment.sequenceNum, el)}>
-                    <GroupedTranscriptSegmentRow
-                      segment={item.segment}
-                      channelId={props.channelId}
-                      isActive={
-                        item.segment.sequenceNum === props.activeSequenceNum
-                      }
-                      timelineStartMs={props.timelineStartMs}
-                      onSeekToSeconds={props.onSeekToSeconds}
-                    />
-                  </div>
-                </Show>
+                    }
+                  >
+                    {(channelId) => (
+                      <Show
+                        when={item.groupedWithPrevious}
+                        fallback={
+                          <TranscriptSegmentRow
+                            segment={item.segment}
+                            channelId={channelId()}
+                            isActive={
+                              item.segment.sequenceNum ===
+                              props.activeSequenceNum
+                            }
+                            timelineStartMs={props.timelineStartMs}
+                            onSeekToSeconds={props.onSeekToSeconds}
+                          />
+                        }
+                      >
+                        <GroupedTranscriptSegmentRow
+                          segment={item.segment}
+                          channelId={channelId()}
+                          isActive={
+                            item.segment.sequenceNum === props.activeSequenceNum
+                          }
+                          timelineStartMs={props.timelineStartMs}
+                          onSeekToSeconds={props.onSeekToSeconds}
+                        />
+                      </Show>
+                    )}
+                  </Show>
+                </div>
               )}
             </For>
           </div>

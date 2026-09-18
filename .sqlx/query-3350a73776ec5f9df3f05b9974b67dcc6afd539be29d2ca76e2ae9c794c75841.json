@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO call_record_participants (call_record_id, user_id, joined_at, left_at, display_name)\n            SELECT $1, user_id, joined_at, left_at, display_name\n            FROM call_participants\n            WHERE call_id = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3350a73776ec5f9df3f05b9974b67dcc6afd539be29d2ca76e2ae9c794c75841"
+}

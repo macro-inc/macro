@@ -438,6 +438,9 @@ export type CallState = {
 
 const CallContext = createContext<CallState>();
 
+/** Supplies a call controller to a subtree, including isolated UI previews. */
+export const CallStateProvider = CallContext.Provider;
+
 export function useCallContext(): CallState {
   const ctx = useContext(CallContext);
   if (!ctx) {
@@ -1113,14 +1116,16 @@ function createCallState() {
   async function finishLocalMediaSetup(targetRoom: Room, setupVersion: number) {
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
-    // Enable microphone by default.
+    // Respect the pre-join microphone preference before opening a device.
     try {
       await targetRoom.localParticipant.setMicrophoneEnabled(
-        true,
+        !store.isAudioMuted,
         currentMicrophoneCaptureOptions()
       );
     } catch (e) {
       console.error('failed to enable microphone', e);
+      if (isCurrentMediaSetup(targetRoom, setupVersion))
+        setStore('isAudioMuted', true);
     }
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
     if (store.isAudioMuted) {
@@ -1135,6 +1140,23 @@ function createCallState() {
       // Attach Krisp when supported; otherwise use one browser-native layer.
       // ensureNoiseSuppressionOnMicTrack is a no-op when the user's pref is off.
       await ensureNoiseSuppressionOnMicTrack(targetRoom);
+    }
+    if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
+
+    if (!store.isVideoMuted) {
+      try {
+        await targetRoom.localParticipant.setCameraEnabled(true);
+        if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
+        if (store.isVideoMuted) {
+          await targetRoom.localParticipant.setCameraEnabled(false);
+        } else {
+          await ensureBackgroundEffectOnCameraTrack(targetRoom, true);
+        }
+      } catch (error) {
+        console.error('failed to enable camera', error);
+        if (isCurrentMediaSetup(targetRoom, setupVersion))
+          setStore('isVideoMuted', true);
+      }
     }
     if (!isCurrentMediaSetup(targetRoom, setupVersion)) return;
 
@@ -1199,9 +1221,9 @@ function createCallState() {
       setStore('optimisticJoinChannelId', null);
       setStore('joinError', null);
     },
-    setInitialMediaState: () => {
-      setStore('isAudioMuted', false);
-      setStore('isVideoMuted', true);
+    setInitialMediaState: (preferences) => {
+      setStore('isAudioMuted', preferences?.microphoneEnabled === false);
+      setStore('isVideoMuted', preferences?.cameraEnabled !== true);
     },
     setRemoteParticipants: (participants) => {
       setStore('remoteParticipants', participants);
@@ -1217,11 +1239,11 @@ function createCallState() {
 
   const callSession = createCallSessionController({
     nativeCall,
-    jsConnect: async (tokenResponse) => {
+    jsConnect: async (tokenResponse, metadata) => {
       const generation = ++browserConnectGeneration;
       const controller = await getLivekitJsController();
       if (disposed || generation !== browserConnectGeneration) return;
-      return controller.connect(tokenResponse);
+      return controller.connect(tokenResponse, metadata);
     },
     jsDisconnect: async () => {
       // Cancel a connect that is still waiting on its dynamic import. This is

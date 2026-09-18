@@ -4,6 +4,13 @@ const record = [...root, 'record'] as const;
 
 export const callKeys = {
   _def: root,
+  meetings: { queryKey: [...root, 'meetings'] as const },
+  meeting: (shareToken: string) => ({
+    queryKey: [...root, 'meeting', shareToken] as const,
+  }),
+  link: (callId: string) => ({
+    queryKey: [...root, 'link', callId] as const,
+  }),
   active: Object.assign(
     (channelId: string) => ({
       queryKey: [...active, channelId] as const,

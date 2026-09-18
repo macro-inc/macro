@@ -456,9 +456,17 @@ export function createCalendarEventFormController(
     const conference =
       isOutOfOffice() ||
       current.conference === 'existing' ||
-      current.conference === initialValue().conference
+      (current.conference === 'none' && initialValue().conference === 'none') ||
+      (options.isEdit === true &&
+        current.conference === initialValue().conference)
         ? undefined
-        : current.conference;
+        : current.conference === 'macro_call'
+          ? options.isEdit === true &&
+            initialValue().conference !== 'none' &&
+            initialValue().conference !== 'macro_call'
+            ? 'none'
+            : undefined
+          : current.conference;
     return {
       title: current.title,
       time,
@@ -472,6 +480,9 @@ export function createCalendarEventFormController(
         ? ''
         : current.description,
       ...(conference ? { conference } : {}),
+      ...(!isOutOfOffice() && current.conference === 'macro_call'
+        ? { macroCall: true }
+        : {}),
       ...(reminders ? { reminders } : {}),
       ...(outOfOffice ? { outOfOffice } : {}),
     };

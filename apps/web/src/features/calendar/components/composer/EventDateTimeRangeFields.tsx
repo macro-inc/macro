@@ -4,7 +4,6 @@ import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
 import CaretDownIcon from '@phosphor/caret-down.svg';
 import { Calendar } from '@ui/components/Calendar';
 import { Layer } from '@ui/components/Layer';
-import { ToggleSwitch } from '@ui/components/ToggleSwitch';
 import { cn } from '@ui/utils/classname';
 import { createSignal, createUniqueId } from 'solid-js';
 import { formatLocalDate, parseLocalDate } from '../../utils/calendar-date';
@@ -175,10 +174,8 @@ export interface EventDateTimeRangeFieldsProps {
   allDay: boolean;
   onStartChange: (value: string) => void;
   onEndChange: (value: string) => void;
-  onAllDayChange: (allDay: boolean) => void;
   startDisabled?: boolean;
   endDisabled?: boolean;
-  allDayDisabled?: boolean;
   invalid?: boolean;
   describedBy?: string;
 }
@@ -231,15 +228,6 @@ export function EventDateTimeRangeFields(props: EventDateTimeRangeFieldsProps) {
           placement="bottom-end"
         />
       </div>
-      <ToggleSwitch
-        checked={props.allDay}
-        disabled={props.allDayDisabled}
-        onChange={props.onAllDayChange}
-        size="sm"
-        label="All day"
-        labelClass="whitespace-nowrap text-xs text-ink-muted"
-        class="shrink-0"
-      />
     </div>
   );
 }

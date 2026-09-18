@@ -4,12 +4,15 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SoupCallRecordParticipantDisplayName } from './soupCallRecordParticipantDisplayName';
 import type { SoupCallRecordParticipantLeftAt } from './soupCallRecordParticipantLeftAt';
 
 /**
  * A participant in a call record, as displayed in Soup.
  */
 export interface SoupCallRecordParticipant {
+  /** Guest display name, when the participant has no Macro profile. */
+  displayName?: SoupCallRecordParticipantDisplayName;
   /** When the user joined the call. */
   joinedAt: string;
   /** When the user left (None if still in an active call). */

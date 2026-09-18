@@ -9,4 +9,5 @@ pub fn digest_email_block_list() -> EmailBlockList {
     EmailBlockList::new::<NewEmailMetadata>()
         .append::<InviteToTeamMetadata>()
         .append::<InviteToMacro>()
+        .append::<invite_email::CallInvite>()
 }

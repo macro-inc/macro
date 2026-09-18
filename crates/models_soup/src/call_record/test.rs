@@ -10,7 +10,7 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
     let now = Utc::now();
     CallRecord {
         call_id: Uuid::now_v7(),
-        channel_id: Uuid::now_v7(),
+        channel_id: Some(Uuid::now_v7()),
         room_name: "room".to_string(),
         created_by: "macro|creator@test.com".to_string(),
         started_at: now,
@@ -33,6 +33,7 @@ fn record_with_participants(user_ids: &[&str]) -> CallRecord {
             .iter()
             .map(|u| CallRecordParticipant {
                 user_id: u.to_string(),
+                display_name: None,
                 joined_at: now,
                 left_at: None,
             })
@@ -171,4 +172,15 @@ fn from_record_for_user_summary_none_when_record_has_none() {
     let record = record_with_participants(&["macro|a@test.com"]);
     let soup = SoupCallRecord::from_record_for_user(record, "macro|a@test.com");
     assert!(soup.summary.is_none());
+}
+
+#[test]
+fn standalone_call_retains_guest_name_and_has_no_channel() {
+    let mut record = record_with_participants(&["guest:01900000-0000-7000-8000-000000000001"]);
+    record.channel_id = None;
+    record.participants[0].display_name = Some("Alex".to_string());
+    let soup = SoupCallRecord::from_record_for_user(record, "macro|owner@example.com");
+    assert_eq!(soup.channel_id, None);
+    assert_eq!(soup.participants[0].display_name.as_deref(), Some("Alex"));
+    assert_eq!(soup.status, CallStatus::Unattended);
 }
