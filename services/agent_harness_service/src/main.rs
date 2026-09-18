@@ -772,6 +772,10 @@ async fn run() -> anyhow::Result<()> {
     // explicitly selected coding agents keep their configured runtimes.
     .with_managed_bot(inmem_bot);
 
+    // The open path authorizes explicit repositories against the same listing
+    // the repository route below serves, so what the app offers is exactly
+    // what a session may select.
+    let open_repositories = Arc::clone(&reachable_repositories);
     let harness = Arc::new(
         AgentHarnessService::new(
             sessions,
@@ -793,7 +797,7 @@ async fn run() -> anyhow::Result<()> {
             // notification ingress channel messages use.
             IngressAgentSessionNotifier::new(Arc::clone(&notifications)),
         )
-        .with_repositories(Arc::clone(&reachable_repositories)),
+        .with_repositories(open_repositories),
     );
     // Close the loop: turn ends observed by the session actors drain the
     // harness's prompt queue.
@@ -906,8 +910,7 @@ async fn run() -> anyhow::Result<()> {
         runtimes,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
-    // The same listing the open path authorizes explicit repositories
-    // against, so what the app offers is exactly what a session may select.
+    // Served to the app by `GET /agent-repositories`; see `open_repositories`.
     let repositories_state = AgentRepositoriesRouterState::new(
         reachable_repositories,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
