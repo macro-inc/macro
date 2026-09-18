@@ -965,9 +965,35 @@ fn count(frames: &[serde_json::Value], pointer: &str, value: &str) -> usize {
         .count()
 }
 
+/// Whether this frame is the slash-command catalog, not conversation history.
+fn is_available_commands_update(frame: &serde_json::Value) -> bool {
+    frame
+        .pointer("/params/update/sessionUpdate")
+        .and_then(|found| found.as_str())
+        == Some("available_commands_update")
+}
+
+/// Consume the `available_commands_update` that follows a successful load so
+/// leftover catalog frames do not precede the next initialize or look like
+/// unsolicited history.
+async fn drain_available_commands_update(
+    receiver: &mut tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>,
+) {
+    let frames = collect_until(receiver, is_available_commands_update).await;
+    assert_eq!(
+        frames.len(),
+        1,
+        "session/load is followed by the slash-command catalog and nothing else: {frames:?}"
+    );
+}
+
 /// The recovery handshake as the session actor performs it: `initialize`,
 /// then `session/load`. Returns the history replayed before the load's
 /// response after asserting the load succeeded and only history preceded it.
+///
+/// The catalog notification that follows a successful load is drained, the
+/// same way the Cursor fold helpers do, so a leftover metadata frame cannot
+/// poison the next handshake.
 async fn reload(
     sender: &super::super::pipe::PipeSender,
     receiver: &mut tokio::sync::mpsc::UnboundedReceiver<ToServerMessage>,
@@ -1005,7 +1031,12 @@ async fn reload(
             ),
             "only history travels before a load's response, got {frame}"
         );
+        assert!(
+            !is_available_commands_update(frame),
+            "the catalog is advertised after the load result, not as history: {frame}"
+        );
     }
+    drain_available_commands_update(receiver).await;
     replayed
 }
 
