@@ -111,7 +111,10 @@ where
              Use ReadContent, ReadMetadata, and ReadThread to read them. \
              Use CreateDocument to create new documents. \
              Use EditDocument to edit existing documents. \
-             Use ListEntities to browse recent items.\n\n{}",
+             Use ListEntities to browse recent items. \
+             Use CreateEmailDraft to save an email the user then reviews and sends from Macro; \
+             SendEmail delivers immediately and only works for inboxes where the user enabled \
+             agent sending in Macro Settings → Macro MCP server.\n\n{}",
             prompt::mcp_instructions(base_url),
         ));
         info

@@ -12,6 +12,7 @@ import { getRecipientDisplayName } from '../core/email-recipient';
 import type { ReplyType } from '../core/reply-type';
 import type { EmailFormRecipients } from '../primitives/email-form-state';
 import type { createReplyRecipientFields } from '../primitives/reply-recipient-fields';
+import { useRemoveContactSuggestion } from '../queries/remove-contact-suggestion';
 
 type ReplyEnvelopeProps = {
   fields: ReturnType<typeof createReplyRecipientFields>;
@@ -50,6 +51,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
     mobileDrawerCcBccOpen,
     toggleMobileDrawerCcBcc,
   } = props.fields;
+  const removeSuggestion = useRemoveContactSuggestion();
   const summary = () => {
     const values = props.values();
     const recipients = [...values.to, ...values.cc, ...values.bcc];
@@ -93,6 +95,7 @@ export function ReplyEnvelope(props: ReplyEnvelopeProps) {
         handleChipDragStart(field.field, option, event)
       }
       onChipDragEnd={handleChipDragEnd}
+      onRemoveSuggestion={removeSuggestion}
       hideMenuOnEscape
     />
   );

@@ -7,6 +7,7 @@ import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { useCompose } from '../context/compose-context';
 import type { RecipientFieldId } from '../core/email-recipient';
+import { useRemoveContactSuggestion } from '../queries/remove-contact-suggestion';
 
 type DragState = {
   recipient: EmailRecipient;
@@ -100,6 +101,7 @@ export function ComposeRecipients(props: {
   onToRowFocusIn?: () => void;
 }) {
   const ctx = useCompose();
+  const removeSuggestion = useRemoveContactSuggestion();
 
   const isCcVisible = () => props.showCc() || ctx.recipients().cc.length > 0;
   const isBccVisible = () => props.showBcc() || ctx.recipients().bcc.length > 0;
@@ -226,6 +228,7 @@ export function ComposeRecipients(props: {
       includeSelf={opts?.includeSelf}
       onChipDragStart={(option, e) => handleChipDragStart(field, option, e)}
       onChipDragEnd={handleChipDragEnd}
+      onRemoveSuggestion={removeSuggestion}
       hideMenuOnEscape
     />
   );

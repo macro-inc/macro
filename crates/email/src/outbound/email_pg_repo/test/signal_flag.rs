@@ -93,6 +93,60 @@ async fn update_thread_metadata_syncs_signal_flag(pool: Pool<Postgres>) -> anyho
     Ok(())
 }
 
+// A thread whose only message is SPAM lands in the inbox views as noise: the
+// metadata update makes it inbox-visible with an inbound timestamp, and the
+// piggybacked signal sync clears the (stale) signal flag.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_signal_flag"))
+)]
+async fn spam_thread_becomes_inbox_visible_noise(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    const THREAD_SPAM: &str = "00000000-0000-0000-0000-00000000e207";
+    assert!(fetch_signal(&pool, THREAD_SPAM).await?);
+    assert!(!fetch_inbox_state(&pool, THREAD_SPAM).await?.inbox_visible);
+
+    let mut tx = pool.begin().await?;
+    super::super::thread::update_thread_metadata(
+        &mut tx,
+        Uuid::parse_str(THREAD_SPAM)?,
+        Uuid::parse_str(LINK_ID)?,
+    )
+    .await?;
+    tx.commit().await?;
+
+    assert!(!fetch_signal(&pool, THREAD_SPAM).await?);
+    let state = fetch_inbox_state(&pool, THREAD_SPAM).await?;
+    assert!(state.inbox_visible);
+    assert!(state.latest_inbound_message_ts.is_some());
+    Ok(())
+}
+
+// The sender-policy fan-out mirrors the per-thread heuristic: marking a spam
+// sender Signal still leaves their spam-only thread in Noise.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_signal_flag"))
+)]
+async fn signal_filter_resync_keeps_spam_thread_noise(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    const THREAD_SPAM: &str = "00000000-0000-0000-0000-00000000e207";
+    let repo = EmailPgRepo::new(pool.clone());
+
+    repo.upsert_email_filter(
+        Uuid::parse_str(LINK_ID)?,
+        UpsertEmailFilterInput {
+            email_address: Some("plain@example.com".to_string()),
+            email_domain: None,
+            is_important: true,
+        },
+    )
+    .await?;
+
+    // The sender's ordinary thread is signal; the spam one is not.
+    assert!(fetch_signal(&pool, THREAD_PLAIN_SIGNAL).await?);
+    assert!(!fetch_signal(&pool, THREAD_SPAM).await?);
+    Ok(())
+}
+
 const THREAD_DRAFT_SIGNAL: &str = "00000000-0000-0000-0000-00000000e204";
 const DRAFT_MSG: &str = "00000000-0000-0000-0000-00000000e505";
 

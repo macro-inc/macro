@@ -437,15 +437,27 @@ fn new_email_events_map_to_realtime_thread_patches() {
         thread_id,
         provider_thread_id: "thread-id".to_string(),
         is_spam_or_trash: false,
+        is_trash: Some(false),
     });
-    let hidden_draft = EmailTopicEvent::MessageDraftSynced(MessageDraftSyncedMetadata {
+    let spam_draft = EmailTopicEvent::MessageDraftSynced(MessageDraftSyncedMetadata {
         link_id,
         owner: user(),
         message_id: Uuid::now_v7(),
-        provider_message_id: "hidden-message-id".to_string(),
+        provider_message_id: "spam-message-id".to_string(),
         thread_id,
         provider_thread_id: "thread-id".to_string(),
         is_spam_or_trash: true,
+        is_trash: Some(false),
+    });
+    let trashed_draft = EmailTopicEvent::MessageDraftSynced(MessageDraftSyncedMetadata {
+        link_id,
+        owner: user(),
+        message_id: Uuid::now_v7(),
+        provider_message_id: "trashed-message-id".to_string(),
+        thread_id,
+        provider_thread_id: "thread-id".to_string(),
+        is_spam_or_trash: true,
+        is_trash: Some(true),
     });
     let marked_spam = EmailTopicEvent::ThreadSpamChanged(ThreadSpamChangedMetadata {
         link_id,
@@ -480,10 +492,29 @@ fn new_email_events_map_to_realtime_thread_patches() {
         patches_from_email_event(&visible_draft)[0].patch,
         Patch::Updated(_)
     ));
-    assert!(patches_from_email_event(&hidden_draft).is_empty());
+    // Spam is shown as noise, so it updates like any other message; only
+    // trash is dropped from the feed.
+    assert!(matches!(
+        patches_from_email_event(&spam_draft)[0].patch,
+        Patch::Updated(_)
+    ));
+    assert!(patches_from_email_event(&trashed_draft).is_empty());
+    // An event from before `is_trash` existed only says spam-or-trash; it is
+    // read as trash so a trashed message never leaks into the feed.
+    let legacy_spam_or_trash = EmailTopicEvent::MessageDraftSynced(MessageDraftSyncedMetadata {
+        link_id,
+        owner: user(),
+        message_id: Uuid::now_v7(),
+        provider_message_id: "legacy-message-id".to_string(),
+        thread_id,
+        provider_thread_id: "thread-id".to_string(),
+        is_spam_or_trash: true,
+        is_trash: None,
+    });
+    assert!(patches_from_email_event(&legacy_spam_or_trash).is_empty());
     assert!(matches!(
         patches_from_email_event(&marked_spam)[0].patch,
-        Patch::Deleted(_)
+        Patch::Updated(_)
     ));
     assert!(matches!(
         patches_from_email_event(&restored_from_spam)[0].patch,

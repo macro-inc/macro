@@ -338,8 +338,15 @@ fn is_macro_draft(msg: &MessageMetadata) -> bool {
     msg.is_draft && msg.provider_id.is_none()
 }
 
+/// INBOX, or SPAM — which the inbox views show as noise instead of hiding.
+fn lands_in_inbox(msg: &MessageMetadata) -> bool {
+    msg.labels
+        .iter()
+        .any(|l| matches!(l.as_str(), system_labels::INBOX | system_labels::SPAM))
+}
+
 fn is_inbound(msg: &MessageMetadata) -> bool {
-    if !msg.labels.iter().any(|l| l == system_labels::INBOX) {
+    if !lands_in_inbox(msg) {
         return false;
     }
 
@@ -475,12 +482,12 @@ pub(super) async fn update_thread_metadata(
 ) -> Result<(), sqlx::Error> {
     let messages = fetch_messages_metadata(tx, thread_db_id).await?;
 
-    // if any non-sent message in the thread has the INBOX label, the thread is visible in the inbox
+    // if any non-sent message in the thread has the INBOX (or SPAM, shown as
+    // noise) label, the thread is visible in the inbox
     let inbox_visible = messages.iter().any(|message| {
-        let has_inbox = message.labels.iter().any(|l| l == system_labels::INBOX);
         let has_sent = message.labels.iter().any(|l| l == system_labels::SENT);
 
-        (has_inbox && !has_sent) || is_macro_draft(message)
+        (lands_in_inbox(message) && !has_sent) || is_macro_draft(message)
     });
 
     // if any message in the thread is unread, the thread is considered unread in the FE
@@ -539,7 +546,8 @@ pub(super) async fn update_thread_metadata(
 }
 
 /// Recomputes the denormalized `email_threads.is_signal` flag: true iff the
-/// thread has a non-TRASH message matching the importance heuristic. Exact
+/// thread has a non-TRASH, non-SPAM message matching the importance
+/// heuristic (spam is inbox-visible but always noise). Exact
 /// copy of `email_db_client::threads::update::sync_thread_signal_flag`,
 /// mirroring the Importance(true) predicate in the dynamic query builder.
 pub(super) async fn sync_thread_signal_flag(
@@ -558,7 +566,7 @@ pub(super) async fn sync_thread_signal_flag(
                   AND NOT EXISTS (
                       SELECT 1 FROM email_message_labels ml
                       JOIN email_labels l ON ml.label_id = l.id
-                      WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                      WHERE ml.message_id = m.id AND l.name IN ('TRASH', 'SPAM')
                   )
                   AND (
                       (

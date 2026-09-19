@@ -15,6 +15,7 @@ import {
   makeMarkDoneAction,
   makeMarkNotDoneAction,
   makeMarkNotificationsReadAction,
+  makeMarkNotSpamAction,
   makeMarkReadAction,
   makeMarkSenderNoiseAction,
   makeMarkSenderSignalAction,
@@ -140,6 +141,7 @@ export function createSoupEntityActions(): {
   const blockSenderAction = makeBlockSenderAction();
   const markSenderSignalAction = makeMarkSenderSignalAction();
   const markSenderNoiseAction = makeMarkSenderNoiseAction();
+  const markNotSpamAction = makeMarkNotSpamAction();
   const hideCompanyAction = makeHideCompanyAction({
     setHidden: (companyId, hidden) =>
       hiddenMutation.mutateAsync({ companyId, hidden }),
@@ -452,8 +454,17 @@ export function createSoupEntityActions(): {
       }
     }
 
-    // Sender group: Sender → Signal, Sender → Noise, Block Sender
+    // Sender group: Not Spam, Sender → Signal, Sender → Noise, Block Sender
     const senderItems: SoupEntityActionItem[] = [];
+
+    // Spam threads sit in Noise; this is how a misfiled one gets out.
+    if (canExecuteAll(markNotSpamAction.canExecute)) {
+      senderItems.push({
+        id: 'not-spam',
+        label: 'Not Spam',
+        onClick: handle(markNotSpamAction.executeWithSoup),
+      });
+    }
 
     if (
       viewContext.senderBucket === 'noise' &&

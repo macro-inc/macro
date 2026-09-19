@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_settings (link_id, signature_on_replies_forwards, signature, mcp_send_enabled)\n        VALUES ($1, COALESCE($2, FALSE), $3, COALESCE($4, FALSE))\n        ON CONFLICT (link_id)\n        DO UPDATE SET\n            signature_on_replies_forwards = COALESCE($2, email_settings.signature_on_replies_forwards),\n            signature = COALESCE($3, email_settings.signature),\n            mcp_send_enabled = COALESCE($4, email_settings.mcp_send_enabled),\n            updated_at = NOW()\n        RETURNING link_id, signature_on_replies_forwards, signature, mcp_send_enabled\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "signature_on_replies_forwards",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "signature",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "mcp_send_enabled",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "047aa8ad9fd829eb0df5c6faa3cd16297151db559e93b802c6638b0aa3b32dd2"
+}

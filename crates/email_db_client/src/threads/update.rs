@@ -4,7 +4,9 @@ mod test;
 use crate::messages::get::fetch_messages_metadata;
 
 use chrono::{DateTime, Utc};
-use models_email::email::service::message::{is_inbound, is_outbound, is_spam_or_trash};
+use models_email::email::service::message::{
+    is_inbound, is_outbound, is_spam_or_trash, lands_in_inbox,
+};
 use models_email::service;
 use models_email::service::message::is_macro_draft;
 use sqlx::types::Uuid;
@@ -177,7 +179,8 @@ pub async fn sync_thread_calendar_flag(
 }
 
 /// Recomputes the denormalized `email_threads.is_signal` flag: true iff the
-/// thread has a non-TRASH message matching the importance heuristic. Mirrors
+/// thread has a non-TRASH, non-SPAM message matching the importance heuristic
+/// (a spam thread is inbox-visible but always noise). Mirrors
 /// the Importance(true) predicate in the email crate's dynamic query builder.
 #[tracing::instrument(skip(tx), err)]
 pub async fn sync_thread_signal_flag(
@@ -196,7 +199,7 @@ pub async fn sync_thread_signal_flag(
                   AND NOT EXISTS (
                       SELECT 1 FROM email_message_labels ml
                       JOIN email_labels l ON ml.label_id = l.id
-                      WHERE ml.message_id = m.id AND l.name = 'TRASH'
+                      WHERE ml.message_id = m.id AND l.name IN ('TRASH', 'SPAM')
                   )
                   AND (
                       (
@@ -297,18 +300,15 @@ pub async fn update_thread_metadata(
 ) -> anyhow::Result<()> {
     let messages = fetch_messages_metadata(&mut *tx, thread_db_id).await?;
 
-    // if any non-sent message in the thread has the INBOX label, the thread is visible in the inbox
+    // if any non-sent message in the thread has the INBOX (or SPAM, shown as
+    // noise) label, the thread is visible in the inbox
     let inbox_visible = messages.iter().any(|message| {
-        let has_inbox = message
-            .labels
-            .iter()
-            .any(|label| label.provider_label_id == service::label::system_labels::INBOX);
         let has_sent = message
             .labels
             .iter()
             .any(|label| label.provider_label_id == service::label::system_labels::SENT);
 
-        (has_inbox && !has_sent) || is_macro_draft(message)
+        (lands_in_inbox(message) && !has_sent) || is_macro_draft(message)
     });
 
     // if any message in the thread is unread, the thread is considered unread in the FE

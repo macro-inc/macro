@@ -331,10 +331,15 @@ type MarkThreadAsUnreadParams = {
 };
 
 /**
- * Resolve an inbox's UNREAD system label from the cached labels list (the
- * endpoint returns every inbox's labels; mirrors trashEmails' TRASH lookup).
+ * Resolve an inbox's system label (UNREAD, SPAM, INBOX, ...) from the cached
+ * labels list (the endpoint returns every inbox's labels; mirrors trashEmails'
+ * TRASH lookup). Prefers the label whose `linkId` matches, falling back to
+ * any inbox's label when the thread's inbox is unknown.
  */
-async function fetchUnreadLabelId(linkId?: string): Promise<string> {
+async function fetchSystemLabelId(
+  providerLabelId: string,
+  linkId?: string
+): Promise<string> {
   const labelsData = await queryClient.fetchQuery({
     queryKey: emailKeys.labels.queryKey,
     queryFn: async () =>
@@ -342,16 +347,88 @@ async function fetchUnreadLabelId(linkId?: string): Promise<string> {
     staleTime: 5 * 60 * 1000,
   });
   const labels = labelsData?.labels ?? [];
-  const unreadLabel =
+  const label =
     (linkId
       ? labels.find(
-          (l) => l.providerLabelId === 'UNREAD' && l.linkId === linkId
+          (l) => l.providerLabelId === providerLabelId && l.linkId === linkId
         )
-      : undefined) ?? labels.find((l) => l.providerLabelId === 'UNREAD');
-  if (!unreadLabel) {
-    throw new Error('UNREAD label not found');
+      : undefined) ?? labels.find((l) => l.providerLabelId === providerLabelId);
+  if (!label) {
+    throw new Error(`${providerLabelId} label not found`);
   }
-  return unreadLabel.id;
+  return label.id;
+}
+
+const fetchUnreadLabelId = (linkId?: string) =>
+  fetchSystemLabelId('UNREAD', linkId);
+
+/**
+ * Moves a thread out of the provider's spam folder and back into the inbox:
+ * drops SPAM and adds INBOX, the same two label edits Gmail's own "Not spam"
+ * makes (removing SPAM alone would leave the thread archived). Shared by the
+ * soup context menu; the toast offers an undo that reverses both edits.
+ */
+export async function markThreadNotSpamWithToast(
+  threadId: string,
+  linkId?: string
+) {
+  let spamLabelId: string;
+  let inboxLabelId: string;
+  try {
+    [spamLabelId, inboxLabelId] = await Promise.all([
+      fetchSystemLabelId('SPAM', linkId),
+      fetchSystemLabelId('INBOX', linkId),
+    ]);
+  } catch {
+    toast.failure('Failed to move out of spam');
+    return;
+  }
+
+  // Two label edits, in a deliberate order: add the destination label
+  // first, then drop the source. If the first fails nothing has changed; if
+  // the second fails the thread carries both labels and stays visible, never
+  // stranded with neither (SPAM gone and INBOX absent reads as archived).
+  const setLabels = async (spam: boolean) => {
+    const [add, remove] = spam
+      ? [spamLabelId, inboxLabelId]
+      : [inboxLabelId, spamLabelId];
+    const added = await emailClient.updateThreadLabel({
+      thread_id: threadId,
+      label_id: add,
+      value: true,
+    });
+    if (added.isErr()) return false;
+    const removed = await emailClient.updateThreadLabel({
+      thread_id: threadId,
+      label_id: remove,
+      value: false,
+    });
+    // Whatever happened, the first edit landed, so the feed needs refetching.
+    invalidateAllSoup();
+    return removed.isOk();
+  };
+
+  if (!(await setLabels(false))) {
+    toast.failure('Failed to move out of spam');
+    return;
+  }
+
+  toast.success('Moved out of spam', {
+    subtext: 'The thread is back in your inbox',
+    actions: [
+      {
+        label: 'Undo',
+        icon: ArrowCounterClockwise,
+        onClick: async () => {
+          if (await setLabels(true)) {
+            toast.success('Moved back to spam');
+          } else {
+            toast.failure('Failed to undo');
+          }
+        },
+      },
+    ],
+  });
 }
 
 /**

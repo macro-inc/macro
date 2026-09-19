@@ -231,6 +231,7 @@ fn received_email_event(is_spam_or_trash: bool) -> EmailTopicEvent {
         to_emails: vec!["owner@example.com".to_string()],
         attachment_count: 1,
         is_spam_or_trash,
+        is_trash: Some(false),
         received_at: Some(Utc::now()),
     })
 }
@@ -244,6 +245,7 @@ fn draft_email_event(is_spam_or_trash: bool) -> EmailTopicEvent {
         thread_id: EMAIL_THREAD_ID,
         provider_thread_id: "provider-thread-id".to_string(),
         is_spam_or_trash,
+        is_trash: Some(false),
     })
 }
 

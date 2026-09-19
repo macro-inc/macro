@@ -17,6 +17,17 @@ pub trait ContactsRepository: Send + Sync + 'static {
         &self,
         connections: Vec<(MacroUserIdStr<'_>, MacroUserIdStr<'_>)>,
     ) -> impl Future<Output = Result<(), Report>> + Send;
+
+    /// Records whether `owner` wants `contact` suppressed from their
+    /// suggestions. The connection itself is kept, so a later sync that
+    /// re-upserts the edge does not resurface the contact. Hiding someone
+    /// the owner is not connected to is a no-op.
+    fn set_contact_hidden(
+        &self,
+        owner: MacroUserIdStr<'_>,
+        contact: MacroUserIdStr<'_>,
+        hidden: bool,
+    ) -> impl Future<Output = Result<(), Report>> + Send;
 }
 
 /// Port trait for notifying users about contact changes.
@@ -70,6 +81,15 @@ pub trait ContactsService: Send + Sync + 'static {
     fn add_contact_nodes(
         &self,
         nodes: ContactsNodes,
+    ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
+
+    /// Hides (or un-hides) one of `owner`'s contacts from their suggestions,
+    /// e.g. a mistyped address that keeps bouncing.
+    fn set_contact_hidden(
+        &self,
+        owner: MacroUserIdStr<'_>,
+        contact: MacroUserIdStr<'_>,
+        hidden: bool,
     ) -> impl Future<Output = Result<(), rootcause::Report>> + Send;
 }
 

@@ -89,6 +89,24 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsService for ContactsDom
     async fn add_contact_nodes(&self, nodes: ContactsNodes) -> Result<(), rootcause::Report> {
         self.process_message(ContactsMessage::Nodes(nodes)).await
     }
+
+    #[instrument(err, skip(self))]
+    async fn set_contact_hidden(
+        &self,
+        owner: MacroUserIdStr<'_>,
+        contact: MacroUserIdStr<'_>,
+        hidden: bool,
+    ) -> Result<(), rootcause::Report> {
+        self.repository
+            .set_contact_hidden(owner.copied(), contact, hidden)
+            .await?;
+        // Only the owner's suggestion list changed; the contact's own list is
+        // untouched because the edge is still there.
+        self.notifier
+            .invalidate_contacts_for_users(vec![owner])
+            .await?;
+        Ok(())
+    }
 }
 
 /// Queue-backed implementation of [`ContactsIngress`].

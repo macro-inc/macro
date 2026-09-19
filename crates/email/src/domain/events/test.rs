@@ -26,6 +26,7 @@ fn new_contract_events(link_id: Uuid) -> Vec<EmailMacroEvent> {
             thread_id: Uuid::new_v4(),
             provider_thread_id: "gmail-thread-1".to_string(),
             is_spam_or_trash: false,
+            is_trash: Some(false),
         }),
         EmailMacroEvent::thread_backfilled(ThreadBackfilledMetadata {
             link_id,
@@ -67,6 +68,7 @@ fn message_received_wire_shape() {
             to_emails: vec!["owner@example.com".to_string()],
             attachment_count: 2,
             is_spam_or_trash: false,
+            is_trash: Some(false),
             received_at: Some(timestamp()),
         }),
     );
@@ -92,6 +94,7 @@ fn message_received_wire_shape() {
                 "to_emails": ["owner@example.com"],
                 "attachment_count": 2,
                 "is_spam_or_trash": false,
+                "is_trash": false,
                 "received_at": "2026-01-02T03:04:05Z",
             },
         })
@@ -111,6 +114,7 @@ fn message_draft_synced_wire_shape_preserves_spam_or_trash_state() {
                 thread_id: Uuid::nil(),
                 provider_thread_id: "gmail-thread-1".to_string(),
                 is_spam_or_trash,
+                is_trash: Some(false),
             }),
         );
 
@@ -129,10 +133,36 @@ fn message_draft_synced_wire_shape_preserves_spam_or_trash_state() {
                     "thread_id": "00000000-0000-0000-0000-000000000000",
                     "provider_thread_id": "gmail-thread-1",
                     "is_spam_or_trash": is_spam_or_trash,
+                    "is_trash": false,
                 },
             })
         );
     }
+}
+
+#[test]
+fn legacy_events_without_is_trash_read_spam_or_trash_as_trash() {
+    // Published before `is_trash` existed: only the coarse flag is present.
+    let legacy = serde_json::json!({
+        "link_id": "00000000-0000-0000-0000-000000000000",
+        "owner": "macro|owner@example.com",
+        "message_id": "00000000-0000-0000-0000-000000000000",
+        "provider_message_id": "gmail-draft-1",
+        "thread_id": "00000000-0000-0000-0000-000000000000",
+        "provider_thread_id": "gmail-thread-1",
+        "is_spam_or_trash": true,
+    });
+    let metadata: MessageDraftSyncedMetadata =
+        serde_json::from_value(legacy).expect("legacy payload decodes");
+    assert_eq!(metadata.is_trash, None);
+    assert!(metadata.is_trash());
+
+    // A current event with the flag is taken at its word.
+    let current = MessageDraftSyncedMetadata {
+        is_trash: Some(false),
+        ..metadata
+    };
+    assert!(!current.is_trash());
 }
 
 #[test]
@@ -279,6 +309,7 @@ fn event_type_strings_follow_dot_convention() {
                 to_emails: vec![],
                 attachment_count: 0,
                 is_spam_or_trash: false,
+                is_trash: Some(false),
                 received_at: None,
             }),
             "email.message_received",
@@ -292,6 +323,7 @@ fn event_type_strings_follow_dot_convention() {
                 thread_id: Uuid::nil(),
                 provider_thread_id: "t".to_string(),
                 is_spam_or_trash: false,
+                is_trash: Some(false),
             }),
             "email.message_draft_synced",
         ),

@@ -15,7 +15,7 @@ use rate_limit::{
 use rootcause::Report;
 use std::collections::HashSet;
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicUsize, Ordering},
 };
 use tower::ServiceExt;
@@ -25,7 +25,10 @@ const NOT_FOUND_USER_ID: &str = "macro|notfound@test.com";
 const SENDER_USER_ID: &str = "macro|sender@test.com";
 const VALID_INTERNAL_KEY: &str = "valid-internal-key";
 
-struct MockService;
+#[derive(Default)]
+struct MockService {
+    hidden_calls: Mutex<Vec<(String, String, bool)>>,
+}
 
 impl ContactsService for MockService {
     async fn query_contacts(
@@ -47,6 +50,20 @@ impl ContactsService for MockService {
     }
 
     async fn add_contact_nodes(&self, _nodes: ContactsNodes) -> Result<(), Report> {
+        Ok(())
+    }
+
+    async fn set_contact_hidden(
+        &self,
+        owner: MacroUserIdStr<'_>,
+        contact: MacroUserIdStr<'_>,
+        hidden: bool,
+    ) -> Result<(), Report> {
+        self.hidden_calls.lock().unwrap().push((
+            owner.as_ref().to_string(),
+            contact.as_ref().to_string(),
+            hidden,
+        ));
         Ok(())
     }
 }
@@ -116,6 +133,13 @@ fn rate_limiter(should_exceed: bool) -> RateLimitServiceImpl<MockRateLimitPort> 
 }
 
 fn build_test_router(should_exceed: bool) -> (Router, FakeJwtValidator) {
+    let (router, validator, _) = build_test_router_with_service(should_exceed);
+    (router, validator)
+}
+
+fn build_test_router_with_service(
+    should_exceed: bool,
+) -> (Router, FakeJwtValidator, Arc<MockService>) {
     let validator = FakeJwtValidator::default();
     let authorization_service = MacroAuthorizationServiceImpl::new(
         validator.clone(),
@@ -126,13 +150,14 @@ fn build_test_router(should_exceed: bool) -> (Router, FakeJwtValidator) {
         macro_authorization::NoBotAuthorizer,
         macro_authorization::NoUserApiKeyAuthorizer,
     );
+    let service = Arc::new(MockService::default());
     let state = ContactsRouterState {
-        contacts_service: Arc::new(MockService),
+        contacts_service: service.clone(),
         rate_limit_service: rate_limiter(should_exceed),
         authorization_state: MacroAuthorizationState::new(Arc::new(authorization_service)),
     };
 
-    (contacts_router::<_, _, _, ()>(state), validator)
+    (contacts_router::<_, _, _, ()>(state), validator, service)
 }
 
 fn bearer_get_request(token: &str) -> Request<Body> {
@@ -150,6 +175,80 @@ fn add_contact_request(token: &str) -> Request<Body> {
             serde_json::json!({"user_id": "macro|recipient@example.com"}).to_string(),
         ))
         .unwrap()
+}
+
+fn set_hidden_request(token: &str, hidden: bool) -> Request<Body> {
+    Request::put("/contacts/hidden")
+        .header(header::AUTHORIZATION, format!("Bearer {token}"))
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            serde_json::json!({"user_id": "macro|typo@example.com", "hidden": hidden}).to_string(),
+        ))
+        .unwrap()
+}
+
+#[tokio::test]
+async fn bearer_put_hidden_scopes_to_the_caller() {
+    let (api, validator, service) = build_test_router_with_service(false);
+
+    let response = api
+        .clone()
+        .oneshot(set_hidden_request("sender", true))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+
+    let response = api
+        .oneshot(set_hidden_request("sender", false))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+    assert_eq!(validator.validation_count(), 2);
+
+    let calls = service.hidden_calls.lock().unwrap();
+    assert_eq!(
+        *calls,
+        vec![
+            (
+                SENDER_USER_ID.to_string(),
+                "macro|typo@example.com".to_string(),
+                true
+            ),
+            (
+                SENDER_USER_ID.to_string(),
+                "macro|typo@example.com".to_string(),
+                false
+            ),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn put_hidden_is_not_affected_by_post_rate_limit() {
+    let (api, _) = build_test_router(true);
+
+    let response = api
+        .oneshot(set_hidden_request("sender", true))
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NO_CONTENT);
+}
+
+#[tokio::test]
+async fn put_hidden_rejects_a_malformed_user_id() {
+    let (api, _) = build_test_router(false);
+    let request = Request::put("/contacts/hidden")
+        .header(header::AUTHORIZATION, "Bearer sender")
+        .header(header::CONTENT_TYPE, "application/json")
+        .body(Body::from(
+            serde_json::json!({"user_id": "not-a-macro-id", "hidden": true}).to_string(),
+        ))
+        .unwrap();
+
+    let response = api.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 }
 
 #[tokio::test]

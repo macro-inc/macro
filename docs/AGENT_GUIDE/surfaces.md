@@ -242,6 +242,19 @@ Full email client. Tabs: `Signal` / `Noise` / `Sent` / `Calendar` / `Drafts` / `
 shows `Connect your email` (Gmail/Google Workspace OAuth) — most functionality needs a
 connected account. Search is `Ctrl+F` within the surface.
 
+Threads the provider filed as spam are not hidden: they appear in `Noise` (and `All`)
+with a `spam` badge beside the participants, never in `Signal`. The row's context menu
+offers `Not Spam`, which removes the provider `SPAM` label and re-adds `INBOX`; the
+`Moved out of spam` notice offers `Undo`. Spam is still excluded from search, and
+mail that was already in the spam folder when the account was connected is not
+imported.
+
+In the compose and reply recipient pickers, hovering (or keyboard-focusing) an
+address-book suggestion reveals `Remove from suggestions`, an `X` button named
+`Remove <email> from suggestions`. It hides that address from the current user's
+suggestions only (a `Removed from suggestions` notice offers `Undo`); typing the
+address still works, and participants of the open thread are unaffected.
+
 The new views reuse the legacy filter option rows and searchable submenus.
 Their triggers are icon-only buttons matching the surrounding view controls;
 Clear/Reset filters and the mobile Clear all action use destructive text styling.
@@ -712,7 +725,10 @@ with `Customize stages`, inline rename, reorder by drag handle or arrow keys (up
 buttons on touch), delete, `Add stage`, `Reset to defaults`, and `Closed stages`
 checkboxes, editable by the role set as `edit_stages_role`),
 `Connections` (email/tool OAuth), `MCP server`
-(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE), `Agents`, `Bots`, `Harness`;
+(setup snippets for Claude Code / Codex CLI / Claude.ai / ChatGPT / IDE, then an
+`Email sending` card with one `Allow connected agents to send email from this inbox`
+switch per owned inbox — off by default; MCP clients can always save drafts with
+`CreateEmailDraft`, and their `SendEmail` fails until the switch is on), `Agents`, `Bots`, `Harness`;
 `Log out`.
 `Agents` lists team and private agents with `Create agent` / `Edit <name>` dialogs grouped
 Profile, Behavior, Runtime, Connections, Channels, Share. Connections is a radio pair:

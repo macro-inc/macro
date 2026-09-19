@@ -6050,6 +6050,10 @@
       "Settings": {
         "type": "object",
         "properties": {
+          "mcp_send_enabled": {
+            "type": ["boolean", "null"],
+            "description": "Whether external agents (MCP clients) may send email from this inbox.\nOff by default; agents can always save drafts. Omit on a patch to\nleave unchanged."
+          },
           "signature": {
             "type": ["string", "null"],
             "description": "The user's email signature content (HTML). On a patch, omit or send\n`null` to leave unchanged (both deserialize to `None`); pass an empty\nstring to clear it. The column cannot be set to SQL NULL via patch."

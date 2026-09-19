@@ -7,4 +7,5 @@ pub struct Settings {
     pub link_id: Uuid,
     pub signature_on_replies_forwards: bool,
     pub signature: Option<String>,
+    pub mcp_send_enabled: bool,
 }

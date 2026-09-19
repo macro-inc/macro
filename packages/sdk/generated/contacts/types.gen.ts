@@ -24,6 +24,21 @@ export type GetContactsResponse = {
     contacts: Array<string>;
 };
 
+/**
+ * Request body for PUT /contacts/hidden.
+ */
+export type SetContactHiddenRequest = {
+    /**
+     * `true` removes the contact from the caller's suggestions; `false`
+     * restores it. Only the caller's own list is affected.
+     */
+    hidden: boolean;
+    /**
+     * The contact's user ID (e.g. `macro|name@example.com`).
+     */
+    user_id: string;
+};
+
 export type GetContactsData = {
     body?: never;
     path?: never;
@@ -64,3 +79,23 @@ export type AddContactResponses = {
 };
 
 export type AddContactResponse = AddContactResponses[keyof AddContactResponses];
+
+export type SetContactHiddenData = {
+    body: SetContactHiddenRequest;
+    path?: never;
+    query?: never;
+    url: '/contacts/hidden';
+};
+
+export type SetContactHiddenErrors = {
+    401: string;
+    500: string;
+};
+
+export type SetContactHiddenError = SetContactHiddenErrors[keyof SetContactHiddenErrors];
+
+export type SetContactHiddenResponses = {
+    204: void;
+};
+
+export type SetContactHiddenResponse = SetContactHiddenResponses[keyof SetContactHiddenResponses];

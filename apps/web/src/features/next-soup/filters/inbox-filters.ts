@@ -59,11 +59,27 @@ const getLabelTokens = (
 
 type EmailEntity = Extract<EntityData, { type: 'email' }>;
 
+const SPAM_LABEL = 'SPAM';
+
+/**
+ * Whether the thread is in the provider's spam folder. Spam threads are shown
+ * in the inbox views as noise (rather than hidden) so a misclassified message
+ * can be fished out; see the `Not Spam` entity action.
+ */
+export function isSpamEmail(entity: EmailEntity): boolean {
+  return getLabelTokens(entity.labels).includes(SPAM_LABEL);
+}
+
 function getEmailSignalInfo(entity: EmailEntity): {
   hasPriority: boolean;
   hasDepriority: boolean;
 } {
   const labelTokens = getLabelTokens(entity.labels);
+  // Spam is noise no matter what else it carries (mirrors the server's
+  // is_signal, which never counts a spam message).
+  if (labelTokens.includes(SPAM_LABEL)) {
+    return { hasPriority: false, hasDepriority: true };
+  }
   const priorityLabels = PRIORITY_LABELS;
   const depriorityLabels = DEPRIORITY_LABELS;
 

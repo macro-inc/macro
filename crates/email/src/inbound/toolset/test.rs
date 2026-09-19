@@ -84,6 +84,66 @@ fn test_send_email_schema_validation() {
 }
 
 #[test]
+fn test_create_email_draft_schema_validation() {
+    let result = generate_validated_input_schema::<CreateEmailDraft>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(validated.name, "CreateEmailDraft");
+    assert!(validated.description.contains("draft"));
+    assert!(
+        validated.description.contains("SendEmail"),
+        "should steer the model between drafting and sending"
+    );
+}
+
+#[test]
+fn test_mcp_send_email_schema_validation() {
+    let result = generate_validated_input_schema::<McpSendEmail>();
+    assert!(result.is_ok(), "{:?}", result);
+
+    let validated = result.unwrap();
+    assert_eq!(
+        validated.name, "SendEmail",
+        "MCP clients see the same tool name as chat"
+    );
+    assert!(validated.description.contains("off by default"));
+    assert!(validated.description.contains("CreateEmailDraft"));
+}
+
+// Which hosts can send: chat reviews SendEmail in the composer, the channel
+// bot only drafts, and MCP sends directly behind the per-inbox opt-in.
+#[test]
+fn host_toolsets_expose_the_right_send_and_draft_tools() {
+    use crate::domain::ports::{NoOpEmailService, NoOpGmailTokenProvider};
+    use ai_toolset::ToolSet as _;
+    type Eas = entity_access::domain::service::EntityAccessServiceImpl<
+        entity_access::outbound::PgAccessRepository,
+    >;
+
+    let chat = email_toolset::<NoOpEmailService, NoOpGmailTokenProvider, Eas>();
+    assert!(
+        chat.user_tools.contains_key("SendEmail"),
+        "chat defers SendEmail to the composer"
+    );
+    assert!(!chat.tools.contains_key("CreateEmailDraft"));
+
+    let bot = channel_bot_toolset::<NoOpEmailService, NoOpGmailTokenProvider, Eas>();
+    assert!(bot.tools.contains_key("CreateEmailDraft"));
+    assert!(!bot.tools.contains_key("SendEmail"));
+    assert!(bot.user_tools.is_empty());
+
+    let mcp = mcp_toolset::<NoOpEmailService, NoOpGmailTokenProvider, Eas>();
+    assert!(mcp.tools.contains_key("CreateEmailDraft"));
+    assert!(mcp.tools.contains_key("SendEmail"));
+    assert!(mcp.user_tools.is_empty());
+    assert!(
+        mcp.request_schemas().is_some(),
+        "the MCP toolset serializes for tool listing"
+    );
+}
+
+#[test]
 fn test_get_thread_schema_validation() {
     let result = generate_validated_input_schema::<GetThread>();
     assert!(result.is_ok(), "{:?}", result);
@@ -184,6 +244,37 @@ fn resolve_inbox_selector_rejects_unknown_address() {
         "{}",
         err.description
     );
+}
+
+#[test]
+fn require_owned_inbox_rejects_delegated_inboxes() {
+    let owned = make_link("macro|gab@macro.com", "gab@macro.com", true);
+    let delegated = make_link("macro|boss@macro.com", "boss@macro.com", true);
+
+    assert!(require_owned_inbox(&owned, "macro|gab@macro.com").is_ok());
+
+    let err = require_owned_inbox(&delegated, "macro|gab@macro.com")
+        .err()
+        .expect("a delegated inbox must be refused");
+    assert!(
+        err.description.contains("owned by someone else"),
+        "{}",
+        err.description
+    );
+    assert!(
+        err.description.contains("CreateEmailDraft"),
+        "{}",
+        err.description
+    );
+}
+
+#[test]
+fn require_owned_inbox_rejects_the_fallback_when_the_caller_owns_nothing() {
+    // With no owned link, the selector falls back to the first accessible
+    // inbox; the ownership check is what keeps that fallback from sending.
+    let inboxes = vec![make_link("macro|boss@macro.com", "boss@macro.com", true)];
+    let link = resolve_inbox_selector(&inboxes, "macro|assistant@macro.com", None).unwrap();
+    assert!(require_owned_inbox(link, "macro|assistant@macro.com").is_err());
 }
 
 /// The composer's export, as `prepareEmailBody` encodes it: base64url of the

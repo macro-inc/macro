@@ -62,11 +62,12 @@ fn the_agent_session_host_keeps_chats_user_tools_with_the_review_prompt() {
 }
 
 /// Hosts without a composer cannot finish a deferred user tool, so their
-/// toolsets must execute calendar creation directly and omit SendEmail
-/// entirely — a `UserToolResponse` output there would mean a call that
-/// nothing can ever execute.
+/// toolsets must execute calendar creation directly and never register the
+/// deferring SendEmail — a `UserToolResponse` output there would mean a call
+/// that nothing can ever execute. Both get CreateEmailDraft instead; only
+/// the MCP server also gets the direct, opt-in-gated SendEmail.
 #[test]
-fn composerless_hosts_execute_calendar_create_directly_and_omit_send_email() {
+fn composerless_hosts_execute_directly_and_draft_instead_of_deferring() {
     for host in [AiHost::ChannelBot, AiHost::Mcp] {
         let json = frontend_schemas_builder()
             .merge(&tools_for(host))
@@ -83,9 +84,24 @@ fn composerless_hosts_execute_calendar_create_directly_and_omit_send_email() {
         assert_eq!(create["output"], "ToolCalendarEvent", "{host:?}");
 
         assert!(
-            !tools.iter().any(|tool| tool["name"] == "SendEmail"),
-            "{host:?} toolset must not expose SendEmail"
+            tools.iter().any(|tool| tool["name"] == "CreateEmailDraft"),
+            "{host:?} toolset offers CreateEmailDraft"
         );
+
+        let send = tools.iter().find(|tool| tool["name"] == "SendEmail");
+        match host {
+            AiHost::ChannelBot => {
+                assert!(send.is_none(), "the channel bot must not expose SendEmail");
+            }
+            AiHost::Mcp => {
+                let send = send.expect("the MCP server exposes a direct SendEmail");
+                assert_eq!(
+                    send["output"], "McpSendEmailResponse",
+                    "MCP's SendEmail executes directly rather than deferring"
+                );
+            }
+            AiHost::Chat | AiHost::AgentSession => unreachable!(),
+        }
     }
 }
 

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                INSERT INTO contacts_hidden(owner, contact)\n                SELECT $1, $2\n                WHERE EXISTS (\n                    SELECT 1 FROM contacts_connections\n                    WHERE (user1 = $1 AND user2 = $2) OR (user1 = $2 AND user2 = $1)\n                )\n                ON CONFLICT (owner, contact) DO NOTHING\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8242ee5968bf69114fafe70453f4411c6c7a4a0582267fb73a823ce7a8279e90"
+}

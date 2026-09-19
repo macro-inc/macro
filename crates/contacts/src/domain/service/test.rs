@@ -5,6 +5,7 @@ use std::sync::Mutex;
 #[derive(Default)]
 struct RecordingRepository {
     connections: Mutex<Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)>>,
+    hidden: Mutex<Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>, bool)>>,
 }
 
 impl ContactsRepository for RecordingRepository {
@@ -26,6 +27,19 @@ impl ContactsRepository for RecordingRepository {
         );
         Ok(())
     }
+
+    async fn set_contact_hidden(
+        &self,
+        owner: MacroUserIdStr<'_>,
+        contact: MacroUserIdStr<'_>,
+        hidden: bool,
+    ) -> Result<(), rootcause::Report> {
+        self.hidden
+            .lock()
+            .unwrap()
+            .push((owner.into_owned(), contact.into_owned(), hidden));
+        Ok(())
+    }
 }
 
 struct NoopNotifier;
@@ -37,6 +51,44 @@ impl ContactsNotifier for NoopNotifier {
     ) -> Result<(), rootcause::Report> {
         Ok(())
     }
+}
+
+#[derive(Default)]
+struct RecordingNotifier {
+    invalidated: Mutex<Vec<MacroUserIdStr<'static>>>,
+}
+
+impl ContactsNotifier for RecordingNotifier {
+    async fn invalidate_contacts_for_users(
+        &self,
+        user_ids: Vec<MacroUserIdStr<'_>>,
+    ) -> Result<(), rootcause::Report> {
+        self.invalidated
+            .lock()
+            .unwrap()
+            .extend(user_ids.into_iter().map(|id| id.into_owned()));
+        Ok(())
+    }
+}
+
+#[tokio::test]
+async fn hiding_a_contact_only_invalidates_the_owner() {
+    let owner = user("owner@example.com");
+    let typo = user("typo@example.com");
+    let service = ContactsDomainService {
+        repository: RecordingRepository::default(),
+        notifier: RecordingNotifier::default(),
+    };
+
+    service
+        .set_contact_hidden(owner.clone(), typo.clone(), true)
+        .await
+        .unwrap();
+
+    let hidden = service.repository.hidden.lock().unwrap();
+    assert_eq!(*hidden, vec![(owner.clone(), typo, true)]);
+    let invalidated = service.notifier.invalidated.lock().unwrap();
+    assert_eq!(*invalidated, vec![owner]);
 }
 
 fn user(email: &str) -> MacroUserIdStr<'static> {

@@ -77,6 +77,72 @@ async fn test_get_contacts(pool: PgPool) -> sqlx::Result<()> {
     Ok(())
 }
 
+// Hiding a contact removes it from the owner's list only, survives the sync
+// re-upserting the same edge, and is reversible.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("user_list"))
+)]
+async fn test_hidden_contacts_are_filtered_for_the_owner_only(pool: PgPool) -> sqlx::Result<()> {
+    let repo = DbContactsRepository::new(pool.clone());
+    let owner = mid("macro|a@test.com");
+    let typo = mid("macro|b@test.com");
+
+    repo.set_contact_hidden(owner.clone(), typo.clone(), true)
+        .await
+        .unwrap();
+    // Idempotent: hiding twice is not an error.
+    repo.set_contact_hidden(owner.clone(), typo.clone(), true)
+        .await
+        .unwrap();
+
+    let contacts = repo.get_contacts(owner.clone()).await.unwrap();
+    assert_eq!(contacts.len(), 2);
+    assert!(!contacts.iter().any(|c| c.as_ref() == typo.as_ref()));
+
+    // The other party still sees the owner.
+    let reverse = repo.get_contacts(typo.clone()).await.unwrap();
+    assert_eq!(reverse.len(), 1);
+    assert_eq!(reverse[0].as_ref(), owner.as_ref());
+
+    // A replayed sync upsert of the same edge does not resurface it.
+    repo.create_connections(vec![(owner.clone(), typo.clone())])
+        .await
+        .unwrap();
+    let contacts = repo.get_contacts(owner.clone()).await.unwrap();
+    assert_eq!(contacts.len(), 2);
+
+    repo.set_contact_hidden(owner.clone(), typo.clone(), false)
+        .await
+        .unwrap();
+    let contacts = repo.get_contacts(owner).await.unwrap();
+    assert_eq!(contacts.len(), 3);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "fixtures", scripts("user_list"))
+)]
+async fn test_hiding_a_stranger_stores_nothing(pool: PgPool) -> sqlx::Result<()> {
+    let repo = DbContactsRepository::new(pool.clone());
+    let owner = mid("macro|a@test.com");
+
+    // Not a connection of the owner: nothing to suppress, nothing stored, so
+    // a client cannot grow the table with arbitrary ids.
+    repo.set_contact_hidden(owner.clone(), mid("macro|stranger@test.com"), true)
+        .await
+        .unwrap();
+
+    let count = sqlx::query_scalar!("SELECT count(*) FROM contacts_hidden")
+        .fetch_one(&pool)
+        .await?
+        .unwrap();
+    assert_eq!(count, 0);
+    assert_eq!(repo.get_contacts(owner).await.unwrap().len(), 3);
+    Ok(())
+}
+
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_create_connections_batch(pool: PgPool) -> sqlx::Result<()> {
     let connections: Vec<(MacroUserIdStr<'static>, MacroUserIdStr<'static>)> = (0..8)

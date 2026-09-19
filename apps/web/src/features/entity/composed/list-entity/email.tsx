@@ -1,9 +1,10 @@
+import { isSpamEmail } from '@app/features/next-soup/filters/inbox-filters';
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { useEmailLinksContext } from '@core/context/emailLinks';
 import { cn } from '@ui';
 import { type Accessor, createMemo, Show } from 'solid-js';
-import { DraftBadge } from '../../components/Badges';
+import { DraftBadge, SpamBadge } from '../../components/Badges';
 import { Entity } from '../../entity';
 import { HitSnippet } from '../../extractors-search/HitSnippet';
 import { getSnippetHit } from '../../extractors-search/snippet-entity';
@@ -70,6 +71,9 @@ export function EmailIdentity(props: { entity: EmailEntity }) {
     <>
       <Show when={props.entity.isDraft}>
         <DraftBadge />
+      </Show>
+      <Show when={isSpamEmail(props.entity)}>
+        <SpamBadge />
       </Show>
       <span class="truncate min-w-0">
         <Entity.EmailParticipants entity={props.entity} />

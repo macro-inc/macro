@@ -1,8 +1,10 @@
 //! Toolset inbound adapter for the Email service.
 
+mod create_email_draft;
 mod get_thread;
 mod list_inboxes;
 mod list_labels;
+mod mcp_send_email;
 mod send_email;
 mod set_sender_policy;
 mod update_thread_labels;
@@ -21,10 +23,12 @@ use entity_access::domain::ports::EntityAccessService;
 use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
 
+pub use create_email_draft::{CreateEmailDraft, CreateEmailDraftResponse};
 pub use get_thread::{GetThread, GetThreadResponse};
 pub use list_inboxes::{ListInboxes, ListInboxesResponse, ToolInbox};
 pub use list_labels::{ListLabels, ListLabelsResponse, ToolLabel};
-pub use send_email::{SendEmail, SendEmailResponse};
+pub use mcp_send_email::{McpSendEmail, McpSendEmailResponse};
+pub use send_email::{EmailRecipient, SendEmail, SendEmailResponse};
 pub use set_sender_policy::{SetSenderPolicy, SetSenderPolicyResponse, ToolSenderPolicy};
 pub use update_thread_labels::{UpdateThreadLabels, UpdateThreadLabelsResponse};
 
@@ -80,6 +84,27 @@ pub fn resolve_inbox_selector<'a>(
             internal_error: anyhow::anyhow!("unknown inbox selector: {addr}"),
         }),
     }
+}
+
+/// Require that `link` is an inbox the caller owns, not one delegated to
+/// them. Owner-only actions (sending on an agent opt-in the owner set for
+/// their own agents) use this after [`resolve_inbox_selector`], which
+/// deliberately spans every accessible inbox.
+pub fn require_owned_inbox(link: &Link, caller_macro_id: &str) -> Result<(), ToolCallError> {
+    if link.macro_id.to_string() == caller_macro_id {
+        return Ok(());
+    }
+    let inbox = link.email_address.0.as_ref();
+    Err(ToolCallError {
+        description: format!(
+            "{inbox} is shared with the user but owned by someone else; only its owner can send \
+             from it here. Save the email with CreateEmailDraft instead."
+        ),
+        internal_error: anyhow::anyhow!(
+            "caller {caller_macro_id} does not own link {} ({inbox})",
+            link.id
+        ),
+    })
 }
 
 /// Service context for email AI tools.
@@ -209,20 +234,8 @@ fn decode_composer_html(body: &str) -> Option<String> {
     decoded.trim_start().starts_with('<').then_some(decoded)
 }
 
-/// Create the full email toolset including SendEmail.
-pub fn email_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
-where
-    T: EmailService,
-    G: GmailTokenProvider,
-    E: EntityAccessService,
-{
-    mcp_toolset().add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
-}
-
-/// Email toolset for hosts without a composer (the MCP server and the
-/// channel-mention bot) — excludes SendEmail, whose draft only the chat
-/// frontend can review and send.
-pub fn mcp_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
+/// The read and label tools every host gets.
+fn base_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
 where
     T: EmailService,
     G: GmailTokenProvider,
@@ -234,4 +247,37 @@ where
         .add_tool::<ListLabels, EmailToolContext<T, G, E>>()
         .add_tool::<ListInboxes, EmailToolContext<T, G, E>>()
         .add_tool::<SetSenderPolicy, EmailToolContext<T, G, E>>()
+}
+
+/// Email toolset for hosts with a composer (chat, agent sessions): SendEmail
+/// is a user tool whose draft the user reviews and sends in the composer.
+pub fn email_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
+where
+    T: EmailService,
+    G: GmailTokenProvider,
+    E: EntityAccessService,
+{
+    base_toolset().add_user_tool::<SendEmail, EmailToolContext<T, G, E>>()
+}
+
+/// Email toolset for the channel-mention bot: no composer, so it can save a
+/// draft the user finishes in Macro but never sends.
+pub fn channel_bot_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
+where
+    T: EmailService,
+    G: GmailTokenProvider,
+    E: EntityAccessService,
+{
+    base_toolset().add_tool::<CreateEmailDraft, EmailToolContext<T, G, E>>()
+}
+
+/// Email toolset for the MCP server: drafts always, and a direct `SendEmail`
+/// that only works for inboxes whose owner opted in to agent sending.
+pub fn mcp_toolset<T, G, E>() -> AsyncToolCollection<EmailToolContext<T, G, E>>
+where
+    T: EmailService,
+    G: GmailTokenProvider,
+    E: EntityAccessService,
+{
+    channel_bot_toolset().add_tool::<McpSendEmail, EmailToolContext<T, G, E>>()
 }

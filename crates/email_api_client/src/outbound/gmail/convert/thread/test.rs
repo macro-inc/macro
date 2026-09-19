@@ -57,6 +57,23 @@ fn thread_with_an_undecodable_message_body_still_converts() {
     assert_eq!(thread.messages[0].body_text, None);
 }
 
+// A thread Gmail filed under SPAM is shown in the inbox views (as noise), so
+// it is inbox-visible and has an inbound timestamp, while the "non-spam"
+// timestamp that backs the All Mail view stays unset.
+#[test]
+fn spam_only_thread_is_inbox_visible() {
+    let resource = ThreadResource {
+        id: "thread".into(),
+        messages: vec![message("spam", 1_000, vec!["SPAM".into(), "UNREAD".into()])],
+    };
+
+    let thread = map_thread_resource_to_service(resource, Uuid::now_v7()).unwrap();
+
+    assert!(thread.inbox_visible);
+    assert!(thread.latest_inbound_message_ts.is_some());
+    assert!(thread.latest_non_spam_message_ts.is_none());
+}
+
 #[test]
 fn sorts_messages_and_derives_thread_state() {
     let resource = ThreadResource {

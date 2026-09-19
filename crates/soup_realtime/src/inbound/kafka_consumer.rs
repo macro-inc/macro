@@ -243,16 +243,17 @@ fn patches_from_email_event(event: &EmailTopicEvent) -> Vec<SoupRealtimePatch> {
     let updated_thread = |thread_id| vec![update(EntityType::EmailThread, thread_id)];
     let deleted_thread = |thread_id| vec![delete(EntityType::EmailThread, thread_id)];
 
+    // Spam stays in the feed as noise, so only trash suppresses the patch.
     match event {
         EmailTopicEvent::MessageReceived(metadata) => {
-            if metadata.is_spam_or_trash {
+            if metadata.is_trash() {
                 Vec::new()
             } else {
                 updated_thread(metadata.thread_id)
             }
         }
         EmailTopicEvent::MessageDraftSynced(metadata) => {
-            if metadata.is_spam_or_trash {
+            if metadata.is_trash() {
                 Vec::new()
             } else {
                 updated_thread(metadata.thread_id)
@@ -272,13 +273,9 @@ fn patches_from_email_event(event: &EmailTopicEvent) -> Vec<SoupRealtimePatch> {
         }
         EmailTopicEvent::ThreadRead(metadata) => updated_thread(metadata.thread_id),
         EmailTopicEvent::ThreadStarred(metadata) => updated_thread(metadata.thread_id),
-        EmailTopicEvent::ThreadSpamChanged(metadata) => {
-            if metadata.spam {
-                deleted_thread(metadata.thread_id)
-            } else {
-                updated_thread(metadata.thread_id)
-            }
-        }
+        // Either direction moves the thread between Signal/Noise buckets
+        // rather than in or out of existence.
+        EmailTopicEvent::ThreadSpamChanged(metadata) => updated_thread(metadata.thread_id),
         EmailTopicEvent::ThreadProjectChanged(metadata) => updated_thread(metadata.thread_id),
         EmailTopicEvent::ThreadLabelsUpdated(metadata) => updated_thread(metadata.thread_id),
         EmailTopicEvent::ThreadBackfilled(metadata) => updated_thread(metadata.thread_id),
