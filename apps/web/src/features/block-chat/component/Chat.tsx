@@ -306,8 +306,7 @@ function ChatInner(props: {
     hotkeyToken: TOKENS.chat.stop,
   });
 
-  // J/K navigation focuses the block once it mounts, except when that block is
-  // passive content in a Preview Pair Viewer.
+  // J/K navigation focuses mounted standalone blocks.
   let hasRun = false;
   createEffect(() => {
     if (hasRun) return;

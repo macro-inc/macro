@@ -4,7 +4,6 @@ import {
   executeMarkEntitiesDone,
   executeMarkEntitiesUndone,
   type MarkEntitiesDoneContext,
-  openEntityInSplitFromUnifiedList,
   resolveMarkEntitiesDoneVariables,
   restoreSoupFocus,
 } from '@app/features/next-soup/utils';
@@ -376,19 +375,6 @@ export const makeMarkDoneAction = (options: MakeMarkDoneOptions) => {
         actionId: 'mark-done',
         entity: nextRow?.original,
       });
-    } else {
-      const controller = splitPanel?.handle;
-      if (controller?.isControllerSplit()) {
-        if (nextRow) {
-          void openEntityInSplitFromUnifiedList(nextRow.original, {
-            splitHandle: controller,
-            mergeHistory: true,
-            notificationSource: options.notificationSource(),
-          });
-        } else {
-          controller.resetPreview();
-        }
-      }
     }
 
     // When marking done navigated the view to the next item, undo navigates

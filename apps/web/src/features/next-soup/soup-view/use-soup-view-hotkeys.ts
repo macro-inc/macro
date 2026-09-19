@@ -209,47 +209,6 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     displayPriority: 4,
   }).withGroup(group);
 
-  // cmd+enter - Focus preview block
-  registerHotkey({
-    hotkey: ['cmd+enter'],
-    scopeId,
-    description: 'Focus Preview',
-    condition: () => splitHandle.isControllerSplit(),
-    keyDownHandler: () => {
-      const manager = globalSplitManager();
-      const viewerId = splitHandle.viewerId();
-      if (splitHandle.isControllerSplit() && viewerId && manager) {
-        manager.activateSplit(viewerId);
-        manager.returnFocus();
-        return true;
-      }
-      return false;
-    },
-    displayPriority: 4,
-  }).withGroup(group);
-
-  // opt+enter - Open in place of the whole Preview Pair
-  registerHotkey({
-    hotkey: ['opt+enter'],
-    scopeId,
-    description: 'Open to replace preview',
-    condition: () =>
-      splitHandle.isControllerSplit() && soup.focus.id() !== undefined,
-    keyDownHandler: () => {
-      const entity = soup.focus.item();
-      if (!entity) return false;
-      markReminderSeenOnOpen(entity, notificationSource);
-      openEntityInSplitFromUnifiedList(entity, {
-        splitHandle,
-        replacePreview: true,
-        referredFrom: currentView(),
-        notificationSource,
-      });
-      return true;
-    },
-    hide: true,
-  }).withGroup(group);
-
   // x - Toggle select item
   registerHotkey({
     hotkey: ['x'],
