@@ -58,7 +58,11 @@ function createParticipant(
     callId: 'call-1',
     shouldStop: () => false,
     maxDurationMs: 30_000,
-    ...callbacks,
+    ring: () => {
+      callbacks.onAcquire();
+      return callbacks.onRelease;
+    },
+    onEnd: callbacks.onEnd,
     ...overrides,
   });
   return { participation, ...callbacks };
@@ -321,5 +325,26 @@ describe('ring coordination', () => {
     expect(publishedMessages('release')[0]).toMatchObject({
       callId: 'call-1',
     });
+  });
+  it('keeps the same sound through heartbeats and a losing takeover', async () => {
+    const module = await importRingCoordination();
+    const fixture = createParticipant(module);
+    await vi.advanceTimersByTimeAsync(2_000);
+    MockBroadcastChannel.instance?.emit(foreignClaim({ claimedAt: 103_000 }));
+    expect(fixture.onAcquire).toHaveBeenCalledOnce();
+    expect(fixture.onRelease).not.toHaveBeenCalled();
+    fixture.participation.stop();
+  });
+
+  it('ignores sound-stop callbacks from cleanup so a suppressed tab can take over', async () => {
+    const module = await importRingCoordination();
+    const ring = vi.fn((end: () => void) => () => end());
+    const fixture = createParticipant(module, { ring });
+    MockBroadcastChannel.instance?.emit(foreignClaim());
+    expect(fixture.onEnd).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(4_000);
+    expect(ring).toHaveBeenCalledTimes(2);
+    fixture.participation.stop();
+    expect(fixture.onEnd).toHaveBeenCalledOnce();
   });
 });

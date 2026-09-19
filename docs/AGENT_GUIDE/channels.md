@@ -357,6 +357,14 @@ instead.
 - Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
   participants.
 
+## Incoming call ringing
+
+For cross-tab ringing checks, sign the recipient into two tabs and start a call
+from another account. Both tabs may show the incoming call; only one should play
+the chime. Closing the audible tab lets the other take over while the call is
+still ringing. Answering or dismissing stops ringing across tabs. An unanswered
+call stops ringing after 30 seconds, including after a tab takes over.
+
 ## Onboarding channel
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —
