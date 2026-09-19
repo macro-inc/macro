@@ -14,7 +14,12 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { err } from 'neverthrow';
 import { Suspense } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import { AgentPullRequestChip } from './AgentPullRequestChip';
+import {
+  AgentGithubChip,
+  AgentPullRequestChip,
+  githubRepositoryLabel,
+} from './AgentPullRequestChip';
+import { pullRequestLineCounts } from './pull-request-line-counts';
 
 const { openWithSplit } = vi.hoisted(() => {
   class FakeWebSocket {
@@ -157,5 +162,68 @@ it('opens the PR entity once synced and follows later status changes', async () 
   await vi.advanceTimersByTimeAsync(1);
   expect(screen.getByRole('button').textContent).toContain('Merged');
   rendered.unmount();
+  client.clear();
+});
+
+it('reads added and deleted lines from a synced pull request', () => {
+  expect(pullRequestLineCounts(entity('open'))).toBeUndefined();
+  expect(
+    pullRequestLineCounts({
+      ...entity('open'),
+      metadata: { status: 'open', additions: 12, deletions: 3 },
+    })
+  ).toEqual({ additions: 12, deletions: 3 });
+  expect(
+    pullRequestLineCounts({
+      ...entity('open'),
+      metadata: { status: 'open', additions: 0, deletions: 0 },
+    })
+  ).toBeUndefined();
+  expect(pullRequestLineCounts(undefined)).toBeUndefined();
+});
+
+it('names a repository from its url or a pull request url', () => {
+  expect(githubRepositoryLabel('https://github.com/macro-inc/macro.git')).toBe(
+    'macro-inc/macro'
+  );
+  expect(githubRepositoryLabel(url)).toBe('macro-inc/macro');
+});
+
+it('shows the repository alone, then folds it into the pull request chip', async () => {
+  type Lookup = ReturnType<
+    typeof storageServiceClient.getForeignEntityBySource
+  >;
+  vi.mocked(storageServiceClient.getForeignEntityBySource).mockReturnValue(
+    new Promise(() => {}) as Lookup
+  );
+  const client = new QueryClient();
+  const rendered = render(() => (
+    <QueryClientProvider client={client}>
+      <AgentGithubChip repoUrl="https://github.com/macro-inc/macro" />
+    </QueryClientProvider>
+  ));
+  const repo = screen.getByRole('link', {
+    name: 'Open macro-inc/macro on GitHub',
+  });
+  expect(repo.getAttribute('href')).toBe('https://github.com/macro-inc/macro');
+  expect(screen.queryByText('#6303')).toBeNull();
+  rendered.unmount();
+
+  render(() => (
+    <QueryClientProvider client={client}>
+      <AgentGithubChip
+        repoUrl="https://github.com/macro-inc/macro"
+        pullRequestUrl={url}
+      />
+    </QueryClientProvider>
+  ));
+  const combined = screen.getByRole('link');
+  expect(combined.getAttribute('href')).toBe(url);
+  expect(combined.textContent).toContain('macro-inc/macro');
+  expect(combined.textContent).toContain('#6303');
+  expect(combined.textContent).toContain('Open');
+  expect(
+    screen.queryByRole('link', { name: 'Open macro-inc/macro on GitHub' })
+  ).toBeNull();
   client.clear();
 });

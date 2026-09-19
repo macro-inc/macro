@@ -6,7 +6,7 @@ import {
   ReviewNotesDock,
 } from '@app/features/agent-changes/agent-changes';
 import { AgentComposer } from '@app/features/block-agent/component/AgentComposer';
-import { AgentPullRequestChip } from '@app/features/block-agent/component/AgentPullRequestChip';
+import { AgentGithubChip } from '@app/features/block-agent/component/AgentPullRequestChip';
 import { agentSessionTitle } from '@app/features/block-agent/component/AgentSplitHeader';
 import { AgentSidePanelSections } from '@app/features/block-agent/component/sidepanel/AgentSidePanelSections';
 import { Transcript } from '@app/features/block-agent/component/Transcript';
@@ -44,7 +44,14 @@ import type { AgentSessionEntity } from '@entity';
 import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
 import GitBranch from '@phosphor/git-branch.svg';
 import ShareIcon from '@phosphor/share.svg';
-import { createSignal, onCleanup, Show, Suspense } from 'solid-js';
+import {
+  createEffect,
+  createSignal,
+  onCleanup,
+  Show,
+  Suspense,
+} from 'solid-js';
+import { createRecentRepositories } from '../primitives/recent-repositories';
 import { ChatSessionInput } from './ChatComposer';
 import { SessionModelSelector } from './ModelSelector';
 import { Topbar } from './Topbar';
@@ -71,6 +78,16 @@ function SessionContent(props: { onDeleted: () => void }) {
   const userId = useUserId();
 
   const title = () => agentSessionTitle(session(), metadata()?.title);
+  const recentRepositories = createRecentRepositories(userId());
+  let rememberedRepository = '';
+  createEffect(() => {
+    const id = sessionId();
+    const url = session()?.repoUrl;
+    const key = id && url ? `${id}:${url}` : '';
+    if (!key || key === rememberedRepository) return;
+    rememberedRepository = key;
+    recentRepositories.remember(url!);
+  });
   const permissions = () =>
     session()?.ownerId === userId()
       ? Permissions.OWNER
@@ -185,8 +202,11 @@ function SessionContent(props: { onDeleted: () => void }) {
             </>
           }
         >
-          <Show when={session()?.pullRequestUrl}>
-            {(url) => <AgentPullRequestChip url={url()} />}
+          <Show when={session()?.repoUrl || session()?.pullRequestUrl}>
+            <AgentGithubChip
+              repoUrl={session()?.repoUrl}
+              pullRequestUrl={session()?.pullRequestUrl}
+            />
           </Show>
           <Show when={sessionId()}>
             {(id) => (

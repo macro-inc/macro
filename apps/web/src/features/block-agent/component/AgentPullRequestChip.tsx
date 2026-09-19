@@ -1,8 +1,9 @@
 /**
- * Compact header chip for the session's linked pull request: `#N` plus
- * status, opening the PR entity once GitHub has synced it. Cloud runtimes
- * can report the URL before the webhook entity exists; until then this is
- * a GitHub link with the same face.
+ * Compact header chips for the session's GitHub repository and, when one
+ * exists, its linked pull request. The PR folds into the same chip as the
+ * repository — `#N` plus status — and opens the PR entity once GitHub has
+ * synced it. Cloud runtimes can report the URL before the webhook entity
+ * exists; until then this is a GitHub link with the same face.
  */
 
 import { GithubPullRequestStatusIcon } from '@app/features/block-pr/side-panel/github-pull-request';
@@ -15,6 +16,7 @@ import { HoverCard } from '@core/component/HoverCard';
 import { PullRequestPreviewCard } from '@core/component/LexicalMarkdown/component/decorator/PullRequestMention';
 import { openInNewSplitForMention } from '@core/util/openInNewSplit';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
+import GithubIcon from '@phosphor/github-logo.svg';
 import { usePullRequestByGithubKeyQuery } from '@queries/storage/pr-mention';
 import type { ForeignEntity } from '@service-storage/generated/schemas';
 import { cn, Layer } from '@ui';
@@ -69,8 +71,9 @@ function ChipFace(props: {
   status: string;
   number?: number;
   title?: string;
+  repository?: string;
 }): JSX.Element {
-  const label = () =>
+  const pullRequest = () =>
     props.number != null ? `#${props.number}` : 'Pull request';
 
   return (
@@ -79,11 +82,18 @@ function ChipFace(props: {
         status={props.status}
         class="size-3 shrink-0"
       />
+      <Show when={props.repository}>
+        {(repository) => (
+          <span class="min-w-0 truncate" title={repository()}>
+            {repository()}
+          </span>
+        )}
+      </Show>
       <span
-        class="min-w-0 truncate tabular-nums"
-        title={props.title ?? label()}
+        class="min-w-0 shrink-0 tabular-nums"
+        title={props.title ?? pullRequest()}
       >
-        {label()}
+        {pullRequest()}
       </span>
       <span class={cn('shrink-0', statusTextClass(props.status))}>
         {capitalize(props.status)}
@@ -95,13 +105,39 @@ function ChipFace(props: {
 /** Shared pill chrome for the GitHub fallback and the entity button. */
 function ChipShell(props: ParentProps): JSX.Element {
   return (
-    <span class="inline-flex h-7 max-w-44 min-w-0 items-center gap-1 rounded-full border border-edge-muted bg-surface px-2 text-xs leading-none text-ink-muted hover:bg-hover hover:text-ink">
+    <span class="inline-flex h-7 max-w-60 min-w-0 items-center gap-1 rounded-full border border-edge-muted bg-surface px-2 text-xs leading-none text-ink-muted hover:bg-hover hover:text-ink">
       {props.children}
     </span>
   );
 }
 
-function GithubFallback(props: { url: string; number?: number }): JSX.Element {
+/** `https://github.com/org/repo.git` → `org/repo` for a compact chip. */
+export function githubRepositoryLabel(url: string): string {
+  const pullRequest = parseGithubPrUrl(url);
+  if (pullRequest) return `${pullRequest.owner}/${pullRequest.repo}`;
+  const path = url
+    .replace(/\.git$/i, '')
+    .split('/')
+    .filter(Boolean);
+  const repo = path.at(-1);
+  const owner = path.at(-2);
+  return owner && repo && !owner.includes(':')
+    ? `${owner}/${repo}`
+    : (repo ?? url);
+}
+
+function githubRepositoryUrl(url: string): string {
+  const pullRequest = parseGithubPrUrl(url);
+  if (pullRequest)
+    return `https://github.com/${pullRequest.owner}/${pullRequest.repo}`;
+  return url.replace(/\.git$/i, '').replace(/\/+$/, '');
+}
+
+function GithubFallback(props: {
+  url: string;
+  number?: number;
+  repository?: string;
+}): JSX.Element {
   return (
     <a
       href={props.url}
@@ -109,14 +145,20 @@ function GithubFallback(props: { url: string; number?: number }): JSX.Element {
       rel="noreferrer"
       data-agent-pull-request={props.url}
       title={
-        props.number != null
-          ? `Open #${props.number} on GitHub`
-          : 'Open pull request on GitHub'
+        props.repository && props.number != null
+          ? `Open ${props.repository} #${props.number} on GitHub`
+          : props.number != null
+            ? `Open #${props.number} on GitHub`
+            : 'Open pull request on GitHub'
       }
       onClick={(event) => event.stopPropagation()}
     >
       <ChipShell>
-        <ChipFace status="open" number={props.number} />
+        <ChipFace
+          status="open"
+          number={props.number}
+          repository={props.repository}
+        />
       </ChipShell>
     </a>
   );
@@ -125,6 +167,7 @@ function GithubFallback(props: { url: string; number?: number }): JSX.Element {
 function EntityChip(props: {
   entity: ForeignEntity;
   number?: number;
+  repository?: string;
 }): JSX.Element {
   const { openWithSplit } = useSplitLayout();
   const status = () => pullRequestStatus(props.entity);
@@ -148,14 +191,21 @@ function EntityChip(props: {
           data-pr-entity-link={props.entity.id}
           title={
             title() ??
-            (props.number != null
-              ? `Open #${props.number}`
-              : 'Open pull request')
+            (props.repository && props.number != null
+              ? `Open ${props.repository} #${props.number}`
+              : props.number != null
+                ? `Open #${props.number}`
+                : 'Open pull request')
           }
           {...navHandlers}
         >
           <ChipShell>
-            <ChipFace status={status()} number={props.number} title={title()} />
+            <ChipFace
+              status={status()}
+              number={props.number}
+              title={title()}
+              repository={props.repository}
+            />
           </ChipShell>
         </button>
       }
@@ -187,7 +237,10 @@ export function AgentPullRequestIcon(props: { url: string }): JSX.Element {
   );
 }
 
-export function AgentPullRequestChip(props: { url: string }): JSX.Element {
+export function AgentPullRequestChip(props: {
+  url: string;
+  repository?: string;
+}): JSX.Element {
   const { reference, entity } = useLinkedPullRequest(() => props.url);
 
   return (
@@ -195,13 +248,73 @@ export function AgentPullRequestChip(props: { url: string }): JSX.Element {
       <Show
         when={entity()}
         fallback={
-          <GithubFallback url={props.url} number={reference()?.number} />
+          <GithubFallback
+            url={props.url}
+            number={reference()?.number}
+            repository={props.repository}
+          />
         }
       >
         {(synced) => (
-          <EntityChip entity={synced()} number={reference()?.number} />
+          <EntityChip
+            entity={synced()}
+            number={reference()?.number}
+            repository={props.repository}
+          />
         )}
       </Show>
     </Layer>
+  );
+}
+
+function RepositoryChip(props: { url: string }): JSX.Element {
+  const label = () => githubRepositoryLabel(props.url);
+  const href = () => githubRepositoryUrl(props.url);
+  return (
+    <Layer depth={2}>
+      <a
+        href={href()}
+        target="_blank"
+        rel="noreferrer"
+        data-agent-repository={props.url}
+        title={`Open ${label()} on GitHub`}
+        aria-label={`Open ${label()} on GitHub`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <ChipShell>
+          <GithubIcon class="size-3 shrink-0" />
+          <span class="min-w-0 truncate">{label()}</span>
+        </ChipShell>
+      </a>
+    </Layer>
+  );
+}
+
+/**
+ * Header chip for the session's repository. A linked pull request folds into
+ * the same chip — the PR is the more specific place to go.
+ */
+export function AgentGithubChip(props: {
+  repoUrl?: string;
+  pullRequestUrl?: string;
+}): JSX.Element {
+  const repository = () =>
+    props.repoUrl
+      ? githubRepositoryLabel(props.repoUrl)
+      : props.pullRequestUrl
+        ? githubRepositoryLabel(props.pullRequestUrl)
+        : undefined;
+
+  return (
+    <Show
+      when={props.pullRequestUrl}
+      fallback={
+        <Show when={props.repoUrl}>
+          {(url) => <RepositoryChip url={url()} />}
+        </Show>
+      }
+    >
+      {(url) => <AgentPullRequestChip url={url()} repository={repository()} />}
+    </Show>
   );
 }

@@ -17,7 +17,9 @@
   pull request is linked). Home and the Agents sidebar share these agent rows.
   Rows have no agent or runtime-status subtext. Sessions with a linked PR show
   **View PR #<number> in GitHub** beneath the title; clicking it opens GitHub in
-  a new tab without opening the session. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
+  a new tab without opening the session. The leading icon reflects the PR status.
+  When GitHub has synced the PR, `+added −deleted` line counts sit on the right
+  of the title, before the age. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
@@ -63,7 +65,9 @@
   (**Choose repository** until one is picked) opens a searchable list:
   **Choose automatically**, then the repositories the signed-in user reaches
   through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
-  recently used ones first. Typing filters the list; an unlisted GitHub
+  in order of the repository most recently used — opening or sending a coding
+  session and picking in this dropdown all count, newest first. Repositories
+  never used yet follow in the App listing's `owner/name` order. Typing filters the list; an unlisted GitHub
   `owner/repo` or URL adds a **Use owner/repo** row. Arrow keys move the
   highlight and Enter or a click picks it; there is no separate confirm
   button. Someone who reaches no repository sees a hint with **Connect
@@ -100,8 +104,10 @@
   the roster into Team and Private, with Edit / Delete actions. The coding
   tab includes runtime setup. The create/edit dialog has sharing, name,
   `@tag`, runtime, default model, connections, channels, and instructions.
-- **Session**: the header has the sidebar reopen control, a linked PR status chip,
-  favorite, Share, and Side panel. The top-left title uses the same provider icon,
+- **Session**: the header has the sidebar reopen control, a GitHub repository
+  chip when the session has a repo (opens the repo on GitHub), which combines
+  into the linked PR status chip when a pull request exists (repo name plus
+  `#N` and status; opens the PR), favorite, Share, and Side panel. The top-left title uses the same provider icon,
   saved-title precedence, and title menu as `/app/agent/<id>`; click the caret
   beside the title for shared block actions such as Rename, Copy link, Favorite,
   and Delete
@@ -342,11 +348,14 @@ to open the title menu (caret), then **Rename** — that opens the generic entit
 rename dialog. Do not expect a tap on the name itself to start
 an inline edit.
 
-When the session has opened a pull request, a compact `#N` status chip
-appears in the header (top right) and in the side-panel Details. Click it
-to open the PR entity in a split; until GitHub has synced the entity the
+When the session has a repository, a compact GitHub chip appears in the
+header (top right) next to Share. Click it to open the repository on GitHub.
+When the session has also opened a pull request, that chip becomes one
+combined control: the repository name plus `#N` and status. Click it to
+open the PR entity in a split; until GitHub has synced the entity the
 chip is a GitHub link instead. The icon and status word follow open /
-merged / closed.
+merged / closed. The side-panel Details still lists repository and
+pull request separately.
 
 Tool groups and individual tool cards start collapsed. Expand a group to see
 its calls, then expand an edit card to view its file diffs. Diff bodies load

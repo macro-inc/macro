@@ -31,6 +31,16 @@ vi.mock('@queries/agents/agents', () => ({
 vi.mock('@app/features/block-agent/component/AgentPullRequestChip', () => ({
   AgentPullRequestIcon: () => <svg data-pr-icon />,
 }));
+vi.mock('@queries/storage/pr-mention', () => ({
+  usePullRequestByGithubKeyQuery: () => ({
+    get isSuccess() {
+      return prEntity() !== undefined;
+    },
+    get data() {
+      return prEntity();
+    },
+  }),
+}));
 vi.mock('@entity', () => ({
   Entity: { Title: () => 'Recent chat', Timestamp: () => 'now' },
   MaybeEntityRow: (props: { children: JSX.Element }) => props.children,
@@ -49,9 +59,14 @@ const [metadata, setMetadata] = createSignal<{
   harness: string;
   pullRequestUrl?: string;
 }>();
+const [prEntity, setPrEntity] = createSignal<{
+  foreignEntitySource: string;
+  metadata: { additions: number; deletions: number };
+}>();
 afterEach(() => {
   cleanup();
   setMetadata(undefined);
+  setPrEntity(undefined);
 });
 
 vi.mock('@solid-primitives/resize-observer', () => ({
@@ -189,6 +204,22 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(open).toHaveBeenCalledOnce();
     const event = open.mock.calls[0][surface === 'home' ? 0 : 1];
     expect(event.shiftKey).toBe(true);
+  });
+
+  it('shows the pull request line counts on the right of the row', () => {
+    setup();
+    setMetadata({
+      harness: 'cursor',
+      pullRequestUrl: 'https://github.com/macro-inc/macro/pull/42',
+    });
+    expect(screen.queryByLabelText('12 additions, 3 deletions')).toBeNull();
+    setPrEntity({
+      foreignEntitySource: 'github_pull_request',
+      metadata: { additions: 12, deletions: 3 },
+    });
+    const counts = screen.getByLabelText('12 additions, 3 deletions');
+    expect(counts.textContent).toContain('+12');
+    expect(counts.textContent).toContain('−3');
   });
 
   it('keeps the session available without metadata and uses the session harness for its icon', () => {

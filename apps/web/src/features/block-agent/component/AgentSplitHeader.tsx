@@ -33,7 +33,7 @@ import {
   ORIGIN_THREAD_DRAWER_ID,
   sessionOriginThread,
 } from '../context/origin-thread';
-import { AgentPullRequestChip } from './AgentPullRequestChip';
+import { AgentGithubChip } from './AgentPullRequestChip';
 import { harnessTitle } from './compose-agent-session-options';
 
 export { harnessTitle };
@@ -50,8 +50,9 @@ export function agentSessionTitle(
 
 /**
  * Agent-session identity in the split header chrome plus the standard split
- * toolbar: static label, shared entity actions, the session's pull request
- * once one exists, and external-provider links.
+ * toolbar: static label, shared entity actions, the session's repository
+ * (folded into the pull-request chip when one exists), and external-provider
+ * links.
  *
  * Rename lives on the title menu (channel / automation), not on a tap of
  * the name — `StaticSplitLabel` without `onRename` so a touch tap opens
@@ -159,8 +160,11 @@ export function AgentSplitHeader(props: {
           into the title menu via `menuTools` below instead. */}
       <SplitHeaderRight>
         <div class="order-[1000] flex items-center gap-1.5">
-          <Show when={props.session?.pullRequestUrl}>
-            {(url) => <AgentPullRequestChip url={url()} />}
+          <Show when={props.session?.repoUrl || props.session?.pullRequestUrl}>
+            <AgentGithubChip
+              repoUrl={props.session?.repoUrl}
+              pullRequestUrl={props.session?.pullRequestUrl}
+            />
           </Show>
           <Show when={!isMobile()}>
             <ChangesToggle />

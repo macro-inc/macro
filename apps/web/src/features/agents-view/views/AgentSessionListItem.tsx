@@ -1,19 +1,28 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { AgentPullRequestIcon } from '@app/features/block-agent/component/AgentPullRequestChip';
-import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
+import { pullRequestLineCounts } from '@app/features/block-agent/component/pull-request-line-counts';
+import { DiffChanges } from '@app/features/block-agent/ui/DiffChanges';
+import {
+  parseGithubPrUrl,
+  prHtmlUrl,
+  toGithubKey,
+} from '@app/features/block-pr/util/prKey';
+import { useUserId } from '@core/context/user';
 import type { AgentSessionEntity } from '@entity';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import CodeIcon from '@phosphor/code.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { useAgentsQuery } from '@queries/agents/agents';
+import { usePullRequestByGithubKeyQuery } from '@queries/storage/pr-mention';
 import { cn, pressHandlers } from '@ui';
-import { ErrorBoundary, Show, Suspense } from 'solid-js';
+import { createEffect, ErrorBoundary, Show, Suspense } from 'solid-js';
 import { kindForHarness, modeForKind, systemBotKind } from '../core/agent-kind';
 import { conversationState } from '../core/conversation-state';
 import { compactAge } from '../core/format-age';
 import type { AgentsMode } from '../core/mode';
 import { conversationTimestamp } from '../core/recent-conversations';
+import { createRecentRepositories } from '../primitives/recent-repositories';
 
 type Props = {
   entity: AgentSessionEntity;
@@ -36,6 +45,14 @@ function SessionListItem(props: Props) {
   const query = useAgentSessionQuery(() => props.entity.id);
   const agents = useAgentsQuery();
   const session = () => (query.isSuccess ? query.data : undefined);
+  const userId = useUserId();
+  const recentRepositories = createRecentRepositories(userId());
+  createEffect(() => {
+    const url = session()?.repoUrl;
+    if (url) {
+      recentRepositories.observe(url, conversationTimestamp(props.entity));
+    }
+  });
   const botId = () =>
     (props.entity.bot?.id ?? props.entity.botId).replace(/^bot\|/, '');
   const agent = () =>
@@ -55,6 +72,14 @@ function SessionListItem(props: Props) {
     const pr = pullRequest();
     return pr ? prHtmlUrl(pr) : undefined;
   };
+  const linkedPullRequest = usePullRequestByGithubKeyQuery(() => {
+    const pr = pullRequest();
+    return pr ? toGithubKey(pr) : undefined;
+  });
+  const lineCounts = () =>
+    linkedPullRequest.isSuccess
+      ? pullRequestLineCounts(linkedPullRequest.data ?? undefined)
+      : undefined;
 
   return (
     <ViewSidebar.Item
@@ -98,6 +123,20 @@ function SessionListItem(props: Props) {
       <span class="pointer-events-none relative min-w-0 flex-1">
         <span class="flex min-w-0 items-center gap-2">
           <span class="min-w-0 flex-1 truncate">{title()}</span>
+          <Show when={lineCounts()}>
+            {(counts) => (
+              <span
+                class="shrink-0 text-xs"
+                aria-label={`${counts().additions} additions, ${counts().deletions} deletions`}
+              >
+                <DiffChanges
+                  additions={counts().additions}
+                  deletions={counts().deletions}
+                  class="gap-1"
+                />
+              </span>
+            )}
+          </Show>
           <span class="shrink-0 text-xs text-ink-extra-muted tabular-nums">
             {compactAge(conversationTimestamp(props.entity))}
           </span>
