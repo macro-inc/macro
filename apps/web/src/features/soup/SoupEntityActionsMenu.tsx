@@ -1,11 +1,8 @@
-import type {
-  EntityActionListState,
-  EntityActionViewContext,
-} from '@app/features/next-soup/actions';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import type { EntityData } from '@entity';
 import { For, Show } from 'solid-js';
+import type { EntityActionListState, EntityActionViewContext } from './actions';
 import {
   createSoupEntityActions,
   viewedProjectIdFromContent,

@@ -1,9 +1,6 @@
-import type {
-  EntityActionListState,
-  EntityActionViewContext,
-} from '@app/features/next-soup/actions';
 import type { EntityData } from '@entity';
 import { type Accessor, createContext, useContext } from 'solid-js';
+import type { EntityActionListState, EntityActionViewContext } from './actions';
 
 export type EntityActionDrawerEntry = {
   entity: EntityData;

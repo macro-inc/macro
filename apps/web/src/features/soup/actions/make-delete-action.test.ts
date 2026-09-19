@@ -39,21 +39,13 @@ vi.mock('../utils', () => ({
   trashEmails: mocks.trashEmails,
 }));
 
-vi.mock('@app/features/next-soup/filters/configs/', () => ({
-  SOUP_FILTERS: [],
-}));
-vi.mock('@app/features/next-soup/soup-view/sort-options', () => ({
-  SORT_CONFIGS: { updated_at: { id: 'updated_at', fn: () => 0 } },
-}));
-vi.mock('@core/mobile/inputModality', () => ({ isModality: () => false }));
-vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('./make-mark-done-action', () => ({
   canExecuteMarkDoneOnView: () => true,
 }));
 
 import { createListController } from '@app/components/list/create-list-controller';
-import { createSoupState, type SoupRow } from '../create-soup-state';
 import {
+  type EntityActionListRow,
   type EntityActionListState,
   toEntityActionListState,
 } from './entity-action-context';
@@ -161,17 +153,28 @@ function listState(entities: EntityData[]) {
         getIsLoadMore: () => false,
         isFocused: () => focused === original.id,
         isSelected: () => selected.has(original.id),
-      }) as SoupRow
+      }) as EntityActionListRow
   );
   const focusSet = vi.fn((id: string | undefined) => {
     focused = id;
   });
   const clear = vi.fn(() => selected.clear());
   const peekOffset = vi.fn<EntityActionListState['navigate']['peekOffset']>(
-    (direction, options) => {
-      const candidates = direction >= 0 ? rows : rows.toReversed();
-      const row = candidates.find((row) => !options?.skip?.(row));
-      return row ? { row, index: row.index } : undefined;
+    (offset, options) => {
+      const direction = offset >= 0 ? 1 : -1;
+      let remaining = Math.abs(offset);
+      let index = rows.findIndex((row) => row.id === focused);
+      while (remaining > 0) {
+        index += direction;
+        const row = rows[index];
+        if (!row) return undefined;
+        if (options?.skipGroupHeaders && row.getIsGrouped()) continue;
+        if (options?.skipLoadMore && row.getIsLoadMore()) continue;
+        if (options?.skip?.(row)) continue;
+        remaining -= 1;
+      }
+      const row = rows[index];
+      return row ? { row, index } : undefined;
     }
   );
   const soup: EntityActionListState = {
@@ -283,26 +286,9 @@ describe('confirmed partial deletion cleanup', () => {
   });
 });
 
-function liveListState(
-  adapter: 'legacy' | 'controller',
-  initial: EntityData[],
-  focusId: string
-) {
+function liveListState(initial: EntityData[], focusId: string) {
   return createRoot((dispose) => {
     onTestFinished(dispose);
-    if (adapter === 'legacy') {
-      const soup = createSoupState({ initialData: initial });
-      soup.focus.set(focusId);
-      return {
-        soup,
-        setItems: (items: EntityData[]) =>
-          soup.setRows(
-            items.map((original, index) =>
-              soup.buildRow({ id: original.id, original, index })
-            )
-          ),
-      };
-    }
     const [items, setItems] = createSignal(initial);
     const controller = createListController({
       items,
@@ -367,93 +353,87 @@ const focusCases = [
   },
 ];
 
-describe.each(['legacy', 'controller'] as const)(
-  'partial delete focus on the real %s list',
-  (adapter) => {
-    it.each(focusCases)('$name', async ({ initial, final, expected }) => {
-      const items = new Map(
-        [...initial, ...final].map((id) => [id, entity('document', { id })])
-      );
-      const { soup, setItems } = liveListState(
-        adapter,
-        initial.map((id) => items.get(id)!),
-        'deleted'
-      );
-      const deleted = items.get('deleted')!;
-      const retry = items.get('retry')!;
-      const action = makeDeleteAction({ userId: () => ME });
-      await action.executeWithSoup([deleted, retry], soup);
-      const modal = currentDeleteModal();
-      // Real list updates invalidate the focused row's index. A mock that only
-      // skips deleted ids, without losing focus, misses the jump-to-top bug.
-      setItems(
-        initial.filter((id) => id !== deleted.id).map((id) => items.get(id)!)
-      );
-      modal.onPartialDelete([deleted], [retry]);
-      setItems(final.map((id) => items.get(id)!));
-      expect(soup.focus.index()).toBe(-1);
-      modal.onFinish();
-      const focusId = soup.focus.id();
-      expect(
-        focusId === undefined ? undefined : soup.items.get(focusId)?.original.id
-      ).toBe(expected);
-      expect(mocks.restoreFocus).toHaveBeenLastCalledWith(focusId);
-    });
-  }
-);
+describe('partial delete focus on a controller-backed list', () => {
+  it.each(focusCases)('$name', async ({ initial, final, expected }) => {
+    const items = new Map(
+      [...initial, ...final].map((id) => [id, entity('document', { id })])
+    );
+    const { soup, setItems } = liveListState(
+      initial.map((id) => items.get(id)!),
+      'deleted'
+    );
+    const deleted = items.get('deleted')!;
+    const retry = items.get('retry')!;
+    const action = makeDeleteAction({ userId: () => ME });
+    await action.executeWithSoup([deleted, retry], soup);
+    const modal = currentDeleteModal();
+    // Real list updates invalidate the focused row's index. A mock that only
+    // skips deleted ids, without losing focus, misses the jump-to-top bug.
+    setItems(
+      initial.filter((id) => id !== deleted.id).map((id) => items.get(id)!)
+    );
+    modal.onPartialDelete([deleted], [retry]);
+    setItems(final.map((id) => items.get(id)!));
+    expect(soup.focus.index()).toBe(-1);
+    modal.onFinish();
+    const focusId = soup.focus.id();
+    expect(
+      focusId === undefined ? undefined : soup.items.get(focusId)?.original.id
+    ).toBe(expected);
+    expect(mocks.restoreFocus).toHaveBeenLastCalledWith(focusId);
+  });
+});
 
 it('skips grouped headers and load-more rows when anchoring partial-delete focus', async () => {
-  const soup = createRoot((dispose) => {
-    onTestFinished(dispose);
-    return createSoupState();
-  });
   const top = entity('document', { id: 'top' });
   const deleted = entity('document', { id: 'deleted' });
   const retry = entity('document', { id: 'retry' });
   const neighbour = entity('document', { id: 'neighbour' });
-  const group = {
-    key: 'group',
-    label: 'Group',
-    value: 'group',
-    count: 1,
-    isExpanded: () => true,
-    toggle: () => {},
-  };
-  const structural = [
-    soup.buildRow({
-      id: 'header',
-      index: 3,
-      original: neighbour,
-      group,
-      isGrouped: true,
-    }),
-    soup.buildRow({
-      id: 'more',
-      index: 4,
-      original: neighbour,
-      group,
-      isLoadMore: true,
-    }),
-  ];
-  soup.setRows([
-    ...[top, deleted, retry].map((original, index) =>
-      soup.buildRow({ id: original.id, original, index })
-    ),
-    ...structural,
-    soup.buildRow({ id: neighbour.id, original: neighbour, index: 5, group }),
-  ]);
+  const { soup, rows } = listState([top, deleted, retry, neighbour]);
+  const group = { isExpanded: () => true };
+  const structural = (
+    id: string,
+    isGrouped: boolean,
+    isLoadMore: boolean
+  ): EntityActionListRow => ({
+    identityKey: id,
+    id,
+    index: -1,
+    original: neighbour,
+    group,
+    getIsGrouped: () => isGrouped,
+    getIsLoadMore: () => isLoadMore,
+    isFocused: () => false,
+    isSelected: () => false,
+  });
+  rows.splice(
+    3,
+    0,
+    structural('header', true, false),
+    structural('more', false, true)
+  );
+  rows.forEach((row, index) => {
+    row.index = index;
+  });
   soup.focus.set(deleted.id);
+
   await makeDeleteAction({ userId: () => ME }).executeWithSoup(
     [deleted, retry],
     soup
   );
   const modal = currentDeleteModal();
   modal.onPartialDelete([deleted], [retry]);
-  soup.setRows([
-    soup.buildRow({ id: top.id, original: top, index: 0 }),
-    ...structural.map((row, index) => ({ ...row, index: index + 1 })),
-    soup.buildRow({ id: neighbour.id, original: neighbour, index: 3, group }),
-  ]);
+  rows.splice(
+    0,
+    rows.length,
+    ...rows.filter(
+      (row) => row.original.id !== deleted.id && row.original.id !== retry.id
+    )
+  );
+  rows.forEach((row, index) => {
+    row.index = index;
+  });
+
   expect(soup.focus.index()).toBe(-1);
   modal.onFinish();
   expect(soup.focus.id()).toBe(neighbour.id);

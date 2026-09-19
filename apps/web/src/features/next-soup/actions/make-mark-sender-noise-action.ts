@@ -1,5 +1,1 @@
-import { markSenderNoiseWithToast } from '@queries/email/thread';
-import { makeSenderFilterAction } from './make-sender-filter-action';
-
-export const makeMarkSenderNoiseAction = () =>
-  makeSenderFilterAction(markSenderNoiseWithToast);
+export * from '@app/features/soup/actions/make-mark-sender-noise-action';
