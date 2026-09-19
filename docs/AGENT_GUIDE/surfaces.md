@@ -332,7 +332,11 @@ Shift-click opens a standalone split at `/app/email/<thread-id>`, which remains
 the destination for direct links and legacy surfaces. Click a message header to
 expand or collapse it; `Show N hidden messages` reveals the collapsed middle of
 a longer conversation. A standalone link with
-`?email_message_id=<message-id>` reveals that message.
+`?email_message_id=<message-id>` loads older pages as needed, expands the target,
+scrolls it into view, and briefly highlights it. For navigation regressions,
+exercise both a recent message and one outside the first page. Open another
+target while loading or highlighting: the previous request must not scroll the
+new thread or clear its highlight. Closing the split cancels pending positioning.
 Collapsed thread cards use a compact text snippet; expanding mounts the message
 body and its attachments. On phones, messages form flat rows with horizontal
 separators and 16px side gutters; collapsed previews show one line. Desktop

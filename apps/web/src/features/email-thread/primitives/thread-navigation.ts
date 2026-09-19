@@ -1,6 +1,7 @@
 import type { ReplyType } from '@app/features/email-compose/core/reply-type';
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
 import { createCallback } from '@solid-primitives/rootless';
+import { debounce } from '@solid-primitives/scheduled';
 import {
   type Accessor,
   createEffect,
@@ -42,6 +43,7 @@ import {
   threadMessageIsExpanded,
 } from '../primitives/scroll-to-message';
 import type { EmailThreadState } from './email-thread-state';
+import { createTargetMessageNavigation } from './target-message-navigation';
 
 const TARGET_MESSAGE_HIGHLIGHT_MS = 800;
 /** List navigation — keep within the 300ms UI motion budget (improve-animations). */
@@ -56,26 +58,31 @@ export function createThreadNavigation(
 ) {
   const isTouchDevice = threadContext.isTouch;
   const setIsScrollingToMessage = context.setIsScrollingToMessage;
-  let disposed = false;
-  const pendingWaits = new Set<() => void>();
+  const finishScrolling = debounce(
+    () => setIsScrollingToMessage(false),
+    SCROLL_ANIMATION_MS
+  );
+  const markScrolling = () => {
+    setIsScrollingToMessage(true);
+    finishScrolling();
+  };
   onCleanup(() => {
-    disposed = true;
-    for (const finish of pendingWaits) finish();
+    finishScrolling.clear();
+    setIsScrollingToMessage(false);
   });
-  /**
-   * Waits for the query to finish fetching
-   */
-  const waitForQueryLoad = (): Promise<void> => {
+
+  const waitForQueryLoad = (signal: AbortSignal): Promise<void> => {
+    if (signal.aborted || !context.query.isFetching()) return Promise.resolve();
     return new Promise((resolve) => {
       const finish = () => {
         clearInterval(checkInterval);
-        pendingWaits.delete(finish);
+        signal.removeEventListener('abort', finish);
         resolve();
       };
       const checkInterval = setInterval(() => {
-        if (disposed || !context.query.isFetching()) finish();
+        if (!context.query.isFetching()) finish();
       }, 50);
-      pendingWaits.add(finish);
+      signal.addEventListener('abort', finish, { once: true });
     });
   };
 
@@ -83,10 +90,11 @@ export function createThreadNavigation(
    * Loads messages until the target message is found or no more messages available
    */
   const loadMessagesUntilFound = async (
-    targetMessageId: string
+    targetMessageId: string,
+    signal: AbortSignal
   ): Promise<boolean> => {
     const ownerThreadId = props.threadId();
-    while (!disposed && props.threadId() === ownerThreadId) {
+    while (!signal.aborted && props.threadId() === ownerThreadId) {
       const messages = context.messages.unfiltered();
 
       // Check if message exists in current batch
@@ -101,16 +109,20 @@ export function createThreadNavigation(
 
       // Load next batch and wait
       await context.query.fetchNextPage();
-      await waitForQueryLoad();
+      await waitForQueryLoad(signal);
       if (context.messages.unfiltered().length <= messages.length) return false;
     }
     return false;
   };
 
-  const fetchNextPage = async () => {
-    if (context.query.hasMore() && !context.query.isFetching()) {
-      context.query.fetchNextPage();
-      await waitForQueryLoad();
+  const fetchNextPage = async (signal: AbortSignal) => {
+    if (
+      !signal.aborted &&
+      context.query.hasMore() &&
+      !context.query.isFetching()
+    ) {
+      await context.query.fetchNextPage();
+      await waitForQueryLoad(signal);
     }
   };
 
@@ -174,14 +186,13 @@ export function createThreadNavigation(
 
     if (!messages || !container) return false;
 
-    setIsScrollingToMessage(true);
-
     const success = scrollToMessage(messageId, messages, container, {
       behavior: opts.behavior,
       align: opts.align,
     });
 
     if (!success) {
+      finishScrolling.clear();
       setIsScrollingToMessage(false);
       return false;
     }
@@ -191,60 +202,60 @@ export function createThreadNavigation(
       context.messages.setFocused(messageId);
     }
 
+    markScrolling();
     if (context.messages.targetMessageId() === messageId) {
-      setTimeout(() => {
-        context.messages.setTargetMessageId(undefined);
-      }, TARGET_MESSAGE_HIGHLIGHT_MS);
+      targetNavigation.highlight({ threadId: props.threadId(), messageId });
     }
-
-    setTimeout(() => setIsScrollingToMessage(false), SCROLL_ANIMATION_MS);
 
     return true;
   };
 
-  context.onInitialDataLoad(() => {
-    if (!canRunInitialEmailScroll()) return false;
-    if (!untrack(context.messagesListRef)) return false;
-
-    const targetMessageId_ = context.messages.targetMessageId();
-    if (targetMessageId_ && typeof targetMessageId_ !== 'string') return true;
-    if (typeof targetMessageId_ === 'string') {
-      void revealTargetMessage(targetMessageId_);
-    }
-
-    return true;
-  });
-
-  async function revealTargetMessage(messageId: string) {
-    context.messages.setExpandedBodyId(messageId, true);
-    const messages = untrack(context.messages.list);
-    if (!messages) return;
-
-    const initialIndex = messages.findIndex(
-      (message) => message.db_id === messageId
-    );
-
-    if (initialIndex < 0) {
-      try {
-        const found = await loadMessagesUntilFound(messageId);
-        if (!found) return;
-        await fetchNextPage();
-      } catch (error) {
-        console.error('Error loading target message:', error);
-        return;
+  const targetNavigation = createTargetMessageNavigation({
+    highlightMs: TARGET_MESSAGE_HIGHLIGHT_MS,
+    load: async ({ messageId, threadId }, signal) => {
+      context.messages.setExpandedBodyId(messageId, true);
+      const messages = untrack(context.messages.list);
+      const initialIndex = messages.findIndex(
+        (message) => message.db_id === messageId
+      );
+      if (initialIndex < 0) {
+        if (!(await loadMessagesUntilFound(messageId, signal))) return false;
+        await fetchNextPage(signal);
+      } else if (initialIndex === 0) {
+        await fetchNextPage(signal);
       }
-    } else if (initialIndex === 0) {
-      await fetchNextPage();
-    }
-
-    requestAnimationFrame(() => {
+      return !signal.aborted && props.threadId() === threadId;
+    },
+    position: ({ messageId }) =>
       performScrollToMessage(messageId, {
         behavior: 'instant',
         focus: true,
         align: 'start',
-      });
-    });
-  }
+      }),
+    release: ({ messageId }) => {
+      if (context.messages.targetMessageId() === messageId)
+        context.messages.setTargetMessageId(undefined);
+    },
+    onError: (error) => console.error('Error loading target message:', error),
+  });
+  onCleanup(targetNavigation.dispose);
+  createEffect(
+    on(
+      [props.threadId, context.messages.targetMessageId],
+      ([threadId, messageId]) =>
+        targetNavigation.syncTarget(
+          messageId ? { threadId, messageId } : undefined
+        )
+    )
+  );
+  context.onInitialDataLoad(() => {
+    if (!canRunInitialEmailScroll() || !untrack(context.messagesListRef))
+      return false;
+    const messageId = context.messages.targetMessageId();
+    if (messageId)
+      targetNavigation.navigate({ threadId: props.threadId(), messageId });
+    return true;
+  });
 
   const [userOpenedMiddle, setUserOpenedMiddle] = createSignal(false);
   createEffect(
@@ -276,14 +287,9 @@ export function createThreadNavigation(
   let markdownDomRef!: HTMLDivElement;
   const tryKeyboardListScroll = leadingThrottle(KEYBOARD_SCROLL_MS);
 
-  const scrollListBy = (
-    list: HTMLElement,
-    top: number,
-    animationMs = SCROLL_ANIMATION_MS
-  ) => {
+  const scrollListBy = (list: HTMLElement, top: number) => {
     if (top === 0) return false;
-    setIsScrollingToMessage(true);
-    setTimeout(() => setIsScrollingToMessage(false), animationMs);
+    markScrolling();
     list.scrollBy({ top, behavior: listScrollBehavior() });
     return true;
   };
@@ -291,8 +297,7 @@ export function createThreadNavigation(
   const keyboardScrollListBy = (list: HTMLElement, top: number) => {
     if (top === 0) return false;
     if (!tryKeyboardListScroll()) return true;
-    setIsScrollingToMessage(true);
-    setTimeout(() => setIsScrollingToMessage(false), KEYBOARD_SCROLL_MS);
+    markScrolling();
     list.scrollBy({ top, behavior: listScrollBehavior() });
     return true;
   };
