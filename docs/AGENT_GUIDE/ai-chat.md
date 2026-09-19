@@ -21,6 +21,8 @@
   and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
   tab. Either click leaves the session unopened. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
+  Right-click (or long-press on mobile) opens the same entity menu as Home:
+  Rename, Favorite, Copy link, Share, Delete, and the other session actions.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other
   non-paragraph blocks expand immediately, even with short text. This also applies
