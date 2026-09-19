@@ -8,11 +8,11 @@ import { createFocusRequest } from '@channel/Thread/focus-request';
 import { buildMessageLink } from '@channel/Thread/utils/message-actions';
 import { useUserId } from '@core/context/user';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import TrashIcon from '@phosphor/trash.svg';
 import {
   useDeleteMessageMutation,
   useDeleteThreadMutation,
   usePatchMessageMutation,
-  usePatchThreadMutation,
 } from '@queries/messages/mutations';
 import {
   useAddReactionMutation,
@@ -26,6 +26,7 @@ import type {
   MessageParent,
   MessageThread as ThreadData,
 } from '@service-storage/messages';
+import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { MessageData } from './types';
 
@@ -64,10 +65,12 @@ export function MessageThread(
   const [attachScope, scopeId] = useHotkeyDOMScope('message-thread');
   const focus = createFocusRequest();
   const remove = useDeleteMessageMutation();
-  const confirm = createDeleteMessageConfirmation(remove.mutate);
-  const patch = usePatchMessageMutation();
-  const patchThread = usePatchThreadMutation();
   const deleteThread = useDeleteThreadMutation();
+  const confirm = createDeleteMessageConfirmation(
+    remove.mutate,
+    deleteThread.mutate
+  );
+  const patch = usePatchMessageMutation();
   const addReaction = useAddReactionMutation();
   const removeReaction = useRemoveReactionMutation();
   const editor = createMessageEditor({
@@ -104,48 +107,26 @@ export function MessageThread(
         class="relative isolate"
       >
         <confirm.ConfirmationDialog />
-        <Show when={props.data.parent.type === 'document'}>
-          <div class="mb-5 flex items-center justify-end gap-3 text-xs text-ink-muted touch:mb-0">
-            <Show when={props.data.state.resolved}>
-              <span>Resolved</span>
-            </Show>
-            <Show when={props.canWrite}>
-              <button
-                type="button"
-                onClick={() =>
-                  patchThread.mutate({
-                    parent: props.data.parent,
-                    rootId: props.data.id,
-                    patch: { resolved: !props.data.state.resolved },
-                  })
-                }
-              >
-                {props.data.state.resolved ? 'Reopen' : 'Resolve'}
-              </button>
-            </Show>
-            <Show
-              when={
-                props.canWrite &&
-                (props.canManage || props.data.state.user_id === userId())
+        <Show
+          when={
+            props.data.parent.type === 'document' &&
+            props.canWrite &&
+            (props.canManage || props.data.state.user_id === userId())
+          }
+        >
+          <div class="mb-2 flex justify-end touch:mb-0">
+            <Button
+              size="icon-sm"
+              label="Delete discussion"
+              onClick={() =>
+                confirm.requestDeleteThread({
+                  parent: props.data.parent,
+                  rootId: props.data.id,
+                })
               }
             >
-              <button
-                type="button"
-                onClick={() => {
-                  if (
-                    window.confirm(
-                      'Delete this discussion and all its replies?'
-                    )
-                  )
-                    deleteThread.mutate({
-                      parent: props.data.parent,
-                      rootId: props.data.id,
-                    });
-                }}
-              >
-                Delete discussion
-              </button>
-            </Show>
+              <TrashIcon />
+            </Button>
           </div>
         </Show>
         <ChannelThread
