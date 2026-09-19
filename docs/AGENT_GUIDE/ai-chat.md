@@ -354,6 +354,13 @@ only when their card opens; syntax highlighting may appear after the diff text.
 Opening a session or expanding a group should leave the app responsive, even
 when the session contains many file edits.
 
+A shell command's card shows the command beside the tool name and, once
+expanded, its output as the harness streams it: lines append while the command
+runs, the body (bounded in height) follows the newest line until you scroll up
+to read earlier output, a blinking caret marks a command still running, and a
+non-zero **Exit code** label appears above the output when it fails. A card
+with no output yet has nothing to expand.
+
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
 as soon as a tool or answer follows, including during long Cursor turns. A

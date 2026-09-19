@@ -519,6 +519,69 @@ const FIXTURE_UNCLOSED: FoldedMessage = {
 };
 
 /**
+ * What a `cargo test` run writes, one terminal write per line - the shape
+ * the fold appends from a harness's `_meta.terminal_output` stream.
+ */
+const STREAMED_TEST_RUN: string[] = [
+  '\u001b[1m\u001b[32m   Compiling\u001b[0m agent_fold v0.1.0 (/workspace/crates/agent_fold)\n',
+  '\u001b[1m\u001b[32m    Finished\u001b[0m `test` profile [unoptimized + debuginfo] target(s) in 4.21s\n',
+  '\u001b[1m\u001b[32m     Running\u001b[0m unittests src/lib.rs\n',
+  '\n',
+  'running 6 tests\n',
+  'test domain::test::fold::folds_a_complete_turn ... \u001b[32mok\u001b[0m\n',
+  'test domain::test::fold::terminal_writes_stream_in_and_accumulate ... \u001b[32mok\u001b[0m\n',
+  'test domain::test::fold::terminal_content_snapshots_replace_each_other ... \u001b[32mok\u001b[0m\n',
+  'test domain::test::harness::chunks_append_and_snapshots_replace ... \u001b[32mok\u001b[0m\n',
+  'test domain::test::harness::codex_reads_the_closing_raw_output ... \u001b[32mok\u001b[0m\n',
+  'test domain::test::harness::cursor_reads_shell_output_from_its_result_envelope ... \u001b[33mFAILED\u001b[0m\n',
+  '\n',
+  'failures:\n',
+  '\n',
+  '---- domain::test::harness::cursor_reads_shell_output_from_its_result_envelope stdout ----\n',
+  'assertion `left == right` failed\n  left: Some(Snapshot("10\\n"))\n right: None\n',
+  '\n',
+  'test result: \u001b[31mFAILED\u001b[0m. 5 passed; 1 failed; 0 ignored; 0 measured\n',
+];
+
+/**
+ * A terminal call streaming: writes land every few hundred milliseconds, the
+ * card follows the tail, and the run settles with its exit code - then starts
+ * over, so the transition stays observable.
+ */
+function StreamingTerminalDemo() {
+  const [written, setWritten] = createSignal(1);
+  const timer = setInterval(
+    () => setWritten((count) => (count % (STREAMED_TEST_RUN.length + 3)) + 1),
+    350
+  );
+  onCleanup(() => clearInterval(timer));
+  const finished = () => written() > STREAMED_TEST_RUN.length;
+  const message = (): FoldedMessage => ({
+    agentSessionId: 'demo',
+    requestId: null,
+    pending: false,
+    turn: 4,
+    author: { kind: 'agent' },
+    stop: finished() ? { kind: 'end_turn' } : null,
+    parts: [
+      {
+        kind: 'tool_use',
+        id: 'streaming-bash',
+        name: { kind: 'native', name: 'Bash' },
+        status: finished() ? 'failed' : 'running',
+        detail: {
+          kind: 'terminal',
+          command: 'cargo test -p agent_fold',
+          output: STREAMED_TEST_RUN.slice(0, written()).join(''),
+          exitCode: finished() ? 101 : null,
+        },
+      },
+    ],
+  });
+  return <Message message={message()} inFlight={!finished()} />;
+}
+
+/**
  * The same unclosed turn, live or settled at the flip of a switch: the
  * active ? done transition every shimmer in a message goes through when the
  * session's `working` drops, whatever the message's own `stop` says.
@@ -958,6 +1021,14 @@ export default function AgentUiGallery() {
 
           <Item label="AgentMessage (turn settles)">
             <LiveTurnDemo />
+          </Item>
+
+          <Item label="Terminal (output streaming in)">
+            <p class="text-xs text-ink-muted">
+              Open the card: writes append as they arrive, the body follows the
+              tail until you scroll up, and the exit code lands last.
+            </p>
+            <StreamingTerminalDemo />
           </Item>
         </div>
       </div>

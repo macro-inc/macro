@@ -1,8 +1,11 @@
-/** A shell command: `$ cmd` in the row, ANSI-colored output in the body. */
+/**
+ * A shell command: `$ cmd` in the row, ANSI-colored output in the body,
+ * streaming in while the command runs.
+ */
 
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
-import { FoldedTerminal, ToolCard } from '../../ui';
+import { FoldedTerminal, isToolActive, ToolCard } from '../../ui';
 import type { ToolCallCommon } from './shared';
 
 export function TerminalToolCall(props: {
@@ -20,7 +23,11 @@ export function TerminalToolCall(props: {
     >
       <Show when={props.detail.output}>
         {(output) => (
-          <FoldedTerminal output={output()} exitCode={props.detail.exitCode} />
+          <FoldedTerminal
+            output={output()}
+            exitCode={props.detail.exitCode}
+            active={isToolActive(props.common.status)}
+          />
         )}
       </Show>
     </ToolCard>
