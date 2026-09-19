@@ -57,11 +57,14 @@ function AgentBlockContent() {
 
   // Nothing loaded and no way forward: the load failed outright, or the
   // device is offline and the pending load cannot complete until
-  // connectivity returns (that one resumes by itself, so no Retry). Gating
-  // the whole block — like the other entity blocks — keeps the composer and
-  // header from rendering against a session that never loaded.
+  // connectivity returns (that one resumes by itself, so no Retry). A
+  // failed refetch must not unmount a session we already painted from
+  // cache — same rule as EntityLoadGate: loaded content outranks
+  // LOAD_FAILED. Gating the whole block — like the other entity blocks —
+  // keeps the composer and header from rendering against a session that
+  // never loaded.
   const loadUnavailable = () =>
-    loadFailed() ||
+    (loadFailed() && !session()) ||
     (nativeNetworkStatus() === 'offline' && !session() && !pending());
 
   return (

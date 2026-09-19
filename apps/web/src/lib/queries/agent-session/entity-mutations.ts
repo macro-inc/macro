@@ -1,3 +1,4 @@
+import { removeCachedSessionLog } from '@core/agent-session/session-log-cache';
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { queryClient } from '../client';
@@ -22,5 +23,6 @@ export async function renameAgentSession(id: string, name: string) {
 
 export async function deleteAgentSession(id: string) {
   await throwOnErr(() => agentHarnessServiceClient.delete(id));
+  removeCachedSessionLog(id);
   refreshSessionEntity(id);
 }

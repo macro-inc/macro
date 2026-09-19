@@ -449,7 +449,9 @@ The pane does not create PRs or generate their descriptions.
 ### Transcript navigation
 
 Agent sessions reuse the channel's TanStack `ThreadList`. Opening a session lands
-at the latest message, including when history arrives after the empty view. Short
+at the latest message, including when history arrives after the empty view. A
+session opened before may paint its last-known transcript immediately from a
+local frame cache, then reconcile with the server log. Short
 transcripts sit at the bottom, above the composer. Only the visible rows and an
 overscan buffer are mounted: scroll to older turns before searching their DOM text.
 

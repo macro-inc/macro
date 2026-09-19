@@ -7,6 +7,7 @@ const mocks = vi.hoisted(() => ({
   changed: vi.fn(),
   invalidate: vi.fn(),
   soup: vi.fn(),
+  removeCachedSessionLog: vi.fn(),
 }));
 vi.mock('@service-agent-harness/client', () => ({
   agentHarnessServiceClient: { rename: mocks.rename, delete: mocks.delete },
@@ -17,6 +18,9 @@ vi.mock('../client', () => ({
 vi.mock('../soup/cache', () => ({ invalidateAllSoup: mocks.soup }));
 vi.mock('./session-metadata-sync', () => ({
   handleAgentSessionRenamed: mocks.changed,
+}));
+vi.mock('@core/agent-session/session-log-cache', () => ({
+  removeCachedSessionLog: mocks.removeCachedSessionLog,
 }));
 
 import { deleteAgentSession, renameAgentSession } from './entity-mutations';
@@ -45,5 +49,6 @@ it('deletes through the owning API, not a document deletion', async () => {
   mocks.delete.mockResolvedValue(ok(undefined));
   await deleteAgentSession('session');
   expect(mocks.delete).toHaveBeenCalledWith('session');
+  expect(mocks.removeCachedSessionLog).toHaveBeenCalledWith('session');
   expect(mocks.soup).toHaveBeenCalledOnce();
 });

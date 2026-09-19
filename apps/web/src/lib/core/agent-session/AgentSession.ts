@@ -32,11 +32,18 @@ import type {
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type {
   AgentAction,
+  AgentSessionLogEntryDto,
   AgentSessionResponse,
   ControlRequest,
   SessionBot,
 } from '@service-agent-harness/generated/schemas';
 import { v7 as uuidv7 } from 'uuid';
+import {
+  flushCachedSessionLogs,
+  readCachedSessionLog,
+  SESSION_LOG_CACHE_VERSION,
+  writeCachedSessionLog,
+} from './session-log-cache';
 
 export type AgentSessionListener = (events: FoldedStreamEvent[]) => void;
 
@@ -106,7 +113,16 @@ export class AgentSession {
    */
   private chain: Promise<void> = Promise.resolve();
   private loading: Promise<AgentSessionRecord>;
+  /**
+   * Cache hydrate, started with the load so a surface can paint the last
+   * known transcript without waiting on the network. `undefined` is a miss.
+   */
+  private hydrating: Promise<AgentSessionRecord | undefined>;
   private loadFailed = false;
+  /** Session row + bot from cache or the last successful fetch. */
+  private record: AgentSessionRecord | undefined;
+  /** Frames we have folded, for writing the cache back out. */
+  private frames: AgentSessionLogEntryDto[] = [];
   /**
    * The fold's turn state, tracked off the same events listeners see. What
    * {@link issue} reads to know whether an action will reach the runtime or
@@ -121,7 +137,17 @@ export class AgentSession {
     this.unsubscribeSocket = subscribeSocketSessionStarted(() => {
       void this.resync();
     });
+    this.hydrating = this.hydrateFromCache();
     this.loading = this.startLoad();
+  }
+
+  /**
+   * The last-known log, folded from IndexedDB when we have one. Resolves
+   * `undefined` on a miss. The network load still runs; this is the instant
+   * first paint, not the authority.
+   */
+  hydrate(): Promise<AgentSessionRecord | undefined> {
+    return this.hydrating;
   }
 
   /**
@@ -284,6 +310,8 @@ export class AgentSession {
     this.closed = true;
     this.listeners.clear();
     this.unsubscribeSocket();
+    this.persist();
+    void flushCachedSessionLogs();
     closeSession(this.id);
   }
 
@@ -294,7 +322,35 @@ export class AgentSession {
     });
   }
 
+  private async hydrateFromCache(): Promise<AgentSessionRecord | undefined> {
+    let cached: Awaited<ReturnType<typeof readCachedSessionLog>>;
+    try {
+      cached = await readCachedSessionLog(this.id);
+    } catch (error: unknown) {
+      console.warn('[agent-session] cache could not be read', error);
+      return undefined;
+    }
+    if (!cached || this.closed || this.ready) return undefined;
+
+    await this.apply([{ kind: 'snapshot', rows: cached.entries }]);
+    if (this.closed) return undefined;
+
+    let turn: TurnState;
+    try {
+      turn = (await readSession(this.id)).metadata.turn;
+    } catch (error: unknown) {
+      console.warn('[agent-session] cache could not be folded', error);
+      return undefined;
+    }
+
+    this.ready = true;
+    this.record = { session: cached.session, bot: cached.bot };
+    this.turn = turn;
+    return this.record;
+  }
+
   private async fetchAndFold(): Promise<AgentSessionRecord> {
+    await this.hydrating;
     const [session, log] = await Promise.all([
       agentHarnessServiceClient.get(this.id),
       agentHarnessServiceClient.getLog(this.id),
@@ -316,8 +372,10 @@ export class AgentSession {
       await this.apply(inputs);
     }
     this.ready = true;
+    this.record = { session: session.value, bot: log.value.bot };
     this.turn = (await readSession(this.id)).metadata.turn;
-    return { session: session.value, bot: log.value.bot };
+    this.persist();
+    return this.record;
   }
 
   /**
@@ -330,6 +388,7 @@ export class AgentSession {
     const log = await agentHarnessServiceClient.getLog(this.id);
     if (log.isErr() || this.closed) return;
     await this.apply([{ kind: 'snapshot', rows: log.value.entries }]);
+    this.persist();
   }
 
   private enqueue(input: FoldInput): Promise<void> {
@@ -340,7 +399,33 @@ export class AgentSession {
     return this.apply([input]);
   }
 
+  private remember(inputs: FoldInput[]): void {
+    for (const input of inputs) {
+      if (input.kind === 'snapshot') {
+        // Copied: a later confirmed row must not mutate the snapshot we
+        // already handed the fold, or the log object the fetch returned.
+        this.frames = [...input.rows];
+        continue;
+      }
+      if (input.kind !== 'confirmed') continue;
+      if (this.frames.some((row) => row.id === input.row.id)) continue;
+      this.frames.push(input.row);
+    }
+  }
+
+  private persist(): void {
+    if (!this.record) return;
+    writeCachedSessionLog({
+      version: SESSION_LOG_CACHE_VERSION,
+      sessionId: this.id,
+      session: this.record.session,
+      bot: this.record.bot,
+      entries: [...this.frames],
+    });
+  }
+
   private apply(inputs: FoldInput[]): Promise<void> {
+    this.remember(inputs);
     const run = this.chain.then(async () => {
       if (this.closed) return;
       const events = await pushSession(this.id, inputs);
