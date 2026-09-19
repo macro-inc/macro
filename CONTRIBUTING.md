@@ -2,7 +2,7 @@
 
 Thanks for your interest in contributing! Macro is fully open source under the
 [AGPLv3](LICENSE.txt), and we welcome outside contributions. This guide covers
-how to get a change from idea to merged PR.
+how to get a change from idea to merged PR. [Test edit for PR demo]
 
 ## Start with an issue
 
