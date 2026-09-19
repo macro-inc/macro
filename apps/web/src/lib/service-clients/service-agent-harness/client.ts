@@ -3,6 +3,7 @@ import { fetchWithToken } from '@core/util/fetchWithToken';
 import type { ErrorResponseHandler } from '@core/util/safeFetch';
 import type {
   AgentRepositoriesResponse,
+  AgentRepositoryBranchesResponse,
   AgentSessionChangesPatchResponse,
   AgentSessionChangesResponse,
   AgentSessionLogResponse,
@@ -81,6 +82,19 @@ export const agentHarnessServiceClient = {
   listRepositories() {
     return fetchWithToken<AgentRepositoriesResponse>(
       `${agentHarnessHost}/agent-repositories`,
+      { method: 'GET' }
+    );
+  },
+
+  /**
+   * The branches on one GitHub repository the caller can start a coding
+   * session from. `repoUrl` is the canonical `https://github.com/owner/name`
+   * form `listRepositories` and create-session share.
+   */
+  listRepositoryBranches(repoUrl: string) {
+    const params = new URLSearchParams({ repoUrl });
+    return fetchWithToken<AgentRepositoryBranchesResponse>(
+      `${agentHarnessHost}/agent-repositories/branches?${params}`,
       { method: 'GET' }
     );
   },

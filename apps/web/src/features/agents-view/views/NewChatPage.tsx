@@ -16,6 +16,7 @@ import { defaultBranchFor } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import { createRecentRepositories } from '../primitives/recent-repositories';
 import { createReachableRepositories } from '../queries/reachable-repositories';
+import { createRepositoryBranches } from '../queries/repository-branches';
 import { AgentPicker } from './AgentPicker';
 import { RepositoryPicker } from './RepositoryPicker';
 
@@ -76,6 +77,10 @@ export function NewChatPage(props: {
   };
   // Listed only while the drawer can show them: chat agents never ask.
   const reachable = createReachableRepositories(coding);
+  // Listed only while a repository is chosen: listing costs a GitHub call.
+  const reachableBranches = createRepositoryBranches(() =>
+    coding() ? repoUrl() : undefined
+  );
   // A chosen branch, or where the selected repository's own clones start.
   const repoBranch = () =>
     branchOverride() ?? defaultBranchFor(reachable.repositories(), repoUrl());
@@ -164,6 +169,10 @@ export function NewChatPage(props: {
               repositoriesError={reachable.error()}
               recentRepositories={repositories.urls()}
               onRetryRepositories={reachable.retry}
+              branches={reachableBranches.branches()}
+              branchesLoading={reachableBranches.loading()}
+              branchesError={reachableBranches.error()}
+              onRetryBranches={reachableBranches.retry}
               onConnectGitHub={() => openSettings('Connected')}
               onSelectRepository={selectRepository}
               onSelectBranch={setBranchOverride}

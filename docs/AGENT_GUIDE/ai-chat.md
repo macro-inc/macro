@@ -87,10 +87,14 @@
   GitHub**, which opens Settings → Connected. Listed recents are remembered
   per user in local storage and offered first, without changing the Automatic
   default. Once selected, **Branch** shows the repository's default branch (`main` when it
-  has none) and opens a starting-branch field confirmed with **Use branch**;
-  picking a different repository resets the branch to that repository's
-  default. Omitting the branch on the create-session API likewise starts on
-  the repository's default branch.
+  has none) and opens a searchable list of that repository's branches
+  (`GET /agent-repositories/branches?repoUrl=…` on the agent harness),
+  default first. Typing filters the list; an unlisted valid name adds a
+  **Use name** row. Arrow keys move the highlight and Enter or a click picks
+  it; there is no separate confirm button. Someone whose listing fails sees
+  **Retry**. Picking a different repository resets the branch to that
+  repository's default. Omitting the branch on the create-session API
+  likewise starts on the repository's default branch.
   Both controls open above the drawer without clipping. The selections survive
   agent changes and are sent only to coding agents. Cursor honors the explicit
   repository and branch instead of choosing a repository from the prompt;

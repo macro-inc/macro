@@ -61,6 +61,7 @@ use agent_harness::outbound::daytona::{
 };
 use agent_harness::outbound::egress::EgressProvisioner;
 use agent_harness::outbound::forward::RedisCommandForwarder;
+use agent_harness::outbound::github_branches::GithubRepositoryBranches;
 use agent_harness::outbound::github_repositories::GithubReachableRepositories;
 use agent_harness::outbound::local::{LocalContainerManager, LocalSettings};
 use agent_harness::outbound::notifications::IngressAgentSessionNotifier;
@@ -473,12 +474,20 @@ async fn run() -> anyhow::Result<()> {
     // Which repositories a session may work on is the owner's question, not
     // the deployment's: the same App credentials the egress proxy mints tokens
     // with, read in the other direction - from the user to their installations.
+    let github_token_config = InstallationTokenConfig {
+        client_id: config.github_sync_app_client_id.clone(),
+        private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
+    };
     let reachable_repositories = Arc::new(GithubReachableRepositories::new(
         ReachableRepositoriesService::new(
-            InstallationTokenConfig {
-                client_id: config.github_sync_app_client_id.clone(),
-                private_key_pem: config.github_sync_app_pem_secret_key.as_ref().to_owned(),
-            },
+            github_token_config.clone(),
+            PgGithubSyncRepo::new(pool.clone()),
+            GithubSyncClientImpl::default(),
+        ),
+    ));
+    let repository_branches = Arc::new(GithubRepositoryBranches::new(
+        InstallationTokenService::new(
+            github_token_config,
             PgGithubSyncRepo::new(pool.clone()),
             GithubSyncClientImpl::default(),
         ),
@@ -989,6 +998,7 @@ async fn run() -> anyhow::Result<()> {
     // Served to the app by `GET /agent-repositories`; see `open_repositories`.
     let repositories_state = AgentRepositoriesRouterState::new(
         reachable_repositories,
+        repository_branches,
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let http_runtime_commands_readiness = runtime_commands_readiness.clone();
