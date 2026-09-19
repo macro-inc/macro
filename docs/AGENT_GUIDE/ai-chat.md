@@ -16,8 +16,10 @@
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
   pull request is linked). Home and the Agents sidebar share these agent rows.
   Rows have no agent or runtime-status subtext. Sessions with a linked PR show
-  **View PR #<number> in GitHub** beneath the title; clicking it opens GitHub in
-  a new tab without opening the session. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
+  **View PR #<number> in GitHub** beneath the title; clicking it opens the synced
+  GitHub PR entity in a split (the same destination as the session header chip
+  and Magic Chip). Until GitHub has synced the entity it opens GitHub in a new
+  tab. Either click leaves the session unopened. The leading icon reflects the PR status. Changing the composer mode does not filter the sidebar.
   Selecting a row opens its own mode; Shift-click opens it in a new split.
 - The starting page has a compact composer that starts at one line and grows
   with longer prompts or Shift+Enter. Lists, quotes, headings, and other

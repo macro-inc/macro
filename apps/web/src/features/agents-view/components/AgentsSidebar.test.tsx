@@ -30,6 +30,19 @@ vi.mock('@queries/agents/agents', () => ({
 }));
 vi.mock('@app/features/block-agent/component/AgentPullRequestChip', () => ({
   AgentPullRequestIcon: () => <svg data-pr-icon />,
+  AgentPullRequestLink: (props: { url: string }) => {
+    const number = props.url.match(/\/pull\/(\d+)/)?.[1];
+    return (
+      <a
+        href={props.url}
+        target="_blank"
+        rel="noreferrer"
+        onClick={(event) => event.stopPropagation()}
+      >
+        View PR #{number} in GitHub
+      </a>
+    );
+  },
 }));
 vi.mock('@entity', () => ({
   Entity: { Title: () => 'Recent chat', Timestamp: () => 'now' },

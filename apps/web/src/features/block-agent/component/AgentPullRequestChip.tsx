@@ -129,14 +129,9 @@ function EntityChip(props: {
   const { openWithSplit } = useSplitLayout();
   const status = () => pullRequestStatus(props.entity);
   const title = () => pullRequestTitle(props.entity);
-  const open = (event: MouseEvent | KeyboardEvent) => {
-    event.stopPropagation();
-    openWithSplit(
-      { type: 'pr', id: props.entity.id },
-      { preferNewSplit: openInNewSplitForMention(event.shiftKey, true) }
-    );
-  };
-  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>(open);
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) =>
+    openPullRequestEntity(openWithSplit, props.entity.id, event)
+  );
 
   return (
     <HoverCard
@@ -176,6 +171,44 @@ function useLinkedPullRequest(url: Accessor<string>) {
   return { reference, entity };
 }
 
+function openPullRequestEntity(
+  openWithSplit: ReturnType<typeof useSplitLayout>['openWithSplit'],
+  entityId: string,
+  event: MouseEvent | KeyboardEvent
+) {
+  event.stopPropagation();
+  openWithSplit(
+    { type: 'pr', id: entityId },
+    { preferNewSplit: openInNewSplitForMention(event.shiftKey, true) }
+  );
+}
+
+function viewPullRequestLabel(number?: number): string {
+  return number != null ? `View PR #${number} in GitHub` : 'View PR in GitHub';
+}
+
+function EntityTextLink(props: {
+  entity: ForeignEntity;
+  number?: number;
+}): JSX.Element {
+  const { openWithSplit } = useSplitLayout();
+  const navHandlers = useSplitNavigationHandler<HTMLButtonElement>((event) =>
+    openPullRequestEntity(openWithSplit, props.entity.id, event)
+  );
+
+  return (
+    <button
+      type="button"
+      class="pointer-events-auto relative block truncate text-xs leading-4 text-ink-extra-muted hover:text-ink hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+      data-agent-pull-request={props.entity.id}
+      data-pr-entity-link={props.entity.id}
+      {...navHandlers}
+    >
+      {viewPullRequestLabel(props.number)}
+    </button>
+  );
+}
+
 /** Leading list icon, with the same PR status as the chip. */
 export function AgentPullRequestIcon(props: { url: string }): JSX.Element {
   const { entity } = useLinkedPullRequest(() => props.url);
@@ -184,6 +217,36 @@ export function AgentPullRequestIcon(props: { url: string }): JSX.Element {
       status={pullRequestStatus(entity())}
       class="size-4"
     />
+  );
+}
+
+/**
+ * Sidebar / Home row control for the session's linked PR. Same destination
+ * as the header chip: the synced GitHub foreign entity, or GitHub until then.
+ */
+export function AgentPullRequestLink(props: { url: string }): JSX.Element {
+  const { reference, entity } = useLinkedPullRequest(() => props.url);
+
+  return (
+    <Show
+      when={entity()}
+      fallback={
+        <a
+          href={props.url}
+          target="_blank"
+          rel="noreferrer"
+          class="pointer-events-auto block truncate text-xs leading-4 text-ink-extra-muted hover:text-ink hover:underline focus-visible:outline-2 focus-visible:outline-accent"
+          data-agent-pull-request={props.url}
+          onClick={(event) => event.stopPropagation()}
+        >
+          {viewPullRequestLabel(reference()?.number)}
+        </a>
+      }
+    >
+      {(synced) => (
+        <EntityTextLink entity={synced()} number={reference()?.number} />
+      )}
+    </Show>
   );
 }
 

@@ -1,5 +1,8 @@
 import { ViewSidebar } from '@app/components/view-shell';
-import { AgentPullRequestIcon } from '@app/features/block-agent/component/AgentPullRequestChip';
+import {
+  AgentPullRequestIcon,
+  AgentPullRequestLink,
+} from '@app/features/block-agent/component/AgentPullRequestChip';
 import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
 import type { AgentSessionEntity } from '@entity';
 import ChatIcon from '@phosphor/chat-circle.svg';
@@ -108,17 +111,13 @@ function SessionListItem(props: Props) {
             />
           </Show>
         </span>
-        <Show when={pullRequest()}>
-          {(pr) => (
-            <a
-              href={prHtmlUrl(pr())}
-              target="_blank"
-              rel="noreferrer"
-              class="pointer-events-auto block truncate text-xs leading-4 text-ink-extra-muted hover:text-ink hover:underline focus-visible:outline-2 focus-visible:outline-accent"
-              onClick={(event) => event.stopPropagation()}
-            >
-              View PR #{pr().number} in GitHub
-            </a>
+        <Show when={pullRequestUrl()}>
+          {(url) => (
+            <ErrorBoundary fallback={null}>
+              <Suspense>
+                <AgentPullRequestLink url={url()} />
+              </Suspense>
+            </ErrorBoundary>
           )}
         </Show>
       </span>
