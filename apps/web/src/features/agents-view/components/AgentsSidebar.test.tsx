@@ -1,5 +1,11 @@
 import { HomeListEntity } from '@app/features/inbox-view/components/HomeListEntity';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
@@ -63,6 +69,40 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
     isPanelActive: () => true,
   }),
 }));
+vi.mock('@app/features/next-soup/actions', () => ({
+  toEntityActionListState: () => ({
+    focus: { set: vi.fn() },
+  }),
+}));
+vi.mock('@app/features/soup', () => ({
+  MaybeSoupEntityActionDrawerManager: (props: { children: JSX.Element }) =>
+    props.children,
+  SoupEntityContextMenu: (props: {
+    children: JSX.Element;
+    entity: { id: string };
+  }) => {
+    const [open, setOpen] = createSignal(false);
+    return (
+      <div
+        data-entity-context-menu={props.entity.id}
+        onContextMenu={(event) => {
+          event.preventDefault();
+          setOpen(true);
+        }}
+      >
+        {props.children}
+        {open() && (
+          <div role="menu">
+            <div role="menuitem">Rename</div>
+            <div role="menuitem">Favorite</div>
+            <div role="menuitem">Copy Link</div>
+            <div role="menuitem">Delete</div>
+          </div>
+        )}
+      </div>
+    );
+  },
+}));
 vi.mock('@components/app/split-panel', () => ({
   SplitPanel: { CloseButton: () => null },
 }));
@@ -121,6 +161,60 @@ describe('mixed Agents sidebar', () => {
     expect(open).toHaveBeenLastCalledWith(conversations[1], expect.anything());
     fireEvent.click(screen.getByRole('button', { name: 'New conversation' }));
     expect(create).toHaveBeenCalledOnce();
+  });
+
+  it('opens rename and delete on a session or chat right-click', async () => {
+    render(() => (
+      <AgentsSidebar
+        groups={groupConversations([
+          {
+            type: 'agent_session',
+            id: 'code',
+            name: 'Fix build',
+            ownerId: 'me',
+            botId: 'cursor',
+            status: 'acp_ready',
+          },
+          { type: 'chat', id: 'chat', name: 'Plan launch', ownerId: 'me' },
+        ])}
+        modeForConversation={(conversation) =>
+          conversation.id === 'code' ? 'code' : 'chat'
+        }
+        activeConversationId={undefined}
+        search=""
+        loading={false}
+        error={false}
+        hasNextPage={false}
+        loadingNextPage={false}
+        onNewConversation={vi.fn()}
+        onSearchChange={vi.fn()}
+        onOpenConversation={vi.fn()}
+        onRetry={vi.fn()}
+        onLoadMore={vi.fn()}
+      />
+    ));
+
+    const session = screen.getByRole('button', { name: /Fix build/ });
+    fireEvent.contextMenu(session);
+    const sessionMenu = within(
+      session.closest('[data-entity-context-menu]') as HTMLElement
+    );
+    expect(sessionMenu.getByRole('menuitem', { name: 'Rename' })).toBeTruthy();
+    expect(sessionMenu.getByRole('menuitem', { name: 'Delete' })).toBeTruthy();
+    expect(
+      sessionMenu.getByRole('menuitem', { name: 'Favorite' })
+    ).toBeTruthy();
+    expect(
+      sessionMenu.getByRole('menuitem', { name: 'Copy Link' })
+    ).toBeTruthy();
+
+    const chat = screen.getByRole('button', { name: /Plan launch/ });
+    fireEvent.contextMenu(chat);
+    const chatMenu = within(
+      chat.closest('[data-entity-context-menu]') as HTMLElement
+    );
+    expect(chatMenu.getByRole('menuitem', { name: 'Rename' })).toBeTruthy();
+    expect(chatMenu.getByRole('menuitem', { name: 'Delete' })).toBeTruthy();
   });
 });
 
