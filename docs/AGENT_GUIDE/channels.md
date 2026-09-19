@@ -357,6 +357,19 @@ instead.
 - Bots: `New bot`, `Search existing bots…` combobox, `Invite bot` — webhook-powered channel
   participants.
 
+## Call lifecycle
+
+The channel's call tab and floating call controls share one session. Repeated
+Join clicks while connecting should produce one connection; leaving from either
+control ends the same call. Navigate away and return while connected to check
+that the call and its controls remain usable.
+
+For recovery checks, keep another participant connected and briefly interrupt
+the first participant's network. Recovery may rejoin that same live call. It
+must not start a replacement call if the original ended, or rejoin after the
+user chose Leave. A failed join must restore the Try again control even if
+background cleanup is slow.
+
 ## Onboarding channel
 
 New users get `Macro Support x <name>` seeded with a welcome message that @mentions them —
