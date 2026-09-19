@@ -45,6 +45,7 @@
   available agent is selected initially; otherwise Macro is selected.
   Hover an agent (or use the right arrow key) to open its model submenu, with
   the searchable Settings catalog, provider icons, and scrollable **More models**.
+  The submenu focuses the `Search models` field so you can type immediately.
   Clicking an agent directly uses its default; choosing a submenu model selects
   both the agent and that model. A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.

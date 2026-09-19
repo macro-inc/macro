@@ -351,6 +351,20 @@ describe('agent-led new conversation', () => {
     expect(row.textContent).toContain('Its runtime is disconnected');
   });
 
+  it('focuses model search when hovering an agent submenu', async () => {
+    page();
+    await hoverAgent('Cursor');
+    const search = screen.getByRole('textbox', { name: 'Search models' });
+    await waitFor(() => expect(document.activeElement).toBe(search));
+
+    fireEvent.input(search, { target: { value: 'GPT' } });
+    expect((search as HTMLInputElement).value).toBe('GPT');
+    expect(screen.getByRole('menuitem', { name: /GPT-5/ })).toBeTruthy();
+    expect(
+      screen.queryByRole('menuitem', { name: /Cursor default/ })
+    ).toBeNull();
+  });
+
   it('shows the model beside the agent and sends a hovered model choice only once', async () => {
     const send = page();
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(

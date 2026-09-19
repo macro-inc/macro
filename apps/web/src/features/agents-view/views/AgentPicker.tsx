@@ -250,6 +250,7 @@ function AgentPickerRow(props: {
           <Dropdown.SubContent
             aria-label={`Models for ${props.agent.name}`}
             class="w-72 max-w-[calc(100vw-1rem)] max-h-[min(28rem,var(--kb-popper-content-available-height))] overflow-y-auto overscroll-contain"
+            onOpenAutoFocus={(event) => event.preventDefault()}
             onPointerDown={(event: PointerEvent) => event.stopPropagation()}
             onMouseDown={(event: MouseEvent) => event.stopPropagation()}
           >
@@ -276,6 +277,7 @@ function AgentModels(props: {
   const defaultModel = () => props.agent.defaultModel ?? catalog.currentModel();
   return (
     <ModelCatalogMenu
+      autoFocusSearch
       value={props.modelOverride ?? defaultModel() ?? null}
       options={catalog.models().map((option) => ({
         id: option.id,
