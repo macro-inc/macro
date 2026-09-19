@@ -1,10 +1,12 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { AgentPullRequestIcon } from '@app/features/block-agent/component/AgentPullRequestChip';
+import { useSessionLastError } from '@app/features/block-agent/state/session-last-error';
 import { parseGithubPrUrl, prHtmlUrl } from '@app/features/block-pr/util/prKey';
 import type { AgentSessionEntity } from '@entity';
 import ChatIcon from '@phosphor/chat-circle.svg';
 import CodeIcon from '@phosphor/code.svg';
 import SpinnerIcon from '@phosphor/spinner.svg';
+import WarningCircleIcon from '@phosphor/warning-circle.svg';
 import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { useAgentsQuery } from '@queries/agents/agents';
 import { cn, pressHandlers } from '@ui';
@@ -49,7 +51,9 @@ function SessionListItem(props: Props) {
       : (props.mode ?? modeForKind(systemBotKind(botId()) ?? 'agent'));
   };
   const title = () => props.entity.name || session()?.name || 'Untitled chat';
-  const state = () => conversationState(props.entity.status);
+  const lastError = useSessionLastError(() => props.entity.id);
+  const state = () =>
+    lastError() ? 'errored' : conversationState(props.entity.status);
   const pullRequest = () => parseGithubPrUrl(session()?.pullRequestUrl ?? '');
   const pullRequestUrl = () => {
     const pr = pullRequest();
@@ -62,7 +66,8 @@ function SessionListItem(props: Props) {
       active={props.active}
       class={cn(
         'relative',
-        pullRequest() && 'h-auto min-h-12 items-start py-1.5 touch:h-auto'
+        (pullRequest() || state() === 'errored') &&
+          'h-auto min-h-12 items-start py-1.5 touch:h-auto'
       )}
       data-agent-session-row={props.entity.id}
       data-kind={mode()}
@@ -79,16 +84,23 @@ function SessionListItem(props: Props) {
         <Show
           when={state() === 'starting'}
           fallback={
-            <Show when={mode() === 'code'} fallback={<ChatIcon />}>
-              <Show when={pullRequestUrl()} fallback={<CodeIcon />}>
-                {(url) => (
-                  <ErrorBoundary fallback={<CodeIcon />}>
-                    <Suspense fallback={<CodeIcon />}>
-                      <AgentPullRequestIcon url={url()} />
-                    </Suspense>
-                  </ErrorBoundary>
-                )}
-              </Show>
+            <Show
+              when={state() === 'errored'}
+              fallback={
+                <Show when={mode() === 'code'} fallback={<ChatIcon />}>
+                  <Show when={pullRequestUrl()} fallback={<CodeIcon />}>
+                    {(url) => (
+                      <ErrorBoundary fallback={<CodeIcon />}>
+                        <Suspense fallback={<CodeIcon />}>
+                          <AgentPullRequestIcon url={url()} />
+                        </Suspense>
+                      </ErrorBoundary>
+                    )}
+                  </Show>
+                </Show>
+              }
+            >
+              <WarningCircleIcon class="text-failure" />
             </Show>
           }
         >
@@ -108,6 +120,14 @@ function SessionListItem(props: Props) {
             />
           </Show>
         </span>
+        <Show when={state() === 'errored'}>
+          <span
+            class="block truncate text-xs leading-4 text-failure"
+            title={lastError()}
+          >
+            Error
+          </span>
+        </Show>
         <Show when={pullRequest()}>
           {(pr) => (
             <a

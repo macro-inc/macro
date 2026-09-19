@@ -23,9 +23,15 @@ describe('conversationState', () => {
     expect(conversationState('session/end')).toBe('ended');
   });
 
+  it('reads a failed turn as errored', () => {
+    expect(conversationState('failed')).toBe('errored');
+    expect(conversationState('error')).toBe('errored');
+  });
+
   it('labels each state', () => {
     expect(conversationStateLabel('starting')).toBe('Starting');
     expect(conversationStateLabel('live')).toBe('Ready');
+    expect(conversationStateLabel('errored')).toBe('Error');
     expect(conversationStateLabel('ended')).toBe('Ended');
   });
 });

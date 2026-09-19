@@ -36,6 +36,9 @@ function presentation(status: SessionStatusLike): Presentation {
       if (status.event === 'disconnected') {
         return { label: 'Disconnected', tone: 'negative' };
       }
+      if (status.event === 'failed' || status.event === 'error') {
+        return { label: 'Error', tone: 'negative' };
+      }
       // An event name the protocol doesn't model yet — show it rather than
       // hide it.
       return { label: prettyEventName(status.event), tone: 'neutral' };
