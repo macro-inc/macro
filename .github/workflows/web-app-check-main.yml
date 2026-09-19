@@ -110,6 +110,9 @@ jobs:
     - name: Check Collaboration Package Types
       run: bun run type-check
       working-directory: packages/collaboration
+    - name: Check Lexical Service Types
+      run: bun run check
+      working-directory: services/lexical-service
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'
