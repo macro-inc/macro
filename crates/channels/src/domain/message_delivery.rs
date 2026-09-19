@@ -1,6 +1,6 @@
 //! Channel side effects for messages committed by the shared message service.
 use super::{
-    events::{ChannelEvent, MessageChangedNotificationContext},
+    events::{ChannelEvent, MessageChangedNotificationContext, ReactionNotificationContext},
     models::{
         ChannelMetadata, CountedReaction, MutatedAttachment, MutatedMessage, ReferencedShareItem,
         Sender, TypingAction,
@@ -263,12 +263,42 @@ where
                     nonce: event.nonce.clone(),
                 });
             }
-            MessageChange::ReactionChanged { message } => {
+            MessageChange::ReactionChanged {
+                message,
+                emoji,
+                added,
+            } => {
                 if actor.as_user().is_some()
                     && let Err(error) = self.repo.upsert_activity(actor.clone(), channel_id).await
                 {
                     side_effect_error = Some(repo_error(error));
                 }
+                let notification =
+                    if *added && let Some(message_sender_id) = message.sender_id.as_user() {
+                        match self
+                            .repo
+                            .get_channel_metadata(channel_id, message_sender_id.clone())
+                            .await
+                        {
+                            Ok(metadata) => Some(ReactionNotificationContext {
+                                emoji: emoji.clone(),
+                                message_sender: message.sender_id.clone(),
+                                thread_id: message.thread_id,
+                                message_content: message.content.clone(),
+                                metadata,
+                            }),
+                            Err(_) => {
+                                tracing::warn!(
+                                    %channel_id,
+                                    message_id = %message.id,
+                                    "unable to build reaction notification context"
+                                );
+                                None
+                            }
+                        }
+                    } else {
+                        None
+                    };
                 self.events.dispatch(ChannelEvent::ReactionChanged {
                     channel_id,
                     actor: actor.clone(),
@@ -281,6 +311,7 @@ where
                             users: reaction.users.clone(),
                         })
                         .collect(),
+                    notification,
                     recipients: recipients.clone(),
                     nonce: event.nonce.clone(),
                 });

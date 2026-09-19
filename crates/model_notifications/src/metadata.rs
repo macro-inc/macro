@@ -540,6 +540,29 @@ pub struct ChannelMessageSendMetadata {
     pub sender_profile_picture_url: Option<String>,
 }
 
+/// Metadata for a reaction added to one of the recipient's channel messages.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ChannelMessageReactionMetadata {
+    /// The reacted-to message id.
+    #[serde(alias = "message_id")]
+    pub message_id: String,
+    /// The thread root id when the reacted-to message is a reply.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[serde(alias = "thread_id")]
+    pub thread_id: Option<String>,
+    /// The reacted-to message content.
+    #[serde(alias = "message_content")]
+    pub message_content: String,
+    /// The emoji added by the reactor.
+    pub emoji: String,
+    #[serde(flatten)]
+    pub common: CommonChannelMetadata,
+    /// Optional reactor profile picture URL.
+    #[serde(default)]
+    pub sender_profile_picture_url: Option<String>,
+}
+
 /// Metadata for when a item is shared with a user
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -775,6 +798,11 @@ impl notification::domain::models::Notification for ChannelMessageSendMetadata {
     const TYPE_NAME: &'static str = "channel_message_send";
 }
 
+impl notification::domain::models::Notification for ChannelMessageReactionMetadata {
+    const TYPE_NAME: &'static str = "channel_message_reaction";
+    const DEFAULT_ENABLED: bool = false;
+}
+
 impl notification::domain::models::Notification for ChannelMentionMetadata {
     const TYPE_NAME: &'static str = "channel_mention";
 }
@@ -860,6 +888,44 @@ impl NotificationTitle for ChannelMessageSendMetadata {
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
         parse_message_plain_text_or_attachment(&self.message_content, self.has_attachments)
+    }
+}
+
+const CHANNEL_REACTION_EXCERPT_MAX_CHARS: usize = 80;
+
+impl NotificationTitle for ChannelMessageReactionMetadata {
+    fn format_title(
+        &self,
+        sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        let sender = sender_id
+            .map(|sender| sender.email_part().local_part().to_string())
+            .ok_or_else(|| report!("Expected sender id to exist for {:?}", &self))?;
+        let message = parse_message_plain_text(&self.message_content)?
+            .split_whitespace()
+            .collect::<Vec<_>>()
+            .join(" ");
+        let excerpt: String = message
+            .chars()
+            .take(CHANNEL_REACTION_EXCERPT_MAX_CHARS)
+            .collect();
+        let suffix = (message.chars().count() > CHANNEL_REACTION_EXCERPT_MAX_CHARS)
+            .then_some("…")
+            .unwrap_or("");
+        Ok(format!(
+            "{sender} reacted with {} to “{excerpt}{suffix}”",
+            self.emoji
+        ))
+    }
+
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(match self.common.channel_type {
+            ChannelType::DirectMessage => "Direct message".to_string(),
+            _ => format!("#{}", self.common.channel_name),
+        })
     }
 }
 
@@ -1031,6 +1097,29 @@ impl NotificationExtIos for ChannelMessageSendMetadata {
     ) -> Option<APNSPushNotification<Self::NotifData>> {
         let profile_pic = self.sender_profile_picture_url.clone();
         alert_apns(self, sender_id, notification_id, profile_pic).ok()
+    }
+}
+
+impl NotificationExtIos for ChannelMessageReactionMetadata {
+    type NotifData = ::notification::domain::models::apple::PushNotificationData;
+
+    fn collapse_key(&self, _entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new(&self.message_id).append(&self.emoji)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(
+            self,
+            sender_id,
+            notification_id,
+            self.sender_profile_picture_url.clone(),
+        )
+        .ok()
     }
 }
 

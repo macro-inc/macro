@@ -246,27 +246,27 @@ pub trait NotificationRepository: Send + Sync + 'static {
         endpoint_arn: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
-    /// Get users (from the given set) who have disabled the specified notification type.
+    /// Get users (from the given set) with an explicit preference override for this type.
     fn get_users_with_type_disabled<'a>(
         &self,
         notification_event_type: &str,
         user_ids: &[MacroUserIdStr<'a>],
     ) -> impl Future<Output = Result<HashSet<MacroUserIdStr<'static>>, Report>> + Send;
 
-    /// Get all disabled notification types for a user.
+    /// Get all stored notification-type preference overrides for a user.
     fn get_disabled_notification_types(
         &self,
         user_id: MacroUserIdStr<'_>,
     ) -> impl Future<Output = Result<Vec<DisabledNotificationType>, Report>> + Send;
 
-    /// Disable a notification type for a user (insert).
+    /// Insert a notification-type preference override.
     fn disable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,
         notification_event_type: &str,
     ) -> impl Future<Output = Result<(), Report>> + Send;
 
-    /// Re-enable a notification type for a user (delete).
+    /// Delete a notification-type preference override.
     fn enable_notification_type(
         &self,
         user_id: MacroUserIdStr<'_>,

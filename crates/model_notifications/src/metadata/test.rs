@@ -14,6 +14,72 @@ fn utc_datetime(value: &str) -> DateTime<Utc> {
         .with_timezone(&Utc)
 }
 
+fn channel_reaction() -> ChannelMessageReactionMetadata {
+    ChannelMessageReactionMetadata {
+        message_id: "message-1".to_string(),
+        thread_id: None,
+        message_content: "This is a useful message".to_string(),
+        emoji: "👍".to_string(),
+        common: CommonChannelMetadata {
+            channel_type: ChannelType::Public,
+            channel_name: "general".to_string(),
+        },
+        sender_profile_picture_url: None,
+    }
+}
+
+#[test]
+fn channel_reaction_is_default_off_and_formats_push_copy() {
+    assert!(!ChannelMessageReactionMetadata::DEFAULT_ENABLED);
+    assert_eq!(
+        NotifEvent::default_enabled_for_type_name(ChannelMessageReactionMetadata::TYPE_NAME),
+        Some(false)
+    );
+    let reaction = channel_reaction();
+    assert_eq!(
+        reaction
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo reacted with 👍 to “This is a useful message”"
+    );
+    assert_eq!(reaction.format_body(None).unwrap(), "#general");
+    let apns = reaction
+        .as_apns(
+            Some(uid("macro|teo@macro.com")),
+            &EntityType::Channel.with_entity_str("channel-1"),
+            Uuid::nil(),
+        )
+        .unwrap();
+    assert!(matches!(
+        apns.aps.alert,
+        Some(Alert::Dictionary(AlertDictionary {
+            title: Some(ref title),
+            body: Some(ref body),
+            ..
+        })) if title == "teo reacted with 👍 to “This is a useful message”"
+            && body == "#general"
+    ));
+
+    let mut multiline = channel_reaction();
+    multiline.message_content = "First line\nsecond line".to_string();
+    assert_eq!(
+        multiline
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo reacted with 👍 to “First line second line”"
+    );
+}
+
+#[test]
+fn channel_reaction_round_trips_as_notif_event() {
+    let value = serde_json::json!({
+        "tag": "channel_message_reaction",
+        "content": serde_json::to_value(channel_reaction()).unwrap(),
+    });
+    let event: NotifEvent = serde_json::from_value(value).unwrap();
+    assert!(matches!(event, NotifEvent::ChannelMessageReaction(_)));
+}
+
 fn github_pr_common() -> GithubPrNotificationCommon {
     GithubPrNotificationCommon {
         foreign_entity_id: Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap(),

@@ -283,6 +283,32 @@ export type ChannelMentionMetadata = CommonChannelMetadata & {
     threadId?: string | null;
 };
 
+/**
+ * Metadata for a reaction added to one of the recipient's channel messages.
+ */
+export type ChannelMessageReactionMetadata = CommonChannelMetadata & {
+    /**
+     * The emoji added by the reactor.
+     */
+    emoji: string;
+    /**
+     * The reacted-to message content.
+     */
+    messageContent: string;
+    /**
+     * The reacted-to message id.
+     */
+    messageId: string;
+    /**
+     * Optional reactor profile picture URL.
+     */
+    senderProfilePictureUrl?: string | null;
+    /**
+     * The thread root id when the reacted-to message is a reply.
+     */
+    threadId?: string | null;
+};
+
 export type ChannelMessageSendMetadata = CommonChannelMetadata & {
     /**
      * The content of the message
@@ -1011,6 +1037,12 @@ export type NotifEvent = {
      */
     content: AgentSessionMentionedMetadata;
     tag: 'agent_session_mentioned';
+} | {
+    /**
+     * Someone reacted to one of the user's channel messages.
+     */
+    content: ChannelMessageReactionMetadata;
+    tag: 'channel_message_reaction';
 };
 
 /**

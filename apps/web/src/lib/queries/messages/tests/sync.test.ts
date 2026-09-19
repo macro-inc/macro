@@ -197,6 +197,8 @@ describe.each(['channel', 'document'] as const)(
         actor: 'macro|b@example.com',
         change: {
           type: 'reaction_changed',
+          emoji: '👍',
+          added: true,
           message: {
             ...message(parent, 'fourth', 'root'),
             reactions: [{ emoji: '👍', users: ['macro|b@example.com'] }],

@@ -12,9 +12,9 @@ use model_error_response::ErrorResponse;
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionSettledMetadata,
     AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
-    ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata,
-    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrComment, GithubPrMention,
-    GithubPrReview, GithubPrStatusChanged, GithubReviewRequested,
+    ChannelMentionMetadata, ChannelMessageReactionMetadata, ChannelMessageSendMetadata,
+    ChannelReplyMetadata, CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrComment,
+    GithubPrMention, GithubPrReview, GithubPrStatusChanged, GithubReviewRequested,
     MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
     RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
@@ -35,6 +35,7 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         NewEmailMetadata::TYPE_NAME,
         AiResponseMetadata::TYPE_NAME,
         ChannelMessageSendMetadata::TYPE_NAME,
+        ChannelMessageReactionMetadata::TYPE_NAME,
         ChannelMentionMetadata::TYPE_NAME,
         ChannelReplyMetadata::TYPE_NAME,
         DocumentMentionMetadata::TYPE_NAME,
@@ -53,6 +54,16 @@ pub(crate) static BLOCKABLE_NOTIFICATIONS: LazyLock<HashSet<&'static str>> = Laz
         AgentSessionMentionedMetadata::TYPE_NAME,
     ])
 });
+
+/// Notification types users must explicitly opt into.
+pub(crate) static DEFAULT_DISABLED_NOTIFICATIONS: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| {
+        BLOCKABLE_NOTIFICATIONS
+            .iter()
+            .copied()
+            .filter(|type_name| NotifEvent::default_enabled_for_type_name(type_name) == Some(false))
+            .collect()
+    });
 
 #[cfg(test)]
 mod test;

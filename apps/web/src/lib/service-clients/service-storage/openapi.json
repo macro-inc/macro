@@ -24673,8 +24673,16 @@
           {
             "type": "object",
             "description": "The authenticated actor added or removed a reaction.",
-            "required": ["message", "type"],
+            "required": ["message", "emoji", "added", "type"],
             "properties": {
+              "added": {
+                "type": "boolean",
+                "description": "Whether the reaction was added (`true`) or removed (`false`)."
+              },
+              "emoji": {
+                "type": "string",
+                "description": "Emoji whose membership changed."
+              },
               "message": {
                 "$ref": "#/components/schemas/Message",
                 "description": "Persisted message."

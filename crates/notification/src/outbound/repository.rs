@@ -530,7 +530,7 @@ pub trait NotificationDbOps: DeviceRegistrationDbOps + Send + Sync + 'static {
         user_id: MacroUserIdStr<'_>,
     ) -> impl std::future::Future<Output = Result<(), Report>> + Send;
 
-    /// Get users (from the given set) who have disabled the specified notification type.
+    /// Get users (from the given set) with an explicit preference override for this type.
     fn get_users_with_type_disabled<'a>(
         &self,
         notification_event_type: &str,

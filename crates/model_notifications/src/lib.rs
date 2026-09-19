@@ -13,15 +13,15 @@ pub use metadata::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionOriginParent,
     AgentSessionSettledMetadata, AgentSessionWaitingForInputMetadata, AiResponseMetadata,
     CalendarEventReminderMetadata, CallStartedMetadata, ChannelInviteMetadata,
-    ChannelMentionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
-    CommentedOnDocumentMetadata, CommonChannelMetadata, DocumentMentionMetadata, GithubPrCheckRun,
-    GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind, GithubPrEventAction,
-    GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon,
-    GithubPrReview, GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested,
-    InboxReauthRequiredMetadata, InviteToTeamMetadata, ItemSharedMetadata,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotificationDocumentSubType,
-    NotificationTitle, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
-    TaskAssignedMetadata,
+    ChannelMentionMetadata, ChannelMessageReactionMetadata, ChannelMessageSendMetadata,
+    ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, CommonChannelMetadata,
+    DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment,
+    GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus, GithubPrMention,
+    GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState,
+    GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    InviteToTeamMetadata, ItemSharedMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata,
+    NotificationDocumentSubType, NotificationTitle, ReminderMetadata,
+    RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
 };
 pub use unsubscribe::UserUnsubscribe;
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
@@ -128,6 +128,20 @@ macro_rules! define_notif_event {
                 $(#[$variant_meta])*
                 $Variant($(#[$field_meta])* $Ty),
             )+
+        }
+
+        impl $Name {
+            /// Return the default preference for a registered notification type name.
+            pub fn default_enabled_for_type_name(type_name: &str) -> Option<bool> {
+                match type_name {
+                    $(
+                        <$Ty as ::notification::domain::models::Notification>::TYPE_NAME => {
+                            Some(<$Ty as ::notification::domain::models::Notification>::DEFAULT_ENABLED)
+                        }
+                    )+
+                    _ => None,
+                }
+            }
         }
 
         // Compile-time assertions:
@@ -254,6 +268,9 @@ define_notif_event!(
 
         /// The user was named in a prompt to an agent session.
         AgentSessionMentioned(AgentSessionMentionedMetadata),
+
+        /// Someone reacted to one of the user's channel messages.
+        ChannelMessageReaction(ChannelMessageReactionMetadata),
     }
 );
 
@@ -278,6 +295,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
                 channel_message_send_metadata.format_title(sender_id)
             }
+            NotifEvent::ChannelMessageReaction(m) => m.format_title(sender_id),
             NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
                 channel_reply_metadata.format_title(sender_id)
             }
@@ -341,6 +359,7 @@ impl NotificationTitle for NotifEvent {
             NotifEvent::ChannelMessageSend(channel_message_send_metadata) => {
                 channel_message_send_metadata.format_body(sender_id)
             }
+            NotifEvent::ChannelMessageReaction(m) => m.format_body(sender_id),
             NotifEvent::ChannelMessageReply(channel_reply_metadata) => {
                 channel_reply_metadata.format_body(sender_id)
             }

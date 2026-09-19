@@ -378,12 +378,14 @@ impl<T> SortOn<CreatedAt> for UserNotificationRow<T> {
     }
 }
 
-/// A notification type that a user has disabled.
+/// A stored notification-type preference override.
 ///
-/// Presence of a row means the user has opted out of this type.
+/// For default-on types, presence means opted out. For default-off types,
+/// presence means opted in. The reader service normalizes these rows into the
+/// disabled-type list returned by the API.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DisabledNotificationType {
-    /// The user who disabled this type.
+    /// The user who set this preference override.
     pub user_id: MacroUserIdStr<'static>,
     /// The notification event type (e.g. "channel_message_send").
     pub notification_event_type: String,
@@ -393,6 +395,9 @@ pub struct DisabledNotificationType {
 pub trait Notification: Serialize + DeserializeOwned + Send + Sync + 'static {
     /// The type name of this notification.
     const TYPE_NAME: &'static str;
+
+    /// Whether users receive this notification before setting an explicit preference.
+    const DEFAULT_ENABLED: bool = true;
 }
 
 /// Extension trait for notifications that can be delivered via email.

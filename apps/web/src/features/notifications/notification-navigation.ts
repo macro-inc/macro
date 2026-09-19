@@ -107,6 +107,10 @@ export function getChannelNotificationParams(
       messageId: m.content.messageId,
       threadId: undefined,
     }))
+    .with({ tag: 'channel_message_reaction' }, (m) => ({
+      messageId: m.content.messageId,
+      threadId: m.content.threadId ?? undefined,
+    }))
     .with({ tag: 'channel_message_reply' }, (m) => ({
       messageId: m.content.messageId,
       threadId: m.content.threadId,

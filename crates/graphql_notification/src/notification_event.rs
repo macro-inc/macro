@@ -4,14 +4,15 @@ use async_graphql::{Enum, ID, Object, Union};
 use model_notifications::{
     AgentSessionMentionedMetadata, AgentSessionNotificationRef, AgentSessionSettledMetadata,
     AgentSessionWaitingForInputMetadata, AiResponseMetadata, CalendarEventReminderMetadata,
-    CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, ChannelType, CommentedOnDocumentMetadata, DocumentMentionMetadata,
-    GithubPrCheckRun, GithubPrCheckRunState, GithubPrComment, GithubPrCommentKind,
-    GithubPrEventAction, GithubPrEventStatus, GithubPrMention, GithubPrMentionLocation,
-    GithubPrNotificationCommon, GithubPrReview, GithubPrReviewState, GithubPrStatusChanged,
-    GithubReviewRequested, InboxReauthRequiredMetadata, InviteToTeamMetadata,
-    MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent, NotificationDocumentSubType,
-    ReminderMetadata, RepliedToDocumentCommentThreadMetadata, TaskAssignedMetadata,
+    CallStartedMetadata, ChannelInviteMetadata, ChannelMentionMetadata,
+    ChannelMessageReactionMetadata, ChannelMessageSendMetadata, ChannelReplyMetadata, ChannelType,
+    CommentedOnDocumentMetadata, DocumentMentionMetadata, GithubPrCheckRun, GithubPrCheckRunState,
+    GithubPrComment, GithubPrCommentKind, GithubPrEventAction, GithubPrEventStatus,
+    GithubPrMention, GithubPrMentionLocation, GithubPrNotificationCommon, GithubPrReview,
+    GithubPrReviewState, GithubPrStatusChanged, GithubReviewRequested, InboxReauthRequiredMetadata,
+    InviteToTeamMetadata, MentionedInDocumentCommentMetadata, NewEmailMetadata, NotifEvent,
+    NotificationDocumentSubType, ReminderMetadata, RepliedToDocumentCommentThreadMetadata,
+    TaskAssignedMetadata,
 };
 
 /// GraphQL channel type used by notification metadata.
@@ -560,6 +561,44 @@ impl GraphqlChannelMessageSendMetadata {
     /// Whether the message has attachments.
     async fn has_attachments(&self) -> bool {
         self.0.has_attachments
+    }
+
+    /// Channel metadata.
+    #[graphql(flatten)]
+    async fn channel(&self) -> GraphqlChannelNotificationCommon {
+        GraphqlChannelNotificationCommon(self.0.common.clone())
+    }
+
+    /// Sender profile-picture URL.
+    async fn sender_profile_picture_url(&self) -> Option<&str> {
+        self.0.sender_profile_picture_url.as_deref()
+    }
+}
+
+/// GraphQL wrapper for channel message reaction metadata.
+pub struct GraphqlChannelMessageReactionMetadata(ChannelMessageReactionMetadata);
+
+/// Metadata for a reaction to a channel message.
+#[Object]
+impl GraphqlChannelMessageReactionMetadata {
+    /// Reacted-to message identifier.
+    async fn message_id(&self) -> &str {
+        &self.0.message_id
+    }
+
+    /// Root thread identifier when the message is a reply.
+    async fn thread_id(&self) -> Option<&str> {
+        self.0.thread_id.as_deref()
+    }
+
+    /// Reacted-to message content.
+    async fn message_content(&self) -> &str {
+        &self.0.message_content
+    }
+
+    /// Emoji added by the reactor.
+    async fn emoji(&self) -> &str {
+        &self.0.emoji
     }
 
     /// Channel metadata.
@@ -1201,6 +1240,8 @@ pub enum GraphqlNotifEvent {
     ChannelInvite(GraphqlChannelInviteMetadata),
     /// Channel message metadata.
     ChannelMessageSend(GraphqlChannelMessageSendMetadata),
+    /// Channel message reaction metadata.
+    ChannelMessageReaction(GraphqlChannelMessageReactionMetadata),
     /// Channel reply metadata.
     ChannelMessageReply(GraphqlChannelReplyMetadata),
     /// Started-call metadata.
@@ -1264,6 +1305,9 @@ impl From<NotifEvent> for GraphqlNotifEvent {
             }
             NotifEvent::ChannelMessageSend(metadata) => {
                 Self::ChannelMessageSend(GraphqlChannelMessageSendMetadata(metadata))
+            }
+            NotifEvent::ChannelMessageReaction(metadata) => {
+                Self::ChannelMessageReaction(GraphqlChannelMessageReactionMetadata(metadata))
             }
             NotifEvent::ChannelMessageReply(metadata) => {
                 Self::ChannelMessageReply(GraphqlChannelReplyMetadata(metadata))
