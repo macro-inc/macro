@@ -307,6 +307,28 @@ async fn added_reaction_carries_author_notification_context() {
 }
 
 #[tokio::test]
+async fn removed_reaction_has_no_author_notification_context() {
+    let log = Log::default();
+    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let mut reaction = event(MessageChange::ReactionChanged {
+        message: message(),
+        emoji: "👍".to_string(),
+        added: false,
+    });
+    reaction.actor = MEMBER.to_owned();
+
+    delivery.publish(reaction).await.unwrap();
+
+    assert!(matches!(
+        log.events.lock().unwrap().as_slice(),
+        [ChannelEvent::ReactionChanged {
+            notification: None,
+            ..
+        }]
+    ));
+}
+
+#[tokio::test]
 async fn thread_updates_stay_off_the_channel_side_effect_path() {
     let log = Log::default();
     let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());

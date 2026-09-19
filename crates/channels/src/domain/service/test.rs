@@ -1816,7 +1816,6 @@ async fn reaction_mutation_emits_grouped_reaction_event() {
     assert!(matches!(
         notification,
         Some(ReactionNotificationContext {
-            added: true,
             emoji,
             message_content,
             ..

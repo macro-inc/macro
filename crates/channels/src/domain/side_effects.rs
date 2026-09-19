@@ -640,7 +640,6 @@ where
                 })
                 .await;
                 if let Some(notification) = notification
-                    && notification.added
                     && let (Some(sender_id), Some(recipient_id)) = (
                         actor.as_user().cloned(),
                         notification.message_sender.as_user().cloned(),

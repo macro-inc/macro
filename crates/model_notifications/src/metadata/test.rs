@@ -31,6 +31,10 @@ fn channel_reaction() -> ChannelMessageReactionMetadata {
 #[test]
 fn channel_reaction_is_default_off_and_formats_push_copy() {
     assert!(!ChannelMessageReactionMetadata::DEFAULT_ENABLED);
+    assert_eq!(
+        NotifEvent::default_enabled_for_type_name(ChannelMessageReactionMetadata::TYPE_NAME),
+        Some(false)
+    );
     let reaction = channel_reaction();
     assert_eq!(
         reaction
@@ -55,6 +59,15 @@ fn channel_reaction_is_default_off_and_formats_push_copy() {
         })) if title == "teo reacted with 👍 to “This is a useful message”"
             && body == "#general"
     ));
+
+    let mut multiline = channel_reaction();
+    multiline.message_content = "First line\nsecond line".to_string();
+    assert_eq!(
+        multiline
+            .format_title(Some(uid("macro|teo@macro.com")))
+            .unwrap(),
+        "teo reacted with 👍 to “First line second line”"
+    );
 }
 
 #[test]

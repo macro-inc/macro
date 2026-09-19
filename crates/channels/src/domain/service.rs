@@ -1060,17 +1060,13 @@ where
             .map_err(|e| ChannelMutationErr::Repo(e.into()))?;
 
         let message_sender_id = reaction_message.sender.as_user().cloned();
-        let notification = if added
-            && let (Some(actor_id), Some(message_sender_id)) = (actor.as_user(), message_sender_id)
-            && actor_id != &message_sender_id
-        {
+        let notification = if added && let Some(message_sender_id) = message_sender_id {
             match self
                 .repo
                 .get_channel_metadata(channel_id, message_sender_id)
                 .await
             {
                 Ok(metadata) => Some(ReactionNotificationContext {
-                    added,
                     emoji,
                     message_sender: reaction_message.sender,
                     thread_id: reaction_message.thread_id,
