@@ -2296,3 +2296,130 @@ impl crate::domain::audience::SessionSubscriptions for DocumentSubscriptions {
         Ok(self.candidates.clone())
     }
 }
+
+/// A batch lands in one write: every frame under the id it arrived with, in
+/// append order by `(created_at, id)` even though one transaction has one
+/// clock.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_batch_fenced_writes_in_order_under_the_given_ids(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let claim = claimed(repo.claim(session.id, ReplicaId::mint()).await.unwrap());
+    let before = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+
+    let streamed = |text: &str| AgentSessionLog {
+        agent_session_id: session.id,
+        user_id: None,
+        content: Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            RawJsonRpcMessage::notification(
+                "session/update".to_owned(),
+                serde_json::json!({ "sessionId": "acp-1", "update": { "text": text } }),
+            )
+            .unwrap(),
+        ))),
+    };
+    let frames: Vec<AgentSessionLog> = ["one", "two", "three"].into_iter().map(streamed).collect();
+    let ids: Vec<Uuid> = (0..frames.len())
+        .map(|_| macro_uuid::generate_uuid_v7())
+        .collect();
+    let entries = ids
+        .iter()
+        .zip(frames.iter().cloned())
+        .map(|(id, entry)| StoredAgentSessionLog {
+            id: *id,
+            created_at: chrono::Utc::now(),
+            entry,
+        })
+        .collect();
+
+    let stored = repo.create_batch_fenced(entries, &claim).await.unwrap();
+    assert_eq!(
+        stored.iter().map(|row| row.id).collect::<Vec<_>>(),
+        ids,
+        "the store keeps the ids the writer handed out"
+    );
+    assert!(
+        stored
+            .windows(2)
+            .all(|pair| pair[0].created_at < pair[1].created_at),
+        "one transaction, one clock, yet strictly increasing stamps"
+    );
+    let after = repo
+        .create_fenced(fenced_log(session.id), &claim)
+        .await
+        .unwrap();
+
+    let history = AgentSessionLogRepo::list_by_session(&repo, session.id)
+        .await
+        .unwrap();
+    assert_eq!(
+        history.iter().map(|row| row.id).collect::<Vec<_>>(),
+        std::iter::once(before.id)
+            .chain(ids.iter().copied())
+            .chain(std::iter::once(after.id))
+            .collect::<Vec<_>>(),
+        "a batch reads back in append order between single-frame writes"
+    );
+    assert_eq!(
+        history[1..4]
+            .iter()
+            .map(|row| serde_json::to_value(&row.entry.content).unwrap())
+            .collect::<Vec<_>>(),
+        frames
+            .iter()
+            .map(|entry| serde_json::to_value(&entry.content).unwrap())
+            .collect::<Vec<_>>(),
+    );
+}
+
+/// The batch is fenced like every other write: a superseded claim appends
+/// nothing, and a frame from another session is refused before anything is
+/// touched.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_batch_fenced_refuses_stale_claims_and_foreign_frames(pool: PgPool) {
+    let repo = PgAgentSessionRepo::new(pool.clone());
+    let bot = create_test_bot(&pool).await;
+    let session = create_session(&repo, new_session(bot, None, None)).await;
+    let other = create_session(&repo, new_session(bot, None, None)).await;
+    // Re-claiming bumps the fence, so the first claim is the superseded one.
+    let replica = ReplicaId::mint();
+    let stale = claimed(repo.claim(session.id, replica).await.unwrap());
+    let current = claimed(repo.claim(session.id, replica).await.unwrap());
+    let entry = |log: AgentSessionLog| StoredAgentSessionLog {
+        id: macro_uuid::generate_uuid_v7(),
+        created_at: chrono::Utc::now(),
+        entry: log,
+    };
+
+    assert!(matches!(
+        repo.create_batch_fenced(vec![entry(fenced_log(session.id))], &stale)
+            .await,
+        Err(AgentSessionError::FencedOut(id)) if id == session.id
+    ));
+    assert!(matches!(
+        repo.create_batch_fenced(
+            vec![entry(fenced_log(session.id)), entry(fenced_log(other.id))],
+            &current,
+        )
+        .await,
+        Err(AgentSessionError::FencedOut(id)) if id == session.id
+    ));
+    assert!(
+        repo.create_batch_fenced(Vec::new(), &current)
+            .await
+            .unwrap()
+            .is_empty(),
+        "an empty batch is a no-op"
+    );
+    assert!(
+        AgentSessionLogRepo::list_by_session(&repo, session.id)
+            .await
+            .unwrap()
+            .is_empty(),
+        "nothing landed from a refused batch"
+    );
+}

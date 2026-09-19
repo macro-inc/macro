@@ -635,6 +635,14 @@ impl AgentSessionLogRepo for BlockingPromptLogs {
         self.repo.create_fenced(log, claim).await
     }
 
+    async fn create_batch_fenced(
+        &self,
+        entries: Vec<StoredAgentSessionLog>,
+        claim: &SessionClaim,
+    ) -> Result<Vec<StoredAgentSessionLog>> {
+        self.repo.create_batch_fenced(entries, claim).await
+    }
+
     async fn create(&self, log: AgentSessionLog) -> Result<StoredAgentSessionLog> {
         if self.hang_disconnect
             && matches!(
@@ -2127,4 +2135,224 @@ async fn a_full_pending_run_flushes_itself() {
     assert_eq!(published.len(), 1);
     assert_eq!(published[0].entries.len(), MAX_PENDING_LOG_FRAMES);
     assert!(logs.flush_deadline().is_none());
+}
+
+// Batched writes: a fenced connection holds streamed notifications back and
+// lands them in one insert, while anything the store projects or the
+// runtime acts on writes the buffer out first and lands at once.
+
+async fn fenced_connection(
+    realtime: RecordingRealtime,
+) -> (
+    InMemoryAgentSessionRepo,
+    LiveSessionLogWriter<InMemoryAgentSessionRepo, RecordingRealtime>,
+) {
+    let repo = InMemoryAgentSessionRepo::new();
+    repo.insert_session(test_agent_session(test_session()));
+    let claim = claim_for_test(&repo, test_session()).await;
+    let logs = LiveSessionLogWriter::fenced(repo.clone(), realtime, claim);
+    (repo, logs)
+}
+
+/// Under a claim, streamed notifications wait for the flush: nothing is
+/// stored or published until then, and the flush lands them all at once, in
+/// order, under the ids the appends already handed out.
+#[tokio::test]
+async fn a_fenced_connection_buffers_streamed_frames_until_it_flushes() {
+    let realtime = RecordingRealtime::new();
+    let (repo, mut logs) = fenced_connection(realtime.clone()).await;
+
+    let mut appended = Vec::new();
+    for text in ["one", "two", "three"] {
+        appended.push(
+            AgentSessionLogWriter::append(&mut logs, streamed_frame(text))
+                .await
+                .expect("append succeeds")
+                .log_id,
+        );
+    }
+
+    assert!(
+        AgentSessionLogRepo::list_by_session(&repo, test_session())
+            .await
+            .unwrap()
+            .is_empty(),
+        "buffered frames are not yet durable"
+    );
+    assert!(realtime.published().is_empty());
+    assert!(logs.flush_deadline().is_some());
+
+    AgentSessionLogWriter::flush(&mut logs)
+        .await
+        .expect("flush succeeds");
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(
+        stored.iter().map(|row| row.id).collect::<Vec<_>>(),
+        appended,
+        "the flush stores every frame in append order under the id its append returned"
+    );
+    assert!(
+        stored
+            .windows(2)
+            .all(|pair| pair[0].created_at < pair[1].created_at),
+        "a batch orders strictly by time, as readers expect"
+    );
+    let published = realtime.published();
+    assert_eq!(published.len(), 1, "one flush is one publish");
+    assert_eq!(
+        published[0]
+            .entries
+            .iter()
+            .map(|row| row.id)
+            .collect::<Vec<_>>(),
+        appended
+    );
+    assert!(logs.flush_deadline().is_none());
+}
+
+/// A frame headed to the runtime writes the buffer out ahead of itself and
+/// is durable before `append` returns, so history never lacks a message the
+/// agent received and never reorders around it.
+#[tokio::test]
+async fn frames_headed_to_the_runtime_write_the_buffer_out_first() {
+    let realtime = RecordingRealtime::new();
+    let (repo, mut logs) = fenced_connection(realtime.clone()).await;
+
+    let buffered = AgentSessionLogWriter::append(&mut logs, streamed_frame("buffered"))
+        .await
+        .unwrap()
+        .log_id;
+    let prompt = parse_log_as(test_session(), TURN)
+        .into_iter()
+        .find(|entry| matches!(entry.content, Message::ToRuntime(_)))
+        .expect("the fixture turn prompts the runtime");
+    let prompt_id = AgentSessionLogWriter::append(&mut logs, prompt)
+        .await
+        .unwrap()
+        .log_id;
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(
+        stored.iter().map(|row| row.id).collect::<Vec<_>>(),
+        vec![buffered, prompt_id],
+        "both durable, buffered frame first"
+    );
+    assert_eq!(realtime.published().len(), 1, "and pushed as one publish");
+    assert!(logs.flush_deadline().is_none());
+}
+
+/// A successful load's boundary selects history at its own row, so the
+/// frames buffered before it must already be rows when it lands.
+#[tokio::test]
+async fn a_load_boundary_lands_after_the_frames_buffered_before_it() {
+    let realtime = RecordingRealtime::new();
+    let (repo, mut logs) = fenced_connection(realtime.clone()).await;
+
+    let initialize = AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::ToRuntime(ToRuntimeMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::request(
+                "initialize".to_owned(),
+                serde_json::json!({}),
+                agent_client_protocol::schema::v1::RequestId::Str("init".into()),
+            )
+            .unwrap(),
+        ))),
+    };
+    let initialization_log_id = AgentSessionLogWriter::append(&mut logs, initialize)
+        .await
+        .unwrap()
+        .log_id;
+    let replayed = AgentSessionLogWriter::append(&mut logs, streamed_frame("replayed"))
+        .await
+        .unwrap()
+        .log_id;
+    let load_response = AgentSessionLog {
+        agent_session_id: test_session(),
+        user_id: None,
+        content: Message::ToServer(ToServerMessage::Acp(AcpMessage(
+            agent_client_protocol::RawJsonRpcMessage::response(
+                agent_client_protocol::schema::v1::RequestId::Str("load".into()),
+                Ok(serde_json::json!({})),
+            ),
+        ))),
+    };
+    let response_id = AgentSessionLogWriter::append_with_boundary(
+        &mut logs,
+        load_response,
+        Some(crate::domain::model::HistoryBoundary {
+            initialization_log_id,
+        }),
+    )
+    .await
+    .unwrap()
+    .log_id;
+
+    let history = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(
+        history.iter().map(|row| row.id).collect::<Vec<_>>(),
+        vec![initialization_log_id, replayed, response_id],
+        "history starts at the initialization and keeps append order"
+    );
+}
+
+/// A full buffer flushes itself, bounding what a crash could lose and what
+/// one insert has to write.
+#[tokio::test]
+async fn a_full_buffer_writes_itself_out() {
+    let realtime = RecordingRealtime::new();
+    let (repo, mut logs) = fenced_connection(realtime.clone()).await;
+
+    for index in 0..MAX_PENDING_LOG_FRAMES {
+        AgentSessionLogWriter::append(&mut logs, streamed_frame(&index.to_string()))
+            .await
+            .unwrap();
+    }
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(stored.len(), MAX_PENDING_LOG_FRAMES);
+    let published = realtime.published();
+    assert_eq!(published.len(), 1);
+    assert_eq!(published[0].entries.len(), MAX_PENDING_LOG_FRAMES);
+    assert!(logs.flush_deadline().is_none());
+}
+
+/// The fold hands out turn ids over the whole log, so it must count frames
+/// that are only buffered too, and a flushed turn reads back complete and in
+/// order.
+#[tokio::test]
+async fn a_fenced_turn_flushes_complete_and_in_order() {
+    let realtime = RecordingRealtime::new();
+    let (repo, mut logs) = fenced_connection(realtime.clone()).await;
+
+    let log = parse_log_as(test_session(), TURN);
+    for entry in log.clone() {
+        AgentSessionLogWriter::append(&mut logs, entry)
+            .await
+            .unwrap();
+    }
+    AgentSessionLogWriter::flush(&mut logs).await.unwrap();
+
+    let stored = AgentSessionLogRepo::list_by_session(&repo, test_session())
+        .await
+        .unwrap();
+    assert_eq!(
+        stored
+            .into_iter()
+            .map(|row| serde_json::to_value(row.entry.content).unwrap())
+            .collect::<Vec<_>>(),
+        log.into_iter()
+            .map(|entry| serde_json::to_value(entry.content).unwrap())
+            .collect::<Vec<_>>(),
+    );
 }

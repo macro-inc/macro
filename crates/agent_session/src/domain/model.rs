@@ -1,5 +1,5 @@
 use agent_client_protocol::schema::v1::SessionId;
-use agent_runtime_protocol::domain::schema::v0::SystemEvent;
+use agent_runtime_protocol::domain::schema::v0::{AcpMessage, SystemEvent, ToServerMessage};
 use bots::domain::models::BotId;
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -365,6 +365,35 @@ impl From<super::ports::QueuedControl> for QueuedActionDto {
             created_at: queued.created_at,
         }
     }
+}
+
+/// The Cursor run a frame checkpoints, if it is the adapter's empty
+/// `agent_message_chunk` carrying `_meta.macroCursorRunCheckpoint`.
+///
+/// A domain fact rather than a persistence detail: the store projects it
+/// onto `external_agent_session.last_run_id`, and the live writer must know
+/// it to keep such a frame out of a plain batch, so both read one function.
+#[must_use]
+pub fn cursor_run_checkpoint(message: &Message) -> Option<String> {
+    let Message::ToServer(ToServerMessage::Acp(AcpMessage(frame))) = message else {
+        return None;
+    };
+    let value = serde_json::to_value(frame).ok()?;
+    if value.get("method")?.as_str()? != "session/update" {
+        return None;
+    }
+    let params = value.get("params")?;
+    let update = params.get("update")?;
+    if update.get("sessionUpdate")?.as_str()? != "agent_message_chunk"
+        || !update.get("content")?.get("text")?.as_str()?.is_empty()
+    {
+        return None;
+    }
+    params
+        .get("_meta")?
+        .get("macroCursorRunCheckpoint")?
+        .as_str()
+        .map(str::to_owned)
 }
 
 /// A run of frames appended to a live session's log, for anyone watching.
