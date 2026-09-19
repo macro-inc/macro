@@ -13,8 +13,13 @@
 //! - Terminal output and exit codes. ACP's own
 //!   [`Terminal`](agent_client_protocol::Terminal) content block carries only
 //!   a `terminalId` pointing at a terminal the client is expected to have
-//!   created itself. A fold reading a historical log never created one, so the
-//!   only output it will ever see is the copy in `_meta`.
+//!   created itself, and this client creates none: the command runs wherever
+//!   the harness does, on the far side of a byte pipe. So the block says
+//!   *that* a call is a terminal, and the output comes from wherever the
+//!   harness copies it - the `_meta.terminal_output` stream Zed defined and
+//!   Macro advertises, a text content block, or the harness's own
+//!   `rawOutput` shape. See [`TerminalOutput`] for the two ways a frame can
+//!   speak about output.
 //! - Whether a call delegates to another agent, and what that agent said.
 //!   Every harness spells this differently: a `_meta` flag, a tool name, a
 //!   title prefix; the answer in `_meta`, in `rawInput`, in `rawOutput`, or
@@ -184,6 +189,55 @@ impl<'frame> ToolFrame<'frame> {
             .collect::<String>();
         (!text.is_empty()).then_some(text)
     }
+
+    /// The terminal ACP's own `terminal` content block embeds in this call,
+    /// by id. An agent that runs a command in a terminal says so this way
+    /// whether or not the client created the terminal; for this client the
+    /// id is a name for a terminal it never saw, but the block's presence
+    /// still says the call is a shell command.
+    #[must_use]
+    pub fn embedded_terminal(&self) -> Option<&str> {
+        self.content?.iter().find_map(|block| match block {
+            ToolCallContent::Terminal(terminal) => Some(terminal.terminal_id.0.as_ref()),
+            _ => None,
+        })
+    }
+}
+
+/// What one frame says about a terminal-backed call's output.
+///
+/// Two conventions coexist on the wire and they compose differently. Zed's
+/// `_meta.terminal_output` extension streams the bytes a command wrote since
+/// the previous frame - codex-acp sends one per output delta - and a reader
+/// appends them, the way a terminal does. ACP's own `content` is replaced
+/// whole by every update, so a text block there is the output so far and a
+/// reader replaces what it held. A reader that mixed the two up would show
+/// either the last line alone or the whole output twice.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TerminalOutput {
+    /// Bytes written since the last frame; append to what came before.
+    Chunk(String),
+    /// The whole output so far; replace what came before.
+    Snapshot(String),
+}
+
+impl TerminalOutput {
+    /// The text this frame carried, whichever way it meant it.
+    #[must_use]
+    pub fn text(&self) -> &str {
+        match self {
+            Self::Chunk(text) | Self::Snapshot(text) => text,
+        }
+    }
+
+    /// Fold this frame's output into `held`, the output accumulated from the
+    /// frames before it.
+    pub fn apply_to(self, held: &mut Option<String>) {
+        match self {
+            Self::Chunk(chunk) => held.get_or_insert_with(String::new).push_str(&chunk),
+            Self::Snapshot(snapshot) => *held = Some(snapshot),
+        }
+    }
 }
 
 /// What a harness's conventions let the fold read off a tool frame, and how
@@ -224,8 +278,12 @@ pub trait HarnessReader: Sync {
         None
     }
 
-    /// Terminal output accumulated so far.
-    fn terminal_output(&self, frame: &ToolFrame<'_>) -> Option<String> {
+    /// What this frame says about a terminal-backed call's output, if
+    /// anything: a chunk to append or a snapshot to replace with. The neutral
+    /// reading takes the `_meta.terminal_output` stream first, then a text
+    /// content block; a harness that reports output only in its own
+    /// `rawOutput` shape reads that here.
+    fn terminal_output(&self, frame: &ToolFrame<'_>) -> Option<TerminalOutput> {
         generic::terminal_output(frame)
     }
 
@@ -507,6 +565,21 @@ pub(crate) fn has_namespace(meta: Option<&Meta>, namespace: &str) -> bool {
 #[must_use]
 pub(crate) fn raw<T: DeserializeOwned>(value: Option<&Value>) -> Option<T> {
     serde_json::from_value(value?.clone()).ok()
+}
+
+/// Whether a call, as its opening frame describes it, runs in a terminal.
+///
+/// Three signals say so, and any one is enough: ACP's `execute` kind; ACP's
+/// own `terminal` content block, which an agent embeds whatever kind it gave
+/// the call; and the `_meta.terminal_info` announcement of the
+/// `terminal_output` extension, which precedes the stream it keys. Decided at
+/// open like every other shape, so output that streams in later has a
+/// terminal to land in.
+#[must_use]
+pub fn is_terminal(frame: &ToolFrame<'_>) -> bool {
+    matches!(frame.kind, Some(ToolKind::Execute))
+        || frame.embedded_terminal().is_some()
+        || generic::terminal_info(frame).is_some()
 }
 
 /// The command line behind an `execute` tool call.

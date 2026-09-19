@@ -2,8 +2,8 @@ use super::util::{CapturedFields, TURN, capturing_warnings, parse_log};
 use crate::domain::fold::fold;
 use crate::domain::log::{AgentSessionLog, Message};
 use crate::domain::model::{
-    Author, Control, ControlOutcome, FoldedMessage, MessagePart, PermissionOutcome, StopReason,
-    ToolDetail, ToolName, ToolStatus, ToolUseId, TurnId,
+    AnsiText, Author, Control, ControlOutcome, FoldedMessage, MessagePart, PermissionOutcome,
+    StopReason, ToolDetail, ToolName, ToolStatus, ToolUseId, TurnId,
 };
 use agent_client_protocol::RawJsonRpcMessage;
 use agent_runtime_protocol::domain::schema::v0::ToServerMessage;
@@ -88,9 +88,10 @@ fn folds_a_complete_turn() {
         "ANSI escapes survive the fold: {:?}",
         output.as_str()
     );
-    assert!(
-        output.as_str().ends_with("events.rs"),
-        "later updates replace earlier output snapshots"
+    assert_eq!(
+        output.as_str(),
+        "\u{1b}[01;34macp.rs\u{1b}[0m\nevents.rs",
+        "streamed writes append in order"
     );
 
     let MessagePart::Permission {
@@ -521,6 +522,143 @@ fn reported_diffs_beat_the_synthesized_write_diff() {
     assert_eq!(diffs.len(), 1);
     assert_eq!(diffs[0].old_text.as_deref(), Some("old"));
     assert_eq!(diffs[0].new_text, "new");
+}
+
+/// The one terminal part of a fold, with its detail.
+fn only_terminal(messages: &[FoldedMessage]) -> (ToolStatus, Option<String>, Option<i32>) {
+    let agent = messages
+        .iter()
+        .find(|message| message.author == Author::Agent)
+        .expect("the agent answered");
+    let [
+        MessagePart::ToolUse {
+            status,
+            detail: ToolDetail::Terminal {
+                output, exit_code, ..
+            },
+            ..
+        },
+    ] = &agent.parts[..]
+    else {
+        panic!("one terminal part: {:#?}", agent.parts);
+    };
+    (
+        *status,
+        output.as_ref().map(|output| output.as_str().to_owned()),
+        *exit_code,
+    )
+}
+
+/// How codex-acp streams a command for a client that advertised
+/// `terminal_output`: a `tool_call` announcing the terminal, one write per
+/// output delta, and a closing frame with the exit. The writes accumulate in
+/// order, and the closing frame's copy of the whole output does not double
+/// them.
+#[test]
+fn terminal_writes_stream_in_and_accumulate() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"i","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{"_meta":{"terminal_output":true}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"i","result":{"protocolVersion":1,"agentCapabilities":{},"agentInfo":{"name":"@agentclientprotocol/codex-acp","version":"1"}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"count"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"c","title":"seq 3","kind":"execute","status":"in_progress","rawInput":{"command":"seq 3","cwd":"/repo"},"content":[{"type":"terminal","terminalId":"c"}],"_meta":{"terminal_info":{"terminal_id":"c","cwd":"/repo"}}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"c","_meta":{"terminal_output":{"terminal_id":"c","data":"1\n"}}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"c","_meta":{"terminal_output":{"terminal_id":"c","data":"2\n"}}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"c","_meta":{"terminal_output":{"terminal_id":"c","data":"3\n"}}}}}}"#,
+    ));
+    let (messages, warnings) = fold_capturing_warnings(log.clone());
+    assert_eq!(warnings, vec![]);
+    assert_eq!(
+        only_terminal(&messages),
+        (ToolStatus::Running, Some("1\n2\n3\n".to_owned()), None),
+        "mid-command, every write so far is shown"
+    );
+
+    let closing = parse_log(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"c","status":"completed","rawOutput":{"formatted_output":"1\n2\n3\n","exit_code":0},"_meta":{"terminal_exit":{"terminal_id":"c","exit_code":0,"signal":null}}}}}}"#,
+    );
+    let (messages, warnings) = fold_capturing_warnings(log.into_iter().chain(closing));
+    assert_eq!(warnings, vec![]);
+    assert_eq!(
+        only_terminal(&messages),
+        (ToolStatus::Completed, Some("1\n2\n3\n".to_owned()), Some(0))
+    );
+}
+
+/// How OpenCode streams a command: no `_meta`, the accumulated output as a
+/// text content block on each running update, and the whole output again on
+/// completion. Each block replaces the last rather than piling up.
+#[test]
+fn terminal_content_snapshots_replace_each_other() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"i","method":"initialize","params":{"protocolVersion":1,"clientCapabilities":{}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"i","result":{"protocolVersion":1,"agentCapabilities":{},"agentInfo":{"name":"OpenCode","version":"1"}}}}"#,
+        "\n",
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"count"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"b","title":"seq 2","kind":"execute","status":"pending","rawInput":{"command":"seq 2","cwd":"/repo"}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"b","status":"in_progress","kind":"execute","title":"seq 2","rawInput":{"command":"seq 2","cwd":"/repo"},"content":[{"type":"content","content":{"type":"text","text":"1\n"}}]}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"b","status":"in_progress","kind":"execute","title":"seq 2","rawInput":{"command":"seq 2","cwd":"/repo"},"content":[{"type":"content","content":{"type":"text","text":"1\n2\n"}}]}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"b","status":"in_progress","kind":"execute","title":"seq 2","rawInput":{"command":"seq 2","cwd":"/repo"}}}}}"#,
+    ));
+    let (messages, warnings) = fold_capturing_warnings(log.clone());
+    assert_eq!(warnings, vec![]);
+    assert_eq!(
+        only_terminal(&messages),
+        (ToolStatus::Running, Some("1\n2\n".to_owned()), None),
+        "an update with no content leaves the output alone"
+    );
+
+    let closing = parse_log(
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"b","status":"completed","content":[{"type":"content","content":{"type":"text","text":"1\n2\n"}}],"rawOutput":{"output":"1\n2\n","metadata":{"exit":0}}}}}}"#,
+    );
+    let (messages, _) = fold_capturing_warnings(log.into_iter().chain(closing));
+    assert_eq!(
+        only_terminal(&messages),
+        (ToolStatus::Completed, Some("1\n2\n".to_owned()), None)
+    );
+}
+
+/// A call that embeds ACP's `terminal` content block is a terminal whatever
+/// kind it was given, and a repeated announcement of it - which carries no
+/// output of its own - keeps what has streamed in.
+#[test]
+fn an_embedded_terminal_makes_a_terminal_and_a_reopen_keeps_its_output() {
+    let log = parse_log(concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"go"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"t","title":"Terminal","kind":"other","status":"pending","rawInput":{},"content":[{"type":"terminal","terminalId":"t"}]}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t","rawInput":{"command":"make"},"_meta":{"terminal_output":{"terminal_id":"t","data":"building...\n"}}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"t","title":"make","kind":"other","status":"in_progress","rawInput":{"command":"make"},"content":[{"type":"terminal","terminalId":"t"}]}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t","status":"failed","_meta":{"terminal_output":{"terminal_id":"t","data":"error: no rule\n"},"terminal_exit":{"terminal_id":"t","exit_code":2,"signal":null}}}}}}"#,
+    ));
+    let (messages, warnings) = fold_capturing_warnings(log);
+    assert_eq!(warnings, vec![]);
+    let agent = &messages[1];
+    let [MessagePart::ToolUse { status, detail, .. }] = &agent.parts[..] else {
+        panic!("one part: {:#?}", agent.parts);
+    };
+    assert_eq!(*status, ToolStatus::Failed);
+    assert_eq!(
+        *detail,
+        ToolDetail::Terminal {
+            command: Some("make".to_owned()),
+            output: Some(AnsiText("building...\nerror: no rule\n".to_owned())),
+            exit_code: Some(2),
+        }
+    );
 }
 
 /// A patch for a tool call that was never opened is logged, not fatal.

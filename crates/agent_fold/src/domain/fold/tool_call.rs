@@ -54,7 +54,9 @@ impl FoldState {
         // duplicating the row. A subagent's children were pushed by their own
         // frames, which a re-announcement of the parent does not carry, so
         // they are kept - unless the re-announcement carries the child's
-        // whole transcript itself, which is then the newer copy.
+        // whole transcript itself, which is then the newer copy. Output a
+        // terminal streamed in is kept the same way: it arrived by its own
+        // frames, and a re-announcement that carries none has not unsaid it.
         if let Some(at) = self.tool_positions.get(&id).cloned() {
             let message = at.message;
             if let Some(existing @ MessagePart::ToolUse { .. }) = self.part_at_mut(&at) {
@@ -64,6 +66,7 @@ impl FoldState {
                 {
                     children.append(kept);
                 }
+                keep_streamed_terminal(existing, &mut tool);
                 *existing = tool;
             }
             return Some(Changed::updated(message));
@@ -155,12 +158,14 @@ impl FoldState {
 pub(super) fn tool_detail(reader: &dyn HarnessReader, frame: &ToolFrame<'_>) -> ToolDetail {
     let content = frame.content.unwrap_or_default();
     let locations = frame.locations.unwrap_or_default();
+    // A terminal is recognized by more than its kind: an embedded terminal
+    // content block or a `terminal_info` announcement says so whatever kind
+    // the harness gave the call.
+    if harness::is_terminal(frame) {
+        return terminal_detail(reader, frame);
+    }
     match frame.kind.unwrap_or_default() {
-        ToolKind::Execute => ToolDetail::Terminal {
-            command: command_from_raw_input(frame.raw_input),
-            output: reader.terminal_output(frame).map(AnsiText),
-            exit_code: reader.terminal_exit_code(frame),
-        },
+        ToolKind::Execute => terminal_detail(reader, frame),
         ToolKind::Edit => ToolDetail::Edit {
             diffs: edit_diffs(content, frame.raw_input),
         },
@@ -193,6 +198,53 @@ pub(super) fn tool_detail(reader: &dyn HarnessReader, frame: &ToolFrame<'_>) -> 
                 error,
             }
         }
+    }
+}
+
+/// Carry a terminal's streamed output and exit code from `existing` over to
+/// `reopened`, a re-announcement of the same call, wherever the newer frame
+/// left them blank.
+fn keep_streamed_terminal(existing: &MessagePart, reopened: &mut MessagePart) {
+    let (
+        MessagePart::ToolUse {
+            detail:
+                ToolDetail::Terminal {
+                    output: kept_output,
+                    exit_code: kept_exit,
+                    ..
+                },
+            ..
+        },
+        MessagePart::ToolUse {
+            detail: ToolDetail::Terminal {
+                output, exit_code, ..
+            },
+            ..
+        },
+    ) = (existing, reopened)
+    else {
+        return;
+    };
+    if output.is_none() {
+        *output = kept_output.clone();
+    }
+    if exit_code.is_none() {
+        *exit_code = *kept_exit;
+    }
+}
+
+/// The detail for a shell command from its opening frame: the command line,
+/// whatever output the frame already carries, and the exit code if it has
+/// somehow already finished.
+fn terminal_detail(reader: &dyn HarnessReader, frame: &ToolFrame<'_>) -> ToolDetail {
+    let mut output = None;
+    if let Some(found) = reader.terminal_output(frame) {
+        found.apply_to(&mut output);
+    }
+    ToolDetail::Terminal {
+        command: command_from_raw_input(frame.raw_input),
+        output: output.map(AnsiText),
+        exit_code: reader.terminal_exit_code(frame),
     }
 }
 
@@ -300,9 +352,12 @@ pub(super) fn patch_detail(
             if let Some(found) = command_from_raw_input(frame.raw_input) {
                 *command = Some(found);
             }
-            // Each update carries the output accumulated so far, so replace.
+            // A streamed write appends; a reported snapshot replaces. The
+            // reader says which this frame is.
             if let Some(found) = reader.terminal_output(frame) {
-                *output = Some(AnsiText(found));
+                let mut held = output.take().map(|held| held.0);
+                found.apply_to(&mut held);
+                *output = held.map(AnsiText);
             }
             if let Some(found) = reader.terminal_exit_code(frame) {
                 *exit_code = Some(found);

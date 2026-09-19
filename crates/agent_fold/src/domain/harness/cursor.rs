@@ -70,7 +70,7 @@ use serde::Deserialize;
 use serde::de::IgnoredAny;
 use serde_json::{Map, Value};
 
-use super::{HarnessReader, SubagentInput, ToolFrame, generic, mcp, raw};
+use super::{HarnessReader, SubagentInput, TerminalOutput, ToolFrame, generic, mcp, raw};
 use crate::domain::model::{
     AnsiText, FileDiff, MessagePart, SubagentResult, ToolDetail, ToolName, ToolStatus, ToolUseId,
 };
@@ -114,6 +114,27 @@ impl HarnessReader for Cursor {
             Some(output) => output.result.into_tool_output(),
             None => mcp::unwrap_call_result(raw),
         }
+    }
+
+    /// A shell command's output, from the result Cursor reports once it has
+    /// finished: `stdout`/`interleavedOutput` on success, `stderr` on
+    /// failure. Nothing streams while it runs, and the translator writes no
+    /// `_meta`, so the neutral reading is tried first only for a recording
+    /// that carries it anyway.
+    fn terminal_output(&self, frame: &ToolFrame<'_>) -> Option<TerminalOutput> {
+        generic::terminal_output(frame).or_else(|| {
+            ShellOutput::read(frame.raw_output)?
+                .result
+                .payload()
+                .and_then(ShellOutcome::output)
+                .map(TerminalOutput::Snapshot)
+        })
+    }
+
+    /// `0` for a success, the reported `exitCode` for a failure.
+    fn terminal_exit_code(&self, frame: &ToolFrame<'_>) -> Option<i32> {
+        generic::terminal_exit_code(frame)
+            .or_else(|| ShellOutput::read(frame.raw_output)?.result.exit_code())
     }
 
     fn subagent_input(&self, frame: &ToolFrame<'_>) -> SubagentInput {
@@ -714,11 +735,7 @@ impl Descriptor {
                 let detail = ToolDetail::Terminal {
                     command: body.args.and_then(|args| args.command),
                     output: outcome.and_then(ShellOutcome::output).map(AnsiText),
-                    exit_code: match (&body.result.success, &body.result.failure) {
-                        (Some(_), _) => Some(0),
-                        (None, Some(failure)) => failure.exit_code,
-                        (None, None) => None,
-                    },
+                    exit_code: body.result.exit_code(),
                 };
                 ("shell", status, detail)
             }
@@ -873,6 +890,33 @@ impl ShellOutcome {
             .clone()
             .or_else(|| self.stdout.clone())
             .or_else(|| self.stderr.clone())
+    }
+}
+
+impl Envelope<ShellOutcome> {
+    /// A success exited `0` - Cursor does not repeat the code there; a
+    /// failure carries its own.
+    fn exit_code(&self) -> Option<i32> {
+        match (&self.success, &self.failure) {
+            (Some(_), _) => Some(0),
+            (None, Some(failure)) => failure.exit_code,
+            (None, None) => None,
+        }
+    }
+}
+
+/// A top-level shell call's `rawOutput`: the shell result under the
+/// translator's `result` key.
+#[derive(Deserialize)]
+struct ShellOutput {
+    result: Envelope<ShellOutcome>,
+}
+
+impl ShellOutput {
+    /// `None` for a `rawOutput` with no outcome under `result`.
+    fn read(raw_output: Option<&Value>) -> Option<Self> {
+        let output: Self = raw(raw_output)?;
+        output.result.is_reported().then_some(output)
     }
 }
 

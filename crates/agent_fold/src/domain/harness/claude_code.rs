@@ -18,13 +18,19 @@
 //! `toolCallId` naming the tool call, and per question a `question_N` select
 //! plus a `question_N_custom` free-text companion marked with the shared
 //! [`generic::MARKER`]. Custom text wins over the choice when both are sent.
+//!
+//! `Bash` reports its output through the `terminal_output` extension when the
+//! client advertised it - one write with the whole output, then the exit -
+//! and otherwise as a text content block fenced as a `console` code block, a
+//! rendering hint this reader takes off so the output reads as the terminal
+//! showed it.
 
 use agent_client_protocol::schema::v1::{ContentBlock, Meta};
-use lazy_regex::regex_is_match;
+use lazy_regex::{regex_captures, regex_is_match};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, ToolFrame, generic, has_namespace, namespaced, raw};
+use super::{HarnessReader, TerminalOutput, ToolFrame, generic, has_namespace, namespaced, raw};
 use crate::domain::model::{SubagentResult, ToolName, ToolStats, ToolUseId};
 
 /// The `_meta` namespace Claude Code writes under.
@@ -151,6 +157,13 @@ impl HarnessReader for ClaudeCode {
         meta_of(frame.meta).parent_tool_use_id.map(ToolUseId)
     }
 
+    fn terminal_output(&self, frame: &ToolFrame<'_>) -> Option<TerminalOutput> {
+        Some(match generic::terminal_output(frame)? {
+            TerminalOutput::Snapshot(text) => TerminalOutput::Snapshot(unfence_console(&text)),
+            chunk @ TerminalOutput::Chunk(_) => chunk,
+        })
+    }
+
     fn subagent_result(&self, frame: &ToolFrame<'_>) -> Option<SubagentResult> {
         if let Some(response) = meta_of(frame.meta).tool_response {
             // The response object is what the harness says about the run;
@@ -196,4 +209,13 @@ impl HarnessReader for ClaudeCode {
 #[must_use]
 pub fn tool_name(meta: Option<&Meta>) -> Option<String> {
     meta_of(meta).tool_name
+}
+
+/// The output inside a ```` ```console ```` fence, when the whole text is
+/// one; anything else as it is.
+fn unfence_console(text: &str) -> String {
+    match regex_captures!(r"(?s)\A```console\n(.*?)\n?```\s*\z", text) {
+        Some((_, output)) => output.to_owned(),
+        None => text.to_owned(),
+    }
 }

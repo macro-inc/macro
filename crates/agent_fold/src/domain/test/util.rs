@@ -80,6 +80,15 @@ impl Frame {
         self
     }
 
+    /// ACP's `terminal` content block: the call runs in the terminal `id`.
+    pub fn terminal(mut self, id: &str) -> Self {
+        let block = json!({"type": "terminal", "terminalId": id});
+        self.content
+            .get_or_insert_with(Vec::new)
+            .push(serde_json::from_value(block).expect("a terminal content block"));
+        self
+    }
+
     /// The borrowed view a reader takes.
     pub fn view(&self) -> ToolFrame<'_> {
         ToolFrame {

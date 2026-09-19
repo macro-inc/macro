@@ -3,10 +3,18 @@
 //! These read conventions that are not any one harness's:
 //!
 //! - The ACP title as the tool's name.
-//! - The `_meta.terminal_output` / `_meta.terminal_exit` keys, an ACP
-//!   *client* extension (Zed's - a client advertises
-//!   `clientCapabilities._meta.terminal_output`) that any agent serving that
-//!   client writes, whichever harness it is.
+//! - The `_meta.terminal_info` / `_meta.terminal_output` /
+//!   `_meta.terminal_exit` keys, an ACP *client* extension (Zed's - a client
+//!   advertises `clientCapabilities._meta.terminal_output`, as Macro's
+//!   session machine does) that any agent serving that client writes,
+//!   whichever harness it is: `terminal_info` on the `tool_call` names the
+//!   terminal, each `terminal_output` update carries the bytes written since
+//!   the last, and `terminal_exit` carries how the command ended. codex-acp
+//!   writes the same stream as `terminal_output_delta` for a client that did
+//!   not advertise, so that spelling is read too.
+//! - A text content block as the output so far, for a harness that reports
+//!   a command's output through ACP's own `content` (OpenCode streams the
+//!   accumulated output that way while a command runs).
 //! - The "Task tool" convention for subagents that Claude Code set and
 //!   OpenCode and Cursor copied: a tool named `task`/`agent` with
 //!   `{ description, prompt, subagent_type }` arguments.
@@ -18,17 +26,24 @@ use agent_client_protocol::schema::v1::ToolKind;
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, SubagentInput, ToolFrame, mcp, namespaced, raw};
-use crate::domain::model::{SubagentResult, ToolName};
+use super::{HarnessReader, SubagentInput, TerminalOutput, ToolFrame, mcp, namespaced, raw};
+use crate::domain::model::{SubagentResult, ToolName, ToolStatus};
 
 /// A harness this fold knows nothing specific about.
 pub struct Generic;
 
 impl HarnessReader for Generic {}
 
-/// `_meta.terminal_output`: the output accumulated so far.
+/// `_meta.terminal_info`: the terminal a call's output will stream to.
 #[derive(Deserialize)]
-struct TerminalOutput {
+struct TerminalInfo {
+    terminal_id: String,
+}
+
+/// `_meta.terminal_output` (or `_meta.terminal_output_delta`): one write to
+/// the terminal.
+#[derive(Deserialize)]
+struct TerminalWrite {
     data: String,
 }
 
@@ -38,14 +53,45 @@ struct TerminalExit {
     exit_code: Option<i64>,
 }
 
-/// A chunk of terminal output carried on a `tool_call_update`.
+/// The `_meta` key of the terminal announcement.
+const TERMINAL_INFO: &str = "terminal_info";
+/// The `_meta` key of a terminal write, for a client that advertised the
+/// extension.
+const TERMINAL_OUTPUT: &str = "terminal_output";
+/// The `_meta` key codex-acp writes the same stream under for a client that
+/// did not.
+const TERMINAL_OUTPUT_DELTA: &str = "terminal_output_delta";
+/// The `_meta` key of the exit status.
+const TERMINAL_EXIT: &str = "terminal_exit";
+
+/// The terminal a `tool_call` announces its output will stream to, by id.
 ///
-/// Reads `_meta.terminal_output.data`. Each update carries the output
-/// accumulated so far rather than only the new bytes, so callers should
-/// replace rather than append.
+/// Reads `_meta.terminal_info.terminal_id`.
 #[must_use]
-pub fn terminal_output(frame: &ToolFrame<'_>) -> Option<String> {
-    namespaced::<TerminalOutput>(frame.meta, "terminal_output").map(|output| output.data)
+pub fn terminal_info(frame: &ToolFrame<'_>) -> Option<String> {
+    namespaced::<TerminalInfo>(frame.meta, TERMINAL_INFO).map(|info| info.terminal_id)
+}
+
+/// What a frame says about a terminal call's output.
+///
+/// A `_meta.terminal_output` (or `terminal_output_delta`) write is a
+/// [`TerminalOutput::Chunk`]: the bytes since the last frame, to append.
+/// Failing that, a text content block is a [`TerminalOutput::Snapshot`]: ACP
+/// replaces `content` whole on every update, so the block is the output so
+/// far - except on a call still pending, where a text block can only be
+/// something other than output (Claude Code puts the command's description
+/// there before it runs).
+#[must_use]
+pub fn terminal_output(frame: &ToolFrame<'_>) -> Option<TerminalOutput> {
+    if let Some(write) = namespaced::<TerminalWrite>(frame.meta, TERMINAL_OUTPUT)
+        .or_else(|| namespaced::<TerminalWrite>(frame.meta, TERMINAL_OUTPUT_DELTA))
+    {
+        return Some(TerminalOutput::Chunk(write.data));
+    }
+    if matches!(frame.status, None | Some(ToolStatus::Pending)) {
+        return None;
+    }
+    frame.content_text().map(TerminalOutput::Snapshot)
 }
 
 /// The exit code reported when a terminal-backed tool call finished.
@@ -53,7 +99,7 @@ pub fn terminal_output(frame: &ToolFrame<'_>) -> Option<String> {
 /// Reads `_meta.terminal_exit.exit_code`.
 #[must_use]
 pub fn terminal_exit_code(frame: &ToolFrame<'_>) -> Option<i32> {
-    let code = namespaced::<TerminalExit>(frame.meta, "terminal_exit")?.exit_code?;
+    let code = namespaced::<TerminalExit>(frame.meta, TERMINAL_EXIT)?.exit_code?;
     i32::try_from(code).ok()
 }
 

@@ -21,6 +21,12 @@
 //! session by this (legacy) mode; the adapter's native-subagent mode uses
 //! `sessionUpdate` variants ACP has not standardized, which this fold does
 //! not read yet.
+//!
+//! A shell command streams its output through the `terminal_output`
+//! extension while it runs (the neutral reading), and its closing frame
+//! carries the whole of it again as `rawOutput` ([`CommandOutput`]) along
+//! with the exit code - the one place the exit code is when the closing
+//! frame has no `terminal_exit`.
 
 use std::collections::BTreeMap;
 
@@ -29,7 +35,10 @@ use lazy_regex::{regex_captures, regex_is_match};
 use serde::Deserialize;
 use serde_json::Value;
 
-use super::{HarnessReader, SubagentInput, ToolFrame, generic, has_namespace, namespaced, raw};
+use super::{
+    HarnessReader, SubagentInput, TerminalOutput, ToolFrame, generic, has_namespace, namespaced,
+    raw,
+};
 use crate::domain::model::{SubagentResult, ToolName};
 
 /// The `_meta` namespace codex-acp writes under.
@@ -86,6 +95,13 @@ struct AgentState {
     message: Option<String>,
 }
 
+/// A shell command's `rawOutput` on its closing frame.
+#[derive(Debug, Deserialize)]
+struct CommandOutput {
+    formatted_output: Option<String>,
+    exit_code: Option<i32>,
+}
+
 fn flags_of(meta: Option<&Meta>) -> CodexFlags {
     meta.and_then(|meta| serde_json::from_value(Value::Object(meta.clone())).ok())
         .unwrap_or_default()
@@ -112,6 +128,22 @@ impl HarnessReader for Codex {
                 tool: tool.to_owned(),
             }
         })
+    }
+
+    /// The stream while it runs; the whole output from `rawOutput` on the
+    /// closing frame, which repeats what was streamed and so replaces it.
+    fn terminal_output(&self, frame: &ToolFrame<'_>) -> Option<TerminalOutput> {
+        generic::terminal_output(frame).or_else(|| {
+            raw::<CommandOutput>(frame.raw_output)?
+                .formatted_output
+                .filter(|output| !output.is_empty())
+                .map(TerminalOutput::Snapshot)
+        })
+    }
+
+    fn terminal_exit_code(&self, frame: &ToolFrame<'_>) -> Option<i32> {
+        generic::terminal_exit_code(frame)
+            .or_else(|| raw::<CommandOutput>(frame.raw_output)?.exit_code)
     }
 
     fn is_subagent(&self, _name: &ToolName, frame: &ToolFrame<'_>) -> bool {
