@@ -466,7 +466,7 @@ describe('agent-led new conversation', () => {
   it('offers Cursor setup when disconnected without switching to an unavailable agent', async () => {
     page(false);
     await selectAgent(/Cursor/);
-    expect(mocks.openSettings).toHaveBeenCalledWith('Harness');
+    expect(mocks.openSettings).toHaveBeenCalledWith('Agents');
     expect(screen.getByRole('button', { name: 'Agent' }).textContent).toContain(
       'Chat default'
     );

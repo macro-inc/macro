@@ -56,7 +56,7 @@ function ConnectHarness(props: ConnectAppDecoratorProps) {
       {...props}
       connected={connected}
       icon={<HarnessIcon harness={props.appSlug} class="size-3.5" />}
-      onConnect={() => openSettings('Harness')}
+      onConnect={() => openSettings('Agents')}
     />
   );
 }

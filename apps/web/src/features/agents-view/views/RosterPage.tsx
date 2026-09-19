@@ -91,7 +91,7 @@ const MACRO_ROW: Row = {
   handle: MACRO_AGENT_HANDLE,
   kind: 'agent',
   share: 'system',
-  runtime: 'Macro Harness',
+  runtime: 'Macro',
   model: 'Default model',
   channels: 'All channels',
   canEdit: false,
@@ -321,7 +321,7 @@ export function RosterPage(props: {
                 <div id="runtimeList">
                   <RuntimeRow
                     icon={<MacroLogo class="ph" />}
-                    name="Macro Harness"
+                    name="Macro"
                     badge="system"
                     sub="Built in · runs in Macro's cloud"
                     connected
@@ -330,8 +330,8 @@ export function RosterPage(props: {
                     <button
                       type="button"
                       class="icon-btn"
-                      aria-label="Configure Macro Harness"
-                      onClick={() => openSettings('Harness')}
+                      aria-label="Configure runtimes"
+                      onClick={() => openSettings('Agents')}
                     >
                       <GearIcon class="ph" />
                     </button>
@@ -352,7 +352,7 @@ export function RosterPage(props: {
                       type="button"
                       class="icon-btn"
                       aria-label="Configure Cursor"
-                      onClick={() => openSettings('Harness')}
+                      onClick={() => openSettings('Agents')}
                     >
                       <GearIcon class="ph" />
                     </button>

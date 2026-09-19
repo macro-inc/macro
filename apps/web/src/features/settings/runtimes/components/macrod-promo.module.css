@@ -1,0 +1,37 @@
+.examples {
+  display: inline-grid;
+  vertical-align: baseline;
+}
+
+.examples > span {
+  grid-area: 1 / 1;
+  opacity: 0;
+  animation: runtime-example 15s ease-in-out infinite;
+}
+
+@keyframes runtime-example {
+  0% {
+    opacity: 0;
+    transform: translateY(0.35em);
+  }
+  3%,
+  16% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  20%,
+  100% {
+    opacity: 0;
+    transform: translateY(-0.35em);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .examples > span {
+    animation: none;
+  }
+
+  .examples > span:first-child {
+    opacity: 1;
+  }
+}

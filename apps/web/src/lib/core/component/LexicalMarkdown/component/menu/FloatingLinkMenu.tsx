@@ -1,5 +1,5 @@
 import { LinkHoverCard } from '@core/component/Link';
-import { ScopedPortal } from '@core/component/ScopedPortal';
+import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import clickOutside from '@core/directive/clickOutside';
 import { useUnfurl } from '@core/signal/unfurl';
@@ -60,6 +60,7 @@ const HOVER_ID = 'floating-link-hover';
 export function FloatingLinkMenu(props: {
   closePopup?: () => void;
   autoLinkMatchMode?: AutoLinkMatchMode;
+  portalScope?: PortalScope;
 }) {
   const { plugins, editor } = useContext(LexicalWrapperContext) ?? {};
   if (!plugins || !editor) {
@@ -349,10 +350,10 @@ export function FloatingLinkMenu(props: {
         }
       : undefined;
 
-  const MenuWrapper = (props: ParentProps) => {
+  const MenuWrapper = (content: ParentProps) => {
     return (
       <Show when={linkInfo()?.linkRef || linkInfo()?.selection}>
-        <ScopedPortal scope="block">
+        <ScopedPortal scope={props.portalScope ?? 'block'}>
           <div
             class="fixed top-0 left-0 z-modal-content w-80 max-w-[calc(100vw-1rem)] text-sm menu-open-animation"
             use:floatWithElement={floatWithElementProps()}
@@ -368,7 +369,7 @@ export function FloatingLinkMenu(props: {
               hideBorder
               class="rounded-xl glass bg-menu-glass p-1.5"
             >
-              {props.children}
+              {content.children}
             </Surface>
           </div>
         </ScopedPortal>
@@ -381,7 +382,7 @@ export function FloatingLinkMenu(props: {
       <Match when={previewHover()}>
         <Show when={linkInfo()}>
           {(link) => (
-            <ScopedPortal>
+            <ScopedPortal scope={props.portalScope}>
               <div
                 class="fixed top-0 left-0 z-modal-content"
                 use:floatWithElement={{

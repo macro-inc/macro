@@ -11,7 +11,6 @@ import { Billing } from './Billing';
 import { Bots } from './Bots';
 import { ConnectedAccounts } from './ConnectedAccounts';
 import { Crm } from './Crm';
-import { Harness } from './Harness';
 import { MobileApp } from './MobileApp';
 import { Notifications } from './Notifications';
 import { Shortcuts } from './Shortcuts';
@@ -67,11 +66,8 @@ export function SettingsTabContent(props: { tab: SettingsTab }) {
       <Show when={isCurrentTab('Agent')}>
         <Agent />
       </Show>
-      <Show when={isCurrentTab('Agents')}>
+      <Show when={isCurrentTab('Agents') || isCurrentTab('Harness')}>
         <Agents />
-      </Show>
-      <Show when={isCurrentTab('Harness')}>
-        <Harness />
       </Show>
       <Show when={isCurrentTab('Bots')}>
         <Bots />

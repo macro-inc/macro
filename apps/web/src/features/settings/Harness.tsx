@@ -1,34 +1,25 @@
-import { ModelCatalogPicker } from '@core/component/AI/component/input/ModelCatalogPicker';
-import { isLargeModelCatalog } from '@core/component/AI/component/input/modelCatalog';
 import { toast } from '@core/component/Toast/Toast';
+import { useUserId } from '@core/context/user';
 import { ThrownResultError } from '@core/util/result';
-import CursorIcon from '@icon/wide-cursor-ide.svg';
-import ArrowUpRightIcon from '@phosphor/arrow-up-right.svg';
-import HardDrivesIcon from '@phosphor/hard-drives.svg';
-import TerminalWindowIcon from '@phosphor/terminal-window.svg';
-import { useAgentModelsQuery } from '@queries/agents/models';
-import {
-  useCursorApiKeyStatusQuery,
-  useDisconnectCursorApiKey,
-  useSaveCursorApiKey,
-  useSetCursorDefaultModel,
-} from '@queries/auth/cursor-api-key';
+import MacroLogo from '@icon/macro-logo.svg';
+import DesktopIcon from '@phosphor/desktop.svg';
 import {
   useDeleteHarnessMutation,
   useHarnessesQuery,
 } from '@queries/harnesses/harnesses';
+import { useCurrentTeamQuery } from '@queries/team/teams';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
 import { Button, Dialog, Panel } from '@ui';
-import { createSignal, For, onMount, Show } from 'solid-js';
+import { createSignal, For, onMount, Show, Suspense } from 'solid-js';
 import { ClaudeConnection } from '../claude-connection/claude-connection';
 import { CodexHarness } from './codex/views/CodexHarness';
 import { HarnessPairingDialog } from './HarnessPairingDialog';
-import { ConnectAction, HarnessIcon, StatusDot } from './integration-ui';
-import { SettingsCard, SettingsPage } from './primitives';
-
-const BYOA_DOCS_URL = 'https://docs.macro.com/AI/bring-your-own';
-const CURSOR_KEY_PREFIX = 'crsr_';
+import { HarnessIcon, StatusDot } from './integration-ui';
+import { SettingsCard, SettingsSection } from './primitives';
+import { MacrodPromo } from './runtimes/components/macrod-promo';
+import { RuntimeRow } from './runtimes/components/runtime-row';
+import { CursorRuntime } from './runtimes/cursor-runtime';
 
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
@@ -37,22 +28,50 @@ function failureMessage(error: unknown, fallback: string): string {
 function lastConnectedText(harness: RegisteredHarness): string {
   return harness.last_connected_at
     ? `Last connected ${new Date(harness.last_connected_at).toLocaleString()}`
-    : 'Never connected';
+    : 'Waiting for the first connection';
 }
 
-/** Settings UI for choosing and configuring the available agent harnesses. */
+/** Runtime configuration section shared by the combined settings page. */
 export function Harness() {
-  const [cursorApiKey, setCursorApiKey] = createSignal('');
-  const cursorStatus = useCursorApiKeyStatusQuery();
-  const saveCursorApiKey = useSaveCursorApiKey();
-  const disconnectCursor = useDisconnectCursorApiKey();
-  const cursorRegistered = () =>
-    cursorStatus.isSuccess ? cursorStatus.data.registered : false;
+  return (
+    <Suspense
+      fallback={<p class="p-6 text-sm text-ink-muted">Loading runtimes…</p>}
+    >
+      <RuntimeSettings />
+    </Suspense>
+  );
+}
+
+function RuntimeSettings() {
   const harnessesQuery = useHarnessesQuery();
   const deleteHarnessMutation = useDeleteHarnessMutation();
+  const userId = useUserId();
+  const teamQuery = useCurrentTeamQuery();
+  const canRemove = (harness: RegisteredHarness) => {
+    const currentUser = userId();
+    if (!currentUser) return false;
+    if (harness.owner.type === 'user')
+      return harness.owner.user_id === currentUser;
+    if (harness.created_by === currentUser) return true;
+    const team = teamQuery.isSuccess ? teamQuery.data : undefined;
+    return (
+      team?.team.id === harness.owner.team_id &&
+      team.members.some(
+        (member) => member.user_id === currentUser && member.role === 'owner'
+      )
+    );
+  };
   const [pairingDialog, setPairingDialog] = createSignal<{
     initialCode?: string;
   }>();
+  let pairingTrigger: HTMLElement | undefined;
+  const openPairing = () => {
+    pairingTrigger =
+      document.activeElement instanceof HTMLElement
+        ? document.activeElement
+        : undefined;
+    setPairingDialog({});
+  };
   const [removingHarness, setRemovingHarness] =
     createSignal<RegisteredHarness>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -67,410 +86,110 @@ export function Harness() {
 
   const removeHarness = async () => {
     const current = removingHarness();
-    if (!current) return;
-
+    if (!current || deleteHarnessMutation.isPending) return;
     try {
       await deleteHarnessMutation.mutateAsync({ harnessId: current.id });
       setRemovingHarness(undefined);
-      toast.success('Harness removed');
+      toast.success('Runtime removed');
     } catch (error) {
-      toast.failure(failureMessage(error, 'Failed to remove harness'));
-    }
-  };
-
-  const cursorModels = useAgentModelsQuery(
-    () => ({ harness: 'cursor' }),
-    cursorRegistered
-  );
-  const cursorModelData = () =>
-    cursorModels.isSuccess ? cursorModels.data : undefined;
-  const cursorModelOptions = () => {
-    const data = cursorModelData();
-    if (data?.status !== 'available') return [];
-    const saved = cursorStatus.data?.defaultModelId;
-    if (!saved || data.models.some((model) => model.id === saved)) {
-      return data.models;
-    }
-    return [
-      ...data.models,
-      {
-        id: saved,
-        name: `${saved} (saved, unavailable)`,
-        description: undefined,
-        group: undefined,
-      },
-    ];
-  };
-  const setCursorDefaultModel = useSetCursorDefaultModel();
-  const cursorCatalogOptions = () =>
-    cursorModelOptions().map((model) => ({
-      id: model.id,
-      label: model.name,
-      description: model.description ?? undefined,
-      group: model.group ?? undefined,
-    }));
-  const selectedCursorModelId = () =>
-    (cursorStatus.isSuccess ? cursorStatus.data.defaultModelId : null) ??
-    cursorModelOptions()[0]?.id ??
-    null;
-
-  const handleCursorModelChange = async (modelId: string) => {
-    try {
-      await setCursorDefaultModel.mutateAsync(modelId);
-      toast.success('Default model updated');
-    } catch (error) {
-      toast.failure(failureMessage(error, 'Failed to set your default model'));
-    }
-  };
-
-  const handleSaveCursorApiKey = async () => {
-    const apiKey = cursorApiKey().trim();
-    if (!apiKey.startsWith(CURSOR_KEY_PREFIX)) {
-      toast.failure(`Cursor API keys start with ${CURSOR_KEY_PREFIX}`);
-      return;
-    }
-
-    try {
-      await saveCursorApiKey.mutateAsync(apiKey);
-      setCursorApiKey('');
-      toast.success('Cursor connected');
-    } catch (error) {
-      toast.failure(
-        failureMessage(error, 'Failed to save your Cursor API key')
-      );
-    }
-  };
-
-  const handleDisconnectCursor = async () => {
-    try {
-      await disconnectCursor.mutateAsync();
-      setCursorApiKey('');
-      toast.success('Cursor disconnected');
-    } catch (error) {
-      toast.failure(failureMessage(error, 'Failed to disconnect Cursor'));
+      toast.failure(failureMessage(error, 'Failed to remove runtime'));
     }
   };
 
   return (
-    <SettingsPage
-      title="Harness"
-      description="Configure how agents run for your Macro workspace."
+    <SettingsSection
+      title="Runtimes"
+      description="Where your agents run. Connect a cloud account or use your own computer."
     >
-      <SettingsCard>
-        <section class="flex gap-4 px-6 py-5">
-          <HarnessIcon>
-            <HardDrivesIcon />
-          </HarnessIcon>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <h2 class="text-sm font-medium text-ink">In-memory</h2>
-              <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
-                Built in
-              </span>
-            </div>
-            <p class="mt-1 text-sm text-ink-muted">
-              Macro's in-memory harness runs agents directly in your workspace.
-              It is ready to use and does not require any configuration. This is
-              not a coding harness.
-            </p>
-          </div>
-        </section>
-
+      <SettingsCard class="border-edge-muted">
+        <RuntimeRow
+          name="Macro"
+          description="Work with your documents, messages, and workspace."
+          icon={<MacroLogo />}
+          status="Built in"
+          connected
+          system
+        />
         <ClaudeConnection />
-
-        <section class="flex gap-4 px-6 py-5">
-          <HarnessIcon>
-            <CursorIcon />
-          </HarnessIcon>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center gap-2">
-              <h2 class="text-sm font-medium text-ink">Cursor</h2>
-              <Show when={cursorRegistered()}>
-                <span class="rounded-full bg-success-bg px-2 py-0.5 text-[11px] font-medium text-success">
-                  Connected
-                </span>
-              </Show>
-            </div>
-            <p class="mt-1 text-sm text-ink-muted">
-              Use your Cursor account to run agent sessions in Macro.
-            </p>
-
-            <Show
-              when={cursorStatus.isSuccess && !cursorStatus.isPlaceholderData}
-              fallback={
-                <p class="mt-4 text-xs text-ink-muted">
-                  {cursorStatus.isError
-                    ? 'Could not load your Cursor connection. Try refreshing this page.'
-                    : 'Loading…'}
-                </p>
-              }
-            >
-              <Show
-                when={cursorRegistered()}
-                fallback={
-                  <div class="mt-4 flex flex-col gap-1.5">
-                    <label
-                      for="cursor-harness-api-key"
-                      class="text-xs text-ink"
-                    >
-                      API key
-                    </label>
-                    <div class="flex items-center gap-2 mobile:flex-col mobile:items-stretch">
-                      <input
-                        id="cursor-harness-api-key"
-                        type="password"
-                        autocomplete="off"
-                        spellcheck={false}
-                        class="settings-input ph-no-capture min-w-0 flex-1"
-                        placeholder={`${CURSOR_KEY_PREFIX}…`}
-                        value={cursorApiKey()}
-                        onInput={(event) =>
-                          setCursorApiKey(event.currentTarget.value)
-                        }
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter') {
-                            void handleSaveCursorApiKey();
-                          }
-                        }}
-                      />
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        depth={3}
-                        disabled={
-                          cursorApiKey().trim().length === 0 ||
-                          saveCursorApiKey.isPending
-                        }
-                        onClick={handleSaveCursorApiKey}
-                      >
-                        Save
-                      </Button>
-                    </div>
-                    <p class="text-xs text-ink-extra-muted">
-                      Create an API key in Cursor and paste it here. Macro
-                      stores it encrypted.
-                    </p>
-                  </div>
-                }
-              >
-                <div class="mt-4 flex flex-col gap-1.5">
-                  <label for="cursor-default-model" class="text-xs text-ink">
-                    Default model
-                  </label>
-                  <Show
-                    when={!cursorModels.isPending}
-                    fallback={
-                      <select
-                        id="cursor-default-model"
-                        class="settings-input w-56"
-                        disabled
-                      >
-                        <option>Loading models…</option>
-                      </select>
-                    }
-                  >
-                    <Show
-                      when={!cursorModels.isError}
-                      fallback={
-                        <div class="flex items-center gap-2">
-                          <p class="text-xs text-negative">
-                            Could not load Cursor models.
-                          </p>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => void cursorModels.refetch()}
-                          >
-                            Retry
-                          </Button>
-                        </div>
-                      }
-                    >
-                      <Show
-                        when={cursorModelData()?.status === 'available'}
-                        fallback={
-                          <p class="text-xs text-ink-muted">
-                            Cursor does not support model selection.
-                          </p>
-                        }
-                      >
-                        <Show
-                          when={isLargeModelCatalog(cursorCatalogOptions())}
-                          fallback={
-                            <select
-                              id="cursor-default-model"
-                              class="settings-input w-56"
-                              value={
-                                cursorStatus.data?.defaultModelId ??
-                                cursorModelData()?.currentModel ??
-                                cursorModelOptions()[0]?.id ??
-                                ''
-                              }
-                              disabled={setCursorDefaultModel.isPending}
-                              onChange={(event) =>
-                                void handleCursorModelChange(
-                                  event.currentTarget.value
-                                )
-                              }
-                            >
-                              <For each={cursorModelOptions()}>
-                                {(model) => (
-                                  <option value={model.id}>{model.name}</option>
-                                )}
-                              </For>
-                            </select>
-                          }
-                        >
-                          <ModelCatalogPicker
-                            value={selectedCursorModelId()}
-                            options={cursorCatalogOptions()}
-                            onSelect={(id) => void handleCursorModelChange(id)}
-                            disabled={setCursorDefaultModel.isPending}
-                            ariaLabel="Default model"
-                            triggerClass="w-72 max-w-full justify-between"
-                          />
-                        </Show>
-                      </Show>
-                    </Show>
-                  </Show>
-                  <p class="text-xs text-ink-extra-muted">
-                    The model new `@cursor` sessions start on. Recommended
-                    models stay up top; everything else is behind More models.
-                  </p>
-                </div>
-
-                <div class="mt-4 flex items-center justify-between gap-4 mobile:items-start">
-                  <p class="text-xs text-ink-extra-muted">
-                    Disconnecting removes Macro's copy of the key but does not
-                    revoke it in Cursor.
-                  </p>
-                  <Button
-                    type="button"
-                    variant="danger"
-                    size="sm"
-                    depth={3}
-                    class="shrink-0"
-                    disabled={disconnectCursor.isPending}
-                    onClick={handleDisconnectCursor}
-                  >
-                    Disconnect
-                  </Button>
-                </div>
-              </Show>
-            </Show>
-          </div>
-        </section>
-
+        <CursorRuntime />
         <CodexHarness />
 
-        <section class="flex gap-4 px-6 py-5">
-          <HarnessIcon>
-            <TerminalWindowIcon />
-          </HarnessIcon>
-          <div class="min-w-0 flex-1">
-            <div class="flex items-center justify-between gap-4">
-              <h2 class="text-sm font-medium text-ink">Bring your own agent</h2>
-              <div class="flex shrink-0 items-center gap-1">
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  depth={3}
-                  onClick={() => setPairingDialog({})}
-                >
-                  Enter pairing code
-                </Button>
-                <a
-                  href={BYOA_DOCS_URL}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  class="inline-flex shrink-0 items-center gap-1.5 rounded-md px-2 py-1 text-sm font-medium text-ink-muted outline-none transition-colors hover:bg-ink/4 hover:text-ink focus-visible:bg-ink/6"
-                >
-                  Setup guide
-                  <ArrowUpRightIcon class="size-3.5 opacity-70" />
-                </a>
-              </div>
-            </div>
-            <p class="mt-1 text-sm text-ink-muted">
-              Install macrod on your computer to connect Claude or another
-              compatible agent.
+        <Show when={harnessesQuery.isError}>
+          <div class="flex items-center justify-between gap-3 px-5 py-4">
+            <p role="alert" class="text-xs text-negative">
+              Could not load your paired runtimes.
             </p>
-
-            <div class="mt-5">
-              <div class="text-xs font-medium text-ink-muted">
-                Connected agents
-              </div>
-              <For
-                each={harnessesQuery.isSuccess ? harnessesQuery.data : []}
-                fallback={
-                  <div class="flex flex-col items-center py-6 text-center">
-                    <p class="text-sm text-ink">
-                      {harnessesQuery.isPending
-                        ? 'Loading connected agents…'
-                        : harnessesQuery.isError
-                          ? 'Could not load connected agents.'
-                          : 'No agents connected'}
-                    </p>
-                    <p class="mt-1 text-xs text-ink-extra-muted">
-                      Agents connected through macrod will appear here.
-                    </p>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      depth={3}
-                      class="mt-3"
-                      onClick={() => setPairingDialog({})}
-                    >
-                      Enter pairing code
-                    </Button>
-                  </div>
-                }
-              >
-                {(harness) => (
-                  <div class="flex items-center justify-between gap-4 px-4 py-3">
-                    <div class="min-w-0">
-                      <div class="flex min-w-0 items-center gap-2">
-                        <p class="truncate text-sm text-ink">{harness.name}</p>
-                        <span class="shrink-0 rounded-full border border-edge-muted px-2 py-0.5 text-xxs font-medium uppercase text-ink-extra-muted">
-                          {harness.owner.type === 'team' ? 'Team' : 'Private'}
-                        </span>
-                        <StatusDot
-                          state={
-                            harness.connected ? 'connected' : 'disconnected'
-                          }
-                          label={
-                            harness.connected ? 'Connected' : 'Disconnected'
-                          }
-                        />
-                      </div>
-                      <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
-                        {lastConnectedText(harness)}
-                      </p>
-                    </div>
-                    <ConnectAction
-                      label="Remove"
-                      variant="danger"
-                      onClick={() => setRemovingHarness(harness)}
-                    />
-                  </div>
-                )}
-              </For>
-              <Show when={harnessesQuery.isError}>
-                <p class="px-4 py-3 text-xs text-negative">
-                  Could not load your harnesses. Try refreshing this page.
-                </p>
-              </Show>
-            </div>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => void harnessesQuery.refetch()}
+            >
+              Retry
+            </Button>
           </div>
-        </section>
+        </Show>
+        <Show when={!harnessesQuery.isError}>
+          <For
+            each={harnessesQuery.isSuccess ? harnessesQuery.data : []}
+            fallback={
+              <p class="px-5 py-4 text-xs text-ink-extra-muted">
+                {harnessesQuery.isPending
+                  ? 'Loading paired runtimes…'
+                  : 'No computers paired yet. Your runtimes will appear here.'}
+              </p>
+            }
+          >
+            {(harness) => (
+              <div class="flex items-start gap-3 px-5 py-4 mobile:px-4">
+                <HarnessIcon>
+                  <DesktopIcon />
+                </HarnessIcon>
+                <div class="min-w-0 flex-1">
+                  <div class="flex flex-wrap items-center gap-2">
+                    <h3 class="break-words text-sm font-medium text-ink">
+                      {harness.name}
+                    </h3>
+                    <span class="rounded border border-edge-muted px-1.5 py-0.5 text-[10px] text-ink-muted">
+                      {harness.owner.type === 'team' ? 'Team' : 'Private'}
+                    </span>
+                  </div>
+                  <p class="mt-1 flex items-center gap-1.5 text-xs text-ink-muted">
+                    <StatusDot
+                      state={harness.connected ? 'connected' : 'disconnected'}
+                      label={harness.connected ? 'Connected' : 'Offline'}
+                    />
+                    {harness.connected ? 'Connected' : 'Offline'}
+                  </p>
+                  <p class="mt-1 text-[11px] leading-4 text-ink-extra-muted">
+                    {lastConnectedText(harness)}
+                  </p>
+                </div>
+                <Show when={canRemove(harness)}>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Remove ${harness.name}`}
+                    onClick={() => setRemovingHarness(harness)}
+                  >
+                    Remove
+                  </Button>
+                </Show>
+              </div>
+            )}
+          </For>
+        </Show>
       </SettingsCard>
-
+      <MacrodPromo onPair={openPairing} />
+      <p class="px-6 text-xs leading-5 text-ink-extra-muted">
+        Private runtimes are only available to you. Team runtimes can be used by
+        everyone on your team.
+      </p>
       <Show when={pairingDialog()} keyed>
         {(dialog) => (
           <HarnessPairingDialog
+            returnFocus={() => pairingTrigger}
             initialCode={dialog.initialCode}
             onClose={() => setPairingDialog(undefined)}
           />
@@ -486,7 +205,7 @@ export function Harness() {
           />
         )}
       </Show>
-    </SettingsPage>
+    </SettingsSection>
   );
 }
 
@@ -512,8 +231,8 @@ function HarnessRemoveDialog(props: {
         </Panel.Header>
         <Panel.Body class="p-5">
           <Dialog.Description class="text-sm leading-5 text-ink-muted">
-            Agents using this harness will stop running until it's reconnected.
-            macrod on that machine will need to pair again.
+            Agents using this runtime will need another runtime. Pair this
+            computer again to use it in Macro.
           </Dialog.Description>
         </Panel.Body>
         <Panel.Footer class="justify-end gap-2 px-5 py-3">
@@ -533,7 +252,7 @@ function HarnessRemoveDialog(props: {
             disabled={props.pending}
             onClick={props.onConfirm}
           >
-            {props.pending ? 'Removing…' : 'Remove harness'}
+            {props.pending ? 'Removing…' : 'Remove runtime'}
           </Button>
         </Panel.Footer>
       </Panel>

@@ -351,35 +351,41 @@ describe('layout URL synchronization', () => {
     harness.dispose();
   });
 
-  it('preserves a macrod pairing code while settings canonicalizes its tab', async () => {
-    const harness = createHarness({
-      managerContent: [{ type: 'component', id: 'settings' }],
-      urlSegments: ['settings', 'harness'],
-      search: '?pair=3GTM-FNJ9&discard=value',
-    });
+  it.each(['agents', 'runtimes', 'harness'])(
+    'preserves a macrod pairing code while settings canonicalizes /settings/%s',
+    async (slug) => {
+      const harness = createHarness({
+        managerContent: [{ type: 'component', id: 'settings' }],
+        urlSegments: ['settings', slug],
+        search: '?pair=3GTM-FNJ9&discard=value',
+      });
 
-    await flushUrlSync();
+      await flushUrlSync();
 
-    expect(harness.navigate).not.toHaveBeenCalled();
+      expect(harness.navigate).not.toHaveBeenCalled();
 
-    harness.dispose();
-  });
+      harness.dispose();
+    }
+  );
 
-  it('does not stall settings URL synchronization for an empty pairing code', async () => {
-    const harness = createHarness({
-      managerContent: [{ type: 'component', id: 'settings' }],
-      urlSegments: ['settings', 'harness'],
-      search: '?pair=',
-    });
+  it.each(['agents', 'runtimes', 'harness'])(
+    'does not stall URL synchronization for an empty pairing code at /settings/%s',
+    async (slug) => {
+      const harness = createHarness({
+        managerContent: [{ type: 'component', id: 'settings' }],
+        urlSegments: ['settings', slug],
+        search: '?pair=',
+      });
 
-    await flushUrlSync();
+      await flushUrlSync();
 
-    expect(harness.navigate).toHaveBeenCalledWith('/settings/account', {
-      replace: true,
-    });
+      expect(harness.navigate).toHaveBeenCalledWith('/settings/account', {
+        replace: true,
+      });
 
-    harness.dispose();
-  });
+      harness.dispose();
+    }
+  );
 
   it('preserves agent creation links while settings canonicalizes its tab', async () => {
     const harness = createHarness({
