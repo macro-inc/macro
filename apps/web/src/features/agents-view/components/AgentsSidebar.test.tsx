@@ -25,6 +25,9 @@ vi.mock('@queries/agent-session/session', () => ({
     },
   }),
 }));
+vi.mock('@core/agent-session/use-session-turn', () => ({
+  useSessionTurn: () => turn,
+}));
 vi.mock('@queries/agents/agents', () => ({
   useAgentsQuery: () => ({ isSuccess: true, data: [] }),
 }));
@@ -62,9 +65,11 @@ const [metadata, setMetadata] = createSignal<{
   harness: string;
   pullRequestUrl?: string;
 }>();
+const [turn, setTurn] = createSignal<string | undefined>();
 afterEach(() => {
   cleanup();
   setMetadata(undefined);
+  setTurn(undefined);
 });
 
 vi.mock('@solid-primitives/resize-observer', () => ({
@@ -194,6 +199,9 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(view.container.querySelector('[data-coding-icon]')).toBeNull();
     expect(screen.queryByText('@cursor')).toBeNull();
     expect(screen.queryByText('Ready')).toBeNull();
+    expect(
+      view.container.querySelector('[data-session-state="live"]')
+    ).toBeTruthy();
     expect(pr.getAttribute('target')).toBe('_blank');
     fireEvent.mouseDown(pr, { button: 0, detail: 1 });
     fireEvent.click(pr);
@@ -212,5 +220,18 @@ describe.each(['home', 'sidebar'] as const)('%s agent rows', (surface) => {
     expect(view.container.querySelector('[data-kind="chat"]')).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
     expect(screen.queryByText('Ready')).toBeNull();
+  });
+
+  it('spins the leading icon while the session turn is still running', () => {
+    setTurn('running');
+    const { view } = setup();
+    expect(
+      screen.getByRole('button', { name: 'Fix build, Working' })
+    ).toBeTruthy();
+    expect(
+      view.container.querySelector('[data-session-state="working"]')
+    ).toBeTruthy();
+    expect(view.container.querySelector('[data-pr-icon]')).toBeNull();
+    expect(view.container.querySelector('[data-coding-icon]')).toBeNull();
   });
 });
