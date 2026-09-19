@@ -17,7 +17,6 @@ import { match } from 'ts-pattern';
 import {
   filterRepositories,
   orderRepositories,
-  parseRepositoryInput,
   type ReachableRepository,
   repositoryLabel,
   sameRepository,
@@ -25,11 +24,7 @@ import {
 } from '../core/repository';
 
 /** One row of the repository list. */
-type RepositoryChoice =
-  | { kind: 'automatic' }
-  | { kind: 'listed'; url: string }
-  /** Named by hand rather than listed; the service decides whether it may be used. */
-  | { kind: 'typed'; url: string };
+type RepositoryChoice = { kind: 'automatic' } | { kind: 'listed'; url: string };
 
 /** Explicit, portaled repository/branch controls shared by Home and Agents. */
 export function RepositoryPicker(props: {
@@ -65,13 +60,6 @@ export function RepositoryPicker(props: {
     for (const repository of listed) {
       choices.push({ kind: 'listed', url: repository.url });
     }
-    const typed = parseRepositoryInput(text);
-    if (
-      typed?.startsWith('https://github.com/') &&
-      !listed.some((repository) => sameRepository(repository.url, typed))
-    ) {
-      choices.push({ kind: 'typed', url: typed });
-    }
     return choices;
   });
   const choose = (choice: RepositoryChoice) => {
@@ -91,7 +79,7 @@ export function RepositoryPicker(props: {
     });
   const submitRepository = () => {
     if (list.selectSelected()) return;
-    setError('Enter a GitHub repository as owner/repo or a repository URL.');
+    setError('Pick a repository you can reach through Macro’s GitHub App.');
   };
   const chosen = (choice: RepositoryChoice) =>
     choice.kind === 'automatic'
@@ -101,7 +89,6 @@ export function RepositoryPicker(props: {
     match(choice)
       .with({ kind: 'automatic' }, () => 'Choose automatically')
       .with({ kind: 'listed' }, ({ url }) => repositoryLabel(url))
-      .with({ kind: 'typed' }, ({ url }) => `Use ${repositoryLabel(url)}`)
       .exhaustive();
   const nothingReachable = () =>
     !props.repositoriesLoading &&
@@ -162,7 +149,7 @@ export function RepositoryPicker(props: {
                 aria-activedescendant={highlightedId()}
                 aria-autocomplete="list"
                 autocomplete="off"
-                placeholder="Search, or paste owner/repo"
+                placeholder="Search repositories"
                 value={search()}
                 onInput={(event) => {
                   setSearch(event.currentTarget.value);

@@ -12,6 +12,13 @@
 //! that keeps a caller from seeing repositories belonging to someone else who
 //! happens to have installed our App.
 //!
+//! A team claim is not a claim to a teammate's personal repositories. A team
+//! installation on someone's user account would otherwise list those
+//! repositories to every teammate; only organisation repositories from team
+//! installations are offered. Repositories under an installation the user
+//! made themselves stay on the list, whether they live under a person or an
+//! organisation.
+//!
 //! Reaching nothing is an empty list, not an error: a user who has installed
 //! nothing is in a perfectly ordinary state.
 
@@ -79,9 +86,9 @@ where
         }
     }
 
-    /// Every repository under an installation `macro_user_id`, or a team they
-    /// belong to, installed our App on - deduplicated by `owner/name` and
-    /// sorted.
+    /// Every repository under an installation `macro_user_id` made themselves,
+    /// plus organisation repositories under an installation a team they belong
+    /// to made - deduplicated by `owner/name` and sorted.
     ///
     /// A user who reaches nothing gets an empty list.
     #[tracing::instrument(skip(self), err, fields(%macro_user_id))]
@@ -101,7 +108,16 @@ where
                 GithubError::Internal(anyhow::anyhow!("could not read user teams: {error:?}"))
             })?;
 
-        let installation_ids = self
+        let personal_ids = self
+            .installations
+            .get_installation_ids_for_sources(macro_user_id.as_ref(), &[])
+            .await
+            .map_err(|error| {
+                GithubError::Internal(anyhow::anyhow!(
+                    "could not read user installations: {error:?}"
+                ))
+            })?;
+        let claimed_ids = self
             .installations
             .get_installation_ids_for_sources(macro_user_id.as_ref(), &teams)
             .await
@@ -110,8 +126,22 @@ where
                     "could not read user installations: {error:?}"
                 ))
             })?;
+        let team_ids: Vec<String> = claimed_ids
+            .into_iter()
+            .filter(|installation_id| !personal_ids.contains(installation_id))
+            .collect();
 
-        let (repositories, complete) = self.list_all(&installation_ids).await?;
+        let (personal, personal_complete) = self.list_all(&personal_ids).await?;
+        let (team, team_complete) = self.list_all(&team_ids).await?;
+        let mut repositories = personal;
+        repositories.extend(
+            team.into_iter()
+                .filter(|repository| repository.owner_kind.is_organization()),
+        );
+        repositories
+            .sort_by(|left, right| (&left.owner, &left.name).cmp(&(&right.owner, &right.name)));
+        repositories.dedup_by(|left, right| left.owner == right.owner && left.name == right.name);
+        let complete = personal_complete && team_complete;
 
         // Retry unavailable installations on the next request, not in ten minutes.
         if complete {

@@ -12,7 +12,7 @@ import type { PromptAttachment } from '@service-agent-harness/generated/schemas'
 import { createMemo, createSignal } from 'solid-js';
 import { ChatComposer } from '../components/ChatComposer';
 import type { AgentKind } from '../core/agent-kind';
-import { defaultBranchFor } from '../core/repository';
+import { defaultBranchFor, sameRepository } from '../core/repository';
 import { MACRO_PERSONA_ID, type RosterAgent } from '../core/roster';
 import { createRecentRepositories } from '../primitives/recent-repositories';
 import { createReachableRepositories } from '../queries/reachable-repositories';
@@ -49,9 +49,10 @@ export function NewChatPage(props: {
   const options = () => props.roster;
   const [agentId, setAgentId] = createSignal<string>();
   const [modelOverride, setModelOverride] = createSignal<string>();
-  // The last repository handed to a coder is where the next one starts.
-  const [repoUrl, setRepoUrl] = createSignal<string | undefined>(
-    repositories.urls()[0]
+  // `null` is "not chosen yet": use the newest remembered repo that is still
+  // listed. `undefined` is Choose automatically.
+  const [repoChoice, setRepoChoice] = createSignal<string | undefined | null>(
+    null
   );
   const [localDraft, setLocalDraft] = createSignal('');
   const draft = () => props.draft ?? localDraft();
@@ -78,14 +79,23 @@ export function NewChatPage(props: {
   };
   // Listed only while the drawer can show them: chat agents never ask.
   const reachable = createReachableRepositories(coding);
+  const listed = (url: string) =>
+    reachable
+      .repositories()
+      .some((repository) => sameRepository(repository.url, url));
+  const repoUrl = () => {
+    const choice = repoChoice();
+    if (choice === null) return repositories.urls().find(listed);
+    return choice !== undefined && listed(choice) ? choice : undefined;
+  };
   // A chosen branch, or where the selected repository's own clones start.
   const repoBranch = () =>
     branchOverride() ?? defaultBranchFor(reachable.repositories(), repoUrl());
   const selectRepository = (url: string | undefined) => {
     // Another repository starts on its own default branch, not the last one's.
     if (url !== repoUrl()) setBranchOverride(undefined);
-    setRepoUrl(url);
-    if (url) repositories.remember(url);
+    setRepoChoice(url);
+    if (url && listed(url)) repositories.remember(url);
   };
 
   const connect = (agent: RosterAgent) => {

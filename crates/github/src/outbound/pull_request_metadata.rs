@@ -8,8 +8,8 @@ use std::time::Duration;
 use serde::de::DeserializeOwned;
 
 use crate::domain::models::{
-    EnrichedGithubPullRequest, GithubKey, GithubPullRequestCheckRun, GithubPullRequestComment,
-    GithubPullRequestDetails, GithubPullRequestStatus, GithubRepository,
+    EnrichedGithubPullRequest, GithubAccountKind, GithubKey, GithubPullRequestCheckRun,
+    GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestStatus, GithubRepository,
 };
 
 const GITHUB_API_BASE_URL: &str = "https://api.github.com";
@@ -164,6 +164,7 @@ impl GithubInstallationRepositoryResponse {
     fn into_repository(self) -> GithubRepository {
         GithubRepository {
             owner: self.owner.login,
+            owner_kind: self.owner.kind,
             name: self.name,
             html_url: self.html_url,
             default_branch: self.default_branch,
@@ -175,6 +176,8 @@ impl GithubInstallationRepositoryResponse {
 #[derive(Debug, serde::Deserialize)]
 struct GithubRepositoryOwnerResponse {
     login: String,
+    #[serde(default, rename = "type")]
+    kind: GithubAccountKind,
 }
 
 #[derive(Debug, serde::Deserialize)]

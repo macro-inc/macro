@@ -97,19 +97,30 @@ describe('RepositoryPicker', () => {
     expect(handlers.onSelectRepository).toHaveBeenCalledWith(macro.url);
   });
 
-  it('offers an unlisted GitHub repository typed by hand, canonicalized', () => {
+  it('does not offer a recent the listing does not carry', () => {
+    picker({
+      recentRepositories: ['https://github.com/someone/else'],
+    });
+    openRepositories();
+    expect(optionNames()).toEqual([
+      'Choose automatically',
+      'macro-inc/macro',
+      'macro-inc/infra',
+    ]);
+  });
+
+  it('does not offer an unlisted GitHub repository typed by hand', () => {
     const handlers = picker();
     openRepositories();
     fireEvent.input(search(), {
       target: { value: 'https://github.com/macro-inc/other.git' },
     });
-    expect(optionNames()).toEqual(['Use macro-inc/other']);
-    fireEvent.click(
-      screen.getByRole('option', { name: 'Use macro-inc/other' })
+    expect(screen.queryAllByRole('option')).toHaveLength(0);
+    expect(screen.getByText(/No repositories match/).textContent).toContain(
+      'https://github.com/macro-inc/other.git'
     );
-    expect(handlers.onSelectRepository).toHaveBeenCalledWith(
-      'https://github.com/macro-inc/other'
-    );
+    fireEvent.submit(search().closest('form') as HTMLFormElement);
+    expect(handlers.onSelectRepository).not.toHaveBeenCalled();
   });
 
   it('does not duplicate a listed repository typed in full', () => {
@@ -128,7 +139,9 @@ describe('RepositoryPicker', () => {
       'nothing here'
     );
     fireEvent.submit(search().closest('form') as HTMLFormElement);
-    expect(screen.getByRole('alert').textContent).toContain('owner/repo');
+    expect(screen.getByRole('alert').textContent).toContain(
+      'Pick a repository you can reach'
+    );
     expect(handlers.onSelectRepository).not.toHaveBeenCalled();
   });
 

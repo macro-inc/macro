@@ -61,14 +61,16 @@
   Selecting a chat agent retracts it. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
   (**Choose repository** until one is picked) opens a searchable list:
-  **Choose automatically**, then the repositories the signed-in user reaches
+  **Choose automatically**, then the repositories the signed-in user owns
   through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
-  recently used ones first. Typing filters the list; an unlisted GitHub
-  `owner/repo` or URL adds a **Use owner/repo** row. Arrow keys move the
-  highlight and Enter or a click picks it; there is no separate confirm
-  button. Someone who reaches no repository sees a hint with **Connect
-  GitHub**, which opens Settings → Connected. The last repository picked is
-  remembered per user in local storage and preselected next time. Once
+  recently used ones first. The list is only those repositories: a teammate's
+  personal repository, a recent the listing no longer carries, and a typed
+  `owner/repo` that is not listed are not offered. Typing filters the list.
+  Arrow keys move the highlight and Enter or a click picks it; there is no
+  separate confirm button. Someone who reaches no repository sees a hint with
+  **Connect GitHub**, which opens Settings → Connected. The last listed
+  repository picked is remembered per user in local storage and preselected
+  next time. Once
   selected, **Branch** shows the repository's default branch (`main` when it
   has none) and opens a starting-branch field confirmed with **Use branch**;
   picking a different repository resets the branch to that repository's

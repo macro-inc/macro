@@ -22,7 +22,7 @@ pub use pull_request::{
     GithubPullRequestCheckRun, GithubPullRequestComment, GithubPullRequestDetails,
     GithubPullRequestRef, GithubPullRequestStatus,
 };
-pub use repository::GithubRepository;
+pub use repository::{GithubAccountKind, GithubRepository};
 pub use sync::{
     GithubAppInstallationSource, GithubAuthenticatedUser, GithubInstallationAccessToken,
     GithubInstallationSetupAction, GithubKey, GithubSetupAccessToken, GithubUserInstallation,

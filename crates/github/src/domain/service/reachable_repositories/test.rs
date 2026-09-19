@@ -1,7 +1,7 @@
 use super::*;
 use crate::domain::models::{
-    AppJwt, GithubAppInstallationSource, GithubKey, MacroTaskId, ResolvedTeamTaskReference,
-    TeamTaskReference,
+    AppJwt, GithubAccountKind, GithubAppInstallationSource, GithubKey, MacroTaskId,
+    ResolvedTeamTaskReference, TeamTaskReference,
 };
 use std::collections::HashMap;
 use std::sync::Mutex as StdMutex;
@@ -24,8 +24,17 @@ fn config() -> InstallationTokenConfig {
 }
 
 fn repository(owner: &str, name: &str) -> GithubRepository {
+    repository_owned_by(owner, name, GithubAccountKind::Organization)
+}
+
+fn personal_repository(owner: &str, name: &str) -> GithubRepository {
+    repository_owned_by(owner, name, GithubAccountKind::User)
+}
+
+fn repository_owned_by(owner: &str, name: &str, owner_kind: GithubAccountKind) -> GithubRepository {
     GithubRepository {
         owner: owner.to_owned(),
+        owner_kind,
         name: name.to_owned(),
         html_url: format!("https://github.com/{owner}/{name}"),
         default_branch: Some("main".to_owned()),
@@ -237,6 +246,49 @@ async fn lists_the_repositories_of_an_installation_one_of_the_users_teams_made()
     let repositories = service.for_user(&user()).await.expect("listed");
 
     assert_eq!(repositories, vec![repository("macro-inc", "macro")]);
+}
+
+/// A team installation on a teammate's user account is not this user's to
+/// browse: those repositories belong to the teammate, not the team.
+#[tokio::test]
+async fn a_team_installation_does_not_list_another_persons_repositories() {
+    let team = uuid::Uuid::from_u128(7);
+    let service = service(
+        vec![(
+            TEAM_INSTALLATION.to_owned(),
+            vec![GithubAppInstallationSource::Team(team)],
+        )],
+        vec![team],
+        HashMap::from([(
+            77,
+            vec![
+                repository("macro-inc", "macro"),
+                personal_repository("teammate", "notes"),
+            ],
+        )]),
+    );
+
+    let repositories = service.for_user(&user()).await.expect("listed");
+
+    assert_eq!(repositories, vec![repository("macro-inc", "macro")]);
+}
+
+/// An installation the user made themselves keeps their own repositories,
+/// even when those live under a user account rather than an organisation.
+#[tokio::test]
+async fn a_personal_installation_still_lists_the_users_own_repositories() {
+    let service = service(
+        vec![(
+            PERSONAL_INSTALLATION.to_owned(),
+            vec![GithubAppInstallationSource::User(user().to_string())],
+        )],
+        vec![],
+        HashMap::from([(42, vec![personal_repository("owner", "personal")])]),
+    );
+
+    let repositories = service.for_user(&user()).await.expect("listed");
+
+    assert_eq!(repositories, vec![personal_repository("owner", "personal")]);
 }
 
 /// Someone else's installation is not the user's to see, and having no claim to
