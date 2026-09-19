@@ -1,1 +1,69 @@
-export * from '@app/features/soup/actions/make-rename-action';
+import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { toast } from '@core/component/Toast/Toast';
+import type { EntityData } from '@entity';
+import { restoreSoupFocus } from '../utils';
+import type { EntityActionListState } from './entity-action-context';
+
+type MakeRenameOptions = {
+  userId: () => string | undefined;
+};
+
+export const makeRenameAction = (options: MakeRenameOptions) => {
+  const { userId } = options;
+
+  const canExecute = (entity: EntityData): boolean => {
+    if (entity.type === 'email') return false;
+    if (entity.type === 'channel_message' || entity.type === 'channel_thread') {
+      return false;
+    }
+    if (entity.type === 'foreign') return false;
+
+    if (entity.type === 'channel') {
+      if (entity.channelType === 'direct_message') return false;
+      return entity.isParticipant !== false;
+    }
+
+    return entity.ownerId === userId();
+  };
+
+  const execute = async (entities: EntityData[]) => {
+    openBulkEditModal({
+      view: 'rename',
+      entities,
+      onFinish: () => {
+        toast.success(
+          entities.length > 1 ? `Renamed ${entities.length} items` : 'Renamed'
+        );
+      },
+    });
+  };
+
+  const executeWithSoup = async (
+    entities: EntityData[],
+    soup: EntityActionListState
+  ) => {
+    const firstEntity = entities[0];
+
+    openBulkEditModal({
+      view: 'rename',
+      entities,
+      onFinish: () => {
+        toast.success(
+          entities.length > 1 ? `Renamed ${entities.length} items` : 'Renamed'
+        );
+        if (firstEntity) {
+          soup.focus.set(firstEntity.id);
+        }
+        restoreSoupFocus(firstEntity?.id);
+      },
+      onCancel: () => {
+        if (firstEntity) {
+          soup.focus.set(firstEntity.id);
+        }
+        restoreSoupFocus(firstEntity?.id);
+      },
+    });
+  };
+
+  return { canExecute, execute, executeWithSoup };
+};

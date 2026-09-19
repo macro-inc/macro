@@ -3,11 +3,11 @@ import {
   useEntityDetailNavigationStack,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
 import { listOwnedSlotName } from '@app/components/list';
+import { openEntityInSplitFromUnifiedList } from '@app/features/next-soup/utils';
 import {
   type FacetSelection,
   useSoupListNavigationHotkeys,
 } from '@app/features/soup';
-import { openEntityInSplitFromUnifiedList } from '@app/features/soup/utils';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useEntryState } from '@components/app/split-layout/entry-state';
 import {

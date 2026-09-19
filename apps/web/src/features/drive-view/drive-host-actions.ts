@@ -3,12 +3,12 @@ import {
   entityDetailTarget,
   useEntityDetailNavigationStack,
 } from '@app/components/entity-detail/EntityDetailNavigationStack';
-import { makeShareAction } from '@app/features/soup/actions';
+import { makeShareAction } from '@app/features/next-soup/actions';
 import {
   markReminderSeenOnOpen,
   openEntityInNewTab,
   openEntityInSplitFromUnifiedList,
-} from '@app/features/soup/utils';
+} from '@app/features/next-soup/utils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { favoriteBlockName, favoriteSplitContent } from '@app/util/favorites';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';

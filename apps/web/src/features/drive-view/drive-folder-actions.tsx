@@ -3,7 +3,7 @@ import {
   makeCopyLinkAction,
   makeDeleteAction,
   makeFavoriteAction,
-} from '@app/features/soup/actions';
+} from '@app/features/next-soup/actions';
 import { MenuItem, MenuSeparator } from '@core/component/ContextMenu';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';

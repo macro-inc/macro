@@ -1,1 +1,46 @@
-export * from '@app/features/soup/actions/make-hide-company-action';
+import { toast } from '@core/component/Toast/Toast';
+import type { EntityData } from '@entity';
+import { restoreSoupFocus } from '../utils';
+import type { EntityActionListState } from './entity-action-context';
+
+type MakeHideCompanyOptions = {
+  // Available to all team members; the backend enforces
+  // EditAccessLevel on PUT /crm/companies/{id}/hidden.
+  setHidden: (companyId: string, hidden: boolean) => Promise<unknown>;
+};
+
+export const makeHideCompanyAction = (options: MakeHideCompanyOptions) => {
+  const { setHidden } = options;
+
+  const canExecute = (entity: EntityData): boolean =>
+    entity.type === 'crm_company';
+
+  const executeWithSoup = async (
+    entities: EntityData[],
+    soup: EntityActionListState
+  ) => {
+    const entity = entities[0];
+    if (entity?.type !== 'crm_company') return;
+
+    // The row leaves (Hide) or joins (Unhide) the active list once soup
+    // refetches, so move focus to a neighbour first — same as delete.
+    const currentIndex = soup.focus.index();
+    const nextRow =
+      soup.items.at(currentIndex + 1) ?? soup.items.at(currentIndex - 1);
+    const hidden = entity.hidden;
+
+    soup.selection.clear();
+    if (nextRow) soup.focus.set(nextRow.id);
+
+    try {
+      await setHidden(entity.id, !hidden);
+      toast.success(hidden ? 'Unhidden' : 'Hidden');
+    } catch {
+      toast.failure(hidden ? 'Failed to unhide' : 'Failed to hide');
+    }
+
+    await restoreSoupFocus(nextRow?.id);
+  };
+
+  return { canExecute, executeWithSoup };
+};

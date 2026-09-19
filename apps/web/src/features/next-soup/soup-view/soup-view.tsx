@@ -855,7 +855,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
     rows,
     searchText,
     featuredIds,
-    filterByTag,
     isSearchServiceLoading,
     isLocalSearchSettling,
     activeTab,
@@ -1652,10 +1651,6 @@ const SoupViewListContent = (props: SoupViewListProps) => {
                                       }
                                       entity={row.original}
                                       timestamp={timestamp()}
-                                      onFilterByTag={filterByTag}
-                                      showCalendarAttendance={
-                                        activeTab() === 'all'
-                                      }
                                       highlighted={row.isFocused()}
                                       onMouseMove={() => {
                                         if (isKeypressActive()) return;

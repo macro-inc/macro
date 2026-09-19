@@ -36,7 +36,7 @@ vi.mock('@queries/soup/cache', () => ({
   refetchSoupEntity: vi.fn(async () => {}),
 }));
 
-vi.mock('../utils', () => ({
+vi.mock('@app/features/next-soup/utils', () => ({
   applyEntitiesNotDoneOptimistic: vi.fn(() => ({ rollback: vi.fn() })),
   executeMarkEntitiesUndone: mocks.executeMarkEntitiesUndone,
   resolveMarkEntitiesDoneVariables: mocks.resolveMarkEntitiesDoneVariables,

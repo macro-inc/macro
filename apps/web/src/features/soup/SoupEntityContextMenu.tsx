@@ -1,3 +1,8 @@
+import {
+  type EntityActionListState,
+  type EntityActionViewContext,
+  makeAddTagAction,
+} from '@app/features/next-soup/actions';
 import { ContextMenuContent } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
@@ -19,11 +24,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import {
-  type EntityActionListState,
-  type EntityActionViewContext,
-  makeAddTagAction,
-} from './actions';
 import { useSoupEntityActionDrawer } from './SoupEntityActionDrawerContext';
 import { SoupEntityActionsMenu } from './SoupEntityActionsMenu';
 

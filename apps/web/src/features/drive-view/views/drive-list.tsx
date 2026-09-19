@@ -1,13 +1,13 @@
 import { useListInteractions } from '@app/components/list';
 import {
-  MaybeSoupEntityActionDrawerManager,
-  SoupEntityContextMenu,
-} from '@app/features/soup';
-import {
   resolveEntityActionViewContext,
   toEntityActionListState,
   useEntityActionHotkeys,
-} from '@app/features/soup/actions';
+} from '@app/features/next-soup/actions';
+import {
+  MaybeSoupEntityActionDrawerManager,
+  SoupEntityContextMenu,
+} from '@app/features/soup';
 import { DEBUG_SETTING_KEYS, useDebugSetting } from '@app/lib/debugSettings';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -392,6 +392,7 @@ export function DriveList() {
                               >
                                 <ListEntity
                                   entity={row.entity}
+                                  showCalendarAttendance
                                   deferInteractions={source.deferInteractions()}
                                   timestamp={timestamp(row.entity)}
                                   highlighted={list.focus.key() === row.id}

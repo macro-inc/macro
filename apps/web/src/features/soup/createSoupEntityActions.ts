@@ -1,14 +1,3 @@
-import { useAnalytics } from '@app/lib/analytics/analytics-context';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import type { SplitHandle } from '@components/app/split-layout/layoutManager';
-import { itemToBlockName } from '@core/constant/allBlocks';
-import { useUserId } from '@core/context/user';
-import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
-import { isMobile } from '@core/mobile/isMobile';
-import type { EntityData } from '@entity';
-import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
-import type { Component, JSX } from 'solid-js';
 import {
   type EntityActionListState,
   type EntityActionNavigationHandler,
@@ -37,11 +26,22 @@ import {
   makeSetCompanyPropertyAction,
   makeShareAction,
   markReminderTargetDone,
-} from './actions';
+} from '@app/features/next-soup/actions';
 import {
   markReminderSeenOnOpen,
   openEntityInSplitFromUnifiedList,
-} from './utils';
+} from '@app/features/next-soup/utils';
+import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import type { SplitHandle } from '@components/app/split-layout/layoutManager';
+import { itemToBlockName } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import { isMobile } from '@core/mobile/isMobile';
+import type { EntityData } from '@entity';
+import { useSetCompanyHiddenMutation } from '@queries/crm/companies';
+import type { Component, JSX } from 'solid-js';
 
 type SoupEntityActionItem = {
   id: string;

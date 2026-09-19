@@ -3,7 +3,7 @@ import type { EntityData } from '@entity';
 import type { NotificationSource } from '@notifications';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import type { EntityActionListState } from './entity-action-context';
+import type { SoupState } from '../create-soup-state';
 
 const mocks = vi.hoisted(() => ({
   controller: {
@@ -60,7 +60,7 @@ vi.mock('@queries/undo', () => ({
   },
 }));
 
-vi.mock('../utils', () => ({
+vi.mock('@app/features/next-soup/utils', () => ({
   applyEntitiesDoneOptimistic: vi.fn(),
   executeMarkEntitiesDone: mocks.executeMarkEntitiesDone,
   executeMarkEntitiesUndone: mocks.executeMarkEntitiesUndone,
@@ -106,7 +106,7 @@ function createSoup() {
       shouldCollapse: () => false,
       callback: vi.fn(),
     },
-  } as unknown as EntityActionListState;
+  } as unknown as SoupState;
   return { soup, focusSet };
 }
 

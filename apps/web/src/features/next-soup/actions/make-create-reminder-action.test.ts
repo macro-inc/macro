@@ -35,7 +35,7 @@ vi.mock('@core/constant/featureFlags', () => ({
     flag.key === 'enable-reminders' ? mocks.remindersEnabled : false,
 }));
 
-import type { EntityActionListState } from './entity-action-context';
+import type { SoupState } from '../create-soup-state';
 import {
   makeCreateReminderAction,
   markReminderTargetDone,
@@ -53,7 +53,7 @@ const threadEntity = (channelId = 'chan-1') =>
     content: 'ship it',
   }) as EntityData;
 
-const soupState = () => ({}) as EntityActionListState;
+const soupState = () => ({}) as SoupState;
 
 /** The follow-up the action handed the composer for the latest open. */
 const composerOnCreated = (): (() => void | Promise<void>) | undefined =>
